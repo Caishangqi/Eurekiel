@@ -15,8 +15,16 @@
 </p>
 
 ## Introduction
-
+The engine will initially include only a few basic **math classes** and **utility functions**, along with the foundational structure for the Renderer subsystem, which currently consists of two classes: **Camera** and **Renderer**.
 ## Features
+
+## Game Built On
+
+| Project Name                                                                           | Description                            | Start Date   | State      |
+|----------------------------------------------------------------------------------------|----------------------------------------|--------------|------------|
+| [**Eurekiel: Starship**](https://github.com/Caishangqi/Eurekiel/tree/project-starship) | Simple arcade-style space shooter game | `09/01/2024` | **Active** |
+|                                                                                        |                                        |              |            |
+
 
 ## Structure
 
