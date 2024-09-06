@@ -13,6 +13,7 @@ public:
  Rgba8 m_color;
  Vec2 m_uvTextCoords;
 public:
- Vertex_PCU();
+ //Vertex_PCU();
  explicit Vertex_PCU( Vec3 const& position, Rgba8 const& color, Vec2 const& uvTextCoords);
+ ~Vertex_PCU();
 };

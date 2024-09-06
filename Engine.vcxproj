@@ -182,6 +182,9 @@
     <ClInclude Include="Renderer\Camera.hpp" />
     <ClInclude Include="Renderer\Renderer.hpp" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="README.md" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
