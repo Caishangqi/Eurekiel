@@ -4,6 +4,7 @@
 //  在包含 windows.h 和 gl/gl.h 时，顺序非常重要。需要先包含 windows.h，然后再包含 gl/gl.h。
 #include <windows.h>			// #include this (massive, platform-specific) header in VERY few places (and .CPPs only)
 #include <gl/gl.h>
+#pragma comment( lib, "opengl32" )	// Link in the OpenGL32.lib static library
 extern HDC g_displayDeviceContext;
 extern HWND g_hWnd;
 
@@ -48,7 +49,7 @@ void Renderer::EndCamera(const Camera& camera)
 {
 }
 
-void Renderer::DrawVertexArray(int numVertexes, Vertex_PCU const* vertexes)
+void Renderer::DrawVertexArray(int numVertexes, const Vertex_PCU* vertexes)
 {
     glBegin(GL_TRIANGLES);
     {
@@ -80,7 +81,7 @@ void Renderer::CreateRenderingContext()
     int pixelFormatCode = ChoosePixelFormat(g_displayDeviceContext, &pixelFormatDescriptor);
     SetPixelFormat(g_displayDeviceContext, pixelFormatCode, &pixelFormatDescriptor);
     m_apiRenderingContext = wglCreateContext(g_displayDeviceContext);
-    wglMakeCurrent(g_displayDeviceContext, (HGLRC)m_apiRenderingContext);
+    wglMakeCurrent(g_displayDeviceContext, static_cast<HGLRC>(m_apiRenderingContext));
 
     // #SD1ToDo: move all OpenGL functions (including those below) to Renderer.cpp (only!)
     glEnable(GL_BLEND);

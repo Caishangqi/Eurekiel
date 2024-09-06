@@ -1,4 +1,5 @@
 ﻿# Eurekiel
+
 <p align="center">
 <img alt="Realm Select" src="https://github.com/user-attachments/assets/43c5a109-c38b-4157-ba43-2be61ddaa01e" align="center" width=256>
 </p>
@@ -23,6 +24,8 @@
 
 ## Special Notes
 
-This is an engine designed specifically for 2D games. You should use this engine to create 2D games instead of other types of games.
+This is an engine designed specifically for 2D games. You should use this engine to create 2D games instead of other
+types of games.
 
 > 这是一个专门为2D游戏设计的引擎,你应该使用该引擎创建2D游戏而非其他类型游戏。
+

@@ -6,7 +6,7 @@
  * Copy Constructor
  * @param copy target for copy
  */
-Vec2::Vec2(Vec2 const& copy)
+Vec2::Vec2(const Vec2& copy)
 {
     this->x = copy.x;
     this->y = copy.y;
@@ -22,49 +22,49 @@ Vec2::Vec2(float initialX, float initialY)
 
 
 //-----------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator +(Vec2 const& vecToAdd) const
+const Vec2 Vec2::operator +(const Vec2& vecToAdd) const
 {
     return Vec2(this->x + vecToAdd.x, this->y + vecToAdd.y);
 }
 
 
 //-----------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator-(Vec2 const& vecToSubtract) const
+const Vec2 Vec2::operator-(const Vec2& vecToSubtract) const
 {
     return Vec2(this->x - vecToSubtract.x, this->y - vecToSubtract.y);
 }
 
 
 //------------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator-() const
+const Vec2 Vec2::operator-() const
 {
     return Vec2(-this->x, -this->y);
 }
 
 
 //-----------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator*(float uniformScale) const
+const Vec2 Vec2::operator*(float uniformScale) const
 {
     return Vec2(this->x * uniformScale, this->y * uniformScale);
 }
 
 
 //------------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator*(Vec2 const& vecToMultiply) const
+const Vec2 Vec2::operator*(const Vec2& vecToMultiply) const
 {
     return Vec2(this->x * vecToMultiply.x, this->y * vecToMultiply.y);
 }
 
 
 //-----------------------------------------------------------------------------------------------
-Vec2 const Vec2::operator/(float inverseScale) const
+const Vec2 Vec2::operator/(float inverseScale) const
 {
     return Vec2(this->x / inverseScale, this->y / inverseScale);
 }
 
 
 //-----------------------------------------------------------------------------------------------
-void Vec2::operator+=(Vec2 const& vecToAdd)
+void Vec2::operator+=(const Vec2& vecToAdd)
 {
     this->x += vecToAdd.x;
     this->y += vecToAdd.y;
@@ -72,7 +72,7 @@ void Vec2::operator+=(Vec2 const& vecToAdd)
 
 
 //-----------------------------------------------------------------------------------------------
-void Vec2::operator-=(Vec2 const& vecToSubtract)
+void Vec2::operator-=(const Vec2& vecToSubtract)
 {
     this->x -= vecToSubtract.x;
     this->y -= vecToSubtract.y;
@@ -96,7 +96,7 @@ void Vec2::operator/=(const float uniformDivisor)
 
 
 //-----------------------------------------------------------------------------------------------
-void Vec2::operator=(Vec2 const& copyFrom)
+void Vec2::operator=(const Vec2& copyFrom)
 {
     this->x = copyFrom.x;
     this->y = copyFrom.y;
@@ -104,21 +104,21 @@ void Vec2::operator=(Vec2 const& copyFrom)
 
 
 //-----------------------------------------------------------------------------------------------
-Vec2 const operator*(float uniformScale, Vec2 const& vecToScale)
+const Vec2 operator*(float uniformScale, const Vec2& vecToScale)
 {
     return Vec2(uniformScale * vecToScale.x, uniformScale * vecToScale.y);
 }
 
 
 //-----------------------------------------------------------------------------------------------
-bool Vec2::operator==(Vec2 const& compare) const
+bool Vec2::operator==(const Vec2& compare) const
 {
     return this->x == compare.x && this->y == compare.y;
 }
 
 
 //-----------------------------------------------------------------------------------------------
-bool Vec2::operator!=(Vec2 const& compare) const
+bool Vec2::operator!=(const Vec2& compare) const
 {
     return this->x != compare.x || this->y != compare.y;
 }

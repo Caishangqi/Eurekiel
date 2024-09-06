@@ -4,9 +4,10 @@
 class Camera
 {
 public:
-    void SetOrthoView(Vec2 const& bottomLeft, Vec2 const& topRight);
+    void SetOrthoView(const Vec2& bottomLeft, const Vec2& topRight);
     Vec2 GetOrthoBottomLeft() const;
     Vec2 GetOrthoTopRight() const;
+
 protected:
     Vec2 m_bottomLeft;
     Vec2 m_topRight;
