@@ -169,6 +169,8 @@
     <ItemGroup>
         <ClCompile Include="Core\Rgba8.cpp"/>
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
+        <ClCompile Include="Math\MathUtils.cpp" />
+        <ClCompile Include="Math\RandomNumberGenerator.cpp" />
         <ClCompile Include="Math\Vec2.cpp"/>
         <ClCompile Include="Math\Vec3.cpp"/>
         <ClCompile Include="Renderer\Camera.cpp"/>
@@ -177,6 +179,8 @@
     <ItemGroup>
         <ClInclude Include="Core\Rgba8.hpp"/>
         <ClInclude Include="Core\Vertex_PCU.hpp"/>
+        <ClInclude Include="Math\MathUtils.hpp" />
+        <ClInclude Include="Math\RandomNumberGenerator.hpp" />
         <ClInclude Include="Math\Vec2.hpp"/>
         <ClInclude Include="Math\Vec3.hpp"/>
         <ClInclude Include="Renderer\Camera.hpp"/>

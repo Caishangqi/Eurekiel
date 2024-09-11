@@ -1,4 +1,6 @@
 #include "Vec2.hpp"
+#include "Engine/Math/MathUtils.hpp"
+#include <valarray>
 //#include "Engine/Math/MathUtils.hpp"
 //#include "Engine/Core/EngineCommon.hpp"
 
@@ -18,6 +20,91 @@ Vec2::Vec2(float initialX, float initialY)
     : x(initialX)
       , y(initialY)
 {
+}
+
+Vec2 const Vec2::MakeFromPolarRadians(float orientationRadians, float length)
+{
+    float x = length * CosDegrees(ConvertRadiansToDegrees(orientationRadians));
+    float y = length * SinDegrees(ConvertRadiansToDegrees(orientationRadians));
+    return Vec2(x, y);
+}
+
+Vec2 const Vec2::MakeFromPolarDegrees(float orientationDegrees, float length)
+{
+    float x = length * CosDegrees(orientationDegrees);
+    float y = length * SinDegrees(orientationDegrees);
+    return Vec2(x, y);
+}
+
+float Vec2::GetLength() const
+{
+    return sqrt(x * x + y * y);
+}
+
+float Vec2::GetLengthSquared() const
+{
+    return x * x + y * y;
+}
+
+float Vec2::GetOrientationRadians() const
+{
+    return atan2(y, x);
+}
+
+float Vec2::GetOrientationDegrees() const
+{
+    return Atan2Degrees(y, x);
+}
+
+Vec2 const Vec2::GetRotated90Degrees() const
+{
+    Vec2 vec_ptr = *this;
+    vec_ptr.x = -this->y;
+    vec_ptr.y = this->x;
+    return vec_ptr;
+}
+
+Vec2 const Vec2::GetRotatedMinus90Degrees() const
+{
+    Vec2 vec_ptr = *this;
+    vec_ptr.x = this->y;
+    vec_ptr.y = -this->x;
+    return vec_ptr;
+}
+
+Vec2 const Vec2::GetRotatedRadians(float deltaRadians) const
+{
+    Vec2 vec_ptr = *this;
+    float deltaDegrees = ConvertRadiansToDegrees(deltaRadians);
+    TransformPosition2D(vec_ptr, 1.f, deltaDegrees, Vec2(0, 0));
+    return vec_ptr;
+}
+
+Vec2 const Vec2::GetRotatedDegrees(float deltaDegrees) const
+{
+    Vec2 vec_ptr = *this;
+    TransformPosition2D(vec_ptr, 1.f, deltaDegrees, Vec2(0, 0));
+    return vec_ptr;
+}
+
+Vec2 const Vec2::GetClamped(float maxLength) const
+{
+    Vec2 vec_ptr = *this;
+    if (vec_ptr.GetLength() > maxLength)
+        vec_ptr.SetLength(maxLength);
+    return vec_ptr;
+}
+
+Vec2 const Vec2::GetNormalized() const
+{
+    Vec2 vec_ptr = *this;
+    float length = GetLength();
+    if (length == 0.f)
+        return *this;
+    float scale = 1.f / length;
+    vec_ptr.x *= scale;
+    vec_ptr.y *= scale;
+    return vec_ptr;
 }
 
 
@@ -62,6 +149,88 @@ const Vec2 Vec2::operator/(float inverseScale) const
     return Vec2(this->x / inverseScale, this->y / inverseScale);
 }
 
+void Vec2::SetOrientationRadians(float newOrientationRadians)
+{
+    Vec2 newVec = MakeFromPolarRadians(newOrientationRadians, this->GetLength());
+    this->x = newVec.x;
+    this->y = newVec.y;
+}
+
+void Vec2::SetOrientationDegrees(float newOrientationDegrees)
+{
+    Vec2 newVec = MakeFromPolarDegrees(newOrientationDegrees, this->GetLength());
+    this->x = newVec.x;
+    this->y = newVec.y;
+}
+
+void Vec2::SetPolarRadians(float newOrientationRadians, float newLength)
+{
+    Vec2 newVec = MakeFromPolarRadians(newOrientationRadians, newLength);
+    this->x = newVec.x;
+    this->y = newVec.y;
+}
+
+void Vec2::SetPolarDegrees(float newOrientationDegrees, float newLength)
+{
+    Vec2 newVec = MakeFromPolarDegrees(newOrientationDegrees, newLength);
+    this->x = newVec.x;
+    this->y = newVec.y;
+}
+
+void Vec2::Rotate90Degrees()
+{
+    float temp_x = this->x;
+    this->x = -y;
+    this->y = temp_x;
+}
+
+void Vec2::RotateMinus90Degrees()
+{
+    float temp_x = this->x;
+    this->x = y;
+    this->y = -temp_x;
+}
+
+void Vec2::RotateRadians(float deltaRadians)
+{
+    TransformPosition2D(*this, 1.0f, ConvertRadiansToDegrees(deltaRadians), Vec2(0, 0));
+}
+
+void Vec2::RotateDegrees(float deltaDegrees)
+{
+    TransformPosition2D(*this, 1.0f, deltaDegrees, Vec2(0, 0));
+}
+
+
+void Vec2::SetLength(float newLength)
+{
+    Normalize();
+    x *= newLength;
+    y *= newLength;
+}
+
+void Vec2::ClampLength(float maxLength)
+{
+    if (GetLength() > maxLength)
+        SetLength(maxLength);
+}
+
+void Vec2::Normalize()
+{
+    float length = GetLength();
+    if (length == 0.f)
+        return;
+    float scale = 1.f / length;
+    this->x *= scale;
+    this->y *= scale;
+}
+
+float Vec2::NormalizeAndGetPreviousLength()
+{
+    float length = GetLength();
+    Normalize();
+    return length;
+}
 
 //-----------------------------------------------------------------------------------------------
 void Vec2::operator+=(const Vec2& vecToAdd)
