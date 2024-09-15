@@ -182,13 +182,21 @@
     </ItemGroup>
     <ItemGroup>
         <ClCompile Include="App.cpp"/>
+        <ClCompile Include="Asteroid.cpp" />
+        <ClCompile Include="Bullet.cpp" />
+        <ClCompile Include="Entity.cpp" />
+        <ClCompile Include="Game.cpp" />
         <ClCompile Include="Main_Windows.cpp"/>
+        <ClCompile Include="PlayerShip.cpp" />
     </ItemGroup>
     <ItemGroup>
         <ClInclude Include="App.hpp"/>
-    </ItemGroup>
-    <ItemGroup>
-      <Content Include="README.md" />
+        <ClInclude Include="Asteroid.h" />
+        <ClInclude Include="Bullet.h" />
+        <ClInclude Include="Entity.h" />
+        <ClInclude Include="Game.hpp" />
+        <ClInclude Include="GameCommon.hpp" />
+        <ClInclude Include="PlayerShip.hpp" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">

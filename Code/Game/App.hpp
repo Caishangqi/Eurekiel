@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Game.hpp"
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 
@@ -13,12 +14,19 @@ public:
     void RunFrame();
 
     bool IsQuitting() const;
-    bool HandleKeyPress(unsigned char keyCode);
-    bool HandleKeyRelease(unsigned char keyCode);
-    bool HandleQuitRequested();
+    void HandleKeyPress(unsigned char keyCode);
+    void HandleKeyRelease(unsigned char keyCode);
+    void HandleQuitRequested();
+
+    bool IsKeyDown(unsigned char keyCode) const;
+    bool WasKeyJustPressed(unsigned char keyCode) const;
+
+    void AdjustForPauseAndTimeDistortion(float& deltaSeconds);
+    void HandleKeyMapping();
 
 private:
     void BeginFrame();
+    void UpdateCameras();
     void Update(float deltaSeconds);
     void Render() const;
     void EndFrame();
@@ -33,4 +41,8 @@ private:
     Vec2 m_shipPos;
 
     Camera* m_gameCamera;
+    // initialize all flase
+    bool m_areKeysDown[256] = {}; // true if each key is current down
+    bool m_areKeysDownLastFrame[256] = {}; // notes whether key was down last frame
+    Game* m_theGame;
 };

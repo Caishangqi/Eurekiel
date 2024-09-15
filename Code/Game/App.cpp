@@ -1,7 +1,12 @@
 ﻿#include "Game/App.hpp"
 
-Renderer* g_renderer;
-App* g_theApp;
+#include <cstdio>
+
+#include "Engine/Math/RandomNumberGenerator.hpp"
+
+Renderer* g_renderer = nullptr;
+App* g_theApp = nullptr;
+RandomNumberGenerator* g_rng = nullptr;
 
 App::App()
 {
@@ -23,20 +28,38 @@ void App::Startup()
     g_renderer = new Renderer(); // Create render
     g_renderer->StartUp();
 
+    /*  h. App::Startup() should do the following, in this order:
+        i. Create a new instance of Renderer (and assign its memory address to g_theRenderer)
+        ii. Call g_theRenderer->Startup()
+        iii. Create a new instance of Game (and assign its memory address to the App’s m_game)
+    */
+    m_theGame = new Game();
+    g_rng = new RandomNumberGenerator();
+
     m_shipPos = Vec2{0.0f, 50.0f};
 }
 
 void App::Shutdown()
 {
+    /*
+    *   i. App::Shutdown() should do the opposite of each Startup step, in the reverse order:
+        i. Delete (and null) m_theGame
+        ii. Call g_theRenderer->Shutdown()
+        iii. Delete (and null) g_theRenderer
+     */
+    delete m_theGame;
+    m_theGame = nullptr;
     g_renderer->Shutdown();
+    delete g_renderer;
+    g_renderer = nullptr;
 }
 
 void App::RunFrame()
 {
-    BeginFrame();
-    Update(1.f / 60.f);
-    Render();
-    EndFrame();
+    BeginFrame(); //Engine pre-frame stuff
+    Update(1.f / 60.f); // Game updates / moves / spawns / hurts
+    Render(); // Game draws current state of things
+    EndFrame(); // Engine post-frame
 }
 
 bool App::IsQuitting() const
@@ -44,9 +67,12 @@ bool App::IsQuitting() const
     return m_isQuitting;
 }
 
-bool App::HandleKeyPress(unsigned char keyCode)
+void App::HandleKeyPress(unsigned char keyCode)
 {
-    // #SD1ToDo: Tell the App (or InputSystem later) about this key-pressed event...
+    m_areKeysDown[keyCode] = true; //m_areKeysDown[65] = true;
+    m_areKeysDownLastFrame[keyCode] = !m_areKeysDownLastFrame[keyCode];
+
+    /*// #SD1ToDo: Tell the App (or InputSystem later) about this key-pressed event...
     if (keyCode == 'Q') // #SD1ToDo: move this "check for ESC pressed" code to App
     {
         m_isQuitting = true;
@@ -68,72 +94,102 @@ bool App::HandleKeyPress(unsigned char keyCode)
     {
         m_isPausedAfterFrame = true;
     }
-    return false;
+    return false;*/
 }
 
-bool App::HandleKeyRelease(unsigned char keyCode)
+void App::HandleKeyRelease(unsigned char keyCode)
 {
-    if (keyCode == 'T')
+    /*if (keyCode == 'T')
     {
         m_isSlowMo = false;
     }
-    return false;
+    return false;*/
+    m_areKeysDown[keyCode] = false;
 }
 
-bool App::HandleQuitRequested()
+void App::HandleQuitRequested()
 {
     m_isQuitting = true;
-    return true;
+}
+
+bool App::IsKeyDown(unsigned char keyCode) const
+{
+    return m_areKeysDown[keyCode];
+}
+
+bool App::WasKeyJustPressed(unsigned char keyCode) const
+{
+    bool isKeyDown = m_areKeysDown[keyCode];
+    bool wasKeyJustPressed = m_areKeysDownLastFrame[keyCode];
+    return isKeyDown && !wasKeyJustPressed;
+}
+
+void App::HandleKeyMapping()
+{
+    m_isQuitting = IsKeyDown('Q');
+}
+
+void App::AdjustForPauseAndTimeDistortion(float& deltaSeconds)
+{
+    m_isSlowMo = IsKeyDown('T');
+    if (m_isSlowMo)
+    {
+        deltaSeconds *= 0.1f;
+    }
+
+
+    if (WasKeyJustPressed('P'))
+    {
+        m_isPaused = !m_isPaused;
+    }
+
+    if (m_isPaused)
+    {
+        deltaSeconds = 0.f;
+    }
 }
 
 
 void App::BeginFrame()
 {
     g_renderer->BeingFrame();
+    // g_theInput->BeingFrame();
+}
+
+void App::UpdateCameras()
+{
+    m_gameCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
 }
 
 void App::Update(float deltaSeconds)
 {
-    m_gameCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
+    HandleKeyMapping();
+    AdjustForPauseAndTimeDistortion(deltaSeconds);
 
-    if (m_isSlowMo)
-    {
-        deltaSeconds *= 0.1f;
-    }
-
-    if (m_isPaused)
-    {
-        deltaSeconds = 0.0f;
-    }
-
-    UpdateShip(deltaSeconds);
-
-    if (m_isPausedAfterFrame)
-    {
-        if (m_isPaused)
-        {
-            m_isPaused = false;
-            m_isPausedAfterFrame = true;
-        }
-        else
-        {
-            m_isPaused = true;
-            m_isPausedAfterFrame = false;
-        }
-    }
+    m_theGame->Update(deltaSeconds);
+    //  UpdateShip(deltaSeconds);
+    UpdateCameras();
 }
 
+// If this methods is const, the methods inn the method should also promise
+// const
 void App::Render() const
 {
-    g_renderer->ClearScreen(Rgba8(100.f, 50.f, 0.0f, 1.f));
+    g_renderer->ClearScreen(Rgba8(0.f, 0.f, 0.0f, 1.f));
     g_renderer->BeingCamera(*m_gameCamera);
-    RenderShip();
+
+    m_theGame->Render();
+    //RenderShip();
     g_renderer->EndCamera(*m_gameCamera);
 }
 
 void App::EndFrame()
 {
     g_renderer->EndFrame();
+    // g_theInput->EndFrame();
+
+    // Dump() 的时候
+    // Copy m_areKeysDown to m_wereKeyDownLastFrame
 }
 
 void App::UpdateShip(float deltaSeconds)

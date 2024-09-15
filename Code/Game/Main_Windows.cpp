@@ -209,15 +209,13 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
         // #SD1ToDo: This call will move to Window::BeginFrame() once we have a Window engine system
         // Process OS messages (keyboard/mouse button clicked, application lost/gained focus, etc.)
         RunMessagePump(); // calls our own WindowsMessageHandlingProcedure() function for us!
-
-        //TheApp_RunFrame(); // #SD1ToDo: g_theApp->RunFrame();
+        
         g_theApp->RunFrame();
 
 
         // #SD1ToDo: This call will move to Renderer::EndFrame() once we complete our Window refactor
 
-        // "Present" the backbuffer by swapping the front (visible) and back (working) screen buffers
-        SwapBuffers(g_displayDeviceContext); // Note: call this only once at the very end of each frame
+        
     }
 
     // TheApp_Shutdown(); // This will get replaced with:
