@@ -1,6 +1,7 @@
 ﻿#include "Game.hpp"
 
 #include "App.hpp"
+#include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 
@@ -70,6 +71,7 @@ void Game::SpawnNewBullet(Vec2 const& position, float orientationDegrees)
             return;
         }
     }
+    ERROR_RECOVERABLE("MAX AMOUNT OF ENTITY REACH")
 }
 
 void Game::SpawnDefaultAsteroids()
@@ -99,6 +101,7 @@ void Game::SpawnNewAsteroids()
         }
     }
     // Which means reach the max of spawning
+    ERROR_RECOVERABLE("MAX AMOUNT OF ENTITY REACH")
 }
 
 void Game::HandleKeyBoardEvent(float deltaTime)
