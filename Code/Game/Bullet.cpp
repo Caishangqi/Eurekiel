@@ -9,18 +9,30 @@ Bullet::Bullet(Game* owner, const Vec2& startPosition, float orientationDegrees)
 {
     m_physicsRadius = BULLET_PHYSICS_RADIUS;
     m_cosmeticRadius = BULLET_COSMETIC_RADIUS;
-    Bullet::InitializeLocalVerts();
+
+    m_health = 1;
 
     m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, BULLET_SPEED);
+    Bullet::InitializeLocalVerts();
 }
 
 Bullet::~Bullet()
 {
+    Entity::~Entity();
 }
 
 void Bullet::Update(float deltaTime)
 {
     m_position += m_velocity * deltaTime;
+
+    if (IsOffscreen())
+        m_isDead = true;
+
+    if (m_health <= 0)
+        m_isDead = true;
+
+    if (m_isDead)
+        m_isGarbage = true;
 }
 
 void Bullet::Render() const
@@ -46,7 +58,7 @@ void Bullet::InitializeLocalVerts()
 
     m_localVerts[3].m_position = Vec3(0.0f, -0.5f, 0.0f);
     m_localVerts[4].m_position = Vec3(0.0f, 0.5f, 0.0f);
-    m_localVerts[5].m_position = Vec3(-2.0f, 0.5f, 0.0f);
+    m_localVerts[5].m_position = Vec3(-2.0f, 0.0f, 0.0f);
     m_localVerts[3].m_color = Rgba8(255, 0, 0, 255);
     m_localVerts[4].m_color = Rgba8(255, 0, 0, 255);
     m_localVerts[5].m_color = Rgba8(255, 0, 0, 0);

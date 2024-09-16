@@ -22,14 +22,19 @@ public:
     void Render();
     void Update(float deltaTime);
 
-    void SpawnNewBullet(Vec2 const & position, float orientationDegrees);
-
+    void SpawnNewBullet(Vec2 const& position, float orientationDegrees);
+    void SpawnNewAsteroids();
+    void HandleKeyBoardEvent(float deltaTime);
 private:
+    void SpawnDefaultAsteroids();
+
+
     void RenderEntities();
     void HandleEntityCollisions();
+    void GarbageCollection();
 
 public:
-    PlayerShip*     m_PlayerShip = nullptr; // Just one player ship (for now...)
-    Asteroid*       m_asteroid[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
-    Bullet*         m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.
+    PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
+    Asteroid* m_asteroid[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
+    Bullet* m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.
 };

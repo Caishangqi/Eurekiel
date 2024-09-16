@@ -1,7 +1,5 @@
 ﻿#include "PlayerShip.hpp"
 
-#include <cstdio>
-#include <cstdlib>
 #include "App.hpp"
 #include "GameCommon.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
@@ -14,6 +12,7 @@ PlayerShip::PlayerShip(Game* gameInstance, const Vec2& startPosition, float orie
     m_physicsRadius = PLAYER_SHIP_PHYSICS_RADIUS;
     m_cosmeticRadius = PLAYER_SHIP_COSMETIC_RADIUS;
     m_orientationDegrees = orientationDegree;
+    m_health = 1;
     PlayerShip::InitializeLocalVerts();
     /*m_vertices = static_cast<Vertex_PCU*>(
         malloc(sizeof(*m_vertices) * 15));*/
@@ -25,7 +24,13 @@ PlayerShip::~PlayerShip()
 
 void PlayerShip::Update(float deltaSeconds)
 {
+    if (m_isDead)
+    {
+        return;
+    }
+
     Entity::Update(deltaSeconds);
+
     UpdateFromKeyBoard(deltaSeconds);
     if (m_isTurningLeft)
     {
@@ -43,6 +48,9 @@ void PlayerShip::Update(float deltaSeconds)
     }
     // Move the ship
     m_position += m_velocity * deltaSeconds;
+
+    if (m_health <= 0)
+        m_isDead = true;
 
     BounceOffWalls();
 }
@@ -101,9 +109,10 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
     m_isTurningLeft = g_theApp->IsKeyDown('S');
     m_isTurningRight = g_theApp->IsKeyDown('F');
     m_isThrusting = g_theApp->IsKeyDown('E');
-    if (g_theApp->IsKeyDown(' '))
+
+    if (g_theApp->WasKeyJustPressed(' '))
     {
-        m_game->SpawnNewBullet(Vec2(m_position.x + 1, m_position.y), m_orientationDegrees);
+        m_game->SpawnNewBullet(Vec2(m_position.x, m_position.y), m_orientationDegrees);
     }
 }
 
@@ -137,4 +146,9 @@ void PlayerShip::BounceOffWalls()
 
 void PlayerShip::Respawn()
 {
+    m_isDead = false;
+    m_position = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
+    m_velocity = Vec2(0.f, 0.f);
+    m_orientationDegrees = 90.f;
+    m_health = 1;
 }

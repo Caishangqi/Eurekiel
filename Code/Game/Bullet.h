@@ -15,7 +15,7 @@ i.	(1) Maximum of 20 Bullets alive at once; attempting to spawn an 21st Bullet o
 constexpr int NUM_BULLET_TRIS = 2;
 constexpr int NUM_BULLETS_VERTS = 3 * NUM_BULLET_TRIS;
 
-class Bullet : Entity
+class Bullet : public Entity
 {
 public:
     Bullet(Game* owner, const Vec2& startPosition, float oreintationDegrees);
@@ -23,10 +23,8 @@ public:
 
     virtual void Update(float deltaTime) override;
     virtual void Render() const override;
+    virtual void InitializeLocalVerts() override;
 
 private:
-    void InitializeLocalVerts();
-
-private:
-    Vertex_PCU m_localVerts[NUM_BULLET_TRIS];
+    Vertex_PCU m_localVerts[NUM_BULLETS_VERTS];
 };

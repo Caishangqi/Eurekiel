@@ -1,7 +1,9 @@
 ﻿#include "Asteroid.h"
 #include "GameCommon.hpp"
+#include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
+#include "Engine/Renderer/Renderer.hpp"
 
 Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientationDegrees): Entity(
     gameInstance, startPosition, orientationDegrees)
@@ -9,6 +11,10 @@ Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientat
     m_health = 3;
     m_physicsRadius = ASTEROID_PHYSICS_RADIUS;
     m_cosmeticRadius = ASTEROID_COSMETIC_RADIUS;
+
+    m_angularVelocity = g_rng->RollRandomFloatInRange(-200.f, 200.f);
+    m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, ASTEROID_SPEED);
+
     Asteroid::InitializeLocalVerts();
 }
 
@@ -18,15 +24,35 @@ Asteroid::~Asteroid()
 
 void Asteroid::Update(float deltaTime)
 {
+    m_orientationDegrees += deltaTime * m_angularVelocity;
+    m_position += m_velocity * deltaTime;
+
+    if (IsOffscreen())
+        m_isDead = true;
+
+    if (m_health <= 0)
+        m_isDead = true;
+
+    if (m_isDead)
+        m_isGarbage = true;
 }
 
 void Asteroid::Render() const
 {
+    Vertex_PCU tempWorldVerts[NUM_ASTEROID_VERTS];
+    for (int vertIndex = 0; vertIndex < NUM_ASTEROID_VERTS; vertIndex++)
+    {
+        tempWorldVerts[vertIndex] = m_localVerts[vertIndex];
+    }
+    TransformVertexArrayXY3D(NUM_ASTEROID_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
+    g_renderer->DrawVertexArray(NUM_ASTEROID_VERTS, tempWorldVerts);
 }
 
 // 14:32    https://smu.instructure.com/media_attachments_iframe/9925327?type=video&embedded=true
 void Asteroid::InitializeLocalVerts()
 {
+    // TODO: Following code is directly stole from Squirrel, refactor after complete function implementation
+
     // Precompute random radii along each triangle-seam (at each outer vertex)
     float asteroidRadii[NUM_ASTEROID_SIDES] = {};
     for (int sideNum = 0; sideNum < NUM_ASTEROID_SIDES; ++sideNum)

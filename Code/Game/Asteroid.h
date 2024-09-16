@@ -25,7 +25,7 @@ constexpr int NUM_ASTEROID_SIDES = 16;
 constexpr int NUM_ASTEROID_TRIS = NUM_ASTEROID_SIDES;
 constexpr int NUM_ASTEROID_VERTS = 3 * NUM_ASTEROID_TRIS;
 
-class Asteroid : Entity
+class Asteroid : public Entity
 {
 public:
     Asteroid(Game* gameInstance, const Vec2& startPosition, float orientationDegrees);
@@ -35,7 +35,6 @@ public:
     virtual void Render() const override;
 
     virtual void InitializeLocalVerts() override;
-
 
 private:
     Vertex_PCU m_localVerts[NUM_ASTEROID_VERTS];

@@ -69,8 +69,7 @@ bool App::IsQuitting() const
 
 void App::HandleKeyPress(unsigned char keyCode)
 {
-    m_areKeysDown[keyCode] = true; //m_areKeysDown[65] = true;
-    m_areKeysDownLastFrame[keyCode] = !m_areKeysDownLastFrame[keyCode];
+    m_areKeysDown[keyCode] = true;
 
     /*// #SD1ToDo: Tell the App (or InputSystem later) about this key-pressed event...
     if (keyCode == 'Q') // #SD1ToDo: move this "check for ESC pressed" code to App
@@ -127,6 +126,8 @@ bool App::WasKeyJustPressed(unsigned char keyCode) const
 void App::HandleKeyMapping()
 {
     m_isQuitting = IsKeyDown('Q');
+    if (WasKeyJustPressed('I'))
+        m_theGame->SpawnNewAsteroids();
 }
 
 void App::AdjustForPauseAndTimeDistortion(float& deltaSeconds)
@@ -190,6 +191,11 @@ void App::EndFrame()
 
     // Dump() 的时候
     // Copy m_areKeysDown to m_wereKeyDownLastFrame
+    for (int keyIndex = 0; keyIndex < 256; ++keyIndex)
+    {
+        m_areKeysDownLastFrame[keyIndex] = m_areKeysDown[keyIndex];
+    }
+    //m_areKeysDownLastFrame = m_areKeysDown;
 }
 
 void App::UpdateShip(float deltaSeconds)

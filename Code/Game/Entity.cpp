@@ -7,8 +7,6 @@ Entity::~Entity()
 {
     /*free(m_vertices);
     m_vertices = nullptr;*/
-
-    delete m_game;
     m_game = nullptr;
 }
 
@@ -47,7 +45,7 @@ bool Entity::IsOffscreen() const
 
 bool Entity::IsAlive() const
 {
-    return false;
+    return !m_isDead;
 }
 
 Vec2 Entity::GetForwardNormal()

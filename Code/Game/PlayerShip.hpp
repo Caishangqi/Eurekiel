@@ -17,8 +17,8 @@ k.	(2) In PlayerShip::Render, a (temporary, local) duplicate copy of this vertex
 l.	(1) A TransformVertexArrayXY3D() utility function rotates & translates the temp array (from “local space” into “world space”) before drawing:
 */
 //
-constexpr int NUM_SHIP_TRIS             = 5;
-constexpr int NUM_SHIP_VERTS            = 3 * NUM_SHIP_TRIS;
+constexpr int NUM_SHIP_TRIS = 5;
+constexpr int NUM_SHIP_VERTS = 3 * NUM_SHIP_TRIS;
 
 class PlayerShip : public Entity
 {
@@ -36,15 +36,15 @@ public:
 
     virtual void InitializeLocalVerts() override;
 
-
-private:
-    void UpdateFromKeyBoard(float &deltaSeconds);
-    void BounceOffWalls();
     void Respawn();
 
 private:
-    Vertex_PCU      m_localVerts[NUM_SHIP_VERTS];
-    bool            m_isTurningLeft = false;
-    bool            m_isTurningRight = false;
-    bool            m_isThrusting = false;
+    void UpdateFromKeyBoard(float& deltaSeconds);
+    void BounceOffWalls();
+
+private:
+    Vertex_PCU m_localVerts[NUM_SHIP_VERTS];
+    bool m_isTurningLeft = false;
+    bool m_isTurningRight = false;
+    bool m_isThrusting = false;
 };
