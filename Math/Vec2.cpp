@@ -1,6 +1,7 @@
 #include "Vec2.hpp"
-#include "Engine/Math/MathUtils.hpp"
 #include <valarray>
+
+#include "MathUtils.hpp"
 //#include "Engine/Math/MathUtils.hpp"
 //#include "Engine/Core/EngineCommon.hpp"
 

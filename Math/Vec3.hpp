@@ -11,10 +11,9 @@ public:
 
     // Accessors (const methods)
     float        GetLength() const;
-    float        GetLengthX() const;
+    float        GetLengthXY() const;
     float        GetLengthSquared() const;
     float        GetLengthXYSquared() const;
-    float        GetAngleAboutXRadians() const;
     float        GetAngleAboutZRadians() const;
     float        GetAngleAboutZDegrees() const;
     Vec3 const   GetRotatedAboutZRadians( float deltaRadians ) const;

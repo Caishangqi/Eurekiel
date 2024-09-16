@@ -8,11 +8,12 @@
  */
 struct Vertex_PCU
 {
-    Vec3 m_position;    // P
-    Rgba8 m_color;      // C
-    Vec2 m_uvTextCoords;    // U
+    Vec3 m_position; // P
+    Rgba8 m_color; // C
+    Vec2 m_uvTextCoords; // U
     //Vertex_PCU();
     Vertex_PCU(const Vertex_PCU& copyFrom);
+    Vertex_PCU();
     explicit Vertex_PCU(const Vec3& position, const Rgba8& color, const Vec2& uvTextCoords);
     ~Vertex_PCU();
 };

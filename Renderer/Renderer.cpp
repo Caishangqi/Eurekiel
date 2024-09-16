@@ -24,6 +24,8 @@ void Renderer::BeingFrame()
 
 void Renderer::EndFrame()
 {
+    // "Present" the backbuffer by swapping the front (visible) and back (working) screen buffers
+    SwapBuffers(g_displayDeviceContext); // Note: call this only once at the very end of each frame
 }
 
 void Renderer::Shutdown()
