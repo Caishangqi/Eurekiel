@@ -46,6 +46,7 @@ void Asteroid::Render() const
     }
     TransformVertexArrayXY3D(NUM_ASTEROID_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
     g_renderer->DrawVertexArray(NUM_ASTEROID_VERTS, tempWorldVerts);
+    DebugRender();
 }
 
 // 14:32    https://smu.instructure.com/media_attachments_iframe/9925327?type=video&embedded=true

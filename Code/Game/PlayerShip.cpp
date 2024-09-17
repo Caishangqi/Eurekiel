@@ -57,17 +57,17 @@ void PlayerShip::Update(float deltaSeconds)
 
 void PlayerShip::Render() const
 {
-    if (m_isDead)
+    if (!m_isDead)
     {
-        return;
+        Vertex_PCU tempWorldVerts[NUM_SHIP_VERTS];
+        for (int vertIndex = 0; vertIndex < NUM_SHIP_VERTS; vertIndex++)
+        {
+            tempWorldVerts[vertIndex] = m_localVerts[vertIndex];
+        }
+        TransformVertexArrayXY3D(NUM_SHIP_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
+        g_renderer->DrawVertexArray(NUM_SHIP_VERTS, tempWorldVerts);
     }
-    Vertex_PCU tempWorldVerts[NUM_SHIP_VERTS];
-    for (int vertIndex = 0; vertIndex < NUM_SHIP_VERTS; vertIndex++)
-    {
-        tempWorldVerts[vertIndex] = m_localVerts[vertIndex];
-    }
-    TransformVertexArrayXY3D(NUM_SHIP_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
-    g_renderer->DrawVertexArray(NUM_SHIP_VERTS, tempWorldVerts);
+    DebugRender();
 }
 
 
@@ -112,7 +112,7 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 
     if (g_theApp->WasKeyJustPressed(' '))
     {
-        m_game->SpawnNewBullet(Vec2(m_position.x, m_position.y), m_orientationDegrees);
+        m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
     }
 }
 
@@ -146,9 +146,12 @@ void PlayerShip::BounceOffWalls()
 
 void PlayerShip::Respawn()
 {
-    m_isDead = false;
-    m_position = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
-    m_velocity = Vec2(0.f, 0.f);
-    m_orientationDegrees = 90.f;
-    m_health = 1;
+    if (m_isDead)
+    {
+        m_isDead = false;
+        m_position = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
+        m_velocity = Vec2(0.f, 0.f);
+        m_orientationDegrees = 90.f;
+        m_health = 1;
+    }
 }

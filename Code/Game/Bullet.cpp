@@ -37,6 +37,7 @@ void Bullet::Update(float deltaTime)
 
 void Bullet::Render() const
 {
+    
     Vertex_PCU tempWorldVerts[NUM_BULLETS_VERTS];
     for (int vertIndex = 0; vertIndex < NUM_BULLETS_VERTS; vertIndex++)
     {
@@ -44,6 +45,7 @@ void Bullet::Render() const
     }
     TransformVertexArrayXY3D(NUM_BULLETS_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
     g_renderer->DrawVertexArray(NUM_BULLETS_VERTS, tempWorldVerts);
+    DebugRender();
 }
 
 void Bullet::InitializeLocalVerts()

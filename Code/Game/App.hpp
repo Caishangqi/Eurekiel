@@ -22,7 +22,7 @@ public:
     bool WasKeyJustPressed(unsigned char keyCode) const;
 
     void AdjustForPauseAndTimeDistortion(float& deltaSeconds);
-    void HandleKeyMapping();
+    void HandleKeyBoardEvent();
 
 private:
     void BeginFrame();
@@ -34,10 +34,10 @@ private:
     void UpdateShip(float deltaSeconds);
     void RenderShip() const;
 
-    bool m_isPausedAfterFrame = false;
     bool m_isQuitting = false;
     bool m_isPaused = false;
     bool m_isSlowMo = false;
+    bool m_isPauseAfterFrame = false;
     Vec2 m_shipPos;
 
     Camera* m_gameCamera;
@@ -45,4 +45,8 @@ private:
     bool m_areKeysDown[256] = {}; // true if each key is current down
     bool m_areKeysDownLastFrame[256] = {}; // notes whether key was down last frame
     Game* m_theGame;
+
+public:
+    bool m_isDebug = false;
+    bool m_isPendingRestart = false;
 };

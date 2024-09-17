@@ -33,7 +33,7 @@ Game::~Game()
 }
 
 
-void Game::Render()
+void Game::Render() const
 {
     RenderEntities();
 }
@@ -110,9 +110,9 @@ void Game::HandleKeyBoardEvent(float deltaTime)
         m_PlayerShip->Respawn();
 }
 
-void Game::RenderEntities()
+void Game::RenderEntities() const
 {
-    for (Bullet*& m_bullet : m_bullets)
+    for (Bullet* m_bullet : m_bullets)
     {
         if (m_bullet != nullptr)
         {
@@ -120,7 +120,7 @@ void Game::RenderEntities()
         }
     }
 
-    for (Asteroid*& asteroid : m_asteroid)
+    for (Asteroid* asteroid : m_asteroid)
     {
         if (asteroid != nullptr)
         {
@@ -145,6 +145,7 @@ void Game::HandleEntityCollisions()
                     if (DoDiscsOverlap(m_bullet->m_position, m_bullet->m_physicsRadius, asteroid->m_position,
                                        asteroid->m_physicsRadius))
                     {
+                        
                         m_bullet->m_health -= 1;
                         asteroid->m_health -= 1;
                     }
@@ -155,12 +156,13 @@ void Game::HandleEntityCollisions()
 
     for (Asteroid*& asteroid : m_asteroid)
     {
-        if (asteroid != nullptr && asteroid->IsAlive())
+        if (asteroid != nullptr && asteroid->IsAlive() && m_PlayerShip->IsAlive())
         {
             if (DoDiscsOverlap(asteroid->m_position, asteroid->m_physicsRadius, m_PlayerShip->m_position,
                                m_PlayerShip->m_physicsRadius))
             {
                 m_PlayerShip->m_health -= 1;
+                asteroid->m_health = 0;
             }
         }
     }

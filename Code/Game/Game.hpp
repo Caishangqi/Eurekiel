@@ -19,21 +19,22 @@ class Game
 public:
     Game();
     ~Game();
-    void Render();
+    void Render() const;
     void Update(float deltaTime);
 
     void SpawnNewBullet(Vec2 const& position, float orientationDegrees);
     void SpawnNewAsteroids();
     void HandleKeyBoardEvent(float deltaTime);
+
 private:
     void SpawnDefaultAsteroids();
 
-
-    void RenderEntities();
+    void RenderEntities() const;
     void HandleEntityCollisions();
     void GarbageCollection();
 
 public:
+    // nullptr equal to 0
     PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
     Asteroid* m_asteroid[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
     Bullet* m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.

@@ -6,8 +6,6 @@
 #include "Game/App.hpp"
 
 
-
-
 //-----------------------------------------------------------------------------------------------
 // #SD1ToDo: Later we will move this useful macro to a more central place, e.g. Engine/Core/EngineCommon.hpp
 //
@@ -25,9 +23,11 @@ constexpr float CLIENT_ASPECT = 2.0f; // We are requesting a 1:1 aspect (square)
 //
 
 extern App* g_theApp;
+
+
 HWND g_hWnd = nullptr; // ...becomes void* Window::m_windowHandle
 HDC g_displayDeviceContext = nullptr; // ...becomes void* Window::m_displayContext
-auto APP_NAME = "Windows OpenGL Test App"; // ...becomes ??? (Change this per project!)
+auto APP_NAME = "SD1-A2: Starship Prototype"; // ...becomes ??? (Change this per project!)
 
 //-----------------------------------------------------------------------------------------------
 // Handles Windows (Win32) messages/events; i.e. the OS is trying to tell us something happened.
@@ -209,14 +209,12 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
         // #SD1ToDo: This call will move to Window::BeginFrame() once we have a Window engine system
         // Process OS messages (keyboard/mouse button clicked, application lost/gained focus, etc.)
         RunMessagePump(); // calls our own WindowsMessageHandlingProcedure() function for us!
-        
+
         g_theApp->RunFrame();
 
-
         // #SD1ToDo: This call will move to Renderer::EndFrame() once we complete our Window refactor
-
-        
     }
+
 
     // TheApp_Shutdown(); // This will get replaced with:
     // #SD1ToDo:	g_theApp->Shutdown();

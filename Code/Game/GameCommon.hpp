@@ -1,4 +1,8 @@
 ﻿#pragma once
+
+struct Vec2;
+struct Rgba8;
+
 class App;
 class Renderer;
 class RandomNumberGenerator;
@@ -28,8 +32,10 @@ constexpr float PLAYER_SHIP_COSMETIC_RADIUS = 2.25f;
 
 void DebugDrawRing(Vec2 const& center, float radius, float thickness, Rgba8 const& color);
 
+void DebugDrawLine(Vec2 const& start, Vec2 const& end, float thickness, Rgba8 const& color);
+
+
 class GameCommon
 {
 public:
-    
 };

@@ -1,7 +1,5 @@
 ﻿#include "Game/App.hpp"
-
 #include <cstdio>
-
 #include "Engine/Math/RandomNumberGenerator.hpp"
 
 Renderer* g_renderer = nullptr;
@@ -35,8 +33,6 @@ void App::Startup()
     */
     m_theGame = new Game();
     g_rng = new RandomNumberGenerator();
-
-    m_shipPos = Vec2{0.0f, 50.0f};
 }
 
 void App::Shutdown()
@@ -123,11 +119,32 @@ bool App::WasKeyJustPressed(unsigned char keyCode) const
     return isKeyDown && !wasKeyJustPressed;
 }
 
-void App::HandleKeyMapping()
+void App::HandleKeyBoardEvent()
 {
     m_isQuitting = IsKeyDown('Q');
     if (WasKeyJustPressed('I'))
         m_theGame->SpawnNewAsteroids();
+    if (WasKeyJustPressed(0x70))
+    {
+        m_isDebug = !m_isDebug;
+    }
+    if (WasKeyJustPressed(0x77))
+    {
+        m_isPendingRestart = true;
+    }
+    if (WasKeyJustPressed('O'))
+    {
+        m_isPauseAfterFrame = !m_isPauseAfterFrame;
+        if (m_isPauseAfterFrame)
+        {
+            m_isPaused = true;
+            m_isPauseAfterFrame = false;
+        }
+        else
+        {
+            m_isPaused = false;
+        }
+    }
 }
 
 void App::AdjustForPauseAndTimeDistortion(float& deltaSeconds)
@@ -164,7 +181,7 @@ void App::UpdateCameras()
 
 void App::Update(float deltaSeconds)
 {
-    HandleKeyMapping();
+    HandleKeyBoardEvent();
     AdjustForPauseAndTimeDistortion(deltaSeconds);
 
     m_theGame->Update(deltaSeconds);
@@ -195,7 +212,14 @@ void App::EndFrame()
     {
         m_areKeysDownLastFrame[keyIndex] = m_areKeysDown[keyIndex];
     }
-    //m_areKeysDownLastFrame = m_areKeysDown;
+
+    if (m_isPendingRestart)
+    {
+        delete m_theGame;
+        m_theGame = nullptr;
+        m_isPendingRestart = false;
+        m_theGame = new Game();
+    }
 }
 
 void App::UpdateShip(float deltaSeconds)

@@ -186,6 +186,7 @@
         <ClCompile Include="Bullet.cpp" />
         <ClCompile Include="Entity.cpp" />
         <ClCompile Include="Game.cpp" />
+        <ClCompile Include="GameCommon.cpp" />
         <ClCompile Include="Main_Windows.cpp"/>
         <ClCompile Include="PlayerShip.cpp" />
     </ItemGroup>
