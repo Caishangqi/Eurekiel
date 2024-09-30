@@ -170,8 +170,11 @@
         <ClCompile Include="Core\ErrorWarningAssert.cpp" />
         <ClCompile Include="Core\Rgba8.cpp"/>
         <ClCompile Include="Core\StringUtils.cpp" />
+        <ClCompile Include="Core\Time.cpp" />
         <ClCompile Include="Core\VertexUtils.cpp" />
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
+        <ClCompile Include="Math\AABB2.cpp" />
+        <ClCompile Include="Math\IntVec2.cpp" />
         <ClCompile Include="Math\MathUtils.cpp" />
         <ClCompile Include="Math\RandomNumberGenerator.cpp" />
         <ClCompile Include="Math\Vec2.cpp"/>
@@ -183,8 +186,11 @@
         <ClInclude Include="Core\ErrorWarningAssert.hpp" />
         <ClInclude Include="Core\Rgba8.hpp"/>
         <ClInclude Include="Core\StringUtils.hpp" />
+        <ClInclude Include="Core\Time.hpp" />
         <ClInclude Include="Core\VertexUtils.hpp" />
         <ClInclude Include="Core\Vertex_PCU.hpp"/>
+        <ClInclude Include="Math\AABB2.hpp" />
+        <ClInclude Include="Math\IntVec2.hpp" />
         <ClInclude Include="Math\MathUtils.hpp" />
         <ClInclude Include="Math\RandomNumberGenerator.hpp" />
         <ClInclude Include="Math\Vec2.hpp"/>

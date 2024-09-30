@@ -1,4 +1,5 @@
-﻿struct Vec3
+﻿#pragma once
+struct Vec3
 {
 public:
     float x = 0.f;
