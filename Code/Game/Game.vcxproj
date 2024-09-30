@@ -182,22 +182,352 @@
     </ItemGroup>
     <ItemGroup>
         <ClCompile Include="App.cpp"/>
-        <ClCompile Include="Asteroid.cpp" />
-        <ClCompile Include="Bullet.cpp" />
-        <ClCompile Include="Entity.cpp" />
+        <ClCompile Include="Entity\Asteroid.cpp">
+          <AssemblerOutput>NoListing</AssemblerOutput>
+          <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
+          <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+          <BrowseInformation>false</BrowseInformation>
+          <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
+          <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+          <CompileAs>Default</CompileAs>
+          <ConformanceMode>true</ConformanceMode>
+          <DiagnosticsFormat>Column</DiagnosticsFormat>
+          <DisableLanguageExtensions>false</DisableLanguageExtensions>
+          <ErrorReporting>Prompt</ErrorReporting>
+          <ExpandAttributedSource>false</ExpandAttributedSource>
+          <ExceptionHandling>Sync</ExceptionHandling>
+          <EnableASAN>false</EnableASAN>
+          <EnableFuzzer>false</EnableFuzzer>
+          <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+          <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+          <FloatingPointModel>Precise</FloatingPointModel>
+          <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+          <GenerateModuleDependencies>false</GenerateModuleDependencies>
+          <GenerateSourceDependencies>false</GenerateSourceDependencies>
+          <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+          <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+          <IntrinsicFunctions>true</IntrinsicFunctions>
+          <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+          <LanguageStandard>stdcpp17</LanguageStandard>
+          <LanguageStandard_C>Default</LanguageStandard_C>
+          <MinimalRebuild>false</MinimalRebuild>
+          <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
+          <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
+          <OmitDefaultLibName>false</OmitDefaultLibName>
+          <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+          <WholeProgramOptimization>true</WholeProgramOptimization>
+          <Optimization>MaxSpeed</Optimization>
+          <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
+          <CallingConvention>Cdecl</CallingConvention>
+          <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
+          <PrecompiledHeader>NotUsing</PrecompiledHeader>
+          <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+          <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
+          <PreprocessToFile>false</PreprocessToFile>
+          <PreprocessKeepComments>false</PreprocessKeepComments>
+          <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+          <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+          <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+          <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+          <ShowIncludes>false</ShowIncludes>
+          <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
+          <SuppressStartupBanner>true</SuppressStartupBanner>
+          <BufferSecurityCheck>true</BufferSecurityCheck>
+          <SmallerTypeCheck>false</SmallerTypeCheck>
+          <SpectreMitigation>false</SpectreMitigation>
+          <StructMemberAlignment>Default</StructMemberAlignment>
+          <SupportJustMyCode>false</SupportJustMyCode>
+          <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
+          <TranslateIncludes>false</TranslateIncludes>
+          <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+          <TreatWarningAsError>false</TreatWarningAsError>
+          <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+          <UseFullPaths>true</UseFullPaths>
+          <WarningLevel>Level4</WarningLevel>
+          <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
+          <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+          <IntelJCCErratum>false</IntelJCCErratum>
+          <BuildStlModules>false</BuildStlModules>
+          <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+          <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+          <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+          <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+          <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
+          <FunctionLevelLinking>true</FunctionLevelLinking>
+          <SDLCheck>true</SDLCheck>
+          <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
+          <LinkCompiled>true</LinkCompiled>
+        </ClCompile>
+        <ClCompile Include="Entity\Beetle.cpp" />
+        <ClCompile Include="Entity\Bullet.cpp">
+          <AssemblerOutput>NoListing</AssemblerOutput>
+          <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
+          <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+          <BrowseInformation>false</BrowseInformation>
+          <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
+          <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+          <CompileAs>Default</CompileAs>
+          <ConformanceMode>true</ConformanceMode>
+          <DiagnosticsFormat>Column</DiagnosticsFormat>
+          <DisableLanguageExtensions>false</DisableLanguageExtensions>
+          <ErrorReporting>Prompt</ErrorReporting>
+          <ExpandAttributedSource>false</ExpandAttributedSource>
+          <ExceptionHandling>Sync</ExceptionHandling>
+          <EnableASAN>false</EnableASAN>
+          <EnableFuzzer>false</EnableFuzzer>
+          <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+          <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+          <FloatingPointModel>Precise</FloatingPointModel>
+          <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+          <GenerateModuleDependencies>false</GenerateModuleDependencies>
+          <GenerateSourceDependencies>false</GenerateSourceDependencies>
+          <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+          <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+          <IntrinsicFunctions>true</IntrinsicFunctions>
+          <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+          <LanguageStandard>stdcpp17</LanguageStandard>
+          <LanguageStandard_C>Default</LanguageStandard_C>
+          <MinimalRebuild>false</MinimalRebuild>
+          <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
+          <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
+          <OmitDefaultLibName>false</OmitDefaultLibName>
+          <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+          <WholeProgramOptimization>true</WholeProgramOptimization>
+          <Optimization>MaxSpeed</Optimization>
+          <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
+          <CallingConvention>Cdecl</CallingConvention>
+          <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
+          <PrecompiledHeader>NotUsing</PrecompiledHeader>
+          <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+          <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
+          <PreprocessToFile>false</PreprocessToFile>
+          <PreprocessKeepComments>false</PreprocessKeepComments>
+          <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+          <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+          <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+          <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+          <ShowIncludes>false</ShowIncludes>
+          <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
+          <SuppressStartupBanner>true</SuppressStartupBanner>
+          <BufferSecurityCheck>true</BufferSecurityCheck>
+          <SmallerTypeCheck>false</SmallerTypeCheck>
+          <SpectreMitigation>false</SpectreMitigation>
+          <StructMemberAlignment>Default</StructMemberAlignment>
+          <SupportJustMyCode>false</SupportJustMyCode>
+          <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
+          <TranslateIncludes>false</TranslateIncludes>
+          <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+          <TreatWarningAsError>false</TreatWarningAsError>
+          <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+          <UseFullPaths>true</UseFullPaths>
+          <WarningLevel>Level4</WarningLevel>
+          <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
+          <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+          <IntelJCCErratum>false</IntelJCCErratum>
+          <BuildStlModules>false</BuildStlModules>
+          <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+          <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+          <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+          <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+          <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
+          <FunctionLevelLinking>true</FunctionLevelLinking>
+          <SDLCheck>true</SDLCheck>
+          <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
+          <LinkCompiled>true</LinkCompiled>
+        </ClCompile>
+        <ClCompile Include="Entity\Entity.cpp">
+          <AssemblerOutput>NoListing</AssemblerOutput>
+          <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
+          <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+          <BrowseInformation>false</BrowseInformation>
+          <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
+          <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+          <CompileAs>Default</CompileAs>
+          <ConformanceMode>true</ConformanceMode>
+          <DiagnosticsFormat>Column</DiagnosticsFormat>
+          <DisableLanguageExtensions>false</DisableLanguageExtensions>
+          <ErrorReporting>Prompt</ErrorReporting>
+          <ExpandAttributedSource>false</ExpandAttributedSource>
+          <ExceptionHandling>Sync</ExceptionHandling>
+          <EnableASAN>false</EnableASAN>
+          <EnableFuzzer>false</EnableFuzzer>
+          <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+          <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+          <FloatingPointModel>Precise</FloatingPointModel>
+          <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+          <GenerateModuleDependencies>false</GenerateModuleDependencies>
+          <GenerateSourceDependencies>false</GenerateSourceDependencies>
+          <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+          <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+          <IntrinsicFunctions>true</IntrinsicFunctions>
+          <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+          <LanguageStandard>stdcpp17</LanguageStandard>
+          <LanguageStandard_C>Default</LanguageStandard_C>
+          <MinimalRebuild>false</MinimalRebuild>
+          <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
+          <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
+          <OmitDefaultLibName>false</OmitDefaultLibName>
+          <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+          <WholeProgramOptimization>true</WholeProgramOptimization>
+          <Optimization>MaxSpeed</Optimization>
+          <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
+          <CallingConvention>Cdecl</CallingConvention>
+          <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
+          <PrecompiledHeader>NotUsing</PrecompiledHeader>
+          <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+          <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
+          <PreprocessToFile>false</PreprocessToFile>
+          <PreprocessKeepComments>false</PreprocessKeepComments>
+          <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+          <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+          <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+          <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+          <ShowIncludes>false</ShowIncludes>
+          <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
+          <SuppressStartupBanner>true</SuppressStartupBanner>
+          <BufferSecurityCheck>true</BufferSecurityCheck>
+          <SmallerTypeCheck>false</SmallerTypeCheck>
+          <SpectreMitigation>false</SpectreMitigation>
+          <StructMemberAlignment>Default</StructMemberAlignment>
+          <SupportJustMyCode>false</SupportJustMyCode>
+          <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
+          <TranslateIncludes>false</TranslateIncludes>
+          <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+          <TreatWarningAsError>false</TreatWarningAsError>
+          <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+          <UseFullPaths>true</UseFullPaths>
+          <WarningLevel>Level4</WarningLevel>
+          <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
+          <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+          <IntelJCCErratum>false</IntelJCCErratum>
+          <BuildStlModules>false</BuildStlModules>
+          <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+          <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+          <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+          <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+          <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
+          <FunctionLevelLinking>true</FunctionLevelLinking>
+          <SDLCheck>true</SDLCheck>
+          <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
+          <LinkCompiled>true</LinkCompiled>
+        </ClCompile>
+        <ClCompile Include="Entity\PlayerShip.cpp">
+          <AssemblerOutput>NoListing</AssemblerOutput>
+          <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
+          <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+          <BrowseInformation>false</BrowseInformation>
+          <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
+          <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+          <CompileAs>Default</CompileAs>
+          <ConformanceMode>true</ConformanceMode>
+          <DiagnosticsFormat>Column</DiagnosticsFormat>
+          <DisableLanguageExtensions>false</DisableLanguageExtensions>
+          <ErrorReporting>Prompt</ErrorReporting>
+          <ExpandAttributedSource>false</ExpandAttributedSource>
+          <ExceptionHandling>Sync</ExceptionHandling>
+          <EnableASAN>false</EnableASAN>
+          <EnableFuzzer>false</EnableFuzzer>
+          <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+          <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+          <FloatingPointModel>Precise</FloatingPointModel>
+          <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+          <GenerateModuleDependencies>false</GenerateModuleDependencies>
+          <GenerateSourceDependencies>false</GenerateSourceDependencies>
+          <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+          <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+          <IntrinsicFunctions>true</IntrinsicFunctions>
+          <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+          <LanguageStandard>stdcpp17</LanguageStandard>
+          <LanguageStandard_C>Default</LanguageStandard_C>
+          <MinimalRebuild>false</MinimalRebuild>
+          <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
+          <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
+          <OmitDefaultLibName>false</OmitDefaultLibName>
+          <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+          <WholeProgramOptimization>true</WholeProgramOptimization>
+          <Optimization>MaxSpeed</Optimization>
+          <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
+          <CallingConvention>Cdecl</CallingConvention>
+          <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
+          <PrecompiledHeader>NotUsing</PrecompiledHeader>
+          <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+          <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
+          <PreprocessToFile>false</PreprocessToFile>
+          <PreprocessKeepComments>false</PreprocessKeepComments>
+          <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+          <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+          <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
+          <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+          <ShowIncludes>false</ShowIncludes>
+          <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
+          <SuppressStartupBanner>true</SuppressStartupBanner>
+          <BufferSecurityCheck>true</BufferSecurityCheck>
+          <SmallerTypeCheck>false</SmallerTypeCheck>
+          <SpectreMitigation>false</SpectreMitigation>
+          <StructMemberAlignment>Default</StructMemberAlignment>
+          <SupportJustMyCode>false</SupportJustMyCode>
+          <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
+          <TranslateIncludes>false</TranslateIncludes>
+          <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+          <TreatWarningAsError>false</TreatWarningAsError>
+          <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+          <UseFullPaths>true</UseFullPaths>
+          <WarningLevel>Level4</WarningLevel>
+          <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
+          <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+          <IntelJCCErratum>false</IntelJCCErratum>
+          <BuildStlModules>false</BuildStlModules>
+          <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+          <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+          <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+          <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+          <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
+          <FunctionLevelLinking>true</FunctionLevelLinking>
+          <SDLCheck>true</SDLCheck>
+          <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
+          <LinkCompiled>true</LinkCompiled>
+        </ClCompile>
+        <ClCompile Include="Entity\Wasp.cpp" />
         <ClCompile Include="Game.cpp" />
         <ClCompile Include="GameCommon.cpp" />
-        <ClCompile Include="Main_Windows.cpp"/>
-        <ClCompile Include="PlayerShip.cpp" />
+        <ClCompile Include="Level\FLevel.cpp" />
+        <ClCompile Include="Level\LevelHandler.cpp" />
+        <ClCompile Include="Main_Windows.cpp" />
+        <ClCompile Include="Particle\BaseParticle.cpp" />
+        <ClCompile Include="Particle\ParticleHandler.cpp" />
+        <ClCompile Include="Widget\Data\IconRes.cpp" />
+        <ClCompile Include="Widget\Icon\Icon.cpp" />
+        <ClCompile Include="Widget\WidgetHandler.cpp" />
+        <ClCompile Include="Widget\Widgets\BaseWidget.cpp" />
+        <ClCompile Include="Widget\Widgets\WidgetMainMenu.cpp" />
+        <ClCompile Include="Widget\Widgets\WidgetPlayerHealth.cpp" />
     </ItemGroup>
     <ItemGroup>
-        <ClInclude Include="App.hpp"/>
-        <ClInclude Include="Asteroid.h" />
-        <ClInclude Include="Bullet.h" />
-        <ClInclude Include="Entity.h" />
+        <ClInclude Include="App.hpp" />
+        <ClInclude Include="Entity\Asteroid.hpp" />
+        <ClInclude Include="Entity\Beetle.hpp" />
+        <ClInclude Include="Entity\Bullet.h" />
+        <ClInclude Include="Entity\Entity.h" />
+        <ClInclude Include="Entity\PlayerShip.hpp" />
+        <ClInclude Include="Entity\Wasp.hpp" />
+        <ClInclude Include="Enum\EEntity.h" />
+        <ClInclude Include="Enum\ELevelState.h" />
         <ClInclude Include="Game.hpp" />
         <ClInclude Include="GameCommon.hpp" />
-        <ClInclude Include="PlayerShip.hpp" />
+        <ClInclude Include="Level\FLevel.h" />
+        <ClInclude Include="Level\LevelHandler.hpp" />
+        <ClInclude Include="Particle\BaseParticle.hpp" />
+        <ClInclude Include="Particle\ParticleHandler.hpp" />
+        <ClInclude Include="Time\FTimerHandle.hpp" />
+        <ClInclude Include="Widget\Data\IconRes.hpp" />
+        <ClInclude Include="Widget\Icon\Icon.hpp" />
+        <ClInclude Include="Widget\WidgetHandler.hpp" />
+        <ClInclude Include="Widget\Widgets\BaseWidget.hpp" />
+        <ClInclude Include="Widget\Widgets\WidgetMainMenu.hpp" />
+        <ClInclude Include="Widget\Widgets\WidgetPlayerHealth.hpp" />
+    </ItemGroup>
+    <ItemGroup>
+      <Content Include="Enum\EShape.h" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">

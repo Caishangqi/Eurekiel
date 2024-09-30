@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+
 struct Vec2;
 struct Rgba8;
 
@@ -10,6 +11,8 @@ class RandomNumberGenerator;
 extern RandomNumberGenerator* g_rng;
 extern App* g_theApp;
 extern Renderer* g_renderer;
+
+constexpr int NUM_MAX_TRY = 4;
 
 constexpr int NUM_STARTING_ASTEROIDS = 6;
 constexpr int MAX_ASTEROIDS = 12;
@@ -29,6 +32,22 @@ constexpr float PLAYER_SHIP_ACCELERATION = 30.f;
 constexpr float PLAYER_SHIP_TURN_SPEED = 300.f;
 constexpr float PLAYER_SHIP_PHYSICS_RADIUS = 1.75f;
 constexpr float PLAYER_SHIP_COSMETIC_RADIUS = 2.25f;
+
+constexpr float BEETLE_PHYSICS_RADIUS = 1.75f;
+constexpr float BEETLE_COSMETIC_RADIUS = 2.25f;
+constexpr float BEETLE_SPEED = 6.0f;
+constexpr int BEETLE_HEALTH = 3;
+
+constexpr float WASP_PHYSICS_RADIUS = 1.75f;
+constexpr float WASP_COSMETIC_RADIUS = 2.25f;
+constexpr float WASP_SPEED = 6.0f;
+constexpr float WASP_SPEED_MAX = 40.f;
+constexpr int WASP_HEALTH = 3;
+constexpr float WASP_ACCELERATION = 50.f;
+
+
+// Entity Data
+constexpr int MAX_ENTITY_PER_TYPE = 64;
 
 void DebugDrawRing(Vec2 const& center, float radius, float thickness, Rgba8 const& color);
 

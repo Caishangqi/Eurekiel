@@ -1,4 +1,5 @@
 ﻿#pragma once
+
 #include "Game.hpp"
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
@@ -45,6 +46,8 @@ private:
     bool m_areKeysDown[256] = {}; // true if each key is current down
     bool m_areKeysDownLastFrame[256] = {}; // notes whether key was down last frame
     Game* m_theGame;
+
+    float m_LastFrameStartTime;
 
 public:
     bool m_isDebug = false;

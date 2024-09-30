@@ -3,6 +3,8 @@
 #include <cassert>
 #include <crtdbg.h>
 #include <cstdio>
+#include <iostream>
+
 #include "Game/App.hpp"
 
 
@@ -11,19 +13,19 @@
 //
 #define UNUSED(x) (void)(x);
 
-
 //-----------------------------------------------------------------------------------------------
 // #SD1ToDo: This will eventually go away once we add a Window engine class later on.
 // 
 constexpr float CLIENT_ASPECT = 2.0f; // We are requesting a 1:1 aspect (square) window area
 
+#define CONSOLE_HANDLER HANDLE
 
 //-----------------------------------------------------------------------------------------------
 // #SD1ToDo: We will move each of these items to its proper place, once that place is established later on
 //
 
 extern App* g_theApp;
-
+extern HANDLE g_consoleHandle;
 
 HWND g_hWnd = nullptr; // ...becomes void* Window::m_windowHandle
 HDC g_displayDeviceContext = nullptr; // ...becomes void* Window::m_displayContext
@@ -186,11 +188,55 @@ void RunMessagePump()
     }
 }
 
+#ifdef CONSOLE_HANDLER
+HANDLE g_consoleHandle = nullptr; // 定义控制台句柄
+void CreateConsole()
+{
+    // 分配控制台窗口
+    AllocConsole();
+    // 重定向标准输出、标准错误和标准输入到控制台
+    FILE* stream;
+    freopen_s(&stream, "CONOUT$", "w", stdout); // 标准输出
+    freopen_s(&stream, "CONOUT$", "w", stderr); // 标准错误
+    freopen_s(&stream, "CONIN$", "r", stdin); // 标准输入
 
+    // 获取控制台句柄，允许通过 WinAPI 与控制台进行更多的交互
+    g_consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if (g_consoleHandle == INVALID_HANDLE_VALUE)
+    {
+        std::cerr << "Failed to get console handle!" << '\n';
+    }
+    else
+    {
+        puts("[/] Initialize......");
+        puts("   _____ _             _    _____ _     _        ");
+        puts("  / ____| |           | |  / ____| |   (_)       ");
+        puts(" | (___ | |_ __ _ _ __| |_| (___ | |__  _ _ __   ");
+        puts("  \\___ \\| __/ _` | '__| __|\\___ \\| '_ \\| | '_ \\       Running v2.3-BETA (v1_20)");
+        puts("  ____) | || (_| | |  | |_ ____) | | | | | |_) |      Platform Windows (11)");
+        puts(" |_____/ \\__\\__,_|_|   \\__|_____/|_| |_|_| .__/  ");
+        puts("                                         | |     ");
+        puts("                                         |_|     ");
+        puts("             Developed by Caizii                 ");
+        puts("\n");
+    }
+
+    if (g_consoleHandle)
+    {
+        // 例如更改控制台文字颜色 (白色背景，蓝色文字)
+        SetConsoleTextAttribute(g_consoleHandle, BACKGROUND_BLUE | FOREGROUND_INTENSITY);
+    }
+}
+#endif
 //-----------------------------------------------------------------------------------------------
 int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR commandLineString, int)
 {
     UNUSED(commandLineString);
+
+#ifdef CONSOLE_HANDLER
+    CreateConsole();
+#endif
 
     CreateOSWindow(applicationInstanceHandle, CLIENT_ASPECT);
     //CreateRenderingContext();
@@ -205,7 +251,7 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
     // Program main loop; keep running frames until it's time to quit
     while (!g_theApp->IsQuitting()) // #SD1ToDo: ...becomes:  !g_theApp->IsQuitting()
     {
-        Sleep(16); // Temporary code to "slow down" our app to ~60Hz until we have proper frame timing in
+        //Sleep(16); // Temporary code to "slow down" our app to ~60Hz until we have proper frame timing in
         // #SD1ToDo: This call will move to Window::BeginFrame() once we have a Window engine system
         // Process OS messages (keyboard/mouse button clicked, application lost/gained focus, etc.)
         RunMessagePump(); // calls our own WindowsMessageHandlingProcedure() function for us!
@@ -214,7 +260,6 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
 
         // #SD1ToDo: This call will move to Renderer::EndFrame() once we complete our Window refactor
     }
-
 
     // TheApp_Shutdown(); // This will get replaced with:
     // #SD1ToDo:	g_theApp->Shutdown();

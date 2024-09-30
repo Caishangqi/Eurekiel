@@ -1,10 +1,18 @@
 ﻿#pragma once
-#include "Asteroid.h"
-#include "Bullet.h"
+#include "Game/Entity/Asteroid.hpp"
+#include "Game/Entity/Bullet.h"
 #include "GameCommon.hpp"
-#include "PlayerShip.hpp"
+#include "Game/Entity/PlayerShip.hpp"
+#include "Widget/Widgets/WidgetMainMenu.hpp"
 
 
+struct FTimerHandle;
+class WidgetHandler;
+class ParticleHandler;
+class LevelHandler;
+enum EEntity : int;
+class Wasp;
+class Beetle;
 /*
 *   a. (1) Gameplay overseer, bookkeeper, and referee – owns all gameplay-related concepts
     b. (1) Handles all entity-vs-entity interactions (e.g. physics, damage)
@@ -20,22 +28,75 @@ public:
     Game();
     ~Game();
     void Render() const;
+
     void Update(float deltaTime);
 
     void SpawnNewBullet(Vec2 const& position, float orientationDegrees);
     void SpawnNewAsteroids();
     void HandleKeyBoardEvent(float deltaTime);
+    void RegisterDefaultObjects();
+    // Game play logic
+    void StartGame();
+    void ReturnToMainMenu();
+
+    // Update
+    void UpdateTimerHandle(float deltaSeconds);
+    void UpdateBullet(float deltaTime);
+    void UpdateAsteroid(float deltaTime);
+    void UpdateBeetle(float deltaTime);
+    void UpdateWasp(float deltaTime);
 
 private:
     void SpawnDefaultAsteroids();
+    Vec2 getRandomPositionOffscreen(Entity* entity) const;
 
     void RenderEntities() const;
     void HandleEntityCollisions();
     void GarbageCollection();
 
 public:
+    /**
+     * Spawn specific entity type on the game world
+     * @param entityType The specific entity type
+     */
+    void Spawn(EEntity entityType);
+
+    /**
+     * Spawn specific entity type on the game world
+     * @param entityType The specific entity type
+     */
+    void Spawn(EEntity entityType, int amount);
+
+
+    // Simple event 
+public:
+    void OnEntityDieEvent(Entity* entity);
+    void OnPlayerShipRespawnEvent(PlayerShip* playerShip, int remainTry);
+    void OnPlayerShipDeathEvent(PlayerShip* playerShip);
+    void OnMainMenuDisplayEvent();
+
+public:
     // nullptr equal to 0
     PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
+
     Asteroid* m_asteroid[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
+
     Bullet* m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.
+
+    Beetle* m_entities_beetle[MAX_ENTITY_PER_TYPE] = {};
+
+    Wasp* m_entity_wasp[MAX_ENTITY_PER_TYPE] = {};
+
+    LevelHandler* m_levelHandler = nullptr; // LevelHandler
+
+    WidgetHandler* m_widgetHandler = nullptr; // Widget Handler
+
+    int remainTry = NUM_MAX_TRY;
+
+    bool IsInMainMenu = true;
+    bool IsGameStart = false;
+
+private:
+    FTimerHandle* m_timerHandles[128] = {};
+    FTimerHandle* SetTimer(float timer, void (*callback)());
 };

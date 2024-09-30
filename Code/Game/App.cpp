@@ -1,5 +1,7 @@
 ﻿#include "Game/App.hpp"
 #include <cstdio>
+
+#include "Engine/Core/Time.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 
 Renderer* g_renderer = nullptr;
@@ -25,6 +27,11 @@ void App::Startup()
 {
     g_renderer = new Renderer(); // Create render
     g_renderer->StartUp();
+
+    // g_theInput Start Up
+    // g_theInput = new InputSystem();
+    // g_theInput->StartUp();
+
 
     /*  h. App::Startup() should do the following, in this order:
         i. Create a new instance of Renderer (and assign its memory address to g_theRenderer)
@@ -52,8 +59,12 @@ void App::Shutdown()
 
 void App::RunFrame()
 {
+    float timeNow = static_cast<float>(GetCurrentTimeSeconds());
+    float deltaSeconds = timeNow - m_LastFrameStartTime;
+    m_LastFrameStartTime = timeNow;
+
     BeginFrame(); //Engine pre-frame stuff
-    Update(1.f / 60.f); // Game updates / moves / spawns / hurts
+    Update(deltaSeconds); // Game updates / moves / spawns / hurts
     Render(); // Game draws current state of things
     EndFrame(); // Engine post-frame
 }
@@ -66,30 +77,6 @@ bool App::IsQuitting() const
 void App::HandleKeyPress(unsigned char keyCode)
 {
     m_areKeysDown[keyCode] = true;
-
-    /*// #SD1ToDo: Tell the App (or InputSystem later) about this key-pressed event...
-    if (keyCode == 'Q') // #SD1ToDo: move this "check for ESC pressed" code to App
-    {
-        m_isQuitting = true;
-        return false; // "Consumes" this message (tells Windows "okay, we handled it")
-    }
-
-    if (keyCode == 'P')
-    {
-        m_isPaused = !m_isPaused; // Toggles between pause state
-        return false;
-    }
-
-    if (keyCode == 'T')
-    {
-        m_isSlowMo = true;
-    }
-
-    if (keyCode == 'O')
-    {
-        m_isPausedAfterFrame = true;
-    }
-    return false;*/
 }
 
 void App::HandleKeyRelease(unsigned char keyCode)
@@ -98,6 +85,7 @@ void App::HandleKeyRelease(unsigned char keyCode)
     {
         m_isSlowMo = false;
     }
+    
     return false;*/
     m_areKeysDown[keyCode] = false;
 }
@@ -121,7 +109,15 @@ bool App::WasKeyJustPressed(unsigned char keyCode) const
 
 void App::HandleKeyBoardEvent()
 {
-    m_isQuitting = IsKeyDown('Q');
+    // ESC
+    if (WasKeyJustPressed(27))
+    {
+        if (m_theGame->IsInMainMenu)
+        {
+            m_isQuitting = true;
+        }
+    }
+    
     if (WasKeyJustPressed('I'))
         m_theGame->SpawnNewAsteroids();
     if (WasKeyJustPressed(0x70))
@@ -134,16 +130,8 @@ void App::HandleKeyBoardEvent()
     }
     if (WasKeyJustPressed('O'))
     {
-        m_isPauseAfterFrame = !m_isPauseAfterFrame;
-        if (m_isPauseAfterFrame)
-        {
-            m_isPaused = true;
-            m_isPauseAfterFrame = false;
-        }
-        else
-        {
-            m_isPaused = false;
-        }
+        m_theGame->Update(1 / 60.f);
+        m_isPaused = true;
     }
 }
 
@@ -172,6 +160,12 @@ void App::BeginFrame()
 {
     g_renderer->BeingFrame();
     // g_theInput->BeingFrame();
+    // g_theAudio->BeginFrame();
+    // g_theNetwork->BeginFrame();
+    // g_theWindow->BeginFrame();
+    // g_theDevConsole->BeginFrame();
+    // g_theEventSystem->BeginFrame();
+    // g_theNetwork->BeginFrame();
 }
 
 void App::UpdateCameras()

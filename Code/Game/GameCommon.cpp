@@ -1,8 +1,7 @@
 ﻿#include "GameCommon.hpp"
-#include "Asteroid.h"
+#include "Game/Entity/Asteroid.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Renderer/Renderer.hpp"
-
 void DebugDrawRing(Vec2 const& center, float radius, float thickness, Rgba8 const& color)
 {
     float halfThickness = 0.5f * thickness;
