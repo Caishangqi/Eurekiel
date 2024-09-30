@@ -1,14 +1,17 @@
 ﻿#include "PlayerShip.hpp"
 
-#include "App.hpp"
-#include "GameCommon.hpp"
+#include "Game/App.hpp"
+#include "Game/GameCommon.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+#include "Game/Particle/ParticleHandler.hpp"
+#include "Game/Widget/Data/IconRes.hpp"
 
 PlayerShip::PlayerShip(Game* gameInstance, const Vec2& startPosition, float orientationDegree): Entity(
     gameInstance, startPosition, orientationDegree)
 {
+    m_color = Rgba8(102, 153, 204);
     m_physicsRadius = PLAYER_SHIP_PHYSICS_RADIUS;
     m_cosmeticRadius = PLAYER_SHIP_COSMETIC_RADIUS;
     m_orientationDegrees = orientationDegree;
@@ -50,7 +53,11 @@ void PlayerShip::Update(float deltaSeconds)
     m_position += m_velocity * deltaSeconds;
 
     if (m_health <= 0)
+    {
         m_isDead = true;
+        Die();
+    }
+
 
     BounceOffWalls();
 }
@@ -70,13 +77,20 @@ void PlayerShip::Render() const
     DebugRender();
 }
 
+void PlayerShip::Die()
+{
+    Entity::Die();
+    m_game->OnPlayerShipDeathEvent(this);
+}
+
 
 void PlayerShip::InitializeLocalVerts()
 {
     // Nose cone
-    m_localVerts[0].m_position = Vec3(1.f, 0.f, 0.f);
-    m_localVerts[1].m_position = Vec3(0.f, 1.f, 0.f);
-    m_localVerts[2].m_position = Vec3(0.f, -1.f, 0.f);
+    m_localVerts[0].m_position = ICON::SPACESHIP[0].m_position;
+    m_localVerts[1].m_position = ICON::SPACESHIP[1].m_position;
+    m_localVerts[2].m_position = ICON::SPACESHIP[2].m_position;
+
 
     // Left Wing
     m_localVerts[3].m_position = Vec3(2.f, 1.f, 0.f);
@@ -151,7 +165,35 @@ void PlayerShip::Respawn()
         m_isDead = false;
         m_position = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
         m_velocity = Vec2(0.f, 0.f);
-        m_orientationDegrees = 90.f;
+        m_orientationDegrees = 0.f;
         m_health = 1;
+        m_game->remainTry--;
+        if (m_game->remainTry > 0)
+        {
+            m_game->OnPlayerShipRespawnEvent(this, m_game->remainTry);
+        }
     }
+}
+
+void PlayerShip::OnColliedEnter(Entity* other)
+{
+    Entity::OnColliedEnter(other);
+    m_health--;
+    FParticleProperty pp;
+    pp.fadeOpacity = true;
+    pp.numDebris = 80;
+    pp.averageVelocity = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed = 40.f;
+    pp.color = m_color;
+    pp.position = m_position;
+    pp.minAngularVelocity = 0.f;
+    pp.maxAngularVelocity = 0.f;
+
+    pp.minOpacity = 0.6f;
+    pp.maxOpacity = 1.0f;
+
+    pp.minLifeTime = 2.0f;
+    pp.maxLifeTime = 3.0f;
+
+    ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
 }

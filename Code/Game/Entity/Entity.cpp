@@ -1,7 +1,8 @@
-﻿#include "Entity.h"
+﻿#include "Game/Entity/Entity.h"
 
-#include "App.hpp"
-#include "Game.hpp"
+
+#include "Game/App.hpp"
+#include "Game/Game.hpp"
 
 Entity::~Entity()
 {
@@ -45,7 +46,11 @@ void Entity::DebugRender() const
 
 void Entity::Die()
 {
-    
+    m_game->OnEntityDieEvent(this);
+}
+
+void Entity::OnColliedEnter(Entity* other)
+{
 }
 
 bool Entity::IsOffscreen() const

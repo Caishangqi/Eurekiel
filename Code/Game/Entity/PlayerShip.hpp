@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "Bullet.h"
-#include "Entity.h"
+#include "Game/Entity/Entity.h"
 /*
 a.	(1) Derives (inherits) from Entity (e.g. class PlayerShip : public Entity)
 b.	(1) The only player-controlled Entity
@@ -34,10 +34,14 @@ public:
     virtual void Update(float deltaSeconds) override;
     virtual void Render() const override;
 
+    void Die() override;
+
     virtual void InitializeLocalVerts() override;
 
     void Respawn();
 
+    void OnColliedEnter(Entity* other) override;
+    
 private:
     void UpdateFromKeyBoard(float& deltaSeconds);
     void BounceOffWalls();

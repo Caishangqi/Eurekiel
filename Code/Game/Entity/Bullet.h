@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "Entity.h"
+#include "Game/Entity/Entity.h"
 /*
 a.	(2) Spawned at the PlayerShip’s nose whenever space bar is pressed, facing & moving ship-forward
 b.	(1) Moves forward (drifts) in a straight line (at 50 world units/second) until it dies
@@ -24,6 +24,8 @@ public:
     virtual void Update(float deltaTime) override;
     virtual void Render() const override;
     virtual void InitializeLocalVerts() override;
+
+    void OnColliedEnter(Entity* other) override;
 
 private:
     Vertex_PCU m_localVerts[NUM_BULLETS_VERTS];

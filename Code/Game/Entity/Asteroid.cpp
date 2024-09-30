@@ -1,16 +1,19 @@
-﻿#include "Asteroid.h"
-#include "GameCommon.hpp"
+﻿#include "Asteroid.hpp"
+#include "Game/GameCommon.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+#include "Game/Particle/ParticleHandler.hpp"
 
 Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientationDegrees): Entity(
     gameInstance, startPosition, orientationDegrees)
 {
+    m_color = Rgba8(100, 100, 100);
     m_health = 3;
     m_physicsRadius = ASTEROID_PHYSICS_RADIUS;
     m_cosmeticRadius = ASTEROID_COSMETIC_RADIUS;
+
 
     m_angularVelocity = g_rng->RollRandomFloatInRange(-200.f, 200.f);
     m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, ASTEROID_SPEED);
@@ -27,11 +30,36 @@ void Asteroid::Update(float deltaTime)
     m_orientationDegrees += deltaTime * m_angularVelocity;
     m_position += m_velocity * deltaTime;
 
+
     if (IsOffscreen())
-        m_isDead = true;
+    {
+        // 水平方向包裹
+        if (m_position.x > WORLD_SIZE_X + m_cosmeticRadius)
+        {
+            m_position.x = -m_cosmeticRadius;
+        }
+        else if (m_position.x < -m_cosmeticRadius)
+        {
+            m_position.x = WORLD_SIZE_X + m_cosmeticRadius;
+        }
+
+        // 垂直方向包裹
+        if (m_position.y > WORLD_SIZE_Y + m_cosmeticRadius)
+        {
+            m_position.y = -m_cosmeticRadius;
+        }
+        else if (m_position.y < -m_cosmeticRadius)
+        {
+            m_position.y = WORLD_SIZE_Y + m_cosmeticRadius;
+        }
+    }
+
 
     if (m_health <= 0)
+    {
         m_isDead = true;
+        Die();
+    }
 
     if (m_isDead)
         m_isGarbage = true;
@@ -47,6 +75,28 @@ void Asteroid::Render() const
     TransformVertexArrayXY3D(NUM_ASTEROID_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
     g_renderer->DrawVertexArray(NUM_ASTEROID_VERTS, tempWorldVerts);
     DebugRender();
+}
+
+void Asteroid::Die()
+{
+    Entity::Die();
+    FParticleProperty pp;
+    pp.fadeOpacity = true;
+    pp.numDebris = 60;
+    pp.averageVelocity = m_velocity;
+    pp.maxScatterSpeed = 40.f;
+    pp.color = m_color;
+    pp.position = m_position;
+    pp.minAngularVelocity = 0.f;
+    pp.maxAngularVelocity = 0.f;
+
+    pp.minOpacity = 0.6f;
+    pp.maxOpacity = 1.0f;
+
+    pp.minLifeTime = 2.0f;
+    pp.maxLifeTime = 3.0f;
+
+    ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
 }
 
 // 14:32    https://smu.instructure.com/media_attachments_iframe/9925327?type=video&embedded=true
@@ -90,6 +140,29 @@ void Asteroid::InitializeLocalVerts()
     // Set colors
     for (int vertIndex = 0; vertIndex < NUM_ASTEROID_VERTS; ++vertIndex)
     {
-        m_localVerts[vertIndex].m_color = Rgba8(100, 100, 100);
+        m_localVerts[vertIndex].m_color = m_color;
     }
+}
+
+void Asteroid::OnColliedEnter(Entity* other)
+{
+    Entity::OnColliedEnter(other);
+    m_health--;
+    FParticleProperty pp;
+    pp.fadeOpacity = true;
+    pp.numDebris = 20;
+    pp.averageVelocity = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed = 20.f;
+    pp.color = m_color;
+    pp.position = m_position;
+    pp.minAngularVelocity = 0.f;
+    pp.maxAngularVelocity = 0.f;
+
+    pp.minOpacity = 0.7f;
+    pp.maxOpacity = 1.0f;
+
+    pp.minLifeTime = .5f;
+    pp.maxLifeTime = 1.5f;
+
+    ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
 }

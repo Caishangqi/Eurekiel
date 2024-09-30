@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "Entity.h"
+#include "Game/Entity/Entity.h"
 /*
 a.	(1) 6 Asteroids are spawned at start of a new Game (also, see the ‘I’ debug cheat key, below)
 b.	(2) Spawned at a random position onscreen
@@ -34,7 +34,11 @@ public:
     virtual void Update(float deltaTime) override;
     virtual void Render() const override;
 
+    void Die() override;
+
     virtual void InitializeLocalVerts() override;
+
+    void OnColliedEnter(Entity* other) override;
 
 private:
     Vertex_PCU m_localVerts[NUM_ASTEROID_VERTS];

@@ -24,6 +24,14 @@ public:
 
     virtual void Die();
 
+    /**
+     * A method that handle custom logic for entity, the collision check
+     * is handle by Game, and the entity could implement the method to handle
+     * custom OnCollied
+     * @param other Other Entity that the entity collied with
+     */
+    virtual void OnColliedEnter(Entity* other);
+
     bool IsOffscreen() const;
     virtual bool IsAlive() const;
     Vec2 GetForwardNormal() const;
@@ -43,6 +51,10 @@ public:
     bool m_isDead = false; // whether the Entity is “dead” in the game; affects entity and game logic
     bool m_isGarbage = false; // whether the Entity should be deleted at the end of Game::Update()
     Game* m_game = nullptr; // a pointer back to the Game instance
+
+    Rgba8 m_color;
+
+    float m_ageInSeconds = 0.f;
 
     // TODO: I know how to do getter and setter but I don't want do
 public:
