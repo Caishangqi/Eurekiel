@@ -6,8 +6,8 @@
 class Renderer
 {
 public:
-    void StartUp();
-    void BeingFrame();
+    void Startup();
+    void BeginFrame();
     void EndFrame();
     void Shutdown();
 

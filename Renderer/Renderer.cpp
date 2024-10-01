@@ -13,12 +13,12 @@ extern HWND g_hWnd;
 // #SD1ToDo: Move this to become Renderer::CreateRenderingContext() in Engine/Renderer/Renderer.cpp
 // #SD1ToDo: By the end of SD1-A1, this function will be called from the function Renderer::Startup
 //
-void Renderer::StartUp()
+void Renderer::Startup()
 {
     CreateRenderingContext(); // #SD1ToDo: this will move to Renderer.cpp, called by Renderer::Startup
 }
 
-void Renderer::BeingFrame()
+void Renderer::BeginFrame()
 {
 }
 

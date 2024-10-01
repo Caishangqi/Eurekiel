@@ -173,6 +173,10 @@
         <ClCompile Include="Core\Time.cpp" />
         <ClCompile Include="Core\VertexUtils.cpp" />
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
+        <ClCompile Include="Input\AnalogJoystick.cpp" />
+        <ClCompile Include="Input\InputSystem.cpp" />
+        <ClCompile Include="Input\KeyButtonState.cpp" />
+        <ClCompile Include="Input\XboxController.cpp" />
         <ClCompile Include="Math\AABB2.cpp" />
         <ClCompile Include="Math\IntVec2.cpp" />
         <ClCompile Include="Math\MathUtils.cpp" />
@@ -189,6 +193,11 @@
         <ClInclude Include="Core\Time.hpp" />
         <ClInclude Include="Core\VertexUtils.hpp" />
         <ClInclude Include="Core\Vertex_PCU.hpp"/>
+        <ClInclude Include="Input\AnalogJoystick.hpp" />
+        <ClInclude Include="Input\InputSystem.hpp" />
+        <ClInclude Include="Input\KeyButtonState.hpp" />
+        <ClInclude Include="Input\XboxButtonID.hpp" />
+        <ClInclude Include="Input\XboxController.hpp" />
         <ClInclude Include="Math\AABB2.hpp" />
         <ClInclude Include="Math\IntVec2.hpp" />
         <ClInclude Include="Math\MathUtils.hpp" />
