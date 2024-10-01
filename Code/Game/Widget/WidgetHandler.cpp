@@ -3,6 +3,10 @@
 #include "Widgets/WidgetMainMenu.hpp"
 #include "Widgets/WidgetPlayerHealth.hpp"
 
+WidgetHandler::~WidgetHandler()
+{
+}
+
 WidgetHandler::WidgetHandler(Game* owner)
 {
     this->owner = owner;

@@ -1,9 +1,9 @@
 ﻿#include "PlayerShip.hpp"
-
 #include "Game/App.hpp"
 #include "Game/GameCommon.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Core/VertexUtils.hpp"
+#include "Engine/Input/InputSystem.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
 #include "Game/Widget/Data/IconRes.hpp"
@@ -11,14 +11,12 @@
 PlayerShip::PlayerShip(Game* gameInstance, const Vec2& startPosition, float orientationDegree): Entity(
     gameInstance, startPosition, orientationDegree)
 {
-    m_color = Rgba8(102, 153, 204);
-    m_physicsRadius = PLAYER_SHIP_PHYSICS_RADIUS;
-    m_cosmeticRadius = PLAYER_SHIP_COSMETIC_RADIUS;
+    m_color              = Rgba8(102, 153, 204);
+    m_physicsRadius      = PLAYER_SHIP_PHYSICS_RADIUS;
+    m_cosmeticRadius     = PLAYER_SHIP_COSMETIC_RADIUS;
     m_orientationDegrees = orientationDegree;
-    m_health = 1;
+    m_health             = 1;
     PlayerShip::InitializeLocalVerts();
-    /*m_vertices = static_cast<Vertex_PCU*>(
-        malloc(sizeof(*m_vertices) * 15));*/
 }
 
 PlayerShip::~PlayerShip()
@@ -33,8 +31,7 @@ void PlayerShip::Update(float deltaSeconds)
     }
 
     Entity::Update(deltaSeconds);
-
-    UpdateFromKeyBoard(deltaSeconds);
+    UpdateFromInputSystem(deltaSeconds);
     if (m_isTurningLeft)
     {
         m_orientationDegrees += deltaSeconds * PLAYER_SHIP_TURN_SPEED;
@@ -43,12 +40,15 @@ void PlayerShip::Update(float deltaSeconds)
     {
         m_orientationDegrees -= deltaSeconds * PLAYER_SHIP_TURN_SPEED;
     }
+
     if (m_isThrusting)
     {
-        Vec2 fwdNormal = Vec2::MakeFromPolarDegrees(m_orientationDegrees);
-        Vec2 acceleration = fwdNormal * PLAYER_SHIP_ACCELERATION;
+        Vec2 fwdNormal    = Vec2::MakeFromPolarDegrees(m_orientationDegrees);
+        Vec2 acceleration = fwdNormal * PLAYER_SHIP_ACCELERATION * m_thrustRate;
         m_velocity += acceleration * deltaSeconds;
     }
+
+
     // Move the ship
     m_position += m_velocity * deltaSeconds;
 
@@ -103,7 +103,7 @@ void PlayerShip::InitializeLocalVerts()
     m_localVerts[8].m_position = Vec3(0.f, -2.f, 0.f);
 
     // Body
-    m_localVerts[9].m_position = Vec3(0.f, 1.f, 0.f);
+    m_localVerts[9].m_position  = Vec3(0.f, 1.f, 0.f);
     m_localVerts[10].m_position = Vec3(-2.f, -1.f, 0.f);
     m_localVerts[11].m_position = Vec3(0.f, -1.f, 0.f);
 
@@ -120,11 +120,46 @@ void PlayerShip::InitializeLocalVerts()
 
 void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 {
-    m_isTurningLeft = g_theApp->IsKeyDown('S');
-    m_isTurningRight = g_theApp->IsKeyDown('F');
-    m_isThrusting = g_theApp->IsKeyDown('E');
+    XboxController const& controller = g_theInput->GetController(0);
+    //printf("Magnitude: %f\n", controller.GetLeftStick().GetMagnitude());
+    m_isTurningLeft  = g_theInput->IsKeyDown('A');
+    m_isTurningRight = g_theInput->IsKeyDown('D');
 
-    if (g_theApp->WasKeyJustPressed(' '))
+    // A combination between 2 controller
+    if (g_theInput->IsKeyDown('W') || controller.GetLeftStick().GetMagnitude() > 0.f)
+    {
+        if (g_theInput->IsKeyDown('W'))
+        {
+            m_isThrusting = true;
+            m_thrustRate  = 1;
+        }
+        if (controller.GetLeftStick().GetMagnitude() > 0.f)
+        {
+            m_isThrusting = true;
+            m_thrustRate  = controller.GetLeftStick().GetMagnitude();
+        }
+    }
+    else
+    {
+        m_isThrusting = false;
+        m_thrustRate  = 0;
+    }
+
+    if (g_theInput->WasKeyJustPressed(' '))
+    {
+        m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
+    }
+}
+
+void PlayerShip::UpdateFromController(float& deltaSeconds)
+{
+    XboxController const& controller = g_theInput->GetController(0);
+    if (controller.GetLeftStick().GetMagnitude() > 0.f)
+    {
+        m_orientationDegrees = controller.GetLeftStick().GetPosition().GetOrientationDegrees();
+    }
+
+    if (controller.WasButtonJustPressed(XBOX_BUTTON_A))
     {
         m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
     }
@@ -162,11 +197,12 @@ void PlayerShip::Respawn()
 {
     if (m_isDead)
     {
-        m_isDead = false;
-        m_position = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
-        m_velocity = Vec2(0.f, 0.f);
+        m_isDead             = false;
+        m_position           = Vec2(WORLD_CENTER_X, WORLD_CENTER_Y);
+        m_velocity           = Vec2(0.f, 0.f);
         m_orientationDegrees = 0.f;
-        m_health = 1;
+        m_health             = 1;
+        m_thrustRate         = 0.f;
         m_game->remainTry--;
         if (m_game->remainTry > 0)
         {
@@ -180,12 +216,12 @@ void PlayerShip::OnColliedEnter(Entity* other)
     Entity::OnColliedEnter(other);
     m_health--;
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 80;
-    pp.averageVelocity = m_velocity + other->m_velocity;
-    pp.maxScatterSpeed = 40.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 80;
+    pp.averageVelocity    = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed    = 40.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 
@@ -196,4 +232,10 @@ void PlayerShip::OnColliedEnter(Entity* other)
     pp.maxLifeTime = 3.0f;
 
     ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+}
+
+void PlayerShip::UpdateFromInputSystem(float& deltaSeconds)
+{
+    UpdateFromController(deltaSeconds);
+    UpdateFromKeyBoard(deltaSeconds);
 }

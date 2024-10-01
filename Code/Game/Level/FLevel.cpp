@@ -11,7 +11,7 @@ int FLevel::GetAliveEntityByType(EEntity entityType)
     int amount = 0;
     switch (entityType)
     {
-    case EEntity::WASP:
+    case EEntity::ENTITY_TYPE_WASP:
         for (Wasp* element : m_Game->m_entity_wasp)
         {
             if (element != nullptr && element->IsAlive())
@@ -20,7 +20,7 @@ int FLevel::GetAliveEntityByType(EEntity entityType)
             }
         }
         break;
-    case EEntity::BEETLE:
+    case EEntity::ENTITY_TYPE_BEETLE:
         for (Beetle* element : m_Game->m_entities_beetle)
         {
             if (element != nullptr && element->IsAlive())
@@ -85,8 +85,8 @@ FLevel& FLevel::SetGameInstance(Game* game)
 void FLevel::OnStart()
 {
     printf("[level]     Start Level: %d\n", levelID);
-    m_Game->Spawn(EEntity::WASP, levelAmountWasp);
-    m_Game->Spawn(EEntity::BEETLE, levelAmountBeetle);
+    m_Game->Spawn(EEntity::ENTITY_TYPE_WASP, levelAmountWasp);
+    m_Game->Spawn(EEntity::ENTITY_TYPE_BEETLE, levelAmountBeetle);
     state = ELevelState::ONGOING;
 }
 
@@ -106,8 +106,8 @@ void FLevel::OnUpdate(float deltaSecond)
 
 bool FLevel::CheckComplete()
 {
-    int waspAmount = GetAliveEntityByType(EEntity::WASP);
-    int beetleAmount = GetAliveEntityByType(EEntity::BEETLE);
+    int waspAmount = GetAliveEntityByType(EEntity::ENTITY_TYPE_WASP);
+    int beetleAmount = GetAliveEntityByType(EEntity::ENTITY_TYPE_BEETLE);
     if ((waspAmount <= 0) && (beetleAmount <= 0))
     {
         return true;

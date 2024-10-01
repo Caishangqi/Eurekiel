@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iostream>
 
+#include "Engine/Input/InputSystem.hpp"
 #include "Game/App.hpp"
 
 
@@ -52,9 +53,8 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
     case WM_KEYDOWN:
         {
             unsigned char asKey = static_cast<unsigned char>(wParam);
-
-            g_theApp->HandleKeyPress(asKey);
-
+            
+            g_theInput->HandleKeyPressed(asKey);
             break;
         }
 
@@ -63,9 +63,8 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
         {
             unsigned char asKey = static_cast<unsigned char>(wParam);
 
-
-            // #SD1ToDo: Tell the App (or InputSystem later) about this key-released event...
-            g_theApp->HandleKeyRelease(asKey);
+            
+            g_theInput->HandleKeyReleased(asKey);
 
             break;
         }

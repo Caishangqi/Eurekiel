@@ -43,7 +43,9 @@ public:
     void OnColliedEnter(Entity* other) override;
     
 private:
+    void UpdateFromInputSystem(float& deltaSeconds);
     void UpdateFromKeyBoard(float& deltaSeconds);
+    void UpdateFromController(float& deltaSeconds);
     void BounceOffWalls();
 
 private:
@@ -51,4 +53,5 @@ private:
     bool m_isTurningLeft = false;
     bool m_isTurningRight = false;
     bool m_isThrusting = false;
+    float m_thrustRate = 0.0f;
 };

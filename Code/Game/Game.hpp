@@ -94,9 +94,11 @@ public:
     int remainTry = NUM_MAX_TRY;
 
     bool IsInMainMenu = true;
-    bool IsGameStart = false;
+    bool IsGameStart  = false;
 
 private:
     FTimerHandle* m_timerHandles[128] = {};
+
+public:
     FTimerHandle* SetTimer(float timer, void (*callback)());
 };

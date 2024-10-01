@@ -2,11 +2,13 @@
 #include <cstdio>
 
 #include "Engine/Core/Time.hpp"
+#include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 
-Renderer* g_renderer = nullptr;
-App* g_theApp = nullptr;
-RandomNumberGenerator* g_rng = nullptr;
+Renderer*              g_renderer = nullptr;
+App*                   g_theApp   = nullptr;
+RandomNumberGenerator* g_rng      = nullptr;
+InputSystem*           g_theInput = nullptr;
 
 App::App()
 {
@@ -21,17 +23,19 @@ App::~App()
 
     delete m_gameCamera;
     m_gameCamera = nullptr;
+
+    delete g_theInput;
+    g_theInput = nullptr;
 }
 
 void App::Startup()
 {
     g_renderer = new Renderer(); // Create render
-    g_renderer->StartUp();
+    g_renderer->Startup();
 
     // g_theInput Start Up
-    // g_theInput = new InputSystem();
-    // g_theInput->StartUp();
-
+    g_theInput = new InputSystem();
+    g_theInput->Startup();
 
     /*  h. App::Startup() should do the following, in this order:
         i. Create a new instance of Renderer (and assign its memory address to g_theRenderer)
@@ -39,7 +43,7 @@ void App::Startup()
         iii. Create a new instance of Game (and assign its memory address to the App’s m_game)
     */
     m_theGame = new Game();
-    g_rng = new RandomNumberGenerator();
+    g_rng     = new RandomNumberGenerator();
 }
 
 void App::Shutdown()
@@ -59,8 +63,8 @@ void App::Shutdown()
 
 void App::RunFrame()
 {
-    float timeNow = static_cast<float>(GetCurrentTimeSeconds());
-    float deltaSeconds = timeNow - m_LastFrameStartTime;
+    float timeNow        = static_cast<float>(GetCurrentTimeSeconds());
+    float deltaSeconds   = timeNow - m_LastFrameStartTime;
     m_LastFrameStartTime = timeNow;
 
     BeginFrame(); //Engine pre-frame stuff
@@ -74,43 +78,15 @@ bool App::IsQuitting() const
     return m_isQuitting;
 }
 
-void App::HandleKeyPress(unsigned char keyCode)
-{
-    m_areKeysDown[keyCode] = true;
-}
-
-void App::HandleKeyRelease(unsigned char keyCode)
-{
-    /*if (keyCode == 'T')
-    {
-        m_isSlowMo = false;
-    }
-    
-    return false;*/
-    m_areKeysDown[keyCode] = false;
-}
-
 void App::HandleQuitRequested()
 {
     m_isQuitting = true;
 }
 
-bool App::IsKeyDown(unsigned char keyCode) const
-{
-    return m_areKeysDown[keyCode];
-}
-
-bool App::WasKeyJustPressed(unsigned char keyCode) const
-{
-    bool isKeyDown = m_areKeysDown[keyCode];
-    bool wasKeyJustPressed = m_areKeysDownLastFrame[keyCode];
-    return isKeyDown && !wasKeyJustPressed;
-}
-
 void App::HandleKeyBoardEvent()
 {
-    // ESC
-    if (WasKeyJustPressed(27))
+    // ESC compatibility controller
+    if (g_theInput->GetController(0).WasButtonJustPressed(XBOX_BUTTON_B))
     {
         if (m_theGame->IsInMainMenu)
         {
@@ -118,17 +94,26 @@ void App::HandleKeyBoardEvent()
         }
     }
     
-    if (WasKeyJustPressed('I'))
+    // ESC
+    if (g_theInput->WasKeyJustPressed(27))
+    {
+        if (m_theGame->IsInMainMenu)
+        {
+            m_isQuitting = true;
+        }
+    }
+
+    if (g_theInput->WasKeyJustPressed('I'))
         m_theGame->SpawnNewAsteroids();
-    if (WasKeyJustPressed(0x70))
+    if (g_theInput->WasKeyJustPressed(0x70))
     {
         m_isDebug = !m_isDebug;
     }
-    if (WasKeyJustPressed(0x77))
+    if (g_theInput->WasKeyJustPressed(0x77))
     {
         m_isPendingRestart = true;
     }
-    if (WasKeyJustPressed('O'))
+    if (g_theInput->WasKeyJustPressed('O'))
     {
         m_theGame->Update(1 / 60.f);
         m_isPaused = true;
@@ -137,14 +122,14 @@ void App::HandleKeyBoardEvent()
 
 void App::AdjustForPauseAndTimeDistortion(float& deltaSeconds)
 {
-    m_isSlowMo = IsKeyDown('T');
+    m_isSlowMo = g_theInput->IsKeyDown('T');
     if (m_isSlowMo)
     {
         deltaSeconds *= 0.1f;
     }
 
 
-    if (WasKeyJustPressed('P'))
+    if (g_theInput->WasKeyJustPressed('P'))
     {
         m_isPaused = !m_isPaused;
     }
@@ -158,8 +143,8 @@ void App::AdjustForPauseAndTimeDistortion(float& deltaSeconds)
 
 void App::BeginFrame()
 {
-    g_renderer->BeingFrame();
-    // g_theInput->BeingFrame();
+    g_renderer->BeginFrame();
+    g_theInput->BeginFrame();
     // g_theAudio->BeginFrame();
     // g_theNetwork->BeginFrame();
     // g_theWindow->BeginFrame();
@@ -198,7 +183,7 @@ void App::Render() const
 void App::EndFrame()
 {
     g_renderer->EndFrame();
-    // g_theInput->EndFrame();
+    g_theInput->EndFrame();
 
     // Dump() 的时候
     // Copy m_areKeysDown to m_wereKeyDownLastFrame
@@ -210,16 +195,16 @@ void App::EndFrame()
     if (m_isPendingRestart)
     {
         delete m_theGame;
-        m_theGame = nullptr;
+        m_theGame          = nullptr;
         m_isPendingRestart = false;
-        m_theGame = new Game();
+        m_theGame          = new Game();
     }
 }
 
 void App::UpdateShip(float deltaSeconds)
 {
     float movePerSecond = 20.0f;
-    float movePerFrame = movePerSecond * deltaSeconds;
+    float movePerFrame  = movePerSecond * deltaSeconds;
 
     m_shipPos.x += movePerFrame;
 

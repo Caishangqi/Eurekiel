@@ -7,6 +7,7 @@ class Game;
 class WidgetHandler
 {
 public:
+    ~WidgetHandler();
     WidgetHandler(Game* owner);
     void Update(float deltaSeconds);
     void Draw();

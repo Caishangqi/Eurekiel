@@ -5,6 +5,7 @@
 
 #include "App.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Entity/Beetle.hpp"
@@ -22,7 +23,7 @@ Game::Game()
     RegisterDefaultObjects();
     // Spawn the ship at world center
 
-    m_levelHandler = new LevelHandler(this);
+    m_levelHandler  = new LevelHandler(this);
     m_widgetHandler = new WidgetHandler(this);
 }
 
@@ -36,6 +37,8 @@ Game::~Game()
 
     delete m_widgetHandler;
     m_widgetHandler = nullptr;
+
+    ParticleHandler::getInstance()->CleanParticle();
 }
 
 
@@ -136,13 +139,13 @@ void Game::SpawnDefaultAsteroids()
     for (int numberAsteroid = 0; numberAsteroid < NUM_STARTING_ASTEROIDS; ++numberAsteroid)
     {
         // Generate random position in world 
-        float worldPositionX = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-        float worldPositionY = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-        float randomOrientation = g_rng->RollRandomFloatInRange(0, 360);
-        Asteroid* AddedAsteroid = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
-        Vec2 offScreenPos = getRandomPositionOffscreen(AddedAsteroid);
-        AddedAsteroid->m_position = offScreenPos;
-        m_asteroid[numberAsteroid] = AddedAsteroid;
+        float     worldPositionX    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+        float     worldPositionY    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+        float     randomOrientation = g_rng->RollRandomFloatInRange(0, 360);
+        Asteroid* AddedAsteroid     = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+        Vec2      offScreenPos      = getRandomPositionOffscreen(AddedAsteroid);
+        AddedAsteroid->m_position   = offScreenPos;
+        m_asteroid[numberAsteroid]  = AddedAsteroid;
     }
 }
 
@@ -186,9 +189,9 @@ void Game::SpawnNewAsteroids()
         if (m_asteroid[numberAsteroid] == nullptr)
         {
             // Generate random position in world 
-            float worldPositionX = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-            float worldPositionY = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-            float randomOrientation = g_rng->RollRandomFloatInRange(0, 360);
+            float worldPositionX       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+            float worldPositionY       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+            float randomOrientation    = g_rng->RollRandomFloatInRange(0, 360);
             m_asteroid[numberAsteroid] = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
             return;
         }
@@ -199,10 +202,11 @@ void Game::SpawnNewAsteroids()
 
 void Game::HandleKeyBoardEvent(float deltaTime)
 {
+    XboxController const& controller = g_theInput->GetController(0);
     if (IsInMainMenu)
     {
-        bool spaceBarPressed = g_theApp->WasKeyJustPressed(32);
-        bool NKeyPressed = g_theApp->WasKeyJustPressed('N');
+        bool spaceBarPressed = g_theInput->WasKeyJustPressed(32) || controller.WasButtonJustPressed(XBOX_BUTTON_A);
+        bool NKeyPressed     = g_theInput->WasKeyJustPressed('N') || controller.WasButtonJustPressed(XBOX_BUTTON_START);
         if (spaceBarPressed || NKeyPressed)
         {
             StartGame();
@@ -210,13 +214,18 @@ void Game::HandleKeyBoardEvent(float deltaTime)
     }
 
     // Return to Main menu
-    if (g_theApp->WasKeyJustPressed(27))
+    if (g_theInput->WasKeyJustPressed(27))
     {
         ReturnToMainMenu();
     }
 
+    if (controller.WasButtonJustPressed(XBOX_BUTTON_B))
+    {
+        ReturnToMainMenu();
+    }
+    
 
-    if (g_theApp->WasKeyJustPressed('N'))
+    if (g_theInput->WasKeyJustPressed('N') || controller.WasButtonJustPressed(XBOX_BUTTON_START))
     {
         if (m_PlayerShip != nullptr && !m_PlayerShip->IsAlive())
         {
@@ -224,7 +233,6 @@ void Game::HandleKeyBoardEvent(float deltaTime)
             {
                 m_PlayerShip->Respawn();
             }
-            
         }
     }
 }
@@ -241,7 +249,7 @@ void Game::StartGame()
     remainTry = NUM_MAX_TRY;
 
     IsInMainMenu = false;
-    IsGameStart = true;
+    IsGameStart  = true;
 
     m_widgetHandler->mainMenuWidget->SetVisibility(false);
     m_widgetHandler->mainMenuWidget->SetActive(false);
@@ -270,14 +278,14 @@ void Game::ReturnToMainMenu()
     if (IsInMainMenu == false)
     {
         IsInMainMenu = true;
-        IsGameStart = false;
+        IsGameStart  = false;
 
         m_widgetHandler->mainMenuWidget->SetActiveAndVisible();
 
         m_widgetHandler->playerHealthWidget->SetActive(false);
         m_widgetHandler->playerHealthWidget->SetVisibility(false);
 
-        printf("[core]         Return to Main menu");
+        printf("[core]      Return to Main menu");
     }
 }
 
@@ -462,9 +470,9 @@ void Game::Spawn(EEntity entityType)
 {
     switch (entityType)
     {
-    case BEETLE:
+    case ENTITY_TYPE_BEETLE:
         Beetle* entityBeetle;
-        entityBeetle = new Beetle(this, Vec2(), 0.0f);
+        entityBeetle             = new Beetle(this, Vec2(), 0.0f);
         entityBeetle->m_position = getRandomPositionOffscreen(entityBeetle);
         for (Beetle*& element : m_entities_beetle)
         {
@@ -476,9 +484,9 @@ void Game::Spawn(EEntity entityType)
             }
         }
         break;
-    case WASP:
+    case ENTITY_TYPE_WASP:
         Wasp* entityWasp;
-        entityWasp = new Wasp(this, Vec2(), 0.0f);
+        entityWasp             = new Wasp(this, Vec2(), 0.0f);
         entityWasp->m_position = getRandomPositionOffscreen(entityWasp);
         for (Wasp*& element : m_entity_wasp)
         {
@@ -532,7 +540,7 @@ FTimerHandle* Game::SetTimer(float timer, void (*callback)())
 {
     FTimerHandle* handle = new FTimerHandle();
     handle->SetOwner(this);
-    handle->times = timer;
+    handle->times            = timer;
     handle->onFinishCallback = callback;
     for (FTimerHandle*& element : m_timerHandles)
     {

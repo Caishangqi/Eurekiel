@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 
+class InputSystem;
 struct Vec2;
 struct Rgba8;
 
@@ -11,6 +12,7 @@ class RandomNumberGenerator;
 extern RandomNumberGenerator* g_rng;
 extern App* g_theApp;
 extern Renderer* g_renderer;
+extern InputSystem* g_theInput;
 
 constexpr int NUM_MAX_TRY = 4;
 

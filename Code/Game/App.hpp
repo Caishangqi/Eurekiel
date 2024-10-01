@@ -4,6 +4,8 @@
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 
+class InputSystem;
+
 class App
 {
 public:
@@ -15,12 +17,7 @@ public:
     void RunFrame();
 
     bool IsQuitting() const;
-    void HandleKeyPress(unsigned char keyCode);
-    void HandleKeyRelease(unsigned char keyCode);
     void HandleQuitRequested();
-
-    bool IsKeyDown(unsigned char keyCode) const;
-    bool WasKeyJustPressed(unsigned char keyCode) const;
 
     void AdjustForPauseAndTimeDistortion(float& deltaSeconds);
     void HandleKeyBoardEvent();

@@ -75,7 +75,7 @@ void LevelHandler::RunNextLevel()
             {
                 printf("[level]     Completed All levels");
                 // use return to menu to call Reimport levels and clean scene
-                m_game->ReturnToMainMenu();
+                m_game->SetTimer(3.0, nullptr);
                 return;
             }
         }
@@ -137,15 +137,15 @@ void LevelHandler::ImportLevels()
     m_currentLevel = nullptr;
 
     // On Heap 
-    m_levels[0] = new FLevel(1, 1, 1);
+    m_levels[0] = new FLevel(1, 1, 0);
 
-    m_levels[1] = new FLevel(2, 2, 2);
+    m_levels[1] = new FLevel(2, 0, 1);
 
-    m_levels[2] = new FLevel(3, 3, 3);
+    m_levels[2] = new FLevel(3, 1, 1);
 
-    m_levels[3] = new FLevel(4, 4, 4);
+    m_levels[3] = new FLevel(4, 1, 1);
 
-    m_levels[4] = new FLevel(5, 5, 5);
+    m_levels[4] = new FLevel(5, 1, 1);
 
     for (int i = 0; i < 5; ++i)
     {
