@@ -1,6 +1,6 @@
 ﻿#include "Game/App.hpp"
-#include <cstdio>
 
+#include "Engine/Audio/AudioSystem.hpp"
 #include "Engine/Core/Time.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
@@ -9,6 +9,7 @@ Renderer*              g_renderer = nullptr;
 App*                   g_theApp   = nullptr;
 RandomNumberGenerator* g_rng      = nullptr;
 InputSystem*           g_theInput = nullptr;
+AudioSystem*           g_theAudio = nullptr;
 
 App::App()
 {
@@ -26,6 +27,9 @@ App::~App()
 
     delete g_theInput;
     g_theInput = nullptr;
+
+    delete m_resourceManager;
+    m_resourceManager = nullptr;
 }
 
 void App::Startup()
@@ -36,6 +40,12 @@ void App::Startup()
     // g_theInput Start Up
     g_theInput = new InputSystem();
     g_theInput->Startup();
+
+    g_theAudio = new AudioSystem();
+    g_theAudio->Startup();
+
+    m_resourceManager = new ResourceManager();
+    m_resourceManager->Startup();
 
     /*  h. App::Startup() should do the following, in this order:
         i. Create a new instance of Renderer (and assign its memory address to g_theRenderer)
@@ -93,7 +103,7 @@ void App::HandleKeyBoardEvent()
             m_isQuitting = true;
         }
     }
-    
+
     // ESC
     if (g_theInput->WasKeyJustPressed(27))
     {

@@ -48,6 +48,26 @@ void PlayerShip::Update(float deltaSeconds)
         m_velocity += acceleration * deltaSeconds;
     }
 
+    // Update particle
+    if (m_isThrusting)
+    {
+        FParticleProperty pp;
+        pp.fadeOpacity        = true;
+        pp.numDebris          = static_cast<int>(2 * m_thrustRate);
+        pp.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees);
+        pp.maxScatterSpeed    = 10.f;
+        pp.color              = m_color;
+        pp.position           = m_position;
+        pp.minAngularVelocity = 0.f;
+        pp.maxAngularVelocity = 0.f;
+
+        pp.minOpacity = 0.01f;
+        pp.maxOpacity = 0.05f;
+
+        pp.minLifeTime = .01f;
+        pp.maxLifeTime = .05f;
+        ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+    }
 
     // Move the ship
     m_position += m_velocity * deltaSeconds;

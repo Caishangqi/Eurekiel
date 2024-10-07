@@ -1,6 +1,5 @@
 #define WIN32_LEAN_AND_MEAN		// Always #define this before #including <windows.h>
 #include <windows.h>			// #include this (massive, platform-specific) header in VERY few places (and .CPPs only)
-#include <cassert>
 #include <crtdbg.h>
 #include <cstdio>
 #include <iostream>
@@ -25,12 +24,12 @@ constexpr float CLIENT_ASPECT = 2.0f; // We are requesting a 1:1 aspect (square)
 // #SD1ToDo: We will move each of these items to its proper place, once that place is established later on
 //
 
-extern App* g_theApp;
+extern App*   g_theApp;
 extern HANDLE g_consoleHandle;
 
-HWND g_hWnd = nullptr; // ...becomes void* Window::m_windowHandle
-HDC g_displayDeviceContext = nullptr; // ...becomes void* Window::m_displayContext
-auto APP_NAME = "SD1-A2: Starship Prototype"; // ...becomes ??? (Change this per project!)
+HWND g_hWnd                 = nullptr; // ...becomes void* Window::m_windowHandle
+HDC  g_displayDeviceContext = nullptr; // ...becomes void* Window::m_displayContext
+auto APP_NAME               = "SD1-A3: Starship Playable"; // ...becomes ??? (Change this per project!)
 
 //-----------------------------------------------------------------------------------------------
 // Handles Windows (Win32) messages/events; i.e. the OS is trying to tell us something happened.
@@ -53,7 +52,7 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
     case WM_KEYDOWN:
         {
             unsigned char asKey = static_cast<unsigned char>(wParam);
-            
+
             g_theInput->HandleKeyPressed(asKey);
             break;
         }
@@ -63,7 +62,7 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
         {
             unsigned char asKey = static_cast<unsigned char>(wParam);
 
-            
+
             g_theInput->HandleKeyReleased(asKey);
 
             break;
@@ -86,32 +85,32 @@ void CreateOSWindow(void* applicationInstanceHandle, float clientAspect)
     // Define a window style/class
     WNDCLASSEX windowClassDescription;
     memset(&windowClassDescription, 0, sizeof(windowClassDescription));
-    windowClassDescription.cbSize = sizeof(windowClassDescription);
-    windowClassDescription.style = CS_OWNDC; // Redraw on move, request own Display Context
+    windowClassDescription.cbSize      = sizeof(windowClassDescription);
+    windowClassDescription.style       = CS_OWNDC; // Redraw on move, request own Display Context
     windowClassDescription.lpfnWndProc = static_cast<WNDPROC>(WindowsMessageHandlingProcedure);
     // Register our Windows message-handling function
-    windowClassDescription.hInstance = GetModuleHandle(nullptr);
-    windowClassDescription.hIcon = nullptr;
-    windowClassDescription.hCursor = nullptr;
+    windowClassDescription.hInstance     = GetModuleHandle(nullptr);
+    windowClassDescription.hIcon         = nullptr;
+    windowClassDescription.hCursor       = nullptr;
     windowClassDescription.lpszClassName = TEXT("Simple Window Class");
     RegisterClassEx(&windowClassDescription);
 
     // #SD1ToDo: Add support for fullscreen mode (requires different window style flags than windowed mode)
-    constexpr DWORD windowStyleFlags = WS_CAPTION | WS_BORDER | WS_THICKFRAME | WS_SYSMENU | WS_OVERLAPPED;
+    constexpr DWORD windowStyleFlags   = WS_CAPTION | WS_BORDER | WS_THICKFRAME | WS_SYSMENU | WS_OVERLAPPED;
     constexpr DWORD windowStyleExFlags = WS_EX_APPWINDOW;
 
     // Get desktop rect, dimensions, aspect
     RECT desktopRect;
     HWND desktopWindowHandle = GetDesktopWindow();
     GetClientRect(desktopWindowHandle, &desktopRect);
-    float desktopWidth = static_cast<float>(desktopRect.right - desktopRect.left);
+    float desktopWidth  = static_cast<float>(desktopRect.right - desktopRect.left);
     float desktopHeight = static_cast<float>(desktopRect.bottom - desktopRect.top);
     float desktopAspect = desktopWidth / desktopHeight;
 
     // Calculate maximum client size (as some % of desktop size)
     constexpr float maxClientFractionOfDesktop = 0.90f;
-    float clientWidth = desktopWidth * maxClientFractionOfDesktop;
-    float clientHeight = desktopHeight * maxClientFractionOfDesktop;
+    float           clientWidth                = desktopWidth * maxClientFractionOfDesktop;
+    float           clientHeight               = desktopHeight * maxClientFractionOfDesktop;
     if (clientAspect > desktopAspect)
     {
         // Client window has a wider aspect than desktop; shrink client height to match its width
@@ -126,10 +125,10 @@ void CreateOSWindow(void* applicationInstanceHandle, float clientAspect)
     // Calculate client rect bounds by centering the client area
     float clientMarginX = 0.5f * (desktopWidth - clientWidth);
     float clientMarginY = 0.5f * (desktopHeight - clientHeight);
-    RECT clientRect;
-    clientRect.left = static_cast<int>(clientMarginX);
-    clientRect.right = clientRect.left + static_cast<int>(clientWidth);
-    clientRect.top = static_cast<int>(clientMarginY);
+    RECT  clientRect;
+    clientRect.left   = static_cast<int>(clientMarginX);
+    clientRect.right  = clientRect.left + static_cast<int>(clientWidth);
+    clientRect.top    = static_cast<int>(clientMarginY);
     clientRect.bottom = clientRect.top + static_cast<int>(clientHeight);
 
     // Calculate the outer dimensions of the physical window, including frame et. al.
@@ -189,7 +188,7 @@ void RunMessagePump()
 
 #ifdef CONSOLE_HANDLER
 HANDLE g_consoleHandle = nullptr; // 定义控制台句柄
-void CreateConsole()
+void   CreateConsole()
 {
     // 分配控制台窗口
     AllocConsole();
@@ -234,12 +233,12 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
     UNUSED(commandLineString);
 
 #ifdef CONSOLE_HANDLER
+    // Temporary Console, in SD-4 will draw by opengl
     CreateConsole();
 #endif
 
     CreateOSWindow(applicationInstanceHandle, CLIENT_ASPECT);
     //CreateRenderingContext();
-
 
     // TheApp_Startup(applicationInstanceHandle, commandLineString); // This will get replaced with:
     // #SD1ToDo: g_theApp = new App();
@@ -250,7 +249,7 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
     // Program main loop; keep running frames until it's time to quit
     while (!g_theApp->IsQuitting()) // #SD1ToDo: ...becomes:  !g_theApp->IsQuitting()
     {
-        //Sleep(16); // Temporary code to "slow down" our app to ~60Hz until we have proper frame timing in
+        //Sleep(100); // Temporary code to "slow down" our app to ~60Hz until we have proper frame timing in
         // #SD1ToDo: This call will move to Window::BeginFrame() once we have a Window engine system
         // Process OS messages (keyboard/mouse button clicked, application lost/gained focus, etc.)
         RunMessagePump(); // calls our own WindowsMessageHandlingProcedure() function for us!

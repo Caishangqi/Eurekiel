@@ -35,7 +35,7 @@ void Beetle::Die()
     Entity::Die();
     FParticleProperty pp;
     pp.fadeOpacity = true;
-    pp.numDebris = 60;
+    pp.numDebris = 64;
     pp.averageVelocity = m_velocity;
     pp.maxScatterSpeed = 40.f;
     pp.color = m_color;

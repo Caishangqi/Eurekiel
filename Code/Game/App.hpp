@@ -3,6 +3,7 @@
 #include "Game.hpp"
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+#include "Resource/ResourceManager.hpp"
 
 class InputSystem;
 
@@ -32,21 +33,23 @@ private:
     void UpdateShip(float deltaSeconds);
     void RenderShip() const;
 
-    bool m_isQuitting = false;
-    bool m_isPaused = false;
-    bool m_isSlowMo = false;
+    bool m_isQuitting        = false;
+    bool m_isPaused          = false;
+    bool m_isSlowMo          = false;
     bool m_isPauseAfterFrame = false;
     Vec2 m_shipPos;
 
     Camera* m_gameCamera;
     // initialize all flase
-    bool m_areKeysDown[256] = {}; // true if each key is current down
+    bool m_areKeysDown[256]          = {}; // true if each key is current down
     bool m_areKeysDownLastFrame[256] = {}; // notes whether key was down last frame
-    Game* m_theGame;
+
+    Game*            m_theGame;
+    ResourceManager* m_resourceManager;
 
     float m_LastFrameStartTime;
 
 public:
-    bool m_isDebug = false;
+    bool m_isDebug          = false;
     bool m_isPendingRestart = false;
 };

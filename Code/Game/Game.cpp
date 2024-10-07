@@ -2,8 +2,8 @@
 
 #include <functional>
 #include <vcruntime_typeinfo.h>
-
 #include "App.hpp"
+#include "Engine/Audio/AudioSystem.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/MathUtils.hpp"
@@ -13,6 +13,7 @@
 #include "Enum/EEntity.h"
 #include "Level/LevelHandler.hpp"
 #include "Particle/ParticleHandler.hpp"
+#include "Resource/SoundRes.hpp"
 #include "Time/FTimerHandle.hpp"
 #include "Widget/WidgetHandler.hpp"
 #include "Widget/Widgets/WidgetMainMenu.hpp"
@@ -223,7 +224,7 @@ void Game::HandleKeyBoardEvent(float deltaTime)
     {
         ReturnToMainMenu();
     }
-    
+
 
     if (g_theInput->WasKeyJustPressed('N') || controller.WasButtonJustPressed(XBOX_BUTTON_START))
     {
@@ -265,6 +266,8 @@ void Game::StartGame()
 
     SpawnDefaultAsteroids();
     m_levelHandler->StartLevel(0, this);
+    g_theAudio->StartSound( SOUND::PLAYER_SHOOTS_BULLET );
+
 }
 
 void Game::ReturnToMainMenu()
