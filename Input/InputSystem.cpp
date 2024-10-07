@@ -37,17 +37,6 @@ void InputSystem::EndFrame()
     {
         m_keyStates[keyIndex].m_wasPressedLastFrame = m_keyStates[keyIndex].m_isPressed;
     }
-
-    /*for (XboxController& m_controller : m_controllers)
-    {
-        if (m_controllers->IsConnected())
-        {
-            for (KeyButtonState& element : m_controller.m_buttons)
-            {
-                element.m_wasPressedLastFrame = element.m_isPressed;
-            }
-        }
-    }*/
 }
 
 bool InputSystem::WasKeyJustPressed(unsigned char keyCode)
