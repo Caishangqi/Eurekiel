@@ -165,6 +165,7 @@ void App::BeginFrame()
 
 void App::UpdateCameras()
 {
+    
     m_gameCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
 }
 
@@ -172,10 +173,7 @@ void App::Update(float deltaSeconds)
 {
     HandleKeyBoardEvent();
     AdjustForPauseAndTimeDistortion(deltaSeconds);
-
     m_theGame->Update(deltaSeconds);
-    //  UpdateShip(deltaSeconds);
-    UpdateCameras();
 }
 
 // If this methods is const, the methods inn the method should also promise
@@ -183,11 +181,7 @@ void App::Update(float deltaSeconds)
 void App::Render() const
 {
     g_renderer->ClearScreen(Rgba8(0.f, 0.f, 0.0f, 1.f));
-    g_renderer->BeingCamera(*m_gameCamera);
-
     m_theGame->Render();
-    //RenderShip();
-    g_renderer->EndCamera(*m_gameCamera);
 }
 
 void App::EndFrame()

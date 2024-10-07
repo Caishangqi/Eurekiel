@@ -6,6 +6,7 @@
 #include "Widget/Widgets/WidgetMainMenu.hpp"
 
 
+class Camera;
 struct FTimerHandle;
 class WidgetHandler;
 class ParticleHandler;
@@ -46,6 +47,8 @@ public:
     void UpdateBeetle(float deltaTime);
     void UpdateWasp(float deltaTime);
 
+    // Camera
+    void UpdateCameras();
 private:
     void SpawnDefaultAsteroids();
     Vec2 getRandomPositionOffscreen(Entity* entity) const;
@@ -95,6 +98,10 @@ public:
 
     bool IsInMainMenu = true;
     bool IsGameStart  = false;
+
+    // Camera
+    Camera* m_worldCamera  = nullptr;
+    Camera* m_screenCamera = nullptr;
 
 private:
     FTimerHandle* m_timerHandles[128] = {};

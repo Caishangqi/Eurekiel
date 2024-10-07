@@ -26,6 +26,10 @@ Game::Game()
 
     m_levelHandler  = new LevelHandler(this);
     m_widgetHandler = new WidgetHandler(this);
+
+    // Cameras
+    m_screenCamera = new Camera();
+    m_worldCamera  = new Camera();
 }
 
 Game::~Game()
@@ -45,13 +49,21 @@ Game::~Game()
 
 void Game::Render() const
 {
+    // Fist render world camera
+    g_renderer->BeingCamera(*m_worldCamera);
     if (IsGameStart)
     {
         RenderEntities();
     }
-
     ParticleHandler::getInstance()->Render();
+    g_renderer->EndCamera(*m_worldCamera);
+    //======================================================================= End of World Render =======================================================================
+
+    // Second render screen camera
+    g_renderer->BeingCamera(*m_screenCamera);
     m_widgetHandler->Render();
+    g_renderer->EndCamera(*m_screenCamera);
+    //======================================================================= End of Screen Render =======================================================================
 }
 
 void Game::UpdateBullet(float deltaTime)
@@ -92,11 +104,18 @@ void Game::UpdateWasp(float deltaTime)
     }
 }
 
+void Game::UpdateCameras()
+{
+    m_worldCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
+    m_screenCamera->SetOrthoView(Vec2(0, 0), Vec2(1600, 800));
+}
+
 void Game::Update(float deltaTime)
 {
+    UpdateCameras();
+
     m_widgetHandler->Update(deltaTime);
     ParticleHandler::getInstance()->Update(deltaTime);
-
     if (m_PlayerShip)
         m_PlayerShip->Update(deltaTime);
 
@@ -266,8 +285,7 @@ void Game::StartGame()
 
     SpawnDefaultAsteroids();
     m_levelHandler->StartLevel(0, this);
-    g_theAudio->StartSound( SOUND::PLAYER_SHOOTS_BULLET );
-
+    g_theAudio->StartSound(SOUND::PLAYER_SHOOTS_BULLET);
 }
 
 void Game::ReturnToMainMenu()
