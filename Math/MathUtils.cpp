@@ -1,6 +1,8 @@
 ﻿#include "Engine/Math/MathUtils.hpp"
 #include <cmath>
 
+#include "AABB2.hpp"
+#include "IntVec2.hpp"
 #include "Vec2.hpp"
 #include "Vec3.hpp"
 
@@ -142,6 +144,25 @@ float GetTurnedTowardDegrees(float currentDegrees, float goalDegrees, float maxD
     }
 }
 
+float GetAngleDegreesBetweenVectors2D(Vec2 const& first, Vec2 const& second)
+{
+    float angleFirst       = first.GetOrientationDegrees();
+    float angleSecond      = second.GetOrientationDegrees();
+    float differentDegrees = angleFirst - angleSecond;
+
+    // Wrap the difference to be between -180 and 180
+    while (differentDegrees > 180.0f)
+    {
+        differentDegrees -= 360.0f;
+    }
+    while (differentDegrees < -180.0f)
+    {
+        differentDegrees += 360.0f;
+    }
+    return fabsf(differentDegrees);
+}
+
+
 float DotProduct2D(Vec2 const& a, Vec2 const& b)
 {
     return a.x * b.x + a.y * b.y;
@@ -193,10 +214,31 @@ float GetDistanceXYSquared3D(Vec3 const& positionA, Vec3 const& positionB)
     return deltaX * deltaX + deltaY * deltaY;
 }
 
+int GetTaxicabDistance2D(IntVec2 const& pointA, IntVec2 const& pointB)
+{
+    return abs(pointB.x - pointA.x) + abs(pointB.y - pointA.y);
+}
+
+float GetProjectedLength2D(Vec2 const& vectorToProject, Vec2 const& vectorToProjectOnto)
+{
+    // No normalization of the vector to project
+    Vec2 vectorToProjectOntoNormalized = vectorToProjectOnto.GetNormalized();
+    return DotProduct2D(vectorToProject, vectorToProjectOntoNormalized);
+}
+
+
+Vec2 const GetProjectedOnto2D(Vec2 const& vectorToProject, Vec2 const& vectorToProjectOnto)
+{
+    Vec2  vectorToProjectOntoNormalized = vectorToProjectOnto.GetNormalized();
+    float projectionLength              = DotProduct2D(vectorToProject, vectorToProjectOntoNormalized);
+    return vectorToProjectOntoNormalized * projectionLength;
+}
+
+
 bool DoDiscsOverlap(Vec2 const& centerA, float radiusA, Vec2 const& centerB, float radiusB)
 {
     float discsTotalLength = radiusA + radiusB;
-    float centerDistance = GetDistance2D(centerA, centerB);
+    float centerDistance   = GetDistance2D(centerA, centerB);
     if (discsTotalLength <= centerDistance)
         return false;
     return true;
@@ -205,9 +247,98 @@ bool DoDiscsOverlap(Vec2 const& centerA, float radiusA, Vec2 const& centerB, flo
 bool DoSpheresOverlap(Vec3 const& centerA, float radiusA, Vec3 const& centerB, float radiusB)
 {
     float discsTotalLength = radiusA + radiusB;
-    float centerDistance = GetDistance3D(centerA, centerB);
+    float centerDistance   = GetDistance3D(centerA, centerB);
     if (discsTotalLength <= centerDistance)
         return false;
+    return true;
+}
+
+Vec2 GetNearestPointOnDisc2D(Vec2 const& referencePosition, Vec2 const& discCenter, float discRadius)
+{
+    float distSquared       = GetDistanceSquared2D(referencePosition, discCenter);
+    float discRadiusSquared = discRadius * discRadius;
+
+    if (distSquared <= discRadiusSquared)
+        return referencePosition;
+
+    return discCenter + (referencePosition - discCenter).GetNormalized() * discRadius;
+}
+
+bool IsPointInsideDisc2D(Vec2 const& point, Vec2 const& discCenter, float discRadius)
+{
+    return true;
+}
+
+bool IsPointInsideOrientedSector2D(Vec2 const& point, Vec2 const&           sectorTip, float sectorForwardDegrees,
+                                   float       sectorApertureDegrees, float sectorRadius)
+{
+    return true;
+}
+
+bool IsPointInsideDirectedSector2D(Vec2 const& point, Vec2 const&           sectorTip, Vec2 const& sectorForwardNormal,
+                                   float       sectorApertureDegrees, float sectorRadius)
+{
+    return true;
+}
+
+
+bool PushDiscOutOfPoint2D(Vec2& mobileDiscCenter, float discRadius, Vec2 const& fixedPoint)
+{
+    Vec2 fixedPointToDiscCenter = mobileDiscCenter - fixedPoint;
+
+    if (fixedPointToDiscCenter.GetLengthSquared() >= discRadius * discRadius)
+    {
+        return false;
+    }
+
+    fixedPointToDiscCenter.SetLength(discRadius);
+
+    mobileDiscCenter = fixedPoint + fixedPointToDiscCenter;
+
+    return true;
+}
+
+
+bool PushDiscOutOfDisc2D(Vec2& mobileDiscCenter, float discRadius, Vec2 const& fixedDiscCenter, float fixedDiscRadius)
+{
+    Vec2 mobileToFixDirection = mobileDiscCenter - fixedDiscCenter;
+    if (mobileToFixDirection.GetLengthSquared() >= ((discRadius + fixedDiscRadius) * (discRadius + fixedDiscRadius)))
+    {
+        return false;
+    }
+    // put mobile to the fix but need adjust radius
+    mobileToFixDirection.SetLength(fixedDiscRadius + discRadius);
+
+    mobileDiscCenter = fixedDiscCenter + mobileToFixDirection;
+
+    return true;
+}
+
+bool PushDiscsOutOfEachOther2D(Vec2& aCenter, float aRadius, Vec2& bCenter, float bRadius)
+{
+    Vec2 direction = aCenter - bCenter;
+    if (direction.GetLengthSquared() >= (aRadius + bRadius) * (aRadius + bRadius))
+        return false;
+
+    float overlap = aRadius + bRadius - (aCenter - bCenter).GetLength();
+    aCenter       = aCenter + direction.GetNormalized() * overlap / 2;
+    bCenter       = bCenter - direction.GetNormalized() * overlap / 2; // opposite direction
+    return true;
+}
+
+
+bool PushDiscOutOfAABB2D(Vec2& mobileDiscCenter, float discRadius, AABB2 const& fixedBox)
+{
+    Vec2 discToBoxNearestPoint = fixedBox.GetNearestPoint(mobileDiscCenter);
+    Vec2 pointToDiscCenter     = mobileDiscCenter - discToBoxNearestPoint;
+
+    if (pointToDiscCenter.GetLength() >= discRadius)
+    {
+        return false;
+    }
+
+    float overlap    = discRadius - pointToDiscCenter.GetLength();
+    mobileDiscCenter = mobileDiscCenter + pointToDiscCenter.GetNormalized() * overlap;
     return true;
 }
 
@@ -219,7 +350,7 @@ void TransformPosition2D(Vec2& posToTransform, float uniformScale, float rotatio
 
     // Rotate Using Polar coordinate
     float length = sqrt(posToTransform.x * posToTransform.x + posToTransform.y * posToTransform.y);
-    float theta = Atan2Degrees(posToTransform.y, posToTransform.x);
+    float theta  = Atan2Degrees(posToTransform.y, posToTransform.x);
     theta += rotationDegrees;
 
     // Translate
@@ -238,7 +369,7 @@ void TransformPositionXY3D(Vec3& positionToTransform, float scaleXY, float zRota
 
     // Rotate Using Polar coordinate
     float length = sqrt(positionToTransform.x * positionToTransform.x + positionToTransform.y * positionToTransform.y);
-    float theta = Atan2Degrees(positionToTransform.y, positionToTransform.x);
+    float theta  = Atan2Degrees(positionToTransform.y, positionToTransform.x);
     theta += zRotationDegrees;
 
     // Translate
@@ -247,4 +378,25 @@ void TransformPositionXY3D(Vec3& positionToTransform, float scaleXY, float zRota
 
     positionToTransform.x = convertX + translationXY.x;
     positionToTransform.y = convertY + translationXY.y;
+}
+
+void TransformPosition2D(Vec2& posToTransform, Vec2 const& iBasis, Vec2 const& jBasis, Vec2 const& translation)
+{
+    // Compute the transformed position
+    float newX = (posToTransform.x * iBasis.x) + (posToTransform.y * jBasis.x) + translation.x;
+    float newY = (posToTransform.x * iBasis.y) + (posToTransform.y * jBasis.y) + translation.y;
+
+    posToTransform.x = newX;
+    posToTransform.y = newY;
+}
+
+
+void TransformPositionXY3D(Vec3& posToTransform, Vec2 const& iBasis, Vec2 const& jBasis, Vec2 const& translation)
+{
+    // Compute the transformed x and y positions
+    float newX = (posToTransform.x * iBasis.x) + (posToTransform.y * jBasis.x) + translation.x;
+    float newY = (posToTransform.x * iBasis.y) + (posToTransform.y * jBasis.y) + translation.y;
+
+    posToTransform.x = newX;
+    posToTransform.y = newY;
 }

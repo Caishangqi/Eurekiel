@@ -60,22 +60,22 @@ float Vec2::GetOrientationDegrees() const
 Vec2 const Vec2::GetRotated90Degrees() const
 {
     Vec2 vec_ptr = *this;
-    vec_ptr.x = -this->y;
-    vec_ptr.y = this->x;
+    vec_ptr.x    = -this->y;
+    vec_ptr.y    = this->x;
     return vec_ptr;
 }
 
 Vec2 const Vec2::GetRotatedMinus90Degrees() const
 {
     Vec2 vec_ptr = *this;
-    vec_ptr.x = this->y;
-    vec_ptr.y = -this->x;
+    vec_ptr.x    = this->y;
+    vec_ptr.y    = -this->x;
     return vec_ptr;
 }
 
 Vec2 const Vec2::GetRotatedRadians(float deltaRadians) const
 {
-    Vec2 vec_ptr = *this;
+    Vec2  vec_ptr      = *this;
     float deltaDegrees = ConvertRadiansToDegrees(deltaRadians);
     TransformPosition2D(vec_ptr, 1.f, deltaDegrees, Vec2(0, 0));
     return vec_ptr;
@@ -98,14 +98,26 @@ Vec2 const Vec2::GetClamped(float maxLength) const
 
 Vec2 const Vec2::GetNormalized() const
 {
-    Vec2 vec_ptr = *this;
-    float length = GetLength();
+    Vec2  vec_ptr = *this;
+    float length  = GetLength();
     if (length == 0.f)
         return *this;
     float scale = 1.f / length;
     vec_ptr.x *= scale;
     vec_ptr.y *= scale;
     return vec_ptr;
+}
+
+Vec2 const Vec2::GetReflected(Vec2 const& normalOfSurfaceToReflectOffOf) const
+{
+    Vec2 normalizedNormalOfSurfaceToReflectOffOf = normalOfSurfaceToReflectOffOf.GetNormalized();
+    // Get Vn length composite of Vector
+    float V_n        = x * normalOfSurfaceToReflectOffOf.x + y * normalOfSurfaceToReflectOffOf.y;
+    Vec2  V_n_normal = normalizedNormalOfSurfaceToReflectOffOf * V_n;
+
+    Vec2 V_t       = *this - V_n_normal;
+    Vec2 reflected = V_t + (-V_n_normal);
+    return reflected;
 }
 
 
@@ -153,43 +165,43 @@ const Vec2 Vec2::operator/(float inverseScale) const
 void Vec2::SetOrientationRadians(float newOrientationRadians)
 {
     Vec2 newVec = MakeFromPolarRadians(newOrientationRadians, this->GetLength());
-    this->x = newVec.x;
-    this->y = newVec.y;
+    this->x     = newVec.x;
+    this->y     = newVec.y;
 }
 
 void Vec2::SetOrientationDegrees(float newOrientationDegrees)
 {
     Vec2 newVec = MakeFromPolarDegrees(newOrientationDegrees, this->GetLength());
-    this->x = newVec.x;
-    this->y = newVec.y;
+    this->x     = newVec.x;
+    this->y     = newVec.y;
 }
 
 void Vec2::SetPolarRadians(float newOrientationRadians, float newLength)
 {
     Vec2 newVec = MakeFromPolarRadians(newOrientationRadians, newLength);
-    this->x = newVec.x;
-    this->y = newVec.y;
+    this->x     = newVec.x;
+    this->y     = newVec.y;
 }
 
 void Vec2::SetPolarDegrees(float newOrientationDegrees, float newLength)
 {
     Vec2 newVec = MakeFromPolarDegrees(newOrientationDegrees, newLength);
-    this->x = newVec.x;
-    this->y = newVec.y;
+    this->x     = newVec.x;
+    this->y     = newVec.y;
 }
 
 void Vec2::Rotate90Degrees()
 {
     float temp_x = this->x;
-    this->x = -y;
-    this->y = temp_x;
+    this->x      = -y;
+    this->y      = temp_x;
 }
 
 void Vec2::RotateMinus90Degrees()
 {
     float temp_x = this->x;
-    this->x = y;
-    this->y = -temp_x;
+    this->x      = y;
+    this->y      = -temp_x;
 }
 
 void Vec2::RotateRadians(float deltaRadians)
@@ -277,6 +289,14 @@ void Vec2::operator=(const Vec2& copyFrom)
 const Vec2 operator*(float uniformScale, const Vec2& vecToScale)
 {
     return Vec2(uniformScale * vecToScale.x, uniformScale * vecToScale.y);
+}
+
+
+void Vec2::Reflect(Vec2 const& normalOfSurfaceToReflectOffOf)
+{
+    Vec2 reflectedVector = GetReflected(normalOfSurfaceToReflectOffOf);
+    this->x              = reflectedVector.x;
+    this->y              = reflectedVector.y;
 }
 
 

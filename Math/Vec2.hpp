@@ -33,7 +33,9 @@ public:
     Vec2 const GetRotatedDegrees(float deltaDegrees) const;
     Vec2 const GetClamped(float maxLength) const;   // Get the clamped version of the vector
     Vec2 const GetNormalized() const;
-    
+
+    Vec2 const GetReflected(Vec2 const& normalOfSurfaceToReflectOffOf) const;
+    void Reflect(Vec2 const & normalOfSurfaceToReflectOffOf);
     
     
     // Operators (const)

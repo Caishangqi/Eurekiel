@@ -167,6 +167,8 @@
         </Lib>
     </ItemDefinitionGroup>
     <ItemGroup>
+        <ClCompile Include="Audio\AudioSystem.cpp" />
+        <ClCompile Include="Core\EngineCommon.cpp" />
         <ClCompile Include="Core\ErrorWarningAssert.cpp" />
         <ClCompile Include="Core\Rgba8.cpp"/>
         <ClCompile Include="Core\StringUtils.cpp" />
@@ -187,6 +189,8 @@
         <ClCompile Include="Renderer\Renderer.cpp"/>
     </ItemGroup>
     <ItemGroup>
+        <ClInclude Include="Audio\AudioSystem.hpp" />
+        <ClInclude Include="Core\EngineCommon.hpp" />
         <ClInclude Include="Core\ErrorWarningAssert.hpp" />
         <ClInclude Include="Core\Rgba8.hpp"/>
         <ClInclude Include="Core\StringUtils.hpp" />
@@ -206,6 +210,14 @@
         <ClInclude Include="Math\Vec3.hpp"/>
         <ClInclude Include="Renderer\Camera.hpp"/>
         <ClInclude Include="Renderer\Renderer.hpp"/>
+        <ClInclude Include="ThirdParty\fmod\fmod.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod.hpp" />
+        <ClInclude Include="ThirdParty\fmod\fmod_codec.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod_common.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod_dsp.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod_dsp_effects.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod_errors.h" />
+        <ClInclude Include="ThirdParty\fmod\fmod_output.h" />
     </ItemGroup>
     <ItemGroup>
         <Content Include="README.md"/>
