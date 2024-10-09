@@ -10,7 +10,6 @@ public:
     LevelHandler(Game* owner);
     ~LevelHandler();
 
-public:
     void Update(float deltaTime);
 
     void StartLevel(FLevel* level, Game* gameInstance);
@@ -26,12 +25,12 @@ public:
      */
     void CleanScene();
 
-public: // Event
+    // Event
     void OnEntityDie(Entity* entity);
     void ImportLevels();
 
 private:
     FLevel* m_levels[5] = {};
-    Game* m_game = nullptr;
+    Game*   m_game      = nullptr;
     FLevel* m_currentLevel;
 };

@@ -16,6 +16,5 @@ public:
 
     void Reset() override;
 
-private:
     // health bar
 };

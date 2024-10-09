@@ -21,7 +21,6 @@ void BaseWidget::Render()
 {
     if (visible == false)
     {
-        return;
     }
 }
 
@@ -41,6 +40,6 @@ void BaseWidget::Reset()
 
 void BaseWidget::SetActiveAndVisible()
 {
-    this->active = true;
+    this->active  = true;
     this->visible = true;
 }

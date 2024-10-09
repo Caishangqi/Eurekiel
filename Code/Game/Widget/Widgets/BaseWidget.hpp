@@ -10,10 +10,10 @@ public:
     virtual ~BaseWidget();
 
 protected:
-    Icon* icons[16] = {};
-    WidgetHandler* handler = nullptr;
-    bool visible = false; // whether or not render by opengl
-    bool active = false; // whether or not handle logic
+    Icon*          icons[16] = {};
+    WidgetHandler* handler   = nullptr;
+    bool           visible   = false; // whether or not render by opengl
+    bool           active    = false; // whether or not handle logic
 
 public:
     virtual void Draw();

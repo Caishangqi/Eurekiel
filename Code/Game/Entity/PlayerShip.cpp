@@ -1,12 +1,18 @@
 ﻿#include "PlayerShip.hpp"
+
+#include <vcruntime_typeinfo.h>
+
+#include "Cube.hpp"
 #include "Game/App.hpp"
 #include "Game/GameCommon.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Input/InputSystem.hpp"
+#include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
 #include "Game/Widget/Data/IconRes.hpp"
+
 
 PlayerShip::PlayerShip(Game* gameInstance, const Vec2& startPosition, float orientationDegree): Entity(
     gameInstance, startPosition, orientationDegree)
@@ -25,6 +31,8 @@ PlayerShip::~PlayerShip()
 
 void PlayerShip::Update(float deltaSeconds)
 {
+    m_particleTimer += deltaSeconds;
+
     if (m_isDead)
     {
         return;
@@ -51,22 +59,46 @@ void PlayerShip::Update(float deltaSeconds)
     // Update particle
     if (m_isThrusting)
     {
-        FParticleProperty pp;
-        pp.fadeOpacity        = true;
-        pp.numDebris          = static_cast<int>(2 * m_thrustRate);
-        pp.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees);
-        pp.maxScatterSpeed    = 10.f;
-        pp.color              = m_color;
-        pp.position           = m_position;
-        pp.minAngularVelocity = 0.f;
-        pp.maxAngularVelocity = 0.f;
+        if (m_particleTimer >= .1f) // 如果计时器达到1秒钟
+        {
+            FParticleProperty pp;
+            pp.fadeOpacity        = true;
+            pp.numDebris          = static_cast<int>(10 * m_thrustRate);
+            pp.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -10;
+            pp.maxScatterSpeed    = 10.f;
+            pp.color              = Rgba8(224, 218, 136);
+            pp.position           = m_position + Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -2;
+            pp.minAngularVelocity = 0.f;
+            pp.maxAngularVelocity = 0.f;
 
-        pp.minOpacity = 0.01f;
-        pp.maxOpacity = 0.05f;
+            pp.minOpacity = 0.1f;
+            pp.maxOpacity = 0.4f;
 
-        pp.minLifeTime = .01f;
-        pp.maxLifeTime = .05f;
-        ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+            pp.minLifeTime = .2f;
+            pp.maxLifeTime = .4f;
+
+            FParticleProperty pp_flame;
+            pp_flame.fadeOpacity        = true;
+            pp_flame.numDebris          = static_cast<int>(10 * m_thrustRate);
+            pp_flame.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -10;
+            pp_flame.maxScatterSpeed    = 10.f;
+            pp_flame.color              = Rgba8(230, 167, 60);
+            pp_flame.position           = m_position + Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -2;
+            pp_flame.minAngularVelocity = 0.f;
+            pp_flame.maxAngularVelocity = 0.f;
+
+            pp_flame.minOpacity = 0.1f;
+            pp_flame.maxOpacity = 0.4f;
+
+            pp_flame.minLifeTime = .4f;
+            pp_flame.maxLifeTime = .8f;
+
+
+            ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+            ParticleHandler::getInstance()->SpawnNewParticleCluster(pp_flame);
+
+            m_particleTimer = 0.f;
+        }
     }
 
     // Move the ship
@@ -93,6 +125,18 @@ void PlayerShip::Render() const
         }
         TransformVertexArrayXY3D(NUM_SHIP_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
         g_renderer->DrawVertexArray(NUM_SHIP_VERTS, tempWorldVerts);
+
+        // Tail Flame
+        Vertex_PCU spaceShipTailFlame[12];
+        float      randomRate = g_rng->RollRandomFloatInRange(0.4f, 0.8f);
+        for (int vertIndex = 0; vertIndex < 12; vertIndex++)
+        {
+            spaceShipTailFlame[vertIndex]           = ICON::SPACESHIP_TAIL_FLAME[vertIndex];
+            spaceShipTailFlame[vertIndex].m_color.a = static_cast<unsigned char>(spaceShipTailFlame[vertIndex].m_color.a
+                * m_thrustRate * randomRate);
+        }
+        TransformVertexArrayXY3D(12, spaceShipTailFlame, 1.f, m_orientationDegrees, m_position);
+        g_renderer->DrawVertexArray(12, spaceShipTailFlame);
     }
     DebugRender();
 }
@@ -140,7 +184,7 @@ void PlayerShip::InitializeLocalVerts()
 
 void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 {
-    XboxController const& controller = g_theInput->GetController(0);
+    const XboxController& controller = g_theInput->GetController(0);
     //printf("Magnitude: %f\n", controller.GetLeftStick().GetMagnitude());
     m_isTurningLeft  = g_theInput->IsKeyDown('A');
     m_isTurningRight = g_theInput->IsKeyDown('D');
@@ -173,7 +217,7 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 
 void PlayerShip::UpdateFromController(float& deltaSeconds)
 {
-    XboxController const& controller = g_theInput->GetController(0);
+    const XboxController& controller = g_theInput->GetController(0);
     if (controller.GetLeftStick().GetMagnitude() > 0.f)
     {
         m_orientationDegrees = controller.GetLeftStick().GetPosition().GetOrientationDegrees();
@@ -233,6 +277,12 @@ void PlayerShip::Respawn()
 
 void PlayerShip::OnColliedEnter(Entity* other)
 {
+    if (typeid(*other).name() == typeid(Cube).name())
+    {
+        m_velocity = -m_velocity;
+        return;
+    }
+
     Entity::OnColliedEnter(other);
     m_health--;
     FParticleProperty pp;

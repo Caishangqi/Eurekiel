@@ -1,22 +1,26 @@
 ﻿#include "Asteroid.hpp"
-#include "Game/GameCommon.hpp"
-#include "Engine/Core/VertexUtils.hpp"
+
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
+#include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+
+//#include "Game/Resource/SoundRes.hpp"
+#include "Game/GameCommon.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
+
 
 Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientationDegrees): Entity(
     gameInstance, startPosition, orientationDegrees)
 {
-    m_color = Rgba8(100, 100, 100);
-    m_health = 3;
-    m_physicsRadius = ASTEROID_PHYSICS_RADIUS;
+    m_color          = Rgba8(100, 100, 100);
+    m_health         = 3;
+    m_physicsRadius  = ASTEROID_PHYSICS_RADIUS;
     m_cosmeticRadius = ASTEROID_COSMETIC_RADIUS;
 
 
     m_angularVelocity = g_rng->RollRandomFloatInRange(-200.f, 200.f);
-    m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, ASTEROID_SPEED);
+    m_velocity        = Vec2::MakeFromPolarDegrees(m_orientationDegrees, ASTEROID_SPEED);
 
     Asteroid::InitializeLocalVerts();
 }
@@ -81,12 +85,12 @@ void Asteroid::Die()
 {
     Entity::Die();
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 60;
-    pp.averageVelocity = m_velocity;
-    pp.maxScatterSpeed = 40.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 60;
+    pp.averageVelocity    = m_velocity;
+    pp.maxScatterSpeed    = 40.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 
@@ -112,12 +116,12 @@ void Asteroid::InitializeLocalVerts()
     }
 
     // Precompute 2D vertex offsets
-    constexpr float degreesPerAsterSide = 360.0f / (float)NUM_ASTEROID_SIDES;
-    Vec2 asteroidLocalVertPositions[NUM_ASTEROID_SIDES] = {};
+    constexpr float degreesPerAsterSide                            = 360.0f / static_cast<float>(NUM_ASTEROID_SIDES);
+    Vec2            asteroidLocalVertPositions[NUM_ASTEROID_SIDES] = {};
     for (int sideNum = 0; sideNum < NUM_ASTEROID_SIDES; ++sideNum)
     {
-        float degrees = degreesPerAsterSide * (float)sideNum;
-        float radius = asteroidRadii[sideNum];
+        float degrees                         = degreesPerAsterSide * static_cast<float>(sideNum);
+        float radius                          = asteroidRadii[sideNum];
         asteroidLocalVertPositions[sideNum].x = radius * CosDegrees(degrees);
         asteroidLocalVertPositions[sideNum].y = radius * SinDegrees(degrees);
     }
@@ -125,16 +129,16 @@ void Asteroid::InitializeLocalVerts()
     // Build triangles
     for (int triNum = 0; triNum < NUM_ASTEROID_TRIS; ++triNum)
     {
-        int startRadiusIndex = triNum;
-        int endRadiusIndex = (triNum + 1) % NUM_ASTEROID_SIDES;
-        int firstVertIndex = (triNum * 3) + 0;
-        int secondVertIndex = (triNum * 3) + 1;
-        int thirdVertIndex = (triNum * 3) + 2;
-        Vec2 secondVertOfs = asteroidLocalVertPositions[startRadiusIndex];
-        Vec2 thirdVertOfs = asteroidLocalVertPositions[endRadiusIndex];
-        m_localVerts[firstVertIndex].m_position = Vec3(0.f, 0.f, 0.f);
+        int  startRadiusIndex                    = triNum;
+        int  endRadiusIndex                      = (triNum + 1) % NUM_ASTEROID_SIDES;
+        int  firstVertIndex                      = (triNum * 3) + 0;
+        int  secondVertIndex                     = (triNum * 3) + 1;
+        int  thirdVertIndex                      = (triNum * 3) + 2;
+        Vec2 secondVertOfs                       = asteroidLocalVertPositions[startRadiusIndex];
+        Vec2 thirdVertOfs                        = asteroidLocalVertPositions[endRadiusIndex];
+        m_localVerts[firstVertIndex].m_position  = Vec3(0.f, 0.f, 0.f);
         m_localVerts[secondVertIndex].m_position = Vec3(secondVertOfs.x, secondVertOfs.y, 0.f);
-        m_localVerts[thirdVertIndex].m_position = Vec3(thirdVertOfs.x, thirdVertOfs.y, 0.f);
+        m_localVerts[thirdVertIndex].m_position  = Vec3(thirdVertOfs.x, thirdVertOfs.y, 0.f);
     }
 
     // Set colors
@@ -149,12 +153,12 @@ void Asteroid::OnColliedEnter(Entity* other)
     Entity::OnColliedEnter(other);
     m_health--;
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 20;
-    pp.averageVelocity = m_velocity + other->m_velocity;
-    pp.maxScatterSpeed = 20.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 20;
+    pp.averageVelocity    = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed    = 20.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 
@@ -163,6 +167,6 @@ void Asteroid::OnColliedEnter(Entity* other)
 
     pp.minLifeTime = .5f;
     pp.maxLifeTime = 1.5f;
-
+    //g_theAudio->StartSound(SOUND::ASTEROIDS_DAMAGED);
     ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
 }

@@ -155,7 +155,7 @@ void App::BeginFrame()
 {
     g_renderer->BeginFrame();
     g_theInput->BeginFrame();
-    // g_theAudio->BeginFrame();
+    g_theAudio->BeginFrame();
     // g_theNetwork->BeginFrame();
     // g_theWindow->BeginFrame();
     // g_theDevConsole->BeginFrame();
@@ -165,7 +165,6 @@ void App::BeginFrame()
 
 void App::UpdateCameras()
 {
-    
     m_gameCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
 }
 
@@ -188,6 +187,7 @@ void App::EndFrame()
 {
     g_renderer->EndFrame();
     g_theInput->EndFrame();
+    g_theAudio->EndFrame();
 
     // Dump() 的时候
     // Copy m_areKeysDown to m_wereKeyDownLastFrame

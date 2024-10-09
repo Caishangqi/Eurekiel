@@ -9,7 +9,7 @@ public:
     Beetle(Game* owner, const Vec2& startPosition, float orientationDegree);
 
     ~Beetle() override;
-void Die() override;
+    void Die() override;
     void Update(float deltaSeconds) override;
     void Render() const override;
     void InitializeLocalVerts() override;

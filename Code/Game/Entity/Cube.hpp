@@ -1,0 +1,35 @@
+﻿#pragma once
+#include "Entity.h"
+#include "Engine/Math/AABB2.hpp"
+#include "Engine/Math/IntVec2.hpp"
+
+
+struct IntVec2;
+class Grid;
+
+class Cube : public Entity
+{
+public:
+    Cube(Game* owner, const Vec2& startPosition, float orientationDegree);
+    Cube(Game* owner, Grid* grid, const Vec2& startPosition, float orientationDegree);
+    Cube(Game* owner, Grid* grid, const IntVec2& startPosition, float orientationDegree);
+    Cube();
+    ~Cube() override;
+    void Update(float deltaSeconds) override;
+    void Render() const override;
+    void InitializeLocalVerts() override;
+    void DebugRender() const override;
+    void Die() override;
+    void OnColliedEnter(Entity* other) override;
+    bool IsAlive() const override;
+
+    void UpdateGridPosition();
+
+    AABB2*  m_aabb;
+    IntVec2 m_gridPos;
+
+private:
+    Grid* m_parentGrid = nullptr;
+
+    bool m_IsStatic = false;
+};

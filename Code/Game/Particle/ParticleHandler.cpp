@@ -71,16 +71,16 @@ void ParticleHandler::SpawnNewParticleCluster(FParticleProperty property
 )
 {
     // Common
-    Vec2 position = property.position;
-    Rgba8 color = property.color;
-    bool fadeOpacity = property.fadeOpacity;
+    Vec2  position    = property.position;
+    Rgba8 color       = property.color;
+    bool  fadeOpacity = property.fadeOpacity;
 
 
     // Cluster
-    int numDebris = property.numDebris;
-    Vec2 averageVelocity = property.averageVelocity;
+    int   numDebris       = property.numDebris;
+    Vec2  averageVelocity = property.averageVelocity;
     float maxScatterSpeed = property.maxScatterSpeed;
-    float averageRadius = property.averageRadius;
+    float averageRadius   = property.averageRadius;
 
     float minLifeTime = property.minLifeTime;
     float maxLifeTime = property.maxLifeTime;
@@ -92,17 +92,17 @@ void ParticleHandler::SpawnNewParticleCluster(FParticleProperty property
     for (int number = 0; number < numDebris; ++number)
     {
         prop.fadeOpacity = property.fadeOpacity;
-        prop.position = position;
-        prop.color = color;
+        prop.position    = position;
+        prop.color       = color;
 
-        prop.color.a = static_cast<unsigned char>((float)color.a * g_rng->RollRandomFloatInRange(
+        prop.color.a = static_cast<unsigned char>(static_cast<float>(color.a) * g_rng->RollRandomFloatInRange(
             prop.minOpacity, prop.maxOpacity));
 
         prop.velocity = averageVelocity + Vec2(g_rng->RollRandomFloatInRange(-maxScatterSpeed, maxScatterSpeed),
                                                g_rng->RollRandomFloatInRange(-maxScatterSpeed, maxScatterSpeed));
-        prop.radius = g_rng->RollRandomFloatInRange(1.f, maxScatterSpeed);
+        prop.radius          = g_rng->RollRandomFloatInRange(1.f, maxScatterSpeed);
         prop.angularVelocity = g_rng->RollRandomFloatInRange(minAngularVelocity, maxAngularVelocity);
-        prop.lifeTime = g_rng->RollRandomFloatInRange(minLifeTime, maxLifeTime);
+        prop.lifeTime        = g_rng->RollRandomFloatInRange(minLifeTime, maxLifeTime);
 
         SpawnNewParticle(prop);
     }
@@ -111,14 +111,14 @@ void ParticleHandler::SpawnNewParticleCluster(FParticleProperty property
 
 void ParticleHandler::SpawnNewParticle(FParticleProperty property)
 {
-    Vec2 position = property.position;
-    Rgba8 color = property.color;
-    Vec2 velocity = property.velocity;
-    float radius = property.radius;
-    float lifeTime = property.lifeTime;
-    float angularVelocity = property.angularVelocity;
+    Vec2  position           = property.position;
+    Rgba8 color              = property.color;
+    Vec2  velocity           = property.velocity;
+    float radius             = property.radius;
+    float lifeTime           = property.lifeTime;
+    float angularVelocity    = property.angularVelocity;
     float orientationDegrees = property.orientationDegrees;
-    bool fadeOpacity = property.fadeOpacity;
+    bool  fadeOpacity        = property.fadeOpacity;
 
 
     for (BaseParticle*& element : m_baseParticle)

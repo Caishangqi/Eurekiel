@@ -8,12 +8,12 @@ Icon::Icon(Vertex_PCU* initialVertices, int numberOfVertices, BaseWidget* Owner)
     for (int i = 0; i < numberOfVertices; i++)
     {
         this->initialVertices[i] = initialVertices[i];
-        this->vertices[i] = initialVertices[i];
+        this->vertices[i]        = initialVertices[i];
     }
-    this->owner = Owner;
+    this->owner            = Owner;
     this->numberOfVertices = numberOfVertices;
-    position = Vec2(0.0f, 0.0f);
-    scale = 1.0f;
+    position               = Vec2(0.0f, 0.0f);
+    scale                  = 1.0f;
 }
 
 Vertex_PCU* Icon::GetInitialVertices()
@@ -33,7 +33,6 @@ int Icon::GetNumberOfVertices()
 
 void Icon::SetScale(float rate)
 {
-
     for (int i = 0; i < numberOfVertices; i++)
     {
         vertices[i].m_position.x = vertices[i].m_position.x * rate;
@@ -80,7 +79,7 @@ void Icon::SetRotation(float rotation)
     for (int i = 0; i < numberOfVertices; i++)
     {
         this->rotation = rotation;
-        TransformPositionXY3D(vertices[i].m_position, 1.0f, rotation, Vec2(0,0));
+        TransformPositionXY3D(vertices[i].m_position, 1.0f, rotation, Vec2(0, 0));
     }
 }
 

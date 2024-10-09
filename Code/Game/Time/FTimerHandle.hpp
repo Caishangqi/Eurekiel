@@ -3,8 +3,7 @@
 
 struct FTimerHandle
 {
-public:
-    float times;
+    float  times;
     void (*onFinishCallback)();
 
 private:

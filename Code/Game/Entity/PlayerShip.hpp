@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "Bullet.h"
 #include "Game/Entity/Entity.h"
 /*
 a.	(1) Derives (inherits) from Entity (e.g. class PlayerShip : public Entity)
@@ -17,7 +16,7 @@ k.	(2) In PlayerShip::Render, a (temporary, local) duplicate copy of this vertex
 l.	(1) A TransformVertexArrayXY3D() utility function rotates & translates the temp array (from “local space” into “world space”) before drawing:
 */
 //
-constexpr int NUM_SHIP_TRIS = 5;
+constexpr int NUM_SHIP_TRIS  = 5;
 constexpr int NUM_SHIP_VERTS = 3 * NUM_SHIP_TRIS;
 
 class PlayerShip : public Entity
@@ -31,27 +30,28 @@ public:
     PlayerShip(Game* gameInstance, const Vec2& startPosition, float oritentationDeg);
     ~PlayerShip() override;
 
-    virtual void Update(float deltaSeconds) override;
-    virtual void Render() const override;
+    void Update(float deltaSeconds) override;
+    void Render() const override;
 
     void Die() override;
 
-    virtual void InitializeLocalVerts() override;
+    void InitializeLocalVerts() override;
 
     void Respawn();
 
     void OnColliedEnter(Entity* other) override;
-    
+
 private:
     void UpdateFromInputSystem(float& deltaSeconds);
     void UpdateFromKeyBoard(float& deltaSeconds);
     void UpdateFromController(float& deltaSeconds);
     void BounceOffWalls();
 
-private:
     Vertex_PCU m_localVerts[NUM_SHIP_VERTS];
-    bool m_isTurningLeft = false;
-    bool m_isTurningRight = false;
-    bool m_isThrusting = false;
-    float m_thrustRate = 0.0f;
+    bool       m_isTurningLeft  = false;
+    bool       m_isTurningRight = false;
+    bool       m_isThrusting    = false;
+    float      m_thrustRate     = 0.0f;
+
+    float m_particleTimer = 0.f;
 };

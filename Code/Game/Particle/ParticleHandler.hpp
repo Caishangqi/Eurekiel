@@ -15,22 +15,21 @@ class ParticleHandler
 protected:
     ParticleHandler();
     static ParticleHandler* instance_;
-    BaseParticle* m_baseParticle[1024] = {};
+    BaseParticle*           m_baseParticle[1024] = {};
 
 public:
-    ParticleHandler(ParticleHandler const& other) = delete;
-    void operator=(const ParticleHandler&) = delete;
+    ParticleHandler(const ParticleHandler& other)             = delete;
+    void                    operator=(const ParticleHandler&) = delete;
     static ParticleHandler* getInstance();
-    void Update(float deltaTime);
-    void Render();
-    void HandleParticleCollision();
-    void GarbageCollection();
+    void                    Update(float deltaTime);
+    void                    Render();
+    void                    HandleParticleCollision();
+    void                    GarbageCollection();
     /**
      * Clean all particles in the current scene
      */
     void CleanParticle();
 
-public:
     void SpawnNewParticleCluster(FParticleProperty property);
 
     void SpawnNewParticle(FParticleProperty property);
@@ -38,24 +37,23 @@ public:
 
 struct FParticleProperty
 {
-public:
     // Individual
-    Vec2 velocity;
+    Vec2  velocity;
     float radius;
     float lifeTime;
     float angularVelocity;
     float orientationDegrees;
 
     // Common
-    Vec2 position; //
-    Rgba8 color; //
+    Vec2   position; //
+    Rgba8  color; //
     EShape shape;
 
     bool fadeOpacity = false;
 
     // Cluster
-    int numDebris;
-    Vec2 averageVelocity;
+    int   numDebris;
+    Vec2  averageVelocity;
     float maxScatterSpeed;
     float averageRadius;
 
@@ -68,8 +66,7 @@ public:
     float minOpacity = 0.1f;
     float maxOpacity = 1.0f;
 
-public:
-    FParticleProperty(): radius(1), lifeTime(1.f), angularVelocity(0), orientationDegrees(0), shape(EShape::PIXEL),
+    FParticleProperty(): radius(1), lifeTime(1.f), angularVelocity(0), orientationDegrees(0), shape(PIXEL),
                          fadeOpacity(true),
                          numDebris(1),
                          maxScatterSpeed(10.f), averageRadius(10.f), minOpacity(0.1f), maxOpacity(1.0f)

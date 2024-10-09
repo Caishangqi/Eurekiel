@@ -71,13 +71,10 @@ void LevelHandler::RunNextLevel()
                 StartLevel(m_levels[i + 1], m_game);
                 return;
             }
-            else
-            {
-                printf("[level]     Completed All levels");
-                // use return to menu to call Reimport levels and clean scene
-                m_game->SetTimer(3.0, nullptr);
-                return;
-            }
+            printf("[level]     Completed All levels");
+            // use return to menu to call Reimport levels and clean scene
+            m_game->SetTimer(3.0, nullptr);
+            return;
         }
     }
 }

@@ -6,8 +6,6 @@ enum class ELevelState
     ONGOING, // Current level is initialize and had spawn entities
     FINISHED, // Player killed all entity that the level specific
     INACTIVE // deactivate and not update in game loop;
-    
-    
 };
 
 inline const char* to_string(ELevelState e)
@@ -21,4 +19,3 @@ inline const char* to_string(ELevelState e)
     default: return "unknown";
     }
 }
-

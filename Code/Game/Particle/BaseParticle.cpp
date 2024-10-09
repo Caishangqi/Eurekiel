@@ -5,20 +5,20 @@
 #include "Game/GameCommon.hpp"
 
 
-BaseParticle::BaseParticle(float lifetime, Vec2 position, Vec2 velocity, float radius, Rgba8 color,
-                           float angularVelocity, float orientationDegrees, bool fadeOpacity,
+BaseParticle::BaseParticle(float            lifetime, Vec2         position, Vec2 velocity, float radius, Rgba8 color,
+                           float            angularVelocity, float orientationDegrees, bool fadeOpacity,
                            ParticleHandler* particleHandler)
 {
-    m_position = position;
-    m_velocity = velocity;
-    m_radius = radius;
-    m_color = color;
-    m_particleHandler = particleHandler;
-    m_angularVelocity = angularVelocity;
+    m_position           = position;
+    m_velocity           = velocity;
+    m_radius             = radius;
+    m_color              = color;
+    m_particleHandler    = particleHandler;
+    m_angularVelocity    = angularVelocity;
     m_orientationDegrees = orientationDegrees;
-    m_lifetime = lifetime;
-    m_lifetimeInitial = m_lifetime;
-    m_fadeOpacity = fadeOpacity;
+    m_lifetime           = lifetime;
+    m_lifetimeInitial    = m_lifetime;
+    m_fadeOpacity        = fadeOpacity;
     InitializeLocalVerts();
 }
 
@@ -59,7 +59,7 @@ void BaseParticle::Render()
         {
             for (Vertex_PCU& temp_world_vert : tempWorldVerts)
             {
-                temp_world_vert.m_color.a = static_cast<unsigned char>((float)temp_world_vert.m_color.a * (
+                temp_world_vert.m_color.a = static_cast<unsigned char>(static_cast<float>(temp_world_vert.m_color.a) * (
                     m_lifetime / m_lifetimeInitial));
             }
         }

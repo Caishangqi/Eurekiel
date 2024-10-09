@@ -6,9 +6,11 @@
 #include "Engine/Audio/AudioSystem.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Input/InputSystem.hpp"
+#include "Engine/Math/IntVec2.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Entity/Beetle.hpp"
+#include "Entity/Cube.hpp"
 #include "Entity/Wasp.hpp"
 #include "Enum/EEntity.h"
 #include "Level/LevelHandler.hpp"
@@ -30,6 +32,9 @@ Game::Game()
     // Cameras
     m_screenCamera = new Camera();
     m_worldCamera  = new Camera();
+
+    // Grid
+    m_grid = new Grid(this);
 }
 
 Game::~Game()
@@ -43,6 +48,8 @@ Game::~Game()
     delete m_widgetHandler;
     m_widgetHandler = nullptr;
 
+    delete m_grid;
+    m_grid = nullptr;
     ParticleHandler::getInstance()->CleanParticle();
 }
 
@@ -104,15 +111,31 @@ void Game::UpdateWasp(float deltaTime)
     }
 }
 
-void Game::UpdateCameras()
+void Game::UpdateCube(float deltaTime)
+{
+    for (Cube* element : m_cube)
+    {
+        if (element != nullptr)
+            element->Update(deltaTime);
+    }
+}
+
+void Game::UpdateCameras(float deltaTime)
 {
     m_worldCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
+    m_worldCamera->Update(deltaTime);
     m_screenCamera->SetOrthoView(Vec2(0, 0), Vec2(1600, 800));
+    m_screenCamera->Update(deltaTime);
+}
+
+void Game::GenerateNewCube()
+{
+    Spawn(ENTITY_TYPE_CUBE);
 }
 
 void Game::Update(float deltaTime)
 {
-    UpdateCameras();
+    UpdateCameras(deltaTime);
 
     m_widgetHandler->Update(deltaTime);
     ParticleHandler::getInstance()->Update(deltaTime);
@@ -130,6 +153,8 @@ void Game::Update(float deltaTime)
 
         UpdateWasp(deltaTime);
 
+        UpdateCube(deltaTime);
+
         HandleEntityCollisions();
     }
 
@@ -141,12 +166,14 @@ void Game::Update(float deltaTime)
     GarbageCollection();
 }
 
-void Game::SpawnNewBullet(Vec2 const& position, float orientationDegrees)
+void Game::SpawnNewBullet(const Vec2& position, float orientationDegrees)
 {
     for (Bullet*& m_bullet : m_bullets)
     {
         if (m_bullet == nullptr)
         {
+            // TODO: 为什么这部分移动到PlayerShip会有编译错误
+            g_theAudio->StartSound(SOUND::PLAYER_SHOOTS_BULLET);
             m_bullet = new Bullet(this, position, orientationDegrees);
             return;
         }
@@ -159,13 +186,13 @@ void Game::SpawnDefaultAsteroids()
     for (int numberAsteroid = 0; numberAsteroid < NUM_STARTING_ASTEROIDS; ++numberAsteroid)
     {
         // Generate random position in world 
-        float     worldPositionX    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-        float     worldPositionY    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-        float     randomOrientation = g_rng->RollRandomFloatInRange(0, 360);
-        Asteroid* AddedAsteroid     = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
-        Vec2      offScreenPos      = getRandomPositionOffscreen(AddedAsteroid);
-        AddedAsteroid->m_position   = offScreenPos;
-        m_asteroid[numberAsteroid]  = AddedAsteroid;
+        float worldPositionX       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+        float worldPositionY       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+        float randomOrientation    = g_rng->RollRandomFloatInRange(0, 360);
+        auto  AddedAsteroid        = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+        Vec2  offScreenPos         = getRandomPositionOffscreen(AddedAsteroid);
+        AddedAsteroid->m_position  = offScreenPos;
+        m_asteroid[numberAsteroid] = AddedAsteroid;
     }
 }
 
@@ -222,7 +249,7 @@ void Game::SpawnNewAsteroids()
 
 void Game::HandleKeyBoardEvent(float deltaTime)
 {
-    XboxController const& controller = g_theInput->GetController(0);
+    const XboxController& controller = g_theInput->GetController(0);
     if (IsInMainMenu)
     {
         bool spaceBarPressed = g_theInput->WasKeyJustPressed(32) || controller.WasButtonJustPressed(XBOX_BUTTON_A);
@@ -231,6 +258,31 @@ void Game::HandleKeyBoardEvent(float deltaTime)
         {
             StartGame();
         }
+    }
+
+    if (g_theInput->WasKeyJustPressed('C'))
+    {
+        //m_grid->PlaceCube(IntVec2(40, 20));
+        m_grid->PlaceCube(IntVec2(39, 19));
+        m_grid->PlaceCube(IntVec2(39, 18));
+        m_grid->PlaceCube(IntVec2(39, 17));
+        m_grid->PlaceCube(IntVec2(39, 16));
+        m_grid->PlaceCube(IntVec2(39, 15));
+        m_grid->PlaceCube(IntVec2(39, 14));
+        m_grid->PlaceCube(IntVec2(39, 13));
+        m_grid->PlaceCube(IntVec2(39, 12));
+        m_grid->PlaceCube(IntVec2(39, 11));
+        m_grid->PlaceCube(IntVec2(39, 10));
+        m_grid->PlaceCube(IntVec2(39, 9));
+        m_grid->PlaceCube(IntVec2(39, 8));
+        m_grid->PlaceCube(IntVec2(39, 7));
+        m_grid->PlaceCube(IntVec2(39, 6));
+        m_grid->PlaceCube(IntVec2(39, 5));
+        m_grid->PlaceCube(IntVec2(39, 4));
+        m_grid->PlaceCube(IntVec2(39, 3));
+        m_grid->PlaceCube(IntVec2(39, 2));
+        m_grid->PlaceCube(IntVec2(39, 1));
+        m_grid->PlaceCube(IntVec2(39, 0));
     }
 
     // Return to Main menu
@@ -349,6 +401,12 @@ void Game::RenderEntities() const
             wasp->Render();
     }
 
+    for (Cube* cube : m_cube)
+    {
+        if (cube != nullptr)
+            cube->Render();
+    }
+
     m_PlayerShip->Render();
 }
 
@@ -400,6 +458,18 @@ void Game::HandleEntityCollisions()
                 break; // Exit the loop after collision
             }
         }
+
+        for (Cube* cube : m_cube)
+        {
+            if (cube == nullptr || !cube->IsAlive())
+                continue;
+            if (PushDiscOutOfAABB2D(m_bullet->m_position, m_bullet->m_physicsRadius, *cube->m_aabb))
+            {
+                m_bullet->OnColliedEnter(cube);
+                cube->OnColliedEnter(m_bullet);
+                break;
+            }
+        }
     }
 
     // ship to entity collision
@@ -413,6 +483,7 @@ void Game::HandleEntityCollisions()
         {
             m_PlayerShip->OnColliedEnter(asteroid);
             asteroid->OnColliedEnter(m_PlayerShip);
+            g_theAudio->StartSound(SOUND::ENEMY_DAMAGED);
             break; // Exit the loop after collision
         }
     }
@@ -427,6 +498,7 @@ void Game::HandleEntityCollisions()
         {
             m_PlayerShip->OnColliedEnter(beetle);
             beetle->OnColliedEnter(m_PlayerShip);
+            g_theAudio->StartSound(SOUND::ENEMY_DAMAGED);
             break; // Exit the loop after collision
         }
     }
@@ -441,7 +513,21 @@ void Game::HandleEntityCollisions()
         {
             m_PlayerShip->OnColliedEnter(wasp);
             wasp->OnColliedEnter(m_PlayerShip);
+            g_theAudio->StartSound(SOUND::ENEMY_DAMAGED);
             break; // Exit the loop after collision
+        }
+    }
+
+    for (Cube* cube : m_cube)
+    {
+        if (cube == nullptr || !cube->IsAlive() || !m_PlayerShip->IsAlive())
+            continue;
+        if (PushDiscOutOfAABB2D(m_PlayerShip->m_position, m_PlayerShip->m_physicsRadius, *cube->m_aabb))
+        {
+            m_PlayerShip->OnColliedEnter(cube);
+            cube->OnColliedEnter(m_PlayerShip);
+            g_theAudio->StartSound(SOUND::ENEMY_DAMAGED);
+            break;
         }
     }
 }
@@ -484,6 +570,15 @@ void Game::GarbageCollection()
             wasp = nullptr;
         }
     }
+
+    for (Cube*& cube : m_cube)
+    {
+        if (cube != nullptr && cube->IsGarbage())
+        {
+            delete cube;
+            cube = nullptr;
+        }
+    }
 }
 
 
@@ -501,6 +596,20 @@ void Game::Spawn(EEntity entityType)
             {
                 element = entityBeetle;
                 printf("[entity]    Spawn 1 Entity - type: Beetle\n");
+                break;
+            }
+        }
+        break;
+    case ENTITY_TYPE_CUBE:
+        Cube* entityCube;
+        entityCube             = new Cube(this, Vec2(), 0.0f);
+        entityCube->m_position = Vec2(205, 95);
+        for (Cube*& element : m_cube)
+        {
+            if (element == nullptr)
+            {
+                element = entityCube;
+                printf("[entity]    Spawn 1 Entity - type: Cube\n");
                 break;
             }
         }
@@ -544,6 +653,7 @@ void Game::OnPlayerShipRespawnEvent(PlayerShip* playerShip, int remainTry)
     printf(
         "[event]     PlayerShip respawn event triggered\n"
         "            > Remain tries: %d\n", remainTry);
+    g_theAudio->StartSound(SOUND::PLAYER_RESPAWN);
     m_widgetHandler->playerHealthWidget->OnPlayerShipRespawn(playerShip, remainTry);
 }
 
@@ -551,6 +661,9 @@ void Game::OnPlayerShipDeathEvent(PlayerShip* playerShip)
 {
     printf(
         "[event]     PlayerShip death event triggered\n");
+
+    g_theAudio->StartSound(SOUND::PLAYER_DIES);
+    m_worldCamera->DoShakeEffect(Vec2(3, 3), 1.0f, true);
     if (remainTry - 1 == 0) // because on spawn will deduct remain try
     {
         SetTimer(3, nullptr);
@@ -559,7 +672,7 @@ void Game::OnPlayerShipDeathEvent(PlayerShip* playerShip)
 
 FTimerHandle* Game::SetTimer(float timer, void (*callback)())
 {
-    FTimerHandle* handle = new FTimerHandle();
+    auto handle = new FTimerHandle();
     handle->SetOwner(this);
     handle->times            = timer;
     handle->onFinishCallback = callback;

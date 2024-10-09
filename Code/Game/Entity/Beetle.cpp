@@ -5,6 +5,7 @@
 #include "Game/Game.hpp"
 #include "Game/GameCommon.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
+#include "Game/Resource/SoundRes.hpp"
 
 /*
  *  Spawns at a random position just offscreen (using the Beetle’s cosmetic radius)
@@ -18,11 +19,11 @@
 Beetle::Beetle(Game* owner, const Vec2& startPosition, float orientationDegree): Entity(
     owner, startPosition, orientationDegree)
 {
-    m_color = Rgba8(100, 160, 60);
-    m_health = BEETLE_HEALTH;
-    m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, BEETLE_SPEED);
+    m_color          = Rgba8(100, 160, 60);
+    m_health         = BEETLE_HEALTH;
+    m_velocity       = Vec2::MakeFromPolarDegrees(m_orientationDegrees, BEETLE_SPEED);
     m_cosmeticRadius = BEETLE_COSMETIC_RADIUS;
-    m_physicsRadius = BEETLE_PHYSICS_RADIUS;
+    m_physicsRadius  = BEETLE_PHYSICS_RADIUS;
     Beetle::InitializeLocalVerts();
 }
 
@@ -34,12 +35,12 @@ void Beetle::Die()
 {
     Entity::Die();
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 64;
-    pp.averageVelocity = m_velocity;
-    pp.maxScatterSpeed = 40.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 64;
+    pp.averageVelocity    = m_velocity;
+    pp.maxScatterSpeed    = 40.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 
@@ -50,6 +51,7 @@ void Beetle::Die()
     pp.maxLifeTime = 3.0f;
 
     ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+    g_theAudio->StartSound(SOUND::ENEMY_DIES);
 }
 
 
@@ -111,12 +113,12 @@ void Beetle::OnColliedEnter(Entity* other)
     m_health--;
 
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 20;
-    pp.averageVelocity = m_velocity + other->m_velocity;
-    pp.maxScatterSpeed = 20.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 20;
+    pp.averageVelocity    = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed    = 20.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 
@@ -126,5 +128,6 @@ void Beetle::OnColliedEnter(Entity* other)
     pp.minLifeTime = .5f;
     pp.maxLifeTime = 1.5f;
 
+    g_theAudio->StartSound(SOUND::ENEMY_DAMAGED);
     ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
 }

@@ -8,7 +8,7 @@
 Bullet::Bullet(Game* owner, const Vec2& startPosition, float orientationDegrees): Entity(
     owner, startPosition, orientationDegrees)
 {
-    m_physicsRadius = BULLET_PHYSICS_RADIUS;
+    m_physicsRadius  = BULLET_PHYSICS_RADIUS;
     m_cosmeticRadius = BULLET_COSMETIC_RADIUS;
 
     m_health = 1;
@@ -57,16 +57,16 @@ void Bullet::InitializeLocalVerts()
     m_localVerts[0].m_position = Vec3(0.5f, 0.0f, 0.0f);
     m_localVerts[1].m_position = Vec3(0.0f, 0.5f, 0.0f);
     m_localVerts[2].m_position = Vec3(0.0f, -0.5f, 0.0f);
-    m_localVerts[0].m_color = Rgba8(255, 255, 0, 255);
-    m_localVerts[1].m_color = Rgba8(255, 255, 0, 255);
-    m_localVerts[2].m_color = Rgba8(255, 255, 0, 255);
+    m_localVerts[0].m_color    = Rgba8(255, 255, 0, 255);
+    m_localVerts[1].m_color    = Rgba8(255, 255, 0, 255);
+    m_localVerts[2].m_color    = Rgba8(255, 255, 0, 255);
 
     m_localVerts[3].m_position = Vec3(0.0f, -0.5f, 0.0f);
     m_localVerts[4].m_position = Vec3(0.0f, 0.5f, 0.0f);
     m_localVerts[5].m_position = Vec3(-2.0f, 0.0f, 0.0f);
-    m_localVerts[3].m_color = Rgba8(255, 0, 0, 255);
-    m_localVerts[4].m_color = Rgba8(255, 0, 0, 255);
-    m_localVerts[5].m_color = Rgba8(255, 0, 0, 0);
+    m_localVerts[3].m_color    = Rgba8(255, 0, 0, 255);
+    m_localVerts[4].m_color    = Rgba8(255, 0, 0, 255);
+    m_localVerts[5].m_color    = Rgba8(255, 0, 0, 0);
 }
 
 void Bullet::OnColliedEnter(Entity* other)
@@ -74,12 +74,12 @@ void Bullet::OnColliedEnter(Entity* other)
     Entity::OnColliedEnter(other);
     m_health--;
     FParticleProperty pp;
-    pp.fadeOpacity = true;
-    pp.numDebris = 5;
-    pp.averageVelocity = m_velocity + other->m_velocity;
-    pp.maxScatterSpeed = 40.f;
-    pp.color = m_color;
-    pp.position = m_position;
+    pp.fadeOpacity        = true;
+    pp.numDebris          = 5;
+    pp.averageVelocity    = m_velocity + other->m_velocity;
+    pp.maxScatterSpeed    = 40.f;
+    pp.color              = m_color;
+    pp.position           = m_position;
     pp.minAngularVelocity = 0.f;
     pp.maxAngularVelocity = 0.f;
 

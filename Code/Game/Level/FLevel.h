@@ -9,14 +9,13 @@ struct FLevel
 private:
     Game* m_Game;
 
-private:
     int GetAliveEntityByType(EEntity entityType);
 
 public:
-    int levelID = 0;
-    ELevelState state = ELevelState::PENDING;
-    int levelAmountBeetle = 1;
-    int levelAmountWasp = 1;
+    int         levelID           = 0;
+    ELevelState state             = ELevelState::PENDING;
+    int         levelAmountBeetle = 1;
+    int         levelAmountWasp   = 1;
 
     FLevel();
     FLevel(int amountBeetle, int amountWasp);
@@ -24,8 +23,8 @@ public:
     ~FLevel();
     FLevel(const FLevel& other);
 
-    FLevel& SetGameInstance(Game * game);
-    
+    FLevel& SetGameInstance(Game* game);
+
     void OnStart();
 
     void OnEnd();

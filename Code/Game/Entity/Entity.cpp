@@ -4,6 +4,10 @@
 #include "Game/App.hpp"
 #include "Game/Game.hpp"
 
+Entity::Entity()
+{
+}
+
 Entity::~Entity()
 {
     /*free(m_vertices);
@@ -13,8 +17,8 @@ Entity::~Entity()
 
 Entity::Entity(Game* owner, const Vec2& startPosition, float orientationDegree)
 {
-    m_game = owner;
-    m_position = startPosition;
+    m_game               = owner;
+    m_position           = startPosition;
     m_orientationDegrees = orientationDegree;
 }
 

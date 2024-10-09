@@ -12,9 +12,9 @@ WidgetPlayerHealth::WidgetPlayerHealth(WidgetHandler* handler)
     {
         icons[i] = new Icon(ICON::SPACESHIP, 15, this);
         icons[i]->SetRotation(90); // first rotation
-        icons[i]->SetPosition(6 + float(6 * i), 96);
+        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
     }
-    active = false;
+    active  = false;
     visible = false;
 }
 
@@ -40,7 +40,7 @@ void WidgetPlayerHealth::OnPlayerShipRespawn(PlayerShip* playerShip, int remainT
         {
             icons[i] = new Icon(ICON::SPACESHIP, 15, this);
             icons[i]->SetRotation(90); // first rotation
-            icons[i]->SetPosition(6 + float(6 * i), 96);
+            icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
         }
     }
 }
@@ -73,6 +73,6 @@ void WidgetPlayerHealth::Reset()
     {
         icons[i] = new Icon(ICON::SPACESHIP, 15, this);
         icons[i]->SetRotation(90); // first rotation
-        icons[i]->SetPosition(6 + float(6 * i), 96);
+        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
     }
 }

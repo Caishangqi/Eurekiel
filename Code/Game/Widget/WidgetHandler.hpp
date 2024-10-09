@@ -13,8 +13,7 @@ public:
     void Draw();
     void Render();
 
-public:
     WidgetPlayerHealth* playerHealthWidget;
-    WidgetMainMenu* mainMenuWidget;
-    Game* owner;
+    WidgetMainMenu*     mainMenuWidget;
+    Game*               owner;
 };

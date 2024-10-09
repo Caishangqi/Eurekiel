@@ -10,9 +10,9 @@ inline const char* to_string(EShape e)
 {
     switch (e)
     {
-    case EShape::TRIANGLE: return "TRIANGLE";
-    case EShape::RECTANGLE: return "RECTANGLE";
-    case EShape::PIXEL: return "PIXEL";
+    case TRIANGLE: return "TRIANGLE";
+    case RECTANGLE: return "RECTANGLE";
+    case PIXEL: return "PIXEL";
     default: return "unknown";
     }
 }

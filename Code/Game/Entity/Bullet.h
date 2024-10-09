@@ -12,7 +12,7 @@ h.	(2) Dies if it overlaps an Asteroid (using each Entity’s m_physicsRadius di
 i.	(1) Maximum of 20 Bullets alive at once; attempting to spawn an 21st Bullet opens an ERROR_RECOVERABLE dialogue and refuses to spawn (note: should be difficult to achieve at normal speed, but much easier in slow-motion)
 */
 //
-constexpr int NUM_BULLET_TRIS = 2;
+constexpr int NUM_BULLET_TRIS   = 2;
 constexpr int NUM_BULLETS_VERTS = 3 * NUM_BULLET_TRIS;
 
 class Bullet : public Entity
@@ -21,9 +21,9 @@ public:
     Bullet(Game* owner, const Vec2& startPosition, float oreintationDegrees);
     ~Bullet() override;
 
-    virtual void Update(float deltaTime) override;
-    virtual void Render() const override;
-    virtual void InitializeLocalVerts() override;
+    void Update(float deltaTime) override;
+    void Render() const override;
+    void InitializeLocalVerts() override;
 
     void OnColliedEnter(Entity* other) override;
 

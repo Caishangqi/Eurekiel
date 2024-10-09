@@ -20,6 +20,7 @@ public:
     void Update(float deltaSeconds) override;
 
     void OnColliedEnter(Entity* other) override;
+
 private:
     Vertex_PCU m_localVerts[NUM_WASP_VERTS];
 };

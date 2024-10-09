@@ -3,9 +3,11 @@
 #include "Game/Entity/Bullet.h"
 #include "GameCommon.hpp"
 #include "Game/Entity/PlayerShip.hpp"
+#include "Grid/Grid.hpp"
 #include "Widget/Widgets/WidgetMainMenu.hpp"
 
 
+class Cube;
 class Camera;
 struct FTimerHandle;
 class WidgetHandler;
@@ -32,7 +34,7 @@ public:
 
     void Update(float deltaTime);
 
-    void SpawnNewBullet(Vec2 const& position, float orientationDegrees);
+    void SpawnNewBullet(const Vec2& position, float orientationDegrees);
     void SpawnNewAsteroids();
     void HandleKeyBoardEvent(float deltaTime);
     void RegisterDefaultObjects();
@@ -46,9 +48,14 @@ public:
     void UpdateAsteroid(float deltaTime);
     void UpdateBeetle(float deltaTime);
     void UpdateWasp(float deltaTime);
+    void UpdateCube(float deltaTime);
 
     // Camera
-    void UpdateCameras();
+    void UpdateCameras(float deltaTime);
+
+    // Cube
+    void GenerateNewCube();
+
 private:
     void SpawnDefaultAsteroids();
     Vec2 getRandomPositionOffscreen(Entity* entity) const;
@@ -72,13 +79,11 @@ public:
 
 
     // Simple event 
-public:
     void OnEntityDieEvent(Entity* entity);
     void OnPlayerShipRespawnEvent(PlayerShip* playerShip, int remainTry);
     void OnPlayerShipDeathEvent(PlayerShip* playerShip);
     void OnMainMenuDisplayEvent();
 
-public:
     // nullptr equal to 0
     PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
 
@@ -89,6 +94,8 @@ public:
     Beetle* m_entities_beetle[MAX_ENTITY_PER_TYPE] = {};
 
     Wasp* m_entity_wasp[MAX_ENTITY_PER_TYPE] = {};
+
+    Cube* m_cube[128] = {};
 
     LevelHandler* m_levelHandler = nullptr; // LevelHandler
 
@@ -102,6 +109,9 @@ public:
     // Camera
     Camera* m_worldCamera  = nullptr;
     Camera* m_screenCamera = nullptr;
+
+    // Grid system
+    Grid* m_grid = nullptr;
 
 private:
     FTimerHandle* m_timerHandles[128] = {};
