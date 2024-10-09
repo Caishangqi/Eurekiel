@@ -488,6 +488,7 @@
             <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
             <LinkCompiled>true</LinkCompiled>
         </ClCompile>
+        <ClCompile Include="Entity\Tetromino\BaseTetromino.cpp" />
         <ClCompile Include="Entity\Wasp.cpp"/>
         <ClCompile Include="Game.cpp"/>
         <ClCompile Include="GameCommon.cpp"/>
@@ -515,6 +516,7 @@
         <ClInclude Include="Entity\Cube.hpp"/>
         <ClInclude Include="Entity\Entity.h"/>
         <ClInclude Include="Entity\PlayerShip.hpp"/>
+        <ClInclude Include="Entity\Tetromino\BaseTetromino.hpp" />
         <ClInclude Include="Entity\Wasp.hpp"/>
         <ClInclude Include="Enum\EEntity.h"/>
         <ClInclude Include="Enum\ELevelState.h"/>
@@ -537,6 +539,9 @@
     </ItemGroup>
     <ItemGroup>
         <Content Include="Enum\EShape.h"/>
+    </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Entity\Cube\" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">

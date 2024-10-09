@@ -95,7 +95,7 @@ public:
 
     Wasp* m_entity_wasp[MAX_ENTITY_PER_TYPE] = {};
 
-    Cube* m_cube[128] = {};
+    Cube* m_cube[1024] = {};
 
     LevelHandler* m_levelHandler = nullptr; // LevelHandler
 
