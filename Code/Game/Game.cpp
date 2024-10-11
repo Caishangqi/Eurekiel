@@ -12,6 +12,7 @@
 #include "Entity/Beetle.hpp"
 #include "Entity/Cube.hpp"
 #include "Entity/Wasp.hpp"
+#include "Entity/Tetromino/LTetromino.h"
 #include "Enum/EEntity.h"
 #include "Level/LevelHandler.hpp"
 #include "Particle/ParticleHandler.hpp"
@@ -155,6 +156,8 @@ void Game::Update(float deltaTime)
 
         UpdateCube(deltaTime);
 
+        m_grid->Update(deltaTime);
+
         HandleEntityCollisions();
     }
 
@@ -285,6 +288,13 @@ void Game::HandleKeyBoardEvent(float deltaTime)
         m_grid->PlaceCube(IntVec2(39, 0));
     }
 
+    if (g_theInput->WasKeyJustPressed('X'))
+    {
+        BaseTetromino* bt = new LTetromino(IntVec2(39, 19));
+        bt->SetParentGrid(m_grid);
+        m_grid->PlaceTetromino(bt);
+    }
+
     // Return to Main menu
     if (g_theInput->WasKeyJustPressed(27))
     {
@@ -335,8 +345,8 @@ void Game::StartGame()
     m_PlayerShip = new PlayerShip(this, Vec2(WORLD_CENTER_X, WORLD_CENTER_Y
                                   ), 0.f);
 
-    SpawnDefaultAsteroids();
-    m_levelHandler->StartLevel(0, this);
+    //SpawnDefaultAsteroids();
+    //m_levelHandler->StartLevel(0, this);
     g_theAudio->StartSound(SOUND::PLAYER_SHOOTS_BULLET);
 }
 

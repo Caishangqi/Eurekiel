@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Game/GameCommon.hpp"
 #include "Game/Entity/Cube.hpp"
+#include "Game/Entity/Tetromino/BaseTetromino.hpp"
 
 struct IntVec2;
 
@@ -10,9 +11,11 @@ public:
     Grid(Game* game);
     ~Grid();
 
-    Cube* PlaceCube(IntVec2 gridPos);
+    void Update(float deltaSeconds);
 
-    float GetHorizontalBaseLine(int horizontalIndex);
+    Cube*          PlaceCube(IntVec2 gridPos);
+    BaseTetromino* PlaceTetromino(BaseTetromino* baseTetromino);
+    float          GetHorizontalBaseLine(int horizontalIndex);
 
     // Events
     void OnCubeTouchBaseLineEvent(Cube* cube);
@@ -23,9 +26,30 @@ private:
 
     Game* m_game;
 
-    Cube* m_cubesData[GRID_HEIGHT_SIZE][GRID_WIDTH_SIZE] = {{nullptr}};
+
+    BaseTetromino* m_TetrominoData[256] = {nullptr};
+
+    bool m_NeedCancelCubes = false;
 
 public:
     static Vec2    GetPositionFromGrid(const IntVec2& gridPos);
     static IntVec2 GetGridPositionFromPosition(const Vec2& position);
+
+    /**
+     * 
+     * @param cube Target Cube pointer you want to remove in Tetromino
+     * @return whether or not remove success
+     */
+    bool RemoveCubePointerInGrid(Cube* cube);
+
+    bool CheckVerticalFull(int verticalIndex);
+
+    bool RemoveVerticalFullPointer(int verticalIndex);
+
+    bool MarkVerticalFullGarbage(int verticalIndex);
+
+    Cube* GetVerticalFullCubes(int verticalIndex);
+
+public:
+    Cube* m_cubesData[GRID_HEIGHT_SIZE][GRID_WIDTH_SIZE] = {{nullptr}};
 };

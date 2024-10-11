@@ -4,7 +4,6 @@
 
 #include "PlayerShip.hpp"
 #include "Engine/Core/VertexUtils.hpp"
-#include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Game/GameCommon.hpp"
 #include "Game/Grid/Grid.hpp"
@@ -20,6 +19,8 @@ Cube::Cube(Game* owner, const Vec2& startPosition, float orientationDegree)
     m_aabb = new AABB2();
     m_aabb->SetCenter(startPosition);
     m_aabb->SetDimensions(Vec2(5, 5));
+
+    m_physicsRadius = 2.5f;
 
     m_health = 1;
 }
@@ -65,8 +66,7 @@ void Cube::Update(float deltaSeconds)
     if (m_position.x <= m_parentGrid->GetHorizontalBaseLine(m_gridPos.y))
     {
         //m_position.x = GRID_BASE_LINE_X;
-        m_IsStatic = true;
-        m_velocity = Vec2(0, 0);
+        SetCubeStatic();
         m_parentGrid->OnCubeTouchBaseLineEvent(this);
     }
 
@@ -111,6 +111,13 @@ void Cube::DebugRender() const
 void Cube::Die()
 {
     Entity::Die();
+    if (GetParentTetromino())
+    {
+        if (!m_IsStatic)
+        {
+            GetParentTetromino()->m_cubes[m_TetrominoPosition.x][m_TetrominoPosition.y] = nullptr;
+        }
+    }
 }
 
 void Cube::OnColliedEnter(Entity* other)
@@ -153,7 +160,36 @@ bool Cube::IsAlive() const
     return Entity::IsAlive();
 }
 
+bool Cube::SetCubeStatic()
+{
+    if (m_IsStatic)
+    {
+        m_velocity = Vec2(0, 0);
+        return false;
+    }
+    m_IsStatic = true;
+    m_velocity = Vec2(0, 0);
+    return true;
+}
+
 void Cube::UpdateGridPosition()
 {
     m_gridPos = Grid::GetGridPositionFromPosition(m_position);
+}
+
+void Cube::CorrectWorldPosition()
+{
+    //Correct position
+    m_position = m_parentGrid->GetPositionFromGrid(m_gridPos);
+    m_aabb->SetCenter(m_position);
+}
+
+void Cube::SetParentTetromino(BaseTetromino* parentTetromino)
+{
+    m_parentTetromino = parentTetromino;
+}
+
+BaseTetromino* Cube::GetParentTetromino() const
+{
+    return m_parentTetromino;
 }

@@ -48,6 +48,8 @@ public:
     float m_physicsRadius      = 5.f; // the Entity’s (inner, conservative) disc-radius for all physics purposes
     float m_cosmeticRadius     = 10.f; // the Entity’s (outer, liberal) disc-radius that encloses all of its vertexes
 
+    int m_internalID = -1;
+
     bool  m_isDead    = false; // whether the Entity is “dead” in the game; affects entity and game logic
     bool  m_isGarbage = false; // whether the Entity should be deleted at the end of Game::Update()
     Game* m_game      = nullptr; // a pointer back to the Game instance

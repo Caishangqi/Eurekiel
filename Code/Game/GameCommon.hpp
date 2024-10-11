@@ -49,7 +49,7 @@ constexpr int   WASP_HEALTH          = 3;
 constexpr float WASP_ACCELERATION    = 50.f;
 
 // Grid
-constexpr int   GRID_WIDTH_SIZE  = 40;
+constexpr int   GRID_WIDTH_SIZE  = 42;
 constexpr int   GRID_HEIGHT_SIZE = 20;
 constexpr float GRID_BASE_LINE_X = 2.5;
 

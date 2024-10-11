@@ -4,6 +4,7 @@
 #include "Engine/Math/IntVec2.hpp"
 
 
+class BaseTetromino;
 struct IntVec2;
 class Grid;
 
@@ -23,13 +24,22 @@ public:
     void OnColliedEnter(Entity* other) override;
     bool IsAlive() const override;
 
-    void UpdateGridPosition();
+    bool           SetCubeStatic();
+    void           UpdateGridPosition();
+    void           CorrectWorldPosition();
+    void           SetParentTetromino(BaseTetromino* parentTetromino);
+    BaseTetromino* GetParentTetromino() const;
 
     AABB2*  m_aabb;
     IntVec2 m_gridPos;
 
-private:
-    Grid* m_parentGrid = nullptr;
+    // the relative position in Tetromino
+    IntVec2 m_TetrominoPosition = IntVec2(0, 0);
 
-    bool m_IsStatic = false;
+    bool m_EnablePhysicalRadius = false;
+    bool m_IsStatic             = false;
+
+private:
+    Grid*          m_parentGrid      = nullptr;
+    BaseTetromino* m_parentTetromino = nullptr;
 };

@@ -489,6 +489,7 @@
             <LinkCompiled>true</LinkCompiled>
         </ClCompile>
         <ClCompile Include="Entity\Tetromino\BaseTetromino.cpp" />
+        <ClCompile Include="Entity\Tetromino\LTetromino.cpp" />
         <ClCompile Include="Entity\Wasp.cpp"/>
         <ClCompile Include="Game.cpp"/>
         <ClCompile Include="GameCommon.cpp"/>
@@ -517,6 +518,7 @@
         <ClInclude Include="Entity\Entity.h"/>
         <ClInclude Include="Entity\PlayerShip.hpp"/>
         <ClInclude Include="Entity\Tetromino\BaseTetromino.hpp" />
+        <ClInclude Include="Entity\Tetromino\LTetromino.h" />
         <ClInclude Include="Entity\Wasp.hpp"/>
         <ClInclude Include="Enum\EEntity.h"/>
         <ClInclude Include="Enum\ELevelState.h"/>
