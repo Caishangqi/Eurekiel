@@ -19,13 +19,13 @@ public:
 
     // Events
     void OnCubeTouchBaseLineEvent(Cube* cube);
+    void OnCubeCancelEvent(int verticalIndex);
 
 private:
     int m_width  = GRID_WIDTH_SIZE;
     int m_height = GRID_HEIGHT_SIZE;
 
     Game* m_game;
-
 
     BaseTetromino* m_TetrominoData[256] = {nullptr};
 
@@ -36,20 +36,44 @@ public:
     static IntVec2 GetGridPositionFromPosition(const Vec2& position);
 
     /**
-     * 
+     * Remove correspond cube pointer in the grid system maintained array
+     * Note: YOU MUST SET CORRESPOND CUBE m_IsGarbage TRUE before you
+     * null the pointer 
      * @param cube Target Cube pointer you want to remove in Tetromino
      * @return whether or not remove success
      */
-    bool RemoveCubePointerInGrid(Cube* cube);
+    bool __RemoveCubePointerInGrid(Cube* cube);
+    /**
+     * Remove all cubes pointers in a vertical line of grid system maintained
+     * array
+     * Note: YOU MUST SET CORRESPOND CUBE m_IsGarbage TRUE before you
+     * null the pointer 
+     * @param verticalIndex Target vertical index you want to null out
+     * @return whether or not remove success
+     */
+    bool __RemoveVerticalFullPointer(int verticalIndex);
+
+    /**
+     * Make all cubes as garbage in a specific vertical line of grid system
+     * maintained array
+     * Note: YOU MUST NULL THE POINTER IN THE GRID SYSTEM after you make cube
+     * as garbage
+     * @param verticalIndex Target vertical index you want to null out
+     * @return whether or not remove success
+     */
+    bool __MarkVerticalFullGarbage(int verticalIndex);
 
     bool CheckVerticalFull(int verticalIndex);
 
-    bool RemoveVerticalFullPointer(int verticalIndex);
-
-    bool MarkVerticalFullGarbage(int verticalIndex);
 
     Cube* GetVerticalFullCubes(int verticalIndex);
 
-public:
+
+    void MoveVerticalCubes(int targetVerticalIndex, int fromVerticalIndex);
+
+    int GetMostNearEmptyVerticalIndex();
+
+    void MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex);
+
     Cube* m_cubesData[GRID_HEIGHT_SIZE][GRID_WIDTH_SIZE] = {{nullptr}};
 };

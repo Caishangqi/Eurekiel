@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "BaseTetromino.hpp"
 
-class LTetromino: public BaseTetromino
+class LTetromino : public BaseTetromino
 {
 public:
     LTetromino(const IntVec2& startPos);

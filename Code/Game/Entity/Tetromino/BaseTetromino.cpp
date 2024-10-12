@@ -1,5 +1,8 @@
 ﻿#include "BaseTetromino.hpp"
 
+#include <queue>
+#include <vector>
+
 #include "Game/Grid/Grid.hpp"
 
 BaseTetromino::~BaseTetromino()
@@ -43,8 +46,8 @@ BaseTetromino* BaseTetromino::InitTetromino()
             if (m_layout[i][j] == true)
             {
                 // 
-                IntVec2 spawnPos = IntVec2(m_posGrid.x + j, m_posGrid.y - i);
-                Cube*   cube     = m_parentGrid->PlaceCube(spawnPos);
+                auto  spawnPos = IntVec2(m_posGrid.x + j, m_posGrid.y - i);
+                Cube* cube     = m_parentGrid->PlaceCube(spawnPos);
                 cube->SetParentTetromino(this);
                 m_cubes[i][j]                = cube;
                 cube->m_EnablePhysicalRadius = true; // Enable Physical Radius that use for structure
@@ -56,7 +59,7 @@ BaseTetromino* BaseTetromino::InitTetromino()
     return this;
 }
 
-bool BaseTetromino::RemoveCubePointerInTetromino(Cube* cube)
+bool BaseTetromino::__RemoveCubePointerInTetromino(Cube* cube)
 {
     for (int i = 0; i < 4; i++)
     {
@@ -72,7 +75,7 @@ bool BaseTetromino::RemoveCubePointerInTetromino(Cube* cube)
     return false;
 }
 
-bool BaseTetromino::MarkCubeAsGarbage(Cube* cube)
+bool BaseTetromino::__MarkCubeAsGarbage(Cube* cube)
 {
     for (int i = 0; i < 4; i++)
     {

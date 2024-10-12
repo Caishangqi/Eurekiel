@@ -27,6 +27,8 @@ public:
 
     void OnColliedEnter(Entity* other) override;
 
+    void Die() override;
+
 private:
     Vertex_PCU m_localVerts[NUM_BULLETS_VERTS];
 };

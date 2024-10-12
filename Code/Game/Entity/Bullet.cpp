@@ -72,6 +72,8 @@ void Bullet::InitializeLocalVerts()
 void Bullet::OnColliedEnter(Entity* other)
 {
     Entity::OnColliedEnter(other);
+
+
     m_health--;
     FParticleProperty pp;
     pp.fadeOpacity        = true;
@@ -90,4 +92,9 @@ void Bullet::OnColliedEnter(Entity* other)
     pp.maxLifeTime = .1f;
 
     ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+}
+
+void Bullet::Die()
+{
+    Entity::Die();
 }

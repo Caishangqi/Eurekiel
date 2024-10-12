@@ -19,6 +19,8 @@ Grid::~Grid()
 
 void Grid::Update(float deltaSeconds)
 {
+    // TODO Try use event system but probably need Recursion
+    MoveCubesRightOfEmptyColumnLeft(GetMostNearEmptyVerticalIndex());
 }
 
 Cube* Grid::PlaceCube(IntVec2 gridPos)
@@ -87,10 +89,19 @@ void Grid::OnCubeTouchBaseLineEvent(Cube* cube)
     {
         if (CheckVerticalFull(i))
         {
-            MarkVerticalFullGarbage(i);
-            RemoveVerticalFullPointer(i);
+            __MarkVerticalFullGarbage(i);
+            __RemoveVerticalFullPointer(i);
+            OnCubeCancelEvent(i);
         }
     }
+}
+
+void Grid::OnCubeCancelEvent(int verticalIndex)
+{
+    printf(
+        "[event]     OnCubeCancelEvent Trigger\n"
+        "                   > Target vertical Index: %d\n", verticalIndex
+    );
 }
 
 // (39, 19)
@@ -106,7 +117,7 @@ IntVec2 Grid::GetGridPositionFromPosition(const Vec2& position)
     return IntVec2(static_cast<int>((position.x) / 5.f), static_cast<int>(position.y / 5.f));
 }
 
-bool Grid::RemoveCubePointerInGrid(Cube* cube)
+bool Grid::__RemoveCubePointerInGrid(Cube* cube)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -135,7 +146,7 @@ bool Grid::CheckVerticalFull(int verticalIndex)
     return true;
 }
 
-bool Grid::RemoveVerticalFullPointer(int verticalIndex)
+bool Grid::__RemoveVerticalFullPointer(int verticalIndex)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -144,7 +155,7 @@ bool Grid::RemoveVerticalFullPointer(int verticalIndex)
     return true;
 }
 
-bool Grid::MarkVerticalFullGarbage(int verticalIndex)
+bool Grid::__MarkVerticalFullGarbage(int verticalIndex)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -154,8 +165,8 @@ bool Grid::MarkVerticalFullGarbage(int verticalIndex)
             BaseTetromino* tet                         = m_cubesData[i][verticalIndex]->GetParentTetromino();
             if (tet)
             {
-                tet->MarkCubeAsGarbage(m_cubesData[i][verticalIndex]);
-                tet->RemoveCubePointerInTetromino(m_cubesData[i][verticalIndex]);
+                tet->__MarkCubeAsGarbage(m_cubesData[i][verticalIndex]);
+                tet->__RemoveCubePointerInTetromino(m_cubesData[i][verticalIndex]);
             }
         }
     }
@@ -165,7 +176,7 @@ bool Grid::MarkVerticalFullGarbage(int verticalIndex)
 Cube* Grid::GetVerticalFullCubes(int verticalIndex)
 {
     Cube* cubeList[GRID_HEIGHT_SIZE] = {nullptr};
-    for (int i = GRID_HEIGHT_SIZE - 1; i < 0; i--)
+    for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
         if (m_cubesData[i][verticalIndex])
         {
@@ -173,4 +184,67 @@ Cube* Grid::GetVerticalFullCubes(int verticalIndex)
         }
     }
     return *cubeList;
+}
+
+// 2                        // 3
+void Grid::MoveVerticalCubes(int targetVerticalIndex, int fromVerticalIndex)
+{
+    for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
+    {
+        m_cubesData[i][targetVerticalIndex] = m_cubesData[i][fromVerticalIndex];
+        __RemoveVerticalFullPointer(fromVerticalIndex);
+    }
+    // 
+}
+
+int Grid::GetMostNearEmptyVerticalIndex()
+{
+    for (int verticalIndex = 0; verticalIndex < GRID_WIDTH_SIZE; ++verticalIndex)
+    {
+        bool isEmpty = true;
+        // 检查这一列是否完全为空
+        for (int row = 0; row < GRID_HEIGHT_SIZE; ++row)
+        {
+            if (m_cubesData[row][verticalIndex] != nullptr)
+            {
+                isEmpty = false;
+                break;
+            }
+        }
+        // 如果找到一个空的竖直列，返回其索引
+        if (isEmpty)
+        {
+            return verticalIndex;
+        }
+    }
+
+    return -1;
+}
+
+void Grid::MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex)
+{
+    if (emptyColumnIndex == -1)
+    {
+        return;
+    }
+
+    for (int verticalIndex = emptyColumnIndex + 1; verticalIndex < GRID_WIDTH_SIZE; ++verticalIndex)
+    {
+        for (int row = 0; row < GRID_HEIGHT_SIZE; ++row)
+        {
+            if (m_cubesData[row][verticalIndex] != nullptr)
+            {
+                // -1 for safe check
+                // move the cube towards left empty space
+                m_cubesData[row][verticalIndex - 1] = m_cubesData[row][verticalIndex];
+                m_cubesData[row][verticalIndex]     = nullptr;
+
+                // update position and collision
+                m_cubesData[row][verticalIndex - 1]->m_gridPos  = IntVec2(verticalIndex - 1, row);
+                m_cubesData[row][verticalIndex - 1]->m_position = GetPositionFromGrid(
+                    m_cubesData[row][verticalIndex - 1]->m_gridPos);
+                m_cubesData[row][verticalIndex - 1]->m_aabb->SetCenter(m_cubesData[row][verticalIndex - 1]->m_position);
+            }
+        }
+    }
 }
