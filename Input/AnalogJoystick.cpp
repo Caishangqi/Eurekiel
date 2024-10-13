@@ -1,7 +1,6 @@
 ﻿#include "Engine/Input/AnalogJoystick.hpp"
 
 #include <cmath>
-#include "stdio.h"
 #include "Engine/Math/MathUtils.hpp"
 
 AnalogJoystick::AnalogJoystick(): m_rawPosition(Vec2()), m_correctedPosition(Vec2()), m_innerDeadZoneFraction(0.3f),

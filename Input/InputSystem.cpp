@@ -130,10 +130,9 @@ Vec2 InputSystem::GetMousePosition() const
 
 Vec2 InputSystem::GetMousePositionOnWorld(Vec2& cameraBottomLeft, Vec2& cameraTopRight) const
 {
-    // 获取屏幕上的鼠标位置
+
     Vec2 mouseScreenPos = GetMousePosition();
 
-    // 获取窗口的宽度和高度
     RECT windowRect;
     GetClientRect(hWnd, &windowRect);
 
@@ -151,8 +150,7 @@ Vec2 InputSystem::GetMousePositionOnWorld(Vec2& cameraBottomLeft, Vec2& cameraTo
     // 将鼠标屏幕位置映射到世界坐标系
     float worldX = RangeMapClamped(mouseScreenPos.x, 0.0f, windowWidth, cameraBottomLeft.x, cameraTopRight.x);
     float worldY = RangeMapClamped(mouseScreenPos.y, 0.0f, windowHeight, cameraTopRight.y, cameraBottomLeft.y);
-    // Y轴通常是反向的
-    //printf("worldX: %f, worldY: %f\n", worldX, worldY);
+
     return Vec2(worldX, worldY);
 }
 

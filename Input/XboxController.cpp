@@ -1,8 +1,7 @@
 ﻿#include "Engine/Input/XboxController.hpp"
 #include <Windows.h> // must #include Windows.h before #including Xinput.h
 #include <Xinput.h> // include the Xinput API header file (interface)
-#include "InputSystem.hpp"
-#include "stdio.h"
+
 #include "Engine/Math/MathUtils.hpp"
 
 #pragma comment(lib, "xinput9_1_0.lib")
