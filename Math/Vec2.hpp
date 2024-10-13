@@ -1,4 +1,5 @@
 #pragma once
+#include <ostream>
 
 
 //-----------------------------------------------------------------------------------------------
@@ -7,7 +8,6 @@ struct Vec2
     // NOTE: this is one of the few cases where we break both the "m_" naming rule AND the avoid-public-members rule
     float x = 0.f;
     float y = 0.f;
-public:
     // Construction/Destruction
     ~Vec2()
     {
@@ -19,28 +19,28 @@ public:
     explicit Vec2(float initialX, float initialY); // explicit constructor (from x, y)
 
     // Static methods (e.g. creation functions)
-    static Vec2 const MakeFromPolarRadians(float orientationRadians, float length = 1.f );
-    static Vec2 const MakeFromPolarDegrees(float orientationDegrees, float length = 1.f );
+    static const Vec2 MakeFromPolarRadians(float orientationRadians, float length = 1.f);
+    static const Vec2 MakeFromPolarDegrees(float orientationDegrees, float length = 1.f);
 
     // Accessors (const methods)
-    float GetLength() const;    // Gives R for X,Y
-    float GetLengthSquared() const;
-    float GetOrientationRadians() const;
-    float GetOrientationDegrees() const;    // Gives Theta for X, Y
-    Vec2 const GetRotated90Degrees() const;
-    Vec2 const GetRotatedMinus90Degrees() const;
-    Vec2 const GetRotatedRadians(float deltaRadians) const;
-    Vec2 const GetRotatedDegrees(float deltaDegrees) const;
-    Vec2 const GetClamped(float maxLength) const;   // Get the clamped version of the vector
-    Vec2 const GetNormalized() const;
+    float      GetLength() const; // Gives R for X,Y
+    float      GetLengthSquared() const;
+    float      GetOrientationRadians() const;
+    float      GetOrientationDegrees() const; // Gives Theta for X, Y
+    const Vec2 GetRotated90Degrees() const;
+    const Vec2 GetRotatedMinus90Degrees() const;
+    const Vec2 GetRotatedRadians(float deltaRadians) const;
+    const Vec2 GetRotatedDegrees(float deltaDegrees) const;
+    const Vec2 GetClamped(float maxLength) const; // Get the clamped version of the vector
+    const Vec2 GetNormalized() const;
 
-    Vec2 const GetReflected(Vec2 const& normalOfSurfaceToReflectOffOf) const;
-    void Reflect(Vec2 const & normalOfSurfaceToReflectOffOf);
-    
-    
+    const Vec2 GetReflected(const Vec2& normalOfSurfaceToReflectOffOf) const;
+    void       Reflect(const Vec2& normalOfSurfaceToReflectOffOf);
+
+
     // Operators (const)
-    bool operator==(const Vec2& compare) const; // vec2 == vec2
-    bool operator!=(const Vec2& compare) const; // vec2 != vec2
+    bool       operator==(const Vec2& compare) const; // vec2 == vec2
+    bool       operator!=(const Vec2& compare) const; // vec2 != vec2
     const Vec2 operator+(const Vec2& vecToAdd) const; // vec2 + vec2
     const Vec2 operator-(const Vec2& vecToSubtract) const; // vec2 - vec2
     const Vec2 operator-() const; // -vec2, i.e. "unary negation"
@@ -49,20 +49,20 @@ public:
     const Vec2 operator/(float inverseScale) const; // vec2 / float
 
     // Mutators (non-const methods)
-    void SetOrientationRadians( float newOrientationRadians );
-    void SetOrientationDegrees( float newOrientationDegrees );
-    void SetPolarRadians( float newOrientationRadians, float newLength );
-    void SetPolarDegrees( float newOrientationDegrees, float newLength );
-    void Rotate90Degrees(); 
-    void RotateMinus90Degrees();
-    void RotateRadians( float deltaRadians );
-    void RotateDegrees( float deltaDegrees );
-    void SetLength( float newLength );
-    void ClampLength( float maxLength );    // Like speed limited
-    void Normalize();
+    void  SetOrientationRadians(float newOrientationRadians);
+    void  SetOrientationDegrees(float newOrientationDegrees);
+    void  SetPolarRadians(float newOrientationRadians, float newLength);
+    void  SetPolarDegrees(float newOrientationDegrees, float newLength);
+    void  Rotate90Degrees();
+    void  RotateMinus90Degrees();
+    void  RotateRadians(float deltaRadians);
+    void  RotateDegrees(float deltaDegrees);
+    void  SetLength(float newLength);
+    void  ClampLength(float maxLength); // Like speed limited
+    void  Normalize();
     float NormalizeAndGetPreviousLength();
 
-    
+
     // Operators (self-mutating / non-const)
     void operator+=(const Vec2& vecToAdd); // vec2 += vec2
     void operator-=(const Vec2& vecToSubtract); // vec2 -= vec2

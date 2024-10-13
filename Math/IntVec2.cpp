@@ -24,7 +24,7 @@ IntVec2::IntVec2(int initialX, int initialY): x(initialX), y(initialY)
 
 float IntVec2::GetLength() const
 {
-    return (float)sqrt(x * x + y * y);
+    return static_cast<float>(sqrt(x * x + y * y));
 }
 
 int IntVec2::GetTaxicabLength() const
@@ -49,42 +49,42 @@ int IntVec2::GetLengthSquared() const
 
 float IntVec2::GetOrientationRadians() const
 {
-    return (float)atan2(y, x);
+    return static_cast<float>(atan2(y, x));
 }
 
 float IntVec2::GetOrientationDegrees() const
 {
-    return ConvertRadiansToDegrees((float)atan2(y, x));
+    return ConvertRadiansToDegrees(static_cast<float>(atan2(y, x)));
 }
 
-IntVec2 const IntVec2::GetRotated90Degrees() const
+const IntVec2 IntVec2::GetRotated90Degrees() const
 {
     IntVec2 p = *this;
-    p.x = -y;
-    p.y = x;
+    p.x       = -y;
+    p.y       = x;
     return p;
 }
 
-IntVec2 const IntVec2::GetRotatedMinus90Degrees() const
+const IntVec2 IntVec2::GetRotatedMinus90Degrees() const
 {
     IntVec2 p = *this;
-    p.x = y;
-    p.y = -x;
+    p.x       = y;
+    p.y       = -x;
     return p;
 }
 
 void IntVec2::Rotate90Degrees()
 {
     int temp_x = x;
-    x = -y;
-    y = temp_x;
+    x          = -y;
+    y          = temp_x;
 }
 
 void IntVec2::RotateMinus90Degrees()
 {
     int temp_x = x;
-    this->x = y;
-    this->y = -temp_x;
+    this->x    = y;
+    this->y    = -temp_x;
 }
 
 void IntVec2::operator=(const IntVec2& copyFrom)

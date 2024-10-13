@@ -46,7 +46,7 @@ AudioSystem::~AudioSystem()
 void AudioSystem::Startup()
 {
     FMOD_RESULT result;
-    result = FMOD::System_Create(&m_fmodSystem);
+    result = System_Create(&m_fmodSystem);
     ValidateResult(result);
 
     result = m_fmodSystem->init(512, FMOD_INIT_NORMAL, nullptr);
@@ -80,22 +80,19 @@ void AudioSystem::EndFrame()
 //-----------------------------------------------------------------------------------------------
 SoundID AudioSystem::CreateOrGetSound(const std::string& soundFilePath)
 {
-    std::map<std::string, SoundID>::iterator found = m_registeredSoundIDs.find(soundFilePath);
+    auto found = m_registeredSoundIDs.find(soundFilePath);
     if (found != m_registeredSoundIDs.end())
     {
         return found->second;
     }
-    else
+    FMOD::Sound* newSound = nullptr;
+    m_fmodSystem->createSound(soundFilePath.c_str(), FMOD_DEFAULT, nullptr, &newSound);
+    if (newSound)
     {
-        FMOD::Sound* newSound = nullptr;
-        m_fmodSystem->createSound(soundFilePath.c_str(), FMOD_DEFAULT, nullptr, &newSound);
-        if (newSound)
-        {
-            SoundID newSoundID                  = m_registeredSounds.size();
-            m_registeredSoundIDs[soundFilePath] = newSoundID;
-            m_registeredSounds.push_back(newSound);
-            return newSoundID;
-        }
+        SoundID newSoundID                  = m_registeredSounds.size();
+        m_registeredSoundIDs[soundFilePath] = newSoundID;
+        m_registeredSounds.push_back(newSound);
+        return newSoundID;
     }
 
     return MISSING_SOUND_ID;
@@ -142,7 +139,7 @@ void AudioSystem::StopSound(SoundPlaybackID soundPlaybackID)
         return;
     }
 
-    FMOD::Channel* channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
+    auto channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
     channelAssignedToSound->stop();
 }
 
@@ -158,7 +155,7 @@ void AudioSystem::SetSoundPlaybackVolume(SoundPlaybackID soundPlaybackID, float 
         return;
     }
 
-    FMOD::Channel* channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
+    auto channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
     channelAssignedToSound->setVolume(volume);
 }
 
@@ -174,7 +171,7 @@ void AudioSystem::SetSoundPlaybackBalance(SoundPlaybackID soundPlaybackID, float
         return;
     }
 
-    FMOD::Channel* channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
+    auto channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
     channelAssignedToSound->setPan(balance);
 }
 
@@ -192,9 +189,9 @@ void AudioSystem::SetSoundPlaybackSpeed(SoundPlaybackID soundPlaybackID, float s
         return;
     }
 
-    FMOD::Channel* channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
-    float          frequency;
-    FMOD::Sound*   currentSound = nullptr;
+    auto         channelAssignedToSound = (FMOD::Channel*)soundPlaybackID;
+    float        frequency;
+    FMOD::Sound* currentSound = nullptr;
     channelAssignedToSound->getCurrentSound(&currentSound);
     if (!currentSound)
         return;
@@ -211,8 +208,8 @@ void AudioSystem::ValidateResult(FMOD_RESULT result)
     if (result != FMOD_OK)
     {
         ERROR_RECOVERABLE(
-            Stringf( "Engine/Audio SYSTEM ERROR: Got error result code %i - error codes listed in fmod_common.h\n", (int
-            ) result ));
+            Stringf( "Engine/Audio SYSTEM ERROR: Got error result code %i - error codes listed in fmod_common.h\n",
+                result ));
     }
 }
 

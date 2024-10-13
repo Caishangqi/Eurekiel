@@ -25,5 +25,4 @@ protected:
     Vec2  m_correctedPosition; // Deadzone-corrected position
     float m_innerDeadZoneFraction = 0.0f; // if R < this % . R = 0; "input range start" for corrective range map
     float m_outerDeadZoneFraction = 1.0f; // if R > this % . R = 1; "input range end" for corrective range map
-    
 };

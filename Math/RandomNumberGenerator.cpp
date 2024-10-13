@@ -1,5 +1,4 @@
 #include "Engine/Math/RandomNumberGenerator.hpp"
-
 #include <stdlib.h>
 
 int RandomNumberGenerator::RollRandomIntLessThan(int maxNotInclusive)
@@ -20,7 +19,14 @@ float RandomNumberGenerator::RollRandomFloatZeroToOne()
 
 float RandomNumberGenerator::RollRandomFloatInRange(float minInclusive, float maxExclusive)
 {
-    float range = (maxExclusive - minInclusive); // 计算范围
+    float range       = (maxExclusive - minInclusive); // 计算范围
+    float randomValue = static_cast<float>(rand()) / RAND_MAX;
+    return minInclusive + randomValue * range;
+}
+
+float RandomNumberGenerator::__RollRandomFloatInRange(float minInclusive, float maxExclusive)
+{
+    float range       = (maxExclusive - minInclusive); // 计算范围
     float randomValue = static_cast<float>(rand()) / RAND_MAX;
     return minInclusive + randomValue * range;
 }

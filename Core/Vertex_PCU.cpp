@@ -3,15 +3,15 @@
 
 Vertex_PCU::Vertex_PCU(const Vertex_PCU& copyFrom)
 {
-    this->m_color = copyFrom.m_color;
-    this->m_position = copyFrom.m_position;
+    this->m_color        = copyFrom.m_color;
+    this->m_position     = copyFrom.m_position;
     this->m_uvTextCoords = copyFrom.m_uvTextCoords;
 }
 
 Vertex_PCU::Vertex_PCU()
 {
-    this->m_color = Rgba8();
-    this->m_position = Vec3();
+    this->m_color        = Rgba8();
+    this->m_position     = Vec3();
     this->m_uvTextCoords = Vec2();
 }
 

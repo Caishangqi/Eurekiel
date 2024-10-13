@@ -4,8 +4,13 @@
 //  在包含 windows.h 和 gl/gl.h 时，顺序非常重要。需要先包含 windows.h，然后再包含 gl/gl.h。
 #include <windows.h>			// #include this (massive, platform-specific) header in VERY few places (and .CPPs only)
 #include <gl/gl.h>
+
+#include "Engine/Renderer/Camera.hpp"
+#include "Engine/Core/Rgba8.hpp"
+#include "Engine/Core/Vertex_PCU.hpp"
+#include "Engine/Math/Vec2.hpp"
 #pragma comment( lib, "opengl32" )	// Link in the OpenGL32.lib static library
-extern HDC g_displayDeviceContext;
+extern HDC  g_displayDeviceContext;
 extern HWND g_hWnd;
 
 //------------------------------------------------------------------------------------------------
@@ -42,7 +47,7 @@ void Renderer::ClearScreen(const Rgba8& clearColor)
 void Renderer::BeingCamera(const Camera& camera)
 {
     Vec2 bottom_left = camera.GetOrthoBottomLeft();
-    Vec2 top_right = camera.GetOrthoTopRight();
+    Vec2 top_right   = camera.GetOrthoTopRight();
     glLoadIdentity();
     glOrtho(bottom_left.x, top_right.x, bottom_left.y, top_right.y, 0.f, 1.f);
 }
@@ -70,13 +75,13 @@ void Renderer::CreateRenderingContext()
     // Creates an OpenGL rendering context (RC) and binds it to the current window's device context (DC)
     PIXELFORMATDESCRIPTOR pixelFormatDescriptor;
     memset(&pixelFormatDescriptor, 0, sizeof(pixelFormatDescriptor));
-    pixelFormatDescriptor.nSize = sizeof(pixelFormatDescriptor);
-    pixelFormatDescriptor.nVersion = 1;
-    pixelFormatDescriptor.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-    pixelFormatDescriptor.iPixelType = PFD_TYPE_RGBA;
-    pixelFormatDescriptor.cColorBits = 24;
-    pixelFormatDescriptor.cDepthBits = 24;
-    pixelFormatDescriptor.cAccumBits = 0;
+    pixelFormatDescriptor.nSize        = sizeof(pixelFormatDescriptor);
+    pixelFormatDescriptor.nVersion     = 1;
+    pixelFormatDescriptor.dwFlags      = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+    pixelFormatDescriptor.iPixelType   = PFD_TYPE_RGBA;
+    pixelFormatDescriptor.cColorBits   = 24;
+    pixelFormatDescriptor.cDepthBits   = 24;
+    pixelFormatDescriptor.cAccumBits   = 0;
     pixelFormatDescriptor.cStencilBits = 8;
 
     // These two OpenGL-like functions (wglCreateContext and wglMakeCurrent) will remain here for now.

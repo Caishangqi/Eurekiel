@@ -1,7 +1,8 @@
 ﻿#pragma once
 
-#include "Engine/Renderer/Camera.hpp"
-#include "Engine/Core/Vertex_PCU.hpp"
+struct Vertex_PCU;
+class Camera;
+struct Rgba8;
 
 class Renderer
 {

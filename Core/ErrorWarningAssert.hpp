@@ -19,23 +19,26 @@
 //-----------------------------------------------------------------------------------------------
 enum class MsgSeverityLevel
 {
-	INFORMATION,
-	QUESTION,
-	WARNING,
-	FATAL
+    INFORMATION,
+    QUESTION,
+    WARNING,
+    FATAL
 };
 
 
 //-----------------------------------------------------------------------------------------------
-void DebuggerPrintf( char const* messageFormat, ... );
-bool IsDebuggerAvailable();
-__declspec( noreturn ) void FatalError( char const* filePath, char const* functionName, int lineNum, std::string const& reasonForError, char const* conditionText=nullptr );
-void RecoverableWarning( char const* filePath, char const* functionName, int lineNum, std::string const& reasonForWarning, char const* conditionText=nullptr );
-void SystemDialogue_Okay( std::string const& messageTitle, std::string const& messageText, MsgSeverityLevel severity );
-bool SystemDialogue_YesNo( std::string const& messageTitle, std::string const& messageText, MsgSeverityLevel severity );
-bool SystemDialogue_OkayCancel( std::string const& messageTitle, std::string const& messageText, MsgSeverityLevel severity );
-int SystemDialogue_YesNoCancel( std::string const& messageTitle, std::string const& messageText, MsgSeverityLevel severity );
-
+void                        DebuggerPrintf(const char* messageFormat, ...);
+bool                        IsDebuggerAvailable();
+__declspec( noreturn ) void FatalError(const char*        filePath, const char*       functionName, int lineNum,
+                                       const std::string& reasonForError, const char* conditionText = nullptr);
+void RecoverableWarning(const char*        filePath, const char*         functionName, int lineNum,
+                        const std::string& reasonForWarning, const char* conditionText = nullptr);
+void SystemDialogue_Okay(const std::string& messageTitle, const std::string& messageText, MsgSeverityLevel severity);
+bool SystemDialogue_YesNo(const std::string& messageTitle, const std::string& messageText, MsgSeverityLevel severity);
+bool SystemDialogue_OkayCancel(const std::string& messageTitle, const std::string& messageText,
+                               MsgSeverityLevel   severity);
+int SystemDialogue_YesNoCancel(const std::string& messageTitle, const std::string& messageText,
+                               MsgSeverityLevel   severity);
 
 
 //-----------------------------------------------------------------------------------------------
@@ -165,5 +168,3 @@ int SystemDialogue_YesNoCancel( std::string const& messageTitle, std::string con
 	}																								\
 }
 #endif
-
-

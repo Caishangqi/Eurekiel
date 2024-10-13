@@ -15,11 +15,11 @@ public:
 
     bool                  IsConnected() const;
     int                   GetControllerId() const;
-    AnalogJoystick const& GetLeftStick() const;
-    AnalogJoystick const& GetRightStick() const;
+    const AnalogJoystick& GetLeftStick() const;
+    const AnalogJoystick& GetRightStick() const;
     float                 GetLeftTrigger() const;
     float                 GetRightTrigger() const;
-    KeyButtonState const& GetButton(XboxButtonID buttonID);
+    const KeyButtonState& GetButton(XboxButtonID buttonID);
     bool                  IsButtonDown(XboxButtonID buttonID) const;
     bool                  WasButtonJustPressed(XboxButtonID buttonID) const;
     bool                  WasButtonJustReleased(XboxButtonID buttonID) const;
@@ -33,12 +33,11 @@ private:
     void UpdateTrigger(float& out_triggerValue, unsigned char rawValue);
     void UpdateButton(int buttonID, unsigned short buttonFlags, unsigned short buttonFlag);
 
-private:
     int            m_id           = -1;
     bool           m_isConnected  = false;
     float          m_leftTrigger  = 0.0f;
     float          m_rightTrigger = 0.0f;
-    KeyButtonState m_buttons[(int)XboxButtonID::NUM];
+    KeyButtonState m_buttons[static_cast<int>(XboxButtonID::NUM)];
     AnalogJoystick m_leftStick;
     AnalogJoystick m_rightStick;
 };

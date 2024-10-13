@@ -9,26 +9,24 @@
 
 
 //-----------------------------------------------------------------------------------------------
-double InitializeTime( LARGE_INTEGER& out_initialTime )
+double InitializeTime(LARGE_INTEGER& out_initialTime)
 {
-	LARGE_INTEGER countsPerSecond;
-	QueryPerformanceFrequency( &countsPerSecond );
-	QueryPerformanceCounter( &out_initialTime );
-	return( 1.0 / static_cast< double >( countsPerSecond.QuadPart ) );
+    LARGE_INTEGER countsPerSecond;
+    QueryPerformanceFrequency(&countsPerSecond);
+    QueryPerformanceCounter(&out_initialTime);
+    return (1.0 / static_cast<double>(countsPerSecond.QuadPart));
 }
 
 
 //-----------------------------------------------------------------------------------------------
 double GetCurrentTimeSeconds()
 {
-	static LARGE_INTEGER initialTime;
-	static double secondsPerCount = InitializeTime( initialTime );
-	LARGE_INTEGER currentCount;
-	QueryPerformanceCounter( &currentCount );
-	LONGLONG elapsedCountsSinceInitialTime = currentCount.QuadPart - initialTime.QuadPart;
+    static LARGE_INTEGER initialTime;
+    static double        secondsPerCount = InitializeTime(initialTime);
+    LARGE_INTEGER        currentCount;
+    QueryPerformanceCounter(&currentCount);
+    LONGLONG elapsedCountsSinceInitialTime = currentCount.QuadPart - initialTime.QuadPart;
 
-	double currentSeconds = static_cast< double >( elapsedCountsSinceInitialTime ) * secondsPerCount;
-	return currentSeconds;
+    double currentSeconds = static_cast<double>(elapsedCountsSinceInitialTime) * secondsPerCount;
+    return currentSeconds;
 }
-
-

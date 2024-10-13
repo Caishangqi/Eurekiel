@@ -4,9 +4,5 @@
 
 
 //-----------------------------------------------------------------------------------------------
-const std::string Stringf( char const* format, ... );
-const std::string Stringf( int maxLength, char const* format, ... );
-
-
-
-
+const std::string Stringf(const char* format, ...);
+const std::string Stringf(int maxLength, const char* format, ...);

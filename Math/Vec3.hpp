@@ -1,42 +1,40 @@
 ﻿#pragma once
 struct Vec3
 {
-public:
     float x = 0.f;
     float y = 0.f;
     float z = 0.f;
 
-public:
     Vec3() = default;
-    explicit Vec3( float initialX, float initialY, float initialZ );
+    explicit Vec3(float initialX, float initialY, float initialZ);
 
     // Accessors (const methods)
-    float        GetLength() const;
-    float        GetLengthXY() const;
-    float        GetLengthSquared() const;
-    float        GetLengthXYSquared() const;
-    float        GetAngleAboutZRadians() const;
-    float        GetAngleAboutZDegrees() const;
-    Vec3 const   GetRotatedAboutZRadians( float deltaRadians ) const;
-    Vec3 const   GetRotatedAboutZDegrees( float deltaDegrees ) const;
-    Vec3 const   GetClamped( float maxLength ) const;
-    Vec3 const   GetNormalized() const;
+    float      GetLength() const;
+    float      GetLengthXY() const;
+    float      GetLengthSquared() const;
+    float      GetLengthXYSquared() const;
+    float      GetAngleAboutZRadians() const;
+    float      GetAngleAboutZDegrees() const;
+    const Vec3 GetRotatedAboutZRadians(float deltaRadians) const;
+    const Vec3 GetRotatedAboutZDegrees(float deltaDegrees) const;
+    const Vec3 GetClamped(float maxLength) const;
+    const Vec3 GetNormalized() const;
 
     // Operators (const)
-    bool         operator==( Vec3 const& compare ) const;    // vec3 == vec3
-    bool         operator!=( Vec3 const& compare ) const;    // vec3 != vec3
-    Vec3 const   operator+( Vec3 const& vecToAdd ) const;    // vec3 + vec3
-    Vec3 const   operator-( Vec3 const& vecToSubtract ) const; // vec3 - vec3
-    Vec3 const   operator*( float uniformScale ) const;      // vec3 * float
-    Vec3 const   operator/( float inverseScale ) const;      // vec3 / float
+    bool       operator==(const Vec3& compare) const; // vec3 == vec3
+    bool       operator!=(const Vec3& compare) const; // vec3 != vec3
+    const Vec3 operator+(const Vec3& vecToAdd) const; // vec3 + vec3
+    const Vec3 operator-(const Vec3& vecToSubtract) const; // vec3 - vec3
+    const Vec3 operator*(float uniformScale) const; // vec3 * float
+    const Vec3 operator/(float inverseScale) const; // vec3 / float
 
     // Operators (self-mutating / non-const)
-    void         operator+=( Vec3 const& vecToAdd );         // vec3 += vec3
-    void         operator-=( Vec3 const& vecToSubtract );    // vec3 -= vec3
-    void         operator*=( float uniformScale );           // vec3 *= float
-    void         operator/=( float uniformDivisor );         // vec3 /= float
-    void         operator=( Vec3 const& copyFrom );          // vec3 = vec3
+    void operator+=(const Vec3& vecToAdd); // vec3 += vec3
+    void operator-=(const Vec3& vecToSubtract); // vec3 -= vec3
+    void operator*=(float uniformScale); // vec3 *= float
+    void operator/=(float uniformDivisor); // vec3 /= float
+    void operator=(const Vec3& copyFrom); // vec3 = vec3
 
     // Standalone "friend" functions that are conceptually, but not actually, part of Vec3::
-    friend Vec3 const   operator*( float uniformScale, Vec3 const& vecToScale );  // float * vec3
+    friend const Vec3 operator*(float uniformScale, const Vec3& vecToScale); // float * vec3
 };

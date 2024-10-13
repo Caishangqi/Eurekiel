@@ -23,14 +23,14 @@ Vec2::Vec2(float initialX, float initialY)
 {
 }
 
-Vec2 const Vec2::MakeFromPolarRadians(float orientationRadians, float length)
+const Vec2 Vec2::MakeFromPolarRadians(float orientationRadians, float length)
 {
     float x = length * CosDegrees(ConvertRadiansToDegrees(orientationRadians));
     float y = length * SinDegrees(ConvertRadiansToDegrees(orientationRadians));
     return Vec2(x, y);
 }
 
-Vec2 const Vec2::MakeFromPolarDegrees(float orientationDegrees, float length)
+const Vec2 Vec2::MakeFromPolarDegrees(float orientationDegrees, float length)
 {
     float x = length * CosDegrees(orientationDegrees);
     float y = length * SinDegrees(orientationDegrees);
@@ -57,7 +57,7 @@ float Vec2::GetOrientationDegrees() const
     return Atan2Degrees(y, x);
 }
 
-Vec2 const Vec2::GetRotated90Degrees() const
+const Vec2 Vec2::GetRotated90Degrees() const
 {
     Vec2 vec_ptr = *this;
     vec_ptr.x    = -this->y;
@@ -65,7 +65,7 @@ Vec2 const Vec2::GetRotated90Degrees() const
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetRotatedMinus90Degrees() const
+const Vec2 Vec2::GetRotatedMinus90Degrees() const
 {
     Vec2 vec_ptr = *this;
     vec_ptr.x    = this->y;
@@ -73,7 +73,7 @@ Vec2 const Vec2::GetRotatedMinus90Degrees() const
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetRotatedRadians(float deltaRadians) const
+const Vec2 Vec2::GetRotatedRadians(float deltaRadians) const
 {
     Vec2  vec_ptr      = *this;
     float deltaDegrees = ConvertRadiansToDegrees(deltaRadians);
@@ -81,14 +81,14 @@ Vec2 const Vec2::GetRotatedRadians(float deltaRadians) const
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetRotatedDegrees(float deltaDegrees) const
+const Vec2 Vec2::GetRotatedDegrees(float deltaDegrees) const
 {
     Vec2 vec_ptr = *this;
     TransformPosition2D(vec_ptr, 1.f, deltaDegrees, Vec2(0, 0));
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetClamped(float maxLength) const
+const Vec2 Vec2::GetClamped(float maxLength) const
 {
     Vec2 vec_ptr = *this;
     if (vec_ptr.GetLength() > maxLength)
@@ -96,7 +96,7 @@ Vec2 const Vec2::GetClamped(float maxLength) const
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetNormalized() const
+const Vec2 Vec2::GetNormalized() const
 {
     Vec2  vec_ptr = *this;
     float length  = GetLength();
@@ -108,7 +108,7 @@ Vec2 const Vec2::GetNormalized() const
     return vec_ptr;
 }
 
-Vec2 const Vec2::GetReflected(Vec2 const& normalOfSurfaceToReflectOffOf) const
+const Vec2 Vec2::GetReflected(const Vec2& normalOfSurfaceToReflectOffOf) const
 {
     Vec2 normalizedNormalOfSurfaceToReflectOffOf = normalOfSurfaceToReflectOffOf.GetNormalized();
     // Get Vn length composite of Vector
@@ -292,7 +292,7 @@ const Vec2 operator*(float uniformScale, const Vec2& vecToScale)
 }
 
 
-void Vec2::Reflect(Vec2 const& normalOfSurfaceToReflectOffOf)
+void Vec2::Reflect(const Vec2& normalOfSurfaceToReflectOffOf)
 {
     Vec2 reflectedVector = GetReflected(normalOfSurfaceToReflectOffOf);
     this->x              = reflectedVector.x;

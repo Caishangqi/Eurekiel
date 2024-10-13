@@ -16,7 +16,6 @@ private:
     void ApplyShakeEffect(float deltaTime);
     Vec2 GenerateRandomShakeOffset(const Vec2& translation2D) const;
 
-private:
     Vec2 m_bottomLeft;
     Vec2 m_topRight;
 

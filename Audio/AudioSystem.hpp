@@ -16,9 +16,9 @@ namespace FMOD
 }
 
 //-----------------------------------------------------------------------------------------------
-typedef size_t   SoundID;
-typedef size_t   SoundPlaybackID;
-constexpr size_t MISSING_SOUND_ID = (size_t)(-1); // for bad SoundIDs and SoundPlaybackIDs
+using SoundID                     = size_t;
+using SoundPlaybackID             = size_t;
+constexpr size_t MISSING_SOUND_ID = static_cast<size_t>(-1); // for bad SoundIDs and SoundPlaybackIDs
 
 
 //-----------------------------------------------------------------------------------------------
@@ -32,7 +32,6 @@ public:
     AudioSystem();
     virtual ~AudioSystem();
 
-public:
     void         Startup();
     void         Shutdown();
     virtual void BeginFrame();

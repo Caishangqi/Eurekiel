@@ -67,13 +67,13 @@ Vec2 Camera::GenerateRandomShakeOffset(const Vec2& translation2D) const
     if (m_decreaseShakeOverTime && m_shakeTotalTime > 0)
     {
         float rate           = m_shakeRemainingTime / m_shakeTotalTime;
-        randomRateHorizontal = g_rng->RollRandomFloatInRange(-rate, rate);
-        randomRateVertical   = g_rng->RollRandomFloatInRange(-rate, rate);
+        randomRateHorizontal = RandomNumberGenerator::__RollRandomFloatInRange(-rate, rate);
+        randomRateVertical   = RandomNumberGenerator::__RollRandomFloatInRange(-rate, rate);
     }
     else
     {
-        randomRateHorizontal = g_rng->RollRandomFloatInRange(-1.0f, 1.0f);
-        randomRateVertical   = g_rng->RollRandomFloatInRange(-1.0f, 1.0f);
+        randomRateHorizontal = RandomNumberGenerator::__RollRandomFloatInRange(-1.0f, 1.0f);
+        randomRateVertical   = RandomNumberGenerator::__RollRandomFloatInRange(-1.0f, 1.0f);
     }
 
     return Vec2(randomRateHorizontal * translation2D.x, randomRateVertical * translation2D.y);

@@ -26,12 +26,12 @@ int XboxController::GetControllerId() const
     return m_id;
 }
 
-AnalogJoystick const& XboxController::GetLeftStick() const
+const AnalogJoystick& XboxController::GetLeftStick() const
 {
     return m_leftStick;
 }
 
-AnalogJoystick const& XboxController::GetRightStick() const
+const AnalogJoystick& XboxController::GetRightStick() const
 {
     return m_rightStick;
 }
@@ -46,7 +46,7 @@ float XboxController::GetRightTrigger() const
     return m_rightTrigger;
 }
 
-KeyButtonState const& XboxController::GetButton(XboxButtonID buttonID)
+const KeyButtonState& XboxController::GetButton(XboxButtonID buttonID)
 {
     return m_buttons[buttonID];
 }
@@ -104,7 +104,7 @@ void XboxController::Update()
 
     if (m_isConnected)
     {
-        XINPUT_GAMEPAD const& state = xboxControllerState.Gamepad;
+        const XINPUT_GAMEPAD& state = xboxControllerState.Gamepad;
 
         UpdateJoystick(m_leftStick, state.sThumbLX, state.sThumbLY);
         UpdateJoystick(m_rightStick, state.sThumbRX, state.sThumbRY);

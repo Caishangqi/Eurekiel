@@ -3,7 +3,7 @@
 #include "Engine/Math/MathUtils.hpp"
 
 void TransformVertexArrayXY3D(int numVerts, Vertex_PCU* verts, float uniformScaleXY, float rotationDegreesAboutZ,
-                              Vec2 const& translationXY)
+                              const Vec2& translationXY)
 {
     for (int vertIndex = 0; vertIndex < numVerts; vertIndex++)
     {

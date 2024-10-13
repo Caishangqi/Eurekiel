@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "Vec2.hpp"
 // Standalone Functions File
 
 // Forward type declarations
@@ -26,43 +25,44 @@ float SinDegrees(float degrees);
 float Atan2Degrees(float y, float x);
 float GetShortestAngularDispDegrees(float startDegree, float endDegree);
 float GetTurnedTowardDegrees(float currentDegrees, float goalDegrees, float maxDeltaDegrees);
-float GetAngleDegreesBetweenVectors2D(Vec2 const& first, Vec2 const& second);
+float GetAngleDegreesBetweenVectors2D(const Vec2& first, const Vec2& second);
 
 // Dot and Cross
-float DotProduct2D(Vec2 const& a, Vec2 const& b);
+float DotProduct2D(const Vec2& a, const Vec2& b);
 
 // Basic 2D and 3D utilities
-float GetDistance2D(Vec2 const& positionA, Vec2 const& positionB);
-float GetDistanceSquared2D(Vec2 const& positionA, Vec2 const& positionB);
-float GetDistance3D(Vec3 const& positionA, Vec3 const& positionB);
-float GetDistanceSquared3D(Vec3 const& positionA, Vec3 const& positionB);
-float GetDistanceXY3D(Vec3 const& positionA, Vec3 const& positionB);
-float GetDistanceXYSquared3D(Vec3 const& positionA, Vec3 const& positionB);
-int GetTaxicabDistance2D(IntVec2 const& pointA, IntVec2 const& pointB);
-float GetProjectedLength2D(Vec2 const& vectorToProject, Vec2 const& vectorToProjectOnto); // Works if Vecs not normalized
-Vec2 const GetProjectedOnto2D(Vec2 const& vectorToProject, Vec2 const& vectorToProjectOnto);
+float GetDistance2D(const Vec2& positionA, const Vec2& positionB);
+float GetDistanceSquared2D(const Vec2& positionA, const Vec2& positionB);
+float GetDistance3D(const Vec3& positionA, const Vec3& positionB);
+float GetDistanceSquared3D(const Vec3& positionA, const Vec3& positionB);
+float GetDistanceXY3D(const Vec3& positionA, const Vec3& positionB);
+float GetDistanceXYSquared3D(const Vec3& positionA, const Vec3& positionB);
+int   GetTaxicabDistance2D(const IntVec2& pointA, const IntVec2& pointB);
+float GetProjectedLength2D(const Vec2& vectorToProject, const Vec2& vectorToProjectOnto);
+// Works if Vecs not normalized
+const Vec2 GetProjectedOnto2D(const Vec2& vectorToProject, const Vec2& vectorToProjectOnto);
 // Works if Vecs not normalized
 
 // Geometric query utilities
-bool DoDiscsOverlap(Vec2 const& centerA, float radiusA, Vec2 const& centerB, float radiusB);
-bool DoSpheresOverlap(Vec3 const& centerA, float radiusA, Vec3 const& centerB, float radiusB);
-Vec2 GetNearestPointOnDisc2D(Vec2 const& referencePosition, Vec2 const& discCenter, float discRadius);
-bool IsPointInsideDisc2D(Vec2 const& point, Vec2 const& discCenter, float discRadius);
-bool IsPointInsideOrientedSector2D(Vec2 const& point, Vec2 const&           sectorTip, float sectorForwardDegrees,
+bool DoDiscsOverlap(const Vec2& centerA, float radiusA, const Vec2& centerB, float radiusB);
+bool DoSpheresOverlap(const Vec3& centerA, float radiusA, const Vec3& centerB, float radiusB);
+Vec2 GetNearestPointOnDisc2D(const Vec2& referencePosition, const Vec2& discCenter, float discRadius);
+bool IsPointInsideDisc2D(const Vec2& point, const Vec2& discCenter, float discRadius);
+bool IsPointInsideOrientedSector2D(const Vec2& point, const Vec2&           sectorTip, float sectorForwardDegrees,
                                    float       sectorApertureDegrees, float sectorRadius);
-bool IsPointInsideDirectedSector2D(Vec2 const& point, Vec2 const&           sectorTip, Vec2 const& sectorForwardNormal,
+bool IsPointInsideDirectedSector2D(const Vec2& point, const Vec2&           sectorTip, const Vec2& sectorForwardNormal,
                                    float       sectorApertureDegrees, float sectorRadius);
-bool PushDiscOutOfPoint2D(Vec2& mobileDiscCenter, float discRadius, Vec2 const& fixedPoint); // MP1A4
+bool PushDiscOutOfPoint2D(Vec2& mobileDiscCenter, float discRadius, const Vec2& fixedPoint); // MP1A4
 
-bool PushDiscOutOfDisc2D(Vec2& mobileDiscCenter, float discRadius, Vec2 const& fixedDiscCenter,
+bool PushDiscOutOfDisc2D(Vec2& mobileDiscCenter, float discRadius, const Vec2& fixedDiscCenter,
                          float fixedDiscRadius); // MP1A4
 bool PushDiscsOutOfEachOther2D(Vec2& aCenter, float aRadius, Vec2& bCenter, float bRadius);
 
-bool PushDiscOutOfAABB2D(Vec2& mobileDiscCenter, float discRadius, AABB2 const& fixedBox); // MP1A4
+bool PushDiscOutOfAABB2D(Vec2& mobileDiscCenter, float discRadius, const AABB2& fixedBox); // MP1A4
 
 
 // Transform utilities
-void TransformPosition2D(Vec2& posToTransform, float uniformScale, float rotationDegrees, Vec2 const& translation);
-void TransformPositionXY3D(Vec3& positionToTransform, float scaleXY, float zRotationDegrees, Vec2 const& translationXY);
-void TransformPosition2D(Vec2& posToTransform, Vec2 const& iBasis, Vec2 const& jBasis, Vec2 const& translation);
-void TransformPositionXY3D(Vec3& posToTransform, Vec2 const& iBasis, Vec2 const& jBasis, Vec2 const& translation);
+void TransformPosition2D(Vec2& posToTransform, float uniformScale, float rotationDegrees, const Vec2& translation);
+void TransformPositionXY3D(Vec3& positionToTransform, float scaleXY, float zRotationDegrees, const Vec2& translationXY);
+void TransformPosition2D(Vec2& posToTransform, const Vec2& iBasis, const Vec2& jBasis, const Vec2& translation);
+void TransformPositionXY3D(Vec3& posToTransform, const Vec2& iBasis, const Vec2& jBasis, const Vec2& translation);

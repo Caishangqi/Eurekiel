@@ -41,7 +41,7 @@ float Vec3::GetAngleAboutZDegrees() const
     return Atan2Degrees(projectionY, projectionX);
 }
 
-Vec3 const Vec3::GetRotatedAboutZRadians(float deltaRadians) const
+const Vec3 Vec3::GetRotatedAboutZRadians(float deltaRadians) const
 {
     // 计算三维向量在X-Y平面上的投影与X轴之间的角度，即相对于Z轴的旋转角度
     Vec3 vec_ptr = *this;
@@ -49,72 +49,72 @@ Vec3 const Vec3::GetRotatedAboutZRadians(float deltaRadians) const
     return vec_ptr;
 }
 
-Vec3 const Vec3::GetRotatedAboutZDegrees(float deltaDegrees) const
+const Vec3 Vec3::GetRotatedAboutZDegrees(float deltaDegrees) const
 {
     Vec3 vec_ptr = *this;
     TransformPositionXY3D(vec_ptr, 1.0f, deltaDegrees, Vec2(0, 0));
     return vec_ptr;
 }
 
-Vec3 const Vec3::GetClamped(float maxLength) const
+const Vec3 Vec3::GetClamped(float maxLength) const
 {
     float length = GetLength();
     if (length > maxLength)
     {
-        Vec3 vec_normalized = GetNormalized();
-        float newX = vec_normalized.x * length;
-        float newY = vec_normalized.y * length;
-        float newZ = vec_normalized.z * length;
+        Vec3  vec_normalized = GetNormalized();
+        float newX           = vec_normalized.x * length;
+        float newY           = vec_normalized.y * length;
+        float newZ           = vec_normalized.z * length;
         return Vec3(newX, newY, newZ);
     }
     return *this;
 }
 
-Vec3 const Vec3::GetNormalized() const
+const Vec3 Vec3::GetNormalized() const
 {
     float length = GetLength();
-    float scale = 1.0f / length;
+    float scale  = 1.0f / length;
     return Vec3(x * scale, y * scale, z * scale);
 }
 
-bool Vec3::operator==(Vec3 const& compare) const
+bool Vec3::operator==(const Vec3& compare) const
 {
     return x == compare.x && y == compare.y && z == compare.z;
 }
 
-bool Vec3::operator!=(Vec3 const& compare) const
+bool Vec3::operator!=(const Vec3& compare) const
 {
     return x != compare.x || y != compare.y || z != compare.z;
 }
 
-Vec3 const Vec3::operator+(Vec3 const& vecToAdd) const
+const Vec3 Vec3::operator+(const Vec3& vecToAdd) const
 {
     return Vec3(x + vecToAdd.x, y + vecToAdd.y, z + vecToAdd.z);
 }
 
-Vec3 const Vec3::operator-(Vec3 const& vecToSubtract) const
+const Vec3 Vec3::operator-(const Vec3& vecToSubtract) const
 {
     return Vec3(x - vecToSubtract.x, y - vecToSubtract.y, z - vecToSubtract.z);
 }
 
-Vec3 const Vec3::operator*(float uniformScale) const
+const Vec3 Vec3::operator*(float uniformScale) const
 {
     return Vec3(x * uniformScale, y * uniformScale, z * uniformScale);
 }
 
-Vec3 const Vec3::operator/(float inverseScale) const
+const Vec3 Vec3::operator/(float inverseScale) const
 {
     return Vec3(x / inverseScale, y / inverseScale, z / inverseScale);
 }
 
-void Vec3::operator+=(Vec3 const& vecToAdd)
+void Vec3::operator+=(const Vec3& vecToAdd)
 {
     x += vecToAdd.x;
     y += vecToAdd.y;
     z += vecToAdd.z;
 }
 
-void Vec3::operator-=(Vec3 const& vecToSubtract)
+void Vec3::operator-=(const Vec3& vecToSubtract)
 {
     x -= vecToSubtract.x;
     y -= vecToSubtract.y;
@@ -135,14 +135,14 @@ void Vec3::operator/=(float uniformDivisor)
     z /= uniformDivisor;
 }
 
-void Vec3::operator=(Vec3 const& copyFrom)
+void Vec3::operator=(const Vec3& copyFrom)
 {
     this->x = copyFrom.x;
     this->y = copyFrom.y;
     this->z = copyFrom.z;
 }
 
-Vec3 const operator*(float uniformScale, Vec3 const& vecToScale)
+const Vec3 operator*(float uniformScale, const Vec3& vecToScale)
 {
     return Vec3(uniformScale * vecToScale.x, uniformScale * vecToScale.y, uniformScale * vecToScale.z);
 }

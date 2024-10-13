@@ -2,10 +2,8 @@
 
 struct IntVec2
 {
-public:
     int x = 0, y = 0;
 
-public:
     ~IntVec2();
 
     IntVec2();
@@ -14,13 +12,13 @@ public:
     explicit IntVec2(int initialX, int initialY);
 
     // Accessors
-    float GetLength() const;
-    int GetTaxicabLength() const;
-    int GetLengthSquared() const;
-    float GetOrientationRadians() const;
-    float GetOrientationDegrees() const;
-    IntVec2 const GetRotated90Degrees() const;
-    IntVec2 const GetRotatedMinus90Degrees() const;
+    float         GetLength() const;
+    int           GetTaxicabLength() const;
+    int           GetLengthSquared() const;
+    float         GetOrientationRadians() const;
+    float         GetOrientationDegrees() const;
+    const IntVec2 GetRotated90Degrees() const;
+    const IntVec2 GetRotatedMinus90Degrees() const;
 
     // Mutators (non-const methods)
     void Rotate90Degrees();
@@ -34,8 +32,8 @@ public:
     void operator/=(int uniformDivisor); // vec2 /= float
 
     // Operators (const)
-    bool operator==(const IntVec2& compare) const; // vec2 == vec2
-    bool operator!=(const IntVec2& compare) const; // vec2 != vec2
+    bool          operator==(const IntVec2& compare) const; // vec2 == vec2
+    bool          operator!=(const IntVec2& compare) const; // vec2 != vec2
     const IntVec2 operator+(const IntVec2& vecToAdd) const; // vec2 + vec2
     const IntVec2 operator-(const IntVec2& vecToSubtract) const; // vec2 - vec2
     const IntVec2 operator-() const; // -vec2, i.e. "unary negation"
