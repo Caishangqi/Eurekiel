@@ -1,9 +1,13 @@
 ﻿#include "Game/App.hpp"
 
+#include "Game.hpp"
 #include "Engine/Audio/AudioSystem.hpp"
+#include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Time.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
+#include "Engine/Renderer/Renderer.hpp"
+#include "Resource/ResourceManager.hpp"
 
 Renderer*              g_renderer = nullptr;
 App*                   g_theApp   = nullptr;
@@ -11,9 +15,9 @@ RandomNumberGenerator* g_rng      = nullptr;
 InputSystem*           g_theInput = nullptr;
 AudioSystem*           g_theAudio = nullptr;
 
+
 App::App()
 {
-    m_gameCamera = new Camera();
 }
 
 App::~App()
@@ -22,8 +26,6 @@ App::~App()
     delete g_renderer;
     g_renderer = nullptr;
 
-    delete m_gameCamera;
-    m_gameCamera = nullptr;
 
     delete g_theInput;
     g_theInput = nullptr;
@@ -38,7 +40,8 @@ void App::Startup()
     g_renderer->Startup();
 
     // g_theInput Start Up
-    g_theInput = new InputSystem();
+    g_theInput       = new InputSystem();
+    g_theInput->hWnd = hWnd;
     g_theInput->Startup();
 
     g_theAudio = new AudioSystem();
@@ -165,7 +168,6 @@ void App::BeginFrame()
 
 void App::UpdateCameras()
 {
-    m_gameCamera->SetOrthoView(Vec2(0, 0), Vec2(200, 100));
 }
 
 void App::Update(float deltaSeconds)
@@ -189,13 +191,6 @@ void App::EndFrame()
     g_theInput->EndFrame();
     g_theAudio->EndFrame();
 
-    // Dump() 的时候
-    // Copy m_areKeysDown to m_wereKeyDownLastFrame
-    for (int keyIndex = 0; keyIndex < 256; ++keyIndex)
-    {
-        m_areKeysDownLastFrame[keyIndex] = m_areKeysDown[keyIndex];
-    }
-
     if (m_isPendingRestart)
     {
         delete m_theGame;
@@ -203,27 +198,4 @@ void App::EndFrame()
         m_isPendingRestart = false;
         m_theGame          = new Game();
     }
-}
-
-void App::UpdateShip(float deltaSeconds)
-{
-    float movePerSecond = 20.0f;
-    float movePerFrame  = movePerSecond * deltaSeconds;
-
-    m_shipPos.x += movePerFrame;
-
-    if (m_shipPos.x >= 200.f) // TODO: Math this a named constant
-    {
-        m_isQuitting = true;
-    }
-}
-
-void App::RenderShip() const
-{
-    Vertex_PCU verts[3] = {
-        Vertex_PCU(Vec3(m_shipPos.x + 4.f, m_shipPos.y, 0.0f), Rgba8(255, 255, 255, 255), Vec2(0.0f, 0.0f)),
-        Vertex_PCU(Vec3(m_shipPos.x - 2.f, m_shipPos.y + 2.f, 0.0f), Rgba8(0, 127, 255, 255), Vec2(0.0f, 0.0f)),
-        Vertex_PCU(Vec3(m_shipPos.x - 2.f, m_shipPos.y - 2.f, 0.0f), Rgba8(0, 0, 0, 255), Vec2(0.f, 0.f))
-    };
-    g_renderer->DrawVertexArray(3, verts);
 }

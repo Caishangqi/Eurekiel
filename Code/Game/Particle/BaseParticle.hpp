@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "Game/Entity/Entity.h"
+#include "Engine/Core/Vertex_PCU.hpp"
 
 class ParticleHandler;
 

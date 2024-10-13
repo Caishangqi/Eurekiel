@@ -1,8 +1,12 @@
 ﻿#include "Wasp.hpp"
+
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+
 #include "Game/Game.hpp"
 #include "Game/GameCommon.hpp"
+#include "PlayerShip.hpp"
+#include "Game/Particle/FParticleProperty.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
 #include "Game/Resource/SoundRes.hpp"
 

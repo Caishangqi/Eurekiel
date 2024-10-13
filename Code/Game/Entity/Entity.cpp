@@ -1,8 +1,7 @@
 ﻿#include "Game/Entity/Entity.h"
-
-
 #include "Game/App.hpp"
 #include "Game/Game.hpp"
+
 
 Entity::Entity()
 {

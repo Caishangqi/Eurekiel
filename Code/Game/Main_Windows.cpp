@@ -1,12 +1,9 @@
 #define WIN32_LEAN_AND_MEAN		// Always #define this before #including <windows.h>
 #include <windows.h>			// #include this (massive, platform-specific) header in VERY few places (and .CPPs only)
 #include <crtdbg.h>
-#include <cstdio>
 #include <iostream>
 
-#include "Engine/Input/InputSystem.hpp"
-#include "Game/App.hpp"
-
+#include "GameCommon.hpp"
 
 //-----------------------------------------------------------------------------------------------
 // #SD1ToDo: Later we will move this useful macro to a more central place, e.g. Engine/Core/EngineCommon.hpp
@@ -26,6 +23,7 @@ constexpr float CLIENT_ASPECT = 2.0f; // We are requesting a 1:1 aspect (square)
 
 extern App*   g_theApp;
 extern HANDLE g_consoleHandle;
+extern HWND   g_hWnd;
 
 HWND g_hWnd                 = nullptr; // ...becomes void* Window::m_windowHandle
 HDC  g_displayDeviceContext = nullptr; // ...becomes void* Window::m_displayContext
@@ -67,6 +65,47 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
 
             break;
         }
+
+    case WM_LBUTTONDOWN:
+        {
+            // 处理鼠标左键按下事件
+            g_theInput->HandleMouseButtonPressed(0);
+            break;
+        }
+    case WM_LBUTTONUP:
+        {
+            // 处理鼠标左键释放事件
+            g_theInput->HandleMouseButtonReleased(0);
+            break;
+        }
+    case WM_RBUTTONDOWN:
+        {
+            // 处理鼠标右键按下事件
+            g_theInput->HandleMouseButtonPressed(2);
+            break;
+        }
+    case WM_RBUTTONUP:
+        {
+            // 处理鼠标右键释放事件
+            g_theInput->HandleMouseButtonReleased(2);
+            break;
+        }
+    case WM_MOUSEMOVE:
+        {
+            // 获取鼠标的屏幕坐标
+            int mouseX = LOWORD(lParam);
+            int mouseY = HIWORD(lParam);
+            g_theInput->HandleMouseMove(mouseX, mouseY);
+            break;
+        }
+    case WM_MOUSEWHEEL:
+        {
+            // 处理鼠标滚轮事件
+            short wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+            g_theInput->HandleMouseWheel(wheelDelta);
+            break;
+        }
+
     default: ;
     }
 
@@ -242,7 +281,8 @@ int WINAPI WinMain(HINSTANCE applicationInstanceHandle, HINSTANCE, LPSTR command
 
     // TheApp_Startup(applicationInstanceHandle, commandLineString); // This will get replaced with:
     // #SD1ToDo: g_theApp = new App();
-    g_theApp = new App();
+    g_theApp       = new App();
+    g_theApp->hWnd = g_hWnd;
     // #SD1ToDo: g_theApp->Startup();
     g_theApp->Startup();
 

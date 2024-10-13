@@ -1,13 +1,6 @@
 ﻿#include "Asteroid.hpp"
-
-#include "Engine/Math/MathUtils.hpp"
-#include "Engine/Math/RandomNumberGenerator.hpp"
-#include "Engine/Core/VertexUtils.hpp"
-#include "Engine/Renderer/Renderer.hpp"
-
-//#include "Game/Resource/SoundRes.hpp"
 #include "Game/GameCommon.hpp"
-#include "Game/Particle/ParticleHandler.hpp"
+
 
 
 Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientationDegrees): Entity(
@@ -22,7 +15,7 @@ Asteroid::Asteroid(Game* gameInstance, const Vec2& startPosition, float orientat
     m_angularVelocity = g_rng->RollRandomFloatInRange(-200.f, 200.f);
     m_velocity        = Vec2::MakeFromPolarDegrees(m_orientationDegrees, ASTEROID_SPEED);
 
-    Asteroid::InitializeLocalVerts();
+    InitializeLocalVerts();
 }
 
 Asteroid::~Asteroid()
@@ -122,8 +115,8 @@ void Asteroid::InitializeLocalVerts()
     {
         float degrees                         = degreesPerAsterSide * static_cast<float>(sideNum);
         float radius                          = asteroidRadii[sideNum];
-        asteroidLocalVertPositions[sideNum].x = radius * CosDegrees(degrees);
-        asteroidLocalVertPositions[sideNum].y = radius * SinDegrees(degrees);
+        asteroidLocalVertPositions[sideNum].x = radius * cosf(degrees);
+        asteroidLocalVertPositions[sideNum].y = radius * cosf(degrees);
     }
 
     // Build triangles

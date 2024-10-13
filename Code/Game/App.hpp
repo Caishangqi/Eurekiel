@@ -1,11 +1,9 @@
 ﻿#pragma once
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
 
-#include "Game.hpp"
-#include "Engine/Math/Vec2.hpp"
-#include "Engine/Renderer/Renderer.hpp"
-#include "Resource/ResourceManager.hpp"
-
-class InputSystem;
+class Game;
+class ResourceManager;
 
 class App
 {
@@ -30,19 +28,10 @@ private:
     void Render() const;
     void EndFrame();
 
-    void UpdateShip(float deltaSeconds);
-    void RenderShip() const;
 
-    bool m_isQuitting        = false;
-    bool m_isPaused          = false;
-    bool m_isSlowMo          = false;
-    bool m_isPauseAfterFrame = false;
-    Vec2 m_shipPos;
-
-    Camera* m_gameCamera;
-    // initialize all flase
-    bool m_areKeysDown[256]          = {}; // true if each key is current down
-    bool m_areKeysDownLastFrame[256] = {}; // notes whether key was down last frame
+    bool m_isQuitting = false;
+    bool m_isPaused   = false;
+    bool m_isSlowMo   = false;
 
     Game*            m_theGame;
     ResourceManager* m_resourceManager;
@@ -52,4 +41,5 @@ private:
 public:
     bool m_isDebug          = false;
     bool m_isPendingRestart = false;
+    HWND hWnd;
 };

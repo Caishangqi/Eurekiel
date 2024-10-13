@@ -1,7 +1,5 @@
 ﻿#pragma once
 #include "BaseWidget.hpp"
-#include "Game/Widget/Icon/Icon.hpp"
-
 class PlayerShip;
 
 class WidgetPlayerHealth : public BaseWidget

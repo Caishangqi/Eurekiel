@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "Engine/Core/Vertex_PCU.hpp"
-#include "Engine/Math/Vec2.hpp"
 
+struct Vec2;
 class Game;
 /*
 a.	(1) Entity is an abstract base class (ABC), i.e. is never directly instantiated (e.g. no “new Entity”)

@@ -1,17 +1,7 @@
 ﻿#include "PlayerShip.hpp"
 
-#include <vcruntime_typeinfo.h>
-
-#include "Cube.hpp"
-#include "Game/App.hpp"
-#include "Game/GameCommon.hpp"
-#include "Engine/Core/Vertex_PCU.hpp"
-#include "Engine/Core/VertexUtils.hpp"
-#include "Engine/Input/InputSystem.hpp"
-#include "Engine/Math/RandomNumberGenerator.hpp"
-#include "Engine/Renderer/Renderer.hpp"
-#include "Game/Particle/ParticleHandler.hpp"
-#include "Game/Widget/Data/IconRes.hpp"
+#include "Game/Game.hpp"
+#include "Game/Entity/Cube.hpp"
 
 
 PlayerShip::PlayerShip(Game* gameInstance, const Vec2& startPosition, float orientationDegree): Entity(
@@ -101,8 +91,11 @@ void PlayerShip::Update(float deltaSeconds)
         }
     }
 
+    // Move the ship (OLD)
+    // m_position += m_velocity * deltaSeconds;
+
     // Move the ship
-    m_position += m_velocity * deltaSeconds;
+    m_position += m_velocity * PLAYER_SHIP_SPEED * deltaSeconds;
 
     if (m_health <= 0)
     {
@@ -185,8 +178,50 @@ void PlayerShip::InitializeLocalVerts()
 void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 {
     const XboxController& controller = g_theInput->GetController(0);
+
+
+    auto movementDirection = Vec2(0.f, 0.f);
+
+    // 根据键盘输入更新移动方向
+    if (g_theInput->IsKeyDown('W'))
+    {
+        movementDirection += Vec2(0.f, 1.f); // 向上移动
+    }
+    if (g_theInput->IsKeyDown('S'))
+    {
+        movementDirection += Vec2(0.f, -1.f); // 向下移动
+    }
+    if (g_theInput->IsKeyDown('A'))
+    {
+        movementDirection += Vec2(-1.f, 0.f); // 向左移动
+    }
+    if (g_theInput->IsKeyDown('D'))
+    {
+        movementDirection += Vec2(1.f, 0.f); // 向右移动
+    }
+
+    // 正常化方向向量，以便斜向移动时保持恒定速度
+    if (movementDirection.GetLength() > 0.f)
+    {
+        movementDirection.Normalize();
+        m_velocity = movementDirection;
+    }
+    else if (!g_theInput->IsKeyDown('W') || !g_theInput->IsKeyDown('S') || !g_theInput->IsKeyDown('A') || !g_theInput->
+        IsKeyDown('D'))
+    {
+        m_velocity *= 0.9f;
+        if (m_velocity.GetLength() < 0.01f)
+        {
+            m_velocity = Vec2(0.f, 0.f);
+        }
+    }
+    auto button          = Vec2(0, 0);
+    auto topRight        = Vec2(200, 100);
+    Vec2 mousePosition   = g_theInput->GetMousePositionOnWorld(button, topRight);
+    m_orientationDegrees = (mousePosition - m_position).GetOrientationDegrees();
+
     //printf("Magnitude: %f\n", controller.GetLeftStick().GetMagnitude());
-    m_isTurningLeft  = g_theInput->IsKeyDown('A');
+    /*m_isTurningLeft  = g_theInput->IsKeyDown('A');
     m_isTurningRight = g_theInput->IsKeyDown('D');
 
     // A combination between 2 controller
@@ -207,6 +242,12 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
     {
         m_isThrusting = false;
         m_thrustRate  = 0;
+    }*/
+
+
+    if (g_theInput->WasMouseButtonJustPressed(0))
+    {
+        m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
     }
 
     if (g_theInput->WasKeyJustPressed(' '))

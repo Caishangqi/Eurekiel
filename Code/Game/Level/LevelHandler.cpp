@@ -1,9 +1,21 @@
 ﻿#include "LevelHandler.hpp"
 #include <iostream>
 #include "FLevel.h"
+#include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Game/Game.hpp"
+#include "Game/Entity/Asteroid.hpp"
 #include "Game/Entity/Beetle.hpp"
+#include "Game/Entity/Bullet.hpp"
+#include "Game/Entity/PlayerShip.hpp"
 #include "Game/Entity/Wasp.hpp"
+#include "Game/Entity/Tetromino/ITetromino.hpp"
+#include "Game/Entity/Tetromino/JTetromino.hpp"
+#include "Game/Entity/Tetromino/LTetromino.h"
+#include "Game/Entity/Tetromino/OTetromino.hpp"
+#include "Game/Entity/Tetromino/STetromino.hpp"
+#include "Game/Entity/Tetromino/TTetromino.hpp"
+#include "Game/Entity/Tetromino/ZTetromino.hpp"
+#include "Game/Grid/Grid.hpp"
 
 LevelHandler::LevelHandler(Game* owner)
 {
@@ -89,7 +101,7 @@ void LevelHandler::InterruptLevel(FLevel& level)
 
 void LevelHandler::CleanScene()
 {
-    for (Asteroid*& m_asteroid : m_game->m_asteroid)
+    for (Asteroid*& m_asteroid : m_game->m_asteroids)
     {
         if (m_asteroid != nullptr)
         {
@@ -127,6 +139,63 @@ void LevelHandler::CleanScene()
 
     delete m_game->m_PlayerShip;
     m_game->m_PlayerShip = nullptr;
+}
+
+void LevelHandler::GenerateRandomTetromino()
+{
+    int            index               = g_rng->RollRandomIntInRange(0, 7);
+    int            randomSpawnPosition = g_rng->RollRandomIntInRange(3, 19);
+    BaseTetromino* bt                  = nullptr;
+    switch (index)
+    {
+    case 0:
+        bt = new ITetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 1:
+        bt = new JTetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 2:
+        bt = new LTetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 3:
+        bt = new OTetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 4:
+        bt = new STetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 5:
+        bt = new TTetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 6:
+        bt = new ZTetromino(IntVec2(39, randomSpawnPosition));
+        bt->SetParentGrid(m_game->m_grid);
+        m_game->m_grid->PlaceTetromino(bt);
+        break;
+    case 7:
+        for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
+        {
+            m_game->m_grid->PlaceCube(IntVec2(39, i));
+        }
+        break;
+    default:
+        printf("[level]     Invalid index!\n");
+    }
+}
+
+void LevelHandler::OnEntityDie(Entity* entity)
+{
 }
 
 void LevelHandler::ImportLevels()

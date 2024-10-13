@@ -19,9 +19,9 @@ public:
      * @param cube Target Cube pointer you want to remove in Tetromino
      * @return whether or not remove success
      */
-    virtual bool __RemoveCubePointerInTetromino(Cube* cube);
+    virtual bool RemoveCubePointerInTetromino(Cube* cube);
 
-    virtual bool __MarkCubeAsGarbage(Cube* cube);
+    virtual bool MarkCubeAsGarbage(Cube* cube);
 
     virtual void SetParentGrid(Grid* parentGrid);
     // DANGEROUS

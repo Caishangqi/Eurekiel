@@ -1,7 +1,5 @@
 ﻿#include "Icon.hpp"
-
 #include "Engine/Math/MathUtils.hpp"
-#include "Game/Widget/Data/IconRes.hpp"
 
 Icon::Icon(Vertex_PCU* initialVertices, int numberOfVertices, BaseWidget* Owner)
 {

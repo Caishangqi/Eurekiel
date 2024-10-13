@@ -1,17 +1,235 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Framework">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
     <Filter Include="Gameplay">
       <UniqueIdentifier>{747dda89-9810-40f6-8958-da309ef5a00f}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Entities">
+      <UniqueIdentifier>{9cca53b9-a295-403e-a278-b656e2a19f97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Grid">
+      <UniqueIdentifier>{ab5a5f4f-0466-4bad-8403-449fbc5c3eba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Framework">
+      <UniqueIdentifier>{11c0b65c-5e6f-4a69-a116-4f36bb4d93a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Particles">
+      <UniqueIdentifier>{0a1bfa54-c4a9-4e8f-a907-7ddf7ed412b0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{6005888a-3502-4bb0-9e12-bf63c05485f3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Entity\Asteroid.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Beetle.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Bullet.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Cube.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Entity.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\PlayerShip.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Wasp.cpp">
+      <Filter>Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\BaseTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\ITetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\JTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\LTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\OTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\STetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\TTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Entity\Tetromino\ZTetromino.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="Game.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="GameCommon.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Grid\Grid.cpp">
+      <Filter>Grid</Filter>
+    </ClCompile>
+    <ClCompile Include="App.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
     <ClCompile Include="Main_Windows.cpp">
       <Filter>Framework</Filter>
     </ClCompile>
+    <ClCompile Include="Level\FLevel.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Level\LevelHandler.cpp">
+      <Filter>Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Particle\BaseParticle.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="Particle\FParticleProperty.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="Particle\ParticleHandler.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\ResourceManager.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Resource\SoundRes.cpp">
+      <Filter>Framework</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\WidgetHandler.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\Data\IconRes.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\Icon\Icon.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\Widgets\BaseWidget.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\Widgets\WidgetMainMenu.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Widget\Widgets\WidgetPlayerHealth.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Entity\Asteroid.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Beetle.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Bullet.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Cube.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Entity.h">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\PlayerShip.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Wasp.hpp">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\BaseTetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\ITetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\JTetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\LTetromino.h">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\OTetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\STetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\TTetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity\Tetromino\ZTetromino.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="Game.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="GameCommon.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Enum\ELevelState.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Enum\EShape.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Enum\EEntity.h">
+      <Filter>Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Grid\Grid.hpp">
+      <Filter>Grid</Filter>
+    </ClInclude>
+    <ClInclude Include="App.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="EngineBuildPreferences.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Level\FLevel.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Level\LevelHandler.hpp">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Particle\BaseParticle.hpp">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="Particle\FParticleProperty.hpp">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="Particle\ParticleHandler.hpp">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\ResourceManager.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource\SoundRes.hpp">
+      <Filter>Framework</Filter>
+    </ClInclude>
+    <ClInclude Include="Time\FTimerHandle.hpp" />
+    <ClInclude Include="Widget\WidgetHandler.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Widget\Data\IconRes.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Widget\Icon\Icon.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Widget\Widgets\BaseWidget.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Widget\Widgets\WidgetMainMenu.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Widget\Widgets\WidgetPlayerHealth.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

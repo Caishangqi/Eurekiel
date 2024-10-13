@@ -1,5 +1,6 @@
 ﻿#pragma once
-#include "Game/Entity/Entity.h"
+#include "Entity.h"
+
 /*
 a.	(2) Spawned at the PlayerShip’s nose whenever space bar is pressed, facing & moving ship-forward
 b.	(1) Moves forward (drifts) in a straight line (at 50 world units/second) until it dies
@@ -28,6 +29,11 @@ public:
     void OnColliedEnter(Entity* other) override;
 
     void Die() override;
+
+protected:
+    Rgba8 m_bulletTailColor;
+
+    float m_particleTimer = 0.f;
 
 private:
     Vertex_PCU m_localVerts[NUM_BULLETS_VERTS];

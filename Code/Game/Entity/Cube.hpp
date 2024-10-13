@@ -1,11 +1,9 @@
 ﻿#pragma once
 #include "Entity.h"
-#include "Engine/Math/AABB2.hpp"
 #include "Engine/Math/IntVec2.hpp"
 
-
+class AABB2;
 class BaseTetromino;
-struct IntVec2;
 class Grid;
 
 class Cube : public Entity

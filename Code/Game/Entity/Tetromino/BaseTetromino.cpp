@@ -1,8 +1,4 @@
 ﻿#include "BaseTetromino.hpp"
-
-#include <queue>
-#include <vector>
-
 #include "Game/Grid/Grid.hpp"
 
 BaseTetromino::~BaseTetromino()
@@ -59,7 +55,7 @@ BaseTetromino* BaseTetromino::InitTetromino()
     return this;
 }
 
-bool BaseTetromino::__RemoveCubePointerInTetromino(Cube* cube)
+bool BaseTetromino::RemoveCubePointerInTetromino(Cube* cube)
 {
     for (int i = 0; i < 4; i++)
     {
@@ -75,7 +71,7 @@ bool BaseTetromino::__RemoveCubePointerInTetromino(Cube* cube)
     return false;
 }
 
-bool BaseTetromino::__MarkCubeAsGarbage(Cube* cube)
+bool BaseTetromino::MarkCubeAsGarbage(Cube* cube)
 {
     for (int i = 0; i < 4; i++)
     {

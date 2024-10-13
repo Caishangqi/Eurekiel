@@ -52,6 +52,5 @@ private:
     bool       m_isTurningRight = false;
     bool       m_isThrusting    = false;
     float      m_thrustRate     = 0.0f;
-
-    float m_particleTimer = 0.f;
+    float      m_particleTimer  = 0.f;
 };

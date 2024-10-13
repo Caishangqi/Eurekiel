@@ -1,7 +1,5 @@
 ﻿#include "IconRes.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
-#include "Engine/Math/Vec3.hpp"
-
 
 Vertex_PCU ICON::SPACESHIP[15] = {
     Vertex_PCU(Vec3(1.f, 0.f, 0.f), Rgba8(102, 153, 204), Vec2()),
@@ -117,4 +115,24 @@ Vertex_PCU ICON::TEXT_SPACESHIP_TRIANGLES[36] = {
     // Repeat for the rest of the 'E'
 
     // Repeat the same logic for the rest of the letters 'S', 'H', 'I', 'P'
+};
+
+Vertex_PCU ICON::BULLET_HEAD[6] = {
+    Vertex_PCU(Vec3(0.f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(0.f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(.25f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+
+    Vertex_PCU(Vec3(0.f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(.25f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(.25f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+};
+
+Vertex_PCU ICON::BULLET_TAIL[6] = {
+    Vertex_PCU(Vec3(0.f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(-2.f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(-2.f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+
+    Vertex_PCU(Vec3(0.f, .25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(0.f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
+    Vertex_PCU(Vec3(-2.f, -.25f, 0.f), Rgba8(255, 255, 255), Vec2()),
 };

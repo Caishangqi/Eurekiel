@@ -1,13 +1,21 @@
 ﻿#pragma once
-
-struct Vec2;
-struct Rgba8;
-
-class App;
-class Renderer;
-class RandomNumberGenerator;
-class AudioSystem;
-class InputSystem;
+#include "App.hpp"
+#include "Engine/Audio/AudioSystem.hpp"
+#include "Engine/Math/RandomNumberGenerator.hpp"
+#include "Engine/Math/Vec2.hpp"
+#include "Engine/Renderer/Renderer.hpp"
+#include "Engine/Input/InputSystem.hpp"
+#include "Game/Widget/Data/IconRes.hpp"
+#include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Renderer/Camera.hpp"
+#include "Engine/Renderer/Renderer.hpp"
+#include "Engine/Math/MathUtils.hpp"
+#include "Engine/Core/Vertex_PCU.hpp"
+#include "Engine/Renderer/Renderer.hpp"
+#include "Engine/Core/VertexUtils.hpp"
+#include "Game/Particle/FParticleProperty.hpp"
+#include "Game/Particle/ParticleHandler.hpp"
+#include "Game/Resource/SoundRes.hpp"
 
 extern RandomNumberGenerator* g_rng;
 extern App*                   g_theApp;
@@ -32,6 +40,7 @@ constexpr float BULLET_SPEED                = 150.f;
 constexpr float BULLET_PHYSICS_RADIUS       = 0.5f;
 constexpr float BULLET_COSMETIC_RADIUS      = 2.0f;
 constexpr float PLAYER_SHIP_ACCELERATION    = 30.f;
+constexpr float PLAYER_SHIP_SPEED           = 60.f;
 constexpr float PLAYER_SHIP_TURN_SPEED      = 300.f;
 constexpr float PLAYER_SHIP_PHYSICS_RADIUS  = 1.75f;
 constexpr float PLAYER_SHIP_COSMETIC_RADIUS = 2.25f;

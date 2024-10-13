@@ -1,6 +1,7 @@
 ﻿#include "BaseParticle.hpp"
-#include "stdio.h"
 #include "Engine/Core/VertexUtils.hpp"
+#include "Engine/Core/Vertex_PCU.hpp"
+#include "Engine/Math/Vec3.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Game/GameCommon.hpp"
 

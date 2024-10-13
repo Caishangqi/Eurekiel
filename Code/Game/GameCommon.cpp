@@ -1,7 +1,5 @@
 ﻿#include "GameCommon.hpp"
-#include "Game/Entity/Asteroid.hpp"
-#include "Engine/Math/MathUtils.hpp"
-#include "Engine/Renderer/Renderer.hpp"
+
 
 void DebugDrawRing(const Vec2& center, float radius, float thickness, const Rgba8& color)
 {

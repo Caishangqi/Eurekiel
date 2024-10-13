@@ -1,8 +1,8 @@
 ﻿#include "WidgetPlayerHealth.hpp"
-#include "stdio.h"
 #include "Engine/Renderer/Renderer.hpp"
 #include "Game/GameCommon.hpp"
 #include "Game/Widget/Data/IconRes.hpp"
+#include "Game/Widget/Icon/Icon.hpp"
 
 WidgetPlayerHealth::WidgetPlayerHealth(WidgetHandler* handler)
     : BaseWidget(handler)
@@ -11,8 +11,9 @@ WidgetPlayerHealth::WidgetPlayerHealth(WidgetHandler* handler)
     for (int i = 0; i < NUM_MAX_TRY - 1; i++)
     {
         icons[i] = new Icon(ICON::SPACESHIP, 15, this);
+        icons[i]->SetScale(20);
         icons[i]->SetRotation(90); // first rotation
-        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
+        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 128);
     }
     active  = false;
     visible = false;
@@ -41,6 +42,7 @@ void WidgetPlayerHealth::OnPlayerShipRespawn(PlayerShip* playerShip, int remainT
             icons[i] = new Icon(ICON::SPACESHIP, 15, this);
             icons[i]->SetRotation(90); // first rotation
             icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
+            icons[i]->SetScale(6);
         }
     }
 }
@@ -73,6 +75,7 @@ void WidgetPlayerHealth::Reset()
     {
         icons[i] = new Icon(ICON::SPACESHIP, 15, this);
         icons[i]->SetRotation(90); // first rotation
-        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
+        icons[i]->SetPosition(6 + static_cast<float>(6 * i), 128);
+        icons[i]->SetScale(6);
     }
 }

@@ -1,8 +1,7 @@
 ﻿#include "Grid.hpp"
-
-#include "Engine/Math/IntVec2.hpp"
+#include "Engine/Math/AABB2.hpp"
 #include "Game/Game.hpp"
-#include "Game/Resource/SoundRes.hpp"
+#include "Game/Entity/Tetromino/BaseTetromino.hpp"
 
 Grid::Grid(Game* game)
 {
@@ -89,11 +88,13 @@ void Grid::OnCubeTouchBaseLineEvent(Cube* cube)
     {
         if (CheckVerticalFull(i))
         {
-            __MarkVerticalFullGarbage(i);
-            __RemoveVerticalFullPointer(i);
+            MarkVerticalFullGarbage(i);
+            RemoveVerticalFullPointer(i);
             OnCubeCancelEvent(i);
         }
     }
+
+    IsCubeOutOfBounds();
 }
 
 void Grid::OnCubeCancelEvent(int verticalIndex)
@@ -101,6 +102,13 @@ void Grid::OnCubeCancelEvent(int verticalIndex)
     printf(
         "[event]     OnCubeCancelEvent Trigger\n"
         "                   > Target vertical Index: %d\n", verticalIndex
+    );
+}
+
+void Grid::OnCubeTouchBoundEvent()
+{
+    printf(
+        "[event]     OnCubeTouchBoundEvent Trigger\n"
     );
 }
 
@@ -117,7 +125,7 @@ IntVec2 Grid::GetGridPositionFromPosition(const Vec2& position)
     return IntVec2(static_cast<int>((position.x) / 5.f), static_cast<int>(position.y / 5.f));
 }
 
-bool Grid::__RemoveCubePointerInGrid(Cube* cube)
+bool Grid::RemoveCubePointerInGrid(Cube* cube)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -146,7 +154,19 @@ bool Grid::CheckVerticalFull(int verticalIndex)
     return true;
 }
 
-bool Grid::__RemoveVerticalFullPointer(int verticalIndex)
+bool Grid::CheckVerticalHasCube(int verticalIndex)
+{
+    for (int row = 0; row < GRID_HEIGHT_SIZE; ++row)
+    {
+        if (m_cubesData[row][verticalIndex] != nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Grid::RemoveVerticalFullPointer(int verticalIndex)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -155,7 +175,7 @@ bool Grid::__RemoveVerticalFullPointer(int verticalIndex)
     return true;
 }
 
-bool Grid::__MarkVerticalFullGarbage(int verticalIndex)
+bool Grid::MarkVerticalFullGarbage(int verticalIndex)
 {
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
@@ -165,8 +185,8 @@ bool Grid::__MarkVerticalFullGarbage(int verticalIndex)
             BaseTetromino* tet                         = m_cubesData[i][verticalIndex]->GetParentTetromino();
             if (tet)
             {
-                tet->__MarkCubeAsGarbage(m_cubesData[i][verticalIndex]);
-                tet->__RemoveCubePointerInTetromino(m_cubesData[i][verticalIndex]);
+                tet->MarkCubeAsGarbage(m_cubesData[i][verticalIndex]);
+                tet->RemoveCubePointerInTetromino(m_cubesData[i][verticalIndex]);
             }
         }
     }
@@ -192,7 +212,7 @@ void Grid::MoveVerticalCubes(int targetVerticalIndex, int fromVerticalIndex)
     for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
     {
         m_cubesData[i][targetVerticalIndex] = m_cubesData[i][fromVerticalIndex];
-        __RemoveVerticalFullPointer(fromVerticalIndex);
+        RemoveVerticalFullPointer(fromVerticalIndex);
     }
     // 
 }
@@ -247,4 +267,14 @@ void Grid::MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex)
             }
         }
     }
+}
+
+bool Grid::IsCubeOutOfBounds()
+{
+    bool result = CheckVerticalHasCube(GRID_WIDTH_SIZE - 3);
+    if (result)
+    {
+        OnCubeTouchBoundEvent();
+    }
+    return result;
 }

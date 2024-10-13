@@ -1,8 +1,8 @@
 ﻿#pragma once
 #include "Game/GameCommon.hpp"
-#include "Game/Entity/Cube.hpp"
-#include "Game/Entity/Tetromino/BaseTetromino.hpp"
-
+class BaseTetromino;
+class Cube;
+class Game;
 struct IntVec2;
 
 class Grid
@@ -20,6 +20,7 @@ public:
     // Events
     void OnCubeTouchBaseLineEvent(Cube* cube);
     void OnCubeCancelEvent(int verticalIndex);
+    void OnCubeTouchBoundEvent();
 
 private:
     int m_width  = GRID_WIDTH_SIZE;
@@ -42,7 +43,7 @@ public:
      * @param cube Target Cube pointer you want to remove in Tetromino
      * @return whether or not remove success
      */
-    bool __RemoveCubePointerInGrid(Cube* cube);
+    bool RemoveCubePointerInGrid(Cube* cube);
     /**
      * Remove all cubes pointers in a vertical line of grid system maintained
      * array
@@ -51,7 +52,7 @@ public:
      * @param verticalIndex Target vertical index you want to null out
      * @return whether or not remove success
      */
-    bool __RemoveVerticalFullPointer(int verticalIndex);
+    bool RemoveVerticalFullPointer(int verticalIndex);
 
     /**
      * Make all cubes as garbage in a specific vertical line of grid system
@@ -61,19 +62,25 @@ public:
      * @param verticalIndex Target vertical index you want to null out
      * @return whether or not remove success
      */
-    bool __MarkVerticalFullGarbage(int verticalIndex);
+    bool MarkVerticalFullGarbage(int verticalIndex);
 
     bool CheckVerticalFull(int verticalIndex);
 
+    bool CheckVerticalHasCube(int verticalIndex);
 
     Cube* GetVerticalFullCubes(int verticalIndex);
-
 
     void MoveVerticalCubes(int targetVerticalIndex, int fromVerticalIndex);
 
     int GetMostNearEmptyVerticalIndex();
 
     void MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex);
+
+    /**
+     * 
+     * @return Whether or not cube out of bound
+     */
+    bool IsCubeOutOfBounds();
 
     Cube* m_cubesData[GRID_HEIGHT_SIZE][GRID_WIDTH_SIZE] = {{nullptr}};
 };

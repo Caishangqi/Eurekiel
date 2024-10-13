@@ -2,7 +2,6 @@
 
 #include "Game/Game.hpp"
 #include "Game/Enum/EEntity.h"
-#include "stdio.h"
 #include "Game/Entity/Beetle.hpp"
 #include "Game/Entity/Wasp.hpp"
 

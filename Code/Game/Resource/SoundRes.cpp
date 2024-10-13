@@ -1,5 +1,4 @@
-﻿// SoundRes.cpp
-#include "SoundRes.hpp"
+﻿#include "SoundRes.hpp"
 
 SoundID SOUND::PLAYER_SHOOTS_BULLET = 0;
 SoundID SOUND::PLAYER_DIES          = 0;

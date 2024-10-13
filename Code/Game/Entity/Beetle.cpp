@@ -1,12 +1,6 @@
 ﻿#include "Beetle.hpp"
-#include "Engine/Core/VertexUtils.hpp"
-#include "Engine/Math/RandomNumberGenerator.hpp"
-#include "Engine/Renderer/Renderer.hpp"
+#include "PlayerShip.hpp"
 #include "Game/Game.hpp"
-#include "Game/GameCommon.hpp"
-#include "Game/Particle/ParticleHandler.hpp"
-#include "Game/Resource/SoundRes.hpp"
-
 /*
  *  Spawns at a random position just offscreen (using the Beetle’s cosmetic radius)
 	(1) Always faces the player (perfectly/instantly)

@@ -1,9 +1,12 @@
-﻿#include "Bullet.h"
+﻿#include "Bullet.hpp"
 
-#include "Game/GameCommon.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+
+#include "Game/GameCommon.hpp"
+#include "Game/Particle/FParticleProperty.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
+#include "Game/Widget/Data/IconRes.hpp"
 
 Bullet::Bullet(Game* owner, const Vec2& startPosition, float orientationDegrees): Entity(
     owner, startPosition, orientationDegrees)
@@ -12,6 +15,9 @@ Bullet::Bullet(Game* owner, const Vec2& startPosition, float orientationDegrees)
     m_cosmeticRadius = BULLET_COSMETIC_RADIUS;
 
     m_health = 1;
+
+    m_color           = Rgba8(49, 162, 242);
+    m_bulletTailColor = Rgba8(0, 87, 132);
 
     m_velocity = Vec2::MakeFromPolarDegrees(m_orientationDegrees, BULLET_SPEED);
     Bullet::InitializeLocalVerts();
@@ -25,9 +31,31 @@ Bullet::~Bullet()
 void Bullet::Update(float deltaTime)
 {
     m_position += m_velocity * deltaTime;
+    m_particleTimer += deltaTime;
 
     if (IsOffscreen())
         m_isDead = true;
+
+    if (m_particleTimer >= .1f)
+    {
+        FParticleProperty pp;
+        pp.fadeOpacity        = true;
+        pp.numDebris          = 1;
+        pp.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -10;
+        pp.maxScatterSpeed    = 0.f;
+        pp.color              = Rgba8(235, 137, 49);
+        pp.position           = m_position;
+        pp.minAngularVelocity = 0.f;
+        pp.maxAngularVelocity = 0.f;
+
+        pp.minOpacity = 0.1f;
+        pp.maxOpacity = 0.3f;
+
+        pp.minLifeTime = .1f;
+        pp.maxLifeTime = .2f;
+
+        ParticleHandler::getInstance()->SpawnNewParticleCluster(pp);
+    }
 
     if (m_health <= 0)
     {
@@ -41,13 +69,28 @@ void Bullet::Update(float deltaTime)
 
 void Bullet::Render() const
 {
-    Vertex_PCU tempWorldVerts[NUM_BULLETS_VERTS];
-    for (int vertIndex = 0; vertIndex < NUM_BULLETS_VERTS; vertIndex++)
+    // Bullet Head
+    Vertex_PCU bulletHead[6];
+    for (int vertIndex = 0; vertIndex < 6; vertIndex++)
     {
-        tempWorldVerts[vertIndex] = m_localVerts[vertIndex];
+        bulletHead[vertIndex] = ICON::BULLET_HEAD[vertIndex];
+        //bulletHead[vertIndex].m_color = m_color;
     }
-    TransformVertexArrayXY3D(NUM_BULLETS_VERTS, tempWorldVerts, 1.f, m_orientationDegrees, m_position);
-    g_renderer->DrawVertexArray(NUM_BULLETS_VERTS, tempWorldVerts);
+    TransformVertexArrayXY3D(6, bulletHead, 1.f, m_orientationDegrees, m_position);
+    g_renderer->DrawVertexArray(6, bulletHead);
+
+    // Bullet Flame
+    Vertex_PCU bulletTail[6];
+    for (int vertIndex = 0; vertIndex < 6; vertIndex++)
+    {
+        bulletTail[vertIndex] = ICON::BULLET_TAIL[vertIndex];
+        //bulletTail[vertIndex].m_color = m_bulletTailColor;
+        bulletTail[vertIndex].m_color.a = 180;
+    }
+    TransformVertexArrayXY3D(6, bulletTail, 1.f, m_orientationDegrees, m_position);
+    g_renderer->DrawVertexArray(6, bulletTail);
+
+
     DebugRender();
 }
 

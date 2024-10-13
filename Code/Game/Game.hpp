@@ -1,12 +1,11 @@
 ﻿#pragma once
-#include "Game/Entity/Asteroid.hpp"
-#include "Game/Entity/Bullet.h"
 #include "GameCommon.hpp"
-#include "Game/Entity/PlayerShip.hpp"
-#include "Grid/Grid.hpp"
-#include "Widget/Widgets/WidgetMainMenu.hpp"
 
-
+class Asteroid;
+class Entity;
+class Bullet;
+class PlayerShip;
+class Grid;
 class Cube;
 class Camera;
 struct FTimerHandle;
@@ -87,7 +86,7 @@ public:
     // nullptr equal to 0
     PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
 
-    Asteroid* m_asteroid[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
+    Asteroid* m_asteroids[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
 
     Bullet* m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.
 
@@ -112,6 +111,8 @@ public:
 
     // Grid system
     Grid* m_grid = nullptr;
+
+    int Score = 0;
 
 private:
     FTimerHandle* m_timerHandles[128] = {};

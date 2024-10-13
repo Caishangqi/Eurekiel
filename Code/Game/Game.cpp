@@ -1,22 +1,14 @@
 ﻿#include "Game.hpp"
-
-#include <functional>
-#include <vcruntime_typeinfo.h>
-#include "App.hpp"
-#include "Engine/Audio/AudioSystem.hpp"
-#include "Engine/Core/ErrorWarningAssert.hpp"
-#include "Engine/Input/InputSystem.hpp"
-#include "Engine/Math/IntVec2.hpp"
-#include "Engine/Math/MathUtils.hpp"
-#include "Engine/Math/RandomNumberGenerator.hpp"
+#include "GameCommon.hpp"
+#include "Entity/Asteroid.hpp"
 #include "Entity/Beetle.hpp"
+#include "Entity/Bullet.hpp"
 #include "Entity/Cube.hpp"
+#include "Entity/PlayerShip.hpp"
 #include "Entity/Wasp.hpp"
-#include "Entity/Tetromino/LTetromino.h"
 #include "Enum/EEntity.h"
+#include "Grid/Grid.hpp"
 #include "Level/LevelHandler.hpp"
-#include "Particle/ParticleHandler.hpp"
-#include "Resource/SoundRes.hpp"
 #include "Time/FTimerHandle.hpp"
 #include "Widget/WidgetHandler.hpp"
 #include "Widget/Widgets/WidgetMainMenu.hpp"
@@ -87,7 +79,7 @@ void Game::UpdateBullet(float deltaTime)
 
 void Game::UpdateAsteroid(float deltaTime)
 {
-    for (Asteroid*& m_asteroid : m_asteroid)
+    for (Asteroid*& m_asteroid : m_asteroids)
     {
         if (m_asteroid != nullptr)
             m_asteroid->Update(deltaTime);
@@ -189,13 +181,13 @@ void Game::SpawnDefaultAsteroids()
     for (int numberAsteroid = 0; numberAsteroid < NUM_STARTING_ASTEROIDS; ++numberAsteroid)
     {
         // Generate random position in world 
-        float worldPositionX       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-        float worldPositionY       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-        float randomOrientation    = g_rng->RollRandomFloatInRange(0, 360);
-        auto  AddedAsteroid        = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
-        Vec2  offScreenPos         = getRandomPositionOffscreen(AddedAsteroid);
-        AddedAsteroid->m_position  = offScreenPos;
-        m_asteroid[numberAsteroid] = AddedAsteroid;
+        float worldPositionX        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+        float worldPositionY        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+        float randomOrientation     = g_rng->RollRandomFloatInRange(0, 360);
+        auto  AddedAsteroid         = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+        Vec2  offScreenPos          = getRandomPositionOffscreen(AddedAsteroid);
+        AddedAsteroid->m_position   = offScreenPos;
+        m_asteroids[numberAsteroid] = AddedAsteroid;
     }
 }
 
@@ -236,13 +228,13 @@ void Game::SpawnNewAsteroids()
 {
     for (int numberAsteroid = 0; numberAsteroid < MAX_ASTEROIDS; ++numberAsteroid)
     {
-        if (m_asteroid[numberAsteroid] == nullptr)
+        if (m_asteroids[numberAsteroid] == nullptr)
         {
             // Generate random position in world 
-            float worldPositionX       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-            float worldPositionY       = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-            float randomOrientation    = g_rng->RollRandomFloatInRange(0, 360);
-            m_asteroid[numberAsteroid] = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+            float worldPositionX        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+            float worldPositionY        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+            float randomOrientation     = g_rng->RollRandomFloatInRange(0, 360);
+            m_asteroids[numberAsteroid] = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
             return;
         }
     }
@@ -263,37 +255,11 @@ void Game::HandleKeyBoardEvent(float deltaTime)
         }
     }
 
-    if (g_theInput->WasKeyJustPressed('C'))
-    {
-        //m_grid->PlaceCube(IntVec2(40, 20));
-        m_grid->PlaceCube(IntVec2(39, 19));
-        m_grid->PlaceCube(IntVec2(39, 18));
-        m_grid->PlaceCube(IntVec2(39, 17));
-        m_grid->PlaceCube(IntVec2(39, 16));
-        m_grid->PlaceCube(IntVec2(39, 15));
-        m_grid->PlaceCube(IntVec2(39, 14));
-        m_grid->PlaceCube(IntVec2(39, 13));
-        m_grid->PlaceCube(IntVec2(39, 12));
-        m_grid->PlaceCube(IntVec2(39, 11));
-        m_grid->PlaceCube(IntVec2(39, 10));
-        m_grid->PlaceCube(IntVec2(39, 9));
-        m_grid->PlaceCube(IntVec2(39, 8));
-        m_grid->PlaceCube(IntVec2(39, 7));
-        m_grid->PlaceCube(IntVec2(39, 6));
-        m_grid->PlaceCube(IntVec2(39, 5));
-        m_grid->PlaceCube(IntVec2(39, 4));
-        m_grid->PlaceCube(IntVec2(39, 3));
-        m_grid->PlaceCube(IntVec2(39, 2));
-        m_grid->PlaceCube(IntVec2(39, 1));
-        m_grid->PlaceCube(IntVec2(39, 0));
-    }
-
     if (g_theInput->WasKeyJustPressed('X'))
     {
-        BaseTetromino* bt = new LTetromino(IntVec2(39, 19));
-        bt->SetParentGrid(m_grid);
-        m_grid->PlaceTetromino(bt);
+        m_levelHandler->GenerateRandomTetromino();
     }
+
 
     // Return to Main menu
     if (g_theInput->WasKeyJustPressed(27))
@@ -391,7 +357,7 @@ void Game::RenderEntities() const
         }
     }
 
-    for (Asteroid* asteroid : m_asteroid)
+    for (Asteroid* asteroid : m_asteroids)
     {
         if (asteroid != nullptr)
         {
@@ -429,7 +395,7 @@ void Game::HandleEntityCollisions()
         if (m_bullet == nullptr || !m_bullet->IsAlive())
             continue;
 
-        for (Asteroid*& asteroid : m_asteroid)
+        for (Asteroid*& asteroid : m_asteroids)
         {
             if (asteroid == nullptr || !asteroid->IsAlive())
                 continue;
@@ -483,7 +449,7 @@ void Game::HandleEntityCollisions()
     }
 
     // ship to entity collision
-    for (Asteroid*& asteroid : m_asteroid)
+    for (Asteroid*& asteroid : m_asteroids)
     {
         if (asteroid == nullptr || !asteroid->IsAlive() || !m_PlayerShip->IsAlive())
             continue;
@@ -554,7 +520,7 @@ void Game::GarbageCollection()
         }
     }
 
-    for (Asteroid*& asteroid : m_asteroid)
+    for (Asteroid*& asteroid : m_asteroids)
     {
         if (asteroid != nullptr && asteroid->IsGarbage())
         {
@@ -678,6 +644,10 @@ void Game::OnPlayerShipDeathEvent(PlayerShip* playerShip)
     {
         SetTimer(3, nullptr);
     }
+}
+
+void Game::OnMainMenuDisplayEvent()
+{
 }
 
 FTimerHandle* Game::SetTimer(float timer, void (*callback)())

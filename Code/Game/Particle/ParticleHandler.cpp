@@ -1,6 +1,6 @@
 ﻿#include "ParticleHandler.hpp"
-#include "stdio.h"
 #include "BaseParticle.hpp"
+#include "FParticleProperty.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Game/GameCommon.hpp"
 

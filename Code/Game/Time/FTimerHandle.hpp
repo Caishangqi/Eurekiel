@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "Game/Widget/WidgetHandler.hpp"
 
 struct FTimerHandle
 {

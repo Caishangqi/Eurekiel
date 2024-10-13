@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "BaseWidget.hpp"
+#include "Engine/Core/Rgba8.hpp"
 struct Icon;
-
 class WidgetMainMenu : public BaseWidget
 {
 public:
@@ -13,4 +13,5 @@ public:
 
 private:
     float internalCounter;
+    Rgba8 interpolatedColor;
 };

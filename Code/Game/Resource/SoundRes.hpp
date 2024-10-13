@@ -1,5 +1,4 @@
-﻿// SoundRes.hpp
-#pragma once
+﻿#pragma once
 
 #include "Engine/Audio/AudioSystem.hpp"
 

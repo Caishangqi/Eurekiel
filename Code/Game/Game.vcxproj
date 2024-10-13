@@ -1,551 +1,266 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-    <ItemGroup Label="ProjectConfigurations">
-        <ProjectConfiguration Include="Debug|Win32">
-            <Configuration>Debug</Configuration>
-            <Platform>Win32</Platform>
-        </ProjectConfiguration>
-        <ProjectConfiguration Include="Release|Win32">
-            <Configuration>Release</Configuration>
-            <Platform>Win32</Platform>
-        </ProjectConfiguration>
-        <ProjectConfiguration Include="Debug|x64">
-            <Configuration>Debug</Configuration>
-            <Platform>x64</Platform>
-        </ProjectConfiguration>
-        <ProjectConfiguration Include="Release|x64">
-            <Configuration>Release</Configuration>
-            <Platform>x64</Platform>
-        </ProjectConfiguration>
-    </ItemGroup>
-    <PropertyGroup Label="Globals">
-        <VCProjectVersion>17.0</VCProjectVersion>
-        <Keyword>Win32Proj</Keyword>
-        <ProjectGuid>{de593c24-11df-4fb4-bebf-7bbebf9d679e}</ProjectGuid>
-        <RootNamespace>Game</RootNamespace>
-        <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-        <ProjectName>Starship</ProjectName>
-    </PropertyGroup>
-    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-        <ConfigurationType>Application</ConfigurationType>
-        <UseDebugLibraries>true</UseDebugLibraries>
-        <PlatformToolset>v143</PlatformToolset>
-        <CharacterSet>Unicode</CharacterSet>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-        <ConfigurationType>Application</ConfigurationType>
-        <UseDebugLibraries>false</UseDebugLibraries>
-        <PlatformToolset>v143</PlatformToolset>
-        <WholeProgramOptimization>true</WholeProgramOptimization>
-        <CharacterSet>Unicode</CharacterSet>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-        <ConfigurationType>Application</ConfigurationType>
-        <UseDebugLibraries>true</UseDebugLibraries>
-        <PlatformToolset>v143</PlatformToolset>
-        <CharacterSet>Unicode</CharacterSet>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-        <ConfigurationType>Application</ConfigurationType>
-        <UseDebugLibraries>false</UseDebugLibraries>
-        <PlatformToolset>v143</PlatformToolset>
-        <WholeProgramOptimization>true</WholeProgramOptimization>
-        <CharacterSet>Unicode</CharacterSet>
-    </PropertyGroup>
-    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
-    <ImportGroup Label="ExtensionSettings">
-    </ImportGroup>
-    <ImportGroup Label="Shared">
-    </ImportGroup>
-    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
-    </ImportGroup>
-    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
-    </ImportGroup>
-    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
-    </ImportGroup>
-    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
-    </ImportGroup>
-    <PropertyGroup Label="UserMacros"/>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
-        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
-        <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
-        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
-        <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
-        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
-        <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
-    </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
-        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
-        <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
-    </PropertyGroup>
-    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-        <ClCompile>
-            <WarningLevel>Level4</WarningLevel>
-            <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-            <ConformanceMode>true</ConformanceMode>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
-        </ClCompile>
-        <Link>
-            <SubSystem>Windows</SubSystem>
-            <GenerateDebugInformation>true</GenerateDebugInformation>
-            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
-        </Link>
-        <PostBuildEvent>
-            <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
-            <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
-        </PostBuildEvent>
-    </ItemDefinitionGroup>
-    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-        <ClCompile>
-            <WarningLevel>Level4</WarningLevel>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-            <ConformanceMode>true</ConformanceMode>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
-        </ClCompile>
-        <Link>
-            <SubSystem>Windows</SubSystem>
-            <EnableCOMDATFolding>true</EnableCOMDATFolding>
-            <OptimizeReferences>true</OptimizeReferences>
-            <GenerateDebugInformation>true</GenerateDebugInformation>
-            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
-        </Link>
-        <PostBuildEvent>
-            <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
-            <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
-        </PostBuildEvent>
-    </ItemDefinitionGroup>
-    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-        <ClCompile>
-            <WarningLevel>Level4</WarningLevel>
-            <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-            <ConformanceMode>true</ConformanceMode>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
-        </ClCompile>
-        <Link>
-            <SubSystem>Windows</SubSystem>
-            <GenerateDebugInformation>true</GenerateDebugInformation>
-            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
-        </Link>
-        <PostBuildEvent>
-            <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
-            <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
-        </PostBuildEvent>
-    </ItemDefinitionGroup>
-    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-        <ClCompile>
-            <WarningLevel>Level4</WarningLevel>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-            <ConformanceMode>true</ConformanceMode>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
-        </ClCompile>
-        <Link>
-            <SubSystem>Windows</SubSystem>
-            <EnableCOMDATFolding>true</EnableCOMDATFolding>
-            <OptimizeReferences>true</OptimizeReferences>
-            <GenerateDebugInformation>true</GenerateDebugInformation>
-            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
-        </Link>
-        <PostBuildEvent>
-            <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
-            <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
-        </PostBuildEvent>
-    </ItemDefinitionGroup>
-    <ItemGroup>
-        <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
-            <Project>{cc3dfa34-a261-4f91-b446-63d998b7b880}</Project>
-        </ProjectReference>
-    </ItemGroup>
-    <ItemGroup>
-        <ClCompile Include="App.cpp"/>
-        <ClCompile Include="Entity\Asteroid.cpp">
-            <AssemblerOutput>NoListing</AssemblerOutput>
-            <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
-            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-            <BrowseInformation>false</BrowseInformation>
-            <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
-            <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-            <CompileAs>Default</CompileAs>
-            <ConformanceMode>true</ConformanceMode>
-            <DiagnosticsFormat>Column</DiagnosticsFormat>
-            <DisableLanguageExtensions>false</DisableLanguageExtensions>
-            <ErrorReporting>Prompt</ErrorReporting>
-            <ExpandAttributedSource>false</ExpandAttributedSource>
-            <ExceptionHandling>Sync</ExceptionHandling>
-            <EnableASAN>false</EnableASAN>
-            <EnableFuzzer>false</EnableFuzzer>
-            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-            <FloatingPointModel>Precise</FloatingPointModel>
-            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-            <GenerateModuleDependencies>false</GenerateModuleDependencies>
-            <GenerateSourceDependencies>false</GenerateSourceDependencies>
-            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <LanguageStandard_C>Default</LanguageStandard_C>
-            <MinimalRebuild>false</MinimalRebuild>
-            <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
-            <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
-            <OmitDefaultLibName>false</OmitDefaultLibName>
-            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-            <WholeProgramOptimization>true</WholeProgramOptimization>
-            <Optimization>MaxSpeed</Optimization>
-            <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
-            <CallingConvention>Cdecl</CallingConvention>
-            <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
-            <PrecompiledHeader>NotUsing</PrecompiledHeader>
-            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
-            <PreprocessToFile>false</PreprocessToFile>
-            <PreprocessKeepComments>false</PreprocessKeepComments>
-            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-            <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
-            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-            <ShowIncludes>false</ShowIncludes>
-            <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
-            <SuppressStartupBanner>true</SuppressStartupBanner>
-            <BufferSecurityCheck>true</BufferSecurityCheck>
-            <SmallerTypeCheck>false</SmallerTypeCheck>
-            <SpectreMitigation>false</SpectreMitigation>
-            <StructMemberAlignment>Default</StructMemberAlignment>
-            <SupportJustMyCode>false</SupportJustMyCode>
-            <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
-            <TranslateIncludes>false</TranslateIncludes>
-            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-            <TreatWarningAsError>false</TreatWarningAsError>
-            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-            <UseFullPaths>true</UseFullPaths>
-            <WarningLevel>Level4</WarningLevel>
-            <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
-            <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-            <IntelJCCErratum>false</IntelJCCErratum>
-            <BuildStlModules>false</BuildStlModules>
-            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-            <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <SDLCheck>true</SDLCheck>
-            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
-            <LinkCompiled>true</LinkCompiled>
-        </ClCompile>
-        <ClCompile Include="Entity\Beetle.cpp"/>
-        <ClCompile Include="Entity\Bullet.cpp">
-            <AssemblerOutput>NoListing</AssemblerOutput>
-            <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
-            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-            <BrowseInformation>false</BrowseInformation>
-            <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
-            <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-            <CompileAs>Default</CompileAs>
-            <ConformanceMode>true</ConformanceMode>
-            <DiagnosticsFormat>Column</DiagnosticsFormat>
-            <DisableLanguageExtensions>false</DisableLanguageExtensions>
-            <ErrorReporting>Prompt</ErrorReporting>
-            <ExpandAttributedSource>false</ExpandAttributedSource>
-            <ExceptionHandling>Sync</ExceptionHandling>
-            <EnableASAN>false</EnableASAN>
-            <EnableFuzzer>false</EnableFuzzer>
-            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-            <FloatingPointModel>Precise</FloatingPointModel>
-            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-            <GenerateModuleDependencies>false</GenerateModuleDependencies>
-            <GenerateSourceDependencies>false</GenerateSourceDependencies>
-            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <LanguageStandard_C>Default</LanguageStandard_C>
-            <MinimalRebuild>false</MinimalRebuild>
-            <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
-            <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
-            <OmitDefaultLibName>false</OmitDefaultLibName>
-            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-            <WholeProgramOptimization>true</WholeProgramOptimization>
-            <Optimization>MaxSpeed</Optimization>
-            <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
-            <CallingConvention>Cdecl</CallingConvention>
-            <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
-            <PrecompiledHeader>NotUsing</PrecompiledHeader>
-            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
-            <PreprocessToFile>false</PreprocessToFile>
-            <PreprocessKeepComments>false</PreprocessKeepComments>
-            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-            <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
-            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-            <ShowIncludes>false</ShowIncludes>
-            <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
-            <SuppressStartupBanner>true</SuppressStartupBanner>
-            <BufferSecurityCheck>true</BufferSecurityCheck>
-            <SmallerTypeCheck>false</SmallerTypeCheck>
-            <SpectreMitigation>false</SpectreMitigation>
-            <StructMemberAlignment>Default</StructMemberAlignment>
-            <SupportJustMyCode>false</SupportJustMyCode>
-            <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
-            <TranslateIncludes>false</TranslateIncludes>
-            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-            <TreatWarningAsError>false</TreatWarningAsError>
-            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-            <UseFullPaths>true</UseFullPaths>
-            <WarningLevel>Level4</WarningLevel>
-            <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
-            <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-            <IntelJCCErratum>false</IntelJCCErratum>
-            <BuildStlModules>false</BuildStlModules>
-            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-            <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <SDLCheck>true</SDLCheck>
-            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
-            <LinkCompiled>true</LinkCompiled>
-        </ClCompile>
-        <ClCompile Include="Entity\Cube.cpp"/>
-        <ClCompile Include="Entity\Entity.cpp">
-            <AssemblerOutput>NoListing</AssemblerOutput>
-            <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
-            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-            <BrowseInformation>false</BrowseInformation>
-            <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
-            <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-            <CompileAs>Default</CompileAs>
-            <ConformanceMode>true</ConformanceMode>
-            <DiagnosticsFormat>Column</DiagnosticsFormat>
-            <DisableLanguageExtensions>false</DisableLanguageExtensions>
-            <ErrorReporting>Prompt</ErrorReporting>
-            <ExpandAttributedSource>false</ExpandAttributedSource>
-            <ExceptionHandling>Sync</ExceptionHandling>
-            <EnableASAN>false</EnableASAN>
-            <EnableFuzzer>false</EnableFuzzer>
-            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-            <FloatingPointModel>Precise</FloatingPointModel>
-            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-            <GenerateModuleDependencies>false</GenerateModuleDependencies>
-            <GenerateSourceDependencies>false</GenerateSourceDependencies>
-            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <LanguageStandard_C>Default</LanguageStandard_C>
-            <MinimalRebuild>false</MinimalRebuild>
-            <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
-            <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
-            <OmitDefaultLibName>false</OmitDefaultLibName>
-            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-            <WholeProgramOptimization>true</WholeProgramOptimization>
-            <Optimization>MaxSpeed</Optimization>
-            <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
-            <CallingConvention>Cdecl</CallingConvention>
-            <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
-            <PrecompiledHeader>NotUsing</PrecompiledHeader>
-            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
-            <PreprocessToFile>false</PreprocessToFile>
-            <PreprocessKeepComments>false</PreprocessKeepComments>
-            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-            <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
-            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-            <ShowIncludes>false</ShowIncludes>
-            <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
-            <SuppressStartupBanner>true</SuppressStartupBanner>
-            <BufferSecurityCheck>true</BufferSecurityCheck>
-            <SmallerTypeCheck>false</SmallerTypeCheck>
-            <SpectreMitigation>false</SpectreMitigation>
-            <StructMemberAlignment>Default</StructMemberAlignment>
-            <SupportJustMyCode>false</SupportJustMyCode>
-            <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
-            <TranslateIncludes>false</TranslateIncludes>
-            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-            <TreatWarningAsError>false</TreatWarningAsError>
-            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-            <UseFullPaths>true</UseFullPaths>
-            <WarningLevel>Level4</WarningLevel>
-            <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
-            <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-            <IntelJCCErratum>false</IntelJCCErratum>
-            <BuildStlModules>false</BuildStlModules>
-            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-            <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <SDLCheck>true</SDLCheck>
-            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
-            <LinkCompiled>true</LinkCompiled>
-        </ClCompile>
-        <ClCompile Include="Entity\PlayerShip.cpp">
-            <AssemblerOutput>NoListing</AssemblerOutput>
-            <AssemblerListingLocation>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</AssemblerListingLocation>
-            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-            <BrowseInformation>false</BrowseInformation>
-            <BrowseInformationFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</BrowseInformationFile>
-            <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-            <CompileAs>Default</CompileAs>
-            <ConformanceMode>true</ConformanceMode>
-            <DiagnosticsFormat>Column</DiagnosticsFormat>
-            <DisableLanguageExtensions>false</DisableLanguageExtensions>
-            <ErrorReporting>Prompt</ErrorReporting>
-            <ExpandAttributedSource>false</ExpandAttributedSource>
-            <ExceptionHandling>Sync</ExceptionHandling>
-            <EnableASAN>false</EnableASAN>
-            <EnableFuzzer>false</EnableFuzzer>
-            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-            <FloatingPointModel>Precise</FloatingPointModel>
-            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-            <GenerateModuleDependencies>false</GenerateModuleDependencies>
-            <GenerateSourceDependencies>false</GenerateSourceDependencies>
-            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-            <IntrinsicFunctions>true</IntrinsicFunctions>
-            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-            <LanguageStandard>stdcpp17</LanguageStandard>
-            <LanguageStandard_C>Default</LanguageStandard_C>
-            <MinimalRebuild>false</MinimalRebuild>
-            <ModuleDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleDependenciesFile>
-            <ModuleOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ModuleOutputFile>
-            <OmitDefaultLibName>false</OmitDefaultLibName>
-            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-            <WholeProgramOptimization>true</WholeProgramOptimization>
-            <Optimization>MaxSpeed</Optimization>
-            <ObjectFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</ObjectFileName>
-            <CallingConvention>Cdecl</CallingConvention>
-            <ProgramDataBaseFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\vc143.pdb</ProgramDataBaseFileName>
-            <PrecompiledHeader>NotUsing</PrecompiledHeader>
-            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship_Release_x64.pch</PrecompiledHeaderOutputFile>
-            <PreprocessToFile>false</PreprocessToFile>
-            <PreprocessKeepComments>false</PreprocessKeepComments>
-            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-            <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
-            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-            <ShowIncludes>false</ShowIncludes>
-            <SourceDependenciesFile>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</SourceDependenciesFile>
-            <SuppressStartupBanner>true</SuppressStartupBanner>
-            <BufferSecurityCheck>true</BufferSecurityCheck>
-            <SmallerTypeCheck>false</SmallerTypeCheck>
-            <SpectreMitigation>false</SpectreMitigation>
-            <StructMemberAlignment>Default</StructMemberAlignment>
-            <SupportJustMyCode>false</SupportJustMyCode>
-            <TrackerLogDirectory>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\Starship.tlog\</TrackerLogDirectory>
-            <TranslateIncludes>false</TranslateIncludes>
-            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-            <TreatWarningAsError>false</TreatWarningAsError>
-            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-            <UseFullPaths>true</UseFullPaths>
-            <WarningLevel>Level4</WarningLevel>
-            <XMLDocumentationFileName>F:\p4\Personal\SD\Starship\Temporary\Starship_x64_Release\</XMLDocumentationFileName>
-            <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-            <IntelJCCErratum>false</IntelJCCErratum>
-            <BuildStlModules>false</BuildStlModules>
-            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-            <PreprocessorDefinitions>NDEBUG;_CONSOLE;_UNICODE;UNICODE;</PreprocessorDefinitions>
-            <FunctionLevelLinking>true</FunctionLevelLinking>
-            <SDLCheck>true</SDLCheck>
-            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Starship\Code/;F:\p4\Personal\SD\Starship\../Engine/Code/</AdditionalIncludeDirectories>
-            <LinkCompiled>true</LinkCompiled>
-        </ClCompile>
-        <ClCompile Include="Entity\Tetromino\BaseTetromino.cpp" />
-        <ClCompile Include="Entity\Tetromino\LTetromino.cpp" />
-        <ClCompile Include="Entity\Wasp.cpp"/>
-        <ClCompile Include="Game.cpp"/>
-        <ClCompile Include="GameCommon.cpp"/>
-        <ClCompile Include="Grid\Grid.cpp"/>
-        <ClCompile Include="Level\FLevel.cpp"/>
-        <ClCompile Include="Level\LevelHandler.cpp"/>
-        <ClCompile Include="Main_Windows.cpp"/>
-        <ClCompile Include="Particle\BaseParticle.cpp"/>
-        <ClCompile Include="Particle\ParticleHandler.cpp"/>
-        <ClCompile Include="Resource\ResourceManager.cpp"/>
-        <ClCompile Include="Resource\SoundRes.cpp"/>
-        <ClCompile Include="Widget\Data\IconRes.cpp"/>
-        <ClCompile Include="Widget\Icon\Icon.cpp"/>
-        <ClCompile Include="Widget\WidgetHandler.cpp"/>
-        <ClCompile Include="Widget\Widgets\BaseWidget.cpp"/>
-        <ClCompile Include="Widget\Widgets\WidgetMainMenu.cpp"/>
-        <ClCompile Include="Widget\Widgets\WidgetPlayerHealth.cpp"/>
-    </ItemGroup>
-    <ItemGroup>
-        <ClInclude Include="App.hpp"/>
-        <ClInclude Include="EngineBuildPreferences.hpp"/>
-        <ClInclude Include="Entity\Asteroid.hpp"/>
-        <ClInclude Include="Entity\Beetle.hpp"/>
-        <ClInclude Include="Entity\Bullet.h"/>
-        <ClInclude Include="Entity\Cube.hpp"/>
-        <ClInclude Include="Entity\Entity.h"/>
-        <ClInclude Include="Entity\PlayerShip.hpp"/>
-        <ClInclude Include="Entity\Tetromino\BaseTetromino.hpp" />
-        <ClInclude Include="Entity\Tetromino\LTetromino.h" />
-        <ClInclude Include="Entity\Wasp.hpp"/>
-        <ClInclude Include="Enum\EEntity.h"/>
-        <ClInclude Include="Enum\ELevelState.h"/>
-        <ClInclude Include="Game.hpp"/>
-        <ClInclude Include="GameCommon.hpp"/>
-        <ClInclude Include="Grid\Grid.hpp"/>
-        <ClInclude Include="Level\FLevel.h"/>
-        <ClInclude Include="Level\LevelHandler.hpp"/>
-        <ClInclude Include="Particle\BaseParticle.hpp"/>
-        <ClInclude Include="Particle\ParticleHandler.hpp"/>
-        <ClInclude Include="Resource\ResourceManager.hpp"/>
-        <ClInclude Include="Resource\SoundRes.hpp"/>
-        <ClInclude Include="Time\FTimerHandle.hpp"/>
-        <ClInclude Include="Widget\Data\IconRes.hpp"/>
-        <ClInclude Include="Widget\Icon\Icon.hpp"/>
-        <ClInclude Include="Widget\WidgetHandler.hpp"/>
-        <ClInclude Include="Widget\Widgets\BaseWidget.hpp"/>
-        <ClInclude Include="Widget\Widgets\WidgetMainMenu.hpp"/>
-        <ClInclude Include="Widget\Widgets\WidgetPlayerHealth.hpp"/>
-    </ItemGroup>
-    <ItemGroup>
-        <Content Include="Enum\EShape.h"/>
-    </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Entity\Cube\" />
-    </ItemGroup>
-    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
-    <ImportGroup Label="ExtensionTargets">
-    </ImportGroup>
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{de593c24-11df-4fb4-bebf-7bbebf9d679e}</ProjectGuid>
+    <RootNamespace>Game</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Starship</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    <TargetName>$(ProjectName)_$(Configuration)_$(PlatformShortName)</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
+      <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
+      <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
+      <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+    </Link>
+    <PostBuildEvent>
+      <Message>Copying $(TargetFileName) to $(SolutionDir)Run...</Message>
+      <Command>xcopy /Y /F /I "$(TargetPath)" "$(SolutionDir)Run"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Engine\Code\Engine\Engine.vcxproj">
+      <Project>{cc3dfa34-a261-4f91-b446-63d998b7b880}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Enum\EShape.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Entity\Cube\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="App.cpp" />
+    <ClCompile Include="Entity\Asteroid.cpp" />
+    <ClCompile Include="Entity\Beetle.cpp" />
+    <ClCompile Include="Entity\Bullet.cpp" />
+    <ClCompile Include="Entity\Cube.cpp" />
+    <ClCompile Include="Entity\Entity.cpp" />
+    <ClCompile Include="Entity\PlayerShip.cpp" />
+    <ClCompile Include="Entity\Tetromino\BaseTetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\ITetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\JTetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\LTetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\OTetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\STetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\TTetromino.cpp" />
+    <ClCompile Include="Entity\Tetromino\ZTetromino.cpp" />
+    <ClCompile Include="Entity\Wasp.cpp" />
+    <ClCompile Include="Game.cpp" />
+    <ClCompile Include="GameCommon.cpp" />
+    <ClCompile Include="Grid\Grid.cpp" />
+    <ClCompile Include="Level\FLevel.cpp" />
+    <ClCompile Include="Level\LevelHandler.cpp" />
+    <ClCompile Include="Main_Windows.cpp" />
+    <ClCompile Include="Particle\BaseParticle.cpp" />
+    <ClCompile Include="Particle\FParticleProperty.cpp" />
+    <ClCompile Include="Particle\ParticleHandler.cpp" />
+    <ClCompile Include="Resource\ResourceManager.cpp" />
+    <ClCompile Include="Resource\SoundRes.cpp" />
+    <ClCompile Include="Widget\Data\IconRes.cpp" />
+    <ClCompile Include="Widget\Icon\Icon.cpp" />
+    <ClCompile Include="Widget\WidgetHandler.cpp" />
+    <ClCompile Include="Widget\Widgets\BaseWidget.cpp" />
+    <ClCompile Include="Widget\Widgets\WidgetMainMenu.cpp" />
+    <ClCompile Include="Widget\Widgets\WidgetPlayerHealth.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="App.hpp" />
+    <ClInclude Include="EngineBuildPreferences.hpp" />
+    <ClInclude Include="Entity\Asteroid.hpp" />
+    <ClInclude Include="Entity\Beetle.hpp" />
+    <ClInclude Include="Entity\Bullet.hpp" />
+    <ClInclude Include="Entity\Cube.hpp" />
+    <ClInclude Include="Entity\Entity.h" />
+    <ClInclude Include="Entity\PlayerShip.hpp" />
+    <ClInclude Include="Entity\Tetromino\BaseTetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\ITetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\JTetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\LTetromino.h" />
+    <ClInclude Include="Entity\Tetromino\OTetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\STetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\TTetromino.hpp" />
+    <ClInclude Include="Entity\Tetromino\ZTetromino.hpp" />
+    <ClInclude Include="Entity\Wasp.hpp" />
+    <ClInclude Include="Enum\EEntity.h" />
+    <ClInclude Include="Enum\ELevelState.h" />
+    <ClInclude Include="Enum\EShape.h" />
+    <ClInclude Include="Game.hpp" />
+    <ClInclude Include="GameCommon.hpp" />
+    <ClInclude Include="Grid\Grid.hpp" />
+    <ClInclude Include="Level\FLevel.h" />
+    <ClInclude Include="Level\LevelHandler.hpp" />
+    <ClInclude Include="Particle\BaseParticle.hpp" />
+    <ClInclude Include="Particle\FParticleProperty.hpp" />
+    <ClInclude Include="Particle\ParticleHandler.hpp" />
+    <ClInclude Include="Resource\ResourceManager.hpp" />
+    <ClInclude Include="Resource\SoundRes.hpp" />
+    <ClInclude Include="Time\FTimerHandle.hpp" />
+    <ClInclude Include="Widget\Data\IconRes.hpp" />
+    <ClInclude Include="Widget\Icon\Icon.hpp" />
+    <ClInclude Include="Widget\WidgetHandler.hpp" />
+    <ClInclude Include="Widget\Widgets\BaseWidget.hpp" />
+    <ClInclude Include="Widget\Widgets\WidgetMainMenu.hpp" />
+    <ClInclude Include="Widget\Widgets\WidgetPlayerHealth.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
 </Project>

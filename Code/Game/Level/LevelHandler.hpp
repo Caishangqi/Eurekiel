@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include "FLevel.h"
-
 class Game;
 class Entity;
 
@@ -24,6 +23,8 @@ public:
      * move to scene manager in the future
      */
     void CleanScene();
+
+    void GenerateRandomTetromino();
 
     // Event
     void OnEntityDie(Entity* entity);

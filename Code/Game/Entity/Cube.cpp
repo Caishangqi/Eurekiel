@@ -4,12 +4,17 @@
 
 #include "PlayerShip.hpp"
 #include "Engine/Core/VertexUtils.hpp"
+#include "Engine/Math/AABB2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+
+
 #include "Game/GameCommon.hpp"
 #include "Game/Grid/Grid.hpp"
+#include "Game/Particle/FParticleProperty.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
 #include "Game/Resource/SoundRes.hpp"
 #include "Game/Widget/Data/IconRes.hpp"
+#include "Tetromino/BaseTetromino.hpp"
 
 Cube::Cube(Game* owner, const Vec2& startPosition, float orientationDegree)
     : Entity(owner, startPosition, orientationDegree)
@@ -36,6 +41,10 @@ Cube::Cube(Game* owner, Grid* grid, const Vec2& startPosition, float orientation
     m_aabb->SetDimensions(Vec2(5, 5));
 
     m_health = 1;
+}
+
+Cube::Cube(Game* owner, Grid* grid, const IntVec2& startPosition, float orientationDegree)
+{
 }
 
 
