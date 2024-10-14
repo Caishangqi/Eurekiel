@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <string>
 
 class WidgetHandler;
 struct Icon;
@@ -14,8 +15,10 @@ protected:
     WidgetHandler* handler   = nullptr;
     bool           visible   = false; // whether or not render by opengl
     bool           active    = false; // whether or not handle logic
+    std::string    name;
 
 public:
+    virtual std::string getName();
     virtual void Draw();
     virtual void Update(float deltaSeconds);
     virtual void Render();
@@ -27,4 +30,5 @@ public:
     virtual void Reset();
 
     virtual void SetActiveAndVisible();
+    virtual void SetInActiveAndInVisible();
 };

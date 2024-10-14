@@ -16,9 +16,11 @@ public:
     ELevelState state             = ELevelState::PENDING;
     int         levelAmountBeetle = 1;
     int         levelAmountWasp   = 1;
+    int         goalScore         = 0;
 
     FLevel();
     FLevel(int amountBeetle, int amountWasp);
+    FLevel(int levelID, int amountBeetle, int amountWasp, int goalScore);
     FLevel(int levelID, int amountBeetle, int amountWasp);
     ~FLevel();
     FLevel(const FLevel& other);

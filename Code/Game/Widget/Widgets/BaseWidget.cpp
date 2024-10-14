@@ -9,6 +9,11 @@ BaseWidget::~BaseWidget()
 {
 }
 
+std::string BaseWidget::getName()
+{
+    return name;
+}
+
 void BaseWidget::Draw()
 {
 }
@@ -42,4 +47,10 @@ void BaseWidget::SetActiveAndVisible()
 {
     this->active  = true;
     this->visible = true;
+}
+
+void BaseWidget::SetInActiveAndInVisible()
+{
+    this->active  = false;
+    this->visible = false;
 }

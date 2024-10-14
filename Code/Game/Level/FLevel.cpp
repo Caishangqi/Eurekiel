@@ -50,6 +50,16 @@ FLevel::FLevel(int amountBeetle, int amountWasp)
     this->levelAmountWasp   = amountWasp;
 }
 
+FLevel::FLevel(int levelID, int amountBeetle, int amountWasp, int goalScore)
+{
+    m_Game                  = nullptr;
+    this->state             = ELevelState::PENDING;
+    this->levelID           = levelID;
+    this->levelAmountBeetle = amountBeetle;
+    this->levelAmountWasp   = amountWasp;
+    this->goalScore         = goalScore;
+}
+
 FLevel::FLevel(int levelID, int amountBeetle, int amountWasp)
 {
     m_Game                  = nullptr;
@@ -107,7 +117,7 @@ bool FLevel::CheckComplete()
 {
     int waspAmount   = GetAliveEntityByType(ENTITY_TYPE_WASP);
     int beetleAmount = GetAliveEntityByType(ENTITY_TYPE_BEETLE);
-    if ((waspAmount <= 0) && (beetleAmount <= 0))
+    if ((waspAmount <= 0) && (beetleAmount <= 0) && m_Game->Score >= goalScore)
     {
         return true;
     }

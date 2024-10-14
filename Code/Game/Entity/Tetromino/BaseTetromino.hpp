@@ -29,6 +29,11 @@ public:
 
     virtual void SetChildCubesStatic();
 
+    // GamePlay
+    virtual bool IsAllCubeDie();
+
+    virtual int GetNumCubesDefined();
+
 private:
     Grid* m_parentGrid = nullptr;
 

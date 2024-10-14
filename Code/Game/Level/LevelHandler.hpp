@@ -18,6 +18,8 @@ public:
     void CompleteLevel(FLevel& level);
     void InterruptLevel(FLevel& level);
 
+    FLevel * GetCurrentLevel();
+
     /**
      * Clean registered entity in the game, this method will
      * move to scene manager in the future

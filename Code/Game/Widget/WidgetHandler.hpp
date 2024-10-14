@@ -1,5 +1,7 @@
 ﻿#pragma once
+#include <string>
 
+class BaseWidget;
 class WidgetMainMenu;
 class WidgetPlayerHealth;
 class Game;
@@ -13,7 +15,9 @@ public:
     void Draw();
     void Render();
 
-    WidgetPlayerHealth* playerHealthWidget;
-    WidgetMainMenu*     mainMenuWidget;
+    BaseWidget * GetWidgetByName(std::string widgetName);
+    
+    BaseWidget* m_registerWidget[128] = {};
+
     Game*               owner;
 };

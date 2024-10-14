@@ -15,6 +15,7 @@ WidgetPlayerHealth::WidgetPlayerHealth(WidgetHandler* handler)
         icons[i]->SetRotation(90); // first rotation
         icons[i]->SetPosition(6 + static_cast<float>(6 * i), 128);
     }
+    name    = "PlayerHealth";
     active  = false;
     visible = false;
 }
@@ -41,7 +42,7 @@ void WidgetPlayerHealth::OnPlayerShipRespawn(PlayerShip* playerShip, int remainT
         {
             icons[i] = new Icon(ICON::SPACESHIP, 15, this);
             icons[i]->SetRotation(90); // first rotation
-            icons[i]->SetPosition(6 + static_cast<float>(6 * i), 96);
+            icons[i]->SetPosition(6 + static_cast<float>(6 * i), 128);
             icons[i]->SetScale(6);
         }
     }

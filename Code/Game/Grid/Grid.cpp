@@ -112,6 +112,44 @@ void Grid::OnCubeTouchBoundEvent()
     );
 }
 
+void Grid::OnCubeDieEvent(Cube* cube)
+{
+    printf(
+        "[event]     OnCubeDieEvent Trigger\n"
+    );
+    if (cube->GetParentTetromino())
+    {
+        if (cube->GetParentTetromino()->IsAllCubeDie())
+        {
+            OnTetrominoDieEvent(cube->GetParentTetromino());
+        }
+    }
+}
+
+void Grid::OnTetrominoDieEvent(BaseTetromino* tetromino)
+{
+    printf(
+        "[event]     OnTetrominoDieEvent Trigger\n"
+    );
+
+    g_theAudio->StartSound(SOUND::DESTROY_TETROMINO);
+
+    // Super score 2 ^ num of cube
+    int rewardsWholeTetromino = static_cast<int>(pow(2, tetromino->GetNumCubesDefined()));
+
+    m_game->OnPointGainEvent(rewardsWholeTetromino);
+
+    for (BaseTetromino* m_tetromino_data : m_TetrominoData)
+    {
+        if (m_tetromino_data == tetromino)
+        {
+            delete m_tetromino_data;
+            m_tetromino_data = nullptr;
+        }
+    }
+}
+
+
 // (39, 19)
 Vec2 Grid::GetPositionFromGrid(const IntVec2& gridPos)
 {

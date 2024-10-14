@@ -21,6 +21,8 @@ WidgetMainMenu::WidgetMainMenu(WidgetHandler* handler): BaseWidget(handler)
     icons[1]->SetPosition(900, 500);
     active  = true;
     visible = true;
+
+    name = "MainMenu";
 }
 
 WidgetMainMenu::~WidgetMainMenu()
@@ -50,7 +52,7 @@ void WidgetMainMenu::Update(float deltaSeconds)
 
         // 设置 icon 的颜色
         Rgba8 icon0Color = interpolatedColor;
-        icon0Color.r     = static_cast<char>( g_rng->RollRandomFloatZeroToOne());
+        icon0Color.r     = static_cast<char>(g_rng->RollRandomFloatZeroToOne());
         icons[0]->SetColor(icon0Color);
         icons[1]->SetColor(interpolatedColor);
         float randomFloat1 = g_rng->RollRandomFloatInRange(-100, 100);

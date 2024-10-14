@@ -26,4 +26,6 @@ void ResourceManager::ResisterSound()
     SOUND::ENEMY_DAMAGED        = g_theAudio->CreateOrGetSound(ENEMY_DAMAGED_LOCATION);
     SOUND::ENEMY_DIES           = g_theAudio->CreateOrGetSound(ENEMY_DIES_LOCATION);
     SOUND::ASTEROIDS_DAMAGED    = g_theAudio->CreateOrGetSound(ASTEROIDS_DAMAGED_LOCATION);
+    SOUND::DESTROY_TETROMINO    = g_theAudio->CreateOrGetSound(DESTROY_TETROMINO_LOCATION);
+    SOUND::POINT_ADD            = g_theAudio->CreateOrGetSound(POINT_ADD_LOCATION);
 }

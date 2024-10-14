@@ -121,10 +121,6 @@ void Game::UpdateCameras(float deltaTime)
     m_screenCamera->Update(deltaTime);
 }
 
-void Game::GenerateNewCube()
-{
-    Spawn(ENTITY_TYPE_CUBE);
-}
 
 void Game::Update(float deltaTime)
 {
@@ -299,20 +295,26 @@ void Game::StartGame()
     IsInMainMenu = false;
     IsGameStart  = true;
 
-    m_widgetHandler->mainMenuWidget->SetVisibility(false);
-    m_widgetHandler->mainMenuWidget->SetActive(false);
+    BaseWidget* mainMenu = m_widgetHandler->GetWidgetByName("MainMenu");
+
+    mainMenu->SetVisibility(false);
+    mainMenu->SetActive(false);
 
 
     // Reset the widget, delete the widget and create new one in the future
     // Should have a container in WidgetHandler but need template to implement
-    m_widgetHandler->playerHealthWidget->Reset();
-    m_widgetHandler->playerHealthWidget->SetActiveAndVisible();
+    BaseWidget* playerHealth = m_widgetHandler->GetWidgetByName("PlayerHealth");
+    playerHealth->Reset();
+    playerHealth->SetActiveAndVisible();
+
+    BaseWidget* scoreBoard = m_widgetHandler->GetWidgetByName("InGameScoreBoard");
+    scoreBoard->SetActiveAndVisible();
 
     m_PlayerShip = new PlayerShip(this, Vec2(WORLD_CENTER_X, WORLD_CENTER_Y
                                   ), 0.f);
 
     //SpawnDefaultAsteroids();
-    //m_levelHandler->StartLevel(0, this);
+    m_levelHandler->StartLevel(0, this);
     g_theAudio->StartSound(SOUND::PLAYER_SHOOTS_BULLET);
 }
 
@@ -329,10 +331,11 @@ void Game::ReturnToMainMenu()
         IsInMainMenu = true;
         IsGameStart  = false;
 
-        m_widgetHandler->mainMenuWidget->SetActiveAndVisible();
+        m_widgetHandler->GetWidgetByName("MainMenu")->SetActiveAndVisible();
 
-        m_widgetHandler->playerHealthWidget->SetActive(false);
-        m_widgetHandler->playerHealthWidget->SetVisibility(false);
+        m_widgetHandler->GetWidgetByName("PlayerHealth")->SetInActiveAndInVisible();
+
+        m_widgetHandler->GetWidgetByName("InGameScoreBoard")->SetInActiveAndInVisible();
 
         printf("[core]      Return to Main menu");
     }
@@ -630,7 +633,9 @@ void Game::OnPlayerShipRespawnEvent(PlayerShip* playerShip, int remainTry)
         "[event]     PlayerShip respawn event triggered\n"
         "            > Remain tries: %d\n", remainTry);
     g_theAudio->StartSound(SOUND::PLAYER_RESPAWN);
-    m_widgetHandler->playerHealthWidget->OnPlayerShipRespawn(playerShip, remainTry);
+
+    static_cast<WidgetPlayerHealth*>(m_widgetHandler->GetWidgetByName("PlayerHealth"))->OnPlayerShipRespawn(
+        playerShip, remainTry);
 }
 
 void Game::OnPlayerShipDeathEvent(PlayerShip* playerShip)
@@ -648,6 +653,12 @@ void Game::OnPlayerShipDeathEvent(PlayerShip* playerShip)
 
 void Game::OnMainMenuDisplayEvent()
 {
+}
+
+void Game::OnPointGainEvent(int gainedScore)
+{
+    Score += gainedScore;
+    g_theAudio->StartSound(SOUND::POINT_ADD);
 }
 
 FTimerHandle* Game::SetTimer(float timer, void (*callback)())

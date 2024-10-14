@@ -44,7 +44,7 @@ void Bullet::Update(float deltaTime)
         pp.averageVelocity    = Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -10;
         pp.maxScatterSpeed    = 0.f;
         pp.color              = Rgba8(235, 137, 49);
-        pp.position           = m_position;
+        pp.position           = m_position + Vec2::MakeFromPolarDegrees(m_orientationDegrees) * -2;
         pp.minAngularVelocity = 0.f;
         pp.maxAngularVelocity = 0.f;
 

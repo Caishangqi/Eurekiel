@@ -11,3 +11,5 @@ SoundID SOUND::NEW_WAVE             = 0;
 SoundID SOUND::GAME_OVER_WIN        = 0;
 SoundID SOUND::GAME_OVER_LOSE       = 0;
 SoundID SOUND::MAIN_MENU            = 0;
+SoundID SOUND::DESTROY_TETROMINO    = 0;
+SoundID SOUND::POINT_ADD            = 0;

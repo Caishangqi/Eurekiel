@@ -47,10 +47,14 @@ private:
     void UpdateFromController(float& deltaSeconds);
     void BounceOffWalls();
 
+    void StartAction(int index);
+
     Vertex_PCU m_localVerts[NUM_SHIP_VERTS];
     bool       m_isTurningLeft  = false;
     bool       m_isTurningRight = false;
     bool       m_isThrusting    = false;
     float      m_thrustRate     = 0.0f;
-    float      m_particleTimer  = 0.f;
+
+    float m_particleTimer = 0.f;
+    float m_actionTimer   = 0.f;
 };

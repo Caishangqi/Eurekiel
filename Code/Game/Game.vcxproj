@@ -218,6 +218,7 @@
     <ClCompile Include="Widget\Icon\Icon.cpp" />
     <ClCompile Include="Widget\WidgetHandler.cpp" />
     <ClCompile Include="Widget\Widgets\BaseWidget.cpp" />
+    <ClCompile Include="Widget\Widgets\WidgetInGameScoreBoard.cpp" />
     <ClCompile Include="Widget\Widgets\WidgetMainMenu.cpp" />
     <ClCompile Include="Widget\Widgets\WidgetPlayerHealth.cpp" />
   </ItemGroup>
@@ -257,6 +258,7 @@
     <ClInclude Include="Widget\Icon\Icon.hpp" />
     <ClInclude Include="Widget\WidgetHandler.hpp" />
     <ClInclude Include="Widget\Widgets\BaseWidget.hpp" />
+    <ClInclude Include="Widget\Widgets\WidgetInGameScoreBoard.hpp" />
     <ClInclude Include="Widget\Widgets\WidgetMainMenu.hpp" />
     <ClInclude Include="Widget\Widgets\WidgetPlayerHealth.hpp" />
   </ItemGroup>

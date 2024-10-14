@@ -6,6 +6,7 @@
 #include "Engine/Core/VertexUtils.hpp"
 #include "Engine/Math/AABB2.hpp"
 #include "Engine/Renderer/Renderer.hpp"
+#include "Game/Game.hpp"
 
 
 #include "Game/GameCommon.hpp"
@@ -124,9 +125,15 @@ void Cube::Die()
     {
         if (!m_IsStatic)
         {
-            GetParentTetromino()->m_cubes[m_TetrominoPosition.x][m_TetrominoPosition.y] = nullptr;
+            // TODO: check validation
+            GetParentTetromino()->MarkCubeAsGarbage(this);
+            GetParentTetromino()->RemoveCubePointerInTetromino(this);
+            //GetParentTetromino()->m_cubes[m_TetrominoPosition.x][m_TetrominoPosition.y] = nullptr;
         }
     }
+    m_parentGrid->OnCubeDieEvent(this);
+
+    m_game->OnPointGainEvent(1);
 }
 
 void Cube::OnColliedEnter(Entity* other)

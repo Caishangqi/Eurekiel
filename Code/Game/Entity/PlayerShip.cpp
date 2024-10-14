@@ -22,7 +22,7 @@ PlayerShip::~PlayerShip()
 void PlayerShip::Update(float deltaSeconds)
 {
     m_particleTimer += deltaSeconds;
-
+    m_actionTimer += deltaSeconds;
     if (m_isDead)
     {
         return;
@@ -215,9 +215,10 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
             m_velocity = Vec2(0.f, 0.f);
         }
     }
-    auto button          = Vec2(0, 0);
-    auto topRight        = Vec2(200, 100);
-    Vec2 mousePosition   = g_theInput->GetMousePositionOnWorld(button, topRight);
+    auto button        = Vec2(0, 0);
+    auto topRight      = Vec2(200, 100);
+    Vec2 mousePosition = g_theInput->GetMousePositionOnWorld(button, topRight);
+    //printf("x: %f, y: %f\n", mousePosition.x, mousePosition.y);
     m_orientationDegrees = (mousePosition - m_position).GetOrientationDegrees();
 
     //printf("Magnitude: %f\n", controller.GetLeftStick().GetMagnitude());
@@ -247,7 +248,12 @@ void PlayerShip::UpdateFromKeyBoard(float& deltaSeconds)
 
     if (g_theInput->WasMouseButtonJustPressed(0))
     {
-        m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
+        StartAction(0);
+    }
+
+    if (g_theInput->IsMouseButtonDown(0))
+    {
+        StartAction(0);
     }
 
     if (g_theInput->WasKeyJustPressed(' '))
@@ -298,6 +304,22 @@ void PlayerShip::BounceOffWalls()
     }
 }
 
+void PlayerShip::StartAction(int index)
+{
+    switch (index)
+    {
+    case 0:
+        if (m_actionTimer >= 0.25f)
+        {
+            m_game->SpawnNewBullet(m_position + m_velocity.GetNormalized(), m_orientationDegrees);
+            m_actionTimer = 0;
+        }
+        break;
+    default:
+        ;
+    }
+}
+
 void PlayerShip::Respawn()
 {
     if (m_isDead)
@@ -318,11 +340,16 @@ void PlayerShip::Respawn()
 
 void PlayerShip::OnColliedEnter(Entity* other)
 {
-    if (typeid(*other).name() == typeid(Cube).name())
+    /*if (typeid(*other).name() == typeid(Cube).name())
     {
-        m_velocity = -m_velocity;
-        return;
-    }
+        Cube* colliedCube = static_cast<Cube*>(other);
+        if (colliedCube->m_IsStatic)
+        {
+            //m_velocity = -m_velocity;
+            BounceOffWalls();
+            return;
+        }
+    }*/
 
     Entity::OnColliedEnter(other);
     m_health--;

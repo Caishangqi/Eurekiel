@@ -128,3 +128,38 @@ void BaseTetromino::SetChildCubesStatic()
         }
     }
 }
+
+bool BaseTetromino::IsAllCubeDie()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            if (m_cubes[i][j] != nullptr)
+            {
+                Cube* cube = m_cubes[i][j];
+                if (cube->IsAlive())
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+int BaseTetromino::GetNumCubesDefined()
+{
+    int count = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            if (m_layout[i][j])
+            {
+                count++;
+            }
+        }
+    }
+    return count;
+}

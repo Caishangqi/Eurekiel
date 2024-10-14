@@ -52,8 +52,6 @@ public:
     // Camera
     void UpdateCameras(float deltaTime);
 
-    // Cube
-    void GenerateNewCube();
 
 private:
     void SpawnDefaultAsteroids();
@@ -82,6 +80,7 @@ public:
     void OnPlayerShipRespawnEvent(PlayerShip* playerShip, int remainTry);
     void OnPlayerShipDeathEvent(PlayerShip* playerShip);
     void OnMainMenuDisplayEvent();
+    void OnPointGainEvent(int gainedScore);
 
     // nullptr equal to 0
     PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)

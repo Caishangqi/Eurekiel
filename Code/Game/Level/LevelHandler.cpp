@@ -99,6 +99,11 @@ void LevelHandler::InterruptLevel(FLevel& level)
 {
 }
 
+FLevel* LevelHandler::GetCurrentLevel()
+{
+    return m_currentLevel;
+}
+
 void LevelHandler::CleanScene()
 {
     for (Asteroid*& m_asteroid : m_game->m_asteroids)
@@ -203,15 +208,15 @@ void LevelHandler::ImportLevels()
     m_currentLevel = nullptr;
 
     // On Heap 
-    m_levels[0] = new FLevel(1, 1, 0);
+    m_levels[0] = new FLevel(1, 1, 0, 100);
 
-    m_levels[1] = new FLevel(2, 0, 1);
+    m_levels[1] = new FLevel(2, 0, 1, 300);
 
-    m_levels[2] = new FLevel(3, 1, 1);
+    m_levels[2] = new FLevel(3, 1, 1, 600);
 
-    m_levels[3] = new FLevel(4, 1, 1);
+    m_levels[3] = new FLevel(4, 1, 1, 1200);
 
-    m_levels[4] = new FLevel(5, 1, 1);
+    m_levels[4] = new FLevel(5, 1, 1, 1500);
 
     for (int i = 0; i < 5; ++i)
     {

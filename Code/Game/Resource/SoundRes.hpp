@@ -9,6 +9,8 @@
 #define ENEMY_DAMAGED_LOCATION "Data/Audio/EnemyDamaged.wav"
 #define ASTEROIDS_DAMAGED_LOCATION "Data/Audio/AsteroidsDamaged.wav"
 #define ENEMY_DIES_LOCATION "Data/Audio/EnemyDies.wav"
+#define DESTROY_TETROMINO_LOCATION "Data/Audio/DestroyTetromino.mp3"
+#define POINT_ADD_LOCATION "Data/Audio/PointAdd.mp3"
 
 namespace SOUND
 {
@@ -23,4 +25,6 @@ namespace SOUND
     extern SoundID GAME_OVER_WIN;
     extern SoundID GAME_OVER_LOSE;
     extern SoundID MAIN_MENU;
+    extern SoundID DESTROY_TETROMINO;
+    extern SoundID POINT_ADD;
 }

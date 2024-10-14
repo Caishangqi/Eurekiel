@@ -22,6 +22,10 @@ public:
     void OnCubeCancelEvent(int verticalIndex);
     void OnCubeTouchBoundEvent();
 
+    // Events
+    void OnCubeDieEvent(Cube* cube);
+    void OnTetrominoDieEvent(BaseTetromino* tetromino);
+
 private:
     int m_width  = GRID_WIDTH_SIZE;
     int m_height = GRID_HEIGHT_SIZE;
