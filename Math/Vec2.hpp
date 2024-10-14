@@ -72,4 +72,5 @@ struct Vec2
 
     // Standalone "friend" functions that are conceptually, but not actually, part of Vec2::
     friend const Vec2 operator*(float uniformScale, const Vec2& vecToScale); // float * vec2
+    
 };
