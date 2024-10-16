@@ -1,5 +1,11 @@
 ﻿#pragma once
+#include <memory>
+
+#include "LevelHandler.hpp"
+#include "Game/Game.hpp"
 #include "Game/Enum/ELevelState.h"
+#include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
+#include "Game/Event/Events/TetrominoAllChildDieEvent.hpp"
 
 enum EEntity : int;
 class Game;
@@ -40,6 +46,11 @@ public:
           levelAmountWasp(other.levelAmountWasp)
     {
     }
+
+    void OnCubeTouchBaseLine(std::shared_ptr<CubeTouchBaseLineEvent> event);
+
+    void OnTetrominoAllChildDie(std::shared_ptr<TetrominoAllChildDieEvent> event);
+
 
     bool CheckComplete();
 

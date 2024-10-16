@@ -1,6 +1,9 @@
 ﻿#pragma once
 #include "GameCommon.hpp"
+#include "Enum/EGameState.h"
 
+struct GameChangeStateEvent;
+struct PointGainEvent;
 class Asteroid;
 class Entity;
 class Bullet;
@@ -36,10 +39,10 @@ public:
     void SpawnNewBullet(const Vec2& position, float orientationDegrees);
     void SpawnNewAsteroids();
     void HandleKeyBoardEvent(float deltaTime);
+    void HandleMouseEvent(float deltaTime);
     void RegisterDefaultObjects();
     // Game play logic
     void StartGame();
-    void ReturnToMainMenu();
 
     // Update
     void UpdateTimerHandle(float deltaSeconds);
@@ -51,7 +54,6 @@ public:
 
     // Camera
     void UpdateCameras(float deltaTime);
-
 
 private:
     void SpawnDefaultAsteroids();
@@ -81,19 +83,17 @@ public:
     void OnPlayerShipDeathEvent(PlayerShip* playerShip);
     void OnMainMenuDisplayEvent();
     void OnPointGainEvent(int gainedScore);
+    // Event handle
+    void OnPointGainEvent(std::shared_ptr<PointGainEvent> event);
+    void OnGameChangeStateEvent(std::shared_ptr<GameChangeStateEvent> event);
 
     // nullptr equal to 0
-    PlayerShip* m_PlayerShip = nullptr; // Just one player ship (for now...)
-
-    Asteroid* m_asteroids[MAX_ASTEROIDS] = {}; // Fixed number of asteroid “slots” nullptr if unused.
-
-    Bullet* m_bullets[MAX_BULLETS] = {}; // The “= {};” syntax initializes the array to zeros.
-
-    Beetle* m_entities_beetle[MAX_ENTITY_PER_TYPE] = {};
-
-    Wasp* m_entity_wasp[MAX_ENTITY_PER_TYPE] = {};
-
-    Cube* m_cube[1024] = {};
+    PlayerShip* m_PlayerShip                           = nullptr; // Just one player ship (for now...)
+    Asteroid*   m_asteroids[MAX_ASTEROIDS]             = {}; // Fixed number of asteroid “slots” nullptr if unused.
+    Bullet*     m_bullets[MAX_BULLETS]                 = {}; // The “= {};” syntax initializes the array to zeros.
+    Beetle*     m_entities_beetle[MAX_ENTITY_PER_TYPE] = {};
+    Wasp*       m_entity_wasp[MAX_ENTITY_PER_TYPE]     = {};
+    Cube*       m_cube[1024]                           = {};
 
     LevelHandler* m_levelHandler = nullptr; // LevelHandler
 
@@ -112,6 +112,9 @@ public:
     Grid* m_grid = nullptr;
 
     int Score = 0;
+
+    // Game State
+    EGameState m_gameState = EGameState::MENU;
 
 private:
     FTimerHandle* m_timerHandles[128] = {};

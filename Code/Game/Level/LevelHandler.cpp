@@ -15,6 +15,9 @@
 #include "Game/Entity/Tetromino/STetromino.hpp"
 #include "Game/Entity/Tetromino/TTetromino.hpp"
 #include "Game/Entity/Tetromino/ZTetromino.hpp"
+#include "Game/Event/EventManager.hpp"
+#include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
+#include "Game/Event/Events/TetrominoAllChildDieEvent.hpp"
 #include "Game/Grid/Grid.hpp"
 
 LevelHandler::LevelHandler(Game* owner)
@@ -41,6 +44,11 @@ void LevelHandler::StartLevel(int id, Game* gameInstance)
     m_currentLevel = m_levels[id]; // 指向当前关卡
     m_currentLevel->SetGameInstance(m_game);
     m_currentLevel->OnStart(); // 启动当前关卡
+
+    if (id == 0)
+    {
+        GenerateRandomTetromino(); // Spawn the first Tetramino
+    }
 }
 
 void LevelHandler::StartLevel(FLevel* level, Game* gameInstance)
@@ -142,13 +150,22 @@ void LevelHandler::CleanScene()
         }
     }
 
+    for (Cube*& m_cube : m_game->m_cube)
+    {
+        if (m_cube != nullptr)
+        {
+            delete m_cube;
+            m_cube = nullptr;
+        }
+    }
+
     delete m_game->m_PlayerShip;
     m_game->m_PlayerShip = nullptr;
 }
 
 void LevelHandler::GenerateRandomTetromino()
 {
-    int            index               = g_rng->RollRandomIntInRange(0, 7);
+    int            index               = g_rng->RollRandomIntInRange(0, 6);
     int            randomSpawnPosition = g_rng->RollRandomIntInRange(3, 19);
     BaseTetromino* bt                  = nullptr;
     switch (index)
@@ -187,13 +204,13 @@ void LevelHandler::GenerateRandomTetromino()
         bt = new ZTetromino(IntVec2(39, randomSpawnPosition));
         bt->SetParentGrid(m_game->m_grid);
         m_game->m_grid->PlaceTetromino(bt);
-        break;
+        break; /*
     case 7:
         for (int i = 0; i < GRID_HEIGHT_SIZE; i++)
         {
             m_game->m_grid->PlaceCube(IntVec2(39, i));
         }
-        break;
+        break;*/
     default:
         printf("[level]     Invalid index!\n");
     }
@@ -205,6 +222,7 @@ void LevelHandler::OnEntityDie(Entity* entity)
 
 void LevelHandler::ImportLevels()
 {
+    delete m_currentLevel;
     m_currentLevel = nullptr;
 
     // On Heap 

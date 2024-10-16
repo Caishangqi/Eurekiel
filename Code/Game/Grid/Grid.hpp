@@ -1,5 +1,7 @@
 ﻿#pragma once
 #include "Game/GameCommon.hpp"
+struct TetrominoRequestOperateEvent;
+struct CubeTouchBaseLineEvent;
 class BaseTetromino;
 class Cube;
 class Game;
@@ -17,14 +19,20 @@ public:
     BaseTetromino* PlaceTetromino(BaseTetromino* baseTetromino);
     float          GetHorizontalBaseLine(int horizontalIndex);
 
+    BaseTetromino* m_controledTetromino = nullptr; // Must Ensure the whole grid have only one that can control
+
+    void ResetGrid();
+    void ClearTetromino();
+
     // Events
-    void OnCubeTouchBaseLineEvent(Cube* cube);
+    void OnCubeTouchBaseLineEvent(std::shared_ptr<CubeTouchBaseLineEvent> event);
     void OnCubeCancelEvent(int verticalIndex);
     void OnCubeTouchBoundEvent();
 
     // Events
     void OnCubeDieEvent(Cube* cube);
     void OnTetrominoDieEvent(BaseTetromino* tetromino);
+    void OnTetrominoRequestOperateEvent(std::shared_ptr<TetrominoRequestOperateEvent> event);
 
 private:
     int m_width  = GRID_WIDTH_SIZE;
@@ -39,6 +47,7 @@ private:
 public:
     static Vec2    GetPositionFromGrid(const IntVec2& gridPos);
     static IntVec2 GetGridPositionFromPosition(const Vec2& position);
+    static Vec2    ConvertGridPositionToWorldPosition(const IntVec2& gridPos);
 
     /**
      * Remove correspond cube pointer in the grid system maintained array

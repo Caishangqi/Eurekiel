@@ -1,5 +1,7 @@
 ﻿#pragma once
-#include "FLevel.h"
+#include <memory>
+
+struct FLevel;
 class Game;
 class Entity;
 
@@ -18,7 +20,7 @@ public:
     void CompleteLevel(FLevel& level);
     void InterruptLevel(FLevel& level);
 
-    FLevel * GetCurrentLevel();
+    FLevel* GetCurrentLevel();
 
     /**
      * Clean registered entity in the game, this method will

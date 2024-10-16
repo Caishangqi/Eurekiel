@@ -5,6 +5,7 @@
 #include "Engine/Renderer/SimpleTriangleFont.hpp"
 #include "Game/Game.hpp"
 #include "Game/GameCommon.hpp"
+#include "Game/Level/FLevel.h"
 #include "Game/Level/LevelHandler.hpp"
 #include "Game/Widget/WidgetHandler.hpp"
 

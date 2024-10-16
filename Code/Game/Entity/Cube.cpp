@@ -10,6 +10,9 @@
 
 
 #include "Game/GameCommon.hpp"
+#include "Game/Event/EventManager.hpp"
+#include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
+#include "Game/Event/Events/PointGainEvent.hpp"
 #include "Game/Grid/Grid.hpp"
 #include "Game/Particle/FParticleProperty.hpp"
 #include "Game/Particle/ParticleHandler.hpp"
@@ -77,7 +80,7 @@ void Cube::Update(float deltaSeconds)
     {
         //m_position.x = GRID_BASE_LINE_X;
         SetCubeStatic();
-        m_parentGrid->OnCubeTouchBaseLineEvent(this);
+        EVENT_TRIGGER(CubeTouchBaseLineEvent, std::make_shared<CubeTouchBaseLineEvent>(this));
     }
 
 
@@ -131,9 +134,10 @@ void Cube::Die()
             //GetParentTetromino()->m_cubes[m_TetrominoPosition.x][m_TetrominoPosition.y] = nullptr;
         }
     }
+
     m_parentGrid->OnCubeDieEvent(this);
 
-    m_game->OnPointGainEvent(1);
+    EventManager::getInstance()->triggerEvent<PointGainEvent>(std::make_shared<PointGainEvent>(1));
 }
 
 void Cube::OnColliedEnter(Entity* other)
@@ -196,7 +200,7 @@ void Cube::UpdateGridPosition()
 void Cube::CorrectWorldPosition()
 {
     //Correct position
-    m_position = m_parentGrid->GetPositionFromGrid(m_gridPos);
+    m_position = Grid::GetPositionFromGrid(m_gridPos);
     m_aabb->SetCenter(m_position);
 }
 

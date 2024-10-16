@@ -34,6 +34,13 @@ public:
 
     virtual int GetNumCubesDefined();
 
+    /**
+     * Set the Tetromino delta position, with check
+     * @param deltaPos The deltaPos you want Tetromino and its child cube move
+     * @return Whether or not success move
+     */
+    virtual bool SetDeltaPosition(IntVec2 deltaPos);
+
 private:
     Grid* m_parentGrid = nullptr;
 

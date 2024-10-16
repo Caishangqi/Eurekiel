@@ -4,6 +4,7 @@
 #include "Game/Enum/EEntity.h"
 #include "Game/Entity/Beetle.hpp"
 #include "Game/Entity/Wasp.hpp"
+#include "Game/Event/EventManager.hpp"
 
 int FLevel::GetAliveEntityByType(EEntity entityType)
 {
@@ -93,6 +94,9 @@ FLevel& FLevel::SetGameInstance(Game* game)
 
 void FLevel::OnStart()
 {
+    EVENT_REGISTER(CubeTouchBaseLineEvent, OnCubeTouchBaseLine);
+    EVENT_REGISTER(TetrominoAllChildDieEvent, OnTetrominoAllChildDie);
+
     printf("[level]     Start Level: %d\n", levelID);
     m_Game->Spawn(ENTITY_TYPE_WASP, levelAmountWasp);
     m_Game->Spawn(ENTITY_TYPE_BEETLE, levelAmountBeetle);
@@ -113,11 +117,32 @@ void FLevel::OnUpdate(float deltaSecond)
 }
 
 
+void FLevel::OnCubeTouchBaseLine(std::shared_ptr<CubeTouchBaseLineEvent> event)
+{
+    if (state == ELevelState::ONGOING)
+    {
+        m_Game->m_levelHandler->GenerateRandomTetromino();
+    }
+}
+
+void FLevel::OnTetrominoAllChildDie(std::shared_ptr<TetrominoAllChildDieEvent> event)
+{
+    if (state == ELevelState::ONGOING)
+    {
+        m_Game->m_levelHandler->GenerateRandomTetromino();
+    }
+}
+
 bool FLevel::CheckComplete()
 {
-    int waspAmount   = GetAliveEntityByType(ENTITY_TYPE_WASP);
+    /*int waspAmount   = GetAliveEntityByType(ENTITY_TYPE_WASP);
     int beetleAmount = GetAliveEntityByType(ENTITY_TYPE_BEETLE);
     if ((waspAmount <= 0) && (beetleAmount <= 0) && m_Game->Score >= goalScore)
+    {
+        return true;
+    }
+    return false;*/
+    if (m_Game->Score >= goalScore)
     {
         return true;
     }

@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Game/Event/Events/GameChangeStateEvent.hpp"
 
 struct FTimerHandle
 {
@@ -57,5 +58,5 @@ inline void FTimerHandle::OnFinish()
         onFinishCallback();
     }
 
-    owner->ReturnToMainMenu();
+    EVENT_TRIGGER(GameChangeStateEvent, std::make_shared<GameChangeStateEvent>(owner->m_gameState,EGameState::MENU));
 }

@@ -2,6 +2,11 @@
 #include "Engine/Math/AABB2.hpp"
 #include "Game/Game.hpp"
 #include "Game/Entity/Tetromino/BaseTetromino.hpp"
+#include "Game/Event/EventManager.hpp"
+#include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
+#include "Game/Event/Events/PointGainEvent.hpp"
+#include "Game/Event/Events/TetrominoAllChildDieEvent.hpp"
+#include "Game/Event/Events/TetrominoRequestOperateEvent.hpp"
 
 Grid::Grid(Game* game)
 {
@@ -9,6 +14,13 @@ Grid::Grid(Game* game)
     printf(
         "[grid]     Initialize Grid System...\n"
     );
+
+    EventManager::getInstance()->registerListener<CubeTouchBaseLineEvent>(
+        [this](std::shared_ptr<CubeTouchBaseLineEvent> event)
+        {
+            this->OnCubeTouchBaseLineEvent(event);
+        });
+    EVENT_REGISTER(TetrominoRequestOperateEvent, OnTetrominoRequestOperateEvent);
 }
 
 Grid::~Grid()
@@ -45,7 +57,8 @@ Cube* Grid::PlaceCube(IntVec2 gridPos)
 
 BaseTetromino* Grid::PlaceTetromino(BaseTetromino* baseTetromino)
 {
-    return baseTetromino->InitTetromino();
+    m_controledTetromino = baseTetromino->InitTetromino();
+    return m_controledTetromino;
 }
 
 
@@ -62,23 +75,47 @@ float Grid::GetHorizontalBaseLine(int horizontalIndex)
     return GRID_BASE_LINE_X;
 }
 
+void Grid::ResetGrid()
+{
+    for (int x = 0; x < GRID_HEIGHT_SIZE; x++)
+    {
+        for (int y = 0; y < GRID_WIDTH_SIZE; y++)
+        {
+            m_cubesData[x][y] = nullptr;
+        }
+    }
+}
 
-void Grid::OnCubeTouchBaseLineEvent(Cube* cube)
+void Grid::ClearTetromino()
+{
+    for (BaseTetromino* m_tetromino_data : m_TetrominoData)
+    {
+        if (m_tetromino_data != nullptr)
+        {
+            delete m_tetromino_data;
+            m_tetromino_data = nullptr;
+        }
+    }
+}
+
+
+void Grid::OnCubeTouchBaseLineEvent(std::shared_ptr<CubeTouchBaseLineEvent> event)
 {
     printf(
         "[event]     OnCubeTouchBaseLineEvent Trigger\n"
     );
-    IntVec2 gridPos = GetGridPositionFromPosition(cube->m_position);
+    Cube*   eventInstigator = event.get()->cube;
+    IntVec2 gridPos         = GetGridPositionFromPosition(eventInstigator->m_position);
 
     // Update cubes data grid array
-    m_cubesData[gridPos.y][gridPos.x] = cube;
+    m_cubesData[gridPos.y][gridPos.x] = eventInstigator;
 
     //Correct position
-    cube->m_position = GetPositionFromGrid(gridPos);
-    cube->m_aabb->SetCenter(cube->m_position);
+    eventInstigator->m_position = GetPositionFromGrid(gridPos);
+    eventInstigator->m_aabb->SetCenter(eventInstigator->m_position);
 
     // if cube have parent tet the set all cube in tet static
-    BaseTetromino* tet = cube->GetParentTetromino();
+    BaseTetromino* tet = eventInstigator->GetParentTetromino();
     if (tet)
     {
         tet->SetChildCubesStatic();
@@ -121,6 +158,8 @@ void Grid::OnCubeDieEvent(Cube* cube)
     {
         if (cube->GetParentTetromino()->IsAllCubeDie())
         {
+            EVENT_TRIGGER(TetrominoAllChildDieEvent,
+                          std::make_shared<TetrominoAllChildDieEvent>(cube->GetParentTetromino()));
             OnTetrominoDieEvent(cube->GetParentTetromino());
         }
     }
@@ -131,13 +170,15 @@ void Grid::OnTetrominoDieEvent(BaseTetromino* tetromino)
     printf(
         "[event]     OnTetrominoDieEvent Trigger\n"
     );
-
     g_theAudio->StartSound(SOUND::DESTROY_TETROMINO);
 
     // Super score 2 ^ num of cube
     int rewardsWholeTetromino = static_cast<int>(pow(2, tetromino->GetNumCubesDefined()));
 
-    m_game->OnPointGainEvent(rewardsWholeTetromino);
+
+    EVENT_TRIGGER(PointGainEvent, std::make_shared<PointGainEvent>(rewardsWholeTetromino));
+    //EventManager::getInstance()->triggerEvent<PointGainEvent>(std::make_shared<PointGainEvent>(rewardsWholeTetromino));
+
 
     for (BaseTetromino* m_tetromino_data : m_TetrominoData)
     {
@@ -146,6 +187,28 @@ void Grid::OnTetrominoDieEvent(BaseTetromino* tetromino)
             delete m_tetromino_data;
             m_tetromino_data = nullptr;
         }
+    }
+}
+
+void Grid::OnTetrominoRequestOperateEvent(std::shared_ptr<TetrominoRequestOperateEvent> event)
+{
+    if (!m_controledTetromino)
+    {
+        return;
+    }
+    EDirection direction = event.get()->requestedOperatedDirection;
+    switch (direction)
+    {
+    case EDirection::UP:
+        m_controledTetromino->SetDeltaPosition(IntVec2(0, 1));
+        break;
+    case EDirection::DOWN:
+        m_controledTetromino->SetDeltaPosition(IntVec2(0, -1));
+    case EDirection::LEFT:
+        break;
+    case EDirection::RIGHT:
+        break;
+    default: ;
     }
 }
 
@@ -161,6 +224,14 @@ Vec2 Grid::GetPositionFromGrid(const IntVec2& gridPos)
 IntVec2 Grid::GetGridPositionFromPosition(const Vec2& position)
 {
     return IntVec2(static_cast<int>((position.x) / 5.f), static_cast<int>(position.y / 5.f));
+}
+
+Vec2 Grid::ConvertGridPositionToWorldPosition(const IntVec2& gridPos)
+{
+    // 0  -1   Displacement (Delta)
+    float x = static_cast<float>(gridPos.x) * 5.0f;
+    float y = static_cast<float>(gridPos.y) * 5.0f;
+    return Vec2(x, y);
 }
 
 bool Grid::RemoveCubePointerInGrid(Cube* cube)

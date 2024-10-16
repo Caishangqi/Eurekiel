@@ -7,12 +7,16 @@
 #include "Entity/PlayerShip.hpp"
 #include "Entity/Wasp.hpp"
 #include "Enum/EEntity.h"
+#include "Event/EventManager.hpp"
+#include "Event/Events/PointGainEvent.hpp"
+#include "Event/Events/TetrominoRequestOperateEvent.hpp"
 #include "Grid/Grid.hpp"
 #include "Level/LevelHandler.hpp"
 #include "Time/FTimerHandle.hpp"
 #include "Widget/WidgetHandler.hpp"
 #include "Widget/Widgets/WidgetMainMenu.hpp"
 #include "Widget/Widgets/WidgetPlayerHealth.hpp"
+
 
 Game::Game()
 {
@@ -28,6 +32,14 @@ Game::Game()
 
     // Grid
     m_grid = new Grid(this);
+
+    EVENT_REGISTER(PointGainEvent, OnPointGainEvent);
+    EVENT_REGISTER(GameChangeStateEvent, OnGameChangeStateEvent);
+
+    /*EventManager::getInstance()->registerListener<PointGainEvent>([this](std::shared_ptr<PointGainEvent> event)
+    {
+        this->OnPointGainEvent(event);
+    });*/
 }
 
 Game::~Game()
@@ -55,6 +67,11 @@ void Game::Render() const
     {
         RenderEntities();
     }
+    Vec2 button   = Vec2(0, 0);
+    Vec2 topRight = Vec2(200, 100);
+    Vec2 mousePos = g_theInput->GetMousePositionOnWorld(button, topRight);
+
+    DebugDrawRing(mousePos, 1, 1, Rgba8(255, 255, 255, 255));
     ParticleHandler::getInstance()->Render();
     g_renderer->EndCamera(*m_worldCamera);
     //======================================================================= End of World Render =======================================================================
@@ -151,7 +168,7 @@ void Game::Update(float deltaTime)
 
 
     m_levelHandler->Update(deltaTime);
-
+    HandleMouseEvent(deltaTime);
     HandleKeyBoardEvent(deltaTime);
 
     GarbageCollection();
@@ -177,11 +194,11 @@ void Game::SpawnDefaultAsteroids()
     for (int numberAsteroid = 0; numberAsteroid < NUM_STARTING_ASTEROIDS; ++numberAsteroid)
     {
         // Generate random position in world 
-        float worldPositionX        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
-        float worldPositionY        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
-        float randomOrientation     = g_rng->RollRandomFloatInRange(0, 360);
-        auto  AddedAsteroid         = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
-        Vec2  offScreenPos          = getRandomPositionOffscreen(AddedAsteroid);
+        float     worldPositionX    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
+        float     worldPositionY    = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
+        float     randomOrientation = g_rng->RollRandomFloatInRange(0, 360);
+        Asteroid* AddedAsteroid     = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+        Vec2      offScreenPos      = getRandomPositionOffscreen(AddedAsteroid);
         AddedAsteroid->m_position   = offScreenPos;
         m_asteroids[numberAsteroid] = AddedAsteroid;
     }
@@ -230,7 +247,8 @@ void Game::SpawnNewAsteroids()
             float worldPositionX        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_X);
             float worldPositionY        = g_rng->RollRandomFloatInRange(0, WORLD_SIZE_Y);
             float randomOrientation     = g_rng->RollRandomFloatInRange(0, 360);
-            m_asteroids[numberAsteroid] = new Asteroid(this, Vec2(worldPositionX, worldPositionY), randomOrientation);
+            m_asteroids[numberAsteroid] = new Asteroid(this, Vec2(worldPositionX, worldPositionY),
+                                                       randomOrientation);
             return;
         }
     }
@@ -260,12 +278,12 @@ void Game::HandleKeyBoardEvent(float deltaTime)
     // Return to Main menu
     if (g_theInput->WasKeyJustPressed(27))
     {
-        ReturnToMainMenu();
+        EVENT_TRIGGER(GameChangeStateEvent, std::make_shared<GameChangeStateEvent>(m_gameState,EGameState::MENU));
     }
 
     if (controller.WasButtonJustPressed(XBOX_BUTTON_B))
     {
-        ReturnToMainMenu();
+        EVENT_TRIGGER(GameChangeStateEvent, std::make_shared<GameChangeStateEvent>(m_gameState,EGameState::MENU));
     }
 
 
@@ -279,6 +297,22 @@ void Game::HandleKeyBoardEvent(float deltaTime)
             }
         }
     }
+}
+
+void Game::HandleMouseEvent(float deltaTime)
+{
+    if (g_theInput->GetMouseWheelDelta() == 120)
+    {
+        // wheel up 120
+        EVENT_TRIGGER(TetrominoRequestOperateEvent, std::make_shared<TetrominoRequestOperateEvent>(EDirection::UP));
+    }
+
+    if (g_theInput->GetMouseWheelDelta() == -120)
+    {
+        // wheel down -120
+        EVENT_TRIGGER(TetrominoRequestOperateEvent, std::make_shared<TetrominoRequestOperateEvent>(EDirection::DOWN));
+    }
+    //printf("Mouse Delta: %hd\n", g_theInput->GetMouseWheelDelta());
 }
 
 void Game::RegisterDefaultObjects()
@@ -318,28 +352,6 @@ void Game::StartGame()
     g_theAudio->StartSound(SOUND::PLAYER_SHOOTS_BULLET);
 }
 
-void Game::ReturnToMainMenu()
-{
-    // Clean the scene
-    // TODO: Move into scene manager in SD 4
-    m_levelHandler->CleanScene();
-    ParticleHandler::getInstance()->CleanParticle();
-    m_levelHandler->ImportLevels();
-
-    if (IsInMainMenu == false)
-    {
-        IsInMainMenu = true;
-        IsGameStart  = false;
-
-        m_widgetHandler->GetWidgetByName("MainMenu")->SetActiveAndVisible();
-
-        m_widgetHandler->GetWidgetByName("PlayerHealth")->SetInActiveAndInVisible();
-
-        m_widgetHandler->GetWidgetByName("InGameScoreBoard")->SetInActiveAndInVisible();
-
-        printf("[core]      Return to Main menu");
-    }
-}
 
 void Game::UpdateTimerHandle(float deltaTime)
 {
@@ -659,6 +671,38 @@ void Game::OnPointGainEvent(int gainedScore)
 {
     Score += gainedScore;
     g_theAudio->StartSound(SOUND::POINT_ADD);
+}
+
+void Game::OnPointGainEvent(std::shared_ptr<PointGainEvent> event)
+{
+    Score += event.get()->m_gainedScore;
+    g_theAudio->StartSound(SOUND::POINT_ADD);
+}
+
+void Game::OnGameChangeStateEvent(std::shared_ptr<GameChangeStateEvent> event)
+{
+    if (event.get()->targetGameState == EGameState::MENU)
+    {
+        m_grid->ResetGrid();
+        m_grid->ClearTetromino();
+        m_levelHandler->CleanScene();
+        ParticleHandler::getInstance()->CleanParticle();
+        m_levelHandler->ImportLevels();
+
+        if (IsInMainMenu == false)
+        {
+            IsInMainMenu = true;
+            IsGameStart  = false;
+
+            m_widgetHandler->GetWidgetByName("MainMenu")->SetActiveAndVisible();
+
+            m_widgetHandler->GetWidgetByName("PlayerHealth")->SetInActiveAndInVisible();
+
+            m_widgetHandler->GetWidgetByName("InGameScoreBoard")->SetInActiveAndInVisible();
+
+            printf("[core]      Return to Main menu");
+        }
+    }
 }
 
 FTimerHandle* Game::SetTimer(float timer, void (*callback)())

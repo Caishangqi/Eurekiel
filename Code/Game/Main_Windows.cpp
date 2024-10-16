@@ -2,7 +2,6 @@
 #include <windows.h>			// #include this (massive, platform-specific) header in VERY few places (and .CPPs only)
 #include <crtdbg.h>
 #include <iostream>
-
 #include "GameCommon.hpp"
 
 //-----------------------------------------------------------------------------------------------
