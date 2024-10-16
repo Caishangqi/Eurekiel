@@ -133,21 +133,27 @@ Vec2 InputSystem::GetMousePositionOnWorld(Vec2& cameraBottomLeft, Vec2& cameraTo
     // 获取屏幕上的鼠标位置
     Vec2 mouseScreenPos = GetMousePosition();
 
-    // 获取窗口的宽度和高度（包含非客户区域）
-    RECT windowRect;
-    GetWindowRect(hWnd, &windowRect);
-    float windowWidth  = static_cast<float>(windowRect.right - windowRect.left);
-    float windowHeight = static_cast<float>(windowRect.bottom - windowRect.top);
+    // 获取窗口客户区域的宽度和高度
+    RECT clientRect;
+    GetClientRect(hWnd, &clientRect);
 
-    // 调整鼠标位置以考虑窗口在屏幕上的位置
-    mouseScreenPos.x -= static_cast<float>(windowRect.left);
-    mouseScreenPos.y -= static_cast<float>(windowRect.top);
+    float clientWidth  = static_cast<float>(clientRect.right - clientRect.left);
+    float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
+
+    // 获取客户区域左上角相对于屏幕的位置
+    POINT clientTopLeft = {0, 0};
+    ClientToScreen(hWnd, &clientTopLeft);
+    //printf("clientTopLeft: x: %f y: %f\n", static_cast<float>(clientTopLeft.x), static_cast<float>(clientTopLeft.y));
+
+    // 调整鼠标位置以考虑客户区域在屏幕上的位置
+    mouseScreenPos.x -= static_cast<float>(clientTopLeft.x);
+    mouseScreenPos.y -= static_cast<float>(clientTopLeft.y);
 
     // 将鼠标屏幕位置映射到世界坐标系
-    float worldX = RangeMapClamped(mouseScreenPos.x, 0.0f, windowWidth, cameraBottomLeft.x, cameraTopRight.x);
-    float worldY = RangeMapClamped(mouseScreenPos.y, 0.0f, windowHeight, cameraTopRight.y, cameraBottomLeft.y);
-    // Y轴通常是反向的
-
+    float worldX = RangeMapClamped(mouseScreenPos.x + static_cast<float>(clientTopLeft.x), 0.0f, clientWidth,
+                                   cameraBottomLeft.x, cameraTopRight.x);
+    float worldY = RangeMapClamped(mouseScreenPos.y + static_cast<float>(clientTopLeft.y), 0.0f, clientHeight,
+                                   cameraTopRight.y, cameraBottomLeft.y);
     return Vec2(worldX, worldY);
 }
 

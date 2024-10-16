@@ -255,13 +255,41 @@ bool IsPointInsideDisc2D(const Vec2& point, const Vec2& discCenter, float discRa
 bool IsPointInsideOrientedSector2D(const Vec2& point, const Vec2&           sectorTip, float sectorForwardDegrees,
                                    float       sectorApertureDegrees, float sectorRadius)
 {
-    return true;
+    float distanceSquared = GetDistanceSquared2D(point, sectorTip);
+    if (distanceSquared > sectorRadius * sectorRadius)
+    {
+        return false;
+    }
+
+    Vec2  directionToPoint  = (point - sectorTip).GetNormalized();
+    float pointAngleDegrees = Atan2Degrees(directionToPoint.y, directionToPoint.x);
+    float angularDisplacement = GetShortestAngularDispDegrees(sectorForwardDegrees, pointAngleDegrees);
+    
+    if (fabs(angularDisplacement) <= sectorApertureDegrees * 0.5f)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 bool IsPointInsideDirectedSector2D(const Vec2& point, const Vec2&           sectorTip, const Vec2& sectorForwardNormal,
                                    float       sectorApertureDegrees, float sectorRadius)
 {
-    return true;
+    float distanceSquared = GetDistanceSquared2D(point, sectorTip);
+    if (distanceSquared > sectorRadius * sectorRadius)
+    {
+        return false;
+    }
+    Vec2  directionToPoint = (point - sectorTip).GetNormalized();
+    float dotProduct       = DotProduct2D(directionToPoint, sectorForwardNormal);
+    float angleBetween     = ConvertRadiansToDegrees(acosf(dotProduct));
+    if (angleBetween <= (sectorApertureDegrees * 0.5f))
+    {
+        return true;
+    }
+
+    return false;
 }
 
 
