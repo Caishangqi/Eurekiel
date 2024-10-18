@@ -261,10 +261,10 @@ bool IsPointInsideOrientedSector2D(const Vec2& point, const Vec2&           sect
         return false;
     }
 
-    Vec2  directionToPoint  = (point - sectorTip).GetNormalized();
-    float pointAngleDegrees = Atan2Degrees(directionToPoint.y, directionToPoint.x);
+    Vec2  directionToPoint    = (point - sectorTip).GetNormalized();
+    float pointAngleDegrees   = Atan2Degrees(directionToPoint.y, directionToPoint.x);
     float angularDisplacement = GetShortestAngularDispDegrees(sectorForwardDegrees, pointAngleDegrees);
-    
+
     if (fabs(angularDisplacement) <= sectorApertureDegrees * 0.5f)
     {
         return true;
@@ -410,4 +410,20 @@ void TransformPositionXY3D(Vec3& posToTransform, const Vec2& iBasis, const Vec2&
 
     posToTransform.x = newX;
     posToTransform.y = newY;
+}
+
+int RecursiveSum(int From)
+{
+    if (From == 0)
+    {
+        return 0;
+    }
+    if (From == 1)
+    {
+        return 1;
+    }
+    else
+    {
+        return From + RecursiveSum(From - 1);
+    }
 }

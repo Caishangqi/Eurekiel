@@ -66,3 +66,6 @@ void TransformPosition2D(Vec2& posToTransform, float uniformScale, float rotatio
 void TransformPositionXY3D(Vec3& positionToTransform, float scaleXY, float zRotationDegrees, const Vec2& translationXY);
 void TransformPosition2D(Vec2& posToTransform, const Vec2& iBasis, const Vec2& jBasis, const Vec2& translation);
 void TransformPositionXY3D(Vec3& posToTransform, const Vec2& iBasis, const Vec2& jBasis, const Vec2& translation);
+
+// Expression
+int RecursiveSum (int From);
