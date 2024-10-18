@@ -8,8 +8,10 @@
 #include "Entity/Wasp.hpp"
 #include "Enum/EEntity.h"
 #include "Event/EventManager.hpp"
+#include "Event/IllegalEventManager.hpp"
 #include "Event/Events/PointGainEvent.hpp"
 #include "Event/Events/TetrominoRequestOperateEvent.hpp"
+#include "Event/Listeners/PointGainListener.hpp"
 #include "Grid/Grid.hpp"
 #include "Level/LevelHandler.hpp"
 #include "Time/FTimerHandle.hpp"
@@ -32,14 +34,11 @@ Game::Game()
 
     // Grid
     m_grid = new Grid(this);
-
-    EVENT_REGISTER(PointGainEvent, OnPointGainEvent);
-    EVENT_REGISTER(GameChangeStateEvent, OnGameChangeStateEvent);
-
-    /*EventManager::getInstance()->registerListener<PointGainEvent>([this](std::shared_ptr<PointGainEvent> event)
-    {
-        this->OnPointGainEvent(event);
-    });*/
+    EVENT_BIND(PointGainEvent, OnPointGainEvent);
+    EVENT_BIND(GameChangeStateEvent, OnGameChangeStateEvent);
+    
+    // Use legal Minecraft SpigotAPI style Event system without function pointer and smart pointers :D
+    EVENT_REGISTER(new PointGainListener());
 }
 
 Game::~Game()
@@ -318,6 +317,8 @@ void Game::HandleMouseEvent(float deltaTime)
 void Game::RegisterDefaultObjects()
 {
     ParticleHandler::getInstance();
+    IllegalEventManager::getInstance();
+    EventManager::GetInstance();
 }
 
 void Game::StartGame()
@@ -677,6 +678,11 @@ void Game::OnPointGainEvent(std::shared_ptr<PointGainEvent> event)
 {
     Score += event.get()->m_gainedScore;
     g_theAudio->StartSound(SOUND::POINT_ADD);
+}
+
+void Game::OnPointGainEvent_(PointGainEvent* event)
+{
+    printf("==========================================\n");
 }
 
 void Game::OnGameChangeStateEvent(std::shared_ptr<GameChangeStateEvent> event)

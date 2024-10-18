@@ -2,7 +2,7 @@
 #include "Game/Entity/Tetromino/BaseTetromino.hpp"
 #include "Game/Event/Event.hpp"
 
-struct TetrominoAllChildDieEvent : public Event
+struct TetrominoAllChildDieEvent : public TypedEvent<TetrominoAllChildDieEvent>
 {
 public:
     BaseTetromino * targetTetromino = nullptr;

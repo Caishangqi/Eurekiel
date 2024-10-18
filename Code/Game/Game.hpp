@@ -19,14 +19,14 @@ enum EEntity : int;
 class Wasp;
 class Beetle;
 /*
-*   a. (1) Gameplay overseer, bookkeeper, and referee – owns all gameplay-related concepts
+ *  a. (1) Gameplay overseer, bookkeeper, and referee – owns all gameplay-related concepts
     b. (1) Handles all entity-vs-entity interactions (e.g. physics, damage)
     c. (1) Handles all high-level game mechanics (e.g. levels/waves, spawning)
     d. (1) Only one instance, which is owned (created, managed, destroyed) by g_theApp
     e. (2) Owns all gameplay Entity instances (e.g. m_playerShip, m_bullets, m_asteroids).
     The ship should be a single object (by pointer); bullets and asteroids are each stored in
     a separate fixed-size c-style list (array) of pointers, as such:
-*/
+ */
 class Game
 {
 public:
@@ -85,6 +85,7 @@ public:
     void OnPointGainEvent(int gainedScore);
     // Event handle
     void OnPointGainEvent(std::shared_ptr<PointGainEvent> event);
+    void OnPointGainEvent_(PointGainEvent * event);
     void OnGameChangeStateEvent(std::shared_ptr<GameChangeStateEvent> event);
 
     // nullptr equal to 0

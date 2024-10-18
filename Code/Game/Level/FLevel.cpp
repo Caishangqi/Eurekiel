@@ -4,7 +4,7 @@
 #include "Game/Enum/EEntity.h"
 #include "Game/Entity/Beetle.hpp"
 #include "Game/Entity/Wasp.hpp"
-#include "Game/Event/EventManager.hpp"
+#include "Game/Event/IllegalEventManager.hpp"
 
 int FLevel::GetAliveEntityByType(EEntity entityType)
 {
@@ -94,8 +94,8 @@ FLevel& FLevel::SetGameInstance(Game* game)
 
 void FLevel::OnStart()
 {
-    EVENT_REGISTER(CubeTouchBaseLineEvent, OnCubeTouchBaseLine);
-    EVENT_REGISTER(TetrominoAllChildDieEvent, OnTetrominoAllChildDie);
+    EVENT_BIND(CubeTouchBaseLineEvent, OnCubeTouchBaseLine);
+    EVENT_BIND(TetrominoAllChildDieEvent, OnTetrominoAllChildDie);
 
     printf("[level]     Start Level: %d\n", levelID);
     m_Game->Spawn(ENTITY_TYPE_WASP, levelAmountWasp);

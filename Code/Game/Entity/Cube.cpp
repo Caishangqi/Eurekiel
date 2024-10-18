@@ -11,6 +11,7 @@
 
 #include "Game/GameCommon.hpp"
 #include "Game/Event/EventManager.hpp"
+#include "Game/Event/IllegalEventManager.hpp"
 #include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
 #include "Game/Event/Events/PointGainEvent.hpp"
 #include "Game/Grid/Grid.hpp"
@@ -137,7 +138,9 @@ void Cube::Die()
 
     m_parentGrid->OnCubeDieEvent(this);
 
-    EventManager::getInstance()->triggerEvent<PointGainEvent>(std::make_shared<PointGainEvent>(1));
+    //IllegalEventManager::getInstance()->triggerEvent<PointGainEvent>(std::make_shared<PointGainEvent>(1));
+    //EventManager::GetInstance()->DispatchEvent(new PointGainEvent(1, m_game));
+    EVENT_DISPATCH(new PointGainEvent(1, m_game));
 }
 
 void Cube::OnColliedEnter(Entity* other)

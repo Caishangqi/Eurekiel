@@ -1,62 +1,36 @@
 ﻿#pragma once
-#include <functional>
-#include <map>
-#include <memory>
-#include <typeindex>
+#include <vector>
 
-#define EVENT_REGISTER(eventType, handler) \
-EventManager::getInstance()->registerListener<eventType>( \
-[this](std::shared_ptr<eventType> event) { this->handler(event); })
-
-#define EVENT_TRIGGER(eventType, eventData) \
-EventManager::getInstance()->triggerEvent<eventType>(eventData)
-
-
+class Listener;
 struct Event;
+#define EVENT_DISPATCH(event) EventManager::GetInstance()->DispatchEvent(event)
+#define EVENT_REGISTER(listener) EventManager::GetInstance()->RegisterListener(listener)
 
+/**
+ * The New Event Manager Class that inspire by Minecraft Spigot API
+ * https://hub.spigotmc.org/javadocs/bukkit/org/bukkit/event/package-summary.html
+ * without using any smart-pointers and function pointer related std
+ *
+ * Although still using template and typeid or else need write numerous repetitive code
+ * I promise I know how template work and how typeid work, this Class have been
+ * test and no memory leak and potential type unsafe operation
+ */
 class EventManager
 {
-public:
-    using EventCallback = std::function<void(const std::shared_ptr<Event>&)>;
-    static EventManager* getInstance();
-
 protected:
-    static EventManager* _instance;
-
-public:
-    // 注册事件监听器
-    template <typename EventType>
-    void registerListener(std::function<void(std::shared_ptr<EventType>)> listener)
-    {
-        {
-            // 包装为可以存储在通用容器中的函数
-            std::function<void(std::shared_ptr<Event>)> wrapper = [listener](std::shared_ptr<Event> data)
-            {
-                listener(std::static_pointer_cast<EventType>(data));
-            };
-            listeners[typeid(EventType)].push_back(wrapper);
-        }
-    }
-
-    template <typename EventType>
-    void triggerEvent(std::shared_ptr<EventType> event)
-    {
-        // 使用 typeid 获取类型信息并传递给 type_index
-        auto eventTypeIndex = std::type_index(typeid(EventType));
-
-        if (listeners.find(eventTypeIndex) != listeners.end())
-        {
-            for (const auto& listener : listeners[eventTypeIndex])
-            {
-                listener(event);
-            }
-        }
-    }
+    static EventManager* instance;
 
 private:
-    std::map<std::type_index, std::vector<EventCallback>> listeners;
+    std::vector<Listener*> listeners;
     EventManager();
-    // 禁用拷贝构造和赋值操作
     EventManager(const EventManager&)            = delete;
     EventManager& operator=(const EventManager&) = delete;
+
+public:
+    ~EventManager();
+    static EventManager* GetInstance();
+
+    void RegisterListener(Listener* listener);
+
+    void DispatchEvent(Event* event);
 };

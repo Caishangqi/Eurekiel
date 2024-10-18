@@ -2,7 +2,7 @@
 #include "Game/Enum/EGameState.h"
 #include "Game/Event/Event.hpp"
 
-struct GameChangeStateEvent : public Event
+struct GameChangeStateEvent : public TypedEvent<GameChangeStateEvent>
 {
 public:
     EGameState targetGameState;

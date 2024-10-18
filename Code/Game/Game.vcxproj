@@ -207,6 +207,9 @@
     <ClCompile Include="Entity\Wasp.cpp" />
     <ClCompile Include="Event\Event.cpp" />
     <ClCompile Include="Event\EventManager.cpp" />
+    <ClCompile Include="Event\IllegalEventManager.cpp" />
+    <ClCompile Include="Event\Listener.cpp" />
+    <ClCompile Include="Event\Listeners\PointGainListener.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="GameCommon.cpp" />
     <ClCompile Include="Grid\Grid.cpp" />
@@ -251,9 +254,12 @@
     <ClInclude Include="Enum\EShape.h" />
     <ClInclude Include="Event\Event.hpp" />
     <ClInclude Include="Event\EventManager.hpp" />
+    <ClInclude Include="Event\IllegalEventManager.hpp" />
     <ClInclude Include="Event\Events\TetrominoRequestOperateEvent.hpp" />
     <ClInclude Include="Event\Events\CubeTouchBaseLineEvent.hpp" />
     <ClInclude Include="Event\Events\PointGainEvent.hpp" />
+    <ClInclude Include="Event\Listener.hpp" />
+    <ClInclude Include="Event\Listeners\PointGainListener.hpp" />
     <ClInclude Include="Game.hpp" />
     <ClInclude Include="GameCommon.hpp" />
     <ClInclude Include="Grid\Grid.hpp" />

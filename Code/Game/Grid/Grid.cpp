@@ -3,6 +3,7 @@
 #include "Game/Game.hpp"
 #include "Game/Entity/Tetromino/BaseTetromino.hpp"
 #include "Game/Event/EventManager.hpp"
+#include "Game/Event/IllegalEventManager.hpp"
 #include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
 #include "Game/Event/Events/PointGainEvent.hpp"
 #include "Game/Event/Events/TetrominoAllChildDieEvent.hpp"
@@ -15,12 +16,12 @@ Grid::Grid(Game* game)
         "[grid]     Initialize Grid System...\n"
     );
 
-    EventManager::getInstance()->registerListener<CubeTouchBaseLineEvent>(
+    IllegalEventManager::getInstance()->registerListener<CubeTouchBaseLineEvent>(
         [this](std::shared_ptr<CubeTouchBaseLineEvent> event)
         {
             this->OnCubeTouchBaseLineEvent(event);
         });
-    EVENT_REGISTER(TetrominoRequestOperateEvent, OnTetrominoRequestOperateEvent);
+    EVENT_BIND(TetrominoRequestOperateEvent, OnTetrominoRequestOperateEvent);
 }
 
 Grid::~Grid()
@@ -104,6 +105,7 @@ void Grid::OnCubeTouchBaseLineEvent(std::shared_ptr<CubeTouchBaseLineEvent> even
     printf(
         "[event]     OnCubeTouchBaseLineEvent Trigger\n"
     );
+
     Cube*   eventInstigator = event.get()->cube;
     IntVec2 gridPos         = GetGridPositionFromPosition(eventInstigator->m_position);
 
@@ -121,6 +123,15 @@ void Grid::OnCubeTouchBaseLineEvent(std::shared_ptr<CubeTouchBaseLineEvent> even
         tet->SetChildCubesStatic();
     }
 
+    // Calculate the full vertical lines and add bonus point
+    int numberOfFullVerticals = GetNumberOfFullVerticals();
+    if (numberOfFullVerticals >= 1)
+    {
+        EVENT_DISPATCH(new PointGainEvent(RecursiveSum(numberOfFullVerticals) * 20, m_game));
+        //EVENT_TRIGGER(PointGainEvent, std::make_shared<PointGainEvent>(RecursiveSum(numberOfFullVerticals) * 20));
+    }
+
+
     for (int i = 0; i < GRID_WIDTH_SIZE; i++)
     {
         if (CheckVerticalFull(i))
@@ -130,6 +141,7 @@ void Grid::OnCubeTouchBaseLineEvent(std::shared_ptr<CubeTouchBaseLineEvent> even
             OnCubeCancelEvent(i);
         }
     }
+
 
     IsCubeOutOfBounds();
 }
@@ -176,8 +188,8 @@ void Grid::OnTetrominoDieEvent(BaseTetromino* tetromino)
     int rewardsWholeTetromino = static_cast<int>(pow(2, tetromino->GetNumCubesDefined()));
 
 
-    EVENT_TRIGGER(PointGainEvent, std::make_shared<PointGainEvent>(rewardsWholeTetromino));
-    //EventManager::getInstance()->triggerEvent<PointGainEvent>(std::make_shared<PointGainEvent>(rewardsWholeTetromino));
+    //EVENT_TRIGGER(PointGainEvent, std::make_shared<PointGainEvent>(rewardsWholeTetromino));
+    EVENT_DISPATCH(new PointGainEvent(rewardsWholeTetromino, m_game));
 
 
     for (BaseTetromino* m_tetromino_data : m_TetrominoData)
@@ -376,6 +388,35 @@ void Grid::MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex)
             }
         }
     }
+}
+
+int Grid::GetNumberOfFullVerticals()
+{
+    int fullVerticalCount = 0;
+
+    // 遍历所有列
+    for (int x = 0; x < m_width; ++x)
+    {
+        bool isFullColumn = true;
+
+        // 检查每一列的所有单元格是否被填满
+        for (int y = 0; y < m_height; ++y)
+        {
+            if (m_cubesData[y][x] == nullptr)
+            {
+                isFullColumn = false; // 只要有一个位置为空，该列就不算满
+                break; // 跳出当前列的检查
+            }
+        }
+
+        // 如果整列都被填满，计数器增加
+        if (isFullColumn)
+        {
+            ++fullVerticalCount;
+        }
+    }
+
+    return fullVerticalCount;
 }
 
 bool Grid::IsCubeOutOfBounds()

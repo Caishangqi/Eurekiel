@@ -15,7 +15,7 @@
 #include "Game/Entity/Tetromino/STetromino.hpp"
 #include "Game/Entity/Tetromino/TTetromino.hpp"
 #include "Game/Entity/Tetromino/ZTetromino.hpp"
-#include "Game/Event/EventManager.hpp"
+#include "Game/Event/IllegalEventManager.hpp"
 #include "Game/Event/Events/CubeTouchBaseLineEvent.hpp"
 #include "Game/Event/Events/TetrominoAllChildDieEvent.hpp"
 #include "Game/Grid/Grid.hpp"

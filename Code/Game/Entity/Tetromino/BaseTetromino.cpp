@@ -190,6 +190,7 @@ bool BaseTetromino::SetDeltaPosition(IntVec2 deltaPos)
                     if (cubeNewPosition.y > 19 || cubeNewPosition.y < 0)
                     {
                         IsEveryCubeCheckMoveValidation = false;
+                        break;
                     }
                 }
             }

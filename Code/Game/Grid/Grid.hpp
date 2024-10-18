@@ -89,6 +89,8 @@ public:
 
     void MoveCubesRightOfEmptyColumnLeft(int emptyColumnIndex);
 
+    int GetNumberOfFullVerticals();
+
     /**
      * 
      * @return Whether or not cube out of bound
