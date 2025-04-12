@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <ItemGroup Label="ProjectConfigurations">
+        <ProjectConfiguration Include="Debug|Win32">
+            <Configuration>Debug</Configuration>
+            <Platform>Win32</Platform>
+        </ProjectConfiguration>
+        <ProjectConfiguration Include="Release|Win32">
+            <Configuration>Release</Configuration>
+            <Platform>Win32</Platform>
+        </ProjectConfiguration>
+        <ProjectConfiguration Include="Debug|x64">
+            <Configuration>Debug</Configuration>
+            <Platform>x64</Platform>
+        </ProjectConfiguration>
+        <ProjectConfiguration Include="Release|x64">
+            <Configuration>Release</Configuration>
+            <Platform>x64</Platform>
+        </ProjectConfiguration>
+    </ItemGroup>
+    <PropertyGroup Label="Globals">
+        <VCProjectVersion>17.0</VCProjectVersion>
+        <Keyword>Win32Proj</Keyword>
+        <ProjectGuid>{cc3dfa34-a261-4f91-b446-63d998b7b880}</ProjectGuid>
+        <RootNamespace>Engine</RootNamespace>
+        <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    </PropertyGroup>
+    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+        <ConfigurationType>StaticLibrary</ConfigurationType>
+        <UseDebugLibraries>true</UseDebugLibraries>
+        <PlatformToolset>v143</PlatformToolset>
+        <CharacterSet>Unicode</CharacterSet>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+        <ConfigurationType>StaticLibrary</ConfigurationType>
+        <UseDebugLibraries>false</UseDebugLibraries>
+        <PlatformToolset>v143</PlatformToolset>
+        <WholeProgramOptimization>true</WholeProgramOptimization>
+        <CharacterSet>Unicode</CharacterSet>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+        <ConfigurationType>StaticLibrary</ConfigurationType>
+        <UseDebugLibraries>true</UseDebugLibraries>
+        <PlatformToolset>v143</PlatformToolset>
+        <CharacterSet>Unicode</CharacterSet>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+        <ConfigurationType>StaticLibrary</ConfigurationType>
+        <UseDebugLibraries>false</UseDebugLibraries>
+        <PlatformToolset>v143</PlatformToolset>
+        <WholeProgramOptimization>true</WholeProgramOptimization>
+        <CharacterSet>Unicode</CharacterSet>
+    </PropertyGroup>
+    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
+    <ImportGroup Label="ExtensionSettings">
+    </ImportGroup>
+    <ImportGroup Label="Shared">
+    </ImportGroup>
+    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
+    </ImportGroup>
+    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
+    </ImportGroup>
+    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
+    </ImportGroup>
+    <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+        <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform"/>
+    </ImportGroup>
+    <PropertyGroup Label="UserMacros"/>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+        <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
+        <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
+    </PropertyGroup>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+        <ClCompile>
+            <WarningLevel>Level4</WarningLevel>
+            <SDLCheck>true</SDLCheck>
+            <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <ConformanceMode>true</ConformanceMode>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+        </ClCompile>
+        <Link>
+            <SubSystem>
+            </SubSystem>
+            <GenerateDebugInformation>true</GenerateDebugInformation>
+        </Link>
+        <Lib>
+            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+        </Lib>
+    </ItemDefinitionGroup>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+        <ClCompile>
+            <WarningLevel>Level4</WarningLevel>
+            <FunctionLevelLinking>true</FunctionLevelLinking>
+            <IntrinsicFunctions>true</IntrinsicFunctions>
+            <SDLCheck>true</SDLCheck>
+            <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <ConformanceMode>true</ConformanceMode>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+        </ClCompile>
+        <Link>
+            <SubSystem>
+            </SubSystem>
+            <EnableCOMDATFolding>true</EnableCOMDATFolding>
+            <OptimizeReferences>true</OptimizeReferences>
+            <GenerateDebugInformation>true</GenerateDebugInformation>
+        </Link>
+        <Lib>
+            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+        </Lib>
+    </ItemDefinitionGroup>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+        <ClCompile>
+            <WarningLevel>Level4</WarningLevel>
+            <SDLCheck>true</SDLCheck>
+            <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <ConformanceMode>true</ConformanceMode>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+        </ClCompile>
+        <Link>
+            <SubSystem>
+            </SubSystem>
+            <GenerateDebugInformation>true</GenerateDebugInformation>
+        </Link>
+        <Lib>
+            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+        </Lib>
+    </ItemDefinitionGroup>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+        <ClCompile>
+            <WarningLevel>Level4</WarningLevel>
+            <FunctionLevelLinking>true</FunctionLevelLinking>
+            <IntrinsicFunctions>true</IntrinsicFunctions>
+            <SDLCheck>true</SDLCheck>
+            <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <ConformanceMode>true</ConformanceMode>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalIncludeDirectories>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+        </ClCompile>
+        <Link>
+            <SubSystem>
+            </SubSystem>
+            <EnableCOMDATFolding>true</EnableCOMDATFolding>
+            <OptimizeReferences>true</OptimizeReferences>
+            <GenerateDebugInformation>true</GenerateDebugInformation>
+        </Link>
+        <Lib>
+            <AdditionalLibraryDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/</AdditionalLibraryDirectories>
+        </Lib>
+    </ItemDefinitionGroup>
+    <ItemGroup>
+        <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp"/>
+        <ClCompile Include="Audio\AudioSystem.cpp"/>
+        <ClCompile Include="Core\Clock.cpp"/>
+        <ClCompile Include="Core\CubicHermiteSpline.cpp" />
+        <ClCompile Include="Core\DevConsole.cpp"/>
+        <ClCompile Include="Core\EngineCommon.cpp"/>
+        <ClCompile Include="Core\ErrorWarningAssert.cpp"/>
+        <ClCompile Include="Core\EventSystem.cpp"/>
+        <ClCompile Include="Core\FileUtils.cpp"/>
+        <ClCompile Include="Core\HeatMaps.cpp"/>
+        <ClCompile Include="Core\Image.cpp"/>
+        <ClCompile Include="Core\NamedStrings.cpp"/>
+        <ClCompile Include="Core\Rgba8.cpp"/>
+        <ClCompile Include="Core\StringUtils.cpp"/>
+        <ClCompile Include="Core\Time.cpp"/>
+        <ClCompile Include="Core\Timer.cpp"/>
+        <ClCompile Include="Core\VertexUtils.cpp"/>
+        <ClCompile Include="Core\Vertex_PCU.cpp"/>
+        <ClCompile Include="Core\XmlUtils.cpp"/>
+        <ClCompile Include="Input\AnalogJoystick.cpp"/>
+        <ClCompile Include="Input\InputSystem.cpp"/>
+        <ClCompile Include="Input\KeyButtonState.cpp"/>
+        <ClCompile Include="Input\XboxController.cpp"/>
+        <ClCompile Include="Math\AABB2.cpp"/>
+        <ClCompile Include="Math\AABB3.cpp"/>
+        <ClCompile Include="Math\Bezier.cpp" />
+        <ClCompile Include="Math\Capsule2.cpp"/>
+        <ClCompile Include="Math\CubicBezierCurve2D.cpp" />
+        <ClCompile Include="Math\Disc2.cpp"/>
+        <ClCompile Include="Math\Easing.cpp" />
+        <ClCompile Include="Math\EulerAngles.cpp"/>
+        <ClCompile Include="Math\FloatRange.cpp"/>
+        <ClCompile Include="Math\IntRange.cpp"/>
+        <ClCompile Include="Math\IntVec2.cpp"/>
+        <ClCompile Include="Math\LineSegment2.cpp"/>
+        <ClCompile Include="Math\Mat44.cpp"/>
+        <ClCompile Include="Math\MathUtils.cpp"/>
+        <ClCompile Include="Math\OBB2.cpp"/>
+        <ClCompile Include="Math\RandomNumberGenerator.cpp"/>
+        <ClCompile Include="Math\RaycastUtils.cpp"/>
+        <ClCompile Include="Math\Sphere.cpp" />
+        <ClCompile Include="Math\Triangle2.cpp"/>
+        <ClCompile Include="Math\Vec2.cpp"/>
+        <ClCompile Include="Math\Vec3.cpp"/>
+        <ClCompile Include="Math\Vec4.cpp"/>
+        <ClCompile Include="Math\ZCylinder.cpp" />
+        <ClCompile Include="Renderer\BitmapFont.cpp"/>
+        <ClCompile Include="Renderer\Camera.cpp"/>
+        <ClCompile Include="Renderer\ConstantBuffer.cpp"/>
+        <ClCompile Include="Renderer\DebugRenderSystem.cpp" />
+        <ClCompile Include="Renderer\IndexBuffer.cpp" />
+        <ClCompile Include="Renderer\Renderer.cpp"/>
+        <ClCompile Include="Renderer\Shader.cpp"/>
+        <ClCompile Include="Renderer\SimpleTriangleFont.cpp"/>
+        <ClCompile Include="Renderer\SpriteAnimDefinition.cpp"/>
+        <ClCompile Include="Renderer\SpriteDefinition.cpp"/>
+        <ClCompile Include="Renderer\SpriteSheet.cpp"/>
+        <ClCompile Include="Renderer\Texture.cpp"/>
+        <ClCompile Include="Renderer\VertexBuffer.cpp"/>
+        <ClCompile Include="Window\Window.cpp"/>
+    </ItemGroup>
+    <ItemGroup>
+        <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h"/>
+        <ClInclude Include="Audio\AudioSystem.hpp"/>
+        <ClInclude Include="Core\Clock.hpp"/>
+        <ClInclude Include="Core\CubicHermiteSpline.hpp" />
+        <ClInclude Include="Core\DevConsole.hpp"/>
+        <ClInclude Include="Core\EngineCommon.hpp"/>
+        <ClInclude Include="Core\ErrorWarningAssert.hpp"/>
+        <ClInclude Include="Core\EventSystem.hpp"/>
+        <ClInclude Include="Core\FileUtils.hpp"/>
+        <ClInclude Include="Core\HeatMaps.hpp"/>
+        <ClInclude Include="Core\Image.hpp"/>
+        <ClInclude Include="Core\NamedStrings.hpp"/>
+        <ClInclude Include="Core\Rgba8.hpp"/>
+        <ClInclude Include="Core\StringUtils.hpp"/>
+        <ClInclude Include="Core\Time.hpp"/>
+        <ClInclude Include="Core\Timer.hpp"/>
+        <ClInclude Include="Core\VertexUtils.hpp"/>
+        <ClInclude Include="Core\Vertex_PCU.hpp"/>
+        <ClInclude Include="Core\XmlUtils.hpp"/>
+        <ClInclude Include="Input\AnalogJoystick.hpp"/>
+        <ClInclude Include="Input\InputSystem.hpp"/>
+        <ClInclude Include="Input\KeyButtonState.hpp"/>
+        <ClInclude Include="Input\XboxButtonID.hpp"/>
+        <ClInclude Include="Input\XboxController.hpp"/>
+        <ClInclude Include="Math\AABB2.hpp"/>
+        <ClInclude Include="Math\AABB3.hpp"/>
+        <ClInclude Include="Math\Bezier.hpp" />
+        <ClInclude Include="Math\Capsule2.hpp"/>
+        <ClInclude Include="Math\CubicBezierCurve2D.hpp" />
+        <ClInclude Include="Math\Disc2.hpp"/>
+        <ClInclude Include="Math\Easing.hpp" />
+        <ClInclude Include="Math\EulerAngles.hpp"/>
+        <ClInclude Include="Math\FloatRange.hpp"/>
+        <ClInclude Include="Math\IntRange.hpp"/>
+        <ClInclude Include="Math\IntVec2.hpp"/>
+        <ClInclude Include="Math\LineSegment2.hpp"/>
+        <ClInclude Include="Math\Mat44.hpp"/>
+        <ClInclude Include="Math\MathUtils.hpp"/>
+        <ClInclude Include="Math\OBB2.hpp"/>
+        <ClInclude Include="Math\RandomNumberGenerator.hpp"/>
+        <ClInclude Include="Math\RaycastUtils.hpp"/>
+        <ClInclude Include="Math\Sphere.h" />
+        <ClInclude Include="Math\Triangle2.hpp"/>
+        <ClInclude Include="Math\Vec2.hpp"/>
+        <ClInclude Include="Math\Vec3.hpp"/>
+        <ClInclude Include="Math\Vec4.hpp"/>
+        <ClInclude Include="Math\ZCylinder.hpp" />
+        <ClInclude Include="Renderer\BitmapFont.hpp"/>
+        <ClInclude Include="Renderer\Camera.hpp"/>
+        <ClInclude Include="Renderer\ConstantBuffer.hpp"/>
+        <ClInclude Include="Renderer\DebugRenderSystem.h" />
+        <ClInclude Include="Renderer\DefaultShader.hpp"/>
+        <ClInclude Include="Renderer\IndexBuffer.hpp" />
+        <ClInclude Include="Renderer\Renderer.hpp"/>
+        <ClInclude Include="Renderer\Shader.hpp"/>
+        <ClInclude Include="Renderer\SimpleTriangleFont.hpp"/>
+        <ClInclude Include="Renderer\SpriteAnimDefinition.hpp"/>
+        <ClInclude Include="Renderer\SpriteDefinition.hpp"/>
+        <ClInclude Include="Renderer\SpriteSheet.hpp"/>
+        <ClInclude Include="Renderer\Texture.hpp"/>
+        <ClInclude Include="Renderer\VertexBuffer.hpp"/>
+        <ClInclude Include="Window\Window.hpp"/>
+    </ItemGroup>
+    <ItemGroup>
+        <Content Include=".gitignore" />
+        <Content Include="README.md"/>
+    </ItemGroup>
+    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
+    <ImportGroup Label="ExtensionTargets">
+    </ImportGroup>
+</Project>
