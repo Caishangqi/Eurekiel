@@ -1,0 +1,6 @@
+﻿.idea
+.vs
+Engine.vcxproj.filters
+*.obj
+*.pdb
+Temporary
