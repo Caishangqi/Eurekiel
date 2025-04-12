@@ -24,6 +24,15 @@ public:
     const Vec2 GetPointAtUV(const Vec2& uv) const; // uv = (0,0) is at mins; uv = (1,1) is at maxs
     const Vec2 GetUVForPoint(const Vec2& point) const; // uv = (.5,.5) at center; u or v outside [0,1] extrapolated
 
+    /// Helpers
+    AABB2 GetBoxAtUvs(Vec2 uvMin, Vec2 uvMax);
+    void  AddPadding(float xToAddOnBothSides, float yToAddOnBothSides);
+    void  ReduceToAspect(float newAspectRatio); /// reduces to new aspect ratio, keeping center the same
+    void  EnlargeToAspect(float newAspect); /// enlarges to new aspect ratio, keeping center the same
+
+    /// Chop off the top AABB2 and return the chopped topped aabb2
+    AABB2 ChopOffTop(float heightOfChoppedPieces);
+
     // Mutators (non-const methods)
     void Translate(const Vec2& translationToApply);
     void SetCenter(const Vec2& newCenter);
