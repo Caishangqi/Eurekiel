@@ -1,4 +1,3 @@
-#include "Vec2.hpp"
 #include <valarray>
 
 #include "IntVec2.hpp"
@@ -7,10 +6,19 @@
 #include "Engine/Core/StringUtils.hpp"
 //#include "Engine/Math/MathUtils.hpp"
 //#include "Engine/Core/EngineCommon.hpp"
-
+#include "Engine/Math/Vec3.hpp"
+#include "Engine/Math/Vec2.hpp"
 Vec2 Vec2::ZERO    = Vec2(0.0f, 0.0f);
 Vec2 Vec2::ONE     = Vec2(1.0f, 1.0f);
 Vec2 Vec2::INVALID = Vec2(-1.0f, -1.0f);
+
+Vec2::~Vec2()
+{
+}
+
+Vec2::Vec2()
+{
+}
 
 /**
  * Copy Constructor
@@ -120,6 +128,12 @@ const Vec2 Vec2::GetNormalized() const
     vec_ptr.y *= scale;
     return vec_ptr;
 }
+
+const Vec3 Vec2::GetAsVec3(float z) const
+{
+    return Vec3(x, y, z);
+}
+
 
 const Vec2 Vec2::GetReflected(const Vec2& normalOfSurfaceToReflectOffOf) const
 {

@@ -2,8 +2,8 @@
 #include <ostream>
 #include <string>
 
-
 struct IntVec2;
+struct Vec3;
 
 //-----------------------------------------------------------------------------------------------
 struct Vec2
@@ -15,12 +15,8 @@ struct Vec2
     float x = 0.f;
     float y = 0.f;
     // Construction/Destruction
-    ~Vec2()
-    {
-    } // destructor (do nothing)
-    Vec2()
-    {
-    } // default constructor (do nothing)
+    ~Vec2(); // destructor (do nothing)
+    Vec2(); // default constructor (do nothing)
     Vec2(const Vec2& copyFrom); // copy constructor (from another vec2)
     Vec2(const IntVec2& copyFrom); // copy constructor (from another vec2)
     explicit Vec2(float initialX, float initialY); // explicit constructor (from x, y)
@@ -40,6 +36,7 @@ struct Vec2
     const Vec2 GetRotatedDegrees(float deltaDegrees) const;
     const Vec2 GetClamped(float maxLength) const; // Get the clamped version of the vector
     const Vec2 GetNormalized() const;
+    const Vec3 GetAsVec3(float z = 0.f) const;
 
     const Vec2 GetReflected(const Vec2& normalOfSurfaceToReflectOffOf) const;
     void       Reflect(const Vec2& normalOfSurfaceToReflectOffOf);

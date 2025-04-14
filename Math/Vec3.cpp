@@ -1,12 +1,12 @@
-﻿#include "Vec3.hpp"
+﻿
 #include <valarray>
 
 #include "EulerAngles.hpp"
 #include "Mat44.hpp"
 #include "MathUtils.hpp"
-#include "Vec2.hpp"
+#include "Engine/Math/Vec2.hpp"
+#include "Engine/Math/Vec3.hpp"
 #include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
 
 Vec3 Vec3::ZERO    = Vec3(0.0f, 0.0f, 0.0f);
@@ -104,6 +104,11 @@ const Vec3 Vec3::GetNormalized() const
     float length = GetLength();
     float scale  = 1.0f / length;
     return Vec3(x * scale, y * scale, z * scale);
+}
+
+const Vec2 Vec3::GetXY() const
+{
+    return Vec2(x, y);
 }
 
 const Vec3 Vec3::MakeFromPolarRadians(float pitchRadians, float yawRadians, float length)

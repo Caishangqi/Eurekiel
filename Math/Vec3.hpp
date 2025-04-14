@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Vec2.hpp"
 struct EulerAngles;
 
 struct Vec3
@@ -28,6 +29,7 @@ struct Vec3
     const Vec3 GetRotatedAboutZDegrees(float deltaDegrees) const;
     const Vec3 GetClamped(float maxLength) const;
     const Vec3 GetNormalized() const;
+    const Vec2 GetXY() const;
 
     // Static methods
     const static Vec3 MakeFromPolarRadians(float pitchRadians, float yawRadians, float length = 1.0f);
