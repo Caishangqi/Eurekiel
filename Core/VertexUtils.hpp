@@ -31,16 +31,21 @@ void AddVertsForCapsule2D(std::vector<Vertex_PCU>& verts, const Capsule2& capsul
 void AddVertsForTriangle2D(std::vector<Vertex_PCU>& verts, const Triangle2& triangle, const Rgba8& color);
 void AddVertsForLineSegment2D(std::vector<Vertex_PCU>& verts, const LineSegment2& lineSegment, const Rgba8& color);
 void AddVertsForArrow2D(std::vector<Vertex_PCU>& verts, Vec2 tailPos, Vec2 tipPos, float arrowSize, float lineThickness, const Rgba8& color);
+void AddVertsForRoundedQuad3D(std::vector<Vertex_PCUTBN>& vertexes, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color = Rgba8::WHITE,
+                              const AABB2&                UVs = AABB2::ZERO_TO_ONE);
 void AddVertsForQuad3D(std::vector<Vertex_PCU>& verts, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color = Rgba8::WHITE,
                        const AABB2&             UVs                                                                                                                   = AABB2::ZERO_TO_ONE);
+void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& verts, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color = Rgba8::WHITE,
+                       const AABB2&                UVs                                                                                                                   = AABB2::ZERO_TO_ONE);
 void AddVertsForQuad3D(std::vector<Vertex_PCU>& outVerts, std::vector<unsigned int>& outIndices, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft,
                        const Rgba8&             color, const AABB2&                  uv);
 void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft,
                        const Rgba8&                color, const AABB2&                  uv);
+
 void  TransformVertexArray3D(std::vector<Vertex_PCU>& verts, const Mat44& transform);
 AABB2 GetVertexBounds2D(const std::vector<Vertex_PCU>& verts);
 void  AddVertsForCylinder3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE,
-                           int                       numSlices                                                                   = 32);
+                            int                      numSlices                                                                   = 32);
 void AddVertsForCone3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32);
 void AddVertsForArrow3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowPercentage = 0.25, const Rgba8& color = Rgba8::WHITE, int numSlices = 32);
 void AddVertsForArrow3DFixArrowSize(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowSize = 0.25f, const Rgba8& color = Rgba8::WHITE, int numSlices = 32);

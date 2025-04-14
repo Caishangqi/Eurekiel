@@ -268,6 +268,33 @@ void AddVertsForArrow2D(std::vector<Vertex_PCU>& verts, Vec2 tailPos, Vec2 tipPo
     AddVertsForLineSegment2D(verts, lineSegmentEB, color);
 }
 
+void AddVertsForRoundedQuad3D(std::vector<Vertex_PCUTBN>& vertexes, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color, const AABB2& UVs)
+{
+    Vec3 u = bottomRight - bottomLeft;
+    Vec3 v = topLeft - bottomLeft;
+    Vec3 n = CrossProduct3D(u, v).GetNormalized();
+
+    Vec3 topMiddlePoint    = Interpolate(topLeft, topRight, 0.5f);
+    Vec3 bottomMiddlePoint = Interpolate(bottomLeft, bottomRight, 0.5f);
+
+    /// Left part
+    vertexes.push_back(Vertex_PCUTBN(bottomLeft, color, UVs.m_mins, -n));
+    vertexes.push_back(Vertex_PCUTBN(bottomMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_mins.y), n));
+    vertexes.push_back(Vertex_PCUTBN(topMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_maxs.y), n));
+
+    vertexes.push_back(Vertex_PCUTBN(bottomLeft, color, UVs.m_mins, -n));
+    vertexes.push_back(Vertex_PCUTBN(topMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_maxs.y), n));
+    vertexes.push_back(Vertex_PCUTBN(topLeft, color, Vec2(UVs.m_mins.x, UVs.m_maxs.y), -n));
+    /// Right part
+    vertexes.push_back(Vertex_PCUTBN(bottomMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_mins.y), n));
+    vertexes.push_back(Vertex_PCUTBN(bottomRight, color, Vec2(UVs.m_maxs.x, UVs.m_mins.y), n));
+    vertexes.push_back(Vertex_PCUTBN(topRight, color, UVs.m_maxs, n));
+
+    vertexes.push_back(Vertex_PCUTBN(bottomMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_mins.y), n));
+    vertexes.push_back(Vertex_PCUTBN(topRight, color, UVs.m_maxs, n));
+    vertexes.push_back(Vertex_PCUTBN(topMiddlePoint, color, Vec2((UVs.m_maxs.x + UVs.m_mins.x) * 0.5f, UVs.m_maxs.y), n));
+}
+
 void AddVertsForQuad3D(std::vector<Vertex_PCU>& verts, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color, const AABB2& UVs)
 {
     verts.push_back(Vertex_PCU(bottomLeft, color, UVs.m_mins));
@@ -277,6 +304,21 @@ void AddVertsForQuad3D(std::vector<Vertex_PCU>& verts, const Vec3& bottomLeft, c
     verts.push_back(Vertex_PCU(bottomLeft, color, UVs.m_mins));
     verts.push_back(Vertex_PCU(topRight, color, UVs.m_maxs));
     verts.push_back(Vertex_PCU(topLeft, color, Vec2(UVs.m_mins.x, UVs.m_maxs.y)));
+}
+
+void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& verts, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft, const Rgba8& color, const AABB2& UVs)
+{
+    Vec3 u = bottomRight - bottomLeft;
+    Vec3 v = topLeft - bottomLeft;
+    Vec3 n = CrossProduct3D(u, v).GetNormalized();
+
+    verts.push_back(Vertex_PCUTBN(bottomLeft, color, UVs.m_mins, n));
+    verts.push_back(Vertex_PCUTBN(bottomRight, color, Vec2(UVs.m_maxs.x, UVs.m_mins.y)));
+    verts.push_back(Vertex_PCUTBN(topRight, color, UVs.m_maxs, n));
+
+    verts.push_back(Vertex_PCUTBN(bottomLeft, color, UVs.m_mins, n));
+    verts.push_back(Vertex_PCUTBN(topRight, color, UVs.m_maxs, n));
+    verts.push_back(Vertex_PCUTBN(topLeft, color, Vec2(UVs.m_mins.x, UVs.m_maxs.y), n));
 }
 
 void AddVertsForQuad3D(std::vector<Vertex_PCU>& outVerts, std::vector<unsigned>& outIndices, const Vec3& bottomLeft, const Vec3& bottomRight, const Vec3& topRight, const Vec3& topLeft,
@@ -302,7 +344,6 @@ void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigne
                        const Rgba8&                color, const AABB2&              uv)
 {
     unsigned int startIndex = static_cast<unsigned int>(outVerts.size());
-
 
     Vec3 u = bottomRight - bottomLeft;
     Vec3 v = topLeft - bottomLeft;
