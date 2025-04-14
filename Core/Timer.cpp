@@ -5,6 +5,8 @@
 
 Timer::Timer()
 {
+    if (m_clock == nullptr)
+        m_clock = &Clock::GetSystemClock();
 }
 
 Timer::Timer(float period, const Clock* clock): m_clock(clock), m_period(period)
@@ -25,8 +27,8 @@ void Timer::Stop()
 
 float Timer::GetElapsedTime() const
 {
-    if (m_startTime < 0.0)
-        return 0.0;
+    if (m_startTime <= 0.f)
+        return 0.f;
     return m_clock->GetTotalSeconds() - m_startTime;
 }
 
