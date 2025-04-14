@@ -52,6 +52,12 @@ Vec2 Interpolate(Vec2 start, Vec2 end, float fractionTowardEnd)
     return Vec2(Interpolate(start.x, end.x, fractionTowardEnd), Interpolate(start.y, end.y, fractionTowardEnd));
 }
 
+Vec3 Interpolate(Vec3 start, Vec3 end, float fractionTowardEnd)
+{
+    return Vec3(Interpolate(start.x, end.x, fractionTowardEnd), Interpolate(start.y, end.y, fractionTowardEnd), Interpolate(start.z, end.z, fractionTowardEnd));
+}
+
+
 float GetFractionWithinRange(float value, float rangeStart, float rangeEnd)
 {
     float range = rangeEnd - rangeStart;
@@ -1032,8 +1038,24 @@ Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTran
     switch (billboardType)
     {
     case BillboardType::WORLD_UP_FACING:
-        ERROR_RECOVERABLE("BillboardType is BillboardType::WORLD_UP_FACING is not implemented")
-        return transform;
+        {
+            Vec2 iBasis2D = Vec2(targetTransform.GetTranslation2D() - Vec2(billboardPosition.x, billboardPosition.y));
+            Vec3 iBasis   = Vec3(iBasis2D.x, iBasis2D.y, 0).GetNormalized();
+            Vec3 jBasis;
+            Vec3 kBasis;
+            if (abs(DotProduct3D(iBasis, Vec3(0, 0, 1)) < 1.0f))
+            {
+                jBasis = CrossProduct3D(Vec3(0, 0, 1), iBasis).GetNormalized();
+                kBasis = CrossProduct3D(iBasis, jBasis);
+            }
+            else
+            {
+                kBasis = CrossProduct3D(iBasis, Vec3(0, 1, 0)).GetNormalized();
+                jBasis = CrossProduct3D(kBasis, iBasis);
+            }
+            transform.SetIJK3D(iBasis, jBasis, kBasis);
+            return transform;
+        }
     case BillboardType::WORLD_UP_OPPOSING:
         ERROR_RECOVERABLE("BillboardType is BillboardType::WORLD_UP_OPPOSING is not implemented")
         return transform;
@@ -1042,7 +1064,7 @@ Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTran
             Vec3 iBasis = (targetTransform.GetTranslation3D() - billboardPosition).GetNormalized();
             Vec3 jBasis;
             Vec3 kBasis;
-            if (abs(DotProduct3D(iBasis, Vec3(0, 0, 1)) < 1))
+            if (abs(DotProduct3D(iBasis, Vec3(0, 0, 1)) < 1.0f))
             {
                 jBasis = CrossProduct3D(Vec3(0, 0, 1), iBasis).GetNormalized();
                 kBasis = CrossProduct3D(iBasis, jBasis);

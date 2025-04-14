@@ -37,6 +37,7 @@ float GetClamped(float value, float minValue, float maxValue);
 float GetClampedZeroToOne(float value);
 float Interpolate(float start, float end, float fractionTowardEnd);
 Vec2  Interpolate(Vec2 start, Vec2 end, float fractionTowardEnd);
+Vec3  Interpolate(Vec3 start, Vec3 end, float fractionTowardEnd);
 float GetFractionWithinRange(float value, float rangeStart, float rangeEnd);
 float RangeMap(float inValue, float inStart, float inEnd, float outStart, float outEnd);
 float RangeMapClamped(float inValue, float inStart, float inEnd, float outStart, float outEnd);
