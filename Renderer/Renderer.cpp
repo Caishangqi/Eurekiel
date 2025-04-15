@@ -18,6 +18,7 @@
 #include "Engine/Core/Image.hpp"
 #include "Engine/Core/StringUtils.hpp"
 #include "Engine/Math/IntVec2.hpp"
+#include "Engine/Math/MathUtils.hpp"
 #pragma comment( lib, "opengl32" )	// Link in the OpenGL32.lib static library
 extern HWND g_hWnd;
 
@@ -425,10 +426,10 @@ void Renderer::BeingCamera(const Camera& camera)
     //UNUSED(camera)
     /// DirectX
     D3D11_VIEWPORT viewport = {};
-    viewport.TopLeftX       = 0.f; // Using different coordinate system
-    viewport.TopLeftY       = 0.f;
-    viewport.Width          = static_cast<float>(m_config.m_window->GetClientDimensions().x);
-    viewport.Height         = static_cast<float>(m_config.m_window->GetClientDimensions().y);
+    viewport.TopLeftX       = RangeMap(camera.m_viewPort.m_mins.x, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().x); // Using different coordinate system
+    viewport.TopLeftY       = RangeMap(1.f - camera.m_viewPort.m_maxs.y, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().y); // revert the top left to bottom left
+    viewport.Width          = RangeMap(camera.m_viewPort.GetDimensions().x, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().x);
+    viewport.Height         = RangeMap(camera.m_viewPort.GetDimensions().y, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().y);
     viewport.MinDepth       = 0.f;
     viewport.MaxDepth       = 1.f;
     m_deviceContext->RSSetViewports(1, &viewport);
