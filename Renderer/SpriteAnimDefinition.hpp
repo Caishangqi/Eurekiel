@@ -16,6 +16,7 @@ public:
                          float              framesPerSecond, SpriteAnimPlaybackType playbackType = SpriteAnimPlaybackType::LOOP);
     const SpriteDefinition& GetSpriteDefAtTime(float seconds) const; // Most of the logic for this class is done here!
     float                   GetDuration() const;
+    int                     GetTotalFrameInCycle();
 
 private:
     const SpriteSheet&     m_spriteSheet;

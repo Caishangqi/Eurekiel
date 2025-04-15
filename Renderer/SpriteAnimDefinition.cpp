@@ -56,3 +56,8 @@ float SpriteAnimDefinition::GetDuration() const
     int totalFrames = m_endSpriteIndex - m_startSpriteIndex + 1;
     return static_cast<float>(totalFrames) / m_framesPerSecond;
 }
+
+int SpriteAnimDefinition::GetTotalFrameInCycle()
+{
+    return m_endSpriteIndex - m_startSpriteIndex + 1;
+}
