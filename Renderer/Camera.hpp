@@ -1,8 +1,10 @@
 ﻿#pragma once
+#include "Engine/Math/AABB2.hpp"
 #include "Engine/Math/EulerAngles.hpp"
 #include "Engine/Math/Mat44.hpp"
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Math/Vec3.hpp"
+
 
 enum Mode
 {
@@ -65,6 +67,12 @@ public:
     //void Translate2D(const Vec2& translation2D);
     void DoShakeEffect(const Vec2& translation2D, float duration, bool decreaseShakeOverTime = true);
 
+    /// Viewport
+    void  SetNormalizedViewport(AABB2 const& viewportSize);
+    AABB2 GetNormalizedViewport() const;
+    float GetViewPortAspectRatio(Vec2 const& clientSize) const;
+    Vec2  GetViewportSize(Vec2 const& clientSize) const;
+
 private:
     void ApplyShakeEffect(float deltaTime);
     Vec2 GenerateRandomShakeOffset(const Vec2& translation2D) const;
@@ -102,5 +110,9 @@ public:
     float m_perspectiveFar    = 0.f;
 
     Mat44 m_cameraToRenderTransform;
-    /// 
+
+    /// View port
+
+    // This view port is start form bottom left (0, 0) to top right with normalized
+    AABB2 m_viewPort = AABB2(Vec2(0, 0), Vec2(1, 1));
 };

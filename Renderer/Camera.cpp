@@ -158,6 +158,26 @@ void Camera::DoShakeEffect(const Vec2& translation2D, float duration, bool decre
     m_decreaseShakeOverTime = decreaseShakeOverTime;
 }
 
+void Camera::SetNormalizedViewport(AABB2 const& viewportSize)
+{
+    m_viewPort = viewportSize;
+}
+
+AABB2 Camera::GetNormalizedViewport() const
+{
+    return m_viewPort;
+}
+
+float Camera::GetViewPortAspectRatio(Vec2 const& clientSize) const
+{
+    return clientSize.x / clientSize.y;
+}
+
+Vec2 Camera::GetViewportSize(Vec2 const& clientSize) const
+{
+    return Vec2(clientSize.x * m_viewPort.GetDimensions().x, clientSize.y * m_viewPort.GetDimensions().y);
+}
+
 void Camera::ApplyShakeEffect(float deltaTime)
 {
     m_shakeRemainingTime -= deltaTime;
