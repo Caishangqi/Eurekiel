@@ -843,20 +843,31 @@ bool BounceDiscsOffEachOther(Disc2& mobileDiscA, Vec2& mobileDiscVelocityA, floa
 {
     if (PushDiscsOutOfEachOther2D(mobileDiscA, mobileDiscB))
     {
-        float finalElastic = mobileDiscElasticityA * mobileDiscElasticityB;
-        Vec2  normalA      = (mobileDiscB.m_position - mobileDiscA.m_position).GetNormalized();
-        float scalarAvn    = DotProduct2D(normalA, mobileDiscVelocityA);
-        Vec2  vectorAvn    = normalA * scalarAvn;
-        Vec2  vectorAvt    = mobileDiscVelocityA - vectorAvn;
+        Vec2 ab     = mobileDiscB.m_position - mobileDiscA.m_position;
+        Vec2 normal = ab.GetNormalized();
 
-        Vec2  normalB   = (mobileDiscA.m_position - mobileDiscB.m_position).GetNormalized();
-        float scalarBvn = DotProduct2D(normalB, mobileDiscVelocityB);
-        Vec2  vectorBvn = normalB * scalarBvn;
-        Vec2  vectorBvt = mobileDiscVelocityB - vectorBvn;
+        float aSpeedAlongN = DotProduct2D(normal, mobileDiscVelocityA);
+        float bSpeedAlongN = DotProduct2D(normal, mobileDiscVelocityB);
+        if (bSpeedAlongN < aSpeedAlongN)
+        {
+            float finalElastic = mobileDiscElasticityA * mobileDiscElasticityB;
+            Vec2  normalA      = (mobileDiscB.m_position - mobileDiscA.m_position).GetNormalized();
+            float scalarAvn    = DotProduct2D(normalA, mobileDiscVelocityA);
+            Vec2  vectorAvn    = normalA * scalarAvn;
+            Vec2  vectorAvt    = mobileDiscVelocityA - vectorAvn;
 
-        // Exchange momentum
-        mobileDiscVelocityA = vectorAvt + (vectorBvn * finalElastic);
-        mobileDiscVelocityB = vectorBvt + (vectorAvn * finalElastic);
+            Vec2  normalB   = (mobileDiscA.m_position - mobileDiscB.m_position).GetNormalized();
+            float scalarBvn = DotProduct2D(normalB, mobileDiscVelocityB);
+            Vec2  vectorBvn = normalB * scalarBvn;
+            Vec2  vectorBvt = mobileDiscVelocityB - vectorBvn;
+
+
+            // Exchange momentum
+            mobileDiscVelocityA = vectorAvt + (vectorBvn * finalElastic);
+            mobileDiscVelocityB = vectorBvt + (vectorAvn * finalElastic);
+            return true;
+        }
+
         return true;
     }
     else
@@ -1057,7 +1068,8 @@ Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTran
             return transform;
         }
     case BillboardType::WORLD_UP_OPPOSING:
-        ERROR_RECOVERABLE("BillboardType is BillboardType::WORLD_UP_OPPOSING is not implemented")
+        transform.SetIJ2D(-targetTransform.GetIBasis2D(), -targetTransform.GetJBasis2D());
+        transform.SetTranslation3D(billboardPosition);
         return transform;
     case BillboardType::FULL_FACING:
         {
@@ -1077,12 +1089,10 @@ Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTran
             transform.SetIJK3D(iBasis, jBasis, kBasis);
             return transform;
         }
-    case BillboardType::FULL_OPPOSING:
+    case
+    BillboardType::FULL_OPPOSING:
         {
-            Mat44 cameraOrientation;
-            cameraOrientation.SetIJK3D(targetTransform.GetIBasis3D(), targetTransform.GetJBasis3D(), targetTransform.GetKBasis3D());
-
-            transform.Append(cameraOrientation);
+            transform.SetIJKTranslation3D(-targetTransform.GetIBasis3D(), -targetTransform.GetJBasis3D(), targetTransform.GetKBasis3D(), billboardPosition);
             return transform;
         }
     case BillboardType::NONE:
