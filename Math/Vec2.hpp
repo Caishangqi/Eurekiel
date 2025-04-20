@@ -36,7 +36,7 @@ struct Vec2
     const Vec2 GetRotatedDegrees(float deltaDegrees) const;
     const Vec2 GetClamped(float maxLength) const; // Get the clamped version of the vector
     const Vec2 GetNormalized() const;
-    const Vec3 GetAsVec3(float z = 0.f) const;
+    Vec3       GetAsVec3(float z = 0.f) const;
 
     const Vec2 GetReflected(const Vec2& normalOfSurfaceToReflectOffOf) const;
     void       Reflect(const Vec2& normalOfSurfaceToReflectOffOf);

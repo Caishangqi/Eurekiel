@@ -129,7 +129,7 @@ const Vec2 Vec2::GetNormalized() const
     return vec_ptr;
 }
 
-const Vec3 Vec2::GetAsVec3(float z) const
+Vec3 Vec2::GetAsVec3(float z) const
 {
     return Vec3(x, y, z);
 }
