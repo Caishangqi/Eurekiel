@@ -9,6 +9,8 @@
 #include <map>
 
 
+struct Vec3;
+
 namespace FMOD
 {
     class Sound;
@@ -41,7 +43,7 @@ public:
     virtual void BeginFrame();
     virtual void EndFrame();
 
-    virtual SoundID         CreateOrGetSound(const std::string& soundFilePath);
+    virtual SoundID         CreateOrGetSound(const std::string& soundFilePath, FMOD_INITFLAGS flags = FMOD_3D);
     virtual SoundPlaybackID StartSound(SoundID soundID, bool isLooped = false, float volume   = 1.f, float balance = 0.0f,
                                        float   speed                  = 1.0f, bool   isPaused = false);
     virtual void StopSound(SoundPlaybackID soundPlaybackID);
@@ -52,6 +54,16 @@ public:
     // speed is frequency multiplier (1.0 == normal)
 
     virtual void ValidateResult(FMOD_RESULT result);
+
+    /// Sound 3D support
+    void                    SetNumListeners(int numListeners);
+    void                    UpdateListener(int listenerIndex, const Vec3& listenerPosition, const Vec3& listenerForward, const Vec3& listenerUp);
+    virtual SoundPlaybackID StartSoundAt(SoundID soundID, const Vec3& soundPosition, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false);
+    virtual void            SetSoundPosition(SoundPlaybackID soundPlaybackID, const Vec3& soundPosition);
+    bool                    IsPlaying(SoundPlaybackID soundPlaybackID);
+
+private:
+    static FMOD_VECTOR GameToFmodVec(const Vec3& v);
 
 protected:
     FMOD::System*                  m_fmodSystem;
