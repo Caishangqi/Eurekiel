@@ -58,9 +58,11 @@ public:
     Mat44 GetPerspectiveMatrix() const;
     Mat44 GetProjectionMatrix() const;
     /// 
-
+    [[deprecated("SetOrthoView() deprecated | Use SetOrthographicView() instead.")]]
     void SetOrthoView(const Vec2& bottomLeft, const Vec2& topRight);
+    [[deprecated("GetOrthoBottomLeft() deprecated | Use GetOrthographicBottomLeft() instead.")]]
     Vec2 GetOrthoBottomLeft() const;
+    [[deprecated("GetOrthoTopRight() deprecated | Use GetOrthographicTopRight() instead.")]]
     Vec2 GetOrthoTopRight() const;
 
     void Update(float deltaTime);
@@ -68,10 +70,17 @@ public:
     void DoShakeEffect(const Vec2& translation2D, float duration, bool decreaseShakeOverTime = true);
 
     /// Viewport
-    void  SetNormalizedViewport(AABB2 const& viewportSize);
-    AABB2 GetNormalizedViewport() const;
-    float GetViewPortAspectRatio(Vec2 const& clientSize) const;
-    Vec2  GetViewportSize(Vec2 const& clientSize) const;
+    void  SetNormalizedViewport(AABB2 const& viewportSize); // Set the normalized viewport from zero to one
+    AABB2 GetNormalizedViewport() const; // Get the normalized viewport from zero to one
+    /// Get the unnormalized view port based on client size, for example, if we have the client dimension 1600 x 800
+    /// and the normalized view port mins = (0, 0.5f) maxs = (1, 1), the function should return dimension of
+    /// mins = (0, 400) maxs = (1600, 800)
+    /// @param clientSize the desired client size for the application.
+    /// @return AABB2 The unnormalized screen viewport size.
+    AABB2 GetViewPortUnnormalized(Vec2 const& clientSize);
+    float GetViewPortAspectRatio(Vec2 const& clientSize) const; // Get the normalized viewport aspect ratio
+    Vec2  GetViewportSize(Vec2 const& clientSize) const; // Get the dimension of screen viewport size after client size was input.
+    float GetViewPortUnnormalizedAspectRatio(Vec2 const& clientSize) const; // Get the unnormalized screen port aspect ratio.
 
 private:
     void ApplyShakeEffect(float deltaTime);
