@@ -243,7 +243,6 @@ void DebugRenderWorld(const Camera& camera)
                 Mat44 cameraTransform = Mat44::MakeTranslation3D(camera.m_position);
                 cameraTransform.Append(camera.m_orientation.GetAsMatrix_IFwd_JLeft_KUp());
                 Mat44 billboardTransform;
-                billboardTransform.AppendTranslation3D(debugRenderPropObject->m_BillboardPosition);
                 billboardTransform.Append(GetBillboardTransform(BillboardType::FULL_OPPOSING, cameraTransform, debugRenderPropObject->m_BillboardPosition));
                 std::vector<Vertex_PCU> verts = debugRenderPropObject->vertices;
                 TransformVertexArray3D(verts, billboardTransform);
@@ -389,9 +388,6 @@ void DebugAddWorldBillboardText(const std::string& text, const Vec3& origin, flo
     debugRenderPropObject->m_isBillboard          = true;
     debugRenderPropObject->m_BillboardPosition    = origin;
     debugBitmapFont->AddVertsForText3DAtOriginXForward(debugRenderPropObject->vertices, textHeight, text, startColor, 1, alignment);
-    Mat44 transformY;
-    transformY.AppendZRotation(180.f);
-    TransformVertexArray3D(debugRenderPropObject->vertices, transformY);
     debugRenderPropsList.push_back(debugRenderPropObject);
 }
 
