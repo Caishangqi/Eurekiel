@@ -4,8 +4,11 @@
 #include "Rgba8.hpp"
 #include "Engine/Math/AABB2.hpp"
 #include "Engine/Math/AABB3.hpp"
+#include "Engine/Math/IntVec2.hpp"
 #include "Engine/Math/Vec3.hpp"
 
+class Plane3;
+class OBB3;
 struct Vertex_PCUTBN;
 class ZCylinder;
 struct Mat44;
@@ -45,7 +48,7 @@ void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigne
 void  TransformVertexArray3D(std::vector<Vertex_PCU>& verts, const Mat44& transform);
 AABB2 GetVertexBounds2D(const std::vector<Vertex_PCU>& verts);
 void  AddVertsForCylinder3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE,
-                            int                      numSlices                                                                   = 32);
+                           int                       numSlices                                                                   = 32);
 void AddVertsForCone3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32);
 void AddVertsForArrow3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowPercentage = 0.25, const Rgba8& color = Rgba8::WHITE, int numSlices = 32);
 void AddVertsForArrow3DFixArrowSize(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowSize = 0.25f, const Rgba8& color = Rgba8::WHITE, int numSlices = 32);
@@ -55,9 +58,14 @@ void AddVertsForWireFrameSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& ce
                                   int                      numStacks                                                   = 8);
 void AddVertsForIndexedSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& center, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32,
                                 int                      numStacks                                                   = 16);
-void        AddVertsForCube3D(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE);
-void        AddVertsForCube3D(std::vector<Vertex_PCU>& verts, std::vector<unsigned int>& indexes, const AABB3& box, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE);
-void        AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color);
-void        AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCylinder& cylinder, const Rgba8& color, int numSlices = 32);
-void        AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cylinder, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32);
+void AddVertsForCube3D(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE);
+void AddVertsForCube3D(std::vector<Vertex_PCU>& verts, std::vector<unsigned int>& indexes, const AABB3& box, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE);
+void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color);
+void AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCylinder& cylinder, const Rgba8& color, int numSlices = 32);
+void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cylinder, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32);
+
+void AddVertsForOBB3D(std::vector<Vertex_PCU>& verts, const OBB3& obb3, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE);
+void AddVertsForOBB3DWireFrame(std::vector<Vertex_PCU>& verts, const OBB3& obb3, const Rgba8& color = Rgba8::DEBUG_BLUE);
+void AddVertsForPlane3D(std::vector<Vertex_PCU>& verts, const Plane3& plane3, const IntVec2& dimensions = IntVec2(50, 50),const float thickness = 0.05f, const Rgba8& colorX = Rgba8::RED, const Rgba8& colorY = Rgba8::GREEN);
+
 static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float radius, const Vec2& uvCenter, float uvRadius, float rotateDegrees = 0.f, bool flipAboutY = false);

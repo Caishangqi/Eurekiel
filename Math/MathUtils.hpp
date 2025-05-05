@@ -139,7 +139,7 @@ float         NormalizeByte(unsigned char byte);
 unsigned char DenormalizeByte(float range);
 
 // Billboard
-Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTransform, Vec3 const& billboardPosition, Vec2 const& billboardScale = Vec2(1.0f, 1.0f));
+Mat44 GetBillboardTransform(BillboardType billboardType, const Mat44& targetTransform, const Vec3& billboardPosition, const Vec2& billboardScale = Vec2(1.0f, 1.0f));
 
 /// Periodical
 float CycleValue(float time, float period);

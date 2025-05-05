@@ -7,7 +7,7 @@ struct Vec3
     static Vec3 ZERO;
     static Vec3 ONE;
     static Vec3 INVALID;
-    
+
     float x = 0.f;
     float y = 0.f;
     float z = 0.f;

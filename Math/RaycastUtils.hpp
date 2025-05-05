@@ -1,8 +1,9 @@
 ﻿#pragma once
-#include "Sphere.h"
+#include "Sphere.hpp"
 #include "Vec2.hpp"
 #include "Vec3.hpp"
 
+class OBB3;
 class ZCylinder;
 class AABB3;
 class AABB2;
@@ -39,6 +40,6 @@ struct RaycastResult3D
 RaycastResult2D RaycastVsDisc2D(Vec2 startPos, Vec2 fwdNormal, float maxDist, Vec2 discCenter, float discRadius);
 RaycastResult2D RaycastVsLineSegment2D(Vec2 startPos, Vec2 fwdNormal, float maxDist, LineSegment2& lineSegment2D);
 RaycastResult2D RaycastVsAABB2(Vec2 startPos, Vec2 fwdNormal, float maxDist, AABB2& aabb2);
-RaycastResult3D RaycastVsSphere3D(const Vec3 startPos, const Vec3 fwdNormal, float maxDist, const Sphere& sphere);
-RaycastResult3D RaycastVsAABB3D(const Vec3 startPos, const Vec3 fwdNormal, float maxDist, const AABB3& aabb3);
-RaycastResult3D RaycastVsZCylinder3D(const Vec3 startPos, const Vec3 fwdNormal, float maxDist, const ZCylinder& cylinder);
+RaycastResult3D RaycastVsSphere3D(Vec3 startPos, Vec3 fwdNormal, float maxDist, const Sphere& sphere);
+RaycastResult3D RaycastVsAABB3D(Vec3 startPos, Vec3 fwdNormal, float maxDist, const AABB3& aabb3);
+RaycastResult3D RaycastVsZCylinder3D(Vec3 startPos, Vec3 fwdNormal, float maxDist, const ZCylinder& cylinder);

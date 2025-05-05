@@ -40,14 +40,20 @@ Rgba8 ParseXmlAttribute(const XmlElement& element, const char* attributeName, co
 Vec2 ParseXmlAttribute(const XmlElement& element, const char* attributeName, const Vec2& defaultValue)
 {
     Vec2 result = defaultValue;
-    result.SetFromText(element.Attribute(attributeName));
+    if (element.Attribute(attributeName))
+    {
+        result.SetFromText(element.Attribute(attributeName));
+    }
     return result;
 }
 
 Vec3 ParseXmlAttribute(const XmlElement& element, const char* attributeName, const Vec3& defaultValue)
 {
     Vec3 result = defaultValue;
-    result.SetFromText(element.Attribute(attributeName));
+    if (element.Attribute(attributeName))
+    {
+        result.SetFromText(element.Attribute(attributeName));
+    }
     return result;
 }
 
@@ -71,10 +77,13 @@ std::string ParseXmlAttribute(const XmlElement& element, const char* attributeNa
 
 Strings ParseXmlAttribute(const XmlElement& element, const char* attributeName, const Strings& defaultValue)
 {
-    UNUSED(element)
-    UNUSED(attributeName)
-    UNUSED(defaultValue)
-    ERROR_AND_DIE("ParseXmlAttribute not implemented")
+    std::string attribute = element.Attribute(attributeName);
+    Strings     strings   = SplitStringOnDelimiter(attribute, ',');
+    if (strings.size() == 0)
+    {
+        return defaultValue;
+    }
+    return strings;
 }
 
 FloatRange ParseXmlAttribute(const XmlElement& element, const char* attributeName, const FloatRange& defaultValue)

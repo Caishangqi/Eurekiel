@@ -1,5 +1,4 @@
-﻿
-#include <valarray>
+﻿#include <valarray>
 
 #include "EulerAngles.hpp"
 #include "Mat44.hpp"
@@ -126,6 +125,7 @@ const Vec3 Vec3::MakeFromPolarDegrees(float pitchDegrees, float yawDegrees, floa
     result = mat.TransformPosition3D(result);
     return result;
 }
+
 
 bool Vec3::operator==(const Vec3& compare) const
 {

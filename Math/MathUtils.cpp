@@ -8,7 +8,7 @@
 #include "IntVec2.hpp"
 #include "LineSegment2.hpp"
 #include "OBB2.hpp"
-#include "Sphere.h"
+#include "Sphere.hpp"
 #include "Triangle2.hpp"
 #include "Vec2.hpp"
 #include "Vec3.hpp"
@@ -870,18 +870,15 @@ bool BounceDiscsOffEachOther(Disc2& mobileDiscA, Vec2& mobileDiscVelocityA, floa
 
         return true;
     }
-    else
-    {
-        return false;
-    }
+    return false;
 }
 
 bool BounceDiscsOffEachOther(Vec2& mobileDiscCenterA, float   mobileDiscRadiusA, Vec2& mobileDiscVelocityA, float mobileDiscElasticityA, Vec2& mobileDiscCenterB, float mobileDiscRadiusB,
                              Vec2& mobileDiscVelocityB, float mobileDiscElasticityB)
 {
-    Disc2 mobileDiscA = Disc2(mobileDiscCenterA, mobileDiscRadiusA);
-    Disc2 mobileDiscB = Disc2(mobileDiscCenterB, mobileDiscRadiusB);
-    bool  result      = BounceDiscsOffEachOther(mobileDiscA, mobileDiscVelocityA, mobileDiscElasticityA, mobileDiscB, mobileDiscVelocityB, mobileDiscElasticityB);
+    auto mobileDiscA  = Disc2(mobileDiscCenterA, mobileDiscRadiusA);
+    auto mobileDiscB  = Disc2(mobileDiscCenterB, mobileDiscRadiusB);
+    bool result       = BounceDiscsOffEachOther(mobileDiscA, mobileDiscVelocityA, mobileDiscElasticityA, mobileDiscB, mobileDiscVelocityB, mobileDiscElasticityB);
     mobileDiscCenterA = mobileDiscA.m_position;
     mobileDiscCenterB = mobileDiscB.m_position;
     return result;
@@ -1042,7 +1039,7 @@ unsigned char DenormalizeByte(float range)
 /// @return A Mat44 representing the final billboard transform, incorporating position and scale,
 ///         and oriented according to the chosen billboard type.
 
-Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTransform, Vec3 const& billboardPosition, Vec2 const& billboardScale)
+Mat44 GetBillboardTransform(BillboardType billboardType, const Mat44& targetTransform, const Vec3& billboardPosition, const Vec2& billboardScale)
 {
     UNUSED(billboardScale)
     Mat44 transform;
@@ -1050,7 +1047,7 @@ Mat44 GetBillboardTransform(BillboardType billboardType, Mat44 const& targetTran
     {
     case BillboardType::WORLD_UP_FACING:
         {
-            Vec2 iBasis2D = Vec2(targetTransform.GetTranslation2D() - Vec2(billboardPosition.x, billboardPosition.y));
+            auto iBasis2D = Vec2(targetTransform.GetTranslation2D() - Vec2(billboardPosition.x, billboardPosition.y));
             Vec3 iBasis   = Vec3(iBasis2D.x, iBasis2D.y, 0).GetNormalized();
             Vec3 jBasis;
             Vec3 kBasis;

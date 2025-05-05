@@ -9,6 +9,8 @@
 #include "Engine/Math/LineSegment2.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Math/OBB2.hpp"
+#include "Engine/Math/OBB3.hpp"
+#include "Engine/Math/Plane3.hpp"
 #include "Engine/Math/Triangle2.hpp"
 #include "Engine/Math/ZCylinder.hpp"
 
@@ -1067,6 +1069,56 @@ void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cyli
         verts.push_back(Vertex_PCU(b1, color, uvB1));
         verts.push_back(Vertex_PCU(b0, color, uvB0));
     }
+}
+
+void AddVertsForOBB3D(std::vector<Vertex_PCU>& verts, const OBB3& obb3, const Rgba8& color, const AABB2& UVs)
+{
+    std::vector<Vec3> coners = obb3.GetCorners();
+    // -x
+    AddVertsForQuad3D(verts, coners[1], coners[2], coners[3], coners[0], color, UVs);
+
+    // +x
+    AddVertsForQuad3D(verts, coners[6], coners[5], coners[4], coners[7], color, UVs);
+
+    // -y
+    AddVertsForQuad3D(verts, coners[2], coners[6], coners[7], coners[3], color, UVs);
+
+    // +y
+    AddVertsForQuad3D(verts, coners[5], coners[1], coners[0], coners[4], color, UVs);
+
+    // -z
+    AddVertsForQuad3D(verts, coners[1], coners[5], coners[6], coners[2], color, UVs);
+
+    // +z
+    AddVertsForQuad3D(verts, coners[3], coners[7], coners[4], coners[0], color, UVs);
+}
+
+void AddVertsForOBB3DWireFrame(std::vector<Vertex_PCU>& verts, const OBB3& obb3, const Rgba8& color)
+{
+    std::vector<Vec3> coners = obb3.GetCorners();
+    // -x
+    AddVertsForCylinder3D(verts, coners[0], coners[1], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[1], coners[2], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[2], coners[3], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[3], coners[0], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    // + x
+    AddVertsForCylinder3D(verts, coners[4], coners[5], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[5], coners[6], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[6], coners[7], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[7], coners[4], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+
+    // +y
+    AddVertsForCylinder3D(verts, coners[4], coners[0], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[5], coners[1], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+
+    // -y
+    AddVertsForCylinder3D(verts, coners[7], coners[3], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, coners[6], coners[2], 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+}
+
+void AddVertsForPlane3D(std::vector<Vertex_PCU>& verts, const Plane3& plane3, const IntVec2& dimensions, const float thickness, const Rgba8& colorX, const Rgba8& colorY)
+{
+    Plane3::AddVerts(verts, plane3, dimensions, thickness, colorX, colorY);
 }
 
 static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float radius, const Vec2& uvCenter, float uvRadius, float rotateDegrees, bool flipAboutY) // 新增

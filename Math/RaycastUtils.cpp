@@ -406,7 +406,7 @@ RaycastResult3D RaycastVsAABB3D(const Vec3 startPos, const Vec3 fwdNormal, float
     result.m_impactDist = tMin;
     result.m_impactPos  = startPos + (fwdNormal * tMin);
 
-    const float EPSILON = 1.e-5f;
+    constexpr float EPSILON = 1.e-5f;
 
     if (fwdNormal.x != 0.f)
     {
@@ -466,6 +466,7 @@ RaycastResult3D RaycastVsAABB3D(const Vec3 startPos, const Vec3 fwdNormal, float
     result.m_impactNormal = -fwdNormal;
     return result;
 }
+
 
 RaycastResult3D RaycastVsZCylinder3D(const Vec3 startPos, const Vec3 fwdNormal, float maxDist, const ZCylinder& cylinder)
 {

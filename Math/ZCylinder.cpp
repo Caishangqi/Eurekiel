@@ -20,7 +20,7 @@ ZCylinder::ZCylinder(const Vec3& center, float radius, float height): m_center(c
 }
 
 ZCylinder::ZCylinder(const Vec3& centerOrBase, float radius, float height, bool isBasePosition)
-    : m_radius(radius), m_height(height)
+    : m_height(height), m_radius(radius)
 {
     if (isBasePosition)
     {

@@ -10,7 +10,7 @@ CubicBezierCurve2D::CubicBezierCurve2D()
 {
 }
 
-CubicBezierCurve2D::CubicBezierCurve2D(CubicHermiteCurve2D const& fromHermite)
+CubicBezierCurve2D::CubicBezierCurve2D(const CubicHermiteCurve2D& fromHermite)
 {
     m_startPos  = fromHermite.m_startPos;
     m_guidePos1 = fromHermite.m_startPos + (fromHermite.m_velocityU / 3.f);
@@ -38,7 +38,7 @@ Vec2 CubicBezierCurve2D::EvaluateAtApproximateDistance(float distanceAlongCurve,
     if (distanceAlongCurve >= totalLength) return m_endPos;
     Vec2  prevPos  = EvaluateAtParametric(0.f);
     float traveled = 0.f;
-    float step     = 1.f / (float)(numSubdivisions);
+    float step     = 1.f / static_cast<float>(numSubdivisions);
 
     for (int i = 1; i <= numSubdivisions; ++i)
     {
@@ -67,10 +67,10 @@ float CubicBezierCurve2D::GetLength(int numSubdivisions) const
 {
     float totalLength = 0.f;
     Vec2  prevPos     = EvaluateAtParametric(0.f);
-    float step        = 1.f / (float)(numSubdivisions);
+    float step        = 1.f / static_cast<float>(numSubdivisions);
     for (int i = 1; i <= numSubdivisions; ++i)
     {
-        float t   = step * (float)(i);
+        float t   = step * static_cast<float>(i);
         Vec2  pos = EvaluateAtParametric(t);
         totalLength += (pos - prevPos).GetLength();
         prevPos = pos;
@@ -94,7 +94,7 @@ CubicHermiteCurve2D::CubicHermiteCurve2D(Vec2 startPos, Vec2 velocityU, Vec2 vel
 {
 }
 
-CubicHermiteCurve2D::CubicHermiteCurve2D(CubicBezierCurve2D const& fromBezier)
+CubicHermiteCurve2D::CubicHermiteCurve2D(const CubicBezierCurve2D& fromBezier)
 {
     m_velocityU = 3 * (fromBezier.m_guidePos1 - fromBezier.m_startPos);
     m_velocityV = 3 * (fromBezier.m_endPos - fromBezier.m_guidePos2);
@@ -102,18 +102,18 @@ CubicHermiteCurve2D::CubicHermiteCurve2D(CubicBezierCurve2D const& fromBezier)
 
 Vec2 CubicHermiteCurve2D::EvaluateAtParametric(float parametricZeroToOne) const
 {
-    CubicBezierCurve2D curve = CubicBezierCurve2D(*this);
+    auto curve = CubicBezierCurve2D(*this);
     return curve.EvaluateAtParametric(parametricZeroToOne);
 }
 
 Vec2 CubicHermiteCurve2D::EvaluateAtApproximateDistance(float distanceAlongCurve, int numSubdivisions) const
 {
-    CubicBezierCurve2D curve = CubicBezierCurve2D(*this);
+    auto curve = CubicBezierCurve2D(*this);
     return curve.EvaluateAtApproximateDistance(distanceAlongCurve, numSubdivisions);
 }
 
 float CubicHermiteCurve2D::GetLength(int numSubdivisions) const
 {
-    CubicBezierCurve2D curve = CubicBezierCurve2D(*this);
+    auto curve = CubicBezierCurve2D(*this);
     return curve.GetLength(numSubdivisions);
 }

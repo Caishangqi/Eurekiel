@@ -17,7 +17,7 @@
 #define SmoothStep SmoothStep3
 #define SmootherStep SmoothStep5
 
-typedef float (*EaseFuncPtr)(float);
+using EaseFuncPtr = float(*)(float);
 
 float EaseInQuadratic(float inValue);
 float EaseInCubic(float inValue);
