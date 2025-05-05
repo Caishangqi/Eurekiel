@@ -1,6 +1,17 @@
 ﻿#pragma once
 #include "Engine/Math/Vec2.hpp"
 
+struct Vec4;
+
+enum class AABB2Anchor
+{
+    INVALID = -1,
+    BOTTOM_LEFT,
+    BOTTOM_RIGHT,
+    TOP_LEFT,
+    TOP_RIGHT
+};
+
 class AABB2
 {
 public:
@@ -29,6 +40,8 @@ public:
     void  AddPadding(float xToAddOnBothSides, float yToAddOnBothSides);
     void  ReduceToAspect(float newAspectRatio); /// reduces to new aspect ratio, keeping center the same
     void  EnlargeToAspect(float newAspect); /// enlarges to new aspect ratio, keeping center the same
+    AABB2 StretchTowards(AABB2Anchor anchor, Vec2 stretchAmount);
+    AABB2 GetPadded(const Vec4& padding) const;
 
     /// Chop off the top AABB2 and return the chopped topped aabb2
     AABB2 ChopOffTop(float heightOfChoppedPieces);

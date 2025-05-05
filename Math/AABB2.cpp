@@ -71,6 +71,60 @@ const Vec2 AABB2::GetUVForPoint(const Vec2& point) const
     return Vec2(x, y);
 }
 
+AABB2 AABB2::StretchTowards(AABB2Anchor anchor, Vec2 stretchAmount)
+{
+    // Make a copy so we don't mutate the original AABB2
+    AABB2 result = *this;
+
+    switch (anchor)
+    {
+    case AABB2Anchor::BOTTOM_LEFT:
+        // Keep bottom-left fixed, move right/up edges
+        result.m_maxs.x += stretchAmount.x; // extend/shrink to the right
+        result.m_maxs.y += stretchAmount.y; // extend/shrink upward
+        break;
+
+    case AABB2Anchor::BOTTOM_RIGHT:
+        // Keep bottom-right fixed
+        result.m_mins.x -= stretchAmount.x; // extend/shrink to the left
+        result.m_maxs.y += stretchAmount.y; // extend/shrink upward
+        break;
+
+    case AABB2Anchor::TOP_LEFT:
+        // Keep top-left fixed
+        result.m_maxs.x += stretchAmount.x; // extend/shrink to the right
+        result.m_mins.y -= stretchAmount.y; // extend/shrink downward
+        break;
+
+    case AABB2Anchor::TOP_RIGHT:
+        // Keep top-right fixed
+        result.m_mins.x -= stretchAmount.x; // extend/shrink to the left
+        result.m_mins.y -= stretchAmount.y; // extend/shrink downward
+        break;
+
+    default: /* INVALID */
+        break;
+    }
+
+    return result;
+}
+
+/**
+ * @brief Return a new AABB2 with extra padding.
+ *        padding = (padLeft, padBottom, padRight, padTop)
+ *
+ *  - Positive values enlarge the box.
+ *  - Negative values shrink the box (clamped responsibility left to caller).
+ */
+AABB2 AABB2::GetPadded(const Vec4& padding) const
+{
+    // padding.x = left , padding.y = bottom
+    // padding.z = right, padding.w = top
+    Vec2 newMins = m_mins - Vec2(padding.x, padding.y); // move mins outward
+    Vec2 newMaxs = m_maxs + Vec2(padding.z, padding.w); // move maxs outward
+    return AABB2(newMins, newMaxs);
+}
+
 void AABB2::Translate(const Vec2& translationToApply)
 {
     m_mins.x += translationToApply.x;
