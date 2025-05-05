@@ -2,6 +2,7 @@
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Math/RandomNumberGenerator.hpp"
+#include "Engine/Math/Vec4.hpp"
 
 void Camera::SetOrthoView(const Vec2& bottomLeft, const Vec2& topRight)
 {
@@ -192,6 +193,33 @@ Vec2 Camera::GetViewportSize(Vec2 const& clientSize) const
 float Camera::GetViewPortUnnormalizedAspectRatio(Vec2 const& clientSize) const
 {
     return GetViewPortAspectRatio(GetViewportSize(clientSize));
+}
+
+Vec2 Camera::WorldToScreen(Vec3 const& worldPos, Vec2 const& clientSize) const
+{
+    Mat44 M = GetProjectionMatrix(); // P
+    M.Append(GetCameraToRenderTransform()); // *C
+    M.Append(GetWorldToCameraTransform()); // *V
+
+    Vec4 clip = M.TransformHomogeneous3D(Vec4(worldPos.x, worldPos.y, worldPos.z, 1.f)); // TODO: Why z need be negative
+    if (clip.w <= 0.f)
+    {
+        // If the point is on the back of the camera, it will directly return a sentinel value or perform visibility clipping.
+        return Vec2(-9999.f, -9999.f);
+    }
+    float ndcX = clip.x / clip.w;
+    float ndcY = -clip.y / clip.w;
+
+    AABB2 vpN = m_viewPort; // Normalize the viewport
+    Vec2  vpOriginPx(vpN.m_mins.x * clientSize.x,
+                    vpN.m_mins.y * clientSize.y);
+    Vec2 vpSizePx(vpN.GetDimensions().x * clientSize.x,
+                  vpN.GetDimensions().y * clientSize.y);
+
+    float sx = vpOriginPx.x + (ndcX + 1.f) * 0.5f * vpSizePx.x;
+    float sy = vpOriginPx.y + (1.f - (ndcY + 1.f) * 0.5f) * vpSizePx.y; // Y flip
+
+    return Vec2(sx, sy);
 }
 
 void Camera::ApplyShakeEffect(float deltaTime)

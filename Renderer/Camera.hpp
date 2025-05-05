@@ -82,6 +82,8 @@ public:
     Vec2  GetViewportSize(Vec2 const& clientSize) const; // Get the dimension of screen viewport size after client size was input.
     float GetViewPortUnnormalizedAspectRatio(Vec2 const& clientSize) const; // Get the unnormalized screen port aspect ratio.
 
+    Vec2 WorldToScreen(Vec3 const& worldPos, Vec2 const& clientSize) const;
+
 private:
     void ApplyShakeEffect(float deltaTime);
     Vec2 GenerateRandomShakeOffset(const Vec2& translation2D) const;
