@@ -148,26 +148,26 @@ const Mat44 Mat44::MakeZRotationDegrees(float rotationDegreesAboutZ)
     return result;
 }
 
-const Mat44 Mat44::MakeYRotationDegrees(float rotationDegreesAboutX)
+const Mat44 Mat44::MakeYRotationDegrees(float rotationDegreesAboutY)
 {
     Matrix44 result;
 
-    result.m_values[Ix] = CosDegrees(rotationDegreesAboutX);
-    result.m_values[Iz] = -SinDegrees(rotationDegreesAboutX);
-    result.m_values[Kx] = SinDegrees(rotationDegreesAboutX);
-    result.m_values[Kz] = CosDegrees(rotationDegreesAboutX);
+    result.m_values[Ix] = CosDegrees(rotationDegreesAboutY);
+    result.m_values[Iz] = -SinDegrees(rotationDegreesAboutY);
+    result.m_values[Kx] = SinDegrees(rotationDegreesAboutY);
+    result.m_values[Kz] = CosDegrees(rotationDegreesAboutY);
 
     return result;
 }
 
-const Mat44 Mat44::MakeXRotationDegrees(float rotationDegreesAboutY)
+const Mat44 Mat44::MakeXRotationDegrees(float rotationDegreesAboutX)
 {
     Matrix44 result;
 
-    result.m_values[Jy] = CosDegrees(rotationDegreesAboutY);
-    result.m_values[Jz] = SinDegrees(rotationDegreesAboutY);
-    result.m_values[Ky] = -SinDegrees(rotationDegreesAboutY);
-    result.m_values[Kz] = CosDegrees(rotationDegreesAboutY);
+    result.m_values[Jy] = CosDegrees(rotationDegreesAboutX);
+    result.m_values[Jz] = SinDegrees(rotationDegreesAboutX);
+    result.m_values[Ky] = -SinDegrees(rotationDegreesAboutX);
+    result.m_values[Kz] = CosDegrees(rotationDegreesAboutX);
 
 
     return result;

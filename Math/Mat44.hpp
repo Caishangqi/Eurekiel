@@ -31,8 +31,8 @@ struct Mat44
     static const Mat44 MakeNonUniformScale2D(const Vec2& nonUniformScaleXY);
     static const Mat44 MakeNonUniformScale3D(const Vec3& nonUniformScaleXYZ);
     static const Mat44 MakeZRotationDegrees(float rotationDegreesAboutZ);
-    static const Mat44 MakeYRotationDegrees(float rotationDegreesAboutX);
-    static const Mat44 MakeXRotationDegrees(float rotationDegreesAboutY);
+    static const Mat44 MakeYRotationDegrees(float rotationDegreesAboutY);
+    static const Mat44 MakeXRotationDegrees(float rotationDegreesAboutX);
     /**
      * Creates a matrix which will transform points in ortho (screen/world) space to D3D11 NDC (Normalized Device Coordinates)
      * space: -1 to +1 on X and Y, and 0 to 1 on Z)
