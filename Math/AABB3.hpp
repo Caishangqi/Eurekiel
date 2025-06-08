@@ -4,6 +4,8 @@
 #include "RaycastUtils.hpp"
 #include "Vec3.hpp"
 
+struct Rgba8;
+struct Vertex_PCUTBN;
 class Plane3;
 
 class AABB3
@@ -17,6 +19,10 @@ public:
     AABB3()
     {
     }
+
+    // Verts
+    AABB3       BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
+    static void BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, AABB3& aabb3, const Rgba8& color, const AABB2& uv);
 
     // Accessors (const methods)
     bool              IsPointInside(const Vec3& point) const;

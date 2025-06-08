@@ -2,10 +2,72 @@
 
 #include <algorithm>
 
+#include "AABB2.hpp"
 #include "Plane3.hpp"
+#include "Engine/Core/Vertex_PCU.hpp"
 
 AABB3::~AABB3()
 {
+}
+
+AABB3 AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, const Rgba8& color, const AABB2& uv)
+{
+    std::vector<Vec3> corners = GetCorners();
+
+    //Vertex indices and corresponding normals of the six faces
+    static const int faces[6][4] = {
+        {4, 5, 6, 7}, // +X
+        {1, 0, 3, 2}, // -X
+        {7, 6, 2, 3}, // +Y
+        {1, 5, 4, 0}, // -Y
+        {0, 4, 7, 3}, // +Z
+        {5, 1, 2, 6} // -Z
+    };
+
+    static const Vec3 normals[6] = {
+        Vec3(1, 0, 0),
+        Vec3(-1, 0, 0),
+        Vec3(0, 1, 0),
+        Vec3(0, -1, 0),
+        Vec3(0, 0, 1),
+        Vec3(0, 0, -1)
+    };
+
+    //Vertex indices and corresponding normals of the six faces
+    Vec2 uvs[4] = {
+        Vec2(uv.m_maxs.x, uv.m_mins.y),
+        Vec2(uv.m_mins.x, uv.m_mins.y),
+        Vec2(uv.m_mins.x, uv.m_maxs.y),
+        Vec2(uv.m_maxs.x, uv.m_maxs.y)
+    };
+
+    unsigned int baseIndex = static_cast<unsigned int>(outVerts.size());
+    for (int face = 0; face < 6; ++face)
+    {
+        // Create 4 vertices
+        for (int i = 0; i < 4; ++i)
+        {
+            outVerts.emplace_back(corners[faces[face][i]], color, uvs[i], normals[face]);
+        }
+
+        // Two triangles per face: 0-1-2 and 0-2-3 (local indexing)
+        outIndices.push_back(baseIndex + 0);
+        outIndices.push_back(baseIndex + 1);
+        outIndices.push_back(baseIndex + 2);
+
+        outIndices.push_back(baseIndex + 0);
+        outIndices.push_back(baseIndex + 2);
+        outIndices.push_back(baseIndex + 3);
+
+        baseIndex += 4;
+    }
+
+    return *this;
+}
+
+void AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, AABB3& aabb3, const Rgba8& color, const AABB2& uv)
+{
+    aabb3.BuildVertices(outVerts, outIndices, color, uv);
 }
 
 bool AABB3::IsPointInside(const Vec3& point) const
