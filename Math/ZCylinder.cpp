@@ -1,5 +1,10 @@
 #include "ZCylinder.hpp"
 
+#include "AABB2.hpp"
+#include "MathUtils.hpp"
+#include "Engine/Core/VertexUtils.hpp"
+#include "Engine/Core/Vertex_PCU.hpp"
+
 ZCylinder::ZCylinder()
 {
 }
@@ -7,6 +12,108 @@ ZCylinder::ZCylinder()
 ZCylinder::~ZCylinder()
 {
 }
+
+ZCylinder ZCylinder::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, int sides, const Rgba8& color, const AABB2& uv)
+{
+    const float angleStep  = 360.f / (float)sides;
+    const float halfHeight = m_height * 0.5f;
+
+    Vec3 topCenter    = m_center + Vec3(0, 0, halfHeight);
+    Vec3 bottomCenter = m_center - Vec3(0, 0, halfHeight);
+
+    // Side Faces (Quads) with smooth shading
+    for (int i = 0; i < sides; ++i)
+    {
+        float currAngle = (float)i * angleStep;
+        float nextAngle = (float)(i + 1) * angleStep;
+
+        Vec3 offsetCurr = Vec3(CosDegrees(currAngle), SinDegrees(currAngle), 0.f) * m_radius;
+        Vec3 offsetNext = Vec3(CosDegrees(nextAngle), SinDegrees(nextAngle), 0.f) * m_radius;
+
+        Vec3 p0 = bottomCenter + offsetCurr;
+        Vec3 p1 = bottomCenter + offsetNext;
+        Vec3 p2 = topCenter + offsetNext;
+        Vec3 p3 = topCenter + offsetCurr;
+
+        Vec3 n0 = offsetCurr.GetNormalized();
+        Vec3 n1 = offsetNext.GetNormalized();
+
+        Vec2 uv0 = Vec2((float)i / (float)sides, uv.m_mins.y);
+        Vec2 uv1 = Vec2((float)(i + 1) / (float)sides, uv.m_mins.y);
+        Vec2 uv2 = Vec2((float)(i + 1) / (float)sides, uv.m_maxs.y);
+        Vec2 uv3 = Vec2((float)i / (float)sides, uv.m_maxs.y);
+
+        unsigned int base = (unsigned int)outVerts.size();
+
+        outVerts.emplace_back(p0, color, uv0, n0); // bottomLeft
+        outVerts.emplace_back(p1, color, uv1, n1); // bottomRight
+        outVerts.emplace_back(p2, color, uv2, n1); // topRight
+        outVerts.emplace_back(p3, color, uv3, n0); // topLeft
+
+        outIndices.push_back(base + 0);
+        outIndices.push_back(base + 1);
+        outIndices.push_back(base + 2);
+        outIndices.push_back(base + 0);
+        outIndices.push_back(base + 2);
+        outIndices.push_back(base + 3);
+    }
+
+    // Top and Bottom Caps
+    unsigned int topCenterIndex = (unsigned int)outVerts.size();
+    outVerts.emplace_back(topCenter, color, (uv.m_mins + uv.m_maxs) * 0.5f, Vec3(0, 0, 1));
+
+    unsigned int bottomCenterIndex = (unsigned int)outVerts.size();
+    outVerts.emplace_back(bottomCenter, color, (uv.m_mins + uv.m_maxs) * 0.5f, Vec3(0, 0, -1));
+
+    for (int i = 0; i < sides; ++i)
+    {
+        float currAngle = (float)i * angleStep;
+        float nextAngle = (float)(i + 1) * angleStep;
+
+        float x0 = CosDegrees(currAngle) * m_radius;
+        float y0 = SinDegrees(currAngle) * m_radius;
+        float x1 = CosDegrees(nextAngle) * m_radius;
+        float y1 = SinDegrees(nextAngle) * m_radius;
+
+        Vec3 topRim0    = topCenter + Vec3(x0, y0, 0);
+        Vec3 topRim1    = topCenter + Vec3(x1, y1, 0);
+        Vec3 bottomRim0 = bottomCenter + Vec3(x0, y0, 0);
+        Vec3 bottomRim1 = bottomCenter + Vec3(x1, y1, 0);
+
+        Vec2 uvTop0 = Vec2(RangeMap(x0, -m_radius, m_radius, uv.m_mins.x, uv.m_maxs.x),
+                           RangeMap(y0, -m_radius, m_radius, uv.m_mins.y, uv.m_maxs.y));
+        Vec2 uvTop1 = Vec2(RangeMap(x1, -m_radius, m_radius, uv.m_mins.x, uv.m_maxs.x),
+                           RangeMap(y1, -m_radius, m_radius, uv.m_mins.y, uv.m_maxs.y));
+
+        // Top cap (counter-clockwise)
+        unsigned int top0 = (unsigned int)outVerts.size();
+        outVerts.emplace_back(topRim0, color, uvTop0, Vec3(0, 0, 1));
+        unsigned int top1 = (unsigned int)outVerts.size();
+        outVerts.emplace_back(topRim1, color, uvTop1, Vec3(0, 0, 1));
+
+        outIndices.push_back(topCenterIndex);
+        outIndices.push_back(top0);
+        outIndices.push_back(top1);
+
+        // Bottom cap (clockwise)
+        unsigned int bottom0 = (unsigned int)outVerts.size();
+        outVerts.emplace_back(bottomRim0, color, uvTop0, Vec3(0, 0, -1));
+        unsigned int bottom1 = (unsigned int)outVerts.size();
+        outVerts.emplace_back(bottomRim1, color, uvTop1, Vec3(0, 0, -1));
+
+        outIndices.push_back(bottomCenterIndex);
+        outIndices.push_back(bottom1);
+        outIndices.push_back(bottom0);
+    }
+
+    return *this;
+}
+
+void ZCylinder::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, ZCylinder& zCylinder, int sides, const Rgba8& color, const AABB2& uv)
+{
+    zCylinder.BuildVertices(outVerts, outIndices, sides, color, uv);
+}
+
 
 ZCylinder::ZCylinder(const ZCylinder& copyFrom)
 {
@@ -28,7 +135,6 @@ ZCylinder::ZCylinder(const Vec3& centerOrBase, float radius, float height, bool 
     }
     else
     {
-        // 否则直接认为传入的就是中心位置
         m_center = centerOrBase;
     }
 }
