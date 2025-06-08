@@ -1,8 +1,10 @@
 #include "OBB3.hpp"
 
+#include "EulerAngles.hpp"
 #include "MathUtils.hpp"
 #include "Plane3.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/VertexUtils.hpp"
 
 OBB3::OBB3(Vec3& center, Vec3 halfDimensions, Vec3& iBases, Vec3& jBases, Vec3& kBases): m_center(center), m_halfDimensions(halfDimensions), m_iBasisNormal(iBases), m_jBasisNormal(jBases),
                                                                                          m_kBasisNormal(kBases)
@@ -20,6 +22,35 @@ OBB3::OBB3(const OBB3& copyFrom)
     m_iBasisNormal   = copyFrom.m_iBasisNormal;
     m_jBasisNormal   = copyFrom.m_jBasisNormal;
     m_kBasisNormal   = copyFrom.m_kBasisNormal;
+}
+
+OBB3 OBB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, const Rgba8& color, const AABB2& uv)
+{
+    std::vector<Vec3> coners = GetCorners();
+    // -x
+    AddVertsForQuad3D(outVerts, outIndices, coners[1], coners[2], coners[3], coners[0], color, uv);
+
+    // +x
+    AddVertsForQuad3D(outVerts, outIndices, coners[6], coners[5], coners[4], coners[7], color, uv);
+
+    // -y
+    AddVertsForQuad3D(outVerts, outIndices, coners[2], coners[6], coners[7], coners[3], color, uv);
+
+    // +y
+    AddVertsForQuad3D(outVerts, outIndices, coners[5], coners[1], coners[0], coners[4], color, uv);
+
+    // -z
+    AddVertsForQuad3D(outVerts, outIndices, coners[1], coners[5], coners[6], coners[2], color, uv);
+
+    // +z
+    AddVertsForQuad3D(outVerts, outIndices, coners[3], coners[7], coners[4], coners[0], color, uv);
+
+    return *this;
+}
+
+void OBB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, OBB3& obb3, const Rgba8& color, const AABB2& uv)
+{
+    obb3.BuildVertices(outVerts, outIndices, color, uv);
 }
 
 bool OBB3::IsPointInside(const Vec3& point) const
@@ -86,6 +117,16 @@ Vec3 OBB3::GetLocalPosForWorldPos(const Vec3& worldPosition) const
 Vec3 OBB3::GetWorldPosForLocalPos(const Vec3& localPosition) const
 {
     return GetWorldPosForLocalPos(*this, localPosition);
+}
+
+OBB3& OBB3::SetOrientation(EulerAngles angles)
+{
+    Vec3 i, j, k;
+    angles.GetAsVectors_IFwd_JLeft_KUp(i, j, k);
+    m_iBasisNormal = i;
+    m_jBasisNormal = j;
+    m_kBasisNormal = k;
+    return *this;
 }
 
 bool OBB3::IsPointInsideOBB3(const Vec3& point, const OBB3& obb3)

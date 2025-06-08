@@ -16,6 +16,11 @@ public:
 
     OBB3(const OBB3& copyFrom);
 
+    // Verts
+    OBB3        BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
+    static void BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, OBB3& obb3, const Rgba8& color, const AABB2& uv);
+
+
     bool              IsPointInside(const Vec3& point) const;
     Vec3              GetNearestPoint(const Vec3& point) const;
     std::vector<Vec3> GetCorners() const;
@@ -26,6 +31,8 @@ public:
 
     Vec3 GetLocalPosForWorldPos(const Vec3& worldPosition) const;
     Vec3 GetWorldPosForLocalPos(const Vec3& localPosition) const;
+
+    OBB3& SetOrientation(EulerAngles angles);
 
     static bool            IsPointInsideOBB3(const Vec3& point, const OBB3& obb3);
     static Vec3            GetNearestPointOnOBB3(const Vec3& referencePoint, const OBB3& obb3);
