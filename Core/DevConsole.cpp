@@ -127,6 +127,38 @@ bool DevConsole::Event_CharInput(EventArgs& args)
     return false;
 }
 
+bool DevConsole::Event_PasteClipboard(EventArgs& args)
+{
+    UNUSED(args)
+    if (!g_theDevConsole->IsOpen())
+        return false;
+
+    if (!OpenClipboard(nullptr)) return false;
+
+    HANDLE hData = GetClipboardData(CF_TEXT);
+    if (hData == nullptr)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    char* pszText = static_cast<char*>(GlobalLock(hData));
+    if (pszText == nullptr)
+    {
+        CloseClipboard();
+        return false;
+    }
+
+    std::string clipboardText(pszText);
+    GlobalUnlock(hData);
+    CloseClipboard();
+
+    g_theDevConsole->m_inputText.insert(g_theDevConsole->m_insertionPointPosition, clipboardText);
+    g_theDevConsole->m_insertionPointPosition += static_cast<int>(clipboardText.size());
+
+    return true;
+}
+
 void DevConsole::HandleBackSpace()
 {
     if (g_theDevConsole->IsOpen())
@@ -316,14 +348,17 @@ DevConsole::~DevConsole()
 {
 }
 
+
 void DevConsole::Startup()
 {
     g_theEventSystem->SubscribeEventCallbackFunction("KeyPressed", Event_KeyPressed);
     g_theEventSystem->SubscribeEventCallbackFunction("CharInput", Event_CharInput);
+    g_theEventSystem->SubscribeEventCallbackFunction("PasteClipboard", Event_PasteClipboard);
     g_theEventSystem->SubscribeEventCallbackFunction("quit", Command_Quit);
     g_theEventSystem->SubscribeEventCallbackFunction("clear", Command_Clear);
     g_theEventSystem->SubscribeEventCallbackFunction("help", Command_Help);
     g_theEventSystem->SubscribeEventCallbackFunction("ecoargs", Command_EcoArgs);
+
 
     m_fontPath = m_fontPath.append("Data/Fonts/").append(m_config.m_defaultFontName);
     m_lines.reserve(1000);
@@ -362,6 +397,14 @@ void DevConsole::BeginFrame()
     if (m_insertionPointBlinkTimer->DecrementPeriodIfElapsed())
     {
         m_insertionLineVisible = !m_insertionLineVisible;
+    }
+
+    if (g_theInput->WasMouseButtonJustPressed(KEYCODE_RIGHT_MOUSE))
+    {
+        if (IsOpen())
+        {
+            FireEvent("PasteClipboard");
+        }
     }
 }
 
@@ -432,6 +475,13 @@ void DevConsole::Render(const AABB2& bounds, Renderer* rendererOverride) const
         Render_OpenFull(bounds, *rendererOverride, *rendererOverride->CreateOrGetBitmapFont(m_fontPath.c_str()), 1);
         g_theRenderer->EndCamera(*m_config.m_camera);
     }
+}
+
+void DevConsole::RegisterCommand(const std::string& commandHeader, const std::string& description, EventCallbackFunction functionPtr)
+{
+    UNUSED(description)
+    m_registerCommands.push_back(commandHeader);
+    g_theEventSystem->SubscribeEventCallbackFunction(commandHeader, functionPtr);
 }
 
 void DevConsole::ToggleOpen()
@@ -614,9 +664,14 @@ bool DevConsole::ExecuteSingleCommand(const std::string& consoleCommandText)
             }*/
             /// We append args and put into one big string and let Command handler to parse it
             std::string commandArg;
-            for (int i = 1; i < static_cast<int>(commandSegment.size()); ++i)
+            for (int i = 1; i < static_cast<int>(commandSegment.size()); i++)
             {
-                commandArg.append(commandSegment[i] + " ");
+                if (i == 1)
+                {
+                    commandArg.append(commandSegment[i]);
+                    continue;
+                }
+                commandArg.append(" " + commandSegment[i]);
             }
             args.SetValue("args", commandArg);
             g_theEventSystem->FireEvent(commandHeader, args);

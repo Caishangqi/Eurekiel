@@ -39,9 +39,18 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
     // Raw physical keyboard "key-was-just-depressed" event (case-insensitive, not translated)
     case WM_KEYDOWN:
         {
+            unsigned char keyCode  = static_cast<unsigned char>(wParam);
+            bool          ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            if (ctrlDown && keyCode == 'V')
+            {
+                FireEvent("PasteClipboard");
+                return 0;
+            }
+
             EventArgs args;
-            args.SetValue("KeyCode", Stringf("%d", static_cast<unsigned char>(wParam)));
+            args.SetValue("KeyCode", Stringf("%d", keyCode));
             FireEvent("KeyPressed", args);
+
             /*unsigned char asKey = static_cast<unsigned char>(wParam);
             if (input)
             {

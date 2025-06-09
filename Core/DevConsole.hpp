@@ -6,6 +6,7 @@
 #include "NamedStrings.hpp"
 #include "Rgba8.hpp"
 #include "Engine/Math/AABB2.hpp"
+#include "Engine/Renderer/IRenderer.hpp"
 
 class Timer;
 class Camera;
@@ -35,6 +36,7 @@ struct DevConsoleConfig
 {
     Camera*     m_camera            = nullptr;
     Renderer*   renderer            = nullptr;
+    IRenderer*  _renderer           = nullptr;
     std::string m_defaultFontName   = "CaiziiFixedFont";
     float       m_defaultFontAspect = 0.7f;
     float       m_maxLinesDisplay   = 40.5f;
@@ -51,6 +53,7 @@ public:
     /// Event
     static bool Event_KeyPressed(EventArgs& args); // Handle char input by appending valid characters to our current input line.
     static bool Event_CharInput(EventArgs& args); // Handle key input.
+    static bool Event_PasteClipboard(EventArgs& args);  // Handle Windows paste
     static bool Command_Clear(EventArgs& args); // Clear all lines of text.
     static bool Command_Help(EventArgs& args); // Display all currently registered commands in the event system.
     static bool Command_Quit(EventArgs& args);
@@ -88,6 +91,8 @@ public:
     // The current input line renders at the bottom with all other lines rendered above it,
     // with the most recent lines at the bottom.
     void Render(const AABB2& bounds, Renderer* rendererOverride = nullptr) const;
+
+    void RegisterCommand(const std::string& commandHeader, const std::string& description, EventCallbackFunction functionPtr);
 
     // Toggles between open and closed.
     void ToggleOpen();
