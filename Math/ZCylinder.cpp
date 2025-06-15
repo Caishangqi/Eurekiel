@@ -1,5 +1,4 @@
 #include "ZCylinder.hpp"
-
 #include "AABB2.hpp"
 #include "MathUtils.hpp"
 #include "Engine/Core/VertexUtils.hpp"
@@ -37,6 +36,9 @@ ZCylinder ZCylinder::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::ve
 
         Vec3 n0 = offsetCurr.GetNormalized();
         Vec3 n1 = offsetNext.GetNormalized();
+        Vec3 t0 = Vec3(-n0.y, n0.x, 0.f).GetNormalized(); // tangent → U
+        Vec3 t1 = Vec3(-n1.y, n1.x, 0.f).GetNormalized();
+        Vec3 b  = Vec3(0, 0, 1); // bitangent → +Z (V)
 
         Vec2 uv0 = Vec2((float)i / (float)sides, uv.m_mins.y);
         Vec2 uv1 = Vec2((float)(i + 1) / (float)sides, uv.m_mins.y);
@@ -45,10 +47,10 @@ ZCylinder ZCylinder::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::ve
 
         unsigned int base = (unsigned int)outVerts.size();
 
-        outVerts.emplace_back(p0, color, uv0, n0); // bottomLeft
-        outVerts.emplace_back(p1, color, uv1, n1); // bottomRight
-        outVerts.emplace_back(p2, color, uv2, n1); // topRight
-        outVerts.emplace_back(p3, color, uv3, n0); // topLeft
+        outVerts.emplace_back(p0, color, uv0, n0, t0, b); // bottom-left
+        outVerts.emplace_back(p1, color, uv1, n1, t1, b); // bottom-right
+        outVerts.emplace_back(p2, color, uv2, n1, t1, b); // top-right
+        outVerts.emplace_back(p3, color, uv3, n0, t0, b); // top-left
 
         outIndices.push_back(base + 0);
         outIndices.push_back(base + 1);
@@ -57,13 +59,19 @@ ZCylinder ZCylinder::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::ve
         outIndices.push_back(base + 2);
         outIndices.push_back(base + 3);
     }
+    Vec3 capTangent(1, 0, 0);
+    Vec3 capBitangent(0, 1, 0);
 
     // Top and Bottom Caps
     unsigned int topCenterIndex = (unsigned int)outVerts.size();
-    outVerts.emplace_back(topCenter, color, (uv.m_mins + uv.m_maxs) * 0.5f, Vec3(0, 0, 1));
+    outVerts.emplace_back(topCenter, color,
+                          (uv.m_mins + uv.m_maxs) * 0.5f,
+                          Vec3(0, 0, 1), capTangent, capBitangent);
 
     unsigned int bottomCenterIndex = (unsigned int)outVerts.size();
-    outVerts.emplace_back(bottomCenter, color, (uv.m_mins + uv.m_maxs) * 0.5f, Vec3(0, 0, -1));
+    outVerts.emplace_back(bottomCenter, color,
+                          (uv.m_mins + uv.m_maxs) * 0.5f,
+                          Vec3(0, 0, -1), capTangent, -capBitangent);
 
     for (int i = 0; i < sides; ++i)
     {
