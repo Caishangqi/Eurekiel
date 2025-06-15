@@ -47,7 +47,7 @@ public:
                            float                    cellAspectScale                                        = 1.f);
     /// Allows creating vertexes (triangles) to draw a specified text string within a specified AABB2.\n
     /// Supports 2D alignment as Vector2 (0,0 means bottom-left, .5,.5 centered, 1,1 top-right).\n
-    /// Supports newline ('\\n’) characters, which break text into separate lines.\n
+    /// Supports newline ('\\n’) m_characters, which break text into separate lines.\n
     /// Takes a TextDrawMode enum which (for now) offers at least two modes\n
     /// Takes a maxGlyphsToDraw argument (default=999999999, or if you prefer, INT_MAX)\n
     /// @param vertexArray 
@@ -73,7 +73,7 @@ public:
     ///                                equal width and height.
     /// @param        alignment        The alignment factors for the text in the Y and Z directions, typically in the range [0, 1].
     ///                                For example, (0.5f, 0.5f) means centering the text along both axes.
-    /// @param        maxGlyphsToDraw  The maximum number of characters to draw. Any excess characters are truncated; defaults to 999.
+    /// @param        maxGlyphsToDraw  The maximum number of m_characters to draw. Any excess m_characters are truncated; defaults to 999.
     ///
     /// During execution:
     /// - The function determines each character's size based on the given `cellHeight` and `cellAspect`.
@@ -81,7 +81,7 @@ public:
     /// - Each character's UV coordinates are computed internally, and then converted to a quadrilateral using `AddVertsForQuad3D`.
     /// - The X direction is considered “forward,” so all vertices are at X=0 by default, with Y and Z coordinates
     ///   positioning the text horizontally and vertically.
-    /// - Newline characters (`\n`) are skipped, and no line-breaking logic is implemented.
+    /// - Newline m_characters (`\n`) are skipped, and no line-breaking logic is implemented.
     ///
     /// @see     AddVertsForQuad3D
     /// @see     Rgba8

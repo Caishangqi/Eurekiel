@@ -471,7 +471,7 @@ void DevConsole::Render(const AABB2& bounds, Renderer* rendererOverride) const
     {
         m_config.renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_NONE);
         m_config.renderer->SetBlendMode(BlendMode::ALPHA);
-        g_theRenderer->BeingCamera(*m_config.m_camera);
+        g_theRenderer->BeginCamera(*m_config.m_camera);
         Render_OpenFull(bounds, *rendererOverride, *rendererOverride->CreateOrGetBitmapFont(m_fontPath.c_str()), 1);
         g_theRenderer->EndCamera(*m_config.m_camera);
     }
