@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "IndexBuffer.hpp"
+#include "IRenderer.hpp"
 #include "Shader.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
@@ -47,50 +48,6 @@ struct Rgba8;
 #undef OPAQUE
 #endif
 
-struct RenderConfig
-{
-    Window* m_window = nullptr;
-};
-
-enum class BlendMode
-{
-    ADDITIVE,
-    ALPHA,
-    OPAQUE,
-    COUNT = 3
-};
-
-enum class SamplerMode
-{
-    POINT_CLAMP,
-    BILINEAR_WRAP,
-    COUNT = 2
-};
-
-enum class RasterizerMode
-{
-    SOLID_CULL_NONE,
-    SOLID_CULL_BACK,
-    WIREFRAME_CULL_NONE,
-    WIREFRAME_CULL_BACK,
-    COUNT = 4
-};
-
-enum class DepthMode
-{
-    DISABLED,
-    READ_ONLY_ALWAYS,
-    READ_ONLY_LESS_EQUAL,
-    READ_WRITE_LESS_EQUAL,
-    COUNT
-};
-
-enum class VertexType
-{
-    Vertex_PCU,
-    Vertex_PCUTBN
-};
-
 
 class Renderer
 {
@@ -103,7 +60,7 @@ public:
     void Shutdown();
 
     void ClearScreen(const Rgba8& clearColor);
-    void BeingCamera(const Camera& camera);
+    void BeginCamera(const Camera& camera);
     void EndCamera(const Camera& camera);
     void DrawVertexArray(int numVertexes, const Vertex_PCU* vertexes);
     void DrawVertexArray(int numVertexes, const Vertex_PCUTBN* vertexes);
@@ -116,7 +73,7 @@ public:
 
     BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension);
     Texture*    CreateOrGetTextureFromFile(const char* filename);
-    void        BindTexture(Texture* texture);
+    void        BindTexture(Texture* texture, int slot = 0);
 
     /// DirectX Shader
 
@@ -144,6 +101,8 @@ public:
     void SetSamplerMode(SamplerMode samplerMode);
 
     void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& modelColor = Rgba8::WHITE);
+    void SetCustomConstants(void* data, int registerSlot, ConstantBuffer* constantBuffer);
+    void SetFrameConstants(const FrameConstants& frameConstants);
     void SetLightConstants(const LightingConstants& lightConstants);
     void SetLightConstants(Vec3 sunDirection, float sunIntensity, float ambientIntensity);
 
@@ -167,6 +126,7 @@ protected:
     ConstantBuffer* m_cameraCBO        = nullptr;
     ConstantBuffer* m_modelCBO         = nullptr;
     ConstantBuffer* m_lightCBO         = nullptr;
+    ConstantBuffer* m_perFrameCBO      = nullptr;
     // Blend
     ID3D11BlendState* m_blendState                                      = nullptr;
     BlendMode         m_desiredBlendMode                                = BlendMode::ALPHA;

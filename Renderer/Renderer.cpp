@@ -1,5 +1,6 @@
 ﻿#include "ThirdParty/stb/stb_image.h"
 
+#include "Engine/Renderer/IRenderer.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 
 #include "VertexBuffer.hpp"
@@ -24,46 +25,11 @@ extern HWND g_hWnd;
 
 /// Constant
 
-struct CameraConstants
-{
-    Mat44 WorldToCameraTransform; // View transform
-    Mat44 CameraToRenderTransform; // Non-standard transform from game to DirectX conventions
-    Mat44 RenderToClipTransform; // Project transform
 
-    /*float OrthoMixX;
-    float OrthoMixY;
-    float OrthoMixZ;
-    float OrthoMaxX;
-    float OrthoMaxY;
-    float OrthoMaxZ;
-    float pad0;
-    float pad1;*/
-};
-
-///
-///DirectX requires that the size of each constant buffer must be a multiple of 16 bytes.
-///The size of the structure LightingConstants you pass in when creating the light constant
-///buffer may be 20 bytes (for example, if Vec3 occupies 12 bytes, plus two floats are 4
-///bytes each, a total of 20 bytes), which is not a multiple of 16 bytes, causing the CreateBuffer call to fail.
-struct LightingConstants
-{
-    Vec3  SunDirection;
-    float SunIntensity;
-    float AmbientIntensity;
-    float pad0;
-    float pad1;
-    float pad2;
-};
-
-struct ModelConstants
-{
-    Mat44 ModelToWorldTransform;
-    float ModelColor[4];
-};
-
-static constexpr int k_cameraConstantsSlot = 2;
-static constexpr int k_modelConstantsSlot  = 3;
-static constexpr int k_lightConstantsSlot  = 1;
+static constexpr int k_cameraConstantsSlot   = 2;
+static constexpr int k_perFrameConstantsSlot = 1;
+static constexpr int k_modelConstantsSlot    = 3;
+static constexpr int k_lightConstantsSlot    = 4;
 
 ///
 
@@ -146,6 +112,7 @@ void Renderer::Startup()
     m_lightCBO         = CreateConstantBuffer(sizeof(LightingConstants));
     m_cameraCBO        = CreateConstantBuffer(sizeof(CameraConstants));
     m_modelCBO         = CreateConstantBuffer(sizeof(ModelConstants));
+    m_perFrameCBO      = CreateConstantBuffer(sizeof(FrameConstants));
 
     // Set rasterizer state
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
@@ -204,7 +171,10 @@ void Renderer::Startup()
     blendDesc.RenderTarget[0].DestBlendAlpha        = blendDesc.RenderTarget[0].DestBlend;
     blendDesc.RenderTarget[0].BlendOpAlpha          = blendDesc.RenderTarget[0].BlendOp;
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)]);
+    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)
+    ]
+    )
+    ;
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:OPAQUE failed.")
     // Alpha state
@@ -336,27 +306,17 @@ void Renderer::Shutdown()
     //delete m_defaultTexture;
     //m_defaultTexture = nullptr;
 
-    delete m_immediateIBO;
-    m_immediateIBO = nullptr;
-
     /// DirectX
-    delete m_immediateVBO;
-    m_immediateVBO = nullptr;
-
-    delete m_immediateVBO_TBN;
-    m_immediateVBO_TBN = nullptr;
-
-    delete m_cameraCBO;
-    m_cameraCBO = nullptr;
-
     delete m_currentShader;
     m_currentShader = nullptr;
 
-    delete m_modelCBO;
-    m_modelCBO = nullptr;
-
-    delete m_lightCBO;
-    m_lightCBO = nullptr;
+    POINTER_SAFE_DELETE(m_immediateIBO)
+    POINTER_SAFE_DELETE(m_immediateVBO)
+    POINTER_SAFE_DELETE(m_immediateVBO_TBN)
+    POINTER_SAFE_DELETE(m_cameraCBO)
+    POINTER_SAFE_DELETE(m_modelCBO)
+    POINTER_SAFE_DELETE(m_lightCBO)
+    POINTER_SAFE_DELETE(m_perFrameCBO)
 
     delete m_defaultShader;
     m_defaultShader = nullptr;
@@ -421,7 +381,7 @@ void Renderer::ClearScreen(const Rgba8& clearColor)
     m_deviceContext->ClearDepthStencilView(m_depthStencilDSV, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
 
-void Renderer::BeingCamera(const Camera& camera)
+void Renderer::BeginCamera(const Camera& camera)
 {
     //UNUSED(camera)
     /// DirectX
@@ -636,7 +596,7 @@ Texture* Renderer::CreateTextureFromData(const char* name, IntVec2 dimensions, i
     GUARANTEE_OR_DIE(texelData, Stringf( "CreateTextureFromData failed for \"%s\" - texelData was null!", name ))
     GUARANTEE_OR_DIE(bytesPerTexel >= 3 && bytesPerTexel <= 4,
                      Stringf( "CreateTextureFromData failed for \"%s\" - unsupported BPP=%i (must be 3 or 4)", name,
-                         bytesPerTexel ));
+                         bytesPerTexel ))
     GUARANTEE_OR_DIE(dimensions.x > 0 && dimensions.y > 0,
                      Stringf( "CreateTextureFromData failed for \"%s\" - illegal texture dimensions (%i x %i)", name,
                          dimensions.x, dimensions.y ))
@@ -694,7 +654,7 @@ Texture* Renderer::CreateTextureFromData(const char* name, IntVec2 dimensions, i
     return newTexture;
 }
 
-void Renderer::BindTexture(Texture* texture)
+void Renderer::BindTexture(Texture* texture, int slot)
 {
     /// OpenGL
     /*if (texture)
@@ -717,7 +677,7 @@ void Renderer::BindTexture(Texture* texture)
         bindTexture = texture;
     }
 
-    m_deviceContext->PSSetShaderResources(0, 1, &bindTexture->m_shaderResourceView);
+    m_deviceContext->PSSetShaderResources(slot, 1, &bindTexture->m_shaderResourceView);
     /// 
 }
 
@@ -755,8 +715,10 @@ void Renderer::SetDepthMode(DepthMode depthMode)
 
 void Renderer::SetSamplerMode(SamplerMode samplerMode)
 {
-    m_samplerState = m_samplerStates[static_cast<int>(samplerMode)];
-    m_deviceContext->PSSetSamplers(0, 1, &m_samplerState);
+    m_samplerState                  = m_samplerStates[static_cast<int>(samplerMode)];
+    ID3D11SamplerState* samplers[2] = {m_samplerState, m_samplerState};
+    //m_deviceContext->PSSetSamplers(0, 1, &m_samplerState);
+    m_deviceContext->PSSetSamplers(0, 2, samplers);
 }
 
 void Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8& modelColor)
@@ -766,6 +728,18 @@ void Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8
     modelColor.GetAsFloats(modelConstants.ModelColor);
     CopyCPUToGPU(&modelConstants, sizeof(modelConstants), m_modelCBO);
     BindConstantBuffer(k_modelConstantsSlot, m_modelCBO);
+}
+
+void Renderer::SetCustomConstants(void* data, int registerSlot, ConstantBuffer* constantBuffer)
+{
+    CopyCPUToGPU(data, (unsigned int)constantBuffer->m_size, constantBuffer);
+    BindConstantBuffer(registerSlot, constantBuffer);
+}
+
+void Renderer::SetFrameConstants(const FrameConstants& frameConstants)
+{
+    CopyCPUToGPU(&frameConstants, sizeof(frameConstants), m_perFrameCBO);
+    BindConstantBuffer(k_perFrameConstantsSlot, m_perFrameCBO);
 }
 
 void Renderer::SetLightConstants(const LightingConstants& lightConstants)
@@ -921,7 +895,8 @@ bool Renderer::CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, 
 #endif
     ID3DBlob* shaderBlob = nullptr;
     ID3DBlob* errorBlob  = nullptr;
-    HRESULT   hr         = D3DCompile(source, strlen(source), name, nullptr, nullptr, entryPoint, target, shaderFlags, 0, &shaderBlob, &errorBlob);
+
+    HRESULT hr = D3DCompile(source, strlen(source), name, nullptr, nullptr, entryPoint, target, shaderFlags, 0, &shaderBlob, &errorBlob);
     if (SUCCEEDED(hr))
     {
         outByteCode.resize(shaderBlob->GetBufferSize());
