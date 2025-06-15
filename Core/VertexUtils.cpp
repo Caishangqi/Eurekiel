@@ -350,11 +350,13 @@ void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigne
     Vec3 u = bottomRight - bottomLeft;
     Vec3 v = topLeft - bottomLeft;
     Vec3 n = CrossProduct3D(u, v).GetNormalized();
+    Vec3 t = u.GetNormalized();
+    Vec3 b = v.GetNormalized();
 
-    outVerts.push_back(Vertex_PCUTBN(bottomLeft, color, Vec2(uv.m_mins.x, uv.m_mins.y), n));
-    outVerts.push_back(Vertex_PCUTBN(bottomRight, color, Vec2(uv.m_maxs.x, uv.m_mins.y), n));
-    outVerts.push_back(Vertex_PCUTBN(topRight, color, Vec2(uv.m_maxs.x, uv.m_maxs.y), n));
-    outVerts.push_back(Vertex_PCUTBN(topLeft, color, Vec2(uv.m_mins.x, uv.m_maxs.y), n));
+    outVerts.emplace_back(bottomLeft, color, Vec2(uv.m_mins.x, uv.m_mins.y), n, t, b);
+    outVerts.emplace_back(bottomRight, color, Vec2(uv.m_maxs.x, uv.m_mins.y), n, t, b);
+    outVerts.emplace_back(topRight, color, Vec2(uv.m_maxs.x, uv.m_maxs.y), n, t, b);
+    outVerts.emplace_back(topLeft, color, Vec2(uv.m_mins.x, uv.m_maxs.y), n, t, b);
 
     outIndices.push_back(startIndex + 0);
     outIndices.push_back(startIndex + 1);
