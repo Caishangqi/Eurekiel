@@ -4,11 +4,12 @@
 //=========================================================
 #pragma once
 #include <d3d12.h>
-#include <map>
 
 #include "Engine/Renderer/IRenderer.hpp"
 #include <unordered_map>
 #include <vector>
+#include <ThirdParty/d3dx12/d3dx12.h>
+#include <wrl/client.h>
 
 #include "Engine/Renderer/IndexBuffer.hpp"
 
@@ -45,15 +46,17 @@ struct D3D12_BLEND_DESC;
 struct D3D12_DEPTH_STENCIL_DESC;
 
 #define ENGINE_DEBUG_RENDER
+static constexpr uint32_t kBufferCount = 2;
+
+using Microsoft::WRL::ComPtr;
+
+
 class DX12Renderer final : public IRenderer
 {
 public:
     explicit DX12Renderer(const RenderConfig& cfg);
     ~DX12Renderer() override;
 
-    //--------------------------------------------------------
-    //  IRenderer overrides（按需全部实现）
-    //--------------------------------------------------------
     void Startup() override;
     void Shutdown() override;
     void BeginFrame() override;
@@ -72,6 +75,12 @@ public:
                                  const char*              source,
                                  const char*              entryPoint,
                                  const char*              target) override;
+    Texture*    CreateTextureFromImage(Image& image) override;
+    Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) override;
+    Texture*    CreateTextureFromFile(const char* imageFilePath) override;
+    Texture*    GetTextureForFileName(const char* imageFilePath) override;
+    BitmapFont* CreateBitmapFont(const char* bitmapFontFilePathWithNoExtension, Texture& fontTexture) override;
+
     void BindShader(Shader* s) override;
 
     VertexBuffer*   CreateVertexBuffer(size_t size, unsigned stride) override;
@@ -83,7 +92,7 @@ public:
     void BindVertexBuffer(VertexBuffer* vbo) override;
     void BindIndexBuffer(IndexBuffer* ibo) override;
     void BindConstantBuffer(int slot, ConstantBuffer* cbo) override;
-    void BindTexture(Texture* tex) override;
+    void BindTexture(Texture* tex, int slot) override;
 
     //—— 常量缓冲 & 状态 ——//
     void SetModelConstants(const Mat44& model = Mat44(), const Rgba8& tint = Rgba8::WHITE) override;
@@ -121,30 +130,46 @@ private:
     //--------------------------------------------------------
     // 设备级资源（StartUp / Shutdown 生命周期）
     //--------------------------------------------------------
-    RenderConfig               m_cfg{};
-    ID3D12Device*              m_device        = nullptr;
-    IDXGISwapChain3*           m_swapChain     = nullptr;
-    ID3D12CommandQueue*        m_cmdQueue      = nullptr;
-    ID3D12CommandAllocator*    m_cmdAllocator  = nullptr;
-    ID3D12GraphicsCommandList* m_cmdList       = nullptr;
-    ID3D12RootSignature*       m_rootSignature = nullptr;
-    D3D12_VIEWPORT             m_viewport{}; // ← 对象
-    D3D12_RECT                 m_scissor{}; // ← 对象
+    RenderConfig                          m_config{};
+    ComPtr<ID3D12Device>                  m_device                         = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Device2> m_device2                        = nullptr;
+    ComPtr<ID3D12CommandQueue>            m_commandQueue                   = nullptr;
+    ComPtr<IDXGISwapChain3>               m_swapChain                      = nullptr;
+    ComPtr<ID3D12DescriptorHeap>          m_renderTargetViewHeap           = nullptr;
+    UINT                                  m_renderTargetViewDescriptorSize = 0;
+    ComPtr<ID3D12Resource>                m_backBuffers[kBufferCount];
+    UINT                                  m_currentBackBufferIndex = 0;
+    ComPtr<ID3D12CommandAllocator>        m_commandAllocator       = nullptr;
+    ComPtr<ID3D12GraphicsCommandList>     m_commandList            = nullptr;
+    ComPtr<ID3D12Fence>                   m_fence                  = nullptr;
+    UINT64                                m_fenceValue             = 0;
+    HANDLE                                m_fenceEvent             = nullptr;
 
-    static constexpr uint32_t kBackBufferCount = 2;
-    ID3D12Resource*           m_backBuffers[kBackBufferCount]{};
-    ID3D12DescriptorHeap*     m_rtvHeap         = nullptr;
-    UINT                      m_rtvSize         = 0;
-    ID3D12Resource*           m_depthStencilBuf = nullptr;
-    ID3D12DescriptorHeap*     m_dsvHeap         = nullptr;
+    /// Buffers Version 1
+    VertexBuffer* m_vertexBuffer = nullptr;
+    /// Root signature that expose shader needed data and buffers to GPU
+    ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
+    /// Pipeline state object
+    ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
+    /// define viewport
+    D3D12_VIEWPORT m_viewport{};
+    /// define scissor rect
+    CD3DX12_RECT m_scissorRect{};
 
-    //--------------------------------------------------------
-    // 同步
-    //--------------------------------------------------------
-    UINT         m_frameIndex = 0;
-    ID3D12Fence* m_fence      = nullptr;
-    UINT64       m_fenceVal   = 0;
-    HANDLE       m_fenceEvent = nullptr;
+    // 当前帧状态 ---------------------------------------------
+    uint32_t        m_drawCount = 0; // 已提交 draw 数
+    CameraConstants m_curCamCB{};
+    ModelConstants  m_curModelCB{};
+
+
+    UINT                  m_rtvStride       = 0;
+    ID3D12Resource*       m_depthStencilBuf = nullptr;
+    ID3D12DescriptorHeap* m_dsvHeap         = nullptr;
+
+    // 每帧临时 VB/IB，EndFrame 清理
+    std::vector<VertexBuffer*> m_tmpVB;
+    std::vector<IndexBuffer*>  m_tmpIB;
+
 
     //--------------------------------------------------------
     // PSO 缓存 —— 单变量对比，无 Current/Desired 结构
@@ -173,7 +198,7 @@ private:
     //--------------------------------------------------------
     ID3D12DescriptorHeap* m_cbvHeap  = nullptr; // ▲ 新增
     static constexpr int  kCBPerDraw = 4; // model / camera / dirLight / extra
-    static constexpr int  kMaxDraws  = 2048;
+    static constexpr int  kMaxDraws  = 1024;
     ConstantBuffer*       m_cbs[kCBPerDraw * kMaxDraws]{};
     int                   m_drawIndex = 0;
 
@@ -182,5 +207,6 @@ private:
     //--------------------------------------------------------
     uint64_t CalcPSOHash() const; // 根据 Shader & 枚举状态拼 64‑bit key
     void     ApplyStatesIfNeeded();
-    void     WaitForPreviousFrame();
+    void     UploadToCB(ConstantBuffer* cb, const void* data, size_t size);
+    void     WaitForGPU();
 };
