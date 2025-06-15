@@ -9,6 +9,7 @@
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Mat44.hpp"
 
+class Image;
 class Window;
 // Forward declarations
 class BitmapFont;
@@ -38,8 +39,9 @@ enum class RendererBackend
 // Basic enums
 struct RenderConfig
 {
-    Window*         m_window  = nullptr;
-    RendererBackend m_backend = RendererBackend::DirectX11;
+    Window*         m_window        = nullptr;
+    std::string     m_defaultShader = "Default"; // This is useful for debugging
+    RendererBackend m_backend       = RendererBackend::DirectX11;
 };
 
 enum class BlendMode
@@ -81,6 +83,62 @@ enum class VertexType
     Vertex_PCUTBN
 };
 
+struct EngineConstants
+{
+    Mat44 EngineConstant_0;
+    Mat44 EngineConstant_1;
+    Mat44 EngineConstant_2;
+    Mat44 EngineConstant_3;
+};
+
+struct FrameConstants
+{
+    float Time;
+    int   DebugInt;
+    float DebugFloat;
+    float Padding[13];
+    Mat44 FrameConstant_1;
+    Mat44 FrameConstant_2;
+    Mat44 FrameConstant_3;
+};
+
+struct CameraConstants
+{
+    Mat44 WorldToCameraTransform; // View transform
+    Mat44 CameraToRenderTransform; // Non-standard transform from game to DirectX conventions
+    Mat44 RenderToClipTransform; // Project transform
+    float padding[16];
+    /*float OrthoMixX;
+    float OrthoMixY;
+    float OrthoMixZ;
+    float OrthoMaxX;
+    float OrthoMaxY;
+    float OrthoMaxZ;
+    float pad0;
+    float pad1;*/
+};
+
+///
+///DirectX requires that the size of each constant buffer must be a multiple of 16 bytes.
+///The size of the structure LightingConstants you pass in when creating the light constant
+///buffer may be 20 bytes (for example, if Vec3 occupies 12 bytes, plus two floats are 4
+///bytes each, a total of 20 bytes), which is not a multiple of 16 bytes, causing the CreateBuffer call to fail.
+struct LightingConstants
+{
+    Vec3  SunDirection;
+    float SunIntensity;
+    float AmbientIntensity;
+    float pad0;
+    float pad1;
+    float pad2;
+};
+
+struct ModelConstants
+{
+    Mat44 ModelToWorldTransform;
+    float ModelColor[4];
+    float padding[44];
+};
 
 class IRenderer
 {
@@ -136,6 +194,14 @@ public:
                                          char const*              entry,
                                          char const*              target) = 0;
     virtual void BindShader(Shader* s) = 0;
+    //virtual Texture* CreateOrGetTexture(const char)
+    virtual Image*      CreateImageFromFile(const char* imageFilePath);
+    virtual Texture*    CreateTextureFromImage(Image& image) = 0;
+    virtual Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) = 0;
+    virtual Texture*    CreateTextureFromFile(const char* imageFilePath) = 0;
+    virtual Texture*    GetTextureForFileName(const char* imageFilePath) = 0;
+    virtual BitmapFont* CreateBitmapFont(const char* bitmapFontFilePathWithNoExtension, Texture& fontTexture) = 0;
+
 
     virtual VertexBuffer*   CreateVertexBuffer(size_t size, unsigned stride) = 0;
     virtual IndexBuffer*    CreateIndexBuffer(size_t size) = 0;
@@ -150,7 +216,7 @@ public:
     virtual void BindVertexBuffer(VertexBuffer* v) = 0;
     virtual void BindIndexBuffer(IndexBuffer* i) = 0;
     virtual void BindConstantBuffer(int slot, ConstantBuffer* c) = 0;
-    virtual void BindTexture(Texture* tex) = 0;
+    virtual void BindTexture(Texture* tex, int slot = 0) = 0;
 
     //------------------------------------------------------------
     // Draw family
@@ -168,7 +234,7 @@ public:
                                    int           idxCount, int   idxOffset = 0) = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
-    
+
     //------------------------------------------------------------
     // Optional high-level effects（DX11 已实现，DX12 暂返回错误）
     //------------------------------------------------------------
