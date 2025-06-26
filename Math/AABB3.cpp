@@ -21,17 +21,17 @@ AABB3 AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<uns
         {7, 6, 2, 3}, // +Y
         {1, 5, 4, 0}, // -Y
         {0, 4, 7, 3}, // +Z
-        {5, 1, 2, 6}  // -Z
+        {5, 1, 2, 6} // -Z
     };
 
     static const Vec2 quadUVs[4] = {
         Vec2(uv.m_mins.x, uv.m_mins.y), // bottomLeft
         Vec2(uv.m_maxs.x, uv.m_mins.y), // bottomRight
         Vec2(uv.m_maxs.x, uv.m_maxs.y), // topRight
-        Vec2(uv.m_mins.x, uv.m_maxs.y)  // topLeft
+        Vec2(uv.m_mins.x, uv.m_maxs.y) // topLeft
     };
 
-    unsigned int baseIndex = (unsigned int)outVerts.size();
+    unsigned int baseIndex = static_cast<unsigned int>(outVerts.size());
 
     for (int face = 0; face < 6; ++face)
     {
@@ -44,25 +44,25 @@ AABB3 AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<uns
         Vec2 uv1 = quadUVs[1];
         Vec2 uv2 = quadUVs[2];
         Vec2 uv3 = quadUVs[3];
-        
-        Vec3 edge1 = p1 - p0;
-        Vec3 edge2 = p2 - p0;
+
+        Vec3 edge1    = p1 - p0;
+        Vec3 edge2    = p2 - p0;
         Vec2 deltaUV1 = uv1 - uv0;
         Vec2 deltaUV2 = uv2 - uv0;
 
-        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
-        Vec3 tangent = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
-        Vec3 bitangent = f * (-deltaUV2.x * edge1 + deltaUV1.x * edge2);
-        Vec3 normal = CrossProduct3D(tangent, bitangent).GetNormalized();
+        float f         = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        Vec3  tangent   = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+        Vec3  bitangent = f * (-deltaUV2.x * edge1 + deltaUV1.x * edge2);
+        Vec3  normal    = CrossProduct3D(tangent, bitangent).GetNormalized();
 
-        tangent = tangent.GetNormalized();
+        tangent   = tangent.GetNormalized();
         bitangent = bitangent.GetNormalized();
-        
+
         outVerts.emplace_back(p0, color, uv0, normal, tangent, bitangent);
         outVerts.emplace_back(p1, color, uv1, normal, tangent, bitangent);
         outVerts.emplace_back(p2, color, uv2, normal, tangent, bitangent);
         outVerts.emplace_back(p3, color, uv3, normal, tangent, bitangent);
-        
+
         outIndices.push_back(baseIndex + 0);
         outIndices.push_back(baseIndex + 1);
         outIndices.push_back(baseIndex + 2);
@@ -76,6 +76,7 @@ AABB3 AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<uns
 
     return *this;
 }
+
 void AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned int>& outIndices, AABB3& aabb3, const Rgba8& color, const AABB2& uv)
 {
     aabb3.BuildVertices(outVerts, outIndices, color, uv);
@@ -122,7 +123,7 @@ bool AABB3::IsOverlapping(const Plane3& other) const
 
 RaycastResult3D AABB3::Raycast(Vec3 startPos, Vec3 fwdNormal, float maxDist) const
 {
-    return AABB3::Raycast(startPos, fwdNormal, maxDist, *this);
+    return Raycast(startPos, fwdNormal, maxDist, *this);
 }
 
 bool AABB3::IsOverlapping(const AABB3& aabb3, const Plane3& other)
