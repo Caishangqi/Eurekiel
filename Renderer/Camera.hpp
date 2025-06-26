@@ -19,7 +19,7 @@ public:
     /// DirectX
 
     // SetOrthographicView and SetPerspectiveView set the camera mode appropriately and store the parameter values.
-    void SetOrthographicView(Vec2 const& bottomLeft, Vec2 const& topRight, float near = 0.0f, float far = 1.0f);
+    void SetOrthographicView(const Vec2& bottomLeft, const Vec2& topRight, float near  = 0.0f, float far  = 1.0f);
     void SetPerspectiveView(float aspect, float fov, float near, float far);
 
     void SetPositionAndOrientation(const Vec3& position, const EulerAngles& orientation);
@@ -31,9 +31,25 @@ public:
     EulerAngles GetOrientation() const;
 
     /// returns the equivalent of the camera model to world transform using the position and orientation of the camera.
+    ///
+    /// In a example Assume that a point in world coordinates is worldPos = Vec3(10, 1, 0), let's observe it with this camera.\n
+    /// \code Vec3 localPos = Vec3(0, 1, 0); // Assume that in camera space, the object is 1 unit in front \endcode
+    /// 
+    /// \code Mat44 camToWorld = camera.GetCameraToWorldTransform();\endcode
+    /// 
+    /// \code Vec3 worldPos = camToWorld.TransformPosition3D(localPos); \endcode
+    /// 
+    /// worldPos should be Vec3(10, 1, 0), which means the camera is at (10, 0, 0), and forward is +Y
     /// @return camera model to world transform
     Mat44 GetCameraToWorldTransform() const;
     /// returns the inverse of the GetCameraToWorldTransform()
+    /// \code Vec3 worldPos = Vec3(10, 1, 0); \endcode
+    ///
+    /// \code Mat44 worldToCam = camera.GetWorldToCameraTransform(); \endcode 
+    ///
+    /// \code Vec3 cameraSpacePos = worldToCam.TransformPosition3D(worldPos); \endcode 
+    ///
+    /// cameraSpacePos should be Vec3(0, 1, 0), which means it is directly in front of the camera.
     /// @return inverse of the GetCameraToWorldTransform()
     Mat44 GetWorldToCameraTransform() const;
 
@@ -49,7 +65,7 @@ public:
 
     Vec2 GetOrthographicBottomLeft() const;
     Vec2 GetOrthographicTopRight() const;
-    void Translate2D(Vec2 const& translation);
+    void Translate2D(const Vec2& translation);
 
     /// GetOrthographicMatrix and GetPerspectiveMatrix build and return orthographic and perspective matrices,
     /// respectively, using the stored values set previously.
@@ -70,19 +86,19 @@ public:
     void DoShakeEffect(const Vec2& translation2D, float duration, bool decreaseShakeOverTime = true);
 
     /// Viewport
-    void  SetNormalizedViewport(AABB2 const& viewportSize); // Set the normalized viewport from zero to one
+    void  SetNormalizedViewport(const AABB2& viewportSize); // Set the normalized viewport from zero to one
     AABB2 GetNormalizedViewport() const; // Get the normalized viewport from zero to one
     /// Get the unnormalized view port based on client size, for example, if we have the client dimension 1600 x 800
     /// and the normalized view port mins = (0, 0.5f) maxs = (1, 1), the function should return dimension of
     /// mins = (0, 400) maxs = (1600, 800)
     /// @param clientSize the desired client size for the application.
     /// @return AABB2 The unnormalized screen viewport size.
-    AABB2 GetViewPortUnnormalized(Vec2 const& clientSize);
-    float GetViewPortAspectRatio(Vec2 const& clientSize) const; // Get the normalized viewport aspect ratio
-    Vec2  GetViewportSize(Vec2 const& clientSize) const; // Get the dimension of screen viewport size after client size was input.
-    float GetViewPortUnnormalizedAspectRatio(Vec2 const& clientSize) const; // Get the unnormalized screen port aspect ratio.
+    AABB2 GetViewPortUnnormalized(const Vec2& clientSize);
+    float GetViewPortAspectRatio(const Vec2& clientSize) const; // Get the normalized viewport aspect ratio
+    Vec2  GetViewportSize(const Vec2& clientSize) const; // Get the dimension of screen viewport size after client size was input.
+    float GetViewPortUnnormalizedAspectRatio(const Vec2& clientSize) const; // Get the unnormalized screen port aspect ratio.
 
-    Vec2 WorldToScreen(Vec3 const& worldPos, Vec2 const& clientSize) const;
+    Vec2 WorldToScreen(const Vec3& worldPos, const Vec2& clientSize) const;
 
 private:
     void ApplyShakeEffect(float deltaTime);

@@ -32,7 +32,7 @@ void Camera::Update(float deltaTime)
     }
 }
 
-void Camera::SetOrthographicView(Vec2 const& bottomLeft, Vec2 const& topRight, float near, float far)
+void Camera::SetOrthographicView(const Vec2& bottomLeft, const Vec2& topRight, float near, float far)
 {
     m_orthographicBottomLeft = bottomLeft;
     m_orthographicTopRight   = topRight;
@@ -159,7 +159,7 @@ void Camera::DoShakeEffect(const Vec2& translation2D, float duration, bool decre
     m_decreaseShakeOverTime = decreaseShakeOverTime;
 }
 
-void Camera::SetNormalizedViewport(AABB2 const& viewportSize)
+void Camera::SetNormalizedViewport(const AABB2& viewportSize)
 {
     m_viewPort = viewportSize;
 }
@@ -169,9 +169,9 @@ AABB2 Camera::GetNormalizedViewport() const
     return m_viewPort;
 }
 
-AABB2 Camera::GetViewPortUnnormalized(Vec2 const& clientSize)
+AABB2 Camera::GetViewPortUnnormalized(const Vec2& clientSize)
 {
-    AABB2 unnormalizedClient = AABB2(Vec2::ZERO, Vec2(clientSize.x, clientSize.y));
+    auto  unnormalizedClient = AABB2(Vec2::ZERO, Vec2(clientSize.x, clientSize.y));
     AABB2 unnormalizedViewport;
     Vec2  mins(clientSize.x * m_viewPort.m_mins.x, clientSize.y * m_viewPort.m_mins.y);
     Vec2  maxs(clientSize.x * m_viewPort.m_maxs.x, clientSize.y * m_viewPort.m_maxs.y);
@@ -180,22 +180,22 @@ AABB2 Camera::GetViewPortUnnormalized(Vec2 const& clientSize)
     return unnormalizedViewport;
 }
 
-float Camera::GetViewPortAspectRatio(Vec2 const& clientSize) const
+float Camera::GetViewPortAspectRatio(const Vec2& clientSize) const
 {
     return clientSize.x / clientSize.y;
 }
 
-Vec2 Camera::GetViewportSize(Vec2 const& clientSize) const
+Vec2 Camera::GetViewportSize(const Vec2& clientSize) const
 {
     return Vec2(clientSize.x * m_viewPort.GetDimensions().x, clientSize.y * m_viewPort.GetDimensions().y);
 }
 
-float Camera::GetViewPortUnnormalizedAspectRatio(Vec2 const& clientSize) const
+float Camera::GetViewPortUnnormalizedAspectRatio(const Vec2& clientSize) const
 {
     return GetViewPortAspectRatio(GetViewportSize(clientSize));
 }
 
-Vec2 Camera::WorldToScreen(Vec3 const& worldPos, Vec2 const& clientSize) const
+Vec2 Camera::WorldToScreen(const Vec3& worldPos, const Vec2& clientSize) const
 {
     Mat44 M = GetProjectionMatrix(); // P
     M.Append(GetCameraToRenderTransform()); // *C
