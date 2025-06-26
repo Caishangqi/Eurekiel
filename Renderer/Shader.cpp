@@ -11,8 +11,8 @@ Shader::~Shader()
     DX_SAFE_RELEASE(m_pixelShader)
     DX_SAFE_RELEASE(m_inputLayout)
 
-    DX_SAFE_RELEASE(m_vsBytecode)
-    DX_SAFE_RELEASE(m_psBytecode)
+    DX_SAFE_RELEASE(m_vertexShaderBlob)
+    DX_SAFE_RELEASE(m_pixelShaderBlob)
 }
 
 const std::string& Shader::GetName() const

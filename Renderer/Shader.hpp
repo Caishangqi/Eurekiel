@@ -32,8 +32,8 @@ private:
     ID3D11InputLayout*  m_inputLayout  = nullptr;
 
     // DirectX 12
-    ID3DBlob* m_vsBytecode = nullptr; // VS / PS 字节码 – 供 PSO 复用
-    ID3DBlob* m_psBytecode = nullptr;
+    ID3DBlob* m_vertexShaderBlob = nullptr; // VS / PS 字节码 – 供 PSO 复用
+    ID3DBlob* m_pixelShaderBlob  = nullptr;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> m_dx12InputLayout = {};
 };
