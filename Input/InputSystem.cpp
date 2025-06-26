@@ -83,7 +83,7 @@ void InputSystem::BeginFrame()
 
     POINT cursorPos;
     GetCursorPos(&cursorPos);
-    HWND hWnd = static_cast<HWND>(Window::s_mainWindow->GetWindowHandle());
+    auto hWnd = static_cast<HWND>(Window::s_mainWindow->GetWindowHandle());
     ScreenToClient(hWnd, &cursorPos);
     IntVec2 newCursorPos(cursorPos.x, -cursorPos.y);
 
