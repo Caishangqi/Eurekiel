@@ -2,6 +2,8 @@
 
 #include "Renderer.hpp"
 
+UINT Texture::s_internalID = 0;
+
 Texture::Texture()
 {
 }
@@ -10,6 +12,8 @@ Texture::~Texture()
 {
     DX_SAFE_RELEASE(m_texture)
     DX_SAFE_RELEASE(m_shaderResourceView)
+    DX_SAFE_RELEASE(m_textureBufferUploadHeap)
+    DX_SAFE_RELEASE(m_dx12Texture)
 }
 
 Vec2 Texture::GetStandardDimensions() const
