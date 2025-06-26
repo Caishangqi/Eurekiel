@@ -4,3 +4,5 @@ Engine.vcxproj.filters
 *.obj
 *.pdb
 Temporary
+/.idea/
+/.vs/
