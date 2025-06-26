@@ -14,6 +14,7 @@ const Rgba8 Rgba8::BLUE                    = Rgba8(0, 0, 255);
 const Rgba8 Rgba8::MAGENTA                 = Rgba8(255, 0, 255);
 const Rgba8 Rgba8::CYAN                    = Rgba8(0, 255, 255);
 const Rgba8 Rgba8::DEBUG_BLUE              = Rgba8(50, 80, 150);
+const Rgba8 Rgba8::DEBUG_GREEN             = Rgba8(100, 255, 200);
 const Rgba8 Rgba8::DEBUG_WHITE_TRANSLUCENT = Rgba8(255, 255, 255, 30);
 
 Rgba8::Rgba8()
@@ -40,9 +41,9 @@ Rgba8::Rgba8(const Rgba8& copyFrom)
 Rgba8 Rgba8::operator*(float multiplier)
 {
     Rgba8 rgba8 = *this;
-    rgba8.r = (char)GetClamped((float)this->r * multiplier, 0, 255);
-    rgba8.g = (char)GetClamped((float)this->g * multiplier, 0, 255);
-    rgba8.b = (char)GetClamped((float)this->b * multiplier, 0, 255);
+    rgba8.r     = static_cast<char>(GetClamped(static_cast<float>(this->r) * multiplier, 0, 255));
+    rgba8.g     = static_cast<char>(GetClamped(static_cast<float>(this->g) * multiplier, 0, 255));
+    rgba8.b     = static_cast<char>(GetClamped(static_cast<float>(this->b) * multiplier, 0, 255));
     return rgba8;
 }
 

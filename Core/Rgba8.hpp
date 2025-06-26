@@ -19,6 +19,7 @@ struct Rgba8
     static const Rgba8 MAGENTA;
     static const Rgba8 CYAN;
     static const Rgba8 DEBUG_BLUE;
+    static const Rgba8 DEBUG_GREEN;
     static const Rgba8 DEBUG_WHITE_TRANSLUCENT;
     // If the constructor is not declared with the explicit keyword, 
     // then the object can be created through implicit conversion or copy initialization, as shown below:
@@ -28,8 +29,8 @@ struct Rgba8
     Rgba8(const Rgba8& copyFrom);
 
     friend bool operator==(const Rgba8& lhs, const Rgba8& rhs);
-    
-    Rgba8 operator*(float multiplier);
+
+    Rgba8       operator*(float multiplier);
     friend bool operator!=(const Rgba8& lhs, const Rgba8& rhs);
 
     /// Example usage:
@@ -43,7 +44,6 @@ struct Rgba8
     /// in the order rgba
     /// @param colorAsFloats array of 4 floats.
     void GetAsFloats(float* colorAsFloats) const;
-    
 };
 
 Rgba8 Interpolate(Rgba8 from, Rgba8 to, float fractionOfEnd);
