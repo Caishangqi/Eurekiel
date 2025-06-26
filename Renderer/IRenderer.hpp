@@ -8,6 +8,7 @@
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Mat44.hpp"
+#include "Light/Light.hpp"
 
 class Image;
 class Window;
@@ -85,10 +86,7 @@ enum class VertexType
 
 struct EngineConstants
 {
-    Mat44 EngineConstant_0;
-    Mat44 EngineConstant_1;
-    Mat44 EngineConstant_2;
-    Mat44 EngineConstant_3;
+    Mat44 EngineConstant[4];
 };
 
 struct FrameConstants
@@ -96,10 +94,9 @@ struct FrameConstants
     float Time;
     int   DebugInt;
     float DebugFloat;
-    float Padding[13];
-    Mat44 FrameConstant_1;
-    Mat44 FrameConstant_2;
-    Mat44 FrameConstant_3;
+    int   DebugViewMode;
+    float Padding[12];
+    Mat44 FrameConstant[3];
 };
 
 struct CameraConstants
@@ -107,7 +104,7 @@ struct CameraConstants
     Mat44 WorldToCameraTransform; // View transform
     Mat44 CameraToRenderTransform; // Non-standard transform from game to DirectX conventions
     Mat44 RenderToClipTransform; // Project transform
-    float padding[16];
+    Mat44 CameraToWorldTransform; // Camera position, use for calculate Spectral
     /*float OrthoMixX;
     float OrthoMixY;
     float OrthoMixZ;
@@ -128,9 +125,11 @@ struct LightingConstants
     Vec3  SunDirection;
     float SunIntensity;
     float AmbientIntensity;
+    int   NumLights;
     float pad0;
     float pad1;
-    float pad2;
+    Light lights[8];
+    float pad2[36];
 };
 
 struct ModelConstants
@@ -185,16 +184,16 @@ public:
     //------------------------------------------------------------
     // Resource creation
     //------------------------------------------------------------
-    virtual Shader* CreateShader(char const* name, char const* src, VertexType t = VertexType::Vertex_PCU) = 0;
-    virtual Shader* CreateShader(char const* name, VertexType t = VertexType::Vertex_PCU) = 0;
+    virtual Shader* CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
+    virtual Shader* CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
     virtual Shader* CreateOrGetShader(const char* shaderName) = 0;
     virtual bool    CompileShaderToByteCode(std::vector<uint8_t>& outBytes,
-                                         char const*              name,
-                                         char const*              src,
-                                         char const*              entry,
-                                         char const*              target) = 0;
-    virtual void BindShader(Shader* s) = 0;
-    //virtual Texture* CreateOrGetTexture(const char)
+                                         const char*              name,
+                                         const char*              src,
+                                         const char*              entry,
+                                         const char*              target) = 0;
+    virtual void        BindShader(Shader* s) = 0;
+    virtual Texture*    CreateOrGetTexture(const char* imageFilePath) = 0; // TODO: abstract to IResource interface
     virtual Image*      CreateImageFromFile(const char* imageFilePath);
     virtual Texture*    CreateTextureFromImage(Image& image) = 0;
     virtual Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) = 0;
@@ -209,6 +208,7 @@ public:
 
     virtual void CopyCPUToGPU(const void* data, size_t size, VertexBuffer* v, size_t offset = 0) = 0;
     virtual void CopyCPUToGPU(const void* data, size_t size, IndexBuffer* i) = 0;
+    virtual void CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) = 0;
 
     //------------------------------------------------------------
     // Binding helpers
@@ -230,23 +230,13 @@ public:
                                  const std::vector<unsigned>&      idx) = 0;
 
     virtual void DrawVertexBuffer(VertexBuffer* v, int count, int offset = 0) = 0;
-    virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i,
-                                   int           idxCount, int   idxOffset = 0) = 0;
+    virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, int idxCount = 0, int idxOffset = 0) = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
-
-    //------------------------------------------------------------
-    // Optional high-level effects（DX11 已实现，DX12 暂返回错误）
-    //------------------------------------------------------------
-    virtual void RenderEmissive()
-    {
-    }
-
-    virtual Texture* GetCurScreenAsTexture() { return nullptr; }
-
-    template <typename T>
-    constexpr T AlignUp(T value, T alignment)
-    {
-        return (value + (alignment - 1)) & ~(alignment - 1);
-    }
 };
+
+template <typename T>
+static constexpr T AlignUp(T value, T alignment)
+{
+    return (value + (alignment - 1)) & ~(alignment - 1);
+}
