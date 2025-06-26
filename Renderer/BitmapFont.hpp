@@ -89,10 +89,10 @@ public:
     void AddVertsForText3DAtOriginXForward(
         std::vector<Vertex_PCU>& verts,
         float                    cellHeight,
-        std::string const&       text,
-        Rgba8 const&             tint            = Rgba8::WHITE,
+        const std::string&       text,
+        const Rgba8&             tint            = Rgba8::WHITE,
         float                    cellAspect      = 1.0f,
-        Vec2 const&              alignment       = Vec2(0.5f, 0.5f),
+        const Vec2&              alignment       = Vec2(0.5f, 0.5f),
         int                      maxGlyphsToDraw = 999
     );
 

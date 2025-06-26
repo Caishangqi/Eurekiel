@@ -9,24 +9,24 @@ Sphere Sphere::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<u
     // Grid Segments
     const int   numSlices = std::max(3, sides); // longitude
     const int   numStacks = std::max(2, sides / 2); // latitude (+ poles)
-    const float dPitchDeg = 180.f / (float)numStacks; // delta latitude
-    const float dYawDeg   = 360.f / (float)numSlices; // delta longitude
-    const Vec3  worldUp   = Vec3(0.f, 0.f, 1.f);
+    const float dPitchDeg = 180.f / static_cast<float>(numStacks); // delta latitude
+    const float dYawDeg   = 360.f / static_cast<float>(numSlices); // delta longitude
+    const auto  worldUp   = Vec3(0.f, 0.f, 1.f);
 
     // vertex
-    const unsigned baseV       = (unsigned)outVerts.size(); // Base index
+    const unsigned baseV       = static_cast<unsigned>(outVerts.size()); // Base index
     const int      vertsPerRow = numSlices + 1; // One more column of closed seams
 
     for (int stack = 0; stack <= numStacks; ++stack) // Include both poles
     {
-        float pitchDeg = -90.f + dPitchDeg * (float)stack; // -90° to +90°
-        float v        = RangeMap((float)stack, 0.f, (float)numStacks,
+        float pitchDeg = -90.f + dPitchDeg * static_cast<float>(stack); // -90° to +90°
+        float v        = RangeMap(static_cast<float>(stack), 0.f, static_cast<float>(numStacks),
                            uv.m_mins.y, uv.m_maxs.y); // [0,1]→V
 
         for (int slice = 0; slice <= numSlices; ++slice) //1 more column
         {
-            float yawDeg = dYawDeg * (float)slice;
-            float u      = RangeMap((float)slice, 0.f, (float)numSlices,
+            float yawDeg = dYawDeg * static_cast<float>(slice);
+            float u      = RangeMap(static_cast<float>(slice), 0.f, static_cast<float>(numSlices),
                                uv.m_mins.x, uv.m_maxs.x); // [0,1]→U
 
             Vec3 pos = Vec3::MakeFromPolarDegrees(pitchDeg, yawDeg, m_radius) + m_position;

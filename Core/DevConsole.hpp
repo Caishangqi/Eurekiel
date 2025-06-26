@@ -38,6 +38,7 @@ struct DevConsoleConfig
     Renderer*   renderer            = nullptr;
     IRenderer*  _renderer           = nullptr;
     std::string m_defaultFontName   = "CaiziiFixedFont";
+    std::string m_fontPath          = ".enigma/data/Fonts/";
     float       m_defaultFontAspect = 0.7f;
     float       m_maxLinesDisplay   = 40.5f;
     int         m_maxCommandHistory = 128;
@@ -53,7 +54,7 @@ public:
     /// Event
     static bool Event_KeyPressed(EventArgs& args); // Handle char input by appending valid characters to our current input line.
     static bool Event_CharInput(EventArgs& args); // Handle key input.
-    static bool Event_PasteClipboard(EventArgs& args);  // Handle Windows paste
+    static bool Event_PasteClipboard(EventArgs& args); // Handle Windows paste
     static bool Command_Clear(EventArgs& args); // Clear all lines of text.
     static bool Command_Help(EventArgs& args); // Display all currently registered commands in the event system.
     static bool Command_Quit(EventArgs& args);
@@ -125,7 +126,7 @@ protected:
     DevConsoleMode              m_mode = DevConsoleMode::HIDDEN;
     std::vector<DevConsoleLine> m_lines; // #ToDo: support a max limited # of lines (e.g. fixed circular buffer)
     int                         m_frameNumber = 0;
-    std::string                 m_fontPath;
+    std::string                 m_fontFullPath;
     bool                        m_isOpen = false; // True if the dev console is currently visible and accepting input.
     std::string                 m_inputText; // Our current line of input text.
     int                         m_insertionPointPosition = 0; // Index of the insertion point in our current input text.

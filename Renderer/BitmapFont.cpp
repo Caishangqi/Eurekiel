@@ -111,10 +111,10 @@ void BitmapFont::AddVertsForTextInBox2D(std::vector<Vertex_PCU>& vertexArray, co
 void BitmapFont::AddVertsForText3DAtOriginXForward(
     std::vector<Vertex_PCU>& verts,
     float                    cellHeight,
-    std::string const&       text,
-    Rgba8 const&             tint,
+    const std::string&       text,
+    const Rgba8&             tint,
     float                    cellAspect,
-    Vec2 const&              alignment,
+    const Vec2&              alignment,
     int                      maxGlyphsToDraw)
 {
     // Calculate total text width for given cellHeight, cellAspect, and the content of 'text'
@@ -150,7 +150,7 @@ void BitmapFont::AddVertsForText3DAtOriginXForward(
         }
 
         // Obtain per-glyph aspect ratio and sprite UVs from the font sprite sheet
-        int   glyphIndex = static_cast<int>(glyph);
+        int   glyphIndex = glyph;
         float glyphRatio = GetGlyphAspect(glyphIndex);
         float glyphWidth = baseGlyphWidth * glyphRatio;
 

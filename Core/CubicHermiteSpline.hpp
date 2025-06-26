@@ -10,7 +10,6 @@ public:
     CubicHermiteSpline() = default;
     CubicHermiteSpline(std::vector<Vec2> points);
 
-public:
     std::vector<Vec2>&                GetPoints();
     Vec2                              EvaluateAtParametric(float parametricZeroToNumCurvesSections) const;
     Vec2                              EvaluateAtApproximateDistance(float distanceAlongCurve, int numSubdivisions = 64) const;

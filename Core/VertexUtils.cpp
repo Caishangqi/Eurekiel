@@ -89,9 +89,9 @@ void AddVertsForCurve2D(std::vector<Vertex_PCU>& verts, const std::vector<Vec2>&
         return;
     }
     float numPoints = static_cast<float>(points.size());
-    for (int i = 0; (int)i < numPoints; ++i)
+    for (int i = 0; i < numPoints; ++i)
     {
-        if (i + 1 < (int)points.size()) AddVertsForLineSegment2D(verts, LineSegment2(points[i], points[(i + 1)], thickness), color);
+        if (i + 1 < static_cast<int>(points.size())) AddVertsForLineSegment2D(verts, LineSegment2(points[i], points[(i + 1)], thickness), color);
     }
 }
 
@@ -378,7 +378,7 @@ void TransformVertexArray3D(std::vector<Vertex_PCU>& verts, const Mat44& transfo
 AABB2 GetVertexBounds2D(const std::vector<Vertex_PCU>& verts)
 {
     AABB2 bounds;
-    if ((int)verts.size() <= 0)
+    if (static_cast<int>(verts.size()) <= 0)
     {
         return AABB2();
     }
@@ -423,8 +423,8 @@ void AddVertsForCylinder3D(std::vector<Vertex_PCU>& verts, const Vec3& apex, con
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float angleA = angleStep * (float)i;
-        float angleB = angleStep * (float)(i + 1);
+        float angleA = angleStep * static_cast<float>(i);
+        float angleB = angleStep * static_cast<float>(i + 1);
 
         float cosA = CosDegrees(angleA);
         float sinA = SinDegrees(angleA);
@@ -472,8 +472,8 @@ void AddVertsForCone3D(std::vector<Vertex_PCU>& verts, const Vec3& apex, const V
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float angleA = angleStep * (float)i;
-        float angleB = angleStep * (float)(i + 1);
+        float angleA = angleStep * static_cast<float>(i);
+        float angleB = angleStep * static_cast<float>(i + 1);
 
         float cosA = CosDegrees(angleA);
         float sinA = SinDegrees(angleA);
@@ -520,8 +520,8 @@ void AddVertsForArrow3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float angleA = angleStep * (float)i;
-        float angleB = angleStep * (float)(i + 1);
+        float angleA = angleStep * static_cast<float>(i);
+        float angleB = angleStep * static_cast<float>(i + 1);
 
         float cosA = CosDegrees(angleA);
         float sinA = SinDegrees(angleA);
@@ -575,8 +575,8 @@ void AddVertsForArrow3DFixArrowSize(std::vector<Vertex_PCU>& verts, const Vec3& 
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float angleA = angleStep * (float)i;
-        float angleB = angleStep * (float)(i + 1);
+        float angleA = angleStep * static_cast<float>(i);
+        float angleB = angleStep * static_cast<float>(i + 1);
 
         // 在 right-up 平面上使用极坐标生成两点，用于形成一段扇形
         float cosA = CosDegrees(angleA);
@@ -639,39 +639,39 @@ void AddVertsForSphere3D(std::vector<Vertex_PCU>& verts, const Vec3&  center, fl
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float yawA = (float)i * unit_yaw;
-        float yawB = (float)((i + 1) % numSlices) * unit_yaw;
+        float yawA = static_cast<float>(i) * unit_yaw;
+        float yawB = static_cast<float>((i + 1) % numSlices) * unit_yaw;
 
         Vec3 ringPointA = Vec3::MakeFromPolarDegrees(ringAngleBottom, yawA, radius) + center;
         Vec3 ringPointB = Vec3::MakeFromPolarDegrees(ringAngleBottom, yawB, radius) + center;
 
-        float uA = static_cast<float>(i) / (float)numSlices;
-        float uB = static_cast<float>(i + 1) / (float)numSlices;
-        AABB2 subUVs(Vec2(uA, 0.f), Vec2(uB, 1.0f / (float)numStacks));
+        float uA = static_cast<float>(i) / static_cast<float>(numSlices);
+        float uB = static_cast<float>(i + 1) / static_cast<float>(numSlices);
+        AABB2 subUVs(Vec2(uA, 0.f), Vec2(uB, 1.0f / static_cast<float>(numStacks)));
 
         AddVertsForQuad3D(verts, bottomPole, bottomPole, ringPointB, ringPointA, color, subUVs);
     }
 
     for (int stack = 1; stack < numStacks - 1; ++stack)
     {
-        float pitch0 = 90.f - (float)stack * unit_pitch;
-        float pitch1 = 90.f - (float)(stack + 1) * unit_pitch;
+        float pitch0 = 90.f - static_cast<float>(stack) * unit_pitch;
+        float pitch1 = 90.f - static_cast<float>(stack + 1) * unit_pitch;
 
-        float v0 = static_cast<float>(stack) / (float)numStacks;
-        float v1 = static_cast<float>(stack + 1) / (float)numStacks;
+        float v0 = static_cast<float>(stack) / static_cast<float>(numStacks);
+        float v1 = static_cast<float>(stack + 1) / static_cast<float>(numStacks);
 
         for (int slice = 0; slice < numSlices; ++slice)
         {
-            float yaw0 = (float)slice * unit_yaw;
-            float yaw1 = (float)((slice + 1) % numSlices) * unit_yaw;
+            float yaw0 = static_cast<float>(slice) * unit_yaw;
+            float yaw1 = static_cast<float>((slice + 1) % numSlices) * unit_yaw;
 
             Vec3 v0Pos = Vec3::MakeFromPolarDegrees(pitch0, yaw0, radius) + center;
             Vec3 v1Pos = Vec3::MakeFromPolarDegrees(pitch1, yaw0, radius) + center;
             Vec3 v2Pos = Vec3::MakeFromPolarDegrees(pitch1, yaw1, radius) + center;
             Vec3 v3Pos = Vec3::MakeFromPolarDegrees(pitch0, yaw1, radius) + center;
 
-            float u0 = static_cast<float>(slice) / (float)numSlices;
-            float u1 = static_cast<float>(slice + 1) / (float)numSlices;
+            float u0 = static_cast<float>(slice) / static_cast<float>(numSlices);
+            float u1 = static_cast<float>(slice + 1) / static_cast<float>(numSlices);
 
             AABB2 subUVs(Vec2(u0, v0), Vec2(u1, v1));
             AddVertsForQuad3D(verts, v0Pos, v3Pos, v2Pos, v1Pos, color, subUVs);
@@ -683,15 +683,15 @@ void AddVertsForSphere3D(std::vector<Vertex_PCU>& verts, const Vec3&  center, fl
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float yawA = (float)i * unit_yaw;
-        float yawB = (float)((i + 1) % numSlices) * unit_yaw;
+        float yawA = static_cast<float>(i) * unit_yaw;
+        float yawB = static_cast<float>((i + 1) % numSlices) * unit_yaw;
 
         Vec3 ringPointA = Vec3::MakeFromPolarDegrees(ringAngleTop, yawA, radius) + center;
         Vec3 ringPointB = Vec3::MakeFromPolarDegrees(ringAngleTop, yawB, radius) + center;
 
-        float uA = static_cast<float>(i) / (float)numSlices;
-        float uB = static_cast<float>(i + 1) / (float)numSlices;
-        AABB2 subUVs(Vec2(uA, 1.0f - 1.0f / (float)numStacks), Vec2(uB, 1.0f));
+        float uA = static_cast<float>(i) / static_cast<float>(numSlices);
+        float uB = static_cast<float>(i + 1) / static_cast<float>(numSlices);
+        AABB2 subUVs(Vec2(uA, 1.0f - 1.0f / static_cast<float>(numStacks)), Vec2(uB, 1.0f));
 
         AddVertsForQuad3D(verts, ringPointA, ringPointB, topPole, topPole, color, subUVs);
     }
@@ -712,15 +712,15 @@ void AddVertsForWireFrameSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& ce
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float yawA = (float)i * unit_yaw;
-        float yawB = (float)((i + 1) % numSlices) * unit_yaw;
+        float yawA = static_cast<float>(i) * unit_yaw;
+        float yawB = static_cast<float>((i + 1) % numSlices) * unit_yaw;
 
         Vec3 ringPointA = Vec3::MakeFromPolarDegrees(ringAngleBottom, yawA, radius) + center;
         Vec3 ringPointB = Vec3::MakeFromPolarDegrees(ringAngleBottom, yawB, radius) + center;
 
-        float uA = static_cast<float>(i) / (float)numSlices;
-        float uB = static_cast<float>(i + 1) / (float)numSlices;
-        AABB2 subUVs(Vec2(uA, 0.f), Vec2(uB, 1.0f / (float)numStacks));
+        float uA = static_cast<float>(i) / static_cast<float>(numSlices);
+        float uB = static_cast<float>(i + 1) / static_cast<float>(numSlices);
+        AABB2 subUVs(Vec2(uA, 0.f), Vec2(uB, 1.0f / static_cast<float>(numStacks)));
 
         AddVertsForCylinder3D(verts, bottomPole, ringPointB, 0.006f, color, subUVs, 3);
         AddVertsForCylinder3D(verts, bottomPole, ringPointA, 0.006f, color, subUVs, 3);
@@ -728,24 +728,24 @@ void AddVertsForWireFrameSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& ce
 
     for (int stack = 1; stack < numStacks - 1; ++stack)
     {
-        float pitch0 = 90.f - (float)stack * unit_pitch;
-        float pitch1 = 90.f - (float)(stack + 1) * unit_pitch;
+        float pitch0 = 90.f - static_cast<float>(stack) * unit_pitch;
+        float pitch1 = 90.f - static_cast<float>(stack + 1) * unit_pitch;
 
-        float v0 = static_cast<float>(stack) / (float)numStacks;
-        float v1 = static_cast<float>(stack + 1) / (float)numStacks;
+        float v0 = static_cast<float>(stack) / static_cast<float>(numStacks);
+        float v1 = static_cast<float>(stack + 1) / static_cast<float>(numStacks);
 
         for (int slice = 0; slice < numSlices; ++slice)
         {
-            float yaw0 = (float)slice * unit_yaw;
-            float yaw1 = (float)((slice + 1) % numSlices) * unit_yaw;
+            float yaw0 = static_cast<float>(slice) * unit_yaw;
+            float yaw1 = static_cast<float>((slice + 1) % numSlices) * unit_yaw;
 
             Vec3 v0Pos = Vec3::MakeFromPolarDegrees(pitch0, yaw0, radius) + center;
             Vec3 v1Pos = Vec3::MakeFromPolarDegrees(pitch1, yaw0, radius) + center;
             Vec3 v2Pos = Vec3::MakeFromPolarDegrees(pitch1, yaw1, radius) + center;
             Vec3 v3Pos = Vec3::MakeFromPolarDegrees(pitch0, yaw1, radius) + center;
 
-            float u0 = static_cast<float>(slice) / (float)numSlices;
-            float u1 = static_cast<float>(slice + 1) / (float)numSlices;
+            float u0 = static_cast<float>(slice) / static_cast<float>(numSlices);
+            float u1 = static_cast<float>(slice + 1) / static_cast<float>(numSlices);
 
             AABB2 subUVs(Vec2(u0, v0), Vec2(u1, v1));
 
@@ -762,15 +762,15 @@ void AddVertsForWireFrameSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& ce
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float yawA = (float)i * unit_yaw;
-        float yawB = (float)((i + 1) % numSlices) * unit_yaw;
+        float yawA = static_cast<float>(i) * unit_yaw;
+        float yawB = static_cast<float>((i + 1) % numSlices) * unit_yaw;
 
         Vec3 ringPointA = Vec3::MakeFromPolarDegrees(ringAngleTop, yawA, radius) + center;
         Vec3 ringPointB = Vec3::MakeFromPolarDegrees(ringAngleTop, yawB, radius) + center;
 
-        float uA = static_cast<float>(i) / (float)numSlices;
-        float uB = static_cast<float>(i + 1) / (float)numSlices;
-        AABB2 subUVs(Vec2(uA, 1.0f - 1.0f / (float)numStacks), Vec2(uB, 1.0f));
+        float uA = static_cast<float>(i) / static_cast<float>(numSlices);
+        float uB = static_cast<float>(i + 1) / static_cast<float>(numSlices);
+        AABB2 subUVs(Vec2(uA, 1.0f - 1.0f / static_cast<float>(numStacks)), Vec2(uB, 1.0f));
 
         AddVertsForCylinder3D(verts, topPole, ringPointA, 0.006f, color, subUVs, 3);
         AddVertsForCylinder3D(verts, topPole, ringPointB, 0.006f, color, subUVs, 3);
@@ -923,7 +923,7 @@ void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box
 
 void AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCylinder& cylinder, const Rgba8& color, int numSlices)
 {
-    Vec3  axis           = Vec3(0, 0, 1);
+    auto  axis           = Vec3(0, 0, 1);
     float cylinderLength = cylinder.m_height;
     float radius         = cylinder.m_radius;
     Vec3  baseCenter     = cylinder.m_center - Vec3(0, 0, cylinderLength / 2.0f);
@@ -947,8 +947,8 @@ void AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCyli
 
     for (int i = 0; i < numSlices; ++i)
     {
-        float angleA = angleStep * (float)i;
-        float angleB = angleStep * (float)(i + 1);
+        float angleA = angleStep * static_cast<float>(i);
+        float angleB = angleStep * static_cast<float>(i + 1);
 
         float cosA = CosDegrees(angleA);
         float sinA = SinDegrees(angleA);
@@ -985,12 +985,12 @@ void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cyli
     topCenter.z += halfHeight; // 圆柱顶面
 
     float uRange          = UVs.m_maxs.x - UVs.m_mins.x;
-    float degreesPerSlice = 360.f / (float)numSlices;
+    float degreesPerSlice = 360.f / static_cast<float>(numSlices);
 
     for (int i = 0; i < numSlices; i++)
     {
-        float angleA = degreesPerSlice * (float)i;
-        float angleB = degreesPerSlice * (float)(i + 1);
+        float angleA = degreesPerSlice * static_cast<float>(i);
+        float angleB = degreesPerSlice * static_cast<float>(i + 1);
 
         float cosA = CosDegrees(angleA);
         float sinA = SinDegrees(angleA);
@@ -1034,8 +1034,8 @@ void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cyli
 
     for (int i = 0; i < numSlices; i++)
     {
-        float angleA = degreesPerSlice * (float)i;
-        float angleB = degreesPerSlice * (float)(i + 1);
+        float angleA = degreesPerSlice * static_cast<float>(i);
+        float angleB = degreesPerSlice * static_cast<float>(i + 1);
 
         Vec3 t0 = cT + Vec3(CosDegrees(angleA) * cylinder.m_radius,
                             SinDegrees(angleA) * cylinder.m_radius, 0.f);
@@ -1055,8 +1055,8 @@ void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cyli
     Vec3 cB = bottomCenter;
     for (int i = 0; i < numSlices; i++)
     {
-        float angleA = degreesPerSlice * (float)i;
-        float angleB = degreesPerSlice * (float)(i + 1);
+        float angleA = degreesPerSlice * static_cast<float>(i);
+        float angleB = degreesPerSlice * static_cast<float>(i + 1);
 
         Vec3 b0 = cB + Vec3(CosDegrees(angleA) * cylinder.m_radius,
                             SinDegrees(angleA) * cylinder.m_radius, 0.f);

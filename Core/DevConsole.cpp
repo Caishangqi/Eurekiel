@@ -142,7 +142,7 @@ bool DevConsole::Event_PasteClipboard(EventArgs& args)
         return false;
     }
 
-    char* pszText = static_cast<char*>(GlobalLock(hData));
+    auto pszText = static_cast<char*>(GlobalLock(hData));
     if (pszText == nullptr)
     {
         CloseClipboard();
@@ -316,7 +316,7 @@ bool DevConsole::Command_Help(EventArgs& args)
 {
     if (args.GetValue("args", "").length() != 0)
     {
-        g_theDevConsole->AddLine(DevConsole::COLOR_WARNING, Stringf("You should not add args after help command!\n"
+        g_theDevConsole->AddLine(COLOR_WARNING, Stringf("You should not add args after help command!\n"
                                      "Omitted arguments for the command"));
     }
     g_theDevConsole->AddLine(COLOR_INPUT_NORMAL, Stringf("Registered Commands"));
@@ -360,7 +360,7 @@ void DevConsole::Startup()
     g_theEventSystem->SubscribeEventCallbackFunction("ecoargs", Command_EcoArgs);
 
 
-    m_fontPath = m_fontPath.append("Data/Fonts/").append(m_config.m_defaultFontName);
+    m_fontFullPath = m_config.m_fontPath.append(m_config.m_defaultFontName);
     m_lines.reserve(1000);
     AddLine(COLOR_WARNING, "Welcome to DevConsole v1.0.0\n"
             "Type help for a list of commands");
@@ -472,7 +472,7 @@ void DevConsole::Render(const AABB2& bounds, Renderer* rendererOverride) const
         m_config.renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_NONE);
         m_config.renderer->SetBlendMode(BlendMode::ALPHA);
         g_theRenderer->BeginCamera(*m_config.m_camera);
-        Render_OpenFull(bounds, *rendererOverride, *rendererOverride->CreateOrGetBitmapFont(m_fontPath.c_str()), 1);
+        Render_OpenFull(bounds, *rendererOverride, *rendererOverride->CreateOrGetBitmapFont(m_fontFullPath.c_str()), 1);
         g_theRenderer->EndCamera(*m_config.m_camera);
     }
 }
@@ -558,7 +558,7 @@ void DevConsole::Render_OpenFull(const AABB2& bounds, Renderer& renderer, Bitmap
     for (int line = static_cast<int>(m_lines.size()) - 1; line >= 0; --line)
     {
         /// Only render the visible line
-        if (lineIndexFromBottom >= (int)round(m_config.m_maxLinesDisplay))
+        if (lineIndexFromBottom >= static_cast<int>(round(m_config.m_maxLinesDisplay)))
         {
             continue;
         }
@@ -610,8 +610,8 @@ void DevConsole::RenderInsertionLine(const AABB2& bounds, Renderer& renderer, Bi
     std::vector<Vertex_PCU> insertionLineVerts;
     insertionLineVerts.reserve(100);
     AABB2 insertionLine;
-    int   maxCharsX       = (int)(bounds.GetDimensions().x / lineHeight * fontAspect);
-    float scaleMultiplier = GetClamped((float)maxCharsX / (float)m_inputText.size(), 0.f, 1.f);
+    int   maxCharsX       = static_cast<int>(bounds.GetDimensions().x / lineHeight * fontAspect);
+    float scaleMultiplier = GetClamped(static_cast<float>(maxCharsX) / static_cast<float>(m_inputText.size()), 0.f, 1.f);
     insertionLine.SetDimensions(Vec2(4.0f * scaleMultiplier, lineHeight));
     insertionLine.SetCenter(Vec2(static_cast<float>(m_insertionPointPosition) * lineHeight * scaleMultiplier, lineHeight / 2.0f));
     AddVertsForAABB2D(insertionLineVerts, insertionLine, Rgba8(221, 221, 221));

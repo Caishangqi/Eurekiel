@@ -160,21 +160,21 @@ void DebugRenderBeginFrame()
 
 DebugRenderPropsObject* CreateDebugRenderPropsObject(float duration, bool isWired, const Rgba8& startColor, const Rgba8& endColor, DebugRenderMode mode)
 {
-    DebugRenderPropsObject* debugRenderPropObject = new DebugRenderPropsObject();
-    debugRenderPropObject->m_duration             = duration;
-    debugRenderPropObject->m_mode                 = mode;
-    debugRenderPropObject->m_isWired              = isWired;
-    debugRenderPropObject->startColor             = startColor;
-    debugRenderPropObject->endColor               = endColor;
+    auto debugRenderPropObject        = new DebugRenderPropsObject();
+    debugRenderPropObject->m_duration = duration;
+    debugRenderPropObject->m_mode     = mode;
+    debugRenderPropObject->m_isWired  = isWired;
+    debugRenderPropObject->startColor = startColor;
+    debugRenderPropObject->endColor   = endColor;
     return debugRenderPropObject;
 }
 
 DebugRenderTextObject* CreateDebugRenderTextObject(float duration, const Rgba8& startColor, const Rgba8& endColor)
 {
-    DebugRenderTextObject* debugRenderTextObject = new DebugRenderTextObject();
-    debugRenderTextObject->m_duration            = duration;
-    debugRenderTextObject->startColor            = startColor;
-    debugRenderTextObject->endColor              = endColor;
+    auto debugRenderTextObject        = new DebugRenderTextObject();
+    debugRenderTextObject->m_duration = duration;
+    debugRenderTextObject->startColor = startColor;
+    debugRenderTextObject->endColor   = endColor;
     return debugRenderTextObject;
 }
 
@@ -184,7 +184,7 @@ void DebugRenderWorld(const Camera& camera)
         return;
     if (!debugRenderConfig.m_renderer)
         ERROR_AND_DIE("DebugRenderWorld: renderer is null")
-    debugRenderConfig.m_renderer->BeingCamera(camera);
+    debugRenderConfig.m_renderer->BeginCamera(camera);
     for (DebugRenderPropsObject* debugRenderPropObject : debugRenderPropsList)
     {
         if (debugRenderPropObject == nullptr)
@@ -203,11 +203,11 @@ void DebugRenderWorld(const Camera& camera)
                 debugRenderConfig.m_renderer->SetBlendMode(BlendMode::ALPHA);
                 debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_ONLY_ALWAYS);
                 Rgba8         originColor    = debugRenderPropObject->vertices[0].m_color;
-                unsigned char newR           = (unsigned char)((float)originColor.r * 0.8f);
-                unsigned char newG           = (unsigned char)((float)originColor.g * 0.8f);
-                unsigned char newB           = (unsigned char)((float)originColor.b * 0.8f);
-                unsigned char newA           = (unsigned char)((float)originColor.a * 0.8f);
-                Rgba8         firstPassColor = Rgba8(newR, newG, newB, newA);
+                unsigned char newR           = static_cast<unsigned char>(static_cast<float>(originColor.r) * 0.8f);
+                unsigned char newG           = static_cast<unsigned char>(static_cast<float>(originColor.g) * 0.8f);
+                unsigned char newB           = static_cast<unsigned char>(static_cast<float>(originColor.b) * 0.8f);
+                unsigned char newA           = static_cast<unsigned char>(static_cast<float>(originColor.a) * 0.8f);
+                auto          firstPassColor = Rgba8(newR, newG, newB, newA);
                 for (Vertex_PCU& vertex : debugRenderPropObject->vertices)
                 {
                     vertex.m_color = firstPassColor;
@@ -263,7 +263,7 @@ void DebugRenderScreen(const Camera& camera)
 {
     if (!debugRenderConfig.m_renderer)
         ERROR_AND_DIE("DebugRenderScreen: renderer is null")
-    debugRenderConfig.m_renderer->BeingCamera(camera);
+    debugRenderConfig.m_renderer->BeginCamera(camera);
     debugRenderConfig.m_renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_BACK);
     debugRenderConfig.m_renderer->SetBlendMode(BlendMode::OPAQUE);
     debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_WRITE_LESS_EQUAL);
@@ -316,12 +316,12 @@ void DebugAddWorldWireSphere(const Vec3& center, float radius, float duration, c
 
 void DebugAddWorldCylinder(const Vec3& start, const Vec3& end, float radius, float duration, const Rgba8& startColor, const Rgba8& endColor, DebugRenderMode mode)
 {
-    DebugRenderPropsObject* debugRenderPropObject = new DebugRenderPropsObject();
-    debugRenderPropObject->m_duration             = duration;
-    debugRenderPropObject->m_mode                 = mode;
-    debugRenderPropObject->m_isWired              = true;
-    debugRenderPropObject->startColor             = startColor;
-    debugRenderPropObject->endColor               = endColor;
+    auto debugRenderPropObject        = new DebugRenderPropsObject();
+    debugRenderPropObject->m_duration = duration;
+    debugRenderPropObject->m_mode     = mode;
+    debugRenderPropObject->m_isWired  = true;
+    debugRenderPropObject->startColor = startColor;
+    debugRenderPropObject->endColor   = endColor;
     debugRenderPropsList.push_back(debugRenderPropObject);
     AddVertsForCylinder3D(debugRenderPropObject->vertices, start, end, radius, startColor);
 }

@@ -15,7 +15,8 @@ struct Sphere
 
     // Verts
     Sphere      BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, int sides = 64, const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
-    static void BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, Sphere& sphere, int sides = 64, const Rgba8& color = Rgba8::WHITE,const AABB2& uv = AABB2::ZERO_TO_ONE);
+    static void BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, Sphere& sphere, int sides = 64, const Rgba8& color = Rgba8::WHITE,
+                              const AABB2&                uv                                                                     = AABB2::ZERO_TO_ONE);
 
 
     Sphere();

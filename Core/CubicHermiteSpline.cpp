@@ -37,8 +37,8 @@ std::vector<Vec2>& CubicHermiteSpline::GetPoints()
 
 Vec2 CubicHermiteSpline::EvaluateAtParametric(float parametricZeroToNumCurvesSections) const
 {
-    if (parametricZeroToNumCurvesSections >= (float)m_curves.size()) return m_curves.back().EvaluateAtParametric(1);
-    return m_curves[(int)(parametricZeroToNumCurvesSections)].EvaluateAtParametric(parametricZeroToNumCurvesSections - floorf(parametricZeroToNumCurvesSections));
+    if (parametricZeroToNumCurvesSections >= static_cast<float>(m_curves.size())) return m_curves.back().EvaluateAtParametric(1);
+    return m_curves[static_cast<int>(parametricZeroToNumCurvesSections)].EvaluateAtParametric(parametricZeroToNumCurvesSections - floorf(parametricZeroToNumCurvesSections));
 }
 
 Vec2 CubicHermiteSpline::EvaluateAtApproximateDistance(float distanceAlongCurve, int numSubdivisions) const
@@ -48,9 +48,9 @@ Vec2 CubicHermiteSpline::EvaluateAtApproximateDistance(float distanceAlongCurve,
     if (distanceAlongCurve >= totalLength) return m_curves.back().m_endPos;
     Vec2  prevPos  = EvaluateAtParametric(0.f);
     float traveled = 0.f;
-    float step     = 1.f / (float)(numSubdivisions);
+    float step     = 1.f / static_cast<float>(numSubdivisions);
 
-    for (int i = 1; i <= numSubdivisions * ((int)m_curves.size()); ++i)
+    for (int i = 1; i <= numSubdivisions * static_cast<int>(m_curves.size()); ++i)
     {
         float t             = step * static_cast<float>(i);
         Vec2  currPos       = EvaluateAtParametric(t);
@@ -82,7 +82,7 @@ float CubicHermiteSpline::GetLength(int numSubdivisions) const
 
 int CubicHermiteSpline::GetNumOfCurves() const
 {
-    return (int)m_curves.size();
+    return static_cast<int>(m_curves.size());
 }
 
 std::vector<CubicHermiteCurve2D>& CubicHermiteSpline::GetCurves()

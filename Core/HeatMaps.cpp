@@ -139,9 +139,9 @@ void HeatMaps::AddVertsForPathDebugDraw(std::vector<Vertex_PCU>& verts, const st
     }
     IntVec2 end = path[0];
 
-    endColor.a   = static_cast<unsigned char>((float)endColor.a * opacity);
-    startColor.a = static_cast<unsigned char>((float)startColor.a * opacity);
-    pathColor.a  = static_cast<unsigned char>((float)pathColor.a * opacity);
+    endColor.a   = static_cast<unsigned char>(static_cast<float>(endColor.a) * opacity);
+    startColor.a = static_cast<unsigned char>(static_cast<float>(startColor.a) * opacity);
+    pathColor.a  = static_cast<unsigned char>(static_cast<float>(pathColor.a) * opacity);
 
     AddVertsForAABB2D(verts, AABB2(Vec2(end), Vec2(end) + Vec2(perTileDrawSize, perTileDrawSize)), endColor);
     IntVec2 start = path[static_cast<int>(path.size()) - 1];

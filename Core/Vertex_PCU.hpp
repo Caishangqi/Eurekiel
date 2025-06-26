@@ -20,15 +20,14 @@ struct Vertex_PCU
 
 struct Vertex_PCUTBN
 {
-public:
-    Vec3 m_position;
+    Vec3  m_position;
     Rgba8 m_color;
-    Vec2 m_uvTexCoords;
-    Vec3 m_tangent;
-    Vec3 m_bitangent;
-    Vec3 m_normal;
+    Vec2  m_uvTexCoords;
+    Vec3  m_tangent;
+    Vec3  m_bitangent;
+    Vec3  m_normal;
 
     Vertex_PCUTBN();
-    explicit Vertex_PCUTBN( Vec3 const& position, Rgba8 const& color, Vec2 const& uvTexCoords, Vec3 const normal = Vec3(), Vec3 const tangent = Vec3(), Vec3 const bitangent = Vec3() );
+    explicit Vertex_PCUTBN(const Vec3& position, const Rgba8& color, const Vec2& uvTexCoords, Vec3 normal = Vec3(), Vec3 tangent = Vec3(), Vec3 bitangent = Vec3());
     ~Vertex_PCUTBN();
 };

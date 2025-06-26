@@ -28,8 +28,8 @@ Vertex_PCUTBN::Vertex_PCUTBN(): m_position(Vec3::ZERO), m_color(Rgba8::WHITE), m
 {
 }
 
-Vertex_PCUTBN::Vertex_PCUTBN(Vec3 const& position, Rgba8 const& color, Vec2 const& uvTexCoords, Vec3 const normal, Vec3 const tangent, Vec3 const bitangent): m_position(position), m_color(color),
-    m_uvTexCoords(uvTexCoords), m_normal(normal), m_tangent(tangent), m_bitangent(bitangent)
+Vertex_PCUTBN::Vertex_PCUTBN(const Vec3& position, const Rgba8& color, const Vec2& uvTexCoords, const Vec3 normal, const Vec3 tangent, const Vec3 bitangent): m_position(position), m_color(color),
+    m_uvTexCoords(uvTexCoords), m_tangent(tangent), m_bitangent(bitangent), m_normal(normal)
 {
 }
 
