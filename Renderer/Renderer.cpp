@@ -55,7 +55,7 @@ void Renderer::Startup()
 
     // Create debug module
 #if defined(ENGINE_DEBUG_RENDER)
-    m_dxgiDebugModule = static_cast<void*>(::LoadLibraryA("dxgidebug.dll"));
+    m_dxgiDebugModule = static_cast<void*>(LoadLibraryA("dxgidebug.dll"));
     if (m_dxgiDebugModule == nullptr)
     {
         ERROR_AND_DIE("Could not load dxgidebug.dll.")
@@ -172,9 +172,8 @@ void Renderer::Startup()
     blendDesc.RenderTarget[0].BlendOpAlpha          = blendDesc.RenderTarget[0].BlendOp;
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)
-    ]
-    )
-    ;
+                                    ]
+    );
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:OPAQUE failed.")
     // Alpha state
@@ -243,7 +242,7 @@ void Renderer::Startup()
     }
 
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
-    hr                                        = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[(int)DepthMode::DISABLED]);
+    hr                                        = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::DISABLED)]);
 
     if (!SUCCEEDED(hr))
     {
@@ -252,18 +251,18 @@ void Renderer::Startup()
     depthStencilDesc.DepthEnable    = true;
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
     depthStencilDesc.DepthFunc      = D3D11_COMPARISON_ALWAYS;
-    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[(int)DepthMode::READ_ONLY_ALWAYS]);
+    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_ONLY_ALWAYS)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateDepthStencilState for DepthMode::READ_ONLY_ALWAYS failed.")
 
     depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-    hr                         = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[(int)DepthMode::READ_ONLY_LESS_EQUAL]);
+    hr                         = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_ONLY_LESS_EQUAL)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateDepthStencilState for DepthMode::READ_ONLY_LESS_EQUAL failed.")
 
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
     depthStencilDesc.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
-    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[(int)DepthMode::READ_WRITE_LESS_EQUAL]);
+    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_WRITE_LESS_EQUAL)]);
 
 
     /// 
@@ -386,10 +385,10 @@ void Renderer::BeginCamera(const Camera& camera)
     //UNUSED(camera)
     /// DirectX
     D3D11_VIEWPORT viewport = {};
-    viewport.TopLeftX       = RangeMap(camera.m_viewPort.m_mins.x, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().x); // Using different coordinate system
-    viewport.TopLeftY       = RangeMap(1.f - camera.m_viewPort.m_maxs.y, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().y); // revert the top left to bottom left
-    viewport.Width          = RangeMap(camera.m_viewPort.GetDimensions().x, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().x);
-    viewport.Height         = RangeMap(camera.m_viewPort.GetDimensions().y, 0.f, 1.f, 0, (float)m_config.m_window->GetClientDimensions().y);
+    viewport.TopLeftX       = RangeMap(camera.m_viewPort.m_mins.x, 0.f, 1.f, 0, static_cast<float>(m_config.m_window->GetClientDimensions().x)); // Using different coordinate system
+    viewport.TopLeftY       = RangeMap(1.f - camera.m_viewPort.m_maxs.y, 0.f, 1.f, 0, static_cast<float>(m_config.m_window->GetClientDimensions().y)); // revert the top left to bottom left
+    viewport.Width          = RangeMap(camera.m_viewPort.GetDimensions().x, 0.f, 1.f, 0, static_cast<float>(m_config.m_window->GetClientDimensions().x));
+    viewport.Height         = RangeMap(camera.m_viewPort.GetDimensions().y, 0.f, 1.f, 0, static_cast<float>(m_config.m_window->GetClientDimensions().y));
     viewport.MinDepth       = 0.f;
     viewport.MaxDepth       = 1.f;
     m_deviceContext->RSSetViewports(1, &viewport);
@@ -398,6 +397,7 @@ void Renderer::BeginCamera(const Camera& camera)
     cameraConstant.RenderToClipTransform   = camera.GetProjectionMatrix();
     cameraConstant.CameraToRenderTransform = camera.GetCameraToRenderTransform();
     cameraConstant.WorldToCameraTransform  = camera.GetWorldToCameraTransform();
+    cameraConstant.CameraToWorldTransform  = camera.GetCameraToWorldTransform();
 
     CopyCPUToGPU(&cameraConstant, sizeof(cameraConstant), m_cameraCBO);
     BindConstantBuffer(k_cameraConstantsSlot, m_cameraCBO);
@@ -716,9 +716,9 @@ void Renderer::SetDepthMode(DepthMode depthMode)
 void Renderer::SetSamplerMode(SamplerMode samplerMode)
 {
     m_samplerState                  = m_samplerStates[static_cast<int>(samplerMode)];
-    ID3D11SamplerState* samplers[2] = {m_samplerState, m_samplerState};
+    ID3D11SamplerState* samplers[3] = {m_samplerState, m_samplerState, m_samplerState};
     //m_deviceContext->PSSetSamplers(0, 1, &m_samplerState);
-    m_deviceContext->PSSetSamplers(0, 2, samplers);
+    m_deviceContext->PSSetSamplers(0, 3, samplers);
 }
 
 void Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8& modelColor)
@@ -732,7 +732,7 @@ void Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8
 
 void Renderer::SetCustomConstants(void* data, int registerSlot, ConstantBuffer* constantBuffer)
 {
-    CopyCPUToGPU(data, (unsigned int)constantBuffer->m_size, constantBuffer);
+    CopyCPUToGPU(data, static_cast<unsigned int>(constantBuffer->m_size), constantBuffer);
     BindConstantBuffer(registerSlot, constantBuffer);
 }
 
@@ -806,7 +806,7 @@ Shader* Renderer::CreateShader(const char* shaderName, const char* shaderSource,
 
         return shader;
     }
-    else if (vertexType == VertexType::Vertex_PCUTBN)
+    if (vertexType == VertexType::Vertex_PCUTBN)
     {
         // Create an input layout and store it on the new shader we created
         D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
@@ -846,7 +846,7 @@ Shader* Renderer::GetShader(const char* shaderName)
 Shader* Renderer::CreateShader(const char* shaderName, VertexType vertexType)
 {
     std::string shaderSource;
-    std::string shaderNameWithExtension = "Data/Shaders/" + std::string(shaderName) + ".hlsl";
+    std::string shaderNameWithExtension = ".enigma/data/Shaders/" + std::string(shaderName) + ".hlsl";
     int         readResult              = FileReadToString(shaderSource, shaderNameWithExtension);
     if (readResult == 0)
     {
@@ -966,7 +966,7 @@ void Renderer::CopyCPUToGPU(const void* data, unsigned int size, VertexBuffer* v
     // Copy vertices
     D3D11_MAPPED_SUBRESOURCE resource;
     m_deviceContext->Map(vbo->m_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &resource);
-    memcpy(resource.pData, data, size); // Only memcopy we specify not the whole buffer size
+    memcpy(resource.pData, data, size); // Only memory copy we specify not the whole buffer size
     m_deviceContext->Unmap(vbo->m_buffer, 0);
 }
 
