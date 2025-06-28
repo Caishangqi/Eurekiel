@@ -18,7 +18,7 @@
 #pragma comment(lib,"dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
 
-DX12Renderer::DX12Renderer(const RenderConfig& cfg): m_config(cfg)
+DX12Renderer::DX12Renderer(const RenderConfig& cfg) : m_config(cfg)
 {
 }
 
@@ -29,7 +29,7 @@ DX12Renderer::~DX12Renderer()
 void DX12Renderer::Startup()
 {
 #ifdef ENGINE_DEBUG_RENDER
-    // ① 打开 DX12 Debug Layer（在 Release 下会被编译器剔除）
+    // Open DX12 Debug Layer (will be eliminated by the compiler under Release)
     {
         ComPtr<ID3D12Debug> debug;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))
@@ -51,12 +51,19 @@ void DX12Renderer::Startup()
 
     // command queue
     {
+        /// Command queue for Main Renderer Command Allocator
         D3D12_COMMAND_QUEUE_DESC desc = {};
         desc.Type                     = D3D12_COMMAND_LIST_TYPE_DIRECT;
         desc.Flags                    = D3D12_COMMAND_QUEUE_FLAG_NONE;
         desc.NodeMask                 = 0;
         desc.Priority                 = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
         m_device->CreateCommandQueue(&desc, IID_PPV_ARGS(&m_commandQueue));
+
+        /// Command queue for Upload Renderer Command Allocator
+        D3D12_COMMAND_QUEUE_DESC copyDesc = {};
+        copyDesc.Type                     = D3D12_COMMAND_LIST_TYPE_COPY;
+        copyDesc.Flags                    = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        m_device->CreateCommandQueue(&copyDesc, IID_PPV_ARGS(&m_copyCommandQueue)) >> chk;
     }
 
     // swap chain
@@ -152,27 +159,35 @@ void DX12Renderer::Startup()
         // We need to bind it to the pipeline in order to use it, but before that, we have to tell the pipeline state
         // object there is a depth stencil vew bound
         m_constantBuffers.resize(14);
-
-        /// TODO: Consider change the DirectX12 state that eliminate the warnning.
-
-        /*for (int i = 0; i < (int)m_constantBuffers.size(); ++i)
-        {
-            m_constantBuffers[i] = CreateConstantBuffer(256); // Create default constant buffer
-        }*/
     }
 
 
     // command allocator
     {
+        /// Main Renderer Command Allocator
+        /// The Command Allocator that execute main drawing and rendering
+
         // The memory that backs the command list object
-        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)); // need to set to Direct command list, submit 3D rendering commands
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)) >> chk;; // need to set to Direct command list, submit 3D rendering commands
 
         // command list
-        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_commandList));
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_commandList)) >> chk;
         // we close it after we create it so it can be reset at top of draw loop
         m_commandList->Close(); // because the render loop expect the command list is in close state
 
-        // fence
+        /// Upload Command Allocator
+        /// The Command Allocator that execute resource upload that need write the resource when the Main Renderer Command Allocator
+        /// was not closing.
+
+        // We create the COPY type allocator which enable Parallel execution
+        m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY,IID_PPV_ARGS(&m_uploadCommandAllocator)) >> chk;
+        // copy command list
+        m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, m_uploadCommandAllocator.Get(), nullptr,IID_PPV_ARGS(&m_uploadCommandList)) >> chk;
+        // Close in the initial state, and reset when the upload is actually recorded
+        m_uploadCommandList->Close();
+    }
+    // fence
+    {
         m_fenceValue = 0; // we keep track this value in CPU side, when it reach we know the Command Lists before fence object is executed by GPU
         m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
         // fence signalling event
@@ -197,7 +212,7 @@ void DX12Renderer::Startup()
         m_indexBuffer         = CreateIndexBuffer(sizeof(unsigned int));
         // Constant buffers heap that hold view descriptor (for 14 constant buffers)
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.NumDescriptors             = kMaxConstantBufferSlot + kMaxShaderSourceViewSlot; // b0 to b13
+        heapDesc.NumDescriptors             = kMaxConstantBufferSlot + (kMaxDescriptorSetsPerFrame * kMaxShaderSourceViewSlot); // Need additional space for uploading binding texture
         heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&m_frameHeap));
@@ -228,7 +243,7 @@ void DX12Renderer::Startup()
     {
         Image defaultImage(IntVec2(2, 2), Rgba8::WHITE); // Default 2x2 texture
         m_defaultTexture = CreateTextureFromImage(defaultImage);
-        BindTexture(nullptr);
+        m_defaultTexture->m_dx12Texture->SetName(L"m_defaultTexture");
     }
 
     // Root Signature
@@ -301,8 +316,7 @@ void DX12Renderer::Startup()
             CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RenderTargetFormats;
             CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DepthStencilViewFormat;
             CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
-        } pipelineStateStream;
-
+        }                        pipelineStateStream;
         D3D12_INPUT_ELEMENT_DESC inputLayoutDesc[] = {
             {
                 "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
@@ -381,7 +395,6 @@ void DX12Renderer::Shutdown()
     }
 
     POINTER_SAFE_DELETE(m_indexBuffer)
-    POINTER_SAFE_DELETE(m_defaultTexture)
 
     for (VertexBuffer* vertexBuffer : m_frameVertexBuffer)
     {
@@ -400,16 +413,39 @@ void DX12Renderer::Shutdown()
         POINTER_SAFE_DELETE(shader)
     }
 
+
     for (Texture* texture : m_textureCache)
     {
         POINTER_SAFE_DELETE(texture)
     }
+
+    POINTER_SAFE_DELETE(m_defaultTexture)
 
     m_defaultShader = nullptr;
 }
 
 void DX12Renderer::BeginFrame()
 {
+    // Reset the Description Set
+    m_currentDescriptorSet = 0;
+    // Initialize the first descriptor set
+    if (m_descriptorSets.empty())
+    {
+        m_descriptorSets.resize(kMaxDescriptorSetsPerFrame);
+        for (UINT i = 0; i < kMaxDescriptorSetsPerFrame; ++i)
+        {
+            m_descriptorSets[i].baseIndex = kMaxConstantBufferSlot + (i * kMaxShaderSourceViewSlot);
+            // Clear texture binding
+            memset((void*)m_descriptorSets[i].boundTextures, 0, sizeof(m_descriptorSets[i].boundTextures));
+        }
+    }
+
+    // Clear texture bindings for all descriptor sets of the current frame
+    for (auto& set : m_descriptorSets)
+    {
+        memset((void*)set.boundTextures, 0, sizeof(set.boundTextures));
+    }
+
     // advance buffer
     m_currentBackBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
     // get current vertex buffer ring's vertex
@@ -440,6 +476,8 @@ void DX12Renderer::BeginFrame()
     m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
     CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandleShaderResource(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), kMaxConstantBufferSlot, incrementSize);
     m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandleShaderResource);
+
+    BindTexture(nullptr);
 
     // Config the Input assembler
     // you may this we have set the primitive in PSO desc. In PSO we saying that we are rendering triangle
@@ -541,11 +579,9 @@ void DX12Renderer::EndCamera(const Camera& cam)
 Shader* DX12Renderer::CreateShader(const char* name, const char* src, VertexType t)
 {
     ShaderConfig cfg;
-    cfg.m_name = name; // 你的 ShaderConfig 结构保持与 DX11 相同字段
+    cfg.m_name = name;
 
-    //--------------------------------------------------------------------
-    // 1. 编译 VS/PS 字节码到 vector
-    //--------------------------------------------------------------------
+    // Compile VS/PS bytecode to vector
     std::vector<uint8_t> vsBytes;
     std::vector<uint8_t> psBytes;
 
@@ -553,9 +589,7 @@ Shader* DX12Renderer::CreateShader(const char* name, const char* src, VertexType
     bool psOk = CompileShaderToByteCode(psBytes, name, src, cfg.m_pixelEntryPoint.c_str(), "ps_5_0");
     GUARANTEE_OR_DIE(vsOk && psOk, "DX12: shader compile failed")
 
-    //--------------------------------------------------------------------
-    // 2. 把 vector → ID3DBlob （以便 PSO 直接使用）
-    //--------------------------------------------------------------------
+    // Convert vector to ID3DBlob (for direct use by PSO)
     ComPtr<ID3DBlob> vsBlob;
     ComPtr<ID3DBlob> psBlob;
 
@@ -567,9 +601,7 @@ Shader* DX12Renderer::CreateShader(const char* name, const char* src, VertexType
     GUARANTEE_OR_DIE(SUCCEEDED(hr), "DX12: D3DCreateBlob PS failed");
     memcpy(psBlob->GetBufferPointer(), psBytes.data(), psBytes.size());
 
-    //--------------------------------------------------------------------
-    // 3. 生成输入布局数组（与 VertexType 匹配）
-    //--------------------------------------------------------------------
+    // Generate input layout array (matching VertexType)
     std::vector<D3D12_INPUT_ELEMENT_DESC> layout;
     if (t == VertexType::Vertex_PCU)
     {
@@ -629,9 +661,7 @@ Shader* DX12Renderer::CreateShader(const char* name, const char* src, VertexType
         ERROR_AND_DIE("DX12Renderer::CreateShader - unhandled VertexType")
     }
 
-    //--------------------------------------------------------------------
-    // 4. 构造 Shader 对象并缓存
-    //--------------------------------------------------------------------
+    // Constructing and caching Shader objects
     auto shader                = new Shader(cfg);
     shader->m_vertexShaderBlob = vsBlob.Detach();
     shader->m_pixelShaderBlob  = psBlob.Detach();
@@ -700,43 +730,25 @@ bool DX12Renderer::CompileShaderToByteCode(std::vector<uint8_t>& out, const char
 
 Texture* DX12Renderer::CreateTextureFromImage(Image& image)
 {
-    // 1. 创建 Texture 对象
+    // Create a Texture object and save basic information
     auto newTexture          = new Texture();
     newTexture->m_dimensions = image.GetDimensions();
     newTexture->m_name       = image.GetImageFilePath();
 
-    // 2. 在 Default Heap 创建纹理（初始状态 COPY_DEST）
-    CD3DX12_RESOURCE_DESC textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(
-        DXGI_FORMAT_R8G8B8A8_UNORM,
-        image.GetDimensions().x,
-        image.GetDimensions().y,
-        1, 1
-    );
+    // Create GPU-side Texture in the DEFAULT heap (initial state is COPY_DEST)
+    CD3DX12_RESOURCE_DESC   textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, image.GetDimensions().x, image.GetDimensions().y,/*arraySize=*/1, /*mipLevels=*/1);
     CD3DX12_HEAP_PROPERTIES defaultHeapProps(D3D12_HEAP_TYPE_DEFAULT);
-    m_device->CreateCommittedResource(
-        &defaultHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &textureDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        IID_PPV_ARGS(&newTexture->m_dx12Texture)
-    ) >> chk;
+    m_device->CreateCommittedResource(&defaultHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&newTexture->m_dx12Texture)) >> chk;
 
-    // 3. 在 Upload Heap 创建临时缓冲区
+    // Calculate UploadHeap size and create UPLOAD heap
     UINT64 uploadSize = 0;
     m_device->GetCopyableFootprints(&textureDesc, 0, 1, 0, nullptr, nullptr, nullptr, &uploadSize);
-    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
-    CD3DX12_RESOURCE_DESC   bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
-    m_device->CreateCommittedResource(
-        &uploadHeapProps,
-        D3D12_HEAP_FLAG_NONE,
-        &bufferDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&newTexture->m_textureBufferUploadHeap)
-    ) >> chk;
 
-    // 4. Map/Memcpy 写入 Upload Heap
+    CD3DX12_RESOURCE_DESC   bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadSize);
+    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
+    m_device->CreateCommittedResource(&uploadHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&newTexture->m_textureBufferUploadHeap)) >> chk;
+
+    // Copy pixel data to UPLOAD heap
     {
         uint8_t*      pData = nullptr;
         CD3DX12_RANGE readRange{0, 0};
@@ -745,63 +757,43 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
         newTexture->m_textureBufferUploadHeap->Unmap(0, nullptr);
     }
 
-    // —— 在 Reset 前插入 GPU 同步，确保上次命令执行完毕 —— 
-    m_commandQueue->Signal(m_fence.Get(), ++m_fenceValue);
+    // Synchronize the last upload to prevent reset conflicts
+    m_copyCommandQueue->Signal(m_fence.Get(), ++m_fenceValue);
     WaitForGPU();
-    m_commandAllocator->Reset() >> chk;
-    m_commandList->Reset(m_commandAllocator.Get(), nullptr) >> chk;
 
-    // 5. 拷贝数据到 Default Heap 并做 Barrier
+    // Reset and record the Upload list
+    m_uploadCommandAllocator->Reset() >> chk;
+    m_uploadCommandList->Reset(m_uploadCommandAllocator.Get(), nullptr) >> chk;
+
     D3D12_SUBRESOURCE_DATA subData = {};
     subData.pData                  = image.GetRawData();
     subData.RowPitch               = image.GetDimensions().x * 4;
     subData.SlicePitch             = subData.RowPitch * image.GetDimensions().y;
-    UpdateSubresources(
-        m_commandList.Get(),
-        newTexture->m_dx12Texture,
-        newTexture->m_textureBufferUploadHeap,
-        0, 0, 1, &subData
-    );
-    auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        newTexture->m_dx12Texture,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-    );
-    m_commandList->ResourceBarrier(1, &barrier);
 
-    // 6. 提交并等待这一批拷贝完成
-    m_commandList->Close() >> chk;
-    ID3D12CommandList* lists[] = {m_commandList.Get()};
-    m_commandQueue->ExecuteCommandLists(_countof(lists), lists);
+    UpdateSubresources(m_uploadCommandList.Get(), newTexture->m_dx12Texture, newTexture->m_textureBufferUploadHeap,/*firstSubresource=*/0, /*numRows=*/0, /*numSlices=*/1, &subData);
+
+    // Submit the Upload list and wait for completion
+    m_uploadCommandList->Close() >> chk;
+    ID3D12CommandList* lists[] = {m_uploadCommandList.Get()};
+    m_copyCommandQueue->ExecuteCommandLists(_countof(lists), lists);
+    m_copyCommandQueue->Signal(m_fence.Get(), ++m_fenceValue);
     WaitForGPU();
 
-    // 7. 在 managerHeap 上创建 SRV （而不是 frameHeap）
-    UINT                          descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    UINT                          srvIndex       = Texture::IncrementInternalID(); // 0,1,2...
-    CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(
-        m_shaderSourceViewManagerHeap->GetCPUDescriptorHandleForHeapStart(),
-        srvIndex,
-        descriptorSize);
+    // Create an SRV for the texture on the manager heap and cache the CPU handle
+    UINT descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    UINT srvIndex       = Texture::IncrementInternalID();
 
+    // Create SRV on CPU-only heap (managerHeap)
+    CD3DX12_CPU_DESCRIPTOR_HANDLE   cpuHandle(m_shaderSourceViewManagerHeap->GetCPUDescriptorHandleForHeapStart(), srvIndex, descriptorSize);
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
     srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
     srvDesc.Texture2D.MipLevels             = 1;
-    m_device->CreateShaderResourceView(
-        newTexture->m_dx12Texture,
-        &srvDesc,
-        cpuHandle
-    );
     m_device->CreateShaderResourceView(newTexture->m_dx12Texture, &srvDesc, cpuHandle);
 
     newTexture->m_cpuShaderSourceViewHandle = cpuHandle;
-    newTexture->m_gpuShaderSourceViewHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(
-        m_frameHeap->GetGPUDescriptorHandleForHeapStart(),
-        srvIndex,
-        descriptorSize
-    );
-
     return newTexture;
 }
 
@@ -856,7 +848,7 @@ BitmapFont* DX12Renderer::CreateBitmapFont(const char* bitmapFontFilePathWithNoE
 
 void DX12Renderer::BindShader(Shader* s)
 {
-    UNUSED(s);
+    UNUSED(s)
     UNUSED(s)
 }
 
@@ -879,9 +871,8 @@ ConstantBuffer* DX12Renderer::CreateConstantBuffer(size_t size)
     CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_UPLOAD);
     CD3DX12_RESOURCE_DESC   desc = CD3DX12_RESOURCE_DESC::Buffer(aligned);
 
-    m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-                                      D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                      IID_PPV_ARGS(&cb->m_dx12ConstantBuffer)) >> chk;
+    m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,IID_PPV_ARGS(&cb->m_dx12ConstantBuffer)) >> chk;
+
     /// We move the creation of constant buffer view inside the `BindConstantBuffer`
     return cb;
 }
@@ -963,17 +954,19 @@ void DX12Renderer::BindTexture(Texture* tex, int slot)
 {
     const Texture* bindTex = (tex == nullptr) ? m_defaultTexture : tex;
 
-    // 目标槽 = 常量缓冲区槽数量 + 纹理槽号（t0→14）
-    UINT dstIndex = kMaxConstantBufferSlot + slot;
+    // Get the current descriptor set
+    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+
+    // Calculate the target location: the base address of the current set + slot
+    UINT dstIndex = currentSet.baseIndex + slot;
     UINT incSize  = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(),(int)dstIndex,incSize);
+    // Copy descriptor
+    CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)dstIndex, incSize);
+    m_device->CopyDescriptorsSimple(1, dst, bindTex->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // 从 managerHeap 复制到 shader-visible frameHeap
-    m_device->CopyDescriptorsSimple( 1,
-        dst, // dst: shader-visible
-        bindTex->m_cpuShaderSourceViewHandle, // src: CPU-only
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // Record the bound texture
+    currentSet.boundTextures[slot] = const_cast<Texture*>(bindTex);
 }
 
 void DX12Renderer::SetModelConstants(const Mat44& model, const Rgba8& tint)
@@ -1022,12 +1015,18 @@ void DX12Renderer::DrawVertexArray(int n, const Vertex_PCU* v)
 {
     if (n <= 0 || v == nullptr) return;
 
-    if (!m_currentVertexBuffer->Allocate(v, n * sizeof(Vertex_PCU))) { return; }
+    if (!m_currentVertexBuffer->Allocate(v, n * sizeof(Vertex_PCU)))
+    {
+        return;
+    }
 
-    //size_t sz = sizeof(Vertex_PCU) * static_cast<size_t>(n);
-    //CopyCPUToGPU(v, sz, m_currentVertexBuffer);
-    //m_tmpVB.push_back(m_vertexBuffer);
+    // Before drawing, set the Root Descriptor Table of the current descriptor set
+    CommitCurrentDescriptorSet();
+
     DrawVertexBuffer(m_currentVertexBuffer, n);
+
+    // After drawing, prepare the next descriptor set
+    PrepareNextDescriptorSet();
 }
 
 void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v)
@@ -1082,6 +1081,48 @@ void DX12Renderer::WaitForGPU()
     if (WaitForSingleObject(m_fenceEvent, INFINITE) == WAIT_FAILED)
     {
         GetLastError() >> chk;
+    }
+}
+
+void DX12Renderer::CommitCurrentDescriptorSet()
+{
+    // Set the Root Descriptor Table to point to the current descriptor set
+    UINT           incSize    = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+
+    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), (int)currentSet.baseIndex, incSize);
+    m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+}
+
+void DX12Renderer::PrepareNextDescriptorSet()
+{
+    // Move to the next descriptor set
+    m_currentDescriptorSet++;
+
+    if (m_currentDescriptorSet >= kMaxDescriptorSetsPerFrame)
+    {
+        ERROR_AND_DIE("Exceeded maximum descriptor sets per frame");
+    }
+
+    // Copy the texture from the previous set to the new set (keeping state)
+    if (m_currentDescriptorSet > 0)
+    {
+        DescriptorSet& prevSet = m_descriptorSets[m_currentDescriptorSet - 1];
+        DescriptorSet& currSet = m_descriptorSets[m_currentDescriptorSet];
+
+        UINT incSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // Copy all bound textures
+        for (int i = 0; i < (int)kMaxShaderSourceViewSlot; ++i)
+        {
+            if (prevSet.boundTextures[i])
+            {
+                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)currSet.baseIndex + i, incSize);
+
+                m_device->CopyDescriptorsSimple(1, dst, prevSet.boundTextures[i]->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                currSet.boundTextures[i] = prevSet.boundTextures[i];
+            }
+        }
     }
 }
 

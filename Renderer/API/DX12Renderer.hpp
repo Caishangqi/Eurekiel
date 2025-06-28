@@ -110,25 +110,47 @@ public:
 
 private:
     // Device-level resources (StartUp / Shutdown lifecycle)
-    RenderConfig                      m_config{};
-    ComPtr<ID3D12Device>              m_device                         = nullptr;
-    ComPtr<ID3D12Device2>             m_device2                        = nullptr;
-    ComPtr<ID3D12CommandQueue>        m_commandQueue                   = nullptr;
-    ComPtr<IDXGISwapChain3>           m_swapChain                      = nullptr;
-    ComPtr<ID3D12DescriptorHeap>      m_renderTargetViewHeap           = nullptr;
-    UINT                              m_renderTargetViewDescriptorSize = 0;
-    ComPtr<ID3D12Resource>            m_backBuffers[kBackBufferCount];
-    UINT                              m_currentBackBufferIndex = 0;
-    ComPtr<ID3D12CommandAllocator>    m_commandAllocator       = nullptr;
-    ComPtr<ID3D12GraphicsCommandList> m_commandList            = nullptr;
-    ComPtr<ID3D12Fence>               m_fence                  = nullptr;
-    UINT64                            m_fenceValue             = 0;
-    HANDLE                            m_fenceEvent             = nullptr;
+    RenderConfig                 m_config{};
+    ComPtr<ID3D12Device>         m_device                         = nullptr;
+    ComPtr<ID3D12Device2>        m_device2                        = nullptr;
+    ComPtr<IDXGISwapChain3>      m_swapChain                      = nullptr;
+    ComPtr<ID3D12DescriptorHeap> m_renderTargetViewHeap           = nullptr;
+    UINT                         m_renderTargetViewDescriptorSize = 0;
+    ComPtr<ID3D12Resource>       m_backBuffers[kBackBufferCount];
+    UINT                         m_currentBackBufferIndex = 0;
+    // Main Renderer Command Allocator
+    ComPtr<ID3D12CommandAllocator>    m_commandAllocator = nullptr;
+    ComPtr<ID3D12GraphicsCommandList> m_commandList      = nullptr;
+    ComPtr<ID3D12CommandQueue>        m_commandQueue     = nullptr;
+    // Upload Renderer Command Allocator
+    ComPtr<ID3D12CommandAllocator>    m_uploadCommandAllocator = nullptr;
+    ComPtr<ID3D12GraphicsCommandList> m_uploadCommandList      = nullptr;
+    ComPtr<ID3D12CommandQueue>        m_copyCommandQueue       = nullptr;
+    // Fence and synchronize
+    ComPtr<ID3D12Fence> m_fence      = nullptr;
+    UINT64              m_fenceValue = 0;
+    HANDLE              m_fenceEvent = nullptr;
 
     /// Vertex Buffers
     VertexBuffer* m_currentVertexBuffer = nullptr;
     // Updated ring vertex buffer
     std::array<VertexBuffer*, kBackBufferCount> m_frameVertexBuffer;
+
+    /// DescriptorSet for each DrawCall
+    /// 1. Each draw call uses a separate descriptor set
+    /// 2. BindTexture modifies the texture of the specified slot in the current descriptor set
+    /// 3. DrawVertexArray commits the current descriptor set before drawing, and then prepares for the next
+    /// 4. This ensures that each draw call has its own independent texture binding state
+    struct DescriptorSet
+    {
+        UINT     baseIndex; // Starting index in the heap
+        Texture* boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
+    };
+
+    std::vector<DescriptorSet> m_descriptorSets;
+    UINT                       m_currentDescriptorSet     = 0;
+    static constexpr UINT      kMaxDescriptorSetsPerFrame = 128;
+
 
     /// Index Buffers
     IndexBuffer* m_indexBuffer = nullptr;
@@ -163,6 +185,11 @@ private:
     std::vector<Shader*>     m_shaderCache; // key: Shader 名称
     std::vector<BitmapFont*> m_fontsCache;
 
+private:
     void UploadToCB(ConstantBuffer* cb, const void* data, size_t size);
     void WaitForGPU();
+
+    /// Descriptor Set
+    void CommitCurrentDescriptorSet();
+    void PrepareNextDescriptorSet();
 };
