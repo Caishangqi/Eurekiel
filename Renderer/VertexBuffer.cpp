@@ -6,12 +6,12 @@
 #include "Renderer.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
-VertexBuffer::VertexBuffer(ID3D11Device* device, unsigned int size, unsigned int stride): m_device(device), m_size(size), m_stride(stride)
+VertexBuffer::VertexBuffer(ID3D11Device* device, unsigned int size, unsigned int stride) : m_device(device), m_size(size), m_stride(stride)
 {
     Create();
 }
 
-VertexBuffer::VertexBuffer(ID3D12Device* device, unsigned int size, unsigned int stride): m_size(size), m_stride(stride), m_dx12device(device)
+VertexBuffer::VertexBuffer(ID3D12Device* device, unsigned int size, unsigned int stride) : m_size(size), m_stride(stride), m_dx12device(device)
 {
     Create();
 }
@@ -68,7 +68,8 @@ void VertexBuffer::Create()
 
         /// Create the view for vertex buffer
         {
-            m_vertexBufferView.BufferLocation = m_dx12buffer->GetGPUVirtualAddress(); // Where is the buffer located in GPU memory
+            m_baseGpuAddress                  = m_dx12buffer->GetGPUVirtualAddress(); // Where is the buffer located in GPU memory
+            m_vertexBufferView.BufferLocation = m_baseGpuAddress;
             m_vertexBufferView.SizeInBytes    = m_size;
             m_vertexBufferView.StrideInBytes  = m_stride; // the distance between vertices
         }
@@ -100,7 +101,7 @@ unsigned int VertexBuffer::GetStride()
 void VertexBuffer::ResetCursor()
 {
     m_cursor                          = 0;
-    m_vertexBufferView.BufferLocation = m_dx12buffer->GetGPUVirtualAddress();
+    m_vertexBufferView.BufferLocation = m_baseGpuAddress;
 }
 
 bool VertexBuffer::Allocate(const void* scr, size_t size)
@@ -131,8 +132,9 @@ bool VertexBuffer::Allocate(const void* scr, size_t size)
     /// Because the pointer type is one byte wide, adding the number of bytes of m_cursor can accurately move to the target
     /// memory location, thereby realizing the cyclic filling of the "ring" buffer and multiple DrawCalls.
     memcpy(m_cpuPtr + m_cursor, scr, aligned);
-
-    m_vertexBufferView.BufferLocation = m_vertexBufferView.BufferLocation + m_cursor;
+    // Get the current view buffer position, After this manipulation, IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
+    // will interpolate the vertexBuffer from the position
+    m_vertexBufferView.BufferLocation = m_baseGpuAddress + m_cursor;    
     m_vertexBufferView.SizeInBytes    = (UINT)size; // the view size increase but the actual buffer size not change.
     m_vertexBufferView.StrideInBytes  = m_stride;
 

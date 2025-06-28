@@ -34,9 +34,14 @@ private:
     unsigned int m_size   = 0;
     unsigned int m_stride = 0;
 
-    uint8_t*                 m_cpuPtr     = nullptr;
-    size_t                   m_cursor     = 0;
-    ID3D12Device*            m_dx12device = nullptr;
-    ID3D12Resource*          m_dx12buffer = nullptr; // DX12
+    uint8_t*                 m_cpuPtr         = nullptr;    // The CPU address handler that point to the buffer
+    uint64_t                 m_baseGpuAddress = 0;  // The base GPU address that set when created
+    ///
+    /// The Cursor for this vertex buffer
+    /// Needed when we want to perform multiple draw in between one frame (Begin to End).
+    /// When we call @see DX12Renderer::DrawVertexArray \n 
+    size_t                   m_cursor         = 0;
+    ID3D12Device*            m_dx12device     = nullptr;
+    ID3D12Resource*          m_dx12buffer     = nullptr; // DX12
     D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView; // DX12 Create the vertex Buffer view, pure cpu sides unlike descriptor heap
 };
