@@ -119,13 +119,14 @@ private:
     ComPtr<ID3D12Resource>       m_backBuffers[kBackBufferCount];
     UINT                         m_currentBackBufferIndex = 0;
     // Main Renderer Command Allocator
-    ComPtr<ID3D12CommandAllocator>    m_commandAllocator = nullptr;
     ComPtr<ID3D12GraphicsCommandList> m_commandList      = nullptr;
     ComPtr<ID3D12CommandQueue>        m_commandQueue     = nullptr;
+    ComPtr<ID3D12CommandAllocator>    m_commandAllocator = nullptr;
     // Upload Renderer Command Allocator
-    ComPtr<ID3D12CommandAllocator>    m_uploadCommandAllocator = nullptr;
     ComPtr<ID3D12GraphicsCommandList> m_uploadCommandList      = nullptr;
     ComPtr<ID3D12CommandQueue>        m_copyCommandQueue       = nullptr;
+    ComPtr<ID3D12CommandAllocator>    m_uploadCommandAllocator = nullptr;
+
     // Fence and synchronize
     ComPtr<ID3D12Fence> m_fence      = nullptr;
     UINT64              m_fenceValue = 0;
@@ -136,15 +137,59 @@ private:
     // Updated ring vertex buffer
     std::array<VertexBuffer*, kBackBufferCount> m_frameVertexBuffer;
 
+    /// Index Buffers
+    IndexBuffer* m_indexBuffer = nullptr;
+
+    // Constant Buffers
+    std::vector<ConstantBuffer*> m_constantBuffers;
+
+    /// Frame heap and the shader source view manager heap
+    /// m_frameHeap (Shader-Visible):
+    /// [CBV0][CBV1]...[CBV13] | [Set0: t0-t127] | [Set1: t0-t127] | [Set2: t0-t127] ...
+    /// |<----- 14 slots ----->|<-- 128 slots -->|<-- 128 slots -->|
+    ///                        ^                 ^                 ^
+    ///                        |                 |                 |
+    ///                   baseIndex=14      baseIndex=142      baseIndex=270
+    /// TODO: Consider use Double-buffered swap chain to make CPU synchronize with GPU
+    ComPtr<ID3D12DescriptorHeap> m_frameHeap                   = nullptr; // The heap that storage 14 constant buffer view descriptors
+    ComPtr<ID3D12DescriptorHeap> m_shaderSourceViewManagerHeap = nullptr; // The shader resource view heap that contains kMaxTextureCached size of views
+
+    struct RenderState
+    {
+        BlendMode      blendMode      = BlendMode::ALPHA;
+        RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
+        DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
+        SamplerMode    samplerMode    = SamplerMode::POINT_CLAMP;
+        Shader*        shader         = nullptr; // Bind Shader
+        // In order to be used in a map, a comparison operator is required
+        bool operator<(const RenderState& other) const
+        {
+            if (blendMode != other.blendMode) return blendMode < other.blendMode;
+            if (rasterizerMode != other.rasterizerMode) return rasterizerMode < other.rasterizerMode;
+            if (depthMode != other.depthMode) return depthMode < other.depthMode;
+            return samplerMode < other.samplerMode;
+        }
+
+
+        bool operator==(const RenderState& other) const
+        {
+            return blendMode == other.blendMode &&
+                rasterizerMode == other.rasterizerMode &&
+                depthMode == other.depthMode &&
+                samplerMode == other.samplerMode;
+        }
+    };
+
     /// DescriptorSet for each DrawCall
-    /// 1. Each draw call uses a separate descriptor set
-    /// 2. BindTexture modifies the texture of the specified slot in the current descriptor set
-    /// 3. DrawVertexArray commits the current descriptor set before drawing, and then prepares for the next
-    /// 4. This ensures that each draw call has its own independent texture binding state
+    /// - Each draw call uses a separate descriptor set
+    /// - BindTexture modifies the texture of the specified slot in the current descriptor set
+    /// - DrawVertexArray commits the current descriptor set before drawing, and then prepares for the next
+    /// - This ensures that each draw call has its own independent texture binding state
     struct DescriptorSet
     {
-        UINT     baseIndex; // Starting index in the heap
-        Texture* boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
+        UINT        baseIndex; // Starting index in the heap
+        Texture*    boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
+        RenderState renderState; // The rendering state used by this descriptor set
     };
 
     std::vector<DescriptorSet> m_descriptorSets;
@@ -152,35 +197,21 @@ private:
     static constexpr UINT      kMaxDescriptorSetsPerFrame = 128;
 
 
-    /// Index Buffers
-    IndexBuffer* m_indexBuffer = nullptr;
-
-    // Constant Buffers
-    std::vector<ConstantBuffer*> m_constantBuffers;
-    // Frame heap and the shader source view manager heap that 
-    // TODO: Consider use Double-buffered swap chain to make CPU synchronize with GPU
-    ComPtr<ID3D12DescriptorHeap> m_frameHeap                   = nullptr; // The heap that storage 14 constant buffer view descriptors
-    ComPtr<ID3D12DescriptorHeap> m_shaderSourceViewManagerHeap = nullptr; // The shader resource view heap that contains kMaxTextureCached size of views
-
     /// depth Buffer
     ComPtr<ID3D12Resource>       m_depthStencilBuffer             = nullptr;
     ComPtr<ID3D12DescriptorHeap> m_depthStencilViewDescriptorHeap = nullptr;
     /// Root signature that expose shader needed data and buffers to GPU
     ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
-    /// Pipeline state object
-    ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
+
     /// define viewport
     D3D12_VIEWPORT m_viewport{};
     /// define scissor rect
     CD3DX12_RECT m_scissorRect{};
 
-    BlendMode      m_blend   = BlendMode::ALPHA;
-    RasterizerMode m_raster  = RasterizerMode::SOLID_CULL_BACK;
-    DepthMode      m_depth   = DepthMode::READ_WRITE_LESS_EQUAL;
-    SamplerMode    m_sampler = SamplerMode::POINT_CLAMP;
 
     Texture*                 m_defaultTexture = nullptr;
     Shader*                  m_defaultShader  = nullptr;
+    Shader*                  m_currentShader  = nullptr;
     std::vector<Texture*>    m_textureCache; // key: 文件路径
     std::vector<Shader*>     m_shaderCache; // key: Shader 名称
     std::vector<BitmapFont*> m_fontsCache;
@@ -192,4 +223,36 @@ private:
     /// Descriptor Set
     void CommitCurrentDescriptorSet();
     void PrepareNextDescriptorSet();
+
+private:
+    
+    // PSO Base Templates - These are the fixed parts shared by all PSOs
+    // TODO: Consider use hash value to directly access the memory
+    struct PSOTemplate
+    {
+        D3D12_INPUT_ELEMENT_DESC      inputLayout[3]; // PCU layout
+        UINT                          inputLayoutCount;
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopology;
+        ComPtr<ID3DBlob>              defaultVertexShader;
+        ComPtr<ID3DBlob>              defaultPixelShader;
+        DXGI_FORMAT                   renderTargetFormat;
+        DXGI_FORMAT                   depthStencilFormat;
+        ComPtr<ID3D12RootSignature>   rootSignature;
+    } m_psoTemplate;
+
+    /// Pipeline state cache, Cache the created PSO based on the state combination
+    std::map<RenderState, ComPtr<ID3D12PipelineState>> m_pipelineStateCache;
+
+    // Current waiting application rendering status
+    RenderState m_pendingRenderState;
+
+    ComPtr<ID3D12PipelineState> m_currentPipelineStateObject = nullptr;
+
+    [[maybe_unused]]
+    // Get or create the PSO of the corresponding state
+    ID3D12PipelineState* GetOrCreatePipelineState(const RenderState& state);
+
+    // Auxiliary method for creating PSO based on status
+    [[nodiscard]]
+    ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);
 };

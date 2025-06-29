@@ -28,6 +28,7 @@ DX12Renderer::~DX12Renderer()
 
 void DX12Renderer::Startup()
 {
+    /// TODO: Fix the meory leak caused by debug layer
 #ifdef ENGINE_DEBUG_RENDER
     // Open DX12 Debug Layer (will be eliminated by the compiler under Release)
     {
@@ -301,66 +302,22 @@ void DX12Renderer::Startup()
 
     // Pipeline state object
     {
-        // the way to describe pipeline state object is quite unique, the description of pipeline state object is a stream of bytes.
-        // the typical way to make that stream is by creating a struct
-        struct PipelineStateStream // static declaration of pso stream structure
-        {
-            // TODO: learn how windows create the amazing packing template
-            CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE     RootSignature; // PSO need to be tell which root signature it will use
-            CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT       InputLayout; // InputLayout for our vertices
-            CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopology; // Triangle, lines...
-            CD3DX12_PIPELINE_STATE_STREAM_VS                 VertexShader;
-            CD3DX12_PIPELINE_STATE_STREAM_PS                 PixelShader;
-            // this is not specify which render target we are going to using, it says any render target
-            // that we bind has to have this format
-            CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RenderTargetFormats;
-            CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DepthStencilViewFormat;
-            CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
-        }                        pipelineStateStream;
-        D3D12_INPUT_ELEMENT_DESC inputLayoutDesc[] = {
-            {
-                "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-            },
-            {
-                "COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0,
-                D3D12_APPEND_ALIGNED_ELEMENT,
-                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-            },
-            {
-                "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
-                D3D12_APPEND_ALIGNED_ELEMENT,
-                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0
-            }
-        };
-
         // default shader
-        m_defaultShader = CreateOrGetShader(m_config.m_defaultShader.c_str());
+        m_defaultShader                   = CreateOrGetShader(m_config.m_defaultShader.c_str());
+        m_psoTemplate.defaultVertexShader = m_defaultShader->m_vertexShaderBlob;
+        m_psoTemplate.defaultPixelShader  = m_defaultShader->m_pixelShaderBlob;
 
         // filling pso structure
-        pipelineStateStream.RootSignature          = m_rootSignature.Get();
-        pipelineStateStream.InputLayout            = {inputLayoutDesc, _countof(inputLayoutDesc)};
-        pipelineStateStream.PrimitiveTopology      = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pipelineStateStream.VertexShader           = CD3DX12_SHADER_BYTECODE(m_defaultShader->m_vertexShaderBlob); // Blob is typeless
-        pipelineStateStream.PixelShader            = CD3DX12_SHADER_BYTECODE(m_defaultShader->m_pixelShaderBlob);
-        pipelineStateStream.DepthStencilViewFormat = DXGI_FORMAT_D32_FLOAT; // need to be same when we create the resource
-        // Do not have C++ 20 designated initializer syntax, initialize by aggregate
-        DXGI_FORMAT           rtFormats[]       = {DXGI_FORMAT_R8G8B8A8_UNORM};
-        D3D12_RT_FORMAT_ARRAY rtFormatArray     = {};
-        rtFormatArray.NumRenderTargets          = 1;
-        rtFormatArray.RTFormats[0]              = rtFormats[0];
-        pipelineStateStream.RenderTargetFormats = CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS(rtFormatArray);
-        // Fill rasterization
-        CD3DX12_RASTERIZER_DESC rasterizerDescription(D3D12_DEFAULT);
-        rasterizerDescription.CullMode              = D3D12_CULL_MODE_NONE;
-        rasterizerDescription.FrontCounterClockwise = false;
-        pipelineStateStream.RasterizerState         = rasterizerDescription;
+        m_psoTemplate.rootSignature      = m_rootSignature;
+        m_psoTemplate.depthStencilFormat = DXGI_FORMAT_D32_FLOAT; // need to be same when we create the resource
+        m_psoTemplate.renderTargetFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+        m_psoTemplate.primitiveTopology  = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        m_psoTemplate.inputLayout[0]     = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayout[1]     = {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayout[2]     = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayoutCount   = _countof(m_psoTemplate.inputLayout);
 
-        // build the pipeline state object
-        D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = {
-            sizeof(PipelineStateStream), &pipelineStateStream
-        };
-        m_device2->CreatePipelineState(&pipelineStateStreamDesc,IID_PPV_ARGS(&m_pipelineState)) >> chk;
+        m_currentPipelineStateObject = CreatePipelineStateForRenderState(m_pendingRenderState);
     }
 
     // define scissor rect
@@ -375,6 +332,14 @@ void DX12Renderer::Startup()
 
 void DX12Renderer::Shutdown()
 {
+#ifdef ENGINE_DEBUG_RENDER
+    ComPtr<ID3D12DebugDevice> debugDevice;
+    if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
+    {
+        debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+    }
+#endif
+
     /// Make sure the queue is empty
     /// So we insert an fence signal, when it reach the signal , CPU knows that GPU executed all the Command List
     /// before the fence
@@ -420,7 +385,7 @@ void DX12Renderer::Shutdown()
     }
 
     POINTER_SAFE_DELETE(m_defaultTexture)
-
+    m_currentShader = nullptr;
     m_defaultShader = nullptr;
 }
 
@@ -465,7 +430,7 @@ void DX12Renderer::BeginFrame()
     }
 
     // Set pipeline state
-    m_commandList->SetPipelineState(m_pipelineState.Get());
+    m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
     UINT incrementSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -767,7 +732,7 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
 
     D3D12_SUBRESOURCE_DATA subData = {};
     subData.pData                  = image.GetRawData();
-    subData.RowPitch               = image.GetDimensions().x * 4;
+    subData.RowPitch               = (int)image.GetDimensions().x * 4;
     subData.SlicePitch             = subData.RowPitch * image.GetDimensions().y;
 
     UpdateSubresources(m_uploadCommandList.Get(), newTexture->m_dx12Texture, newTexture->m_textureBufferUploadHeap,/*firstSubresource=*/0, /*numRows=*/0, /*numSlices=*/1, &subData);
@@ -784,7 +749,7 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     UINT srvIndex       = Texture::IncrementInternalID();
 
     // Create SRV on CPU-only heap (managerHeap)
-    CD3DX12_CPU_DESCRIPTOR_HANDLE   cpuHandle(m_shaderSourceViewManagerHeap->GetCPUDescriptorHandleForHeapStart(), srvIndex, descriptorSize);
+    CD3DX12_CPU_DESCRIPTOR_HANDLE   cpuHandle(m_shaderSourceViewManagerHeap->GetCPUDescriptorHandleForHeapStart(), (INT)srvIndex, descriptorSize);
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
     srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -807,6 +772,7 @@ Texture* DX12Renderer::CreateOrGetTexture(const char* imageFilePath)
     }
     // Never seen this texture before!  Let's load it.
     Texture* newTexture = CreateTextureFromFile(imageFilePath);
+    m_textureCache.push_back(newTexture);
     return newTexture;
 }
 
@@ -848,8 +814,15 @@ BitmapFont* DX12Renderer::CreateBitmapFont(const char* bitmapFontFilePathWithNoE
 
 void DX12Renderer::BindShader(Shader* s)
 {
-    UNUSED(s)
-    UNUSED(s)
+    // If nullptr is passed, the default shader is used.
+    Shader* targetShader = (s != nullptr) ? s : m_defaultShader;
+
+    // Update the current shader and pending application status
+    m_currentShader             = targetShader;
+    m_pendingRenderState.shader = targetShader;
+
+    // @Note: In DX12, we cannot "bind" shaders immediately
+    // Shaders will be applied via PSO the next time you draw
 }
 
 VertexBuffer* DX12Renderer::CreateVertexBuffer(size_t size, unsigned stride)
@@ -995,25 +968,51 @@ void DX12Renderer::SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, siz
     UNUSED(sz)
 }
 
-void DX12Renderer::SetBlendMode(BlendMode)
+void DX12Renderer::SetBlendMode(BlendMode mode)
 {
+    m_currentBlendMode             = mode;
+    m_pendingRenderState.blendMode = mode;
+    // @note: Do not apply immediately, wait until drawing to apply
 }
 
-void DX12Renderer::SetRasterizerMode(RasterizerMode)
+void DX12Renderer::SetRasterizerMode(RasterizerMode mode)
 {
+    m_currentRasterizerMode             = mode;
+    m_pendingRenderState.rasterizerMode = mode;
 }
 
-void DX12Renderer::SetDepthMode(DepthMode)
+void DX12Renderer::SetDepthMode(DepthMode mode)
 {
+    m_currentDepthMode             = mode;
+    m_pendingRenderState.depthMode = mode;
 }
 
-void DX12Renderer::SetSamplerMode(SamplerMode)
+void DX12Renderer::SetSamplerMode(SamplerMode mode)
 {
+    m_currentSamplerMode             = mode;
+    m_pendingRenderState.samplerMode = mode;
 }
 
 void DX12Renderer::DrawVertexArray(int n, const Vertex_PCU* v)
 {
     if (n <= 0 || v == nullptr) return;
+
+    // Checks whether the state of the current descriptor set matches the state to be applied
+    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    {
+        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
+        if (stateChanged)
+        {
+            // The state has changed and a new descriptor set needs to be prepared
+            PrepareNextDescriptorSet(); // The m_currentDescriptorSet pointer has move to next, this has already copy the texture data from previous.
+            DescriptorSet& newSet = m_descriptorSets[m_currentDescriptorSet];
+            newSet.renderState    = m_pendingRenderState;
+            // Set the corresponding PSO
+            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
+            m_commandList->SetPipelineState(pso);
+            m_currentPipelineStateObject = pso; // Cache the reference of the current PSO
+        }
+    }
 
     if (!m_currentVertexBuffer->Allocate(v, n * sizeof(Vertex_PCU)))
     {
@@ -1101,7 +1100,7 @@ void DX12Renderer::PrepareNextDescriptorSet()
 
     if (m_currentDescriptorSet >= kMaxDescriptorSetsPerFrame)
     {
-        ERROR_AND_DIE("Exceeded maximum descriptor sets per frame");
+        ERROR_AND_DIE("Exceeded maximum descriptor sets per frame")
     }
 
     // Copy the texture from the previous set to the new set (keeping state)
@@ -1124,6 +1123,154 @@ void DX12Renderer::PrepareNextDescriptorSet()
             }
         }
     }
+}
+
+ID3D12PipelineState* DX12Renderer::GetOrCreatePipelineState(const RenderState& state)
+{
+    // Check the cache first
+    auto it = m_pipelineStateCache.find(state);
+    if (it != m_pipelineStateCache.end())
+    {
+        return it->second.Get();
+    }
+    // If not in cache, create a new PSO
+    ComPtr<ID3D12PipelineState> newPSO = CreatePipelineStateForRenderState(state);
+    m_pipelineStateCache[state]        = newPSO;
+    return newPSO.Get();
+}
+
+ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(const RenderState& state)
+{
+    // Create the corresponding PSO description according to the state
+
+    /// the way to describe pipeline state object is quite unique, the description of pipeline state object is a stream of bytes.
+    /// the typical way to make that stream is by creating a struct
+    struct PipelineStateStream
+    {
+        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        RootSignature;
+        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
+        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopology;
+        CD3DX12_PIPELINE_STATE_STREAM_VS                    VertexShader;
+        CD3DX12_PIPELINE_STATE_STREAM_PS                    PixelShader;
+        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RenderTargetFormats;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DepthStencilViewFormat;
+        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
+        CD3DX12_PIPELINE_STATE_STREAM_BLEND_DESC            BlendState;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL         DepthStencilState;
+    } pipelineStateStream;
+
+    // Set the fixed part (copy from template)
+    pipelineStateStream.RootSignature     = m_psoTemplate.rootSignature.Get();
+    pipelineStateStream.InputLayout       = {m_psoTemplate.inputLayout, m_psoTemplate.inputLayoutCount};
+    pipelineStateStream.PrimitiveTopology = m_psoTemplate.primitiveTopology;
+    // Set up a shader (either default or user-specified)
+    Shader* targetShader             = state.shader ? state.shader : m_defaultShader;
+    pipelineStateStream.VertexShader = CD3DX12_SHADER_BYTECODE(targetShader->m_vertexShaderBlob);
+    pipelineStateStream.PixelShader  = CD3DX12_SHADER_BYTECODE(targetShader->m_pixelShaderBlob);
+    // Set the render target format (fixed part)
+    DXGI_FORMAT           rtFormats[]          = {m_psoTemplate.renderTargetFormat};
+    D3D12_RT_FORMAT_ARRAY rtFormatArray        = {};
+    rtFormatArray.NumRenderTargets             = 1;
+    rtFormatArray.RTFormats[0]                 = rtFormats[0];
+    pipelineStateStream.RenderTargetFormats    = CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS(rtFormatArray);
+    pipelineStateStream.DepthStencilViewFormat = m_psoTemplate.depthStencilFormat;
+
+
+    // Set the rasterization state according to state.rasterizerMode
+    CD3DX12_RASTERIZER_DESC rasterizerDesc(D3D12_DEFAULT);
+    switch (state.rasterizerMode)
+    {
+    case RasterizerMode::SOLID_CULL_NONE:
+        rasterizerDesc.FrontCounterClockwise = false;
+        rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+        rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+        break;
+    case RasterizerMode::SOLID_CULL_BACK:
+        rasterizerDesc.FrontCounterClockwise = true;
+        rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+        rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+        break;
+    case RasterizerMode::WIREFRAME_CULL_BACK:
+        rasterizerDesc.FrontCounterClockwise = true;
+        rasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+        break;
+    case RasterizerMode::WIREFRAME_CULL_NONE:
+        rasterizerDesc.FrontCounterClockwise = false;
+        rasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+        break;
+    default:
+        ERROR_AND_DIE("Can not use COUNT as RasterizerMode settings")
+    }
+    pipelineStateStream.RasterizerState = rasterizerDesc;
+
+    // Set the blending state according to state.blendMode
+    CD3DX12_BLEND_DESC blendDesc(D3D12_DEFAULT);
+    switch (state.blendMode)
+    {
+    /// Use the alpha value of the source pixel to determine the degree of blending. The formula is: FinalColor = SrcColor * SrcAlpha + DestColor * (1 - SrcAlpha)
+    case BlendMode::ALPHA:
+        blendDesc.RenderTarget[0].BlendEnable = TRUE;
+        blendDesc.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA; // Multiply the source color by the source alpha
+        blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA; // Multiply the destination color by (1-source Alpha)
+        blendDesc.RenderTarget[0].BlendOp   = D3D12_BLEND_OP_ADD; // Add
+        break;
+    /// This mode makes the color brighter and is often used for light effects, flames, explosions, etc. The formula is: FinalColor = SrcColor * SrcAlpha + DestColor * 1
+    case BlendMode::ADDITIVE:
+        blendDesc.RenderTarget[0].BlendEnable = TRUE;
+        blendDesc.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA; // Multiply the source color by the source alpha
+        blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE; // Multiply the destination color by 1 (keep same)
+        blendDesc.RenderTarget[0].BlendOp   = D3D12_BLEND_OP_ADD; // Add
+        break;
+    case BlendMode::OPAQUE:
+        blendDesc.RenderTarget[0].BlendEnable = FALSE;
+        break;
+    default:
+        ERROR_AND_DIE("Can not use COUNT as BlendMode settings")
+    }
+    pipelineStateStream.BlendState = blendDesc;
+
+    // Set the depth state according to state.depthMode
+    CD3DX12_DEPTH_STENCIL_DESC depthStencilDesc(D3D12_DEFAULT);
+    switch (state.depthMode)
+    {
+    // Disable depth testing completely
+    case DepthMode::DISABLED:
+        depthStencilDesc.DepthEnable = FALSE; // Do not write depth
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Not write depth
+        depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS; // Always pass (even if disabled)
+        break;
+    // Enable depth test, but don't write, always pass
+    case DepthMode::READ_ONLY_ALWAYS:
+        depthStencilDesc.DepthEnable = TRUE;
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS; // Always pass
+        break;
+    // Enable depth test, do not write, pass when less than or equal to
+    case DepthMode::READ_ONLY_LESS_EQUAL:
+        depthStencilDesc.DepthEnable = TRUE;
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Not write depth
+        depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL; // Pass if less than or equal to
+        break;
+    // Standard depth test: read and write, pass if less than or equal
+    case DepthMode::READ_WRITE_LESS_EQUAL:
+        depthStencilDesc.DepthEnable = TRUE;
+        depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; // Write Depth
+        depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL; // Pass if less than or equal to
+        break;
+    default:
+        ERROR_AND_DIE("Unhandled DepthMode in CreatePipelineStateForRenderState")
+    }
+    depthStencilDesc.StencilEnable        = FALSE;
+    pipelineStateStream.DepthStencilState = depthStencilDesc;
+
+    ComPtr<ID3D12PipelineState>      pso;
+    D3D12_PIPELINE_STATE_STREAM_DESC desc = {sizeof(PipelineStateStream), &pipelineStateStream};
+
+    // build the pipeline state object
+    m_device2->CreatePipelineState(&desc, IID_PPV_ARGS(&pso)) >> chk;
+    return pso;
 }
 
 void DX12Renderer::UploadToCB(ConstantBuffer* cb, const void* data, size_t size)
