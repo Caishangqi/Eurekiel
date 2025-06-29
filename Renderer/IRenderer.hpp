@@ -162,36 +162,22 @@ public:
     //------------------------------------------------------------
     // Constant-buffer helpers
     //------------------------------------------------------------
-    virtual void SetModelConstants(const Mat44& model = Mat44(),
-                                   const Rgba8& tint  = Rgba8::WHITE) = 0;
-    virtual void SetDirectionalLightConstants(
-        const DirectionalLightConstants& dl) = 0;
-    virtual void SetLightConstants(Vec3         lightPos, float ambient,
-                                   const Mat44& lightView,
-                                   const Mat44& lightProj) = 0;
-    virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo,
-                                         void*            data, size_t size,
-                                         int              slot) = 0;
+    virtual void SetModelConstants(const Mat44& model = Mat44(), const Rgba8& tint = Rgba8::WHITE) = 0;
+    virtual void SetDirectionalLightConstants(const DirectionalLightConstants& dl) = 0;
+    virtual void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& lightView, const Mat44& lightProj) = 0;
+    virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t size, int slot) = 0;
 
-    //------------------------------------------------------------
     // State setters
-    //------------------------------------------------------------
     virtual void SetBlendMode(BlendMode mode) = 0;
     virtual void SetRasterizerMode(RasterizerMode mode) = 0;
     virtual void SetDepthMode(DepthMode mode) = 0;
     virtual void SetSamplerMode(SamplerMode mode) = 0;
 
-    //------------------------------------------------------------
     // Resource creation
-    //------------------------------------------------------------
-    virtual Shader* CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
-    virtual Shader* CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
-    virtual Shader* CreateOrGetShader(const char* shaderName) = 0;
-    virtual bool    CompileShaderToByteCode(std::vector<uint8_t>& outBytes,
-                                         const char*              name,
-                                         const char*              src,
-                                         const char*              entry,
-                                         const char*              target) = 0;
+    virtual Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
+    virtual Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
+    virtual Shader*     CreateOrGetShader(const char* shaderName) = 0;
+    virtual bool        CompileShaderToByteCode(std::vector<uint8_t>& outBytes, const char* name, const char* src, const char* entry, const char* target) = 0;
     virtual void        BindShader(Shader* s) = 0;
     virtual Texture*    CreateOrGetTexture(const char* imageFilePath) = 0; // TODO: abstract to IResource interface
     virtual Image*      CreateImageFromFile(const char* imageFilePath);
@@ -224,15 +210,20 @@ public:
     virtual void DrawVertexArray(int num, const Vertex_PCU* v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v) = 0;
-    virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v,
-                                 const std::vector<unsigned>&   idx) = 0;
-    virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v,
-                                 const std::vector<unsigned>&      idx) = 0;
+    virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) = 0;
+    virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) = 0;
 
     virtual void DrawVertexBuffer(VertexBuffer* v, int count, int offset = 0) = 0;
     virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, int idxCount = 0, int idxOffset = 0) = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
+
+protected:
+    // These are part of the interface contract, all implementations require
+    BlendMode      m_currentBlendMode      = BlendMode::ALPHA;
+    RasterizerMode m_currentRasterizerMode = RasterizerMode::SOLID_CULL_BACK;
+    DepthMode      m_currentDepthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
+    SamplerMode    m_currentSamplerMode    = SamplerMode::POINT_CLAMP;
 };
 
 template <typename T>
