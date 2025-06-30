@@ -1,4 +1,4 @@
-<p align="center"><img src="https://github.com/user-attachments/assets/869c4053-05e4-47e8-b443-5f9357346999" alt="Logo" width="400"></p>
+<p align="center"><img src="https://github.com/user-attachments/assets/869c4053-05e4-47e8-b443-5f9357346999" alt="Logo" width="300"></p>
 
 <h1 align="center"> Eurekiel </h1>
 <h4 align="center">A 3D and 2D game engine designed for voxel game development and scalable projects.</h4>
