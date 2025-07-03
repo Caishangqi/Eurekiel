@@ -210,7 +210,16 @@ void DX12Renderer::Startup()
         }
 
         m_currentVertexBuffer = CreateVertexBuffer(sizeof(Vertex_PCU), sizeof(Vertex_PCU));
-        m_indexBuffer         = CreateIndexBuffer(sizeof(unsigned int));
+
+        // Index ring buffer
+        for (uint32_t i = 0; i < kBackBufferCount; ++i)
+        {
+            m_frameIndexBuffer[i] = CreateIndexBuffer(kIndexRingSize);
+        }
+
+        m_currentIndexBuffer = CreateIndexBuffer(sizeof(unsigned int));
+
+
         // Constant buffers heap that hold view descriptor (for 14 constant buffers)
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
         heapDesc.NumDescriptors             = kMaxConstantBufferSlot + (kMaxDescriptorSetsPerFrame * kMaxShaderSourceViewSlot); // Need additional space for uploading binding texture
@@ -359,7 +368,12 @@ void DX12Renderer::Shutdown()
         m_fenceEvent = nullptr;
     }
 
-    POINTER_SAFE_DELETE(m_indexBuffer)
+    for (IndexBuffer* indexBuffer : m_frameIndexBuffer)
+    {
+        POINTER_SAFE_DELETE(indexBuffer)
+    }
+
+    m_currentIndexBuffer = nullptr;
 
     for (VertexBuffer* vertexBuffer : m_frameVertexBuffer)
     {
@@ -387,6 +401,10 @@ void DX12Renderer::Shutdown()
     POINTER_SAFE_DELETE(m_defaultTexture)
     m_currentShader = nullptr;
     m_defaultShader = nullptr;
+
+#ifdef ENGINE_DEBUG_RENDER
+    debugDevice.Reset();
+#endif
 }
 
 void DX12Renderer::BeginFrame()
@@ -416,6 +434,11 @@ void DX12Renderer::BeginFrame()
     // get current vertex buffer ring's vertex
     m_currentVertexBuffer = m_frameVertexBuffer[m_currentBackBufferIndex];
     m_currentVertexBuffer->ResetCursor();
+
+    // get current index buffer ring's vertex
+    m_currentIndexBuffer = m_frameIndexBuffer[m_currentBackBufferIndex];
+    m_currentIndexBuffer->ResetCursor();
+
     // reset command list and allocator
     m_commandAllocator->Reset();
     // Every time you reset the command list, it gives you a different command allocator
@@ -997,35 +1020,14 @@ void DX12Renderer::DrawVertexArray(int n, const Vertex_PCU* v)
 {
     if (n <= 0 || v == nullptr) return;
 
-    // Checks whether the state of the current descriptor set matches the state to be applied
-    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
-    {
-        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
-        if (stateChanged)
-        {
-            // The state has changed and a new descriptor set needs to be prepared
-            PrepareNextDescriptorSet(); // The m_currentDescriptorSet pointer has move to next, this has already copy the texture data from previous.
-            DescriptorSet& newSet = m_descriptorSets[m_currentDescriptorSet];
-            newSet.renderState    = m_pendingRenderState;
-            // Set the corresponding PSO
-            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
-            m_commandList->SetPipelineState(pso);
-            m_currentPipelineStateObject = pso; // Cache the reference of the current PSO
-        }
-    }
-
+    // Assign to RingBuffer
     if (!m_currentVertexBuffer->Allocate(v, n * sizeof(Vertex_PCU)))
     {
         return;
     }
 
-    // Before drawing, set the Root Descriptor Table of the current descriptor set
-    CommitCurrentDescriptorSet();
-
-    DrawVertexBuffer(m_currentVertexBuffer, n);
-
-    // After drawing, prepare the next descriptor set
-    PrepareNextDescriptorSet();
+    // Directly call the internal drawing function
+    DrawVertexBufferInternal(m_currentVertexBuffer, n);
 }
 
 void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v)
@@ -1042,13 +1044,21 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::
 {
     if (v.empty() || idx.empty()) return;
 
-    unsigned int vertexDataSize = static_cast<unsigned int>(v.size()) * sizeof(Vertex_PCU);
-    unsigned int indexDataSize  = static_cast<unsigned int>(idx.size()) * sizeof(unsigned int);
+    // Allocate vertex space in RingVertexBuffer
+    if (!m_currentVertexBuffer->Allocate(v.data(), v.size() * sizeof(Vertex_PCU)))
+    {
+        return;
+    }
 
-    CopyCPUToGPU(v.data(), vertexDataSize, m_currentVertexBuffer);
-    CopyCPUToGPU(idx.data(), indexDataSize, m_indexBuffer);
+    // Allocate index space in RingIndexBuffer
+    unsigned int indexDataSize = static_cast<unsigned int>(idx.size()) * sizeof(unsigned int);
+    if (!m_currentIndexBuffer->Allocate(idx.data(), indexDataSize))
+    {
+        return;
+    }
 
-    DrawVertexIndexed(m_currentVertexBuffer, m_indexBuffer, static_cast<int>(idx.size()));
+    // Call internal drawing function
+    DrawVertexIndexedInternal(m_currentVertexBuffer, m_currentIndexBuffer, static_cast<unsigned int>(idx.size()));
 }
 
 void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx)
@@ -1057,20 +1067,52 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const st
     UNUSED(idx)
 }
 
-void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count, int offset)
+void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
 {
-    UNUSED(offset)
-    // draw the geometry
-    m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
-    m_commandList->DrawInstanced(count, 1, 0, 0);
+    if (!vbo || count <= 0) return;
+
+    // Calculate the size of the data to be copied
+    size_t dataSize = (size_t)count * vbo->GetStride();
+
+    // Read data from the user's VertexBuffer and copy it to RingBuffer
+    void* srcData = nullptr;
+    if (vbo->m_cpuPtr != nullptr)
+    {
+        // Fast path: persistent mapping
+        srcData = vbo->m_cpuPtr;
+    }
+    else
+    {
+        // Slow path: Map required
+        D3D12_RANGE readRange = {0, dataSize};
+        vbo->m_dx12buffer->Map(0, &readRange, &srcData) >> chk;
+    }
+
+    // Assign to the current RingBuffer
+    if (!m_currentVertexBuffer->Allocate(srcData, dataSize))
+    {
+        if (vbo->m_cpuPtr == nullptr)
+        {
+            vbo->m_dx12buffer->Unmap(0, nullptr);
+        }
+        return;
+    }
+
+    // Unmap (if necessary)
+    if (vbo->m_cpuPtr == nullptr)
+    {
+        vbo->m_dx12buffer->Unmap(0, nullptr);
+    }
+
+    // Call internal drawing function
+    DrawVertexBufferInternal(m_currentVertexBuffer, count);
 }
 
-void DX12Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, int idxCount, int idxOffset)
+void DX12Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount)
 {
-    UNUSED(idxOffset)
     BindVertexBuffer(vbo);
     BindIndexBuffer(ibo);
-    m_commandList->DrawIndexedInstanced(idxCount, 1, 0, 0, 0);
+    m_commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
 }
 
 void DX12Renderer::WaitForGPU()
@@ -1271,6 +1313,62 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
     // build the pipeline state object
     m_device2->CreatePipelineState(&desc, IID_PPV_ARGS(&pso)) >> chk;
     return pso;
+}
+
+void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)
+{
+    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    {
+        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
+        if (stateChanged)
+        {
+            PrepareNextDescriptorSet();
+            DescriptorSet& newSet    = m_descriptorSets[m_currentDescriptorSet];
+            newSet.renderState       = m_pendingRenderState;
+            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
+            m_commandList->SetPipelineState(pso);
+            m_currentPipelineStateObject = pso;
+        }
+    }
+
+    // Submit the current descriptor set
+    CommitCurrentDescriptorSet();
+
+    // Draw
+    m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
+    m_commandList->DrawInstanced(count, 1, 0, 0);
+
+    // Prepare the next descriptor set
+    PrepareNextDescriptorSet();
+}
+
+void DX12Renderer::DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount)
+{
+    // Check and apply state changes
+    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    {
+        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
+        if (stateChanged)
+        {
+            PrepareNextDescriptorSet();
+            DescriptorSet& newSet    = m_descriptorSets[m_currentDescriptorSet];
+            newSet.renderState       = m_pendingRenderState;
+            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
+            m_commandList->SetPipelineState(pso);
+            m_currentPipelineStateObject = pso;
+        }
+    }
+
+    // Submit the current descriptor set
+    CommitCurrentDescriptorSet();
+
+    // Draw
+    m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
+    m_commandList->IASetIndexBuffer(&ibo->m_indexBufferView);
+    m_commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+
+    // Prepare the next descriptor set
+    PrepareNextDescriptorSet();
 }
 
 void DX12Renderer::UploadToCB(ConstantBuffer* cb, const void* data, size_t size)
