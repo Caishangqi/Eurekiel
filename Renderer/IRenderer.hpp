@@ -144,24 +144,18 @@ class IRenderer
 public:
     virtual ~IRenderer() = default;
 
-    //------------------------------------------------------------
     // Life-cycle & per-frame
-    //------------------------------------------------------------
     virtual void Startup() = 0;
     virtual void Shutdown() = 0;
     virtual void BeginFrame() = 0;
     virtual void EndFrame() = 0;
 
-    //------------------------------------------------------------
     // Global clear / camera
-    //------------------------------------------------------------
     virtual void ClearScreen(const Rgba8& clear) = 0;
     virtual void BeginCamera(const Camera& cam) = 0;
     virtual void EndCamera(const Camera& cam) = 0;
 
-    //------------------------------------------------------------
     // Constant-buffer helpers
-    //------------------------------------------------------------
     virtual void SetModelConstants(const Mat44& model = Mat44(), const Rgba8& tint = Rgba8::WHITE) = 0;
     virtual void SetDirectionalLightConstants(const DirectionalLightConstants& dl) = 0;
     virtual void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& lightView, const Mat44& lightProj) = 0;
@@ -196,25 +190,21 @@ public:
     virtual void CopyCPUToGPU(const void* data, size_t size, IndexBuffer* i) = 0;
     virtual void CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) = 0;
 
-    //------------------------------------------------------------
     // Binding helpers
-    //------------------------------------------------------------
     virtual void BindVertexBuffer(VertexBuffer* v) = 0;
     virtual void BindIndexBuffer(IndexBuffer* i) = 0;
     virtual void BindConstantBuffer(int slot, ConstantBuffer* c) = 0;
     virtual void BindTexture(Texture* tex, int slot = 0) = 0;
 
-    //------------------------------------------------------------
     // Draw family
-    //------------------------------------------------------------
     virtual void DrawVertexArray(int num, const Vertex_PCU* v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) = 0;
 
-    virtual void DrawVertexBuffer(VertexBuffer* v, int count, int offset = 0) = 0;
-    virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, int idxCount = 0, int idxOffset = 0) = 0;
+    virtual void DrawVertexBuffer(VertexBuffer* v, int count) = 0;
+    virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, unsigned int indexCount) = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
 
