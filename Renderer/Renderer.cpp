@@ -322,7 +322,7 @@ void Renderer::Shutdown()
 
     for (Shader* m_loaded_shader : m_loadedShaders)
     {
-        delete m_loaded_shader;
+        POINTER_SAFE_DELETE(m_loaded_shader)
     }
 
     for (ID3D11SamplerState* m_sampler_state_element : m_samplerStates)
@@ -879,7 +879,26 @@ Shader* Renderer::CreateShaderFromFile(const char* sourcePath, VertexType vertex
     }
     Strings fileSuffixVec = SplitStringOnDelimiter(pathVec.back(), '.');
 
-    return CreateShader(fileSuffixVec[0].c_str(), shaderSource.c_str(), vertexType);
+    Shader* shaderResource = CreateShader(fileSuffixVec[0].c_str(), shaderSource.c_str(), vertexType);
+
+    m_loadedShaders.push_back(shaderResource);
+    return shaderResource;
+}
+
+Shader* Renderer::CreateOrGetShaderFromFile(const char* sourcePath, VertexType vertexType)
+{
+    std::string shaderNameWithExtension = std::string(sourcePath) + ".hlsl";
+    Strings     pathVec                 = SplitStringOnDelimiter(shaderNameWithExtension, '/');
+    Strings     shaderNamePath          = SplitStringOnDelimiter(sourcePath, '/');
+    std::string shaderName              = shaderNamePath.back();
+    for (Shader* shader : m_loadedShaders)
+    {
+        if (shader->GetName() == shaderName)
+        {
+            return shader;
+        }
+    }
+    return CreateShaderFromFile(sourcePath, vertexType);
 }
 
 // TODO: Check the Error and Shader Blob memory leak

@@ -76,11 +76,11 @@ public:
     void        BindTexture(Texture* texture, int slot = 0);
 
     /// DirectX Shader
-
     Shader* CreateShader(const char* shaderName, const char* shaderSource, VertexType vertexType = VertexType::Vertex_PCU);
     Shader* GetShader(const char* shaderName);
     Shader* CreateShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU);
     Shader* CreateShaderFromFile(const char* sourcePath, VertexType vertexType = VertexType::Vertex_PCU);
+    Shader* CreateOrGetShaderFromFile(const char* sourcePath, VertexType vertexType = VertexType::Vertex_PCU);
     bool    CompileShaderToByteCode(std::vector<unsigned char>& outByteCode, const char* name, const char* source, const char* entryPoint, const char* target);
     void    BindShader(Shader* shader);
 
