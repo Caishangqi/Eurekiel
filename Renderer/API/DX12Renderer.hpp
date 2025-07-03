@@ -4,7 +4,6 @@
 #include <map>
 
 #include "Engine/Renderer/IRenderer.hpp"
-#include <unordered_map>
 #include <vector>
 #include <ThirdParty/d3dx12/d3dx12.h>
 #include <wrl/client.h>
@@ -42,7 +41,6 @@ struct D3D12_DEPTH_STENCIL_DESC;
 
 #define ENGINE_DEBUG_RENDER
 static constexpr uint32_t kBackBufferCount         = 2;
-static constexpr size_t   kVertexRingSize          = sizeof(Vertex_PCU) * 1024 * 1024; // 96MB
 constexpr uint32_t        kMaxConstantBufferSlot   = 14;
 constexpr uint32_t        kMaxShaderSourceViewSlot = 128;
 constexpr uint32_t        kMaxTextureCached        = 4096;
@@ -105,8 +103,8 @@ public:
     void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) override;
     void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) override;
 
-    void DrawVertexBuffer(VertexBuffer* vbo, int count, int offset = 0) override;
-    void DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, int idxCount = 0, int idxOffset = 0) override;
+    void DrawVertexBuffer(VertexBuffer* vbo, int count) override; // DrawVertexBuffer - handles user buffered data
+    void DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount) override;
 
 private:
     // Device-level resources (StartUp / Shutdown lifecycle)
@@ -136,9 +134,14 @@ private:
     VertexBuffer* m_currentVertexBuffer = nullptr;
     // Updated ring vertex buffer
     std::array<VertexBuffer*, kBackBufferCount> m_frameVertexBuffer;
+    static constexpr size_t                     kVertexRingSize = sizeof(Vertex_PCU) * 1024 * 1024; // 96MB
 
-    /// Index Buffers
-    IndexBuffer* m_indexBuffer = nullptr;
+    /// Index Buffers  
+    IndexBuffer* m_currentIndexBuffer = nullptr;
+    // Updating ring index buffer
+    std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer;
+    static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices
+
 
     // Constant Buffers
     std::vector<ConstantBuffer*> m_constantBuffers;
@@ -225,7 +228,6 @@ private:
     void PrepareNextDescriptorSet();
 
 private:
-    
     // PSO Base Templates - These are the fixed parts shared by all PSOs
     // TODO: Consider use hash value to directly access the memory
     struct PSOTemplate
@@ -247,12 +249,14 @@ private:
     RenderState m_pendingRenderState;
 
     ComPtr<ID3D12PipelineState> m_currentPipelineStateObject = nullptr;
-
-    [[maybe_unused]]
+    
     // Get or create the PSO of the corresponding state
-    ID3D12PipelineState* GetOrCreatePipelineState(const RenderState& state);
+    [[maybe_unused]] ID3D12PipelineState* GetOrCreatePipelineState(const RenderState& state);
 
     // Auxiliary method for creating PSO based on status
-    [[nodiscard]]
-    ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);
+    [[nodiscard]] ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);
+
+    /// Internal auxiliary function: only responsible for executing drawing commands, not copying data
+    [[maybe_unused]] void DrawVertexBufferInternal(VertexBuffer* vbo, int count);
+    [[maybe_unused]] void DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount);
 };
