@@ -18,8 +18,13 @@ public:
     /// @param count 
     /// @param deviceContext
     void Update(const unsigned int* indices, unsigned int count, ID3D11DeviceContext* deviceContext);
+    [[deprecated("Update method in DX12Renderer is deprecated, which will cause buffer overwrite")]]
     void Update(const unsigned int* indices, unsigned int count, ID3D12Device* deviceContext = nullptr);
     void Resize(unsigned int size);
+
+    /// DirectX12
+    void ResetCursor();
+    bool Allocate(const void* src, size_t size);
 
     unsigned int GetSize();
     unsigned int GetStride();
@@ -33,4 +38,9 @@ private:
     ID3D12Resource*         m_dx12buffer = nullptr; // DX12
     D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
     unsigned int            m_size = 0;
+
+    /// DirectX12
+    uint8_t* m_cpuPtr         = nullptr;
+    uint64_t m_baseGpuAddress = 0;
+    size_t   m_cursor         = 0;
 };

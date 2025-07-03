@@ -6,12 +6,12 @@
 #include "Renderer.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
-IndexBuffer::IndexBuffer(ID3D11Device* device, unsigned int size): m_buffer(nullptr), m_device(device), m_size(size)
+IndexBuffer::IndexBuffer(ID3D11Device* device, unsigned int size) : m_buffer(nullptr), m_device(device), m_size(size)
 {
     Create();
 }
 
-IndexBuffer::IndexBuffer(ID3D12Device* device, unsigned int size): m_buffer(nullptr), m_dx12device(device), m_size(size)
+IndexBuffer::IndexBuffer(ID3D12Device* device, unsigned int size) : m_buffer(nullptr), m_dx12device(device), m_size(size)
 {
     Create();
 }
@@ -20,6 +20,8 @@ IndexBuffer::~IndexBuffer()
 {
     DX_SAFE_RELEASE(m_buffer)
     DX_SAFE_RELEASE(m_dx12buffer)
+    m_dx12device = nullptr;
+    m_device     = nullptr;
 }
 
 void IndexBuffer::Create()
@@ -53,6 +55,11 @@ void IndexBuffer::Create()
             nullptr,
             IID_PPV_ARGS(&m_dx12buffer)
         ) >> chk;
+
+        // Mapping CPU pointer
+        m_dx12buffer->Map(0, nullptr, reinterpret_cast<void**>(&m_cpuPtr)) >> chk;
+        m_baseGpuAddress = m_dx12buffer->GetGPUVirtualAddress();
+
         /// Create the view for index buffer
         {
             m_indexBufferView.BufferLocation = m_dx12buffer->GetGPUVirtualAddress();
@@ -103,6 +110,30 @@ void IndexBuffer::Resize(unsigned int size)
     DX_SAFE_RELEASE(m_dx12buffer)
     m_size = size;
     Create();
+}
+
+void IndexBuffer::ResetCursor()
+{
+    m_cursor                         = 0;
+    m_indexBufferView.BufferLocation = m_baseGpuAddress;
+}
+
+bool IndexBuffer::Allocate(const void* src, size_t size)
+{
+    size_t aligned = AlignUp<size_t>(size, 16);
+    if (m_cursor + aligned > m_size)
+    {
+        ERROR_AND_DIE("Exceed the Index buffer max amount")
+    }
+
+    memcpy(m_cpuPtr + m_cursor, src, size);
+
+    m_indexBufferView.BufferLocation = m_baseGpuAddress + m_cursor;
+    m_indexBufferView.SizeInBytes    = (UINT)size;
+    m_indexBufferView.Format         = DXGI_FORMAT_R32_UINT;
+
+    m_cursor += aligned;
+    return true;
 }
 
 unsigned int IndexBuffer::GetSize()
