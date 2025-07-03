@@ -134,7 +134,7 @@ bool VertexBuffer::Allocate(const void* scr, size_t size)
     memcpy(m_cpuPtr + m_cursor, scr, aligned);
     // Get the current view buffer position, After this manipulation, IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
     // will interpolate the vertexBuffer from the position
-    m_vertexBufferView.BufferLocation = m_baseGpuAddress + m_cursor;    
+    m_vertexBufferView.BufferLocation = m_baseGpuAddress + m_cursor;
     m_vertexBufferView.SizeInBytes    = (UINT)size; // the view size increase but the actual buffer size not change.
     m_vertexBufferView.StrideInBytes  = m_stride;
 

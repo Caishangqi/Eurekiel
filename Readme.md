@@ -11,14 +11,31 @@
 </p>
 
 ## Overview
-Eurekiel is a 3D and 2D game engine designed from the ground up for voxel game development and scalable projects. It provides a dedicated voxel-based render pipeline and tools for game design without compromising resource efficiency.
+
+Eurekiel is a 3D and 2D game engine designed from the ground up for voxel game development and scalable projects. It provides a dedicated voxel-based render pipeline and tools for game design without
+compromising resource efficiency.
 
 ## Feature
 
 ## Modules
 
+| **Name**           | **Description** |     **State**     |
+|--------------------|:---------------:|:-----------------:|
+| `enigma::core`     |       TBD       |      stable       |
+| `enigma::audio`    |       TBD       |      stable       |
+| `enigma::input`    |       TBD       |      stable       |
+| `enigma::math`     |       TBD       | unstable/refactor |
+| `enigma::render`   |       TBD       |       beta        |
+| `enigma::resource` |       TBD       |    unavailable    |
+| `enigma::window`   |       TBD       |      stable       |
+
+##
+
 <p>&nbsp;</p>
-<p align="center"><a href="https://github.com/Creators-of-Create/Create/issues"><img src="https://i.imgur.com/qPmjSXy.png" width="160" /></a> <a href="https://www.youtube.com/channel/UCrKV2QTuyGcv4E3eSJpBiYA/playlists"><img src="https://i.imgur.com/L1bU9mr.png" width="160" /></a><a href="[https://discord.gg/hmaD7Se](https://discord.gg/3rPcYrPnAs)"><img src="https://i.imgur.com/uf6V9ZX.png" width="160" /></a> <a href="https://github.com/Creators-of-Create/Create/wiki/Supporting-the-Project"><img src="https://i.imgur.com/fHQ45KR.png" width="227" /></a></p>
+<p align="center"><a href="https://github.com/Creators-of-Create/Create/issues">
+<img src="https://i.imgur.com/qPmjSXy.png" width="160" />
+</a> 
+<a href="https://www.youtube.com/channel/UCrKV2QTuyGcv4E3eSJpBiYA/playlists"><img src="https://i.imgur.com/L1bU9mr.png" width="160" /></a><a href="[https://discord.gg/hmaD7Se](https://discord.gg/3rPcYrPnAs)"><img src="https://i.imgur.com/uf6V9ZX.png" width="160" /></a> <a href="https://github.com/Creators-of-Create/Create/wiki/Supporting-the-Project"><img src="https://i.imgur.com/fHQ45KR.png" width="227" /></a></p>
 
 <h1></h1>
 <h4 align="center">Find out more about Eurekiel on the <a href="https://www.curseforge.com/minecraft/mc-mods/create">SMU Pages</a></h4>
