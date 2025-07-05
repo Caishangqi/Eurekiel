@@ -27,7 +27,10 @@ private:
     void ValidateMeshData(const FMesh& mesh) const;
     void GenerateNormalsIfNeeded(FMesh& mesh) const;
     void CalculateTangentSpace(FMesh& mesh) const;
-
+    bool IsDefaultNormal(const Vec3& normal) const;
+    bool HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2) const;
+    void CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2) const;
+    void OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex) const;
 
     [[deprecated]] void ProcessVertex(FMesh& mesh, std::string& data);
     [[deprecated]] void ProcessNormal(FMesh& mesh, std::string& data);

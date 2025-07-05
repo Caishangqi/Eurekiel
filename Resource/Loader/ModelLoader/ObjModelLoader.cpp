@@ -497,7 +497,7 @@ void ObjModelLoader::ProcessFaces(FMesh& mesh, Strings& data)
             vertex.m_tangent     = defaultTangent;
             vertex.m_bitangent   = defaultBinormal;
             vertex.m_normal      = normal;
-
+            
             mesh.vertices.push_back(vertex);
         }
     }
@@ -522,35 +522,85 @@ void ObjModelLoader::ValidateMeshData(const FMesh& mesh) const
 
 void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh) const
 {
-    // If the original data has no normals, you can calculate the normals for each triangle
-    if (mesh.vertexNormal.empty() && mesh.vertices.size() >= 3)
+    if (mesh.vertices.size() % 3 != 0) return;
+
+    // 1. If there are UVs, calculate T, B
+    // 2. If there is no Normal, but there are T, B, N = (T×B).GetNormalized()
+    // 3. If there is no Normal, and no T, B, N = (P01 × P02) Calculate using points
+
+    for (size_t i = 0; i < mesh.vertices.size(); i += 3)
     {
-        for (size_t i = 0; i < mesh.vertices.size(); i += 3)
+        Vertex_PCUTBN& v0 = mesh.vertices[i];
+        Vertex_PCUTBN& v1 = mesh.vertices[i + 1];
+        Vertex_PCUTBN& v2 = mesh.vertices[i + 2];
+
+        // Check if there is a valid normal (not the default)
+        bool hasValidNormals = !IsDefaultNormal(v0.m_normal) || !IsDefaultNormal(v1.m_normal) || !IsDefaultNormal(v2.m_normal);
+
+        if (!hasValidNormals)
         {
-            // Calculate triangle normal
-            Vec3 v0 = mesh.vertices[i].m_position;
-            Vec3 v1 = mesh.vertices[i + 1].m_position;
-            Vec3 v2 = mesh.vertices[i + 2].m_position;
+            // Need to generate normals - try to calculate using tangent space first
+            if (HasValidUVs(v0, v1, v2))
+            {
+                // Calculate tangent space first
+                CalculateTangentSpaceForTriangle(v0, v1, v2);
 
-            Vec3 edge1  = v1 - v0;
-            Vec3 edge2  = v2 - v0;
-            Vec3 normal = CrossProduct3D(edge1, edge2);
-            normal      = normal.GetNormalized();
+                // Then use T×B to calculate the normal
+                Vec3 normal = CrossProduct3D(v0.m_tangent, v0.m_bitangent).GetNormalized();
+                v0.m_normal = normal;
+                v1.m_normal = normal;
+                v2.m_normal = normal;
+            }
+            else
+            {
+                // No UV, directly use vertex position to calculate normal
+                Vec3 E0     = v1.m_position - v0.m_position;
+                Vec3 E1     = v2.m_position - v0.m_position;
+                Vec3 normal = CrossProduct3D(E0, E1).GetNormalized();
+                v0.m_normal = normal;
+                v1.m_normal = normal;
+                v2.m_normal = normal;
 
-            // Set normals for the three vertices of this triangle
-            mesh.vertices[i].m_normal     = normal;
-            mesh.vertices[i + 1].m_normal = normal;
-            mesh.vertices[i + 2].m_normal = normal;
+                // Set the default tangent space
+                v0.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+                v1.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+                v2.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+
+                v0.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+                v1.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+                v2.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+            }
         }
-    }
+        else
+        {
+            // With normals, we only need to calculate tangent space
+            if (HasValidUVs(v0, v1, v2))
+            {
+                CalculateTangentSpaceForTriangle(v0, v1, v2);
+            }
+            else
+            {
+                // No UV, set default tangent space
+                v0.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+                v1.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+                v2.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
 
-    // Calculate tangent space
-    CalculateTangentSpace(mesh);
+                v0.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+                v1.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+                v2.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+                ERROR_AND_DIE("No UV")
+            }
+        }
+
+        OrthonormalizeVertexTangentSpace(v0);
+        OrthonormalizeVertexTangentSpace(v1);
+        OrthonormalizeVertexTangentSpace(v2);
+    }
 }
 
+// This function is now specifically used to calculate tangent space for meshes with existing normals
 void ObjModelLoader::CalculateTangentSpace(FMesh& mesh) const
 {
-    // Only calculate if the number of vertices is a multiple of 3
     if (mesh.vertices.size() % 3 != 0) return;
 
     for (size_t i = 0; i < mesh.vertices.size(); i += 3)
@@ -559,49 +609,105 @@ void ObjModelLoader::CalculateTangentSpace(FMesh& mesh) const
         Vertex_PCUTBN& v1 = mesh.vertices[i + 1];
         Vertex_PCUTBN& v2 = mesh.vertices[i + 2];
 
-        // Calculate edge vector
-        Vec3 edge1 = v1.m_position - v0.m_position;
-        Vec3 edge2 = v2.m_position - v0.m_position;
-
-        // Calculate UV difference
-        Vec2 deltaUV1 = v1.m_uvTexCoords - v0.m_uvTexCoords;
-        Vec2 deltaUV2 = v2.m_uvTexCoords - v0.m_uvTexCoords;
-
-        // Avoid division by zero
-        float denominator = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-        if (abs(denominator) < 0.0001f)
+        if (HasValidUVs(v0, v1, v2))
         {
-            // Use default tangent space
-            Vec3 defaultTangent = Vec3(1.0f, 0.0f, 0.0f);
-            v0.m_tangent        = defaultTangent;
-            v1.m_tangent        = defaultTangent;
-            v2.m_tangent        = defaultTangent;
-
-            Vec3 defaultBitangent = Vec3(0.0f, 1.0f, 0.0f);
-            v0.m_bitangent        = defaultBitangent;
-            v1.m_bitangent        = defaultBitangent;
-            v2.m_bitangent        = defaultBitangent;
-            continue;
+            CalculateTangentSpaceForTriangle(v0, v1, v2);
         }
+        else
+        {
+            // No UV, set default tangent space
+            v0.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+            v1.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+            v2.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
 
-        float f = 1.0f / denominator;
+            v0.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+            v1.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+            v2.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+            ERROR_AND_DIE("No UV")
+        }
+    }
+}
 
-        // Calculate tangent
-        Vec3 tangent = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
-        tangent      = tangent.GetNormalized();
+bool ObjModelLoader::IsDefaultNormal(const Vec3& normal) const
+{
+    return (normal.x == 0.0f && normal.y == 0.0f && normal.z == 1.0f);
+}
 
-        // Calculate binormal
-        Vec3 binormal = f * (-deltaUV2.x * edge1 + deltaUV1.x * edge2);
-        binormal      = binormal.GetNormalized();
+// Check if UV is not all default (0,0)
+bool ObjModelLoader::HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2) const
+{
+    return !((v0.m_uvTexCoords.x == 0.0f && v0.m_uvTexCoords.y == 0.0f) &&
+        (v1.m_uvTexCoords.x == 0.0f && v1.m_uvTexCoords.y == 0.0f) &&
+        (v2.m_uvTexCoords.x == 0.0f && v2.m_uvTexCoords.y == 0.0f));
+}
+
+void ObjModelLoader::CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2) const
+{
+    // Calculate edge vectors E0, E1
+    Vec3 E0 = v1.m_position - v0.m_position; // P1 - P0
+    Vec3 E1 = v2.m_position - v0.m_position; // P2 - P0
+
+    // Calculate UV difference
+    float Δu0 = v1.m_uvTexCoords.x - v0.m_uvTexCoords.x; // u1 - u0
+    float Δu1 = v2.m_uvTexCoords.x - v0.m_uvTexCoords.x; // u2 - u0
+    float Δv0 = v1.m_uvTexCoords.y - v0.m_uvTexCoords.y; // v1 - v0
+    float Δv1 = v2.m_uvTexCoords.y - v0.m_uvTexCoords.y; // v2 - v0
+
+    // r = 1 / (Δu0*Δv1 - Δu1*Δv0)
+    float denominator = Δu0 * Δv1 - Δu1 * Δv0;
+
+    if (abs(denominator) > 1e-23) // avoid divide by zero
+    {
+        float r = 1.0f / denominator;
+
+        // T = r * (Δv1*E0 - Δv0*E1)
+        Vec3 T = r * (Δv1 * E0 - Δv0 * E1);
+        T      = T.GetNormalized();
+
+        // B = r * (Δu0*E1 - Δu1*E0)
+        Vec3 B = r * (Δu0 * E1 - Δu1 * E0);
+        B      = B.GetNormalized();
 
         // Apply to three vertices
-        v0.m_tangent = tangent;
-        v1.m_tangent = tangent;
-        v2.m_tangent = tangent;
+        v0.m_tangent = T;
+        v1.m_tangent = T;
+        v2.m_tangent = T;
 
-        v0.m_bitangent = binormal;
-        v1.m_bitangent = binormal;
-        v2.m_bitangent = binormal;
+        v0.m_bitangent = B;
+        v1.m_bitangent = B;
+        v2.m_bitangent = B;
+    }
+    else
+    {
+        // UV coordinates are invalid, use the default tangent space
+        v0.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+        v1.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+        v2.m_tangent = Vec3(1.0f, 0.0f, 0.0f);
+
+        v0.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+        v1.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+        v2.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+        ERROR_AND_DIE("No UV")
+    }
+}
+
+void ObjModelLoader::OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex) const
+{
+    // Gram-Schmidt orthogonalization, keeping N unchanged
+    Vec3&       T = vertex.m_tangent;
+    Vec3&       B = vertex.m_bitangent;
+    const Vec3& N = vertex.m_normal;
+
+    // T = normalize(T - (T·N)N)
+    T = (T - DotProduct3D(T, N) * N).GetNormalized();
+
+    // B = normalize(B - (B·N)N - (B·T)T)
+    B = (B - DotProduct3D(B, N) * N - DotProduct3D(B, T) * T).GetNormalized();
+
+    // Ensure right-handed coordinate system
+    if (DotProduct3D(CrossProduct3D(T, B), N) < 0.0f)
+    {
+        B = -B;
     }
 }
 
