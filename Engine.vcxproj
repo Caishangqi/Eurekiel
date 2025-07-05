@@ -297,7 +297,7 @@
         <ClInclude Include="Renderer\BitmapFont.hpp"/>
         <ClInclude Include="Renderer\Camera.hpp"/>
         <ClInclude Include="Renderer\ConstantBuffer.hpp"/>
-        <ClInclude Include="Renderer\DebugRenderSystem.h" />
+        <ClInclude Include="Renderer\DebugRenderSystem.hpp" />
         <ClInclude Include="Renderer\DefaultShader.hpp"/>
         <ClInclude Include="Renderer\GraphicsError.hpp" />
         <ClInclude Include="Renderer\IndexBuffer.hpp" />
