@@ -1142,3 +1142,43 @@ static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float rad
 
     return Vec2(u, v);
 }
+
+void ConvertSingleVertex(const Vertex_PCU& src, Vertex_PCUTBN& dst)
+{
+    memcpy(&dst, &src, sizeof(Vertex_PCU));
+    dst.m_tangent   = Vec3(1.0f, 0.0f, 0.0f);
+    dst.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
+    dst.m_normal    = Vec3(0.0f, 0.0f, 1.0f);
+}
+
+
+void ConvertPCUArrayToPCUTBN(const Vertex_PCU* src, Vertex_PCUTBN* dst, size_t count)
+{
+    // For small batches, use a simple loop
+    if (count < 8)
+    {
+        for (size_t i = 0; i < count; ++i)
+        {
+            ConvertSingleVertex(src[i], dst[i]);
+        }
+        return;
+    }
+
+    // For large batches, use loop unrolling optimization
+    size_t i = 0;
+
+    // Process in groups of 4 to improve instruction-level parallelism
+    for (; i + 4 <= count; i += 4)
+    {
+        ConvertSingleVertex(src[i], dst[i]);
+        ConvertSingleVertex(src[i + 1], dst[i + 1]);
+        ConvertSingleVertex(src[i + 2], dst[i + 2]);
+        ConvertSingleVertex(src[i + 3], dst[i + 3]);
+    }
+
+    // Process the remaining vertices
+    for (; i < count; ++i)
+    {
+        ConvertSingleVertex(src[i], dst[i]);
+    }
+}

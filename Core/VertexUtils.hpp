@@ -70,3 +70,6 @@ void AddVertsForPlane3D(std::vector<Vertex_PCU>& verts, const Plane3& plane3, co
                         const Rgba8&             colorY                                                 = Rgba8::GREEN);
 
 static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float radius, const Vec2& uvCenter, float uvRadius, float rotateDegrees = 0.f, bool flipAboutY = false);
+
+[[maybe_unused]] void           ConvertSingleVertex(const Vertex_PCU& src, Vertex_PCUTBN& dst);
+[[maybe_unused]] void           ConvertPCUArrayToPCUTBN(const Vertex_PCU* src, Vertex_PCUTBN* dst, size_t count);
