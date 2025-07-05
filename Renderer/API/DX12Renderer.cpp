@@ -7,6 +7,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/FileUtils.hpp"
 #include "Engine/Core/Image.hpp"
+#include "Engine/Renderer/BitmapFont.hpp"
 #include "Engine/Renderer/Camera.hpp"
 #include "Engine/Renderer/ConstantBuffer.hpp"
 #include "Engine/Renderer/GraphicsError.hpp"
@@ -206,10 +207,10 @@ void DX12Renderer::Startup()
         // Vertex ring buffer
         for (uint32_t i = 0; i < kBackBufferCount; ++i)
         {
-            m_frameVertexBuffer[i] = CreateVertexBuffer(kVertexRingSize, sizeof(Vertex_PCU));
+            m_frameVertexBuffer[i] = CreateVertexBuffer(kVertexRingSize, sizeof(Vertex_PCUTBN));
         }
 
-        m_currentVertexBuffer = CreateVertexBuffer(sizeof(Vertex_PCU), sizeof(Vertex_PCU));
+        m_currentVertexBuffer = CreateVertexBuffer(sizeof(Vertex_PCUTBN), sizeof(Vertex_PCUTBN));
 
         // Index ring buffer
         for (uint32_t i = 0; i < kBackBufferCount; ++i)
@@ -237,6 +238,10 @@ void DX12Renderer::Startup()
             CD3DX12_CPU_DESCRIPTOR_HANDLE handleOffset(cpuHandle, i, incrementSize);
             // We Create Constant buffer but not specific their view
         }
+
+        /// Conversion Buffer
+        m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
+        
     }
 
     /// Manager heaps
@@ -324,6 +329,9 @@ void DX12Renderer::Startup()
         m_psoTemplate.inputLayout[0]     = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
         m_psoTemplate.inputLayout[1]     = {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
         m_psoTemplate.inputLayout[2]     = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayout[3]     = {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayout[4]     = {"BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        m_psoTemplate.inputLayout[5]     = {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
         m_psoTemplate.inputLayoutCount   = _countof(m_psoTemplate.inputLayout);
 
         m_currentPipelineStateObject = CreatePipelineStateForRenderState(m_pendingRenderState);
@@ -434,6 +442,10 @@ void DX12Renderer::BeginFrame()
     // get current vertex buffer ring's vertex
     m_currentVertexBuffer = m_frameVertexBuffer[m_currentBackBufferIndex];
     m_currentVertexBuffer->ResetCursor();
+
+    // Set up the conversion buffer for the current frame
+    m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
+    m_currentConversionBuffer->Reset();
 
     // get current index buffer ring's vertex
     m_currentIndexBuffer = m_frameIndexBuffer[m_currentBackBufferIndex];
@@ -555,6 +567,8 @@ void DX12Renderer::BeginCamera(const Camera& cam)
     BindConstantBuffer(2, cameraBuffer);
     UploadToCB(cameraBuffer, &cameraConstant, sizeof(CameraConstants));
 
+    SetModelConstants();
+
     // TODO: Test only! need revert if the constant buffer test failed
     //m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(CameraConstants) / 4, &cameraConstant, 0);
 }
@@ -562,6 +576,19 @@ void DX12Renderer::BeginCamera(const Camera& cam)
 void DX12Renderer::EndCamera(const Camera& cam)
 {
     UNUSED(cam)
+}
+
+BitmapFont* DX12Renderer::CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension)
+{
+    for (BitmapFont* bitmap : m_loadedFonts)
+    {
+        if (bitmap->m_fontFilePathNameWithNoExtension == bitmapFontFilePathWithNoExtension)
+        {
+            return bitmap;
+        }
+    }
+    Texture* fontTexture = CreateOrGetTexture(bitmapFontFilePathWithNoExtension);
+    return CreateBitmapFont(bitmapFontFilePathWithNoExtension, *fontTexture);
 }
 
 Shader* DX12Renderer::CreateShader(const char* name, const char* src, VertexType t)
@@ -830,9 +857,9 @@ Texture* DX12Renderer::GetTextureForFileName(const char* imageFilePath)
 
 BitmapFont* DX12Renderer::CreateBitmapFont(const char* bitmapFontFilePathWithNoExtension, Texture& fontTexture)
 {
-    UNUSED(bitmapFontFilePathWithNoExtension)
-    UNUSED(fontTexture)
-    return nullptr;
+    auto bitmapFont = new BitmapFont(bitmapFontFilePathWithNoExtension, fontTexture);
+    m_loadedFonts.push_back(bitmapFont);
+    return bitmapFont;
 }
 
 void DX12Renderer::BindShader(Shader* s)
@@ -871,6 +898,23 @@ ConstantBuffer* DX12Renderer::CreateConstantBuffer(size_t size)
 
     /// We move the creation of constant buffer view inside the `BindConstantBuffer`
     return cb;
+}
+
+void DX12Renderer::CopyCPUToGPU(const Vertex_PCU* data, size_t size, VertexBuffer* v, size_t offset)
+{
+    /// Due to DX12 limitation of mixture drawing, we need convert data into Vertex_PCUTBN
+    size_t numOfVertices = size / sizeof(Vertex_PCU);
+
+    // Allocate space from the conversion buffer
+    Vertex_PCUTBN* convertedVerts = m_currentConversionBuffer->Allocate(numOfVertices);
+    // Perform efficient conversion
+    ConvertPCUArrayToPCUTBN(data, convertedVerts, numOfVertices);
+    CopyCPUToGPU(convertedVerts, numOfVertices * sizeof(Vertex_PCUTBN), v, offset);
+}
+
+void DX12Renderer::CopyCPUToGPU(const Vertex_PCUTBN* data, size_t size, VertexBuffer* v, size_t offset)
+{
+    CopyCPUToGPU((void*)data, size, v, offset);
 }
 
 void DX12Renderer::CopyCPUToGPU(const void* data, size_t sz, VertexBuffer* vbo, size_t off)
@@ -965,10 +1009,14 @@ void DX12Renderer::BindTexture(Texture* tex, int slot)
     currentSet.boundTextures[slot] = const_cast<Texture*>(bindTex);
 }
 
-void DX12Renderer::SetModelConstants(const Mat44& model, const Rgba8& tint)
+void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8& tint)
 {
-    UNUSED(model)
-    UNUSED(tint)
+    ModelConstants modelConstants        = {};
+    modelConstants.ModelToWorldTransform = modelToWorldTransform;
+    tint.GetAsFloats(modelConstants.ModelColor);
+    ConstantBuffer* modelBuffer = CreateConstantBuffer(sizeof ModelConstants);
+    BindConstantBuffer(3, modelBuffer);
+    UploadToCB(modelBuffer, &modelConstants, sizeof(CameraConstants));
 }
 
 void DX12Renderer::SetDirectionalLightConstants(const DirectionalLightConstants&)
@@ -1020,13 +1068,34 @@ void DX12Renderer::DrawVertexArray(int n, const Vertex_PCU* v)
 {
     if (n <= 0 || v == nullptr) return;
 
-    // Assign to RingBuffer
-    if (!m_currentVertexBuffer->Allocate(v, n * sizeof(Vertex_PCU)))
+    // Allocate space from the conversion buffer
+    Vertex_PCUTBN* convertedVerts = m_currentConversionBuffer->Allocate(n);
+    // Perform efficient conversion
+    ConvertPCUArrayToPCUTBN(v, convertedVerts, n);
+
+    // Allocate GPU buffer space
+    if (!m_currentVertexBuffer->Allocate(convertedVerts, n * sizeof(Vertex_PCUTBN)))
     {
+        // Buffer is full, need to flush
+        // Error handling or automatic flush logic can be added here
         return;
     }
 
     // Directly call the internal drawing function
+    DrawVertexBufferInternal(m_currentVertexBuffer, n);
+}
+
+void DX12Renderer::DrawVertexArray(int n, const Vertex_PCUTBN* v)
+{
+    if (n <= 0 || v == nullptr) return;
+
+    size_t dataSize = n * sizeof(Vertex_PCUTBN);
+
+    if (!m_currentVertexBuffer->Allocate(v, dataSize))
+    {
+        return;
+    }
+
     DrawVertexBufferInternal(m_currentVertexBuffer, n);
 }
 
@@ -1044,8 +1113,13 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::
 {
     if (v.empty() || idx.empty()) return;
 
+    // Allocate space from the conversion buffer
+    Vertex_PCUTBN* convertedVerts = m_currentConversionBuffer->Allocate(v.size());
+    // Perform efficient conversion
+    ConvertPCUArrayToPCUTBN(v.data(), convertedVerts, v.size());
+
     // Allocate vertex space in RingVertexBuffer
-    if (!m_currentVertexBuffer->Allocate(v.data(), v.size() * sizeof(Vertex_PCU)))
+    if (!m_currentVertexBuffer->Allocate(convertedVerts, v.size() * sizeof(Vertex_PCUTBN)))
     {
         return;
     }

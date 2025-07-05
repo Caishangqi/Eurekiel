@@ -47,6 +47,10 @@ constexpr uint32_t        kMaxTextureCached        = 4096;
 using Microsoft::WRL::ComPtr;
 
 
+/**
+ * DirectX 12 implementation of the IRenderer interface.
+ * Handles rendering operations and resource management using the DirectX 12 API.
+ */
 class DX12Renderer final : public IRenderer
 {
 public:
@@ -62,10 +66,11 @@ public:
     void BeginCamera(const Camera& cam) override;
     void EndCamera(const Camera& cam) override;
 
+    BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) override;
     Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) override;
     Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) override;
     Shader*     CreateOrGetShader(const char* shaderName) override;
-    bool        CompileShaderToByteCode(std::vector<uint8_t>& outByteCode, const char* name, const char* source, const char* entryPoint, const char* target) override;
+    bool        CompileShaderToByteCode(std::vector<uint8_t>& outByteCode, const char* name, const char* src, const char* entryPoint, const char* target) override;
     Texture*    CreateTextureFromImage(Image& image) override;
     Texture*    CreateOrGetTexture(const char* imageFilePath) override;
     Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) override;
@@ -78,16 +83,19 @@ public:
     VertexBuffer*   CreateVertexBuffer(size_t size, unsigned stride) override;
     IndexBuffer*    CreateIndexBuffer(size_t size) override;
     ConstantBuffer* CreateConstantBuffer(size_t size) override;
-    void            CopyCPUToGPU(const void* data, size_t sz, VertexBuffer* vbo, size_t off = 0) override;
-    void            CopyCPUToGPU(const void* data, size_t sz, IndexBuffer* ibo) override;
-    void            CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) override;
+
+    void CopyCPUToGPU(const Vertex_PCU* data, size_t size, VertexBuffer* v, size_t offset) override;
+    void CopyCPUToGPU(const Vertex_PCUTBN* data, size_t size, VertexBuffer* v, size_t offset) override; // directly call general CopyCPUToGPU
+    void CopyCPUToGPU(const void* data, size_t sz, VertexBuffer* vbo, size_t off = 0) override;
+    void CopyCPUToGPU(const void* data, size_t sz, IndexBuffer* ibo) override;
+    void CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) override;
 
     void BindVertexBuffer(VertexBuffer* vbo) override;
     void BindIndexBuffer(IndexBuffer* ibo) override;
     void BindConstantBuffer(int slot, ConstantBuffer* cbo) override;
     void BindTexture(Texture* tex, int slot = 0) override;
 
-    void SetModelConstants(const Mat44& model = Mat44(), const Rgba8& tint = Rgba8::WHITE) override;
+    void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& tint = Rgba8::WHITE) override;
     void SetDirectionalLightConstants(const DirectionalLightConstants&) override;
     void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& view, const Mat44& proj) override;
     void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t sz, int slot) override;
@@ -98,12 +106,25 @@ public:
     void SetSamplerMode(SamplerMode) override;
 
     void DrawVertexArray(int n, const Vertex_PCU* v) override;
+    void DrawVertexArray(int n, const Vertex_PCUTBN* v) override;
     void DrawVertexArray(const std::vector<Vertex_PCU>& v) override;
     void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v) override;
     void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) override;
     void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) override;
-
+    /**
+     * Draws vertices using the specified vertex buffer.
+     *
+     * @param vbo The vertex buffer object containing vertex data.
+     * @param count The number of vertices to draw.
+     */
     void DrawVertexBuffer(VertexBuffer* vbo, int count) override; // DrawVertexBuffer - handles user buffered data
+    /**
+     * Draws indexed vertices using the specified vertex and index buffers.
+     *
+     * @param vbo The vertex buffer object containing vertex data.
+     * @param ibo The index buffer object containing index data.
+     * @param indexCount The number of indices to draw.
+     */
     void DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount) override;
 
 private:
@@ -133,13 +154,15 @@ private:
     /// Vertex Buffers
     VertexBuffer* m_currentVertexBuffer = nullptr;
     // Updated ring vertex buffer
-    std::array<VertexBuffer*, kBackBufferCount> m_frameVertexBuffer;
+    std::array<VertexBuffer*, kBackBufferCount> m_frameVertexBuffer{nullptr};
     static constexpr size_t                     kVertexRingSize = sizeof(Vertex_PCU) * 1024 * 1024; // 96MB
 
+    std::array<ConversionBuffer, kBackBufferCount> m_conversionBuffers;
+    ConversionBuffer*                              m_currentConversionBuffer = nullptr;
     /// Index Buffers  
     IndexBuffer* m_currentIndexBuffer = nullptr;
     // Updating ring index buffer
-    std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer;
+    std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer{nullptr};
     static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices
 
 
@@ -197,8 +220,7 @@ private:
 
     std::vector<DescriptorSet> m_descriptorSets;
     UINT                       m_currentDescriptorSet     = 0;
-    static constexpr UINT      kMaxDescriptorSetsPerFrame = 128;
-
+    static constexpr UINT      kMaxDescriptorSetsPerFrame = 2048;
 
     /// depth Buffer
     ComPtr<ID3D12Resource>       m_depthStencilBuffer             = nullptr;
@@ -215,6 +237,7 @@ private:
     Texture*                 m_defaultTexture = nullptr;
     Shader*                  m_defaultShader  = nullptr;
     Shader*                  m_currentShader  = nullptr;
+    std::vector<BitmapFont*> m_loadedFonts;
     std::vector<Texture*>    m_textureCache; // key: 文件路径
     std::vector<Shader*>     m_shaderCache; // key: Shader 名称
     std::vector<BitmapFont*> m_fontsCache;
@@ -232,7 +255,7 @@ private:
     // TODO: Consider use hash value to directly access the memory
     struct PSOTemplate
     {
-        D3D12_INPUT_ELEMENT_DESC      inputLayout[3]; // PCU layout
+        D3D12_INPUT_ELEMENT_DESC      inputLayout[6]; // PCU layout
         UINT                          inputLayoutCount;
         D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopology;
         ComPtr<ID3DBlob>              defaultVertexShader;
@@ -240,7 +263,7 @@ private:
         DXGI_FORMAT                   renderTargetFormat;
         DXGI_FORMAT                   depthStencilFormat;
         ComPtr<ID3D12RootSignature>   rootSignature;
-    } m_psoTemplate;
+    } m_psoTemplate = {};
 
     /// Pipeline state cache, Cache the created PSO based on the state combination
     std::map<RenderState, ComPtr<ID3D12PipelineState>> m_pipelineStateCache;
@@ -249,7 +272,7 @@ private:
     RenderState m_pendingRenderState;
 
     ComPtr<ID3D12PipelineState> m_currentPipelineStateObject = nullptr;
-    
+
     // Get or create the PSO of the corresponding state
     [[maybe_unused]] ID3D12PipelineState* GetOrCreatePipelineState(const RenderState& state);
 
