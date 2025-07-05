@@ -5,10 +5,12 @@
  *-------------------------------------------------------------*/
 #pragma once
 #include <vector>
+
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Mat44.hpp"
 #include "Light/Light.hpp"
+#include "Engine/Core/VertexUtils.hpp"
 
 class Image;
 class Window;
@@ -139,6 +141,17 @@ struct ModelConstants
     float padding[44];
 };
 
+
+struct ConversionBuffer
+{
+    std::vector<Vertex_PCUTBN> buffer;
+    size_t                     cursor = 0;
+
+    void Reset() { cursor = 0; }
+
+    Vertex_PCUTBN* Allocate(size_t count);
+};
+
 class IRenderer
 {
 public:
@@ -156,7 +169,7 @@ public:
     virtual void EndCamera(const Camera& cam) = 0;
 
     // Constant-buffer helpers
-    virtual void SetModelConstants(const Mat44& model = Mat44(), const Rgba8& tint = Rgba8::WHITE) = 0;
+    virtual void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& tint = Rgba8::WHITE) = 0;
     virtual void SetDirectionalLightConstants(const DirectionalLightConstants& dl) = 0;
     virtual void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& lightView, const Mat44& lightProj) = 0;
     virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t size, int slot) = 0;
@@ -171,6 +184,7 @@ public:
     virtual Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
     virtual Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
     virtual Shader*     CreateOrGetShader(const char* shaderName) = 0;
+    virtual BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) = 0;
     virtual bool        CompileShaderToByteCode(std::vector<uint8_t>& outBytes, const char* name, const char* src, const char* entry, const char* target) = 0;
     virtual void        BindShader(Shader* s) = 0;
     virtual Texture*    CreateOrGetTexture(const char* imageFilePath) = 0; // TODO: abstract to IResource interface
@@ -186,7 +200,34 @@ public:
     virtual IndexBuffer*    CreateIndexBuffer(size_t size) = 0;
     virtual ConstantBuffer* CreateConstantBuffer(size_t size) = 0;
 
+    /**
+     * @brief Copies vertex data from CPU memory to GPU memory while converting it into the required format. This raw copy function
+     * do not handle any Vertex Type check that user should not use the functions
+     * @param data Pointer to the array of vertices in the Vertex_PCU format that need to be copied.
+     * @param size The size of the input vertex data in bytes.
+     * @param v Pointer to the vertex buffer object where the data will be copied to.
+     * @param offset The byte offset into the GPU vertex buffer where the data will be written.
+     * @see virtual void CopyCPUToGPU(const Vertex_PCU* data, size_t size, VertexBuffer* v, size_t offset = 0)
+     */
     virtual void CopyCPUToGPU(const void* data, size_t size, VertexBuffer* v, size_t offset = 0) = 0;
+    /**
+     * @brief Copies vertex data from CPU memory to GPU memory while converting it into the required format. This method served
+     * as an backward compatibility API between DirectX11 and DirectX12
+     * @param data Pointer to the array of vertices in the Vertex_PCU format that need to be copied.
+     * @param size The size of the input vertex data in bytes.
+     * @param v Pointer to the vertex buffer object where the data will be copied to.
+     * @param offset The byte offset into the GPU vertex buffer where the data will be written.
+     */
+    virtual void CopyCPUToGPU(const Vertex_PCU* data, size_t size, VertexBuffer* v, size_t offset = 0) = 0;
+    /**
+     * @brief Copies vertex data from CPU memory to GPU memory while converting it into the required format. This method served
+     * as an backward compatibility API between DirectX11 and DirectX12
+     * @param data Pointer to the array of vertices in the Vertex_PCU format that need to be copied.
+     * @param size The size of the input vertex data in bytes.
+     * @param v Pointer to the vertex buffer object where the data will be copied to.
+     * @param offset The byte offset into the GPU vertex buffer where the data will be written.
+     */
+    virtual void CopyCPUToGPU(const Vertex_PCUTBN* data, size_t size, VertexBuffer* v, size_t offset = 0) = 0;
     virtual void CopyCPUToGPU(const void* data, size_t size, IndexBuffer* i) = 0;
     virtual void CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) = 0;
 
@@ -198,6 +239,7 @@ public:
 
     // Draw family
     virtual void DrawVertexArray(int num, const Vertex_PCU* v) = 0;
+    virtual void DrawVertexArray(int num, const Vertex_PCUTBN* v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v) = 0;
     virtual void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) = 0;
@@ -207,6 +249,8 @@ public:
     virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, unsigned int indexCount) = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
+
+    /// Conversion
 
 protected:
     // These are part of the interface contract, all implementations require

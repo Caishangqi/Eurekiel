@@ -1,11 +1,25 @@
 ﻿#include "IRenderer.hpp"
 
-#include "API/DX11Renderer.hpp"
 #include "API/DX12Renderer.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/Image.hpp"
 
+#undef max
+#undef min
+Vertex_PCUTBN* ConversionBuffer::Allocate(size_t count)
+{
+    if (cursor + count > buffer.size())
+    {
+        // Expansion strategy: 1.5 times growth
 
+        size_t newSize = std::max(buffer.size() * 3 / 2, cursor + count);
+        buffer.resize(newSize);
+    }
+
+    Vertex_PCUTBN* result = buffer.data() + cursor;
+    cursor += count;
+    return result;
+}
 Image* IRenderer::CreateImageFromFile(const char* imageFilePath)
 {
     auto image = new Image(imageFilePath);
@@ -26,3 +40,4 @@ IRenderer* IRenderer::CreateRenderer(RenderConfig& config)
     }
     ERROR_AND_DIE("None specified RenderBacked")
 }
+
