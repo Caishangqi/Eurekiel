@@ -1,4 +1,4 @@
-﻿#include "DebugRenderSystem.h"
+﻿#include "DebugRenderSystem.hpp"
 
 #include "BitmapFont.hpp"
 #include "Camera.hpp"
