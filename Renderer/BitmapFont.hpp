@@ -26,6 +26,8 @@ class BitmapFont
 
 {
     friend class Renderer; // Only the Renderer can create new BitmapFont objects!
+    friend class IRenderer;
+    friend class DX12Renderer;
 
     BitmapFont(const char* fontFilePathNameWithNoExtension, Texture& fontTexture);
 
