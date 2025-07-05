@@ -452,7 +452,7 @@ void DevConsole::AddLine(const Rgba8& color, const std::string& text)
     }
 }
 
-void DevConsole::Render(const AABB2& bounds, Renderer* rendererOverride) const
+void DevConsole::Render(const AABB2& bounds, IRenderer* rendererOverride) const
 {
     if (m_mode == DevConsoleMode::HIDDEN)
     {
@@ -542,7 +542,7 @@ int DevConsole::GetFrameNumber() const
     return m_frameNumber;
 }
 
-void DevConsole::Render_OpenFull(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect) const
+void DevConsole::Render_OpenFull(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect) const
 {
     renderer.BindTexture(nullptr);
     std::vector<Vertex_PCU> vertices;
@@ -584,7 +584,7 @@ void DevConsole::Render_OpenFull(const AABB2& bounds, Renderer& renderer, Bitmap
     RenderInputLine(bounds, renderer, font, fontAspect, lineHeight);
 }
 
-void DevConsole::RenderInputLine(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const
+void DevConsole::RenderInputLine(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const
 {
     std::vector<Vertex_PCU> inputLineVerts;
     inputLineVerts.reserve(10000);
@@ -600,7 +600,7 @@ void DevConsole::AdjustInsertionLine()
 {
 }
 
-void DevConsole::RenderInsertionLine(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const
+void DevConsole::RenderInsertionLine(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const
 {
     UNUSED(font)
     UNUSED(fontAspect)

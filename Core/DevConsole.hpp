@@ -6,13 +6,12 @@
 #include "NamedStrings.hpp"
 #include "Rgba8.hpp"
 #include "Engine/Math/AABB2.hpp"
-#include "Engine/Renderer/IRenderer.hpp"
 
 class Timer;
 class Camera;
 struct Vertex_PCU;
 class BitmapFont;
-class Renderer;
+class IRenderer;
 
 
 struct DevConsoleLine
@@ -35,8 +34,7 @@ enum class DevConsoleMode
 struct DevConsoleConfig
 {
     Camera*     m_camera            = nullptr;
-    Renderer*   renderer            = nullptr;
-    IRenderer*  _renderer           = nullptr;
+    IRenderer*   renderer            = nullptr;
     std::string m_defaultFontName   = "CaiziiFixedFont";
     std::string m_fontPath          = ".enigma/data/Fonts/";
     float       m_defaultFontAspect = 0.7f;
@@ -91,7 +89,7 @@ public:
     // Bounds are in terms of the camera being used to render.
     // The current input line renders at the bottom with all other lines rendered above it,
     // with the most recent lines at the bottom.
-    void Render(const AABB2& bounds, Renderer* rendererOverride = nullptr) const;
+    void Render(const AABB2& bounds, IRenderer* rendererOverride = nullptr) const;
 
     void RegisterCommand(const std::string& commandHeader, const std::string& description, EventCallbackFunction functionPtr);
 
@@ -114,11 +112,11 @@ public:
     static const Rgba8 COLOR_INPUT_NORMAL;
 
 protected:
-    void Render_OpenFull(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect = 1.f) const;
+    void Render_OpenFull(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect = 1.f) const;
     bool ExecuteSingleCommand(const std::string& consoleCommandText);
-    void RenderInputLine(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const; // render the input line of the console
+    void RenderInputLine(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const; // render the input line of the console
     void AdjustInsertionLine();
-    void RenderInsertionLine(const AABB2& bounds, Renderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const;
+    void RenderInsertionLine(const AABB2& bounds, IRenderer& renderer, BitmapFont& font, float fontAspect, float lineHeight) const;
     /// Command handle
     bool IsCommandRegistered(const std::string& consoleCommandHeader) const;
 
