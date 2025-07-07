@@ -323,6 +323,9 @@
         <Content Include=".gitignore" />
         <Content Include="README.md"/>
     </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Renderer\API\DirectX12\" />
+    </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
     </ImportGroup>

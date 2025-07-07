@@ -213,9 +213,10 @@ private:
     /// - This ensures that each draw call has its own independent texture binding state
     struct DescriptorSet
     {
-        UINT        baseIndex; // Starting index in the heap
-        Texture*    boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
-        RenderState renderState; // The rendering state used by this descriptor set
+        UINT            baseIndex; // Starting index in the heap
+        Texture*        boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
+        ConstantBuffer* boundConstantBuffers[kMaxConstantBufferSlot];
+        RenderState     renderState; // The rendering state used by this descriptor set
     };
 
     std::vector<DescriptorSet> m_descriptorSets;

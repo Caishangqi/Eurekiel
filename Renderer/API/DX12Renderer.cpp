@@ -223,10 +223,10 @@ void DX12Renderer::Startup()
 
         // Constant buffers heap that hold view descriptor (for 14 constant buffers)
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.NumDescriptors             = kMaxConstantBufferSlot + (kMaxDescriptorSetsPerFrame * kMaxShaderSourceViewSlot); // Need additional space for uploading binding texture
+        heapDesc.NumDescriptors             = kMaxDescriptorSetsPerFrame * (kMaxConstantBufferSlot + kMaxShaderSourceViewSlot);
         heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        m_device->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&m_frameHeap));
+        m_device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_frameHeap));
 
         // Allocate and write CBV descriptor to the Heap
         UINT                          incrementSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -241,7 +241,6 @@ void DX12Renderer::Startup()
 
         /// Conversion Buffer
         m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
-        
     }
 
     /// Manager heaps
@@ -425,9 +424,10 @@ void DX12Renderer::BeginFrame()
         m_descriptorSets.resize(kMaxDescriptorSetsPerFrame);
         for (UINT i = 0; i < kMaxDescriptorSetsPerFrame; ++i)
         {
-            m_descriptorSets[i].baseIndex = kMaxConstantBufferSlot + (i * kMaxShaderSourceViewSlot);
-            // Clear texture binding
+            // Each set contains 14 CBVs + 128 SRVs
+            m_descriptorSets[i].baseIndex = i * (kMaxConstantBufferSlot + kMaxShaderSourceViewSlot);
             memset((void*)m_descriptorSets[i].boundTextures, 0, sizeof(m_descriptorSets[i].boundTextures));
+            memset((void*)m_descriptorSets[i].boundConstantBuffers, 0, sizeof(m_descriptorSets[i].boundConstantBuffers));
         }
     }
 
@@ -971,41 +971,41 @@ void DX12Renderer::BindIndexBuffer(IndexBuffer* ibo)
 void DX12Renderer::BindConstantBuffer(int slot, ConstantBuffer* cbo)
 {
     if (cbo == nullptr) return;
-    if (m_constantBuffers.empty()) return;
-    if (m_constantBuffers[slot] == cbo) return; // Same Constant buffer, ignore
+    if (slot >= (int)kMaxConstantBufferSlot) return;
 
-    POINTER_SAFE_DELETE(m_constantBuffers[slot])
-    m_constantBuffers[slot] = cbo; // Assign to cached constant buffer vector
+    DescriptorSet& currentSet             = m_descriptorSets[m_currentDescriptorSet];
+    currentSet.boundConstantBuffers[slot] = cbo;
 
-    // Create or Rewrite the Constant Buffer view
-    UINT                          descriptionSize    = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_CPU_DESCRIPTOR_HANDLE   cpuSideBaseAddress = m_frameHeap->GetCPUDescriptorHandleForHeapStart();
-    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(cpuSideBaseAddress, slot, descriptionSize);
+    UINT descriptionSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    // CBV is created in the CBV area of the current set
+    UINT                          cbvIndex = currentSet.baseIndex + slot;
+    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
+        m_frameHeap->GetCPUDescriptorHandleForHeapStart(),
+        (int)cbvIndex,
+        descriptionSize
+    );
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
     desc.BufferLocation                  = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
     desc.SizeInBytes                     = (UINT)cbo->m_size;
 
-    m_device->CreateConstantBufferView(&desc, handle); // Create the view based on current Address
-    cbo->m_constantBufferView = desc; // Assign the description view to constant buffer
+    m_device->CreateConstantBufferView(&desc, handle);
 }
 
 void DX12Renderer::BindTexture(Texture* tex, int slot)
 {
     const Texture* bindTex = (tex == nullptr) ? m_defaultTexture : tex;
 
-    // Get the current descriptor set
     DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
 
-    // Calculate the target location: the base address of the current set + slot
-    UINT dstIndex = currentSet.baseIndex + slot;
+    // Texture SRV is after CBV
+    UINT dstIndex = currentSet.baseIndex + kMaxConstantBufferSlot + slot;
     UINT incSize  = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // Copy descriptor
     CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)dstIndex, incSize);
     m_device->CopyDescriptorsSimple(1, dst, bindTex->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // Record the bound texture
     currentSet.boundTextures[slot] = const_cast<Texture*>(bindTex);
 }
 
@@ -1016,7 +1016,7 @@ void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const R
     tint.GetAsFloats(modelConstants.ModelColor);
     ConstantBuffer* modelBuffer = CreateConstantBuffer(sizeof ModelConstants);
     BindConstantBuffer(3, modelBuffer);
-    UploadToCB(modelBuffer, &modelConstants, sizeof(CameraConstants));
+    UploadToCB(modelBuffer, &modelConstants, sizeof(ModelConstants));
 }
 
 void DX12Renderer::SetDirectionalLightConstants(const DirectionalLightConstants&)
@@ -1201,17 +1201,21 @@ void DX12Renderer::WaitForGPU()
 
 void DX12Renderer::CommitCurrentDescriptorSet()
 {
-    // Set the Root Descriptor Table to point to the current descriptor set
     UINT           incSize    = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
 
+    // Set the root descriptor table to point to the start position of the current set
     CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), (int)currentSet.baseIndex, incSize);
-    m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+
+    m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle); // CBV Table
+
+    //SRV table is after CBV
+    CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), (int)(currentSet.baseIndex + kMaxConstantBufferSlot), incSize);
+    m_commandList->SetGraphicsRootDescriptorTable(1, srvHandle); // SRV Table
 }
 
 void DX12Renderer::PrepareNextDescriptorSet()
 {
-    // Move to the next descriptor set
     m_currentDescriptorSet++;
 
     if (m_currentDescriptorSet >= kMaxDescriptorSetsPerFrame)
@@ -1219,7 +1223,6 @@ void DX12Renderer::PrepareNextDescriptorSet()
         ERROR_AND_DIE("Exceeded maximum descriptor sets per frame")
     }
 
-    // Copy the texture from the previous set to the new set (keeping state)
     if (m_currentDescriptorSet > 0)
     {
         DescriptorSet& prevSet = m_descriptorSets[m_currentDescriptorSet - 1];
@@ -1227,15 +1230,26 @@ void DX12Renderer::PrepareNextDescriptorSet()
 
         UINT incSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        // Copy all bound textures
-        for (int i = 0; i < (int)kMaxShaderSourceViewSlot; ++i)
+        // Copy CBV
+        for (size_t i = 0; i < kMaxConstantBufferSlot; ++i)
+        {
+            if (prevSet.boundConstantBuffers[i])
+            {
+                currSet.boundConstantBuffers[i] = prevSet.boundConstantBuffers[i];
+                CD3DX12_CPU_DESCRIPTOR_HANDLE src(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(prevSet.baseIndex + i), incSize);
+                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + i), incSize);
+                m_device->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            }
+        }
+
+        // Copy the texture
+        for (size_t i = 0; i < kMaxShaderSourceViewSlot; ++i)
         {
             if (prevSet.boundTextures[i])
             {
-                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)currSet.baseIndex + i, incSize);
-
-                m_device->CopyDescriptorsSimple(1, dst, prevSet.boundTextures[i]->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                 currSet.boundTextures[i] = prevSet.boundTextures[i];
+                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + kMaxConstantBufferSlot + i), incSize);
+                m_device->CopyDescriptorsSimple(1, dst, prevSet.boundTextures[i]->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             }
         }
     }
