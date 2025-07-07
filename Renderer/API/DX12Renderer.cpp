@@ -157,10 +157,6 @@ void DX12Renderer::Startup()
         // Depth Stencil View and handle
         CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle{m_depthStencilViewDescriptorHeap->GetCPUDescriptorHandleForHeapStart()};
         m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), nullptr, dsvHandle);
-
-        // We need to bind it to the pipeline in order to use it, but before that, we have to tell the pipeline state
-        // object there is a depth stencil vew bound
-        m_constantBuffers.resize(14);
     }
 
 
@@ -227,17 +223,6 @@ void DX12Renderer::Startup()
         heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_frameHeap));
-
-        // Allocate and write CBV descriptor to the Heap
-        UINT                          incrementSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(m_frameHeap->GetCPUDescriptorHandleForHeapStart());
-        m_constantBuffers.resize(14);
-        for (int i = 0; i < (int)m_constantBuffers.size(); ++i)
-        {
-            // descriptor only when needed
-            CD3DX12_CPU_DESCRIPTOR_HANDLE handleOffset(cpuHandle, i, incrementSize);
-            // We Create Constant buffer but not specific their view
-        }
 
         /// Conversion Buffer
         m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
@@ -392,11 +377,6 @@ void DX12Renderer::Shutdown()
 
     m_currentVertexBuffer = nullptr;
 
-    for (ConstantBuffer* constant_buffer : m_constantBuffers)
-    {
-        POINTER_SAFE_DELETE(constant_buffer)
-    }
-
     for (Shader* shader : m_shaderCache)
     {
         POINTER_SAFE_DELETE(shader)
@@ -418,7 +398,11 @@ void DX12Renderer::Shutdown()
         {
             pool.poolBuffer->m_dx12ConstantBuffer->Unmap(0, nullptr);
         }
-        POINTER_SAFE_DELETE(pool.poolBuffer);
+        POINTER_SAFE_DELETE(pool.poolBuffer)
+        for (ConstantBuffer* temp_buffer : pool.tempBuffers)
+        {
+            temp_buffer = nullptr;
+        }
     }
 
 #ifdef ENGINE_DEBUG_RENDER
@@ -811,21 +795,6 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     m_copyCommandQueue->Signal(m_fence.Get(), ++m_fenceValue);
     WaitForGPU();
 
-    // Create an SRV for the texture on the manager heap and cache the CPU handle
-    UINT descriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    UINT srvIndex       = Texture::IncrementInternalID();
-
-    // Create SRV on CPU-only heap (managerHeap)
-    CD3DX12_CPU_DESCRIPTOR_HANDLE   cpuHandle(m_shaderSourceViewManagerHeap->GetCPUDescriptorHandleForHeapStart(), (INT)srvIndex, descriptorSize);
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MostDetailedMip       = 0;
-    srvDesc.Texture2D.MipLevels             = 1;
-    m_device->CreateShaderResourceView(newTexture->m_dx12Texture, &srvDesc, cpuHandle);
-
-    newTexture->m_cpuShaderSourceViewHandle = cpuHandle;
     return newTexture;
 }
 
@@ -958,7 +927,6 @@ void DX12Renderer::CopyCPUToGPU(const void* data, size_t sz, IndexBuffer* ibo)
     {
         ibo->Resize(static_cast<unsigned int>(sz));
     }
-
     CD3DX12_RANGE rng(0, 0);
     uint8_t*      dst = nullptr;
     ibo->m_dx12buffer->Map(0, &rng, reinterpret_cast<void**>(&dst)) >> chk;
@@ -1046,7 +1014,18 @@ void DX12Renderer::BindTexture(Texture* tex, int slot)
     UINT incSize  = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)dstIndex, incSize);
-    m_device->CopyDescriptorsSimple(1, dst, bindTex->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
+    srvDesc.Texture2D.MipLevels             = 1;
+
+    //m_device->CopyDescriptorsSimple(1, dst, bindTex->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    m_device->CreateShaderResourceView(bindTex->m_dx12Texture, &srvDesc, dst);
+
 
     currentSet.boundTextures[slot] = const_cast<Texture*>(bindTex);
 }
@@ -1060,7 +1039,7 @@ void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const R
     ConstantBuffer* modelBuffer = AllocateFromConstantBufferPool(sizeof(ModelConstants));
     if (modelBuffer == nullptr)
     {
-        ERROR_AND_DIE("Constant buffer pool exhausted for this frame");
+        ERROR_AND_DIE("Constant buffer pool exhausted for this frame")
     }
 
     // Upload data using existing API
@@ -1281,26 +1260,53 @@ void DX12Renderer::PrepareNextDescriptorSet()
 
         UINT incSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        // Copy CBV
+        // Recreate the CBV instead of copying it
         for (size_t i = 0; i < kMaxConstantBufferSlot; ++i)
         {
             if (prevSet.boundConstantBuffers[i])
             {
                 currSet.boundConstantBuffers[i] = prevSet.boundConstantBuffers[i];
-                CD3DX12_CPU_DESCRIPTOR_HANDLE src(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(prevSet.baseIndex + i), incSize);
+
+                // Recreate the CBV
                 CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + i), incSize);
-                m_device->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+                D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
+                ConstantBuffer*                 cbo  = prevSet.boundConstantBuffers[i];
+
+                // Check if it is a pool allocated buffer
+                ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+                if (cbo->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
+                {
+                    size_t offset       = pool.currentOffset - cbo->m_size;
+                    desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + offset;
+                }
+                else
+                {
+                    desc.BufferLocation = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
+                }
+                desc.SizeInBytes = (UINT)cbo->m_size;
+
+                m_device->CreateConstantBufferView(&desc, dst);
             }
         }
 
-        // Copy the texture
+        // Recreate the texture SRV
         for (size_t i = 0; i < kMaxShaderSourceViewSlot; ++i)
         {
             if (prevSet.boundTextures[i])
             {
                 currSet.boundTextures[i] = prevSet.boundTextures[i];
+
                 CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + kMaxConstantBufferSlot + i), incSize);
-                m_device->CopyDescriptorsSimple(1, dst, prevSet.boundTextures[i]->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
+                srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srvDesc.Texture2D.MostDetailedMip       = 0;
+                srvDesc.Texture2D.MipLevels             = 1;
+
+                m_device->CreateShaderResourceView(prevSet.boundTextures[i]->m_dx12Texture, &srvDesc, dst);
             }
         }
     }
@@ -1327,7 +1333,7 @@ void DX12Renderer::InitializeConstantBufferPools()
         pool.tempBuffers.reserve(64); // 预计每帧最多64个CB分配
         for (int i = 0; i < 32; ++i)
         {
-            auto tempCB = std::make_unique<ConstantBuffer>(0); // size为0，我们会手动设置
+            auto tempCB = new ConstantBuffer(0); // size为0，我们会手动设置
             pool.tempBuffers.push_back(std::move(tempCB));
         }
 
@@ -1340,27 +1346,27 @@ ConstantBuffer* DX12Renderer::AllocateFromConstantBufferPool(size_t dataSize)
 {
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
 
-    // 计算对齐后的大小
+    // Calculate the aligned size
     size_t alignedSize = AlignUp(dataSize, ConstantBufferPool::ALIGNMENT);
 
-    // 检查pool是否有足够空间
+    // Check if the pool has enough space
     if (pool.currentOffset + alignedSize > pool.poolSize)
     {
-        return nullptr; // pool已满
+        return nullptr; // pool is full
     }
 
-    // 获取或创建临时ConstantBuffer对象
+    // Get or create a temporary ConstantBuffer object
     ConstantBuffer* tempBuffer = GetTempConstantBuffer(pool, alignedSize);
     if (tempBuffer == nullptr)
     {
         return nullptr;
     }
 
-    // 设置临时缓冲区指向pool中的正确位置
+    // Set the temporary buffer to point to the correct position in the pool
     tempBuffer->m_dx12ConstantBuffer = pool.poolBuffer->m_dx12ConstantBuffer;
     tempBuffer->m_size               = alignedSize;
 
-    // 更新偏移
+    // Update the offset
     pool.currentOffset += alignedSize;
 
     return tempBuffer;
@@ -1370,14 +1376,14 @@ ConstantBuffer* DX12Renderer::GetTempConstantBuffer(ConstantBufferPool& pool, si
 {
     UNUSED(alignedSize)
 
-    // 如果需要更多临时对象，就创建
+    // If more temporary objects are needed, create them
     if (pool.tempBufferIndex >= pool.tempBuffers.size())
     {
-        auto tempCB = std::make_unique<ConstantBuffer>(0);
+        auto tempCB = new ConstantBuffer(0);
         pool.tempBuffers.push_back(std::move(tempCB));
     }
 
-    ConstantBuffer* tempBuffer = pool.tempBuffers[pool.tempBufferIndex].get();
+    ConstantBuffer* tempBuffer = pool.tempBuffers[pool.tempBufferIndex];
     pool.tempBufferIndex++;
 
     return tempBuffer;

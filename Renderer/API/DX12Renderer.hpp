@@ -8,6 +8,7 @@
 #include <ThirdParty/d3dx12/d3dx12.h>
 #include <wrl/client.h>
 
+#include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Renderer/IndexBuffer.hpp"
 
 class Window;
@@ -165,10 +166,6 @@ private:
     std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer{nullptr};
     static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices
 
-
-    // Constant Buffers
-    std::vector<ConstantBuffer*> m_constantBuffers;
-
     /// Frame heap and the shader source view manager heap
     /// m_frameHeap (Shader-Visible):
     /// [CBV0][CBV1]...[CBV13] | [Set0: t0-t127] | [Set1: t0-t127] | [Set2: t0-t127] ...
@@ -215,8 +212,8 @@ private:
         static constexpr size_t ALIGNMENT     = 256; // DX12 requires 256-byte alignment
 
         // Temporary ConstantBuffer object pool to avoid repeated new/delete
-        std::vector<std::unique_ptr<ConstantBuffer>> tempBuffers;
-        size_t                                       tempBufferIndex = 0;
+        std::vector<ConstantBuffer*> tempBuffers;
+        size_t                       tempBufferIndex = 0;
     };
 
     std::array<ConstantBufferPool, kBackBufferCount> m_constantBufferPools;
