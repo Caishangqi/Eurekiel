@@ -17,11 +17,26 @@ compromising resource efficiency.
 
 ## Feature
 
+> Description of the feature here. This could be a feature that adds new functionality, improves existing features, or enhances the overall performance of the engine.
+
+### Rendering Pipeline
+
+TBD
+
+### Voxel Module
+
+TBD
+
+### Resource Module
+
+TBD
+
 ## Modules
 
 | **Name**           | **Description** |     **State**     |
 |--------------------|:---------------:|:-----------------:|
 | `enigma::core`     |       TBD       |      stable       |
+| `enigma::network`  |       TBD       |    unavailable    |
 | `enigma::audio`    |       TBD       |      stable       |
 | `enigma::input`    |       TBD       |      stable       |
 | `enigma::math`     |       TBD       | unstable/refactor |
