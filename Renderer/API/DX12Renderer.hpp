@@ -206,6 +206,22 @@ private:
         }
     };
 
+    struct ConstantBufferPool
+    {
+        ConstantBuffer*         poolBuffer    = nullptr; // Large pool buffer
+        uint8_t*                mappedData    = nullptr; // Mapped CPU address
+        size_t                  currentOffset = 0; // Current allocation offset
+        size_t                  poolSize      = 0; // Total pool size
+        static constexpr size_t ALIGNMENT     = 256; // DX12 requires 256-byte alignment
+
+        // Temporary ConstantBuffer object pool to avoid repeated new/delete
+        std::vector<std::unique_ptr<ConstantBuffer>> tempBuffers;
+        size_t                                       tempBufferIndex = 0;
+    };
+
+    std::array<ConstantBufferPool, kBackBufferCount> m_constantBufferPools;
+    static constexpr size_t                          kConstantBufferPoolSize = (size_t)2 * 1024 * 1024;
+
     /// DescriptorSet for each DrawCall
     /// - Each draw call uses a separate descriptor set
     /// - BindTexture modifies the texture of the specified slot in the current descriptor set
@@ -250,6 +266,11 @@ private:
     /// Descriptor Set
     void CommitCurrentDescriptorSet();
     void PrepareNextDescriptorSet();
+
+    /// Constant buffer pool
+    void            InitializeConstantBufferPools();
+    ConstantBuffer* AllocateFromConstantBufferPool(size_t dataSize);
+    ConstantBuffer* GetTempConstantBuffer(ConstantBufferPool& pool, size_t alignedSize);
 
 private:
     // PSO Base Templates - These are the fixed parts shared by all PSOs

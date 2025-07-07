@@ -241,6 +241,9 @@ void DX12Renderer::Startup()
 
         /// Conversion Buffer
         m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
+
+        /// Constant Buffer pool
+        InitializeConstantBufferPools();
     }
 
     /// Manager heaps
@@ -409,6 +412,15 @@ void DX12Renderer::Shutdown()
     m_currentShader = nullptr;
     m_defaultShader = nullptr;
 
+    for (auto& pool : m_constantBufferPools)
+    {
+        if (pool.poolBuffer && pool.mappedData)
+        {
+            pool.poolBuffer->m_dx12ConstantBuffer->Unmap(0, nullptr);
+        }
+        POINTER_SAFE_DELETE(pool.poolBuffer);
+    }
+
 #ifdef ENGINE_DEBUG_RENDER
     debugDevice.Reset();
 #endif
@@ -418,6 +430,11 @@ void DX12Renderer::BeginFrame()
 {
     // Reset the Description Set
     m_currentDescriptorSet = 0;
+
+    ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+    pool.currentOffset       = 0;
+    pool.tempBufferIndex     = 0;
+
     // Initialize the first descriptor set
     if (m_descriptorSets.empty())
     {
@@ -951,11 +968,24 @@ void DX12Renderer::CopyCPUToGPU(const void* data, size_t sz, IndexBuffer* ibo)
 
 void DX12Renderer::CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb)
 {
-    CD3DX12_RANGE rng(0, 0);
-    uint8_t*      dst = nullptr;
-    cb->m_dx12ConstantBuffer->Map(0, &rng, reinterpret_cast<void**>(&dst));
-    memcpy(dst, data, size);
-    cb->m_dx12ConstantBuffer->Unmap(0, nullptr);
+    ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+
+    // If this is a buffer from the pool, calculate the correct offset
+    if (cb->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
+    {
+        // This is allocated from the pool, calculate the offset
+        size_t offset = pool.currentOffset - cb->m_size; // Offset from last allocation
+        memcpy(pool.mappedData + offset, data, size);
+    }
+    else
+    {
+        // This is a regular ConstantBuffer, use the old method
+        CD3DX12_RANGE rng(0, 0);
+        uint8_t*      dst = nullptr;
+        cb->m_dx12ConstantBuffer->Map(0, &rng, reinterpret_cast<void**>(&dst));
+        memcpy(dst, data, size);
+        cb->m_dx12ConstantBuffer->Unmap(0, nullptr);
+    }
 }
 
 void DX12Renderer::BindVertexBuffer(VertexBuffer* vbo)
@@ -977,9 +1007,8 @@ void DX12Renderer::BindConstantBuffer(int slot, ConstantBuffer* cbo)
     currentSet.boundConstantBuffers[slot] = cbo;
 
     UINT descriptionSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    UINT cbvIndex        = currentSet.baseIndex + slot;
 
-    // CBV is created in the CBV area of the current set
-    UINT                          cbvIndex = currentSet.baseIndex + slot;
     CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
         m_frameHeap->GetCPUDescriptorHandleForHeapStart(),
         (int)cbvIndex,
@@ -987,9 +1016,22 @@ void DX12Renderer::BindConstantBuffer(int slot, ConstantBuffer* cbo)
     );
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
-    desc.BufferLocation                  = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
-    desc.SizeInBytes                     = (UINT)cbo->m_size;
 
+    // Check if it is a buffer allocated by pool
+    ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+    if (cbo->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
+    {
+        // Pool buffer, calculate the correct GPU address offset
+        size_t offset       = pool.currentOffset - cbo->m_size;
+        desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + offset;
+    }
+    else
+    {
+        // Regular buffer
+        desc.BufferLocation = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
+    }
+
+    desc.SizeInBytes = (UINT)cbo->m_size;
     m_device->CreateConstantBufferView(&desc, handle);
 }
 
@@ -1014,9 +1056,18 @@ void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const R
     ModelConstants modelConstants        = {};
     modelConstants.ModelToWorldTransform = modelToWorldTransform;
     tint.GetAsFloats(modelConstants.ModelColor);
-    ConstantBuffer* modelBuffer = CreateConstantBuffer(sizeof ModelConstants);
+    // Allocate constant buffer from pool
+    ConstantBuffer* modelBuffer = AllocateFromConstantBufferPool(sizeof(ModelConstants));
+    if (modelBuffer == nullptr)
+    {
+        ERROR_AND_DIE("Constant buffer pool exhausted for this frame");
+    }
+
+    // Upload data using existing API
+    CopyCPUToGPU(&modelConstants, sizeof(ModelConstants), modelBuffer);
+
+    // Bind using existing API
     BindConstantBuffer(3, modelBuffer);
-    UploadToCB(modelBuffer, &modelConstants, sizeof(ModelConstants));
 }
 
 void DX12Renderer::SetDirectionalLightConstants(const DirectionalLightConstants&)
@@ -1255,6 +1306,83 @@ void DX12Renderer::PrepareNextDescriptorSet()
     }
 }
 
+void DX12Renderer::InitializeConstantBufferPools()
+{
+    for (int frameIndex = 0; frameIndex < kBackBufferCount; ++frameIndex)
+    {
+        ConstantBufferPool& pool = m_constantBufferPools[frameIndex];
+
+        // 创建大的pool缓冲区
+        pool.poolSize   = kConstantBufferPoolSize;
+        pool.poolBuffer = CreateConstantBuffer(pool.poolSize);
+
+        // 映射缓冲区以便CPU写入（保持映射状态）
+        CD3DX12_RANGE readRange(0, 0); // 我们不会在CPU上读取
+        HRESULT       hr = pool.poolBuffer->m_dx12ConstantBuffer->Map(
+            0, &readRange, reinterpret_cast<void**>(&pool.mappedData)
+        );
+        GUARANTEE_OR_DIE(SUCCEEDED(hr), "Failed to map constant buffer pool");
+
+        // 预分配一些临时ConstantBuffer对象
+        pool.tempBuffers.reserve(64); // 预计每帧最多64个CB分配
+        for (int i = 0; i < 32; ++i)
+        {
+            auto tempCB = std::make_unique<ConstantBuffer>(0); // size为0，我们会手动设置
+            pool.tempBuffers.push_back(std::move(tempCB));
+        }
+
+        pool.currentOffset   = 0;
+        pool.tempBufferIndex = 0;
+    }
+}
+
+ConstantBuffer* DX12Renderer::AllocateFromConstantBufferPool(size_t dataSize)
+{
+    ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+
+    // 计算对齐后的大小
+    size_t alignedSize = AlignUp(dataSize, ConstantBufferPool::ALIGNMENT);
+
+    // 检查pool是否有足够空间
+    if (pool.currentOffset + alignedSize > pool.poolSize)
+    {
+        return nullptr; // pool已满
+    }
+
+    // 获取或创建临时ConstantBuffer对象
+    ConstantBuffer* tempBuffer = GetTempConstantBuffer(pool, alignedSize);
+    if (tempBuffer == nullptr)
+    {
+        return nullptr;
+    }
+
+    // 设置临时缓冲区指向pool中的正确位置
+    tempBuffer->m_dx12ConstantBuffer = pool.poolBuffer->m_dx12ConstantBuffer;
+    tempBuffer->m_size               = alignedSize;
+
+    // 更新偏移
+    pool.currentOffset += alignedSize;
+
+    return tempBuffer;
+}
+
+ConstantBuffer* DX12Renderer::GetTempConstantBuffer(ConstantBufferPool& pool, size_t alignedSize)
+{
+    UNUSED(alignedSize)
+
+    // 如果需要更多临时对象，就创建
+    if (pool.tempBufferIndex >= pool.tempBuffers.size())
+    {
+        auto tempCB = std::make_unique<ConstantBuffer>(0);
+        pool.tempBuffers.push_back(std::move(tempCB));
+    }
+
+    ConstantBuffer* tempBuffer = pool.tempBuffers[pool.tempBufferIndex].get();
+    pool.tempBufferIndex++;
+
+    return tempBuffer;
+}
+
 ID3D12PipelineState* DX12Renderer::GetOrCreatePipelineState(const RenderState& state)
 {
     // Check the cache first
@@ -1392,6 +1520,7 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
     default:
         ERROR_AND_DIE("Unhandled DepthMode in CreatePipelineStateForRenderState")
     }
+
     depthStencilDesc.StencilEnable        = FALSE;
     pipelineStateStream.DepthStencilState = depthStencilDesc;
 
