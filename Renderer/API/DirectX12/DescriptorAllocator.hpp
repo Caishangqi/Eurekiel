@@ -111,6 +111,11 @@ public:
     // Allocate a descriptor table for the current frame
     FrameDescriptorTable AllocateFrameDescriptorTable(UINT numDescriptors);
 
+    // Create descriptors directly in the GPU heap of the current frame (for temporary resources such as CBV)
+    DescriptorHandle CreateFrameCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc);
+    DescriptorHandle CreateFrameSRV(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& desc);
+
+
     // Copy from CPU heap to GPU heap
     void CopyDescriptors(const FrameDescriptorTable& dest, const DescriptorHandle* srcHandles, UINT count);
     void CopyDescriptorsRange(const FrameDescriptorTable& dest, UINT destOffset, const DescriptorHandle& src, UINT srcOffset, UINT count);
@@ -130,7 +135,7 @@ private:
 
     // GPU heaps - per-frame ring buffer
     static constexpr UINT kFrameCount          = 3;
-    static constexpr UINT kMaxFrameDescriptors = 4096; // Smaller to avoid exceeding the limit
+    static constexpr UINT kMaxFrameDescriptors = 65536; // Smaller to avoid exceeding the limit
 
     struct FrameHeap
     {

@@ -57,7 +57,7 @@ DescriptorHandle DescriptorAllocator::Allocate()
     else
     {
         // Heap is full, return an invalid handle
-        ERROR_RECOVERABLE("Descriptor heap is full")
+        ERROR_AND_DIE("Descriptor heap is full")
         return handle;
     }
 
@@ -216,6 +216,34 @@ TieredDescriptorHandler::FrameDescriptorTable TieredDescriptorHandler::AllocateF
     table.numDescriptors = numDescriptors;
 
     return table;
+}
+
+DescriptorHandle TieredDescriptorHandler::CreateFrameCBV(const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc)
+{
+    // 获取当前帧的描述符堆分配器
+    auto& frameAllocator = m_frameHeaps[m_currentFrameIndex].allocator;
+    // 分配一个描述符
+    DescriptorHandle handle = frameAllocator->Allocate();
+    if (handle.IsValid())
+    {
+        // 在 GPU heap 上创建 CBV
+        m_device->CreateConstantBufferView(&desc, handle.cpu);
+    }
+    return handle;
+}
+
+DescriptorHandle TieredDescriptorHandler::CreateFrameSRV(ID3D12Resource* resource, const D3D12_SHADER_RESOURCE_VIEW_DESC& desc)
+{
+    // 获取当前帧的描述符堆分配器
+    auto& frameAllocator = m_frameHeaps[m_currentFrameIndex].allocator;
+    // 分配一个描述符
+    DescriptorHandle handle = frameAllocator->Allocate();
+    if (handle.IsValid())
+    {
+        // 在 GPU heap 上创建 SRV
+        m_device->CreateShaderResourceView(resource, &desc, handle.cpu);
+    }
+    return handle;
 }
 
 void TieredDescriptorHandler::CopyDescriptors(const FrameDescriptorTable& dest, const DescriptorHandle* srcHandles, UINT count)
