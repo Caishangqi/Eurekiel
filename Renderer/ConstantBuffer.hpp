@@ -21,4 +21,5 @@ private:
 
     ID3D12Resource*                 m_dx12ConstantBuffer = nullptr;
     D3D12_CONSTANT_BUFFER_VIEW_DESC m_constantBufferView = {};
+    size_t                          m_poolOffset         = 0;
 };
