@@ -64,8 +64,7 @@ struct RenderState
         if (depthMode != other.depthMode) return depthMode < other.depthMode;
         return samplerMode < other.samplerMode;
     }
-
-
+    
     bool operator==(const RenderState& other) const
     {
         return blendMode == other.blendMode &&

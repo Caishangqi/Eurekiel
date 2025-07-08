@@ -525,20 +525,28 @@ void DX12Renderer::BeginCamera(const Camera& cam)
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
-    // bind the Camera buffer
+    // 准备相机常量
     CameraConstants cameraConstant         = {};
     cameraConstant.RenderToClipTransform   = cam.GetProjectionMatrix();
     cameraConstant.CameraToRenderTransform = cam.GetCameraToRenderTransform();
     cameraConstant.WorldToCameraTransform  = cam.GetWorldToCameraTransform();
+    cameraConstant.CameraToWorldTransform  = cam.GetCameraToWorldTransform();
 
-    ConstantBuffer* cameraBuffer = CreateConstantBuffer(sizeof CameraConstants);
+    // 使用池分配常量缓冲区
+    ConstantBuffer* cameraBuffer = AllocateFromConstantBufferPool(sizeof(CameraConstants));
+    if (cameraBuffer == nullptr)
+    {
+        ERROR_AND_DIE("Failed to allocate camera constant buffer");
+    }
+
+    // 上传数据到常量缓冲区
+    CopyCPUToGPU(&cameraConstant, sizeof(CameraConstants), cameraBuffer);
+
+    // 绑定到槽位 2
     BindConstantBuffer(2, cameraBuffer);
-    UploadToCB(cameraBuffer, &cameraConstant, sizeof(CameraConstants));
 
+    // 设置默认的模型常量
     SetModelConstants();
-
-    // TODO: Test only! need revert if the constant buffer test failed
-    //m_commandList->SetGraphicsRoot32BitConstants(0, sizeof(CameraConstants) / 4, &cameraConstant, 0);
 }
 
 void DX12Renderer::EndCamera(const Camera& cam)
@@ -760,7 +768,13 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     ID3D12CommandList* lists[] = {m_uploadCommandList.Get()};
     m_copyCommandQueue->ExecuteCommandLists(_countof(lists), lists);
     m_copyCommandQueue->Signal(m_fence.Get(), ++m_fenceValue);
-    WaitForGPU();
+    // 如果在渲染过程中调用，需要等待
+    if (m_commandList && m_commandList->GetType() == D3D12_COMMAND_LIST_TYPE_DIRECT)
+    {
+        // 主渲染命令列表正在记录，需要等待上传完成
+        WaitForGPU();
+    }
+
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
     srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -953,25 +967,43 @@ void DX12Renderer::BindIndexBuffer(IndexBuffer* ibo)
 
 void DX12Renderer::BindConstantBuffer(int slot, ConstantBuffer* cbo)
 {
-    if (cbo == nullptr || slot >= kMaxConstantBufferSlot) return;
+    if (cbo == nullptr || slot < 0 || slot >= kMaxConstantBufferSlot)
+    {
+        ERROR_RECOVERABLE("Invalid constant buffer or slot");
+        return;
+    }
 
+    // 创建 CBV 描述
     D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
 
     // 检查是否是池分配的缓冲区
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
+
     if (cbo->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
     {
-        size_t offset       = pool.currentOffset - cbo->m_size;
-        desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + offset;
+        // 这是池分配的缓冲区，使用保存的偏移量
+        desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + cbo->m_poolOffset;
     }
     else
     {
+        // 独立的常量缓冲区
         desc.BufferLocation = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
     }
-    desc.SizeInBytes = (UINT)cbo->m_size;
+
+    desc.SizeInBytes = static_cast<UINT>(cbo->m_size);
+
+    // 验证对齐
+    GUARANTEE_OR_DIE(desc.BufferLocation % 256 == 0,
+                     "Constant buffer address must be 256-byte aligned");
+
+    // 在当前帧的 GPU heap 中创建 CBV（而不是持久 heap）
+    DescriptorHandle cbvHandle = m_descriptorHandler->CreateFrameCBV(desc);
+    if (!cbvHandle.IsValid())
+    {
+        ERROR_AND_DIE("Failed to create frame CBV");
+    }
 #undef max
-    // 创建 CBV 并记录
-    DescriptorHandle cbvHandle              = m_descriptorHandler->CreatePersistentCBV(desc);
+    // 记录到当前 DrawCall
     m_currentDrawCall.constantBuffers[slot] = cbvHandle;
     m_currentDrawCall.numCBVs               = std::max(m_currentDrawCall.numCBVs, static_cast<UINT>(slot + 1));
 }
@@ -1190,65 +1222,65 @@ void DX12Renderer::WaitForGPU()
 
 void DX12Renderer::CommitDescriptorsForCurrentDraw()
 {
-    // 计算需要的描述符数量
+    // 计算需要的描述符总数
     UINT totalDescriptors = m_currentDrawCall.numCBVs + m_currentDrawCall.numSRVs;
     if (totalDescriptors == 0) return;
 
-    // 分配描述符表
-    auto table = m_descriptorHandler->AllocateFrameDescriptorTable(totalDescriptors);
+    // 直接使用已经在 GPU heap 中的描述符
+    // 设置根签名参数
 
-    // 收集所有描述符
-    DescriptorSet descriptorSet;
-
-    // 添加 CBVs
-    for (UINT i = 0; i < m_currentDrawCall.numCBVs; ++i)
+    // 参数 0: CBV 表
+    if (m_currentDrawCall.numCBVs > 0 && m_currentDrawCall.constantBuffers[0].IsValid())
     {
-        if (m_currentDrawCall.constantBuffers[i].IsValid())
-        {
-            descriptorSet.AddDescriptor(m_currentDrawCall.constantBuffers[i]);
-        }
+        // CBVs 已经在 GPU heap 中，直接使用第一个的 GPU 地址
+        m_commandList->SetGraphicsRootDescriptorTable(0, m_currentDrawCall.constantBuffers[0].gpu);
     }
 
-    // 添加 SRVs
-    for (UINT i = 0; i < m_currentDrawCall.numSRVs; ++i)
-    {
-        if (m_currentDrawCall.textures[i].IsValid())
-        {
-            descriptorSet.AddDescriptor(m_currentDrawCall.textures[i]);
-        }
-    }
-
-    // 复制到 GPU heap
-    m_descriptorHandler->CopyDescriptors(table, descriptorSet.GetHandles(),
-                                         descriptorSet.GetCount());
-
-    // 设置根描述符表
-    if (m_currentDrawCall.numCBVs > 0)
-    {
-        m_commandList->SetGraphicsRootDescriptorTable(0, table.baseHandle.gpu);
-    }
-
+    // 参数 1: SRV 表
     if (m_currentDrawCall.numSRVs > 0)
     {
-        UINT cbvSrvIncrement = m_device->GetDescriptorHandleIncrementSize(
-            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        CD3DX12_GPU_DESCRIPTOR_HANDLE srvTable(
-            table.baseHandle.gpu,
-            static_cast<INT>(m_currentDrawCall.numCBVs),
-            cbvSrvIncrement
-        );
-        m_commandList->SetGraphicsRootDescriptorTable(1, srvTable);
+        // 为 SRV 分配表并复制
+        auto srvTable = m_descriptorHandler->AllocateFrameDescriptorTable(m_currentDrawCall.numSRVs);
+
+        // 收集 SRV 描述符
+        std::vector<DescriptorHandle> srvDescriptors;
+        for (UINT i = 0; i < m_currentDrawCall.numSRVs; ++i)
+        {
+            if (m_currentDrawCall.textures[i].IsValid())
+            {
+                srvDescriptors.push_back(m_currentDrawCall.textures[i]);
+            }
+            else
+            {
+                // 使用默认纹理
+                auto it = m_textureData.find(m_defaultTexture);
+                if (it != m_textureData.end())
+                {
+                    srvDescriptors.push_back(it->second->persistentSRV);
+                }
+            }
+        }
+
+        // 复制 SRV 到 GPU heap
+        if (!srvDescriptors.empty())
+        {
+            m_descriptorHandler->CopyDescriptors(srvTable, srvDescriptors.data(),
+                                                 static_cast<UINT>(srvDescriptors.size()));
+            m_commandList->SetGraphicsRootDescriptorTable(1, srvTable.baseHandle.gpu);
+        }
     }
 }
 
 void DX12Renderer::PrepareNextDrawCall()
 {
-    // 保留当前的渲染状态
-    RenderState currentState = m_currentDrawCall.renderState;
+    // 保留渲染状态，但清空描述符
+    RenderState savedState = m_currentDrawCall.renderState;
 
-    // 重置 DrawCall
     m_currentDrawCall             = DrawCall{};
-    m_currentDrawCall.renderState = currentState;
+    m_currentDrawCall.renderState = savedState;
+
+    // 重新绑定常用的资源（如默认纹理）
+    BindTexture(nullptr, 0); // 确保至少有一个默认纹理
 }
 
 void DX12Renderer::InitializeConstantBufferPools()
@@ -1285,27 +1317,36 @@ ConstantBuffer* DX12Renderer::AllocateFromConstantBufferPool(size_t dataSize)
 {
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
 
-    // Calculate the aligned size
+    // 计算对齐后的大小
     size_t alignedSize = AlignUp(dataSize, ConstantBufferPool::ALIGNMENT);
 
-    // Check if the pool has enough space
-    if (pool.currentOffset + alignedSize > pool.poolSize)
+    // 确保偏移量也是对齐的
+    if (pool.currentOffset % ConstantBufferPool::ALIGNMENT != 0)
     {
-        return nullptr; // pool is full
+        pool.currentOffset = AlignUp(pool.currentOffset, ConstantBufferPool::ALIGNMENT);
     }
 
-    // Get or create a temporary ConstantBuffer object
+    // 检查池是否有足够空间
+    if (pool.currentOffset + alignedSize > pool.poolSize)
+    {
+        return nullptr; // 池已满
+    }
+
+    // 获取或创建临时 ConstantBuffer 对象
     ConstantBuffer* tempBuffer = GetTempConstantBuffer(pool, alignedSize);
     if (tempBuffer == nullptr)
     {
         return nullptr;
     }
 
-    // Set the temporary buffer to point to the correct position in the pool
+    // 设置临时缓冲区指向池中的正确位置
     tempBuffer->m_dx12ConstantBuffer = pool.poolBuffer->m_dx12ConstantBuffer;
     tempBuffer->m_size               = alignedSize;
 
-    // Update the offset
+    // 保存偏移量信息（用于后续计算GPU地址）
+    tempBuffer->m_poolOffset = pool.currentOffset;
+
+    // 更新偏移量
     pool.currentOffset += alignedSize;
 
     return tempBuffer;
