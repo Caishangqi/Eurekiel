@@ -937,21 +937,25 @@ void DX12Renderer::CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* c
 {
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
 
-    // If this is a buffer from the pool, calculate the correct offset
+    // 如果这是池中的缓冲区
     if (cb->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
     {
-        // This is allocated from the pool, calculate the offset
-        size_t offset = pool.currentOffset - cb->m_size; // Offset from last allocation
-        memcpy(pool.mappedData + offset, data, size);
+        // 计算在池中的实际地址
+        uint8_t* destPtr = pool.mappedData + cb->m_poolOffset;
+        memcpy(destPtr, data, size);
     }
     else
     {
-        // This is a regular ConstantBuffer, use the old method
-        CD3DX12_RANGE rng(0, 0);
-        uint8_t*      dst = nullptr;
-        cb->m_dx12ConstantBuffer->Map(0, &rng, reinterpret_cast<void**>(&dst));
-        memcpy(dst, data, size);
-        cb->m_dx12ConstantBuffer->Unmap(0, nullptr);
+        // 独立的常量缓冲区
+        CD3DX12_RANGE readRange(0, 0);
+        uint8_t*      mappedData = nullptr;
+        HRESULT       hr         = cb->m_dx12ConstantBuffer->Map(0, &readRange,
+                                                                 reinterpret_cast<void**>(&mappedData));
+        if (SUCCEEDED(hr))
+        {
+            memcpy(mappedData, data, size);
+            cb->m_dx12ConstantBuffer->Unmap(0, nullptr);
+        }
     }
 }
 
@@ -1226,61 +1230,119 @@ void DX12Renderer::CommitDescriptorsForCurrentDraw()
     UINT totalDescriptors = m_currentDrawCall.numCBVs + m_currentDrawCall.numSRVs;
     if (totalDescriptors == 0) return;
 
-    // 直接使用已经在 GPU heap 中的描述符
-    // 设置根签名参数
-
-    // 参数 0: CBV 表
-    if (m_currentDrawCall.numCBVs > 0 && m_currentDrawCall.constantBuffers[0].IsValid())
+    // 分配一个大的描述符表
+    auto descriptorTable = m_descriptorHandler->AllocateFrameDescriptorTable(totalDescriptors);
+    if (!descriptorTable.baseHandle.IsValid())
     {
-        // CBVs 已经在 GPU heap 中，直接使用第一个的 GPU 地址
-        m_commandList->SetGraphicsRootDescriptorTable(0, m_currentDrawCall.constantBuffers[0].gpu);
+        ERROR_AND_DIE("Failed to allocate descriptor table");
     }
 
-    // 参数 1: SRV 表
-    if (m_currentDrawCall.numSRVs > 0)
-    {
-        // 为 SRV 分配表并复制
-        auto srvTable = m_descriptorHandler->AllocateFrameDescriptorTable(m_currentDrawCall.numSRVs);
+    // 计算增量
+    UINT incrementSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-        // 收集 SRV 描述符
-        std::vector<DescriptorHandle> srvDescriptors;
-        for (UINT i = 0; i < m_currentDrawCall.numSRVs; ++i)
+    CD3DX12_CPU_DESCRIPTOR_HANDLE destHandle(descriptorTable.baseHandle.cpu);
+    UINT                          currentIndex = 0;
+
+    // 1. 处理 CBV - 直接使用已经在 GPU heap 中的句柄
+    for (UINT i = 0; i < m_currentDrawCall.numCBVs; ++i)
+    {
+        if (m_currentDrawCall.constantBuffers[i].IsValid())
         {
-            if (m_currentDrawCall.textures[i].IsValid())
+            // 验证这是否是来自 GPU heap 的句柄
+            if (m_currentDrawCall.constantBuffers[i].IsShaderVisible())
             {
-                srvDescriptors.push_back(m_currentDrawCall.textures[i]);
+                // 从 GPU heap 复制到 GPU heap 是安全的
+                m_device->CopyDescriptorsSimple(
+                    1,
+                    destHandle,
+                    m_currentDrawCall.constantBuffers[i].cpu,
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+                );
             }
             else
             {
-                // 使用默认纹理
-                auto it = m_textureData.find(m_defaultTexture);
-                if (it != m_textureData.end())
-                {
-                    srvDescriptors.push_back(it->second->persistentSRV);
-                }
+                // 如果不是 GPU 可见的，跳过（这不应该发生）
+                ERROR_RECOVERABLE("CBV is not shader visible");
             }
         }
-
-        // 复制 SRV 到 GPU heap
-        if (!srvDescriptors.empty())
-        {
-            m_descriptorHandler->CopyDescriptors(srvTable, srvDescriptors.data(),
-                                                 static_cast<UINT>(srvDescriptors.size()));
-            m_commandList->SetGraphicsRootDescriptorTable(1, srvTable.baseHandle.gpu);
-        }
+        destHandle.Offset(1, incrementSize);
+        currentIndex++;
     }
+
+    // 2. 处理 SRV - 需要在 GPU heap 中重新创建
+    for (UINT i = 0; i < m_currentDrawCall.numSRVs; ++i)
+    {
+        if (m_currentDrawCall.textures[i].IsValid())
+        {
+            // 查找纹理资源
+            ID3D12Resource* textureResource = nullptr;
+            for (auto& [tex, data] : m_textureData)
+            {
+                if (data->persistentSRV.cpu.ptr == m_currentDrawCall.textures[i].cpu.ptr)
+                {
+                    textureResource = tex->m_dx12Texture;
+                    break;
+                }
+            }
+
+            if (textureResource)
+            {
+                // 在 GPU heap 的目标位置直接创建 SRV
+                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
+                srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srvDesc.Texture2D.MostDetailedMip       = 0;
+                srvDesc.Texture2D.MipLevels             = 1;
+
+                m_device->CreateShaderResourceView(
+                    textureResource,
+                    &srvDesc,
+                    destHandle
+                );
+            }
+        }
+        destHandle.Offset(1, incrementSize);
+        currentIndex++;
+    }
+
+    // 设置根描述符表
+    m_commandList->SetGraphicsRootDescriptorTable(0, descriptorTable.baseHandle.gpu);
+
+    // 如果有 SRV，也需要设置第二个根参数
+    if (m_currentDrawCall.numSRVs > 0)
+    {
+        CD3DX12_GPU_DESCRIPTOR_HANDLE srvTableStart(
+            descriptorTable.baseHandle.gpu,
+            m_currentDrawCall.numCBVs,
+            incrementSize
+        );
+        m_commandList->SetGraphicsRootDescriptorTable(1, srvTableStart);
+    }
+
+    // 保存描述符表信息
+    m_currentDrawCall.descriptorTable = descriptorTable;
 }
 
 void DX12Renderer::PrepareNextDrawCall()
 {
-    // 保留渲染状态，但清空描述符
+    // 保留渲染状态
     RenderState savedState = m_currentDrawCall.renderState;
+
+    // 重置但保留已绑定的资源
+    std::array<DescriptorHandle, kMaxConstantBufferSlot>   savedCBs     = m_currentDrawCall.constantBuffers;
+    std::array<DescriptorHandle, kMaxShaderSourceViewSlot> savedSRVs    = m_currentDrawCall.textures;
+    UINT                                                   savedNumCBVs = m_currentDrawCall.numCBVs;
+    UINT                                                   savedNumSRVs = m_currentDrawCall.numSRVs;
 
     m_currentDrawCall             = DrawCall{};
     m_currentDrawCall.renderState = savedState;
 
-    // 重新绑定常用的资源（如默认纹理）
-    BindTexture(nullptr, 0); // 确保至少有一个默认纹理
+    // 恢复资源绑定
+    m_currentDrawCall.constantBuffers = savedCBs;
+    m_currentDrawCall.textures        = savedSRVs;
+    m_currentDrawCall.numCBVs         = savedNumCBVs;
+    m_currentDrawCall.numSRVs         = savedNumSRVs;
 }
 
 void DX12Renderer::InitializeConstantBufferPools()
