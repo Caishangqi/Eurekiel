@@ -49,6 +49,12 @@ constexpr uint32_t        kMaxShaderSourceViewSlot = 128;
 constexpr uint32_t        kMaxTextureCached        = 4096;
 using Microsoft::WRL::ComPtr;
 
+/**
+ * Represents the configuration for a rendering pipeline state.
+ * Encapsulates various settings that control how rendering operations
+ * are carried out, including shaders, blend states, rasterizer states,
+ * and other pipeline configurations.
+ */
 struct RenderState
 {
     BlendMode      blendMode      = BlendMode::ALPHA;
@@ -64,7 +70,7 @@ struct RenderState
         if (depthMode != other.depthMode) return depthMode < other.depthMode;
         return samplerMode < other.samplerMode;
     }
-    
+
     bool operator==(const RenderState& other) const
     {
         return blendMode == other.blendMode &&
@@ -74,6 +80,38 @@ struct RenderState
     }
 };
 
+/**
+ * Manages a pool of constant buffers for efficient allocation and reuse in GPU rendering operations.
+ *
+ * This structure is primarily used to handle large constant buffers, avoid frequent memory allocation
+ * by reusing temporary buffers, and ensure proper alignment for rendering requirements. It also
+ * facilitates mapping and unmapping resources for CPU-GPU interaction.
+ *
+ * Key responsibilities include:
+ * - Maintaining a large pool buffer for allocations.
+ * - Managing offsets and sizes within the pool to track memory usage.
+ * - Providing temporary constant buffers to reduce overhead from repeated allocations.
+ * - Ensuring data alignment according to rendering API requirements (e.g., 256-byte alignment for DX12).
+ */
+struct ConstantBufferPool
+{
+    ConstantBuffer*         poolBuffer    = nullptr; // Large pool buffer
+    uint8_t*                mappedData    = nullptr; // Mapped CPU address
+    size_t                  currentOffset = 0; // Current allocation offset
+    size_t                  poolSize      = 0; // Total pool size
+    static constexpr size_t ALIGNMENT     = 256; // DX12 requires 256-byte alignment
+
+    // Temporary ConstantBuffer object pool to avoid repeated new/delete
+    std::vector<ConstantBuffer*> tempBuffers;
+    size_t                       tempBufferIndex = 0;
+};
+
+/**
+ * Represents a single draw call in a rendering pipeline.
+ * Encapsulates all the resources, states, and descriptors needed
+ * to execute a draw call, including descriptors for shaders,
+ * constant buffers, textures, and the current rendering state.
+ */
 struct DrawCall
 {
     TieredDescriptorHandler::FrameDescriptorTable          descriptorTable;
@@ -84,6 +122,33 @@ struct DrawCall
     UINT                                                   numSRVs = 0;
 };
 
+/**
+ * Represents a collection of resources bound to the rendering pipeline,
+ * including constant buffers and shader resource views (textures).
+ * This structure tracks the bindings for GPU resource descriptors
+ * and facilitates the management of bound resources during rendering operations.
+ */
+struct BoundResources
+{
+    struct BoundCBV
+    {
+        ConstantBuffer* buffer  = nullptr;
+        bool            isValid = false;
+    };
+
+    struct BoundSRV
+    {
+        Texture* texture = nullptr;
+        bool     isValid = false;
+    };
+
+    std::array<BoundCBV, kMaxConstantBufferSlot>   constantBuffers;
+    std::array<BoundSRV, kMaxShaderSourceViewSlot> textures;
+    UINT                                           numCBVs = 0;
+    UINT                                           numSRVs = 0;
+};
+
+// TODO: Package into Texture Class
 // Modify the texture structure to store the persistent descriptor handle
 struct TextureData
 {
@@ -208,30 +273,19 @@ private:
     ConversionBuffer*                              m_currentConversionBuffer = nullptr;
     /// Index Buffers  
     IndexBuffer* m_currentIndexBuffer = nullptr;
+    
     // Updating ring index buffer
     std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer{nullptr};
     static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices
 
-
-    struct ConstantBufferPool
-    {
-        ConstantBuffer*         poolBuffer    = nullptr; // Large pool buffer
-        uint8_t*                mappedData    = nullptr; // Mapped CPU address
-        size_t                  currentOffset = 0; // Current allocation offset
-        size_t                  poolSize      = 0; // Total pool size
-        static constexpr size_t ALIGNMENT     = 256; // DX12 requires 256-byte alignment
-
-        // Temporary ConstantBuffer object pool to avoid repeated new/delete
-        std::vector<ConstantBuffer*> tempBuffers;
-        size_t                       tempBufferIndex = 0;
-    };
-
+    /// Constant buffer pools
     std::array<ConstantBufferPool, kBackBufferCount> m_constantBufferPools;
     static constexpr size_t                          kConstantBufferPoolSize = (size_t)2 * 1024 * 1024;
 
+    /// Descriptor handler
     std::unique_ptr<TieredDescriptorHandler> m_descriptorHandler;
 
-
+    /// Draw calls
     DrawCall              m_currentDrawCall;
     std::vector<DrawCall> m_pendingDrawCalls;
 
@@ -249,6 +303,7 @@ private:
     /// define scissor rect
     CD3DX12_RECT m_scissorRect{};
 
+    BoundResources m_boundResources;
 
     Texture*                 m_defaultTexture = nullptr;
     Shader*                  m_defaultShader  = nullptr;
