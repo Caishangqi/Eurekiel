@@ -33,25 +33,37 @@ TBD
 
 ## Modules
 
-| **Name**           | **Description** |     **State**     |
-|--------------------|:---------------:|:-----------------:|
-| `enigma::core`     |       TBD       |      stable       |
-| `enigma::network`  |       TBD       |    unavailable    |
-| `enigma::audio`    |       TBD       |      stable       |
-| `enigma::input`    |       TBD       |      stable       |
-| `enigma::math`     |       TBD       | unstable/refactor |
-| `enigma::render`   |       TBD       |       beta        |
-| `enigma::resource` |       TBD       |    unavailable    |
-| `enigma::window`   |       TBD       |      stable       |
+| **Name**           |                               **Description**                               |     **State**     |
+|--------------------|:---------------------------------------------------------------------------:|:-----------------:|
+| `enigma::core`     |             The Core structure and classes that used in engine              |      stable       |
+| `enigma::network`  |       The Network subsystem that handles client and server behaviour        |    unavailable    |
+| `enigma::audio`    | Audio subsystem that implement FMOD API wrapper functions and encapsulation |      stable       |
+| `enigma::input`    |                 The input subsystem that use the XInput API                 |      stable       |
+| `enigma::math`     |                 The Engine math datastructures and geometry                 | unstable/refactor |
+| `enigma::render`   |           The Renderer API that implements the rendering pipeline           |      stable       |       beta        |
+| `enigma::resource` |              The Namespace resource register and cache system               |    unavailable    |
+| `enigma::window`   |          The Native window API that with wrapper and encapsulation          |      stable       |
 
 ##
 
-<p>&nbsp;</p>
-<p align="center"><a href="https://github.com/Creators-of-Create/Create/issues">
+<p>&nbsp;
+</p>
+
+<p align="center">
+<a href="https://github.com/Caishangqi/Eurekiel/issues">
 <img src="https://i.imgur.com/qPmjSXy.png" width="160" />
 </a> 
-<a href="https://www.youtube.com/channel/UCrKV2QTuyGcv4E3eSJpBiYA/playlists"><img src="https://i.imgur.com/L1bU9mr.png" width="160" /></a><a href="[https://discord.gg/hmaD7Se](https://discord.gg/3rPcYrPnAs)"><img src="https://i.imgur.com/uf6V9ZX.png" width="160" /></a> <a href="https://github.com/Creators-of-Create/Create/wiki/Supporting-the-Project"><img src="https://i.imgur.com/fHQ45KR.png" width="227" /></a></p>
+<a href="https://github.com/Caishangqi/Eurekiel">
+<img src="https://i.imgur.com/L1bU9mr.png" width="160" />
+</a>
+<a href="[https://discord.gg/3rPcYrPnAs](https://discord.gg/3rPcYrPnAs)">
+<img src="https://i.imgur.com/uf6V9ZX.png" width="160" />
+</a> 
+<a href="https://github.com/Caishangqi">
+<img src="https://i.imgur.com/fHQ45KR.png" width="227" />
+</a>
+</p>
 
 <h1></h1>
-<h4 align="center">Find out more about Eurekiel on the <a href="https://www.curseforge.com/minecraft/mc-mods/create">SMU Pages</a></h4>
-<h4 align="center">Looking for the custom support? <a href="https://github.com/Fabricators-of-Create/Create">Find it here</a></h4>
+<h4 align="center">Find out more about Eurekiel on the <a href="https://github.com/Caishangqi">SMU Pages</a></h4>
+<h4 align="center">Looking for the custom support? <a href="https://github.com/Caishangqi">Find it here</a></h4>
