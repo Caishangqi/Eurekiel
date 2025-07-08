@@ -178,7 +178,7 @@ public:
     virtual void SetBlendMode(BlendMode mode) = 0;
     virtual void SetRasterizerMode(RasterizerMode mode) = 0;
     virtual void SetDepthMode(DepthMode mode) = 0;
-    virtual void SetSamplerMode(SamplerMode mode) = 0;
+    virtual void SetSamplerMode(SamplerMode mode, int slot = 0) = 0;
 
     // Resource creation
     virtual Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;

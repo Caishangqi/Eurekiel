@@ -215,7 +215,7 @@ public:
     void SetBlendMode(BlendMode) override;
     void SetRasterizerMode(RasterizerMode) override;
     void SetDepthMode(DepthMode) override;
-    void SetSamplerMode(SamplerMode) override;
+    void SetSamplerMode(SamplerMode, int slot = 0) override;
 
     void DrawVertexArray(int n, const Vertex_PCU* v) override;
     void DrawVertexArray(int n, const Vertex_PCUTBN* v) override;
@@ -273,7 +273,7 @@ private:
     ConversionBuffer*                              m_currentConversionBuffer = nullptr;
     /// Index Buffers  
     IndexBuffer* m_currentIndexBuffer = nullptr;
-    
+
     // Updating ring index buffer
     std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer{nullptr};
     static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices

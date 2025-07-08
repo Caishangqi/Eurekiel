@@ -434,7 +434,7 @@ void DX12Renderer::BeginFrame()
     // Set pipeline state
     m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
-    
+
     m_descriptorHandler->BeginFrame(m_currentBackBufferIndex);
     m_descriptorHandler->BindToCommandList(m_commandList.Get());
 
@@ -1047,7 +1047,7 @@ void DX12Renderer::SetDepthMode(DepthMode mode)
     m_pendingRenderState.depthMode = mode;
 }
 
-void DX12Renderer::SetSamplerMode(SamplerMode mode)
+void DX12Renderer::SetSamplerMode(SamplerMode mode, int slot)
 {
     m_currentSamplerMode             = mode;
     m_pendingRenderState.samplerMode = mode;
