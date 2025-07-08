@@ -222,6 +222,7 @@ DescriptorHandle TieredDescriptorHandler::CreateFrameCBV(const D3D12_CONSTANT_BU
 {
     // 获取当前帧的描述符堆分配器
     auto& frameAllocator = m_frameHeaps[m_currentFrameIndex].allocator;
+
     // 分配一个描述符
     DescriptorHandle handle = frameAllocator->Allocate();
     if (handle.IsValid())
@@ -236,6 +237,7 @@ DescriptorHandle TieredDescriptorHandler::CreateFrameSRV(ID3D12Resource* resourc
 {
     // 获取当前帧的描述符堆分配器
     auto& frameAllocator = m_frameHeaps[m_currentFrameIndex].allocator;
+
     // 分配一个描述符
     DescriptorHandle handle = frameAllocator->Allocate();
     if (handle.IsValid())
@@ -258,6 +260,12 @@ void TieredDescriptorHandler::CopyDescriptors(const FrameDescriptorTable& dest, 
     {
         if (srcHandles[i].IsValid())
         {
+            // 检查源描述符是否来自 GPU heap
+            if (!srcHandles[i].IsShaderVisible())
+            {
+                ERROR_RECOVERABLE("Attempting to copy from CPU-only descriptor")
+                continue; // 跳过这个描述符
+            }
             D3D12_CPU_DESCRIPTOR_HANDLE destCPU = CD3DX12_CPU_DESCRIPTOR_HANDLE(dest.baseHandle.cpu, static_cast<INT>(i), m_cbvSrvUavDescriptorSize);
 
             m_device->CopyDescriptorsSimple(1, destCPU, srcHandles[i].cpu, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);

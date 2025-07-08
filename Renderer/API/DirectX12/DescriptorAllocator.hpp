@@ -134,7 +134,7 @@ private:
     std::unique_ptr<DescriptorAllocator> m_persistentCBVSRVUAV;
 
     // GPU heaps - per-frame ring buffer
-    static constexpr UINT kFrameCount          = 3;
+    static constexpr UINT kFrameCount          = 4;
     static constexpr UINT kMaxFrameDescriptors = 65536; // Smaller to avoid exceeding the limit
 
     struct FrameHeap
