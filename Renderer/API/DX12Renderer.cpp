@@ -217,13 +217,6 @@ void DX12Renderer::Startup()
         m_currentIndexBuffer = CreateIndexBuffer(sizeof(unsigned int));
 
 
-        // Constant buffers heap that hold view descriptor (for 14 constant buffers)
-        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.NumDescriptors             = kMaxDescriptorSetsPerFrame * (kMaxConstantBufferSlot + kMaxShaderSourceViewSlot);
-        heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        m_device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_frameHeap));
-
         /// Conversion Buffer
         m_currentConversionBuffer = &m_conversionBuffers[m_currentBackBufferIndex];
 
@@ -231,15 +224,9 @@ void DX12Renderer::Startup()
         InitializeConstantBufferPools();
     }
 
-    /// Manager heaps
-    {
-        // Manager heap for ShaderSourceViewManagerHeap
-        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
-        heapDesc.NumDescriptors             = kMaxTextureCached;
-        heapDesc.Type                       = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        heapDesc.Flags                      = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // Do not set shader visible or else it will become read only
-        m_device->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&m_shaderSourceViewManagerHeap)) >> chk;
-    }
+    m_descriptorHandler = std::make_unique<TieredDescriptorHandler>(m_device.Get());
+    m_descriptorHandler->Startup();
+
 
     // Default Texture
     {
@@ -412,31 +399,10 @@ void DX12Renderer::Shutdown()
 
 void DX12Renderer::BeginFrame()
 {
-    // Reset the Description Set
-    m_currentDescriptorSet = 0;
-
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
     pool.currentOffset       = 0;
     pool.tempBufferIndex     = 0;
 
-    // Initialize the first descriptor set
-    if (m_descriptorSets.empty())
-    {
-        m_descriptorSets.resize(kMaxDescriptorSetsPerFrame);
-        for (UINT i = 0; i < kMaxDescriptorSetsPerFrame; ++i)
-        {
-            // Each set contains 14 CBVs + 128 SRVs
-            m_descriptorSets[i].baseIndex = i * (kMaxConstantBufferSlot + kMaxShaderSourceViewSlot);
-            memset((void*)m_descriptorSets[i].boundTextures, 0, sizeof(m_descriptorSets[i].boundTextures));
-            memset((void*)m_descriptorSets[i].boundConstantBuffers, 0, sizeof(m_descriptorSets[i].boundConstantBuffers));
-        }
-    }
-
-    // Clear texture bindings for all descriptor sets of the current frame
-    for (auto& set : m_descriptorSets)
-    {
-        memset((void*)set.boundTextures, 0, sizeof(set.boundTextures));
-    }
 
     // advance buffer
     m_currentBackBufferIndex = m_swapChain->GetCurrentBackBufferIndex();
@@ -471,12 +437,11 @@ void DX12Renderer::BeginFrame()
 
     UINT incrementSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // Prepare for Constant buffer
-    m_commandList->SetDescriptorHeaps(1, m_frameHeap.GetAddressOf());
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_frameHeap->GetGPUDescriptorHandleForHeapStart();
-    m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandleShaderResource(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), kMaxConstantBufferSlot, incrementSize);
-    m_commandList->SetGraphicsRootDescriptorTable(1, gpuHandleShaderResource);
+    m_descriptorHandler->BeginFrame(m_currentBackBufferIndex);
+    m_descriptorHandler->BindToCommandList(m_commandList.Get());
+
+    m_currentDrawCall             = DrawCall{};
+    m_currentDrawCall.renderState = m_pendingRenderState;
 
     BindTexture(nullptr);
 
@@ -488,6 +453,8 @@ void DX12Renderer::BeginFrame()
 
 void DX12Renderer::EndFrame()
 {
+    m_descriptorHandler->EndFrame();
+
     auto& backBuffer = m_backBuffers[m_currentBackBufferIndex];
     auto  barrier    = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     // We put data and buffers in render target and now to switch D3D12_RESOURCE_STATE_PRESENT for presenting
@@ -794,6 +761,24 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     m_copyCommandQueue->ExecuteCommandLists(_countof(lists), lists);
     m_copyCommandQueue->Signal(m_fence.Get(), ++m_fenceValue);
     WaitForGPU();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
+    srvDesc.Texture2D.MipLevels             = 1;
+
+    // 创建持久的 SRV
+    auto textureData           = std::make_unique<TextureData>();
+    textureData->resource      = newTexture->m_dx12Texture;
+    textureData->uploadHeap    = newTexture->m_textureBufferUploadHeap;
+    textureData->dimensions    = image.GetDimensions();
+    textureData->name          = image.GetImageFilePath();
+    textureData->persistentSRV = m_descriptorHandler->CreatePersistentSRV(
+        newTexture->m_dx12Texture, srvDesc
+    );
+
+    m_textureData[newTexture] = std::move(textureData);
 
     return newTexture;
 }
@@ -968,66 +953,39 @@ void DX12Renderer::BindIndexBuffer(IndexBuffer* ibo)
 
 void DX12Renderer::BindConstantBuffer(int slot, ConstantBuffer* cbo)
 {
-    if (cbo == nullptr) return;
-    if (slot >= (int)kMaxConstantBufferSlot) return;
-
-    DescriptorSet& currentSet             = m_descriptorSets[m_currentDescriptorSet];
-    currentSet.boundConstantBuffers[slot] = cbo;
-
-    UINT descriptionSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    UINT cbvIndex        = currentSet.baseIndex + slot;
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE handle(
-        m_frameHeap->GetCPUDescriptorHandleForHeapStart(),
-        (int)cbvIndex,
-        descriptionSize
-    );
+    if (cbo == nullptr || slot >= kMaxConstantBufferSlot) return;
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
 
-    // Check if it is a buffer allocated by pool
+    // 检查是否是池分配的缓冲区
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
     if (cbo->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
     {
-        // Pool buffer, calculate the correct GPU address offset
         size_t offset       = pool.currentOffset - cbo->m_size;
         desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + offset;
     }
     else
     {
-        // Regular buffer
         desc.BufferLocation = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
     }
-
     desc.SizeInBytes = (UINT)cbo->m_size;
-    m_device->CreateConstantBufferView(&desc, handle);
+#undef max
+    // 创建 CBV 并记录
+    DescriptorHandle cbvHandle              = m_descriptorHandler->CreatePersistentCBV(desc);
+    m_currentDrawCall.constantBuffers[slot] = cbvHandle;
+    m_currentDrawCall.numCBVs               = std::max(m_currentDrawCall.numCBVs, static_cast<UINT>(slot + 1));
 }
 
 void DX12Renderer::BindTexture(Texture* tex, int slot)
 {
     const Texture* bindTex = (tex == nullptr) ? m_defaultTexture : tex;
-
-    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
-
-    // Texture SRV is after CBV
-    UINT dstIndex = currentSet.baseIndex + kMaxConstantBufferSlot + slot;
-    UINT incSize  = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)dstIndex, incSize);
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MostDetailedMip       = 0;
-    srvDesc.Texture2D.MipLevels             = 1;
-
-    //m_device->CopyDescriptorsSimple(1, dst, bindTex->m_cpuShaderSourceViewHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-    m_device->CreateShaderResourceView(bindTex->m_dx12Texture, &srvDesc, dst);
-
-
-    currentSet.boundTextures[slot] = const_cast<Texture*>(bindTex);
+#undef max
+    auto it = m_textureData.find(const_cast<Texture*>(bindTex));
+    if (it != m_textureData.end() && it->second->persistentSRV.IsValid())
+    {
+        m_currentDrawCall.textures[slot] = it->second->persistentSRV;
+        m_currentDrawCall.numSRVs        = std::max(m_currentDrawCall.numSRVs, static_cast<UINT>(slot + 1));
+    }
 }
 
 void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const Rgba8& tint)
@@ -1035,17 +993,18 @@ void DX12Renderer::SetModelConstants(const Mat44& modelToWorldTransform, const R
     ModelConstants modelConstants        = {};
     modelConstants.ModelToWorldTransform = modelToWorldTransform;
     tint.GetAsFloats(modelConstants.ModelColor);
-    // Allocate constant buffer from pool
+
+    // 分配常量缓冲区
     ConstantBuffer* modelBuffer = AllocateFromConstantBufferPool(sizeof(ModelConstants));
     if (modelBuffer == nullptr)
     {
         ERROR_AND_DIE("Constant buffer pool exhausted for this frame")
     }
 
-    // Upload data using existing API
+    // 上传数据
     CopyCPUToGPU(&modelConstants, sizeof(ModelConstants), modelBuffer);
 
-    // Bind using existing API
+    // 绑定
     BindConstantBuffer(3, modelBuffer);
 }
 
@@ -1229,87 +1188,67 @@ void DX12Renderer::WaitForGPU()
     }
 }
 
-void DX12Renderer::CommitCurrentDescriptorSet()
+void DX12Renderer::CommitDescriptorsForCurrentDraw()
 {
-    UINT           incSize    = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    // 计算需要的描述符数量
+    UINT totalDescriptors = m_currentDrawCall.numCBVs + m_currentDrawCall.numSRVs;
+    if (totalDescriptors == 0) return;
 
-    // Set the root descriptor table to point to the start position of the current set
-    CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), (int)currentSet.baseIndex, incSize);
+    // 分配描述符表
+    auto table = m_descriptorHandler->AllocateFrameDescriptorTable(totalDescriptors);
 
-    m_commandList->SetGraphicsRootDescriptorTable(0, gpuHandle); // CBV Table
+    // 收集所有描述符
+    DescriptorSet descriptorSet;
 
-    //SRV table is after CBV
-    CD3DX12_GPU_DESCRIPTOR_HANDLE srvHandle(m_frameHeap->GetGPUDescriptorHandleForHeapStart(), (int)(currentSet.baseIndex + kMaxConstantBufferSlot), incSize);
-    m_commandList->SetGraphicsRootDescriptorTable(1, srvHandle); // SRV Table
+    // 添加 CBVs
+    for (UINT i = 0; i < m_currentDrawCall.numCBVs; ++i)
+    {
+        if (m_currentDrawCall.constantBuffers[i].IsValid())
+        {
+            descriptorSet.AddDescriptor(m_currentDrawCall.constantBuffers[i]);
+        }
+    }
+
+    // 添加 SRVs
+    for (UINT i = 0; i < m_currentDrawCall.numSRVs; ++i)
+    {
+        if (m_currentDrawCall.textures[i].IsValid())
+        {
+            descriptorSet.AddDescriptor(m_currentDrawCall.textures[i]);
+        }
+    }
+
+    // 复制到 GPU heap
+    m_descriptorHandler->CopyDescriptors(table, descriptorSet.GetHandles(),
+                                         descriptorSet.GetCount());
+
+    // 设置根描述符表
+    if (m_currentDrawCall.numCBVs > 0)
+    {
+        m_commandList->SetGraphicsRootDescriptorTable(0, table.baseHandle.gpu);
+    }
+
+    if (m_currentDrawCall.numSRVs > 0)
+    {
+        UINT cbvSrvIncrement = m_device->GetDescriptorHandleIncrementSize(
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        CD3DX12_GPU_DESCRIPTOR_HANDLE srvTable(
+            table.baseHandle.gpu,
+            static_cast<INT>(m_currentDrawCall.numCBVs),
+            cbvSrvIncrement
+        );
+        m_commandList->SetGraphicsRootDescriptorTable(1, srvTable);
+    }
 }
 
-void DX12Renderer::PrepareNextDescriptorSet()
+void DX12Renderer::PrepareNextDrawCall()
 {
-    m_currentDescriptorSet++;
+    // 保留当前的渲染状态
+    RenderState currentState = m_currentDrawCall.renderState;
 
-    if (m_currentDescriptorSet >= kMaxDescriptorSetsPerFrame)
-    {
-        ERROR_AND_DIE("Exceeded maximum descriptor sets per frame")
-    }
-
-    if (m_currentDescriptorSet > 0)
-    {
-        DescriptorSet& prevSet = m_descriptorSets[m_currentDescriptorSet - 1];
-        DescriptorSet& currSet = m_descriptorSets[m_currentDescriptorSet];
-
-        UINT incSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-        // Recreate the CBV instead of copying it
-        for (size_t i = 0; i < kMaxConstantBufferSlot; ++i)
-        {
-            if (prevSet.boundConstantBuffers[i])
-            {
-                currSet.boundConstantBuffers[i] = prevSet.boundConstantBuffers[i];
-
-                // Recreate the CBV
-                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + i), incSize);
-
-                D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
-                ConstantBuffer*                 cbo  = prevSet.boundConstantBuffers[i];
-
-                // Check if it is a pool allocated buffer
-                ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
-                if (cbo->m_dx12ConstantBuffer == pool.poolBuffer->m_dx12ConstantBuffer)
-                {
-                    size_t offset       = pool.currentOffset - cbo->m_size;
-                    desc.BufferLocation = pool.poolBuffer->m_dx12ConstantBuffer->GetGPUVirtualAddress() + offset;
-                }
-                else
-                {
-                    desc.BufferLocation = cbo->m_dx12ConstantBuffer->GetGPUVirtualAddress();
-                }
-                desc.SizeInBytes = (UINT)cbo->m_size;
-
-                m_device->CreateConstantBufferView(&desc, dst);
-            }
-        }
-
-        // Recreate the texture SRV
-        for (size_t i = 0; i < kMaxShaderSourceViewSlot; ++i)
-        {
-            if (prevSet.boundTextures[i])
-            {
-                currSet.boundTextures[i] = prevSet.boundTextures[i];
-
-                CD3DX12_CPU_DESCRIPTOR_HANDLE dst(m_frameHeap->GetCPUDescriptorHandleForHeapStart(), (int)(currSet.baseIndex + kMaxConstantBufferSlot + i), incSize);
-
-                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
-                srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
-                srvDesc.Texture2D.MostDetailedMip       = 0;
-                srvDesc.Texture2D.MipLevels             = 1;
-
-                m_device->CreateShaderResourceView(prevSet.boundTextures[i]->m_dx12Texture, &srvDesc, dst);
-            }
-        }
-    }
+    // 重置 DrawCall
+    m_currentDrawCall             = DrawCall{};
+    m_currentDrawCall.renderState = currentState;
 }
 
 void DX12Renderer::InitializeConstantBufferPools()
@@ -1540,58 +1479,50 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
 
 void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)
 {
-    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    // 检查状态变化
+    bool stateChanged = !(m_currentDrawCall.renderState == m_pendingRenderState);
+    if (stateChanged)
     {
-        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
-        if (stateChanged)
-        {
-            PrepareNextDescriptorSet();
-            DescriptorSet& newSet    = m_descriptorSets[m_currentDescriptorSet];
-            newSet.renderState       = m_pendingRenderState;
-            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
-            m_commandList->SetPipelineState(pso);
-            m_currentPipelineStateObject = pso;
-        }
+        // 应用新的 PSO
+        m_currentDrawCall.renderState = m_pendingRenderState;
+        ID3D12PipelineState* pso      = GetOrCreatePipelineState(m_pendingRenderState);
+        m_commandList->SetPipelineState(pso);
+        m_currentPipelineStateObject = pso;
     }
 
-    // Submit the current descriptor set
-    CommitCurrentDescriptorSet();
+    // 提交描述符
+    CommitDescriptorsForCurrentDraw();
 
-    // Draw
+    // 绘制
     m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
     m_commandList->DrawInstanced(count, 1, 0, 0);
 
-    // Prepare the next descriptor set
-    PrepareNextDescriptorSet();
+    // 准备下一次绘制
+    PrepareNextDrawCall();
 }
 
 void DX12Renderer::DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount)
 {
-    // Check and apply state changes
-    DescriptorSet& currentSet = m_descriptorSets[m_currentDescriptorSet];
+    // 检查状态变化
+    bool stateChanged = !(m_currentDrawCall.renderState == m_pendingRenderState);
+    if (stateChanged)
     {
-        bool stateChanged = !(currentSet.renderState == m_pendingRenderState);
-        if (stateChanged)
-        {
-            PrepareNextDescriptorSet();
-            DescriptorSet& newSet    = m_descriptorSets[m_currentDescriptorSet];
-            newSet.renderState       = m_pendingRenderState;
-            ID3D12PipelineState* pso = GetOrCreatePipelineState(m_pendingRenderState);
-            m_commandList->SetPipelineState(pso);
-            m_currentPipelineStateObject = pso;
-        }
+        // 应用新的 PSO
+        m_currentDrawCall.renderState = m_pendingRenderState;
+        ID3D12PipelineState* pso      = GetOrCreatePipelineState(m_pendingRenderState);
+        m_commandList->SetPipelineState(pso);
+        m_currentPipelineStateObject = pso;
     }
 
-    // Submit the current descriptor set
-    CommitCurrentDescriptorSet();
+    // 提交描述符
+    CommitDescriptorsForCurrentDraw();
 
-    // Draw
+    // 绘制
     m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
-    m_commandList->IASetIndexBuffer(&ibo->m_indexBufferView);
-    m_commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+    m_commandList->DrawInstanced(indexCount, 1, 0, 0);
 
-    // Prepare the next descriptor set
-    PrepareNextDescriptorSet();
+    // 准备下一次绘制
+    PrepareNextDrawCall();
 }
 
 void DX12Renderer::UploadToCB(ConstantBuffer* cb, const void* data, size_t size)

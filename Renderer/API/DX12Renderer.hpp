@@ -2,12 +2,14 @@
 #include <array>
 #include <d3d12.h>
 #include <map>
+#include <unordered_map>
 
 #include "Engine/Renderer/IRenderer.hpp"
 #include <vector>
 #include <ThirdParty/d3dx12/d3dx12.h>
 #include <wrl/client.h>
 
+#include "DirectX12/DescriptorAllocator.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Renderer/IndexBuffer.hpp"
 
@@ -47,6 +49,51 @@ constexpr uint32_t        kMaxShaderSourceViewSlot = 128;
 constexpr uint32_t        kMaxTextureCached        = 4096;
 using Microsoft::WRL::ComPtr;
 
+struct RenderState
+{
+    BlendMode      blendMode      = BlendMode::ALPHA;
+    RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
+    DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
+    SamplerMode    samplerMode    = SamplerMode::POINT_CLAMP;
+    Shader*        shader         = nullptr; // Bind Shader
+    // In order to be used in a map, a comparison operator is required
+    bool operator<(const RenderState& other) const
+    {
+        if (blendMode != other.blendMode) return blendMode < other.blendMode;
+        if (rasterizerMode != other.rasterizerMode) return rasterizerMode < other.rasterizerMode;
+        if (depthMode != other.depthMode) return depthMode < other.depthMode;
+        return samplerMode < other.samplerMode;
+    }
+
+
+    bool operator==(const RenderState& other) const
+    {
+        return blendMode == other.blendMode &&
+            rasterizerMode == other.rasterizerMode &&
+            depthMode == other.depthMode &&
+            samplerMode == other.samplerMode;
+    }
+};
+
+struct DrawCall
+{
+    TieredDescriptorHandler::FrameDescriptorTable          descriptorTable;
+    RenderState                                            renderState;
+    std::array<DescriptorHandle, kMaxConstantBufferSlot>   constantBuffers;
+    std::array<DescriptorHandle, kMaxShaderSourceViewSlot> textures;
+    UINT                                                   numCBVs = 0;
+    UINT                                                   numSRVs = 0;
+};
+
+// Modify the texture structure to store the persistent descriptor handle
+struct TextureData
+{
+    ComPtr<ID3D12Resource> resource;
+    ComPtr<ID3D12Resource> uploadHeap;
+    DescriptorHandle       persistentSRV; // Persistent SRV in CPU heap
+    IntVec2                dimensions;
+    std::string            name;
+};
 
 /**
  * DirectX 12 implementation of the IRenderer interface.
@@ -166,42 +213,6 @@ private:
     std::array<IndexBuffer*, kBackBufferCount> m_frameIndexBuffer{nullptr};
     static constexpr size_t                    kIndexRingSize = sizeof(unsigned int) * 256 * 1024; // 1MB for indices
 
-    /// Frame heap and the shader source view manager heap
-    /// m_frameHeap (Shader-Visible):
-    /// [CBV0][CBV1]...[CBV13] | [Set0: t0-t127] | [Set1: t0-t127] | [Set2: t0-t127] ...
-    /// |<----- 14 slots ----->|<-- 128 slots -->|<-- 128 slots -->|
-    ///                        ^                 ^                 ^
-    ///                        |                 |                 |
-    ///                   baseIndex=14      baseIndex=142      baseIndex=270
-    /// TODO: Consider use Double-buffered swap chain to make CPU synchronize with GPU
-    ComPtr<ID3D12DescriptorHeap> m_frameHeap                   = nullptr; // The heap that storage 14 constant buffer view descriptors
-    ComPtr<ID3D12DescriptorHeap> m_shaderSourceViewManagerHeap = nullptr; // The shader resource view heap that contains kMaxTextureCached size of views
-
-    struct RenderState
-    {
-        BlendMode      blendMode      = BlendMode::ALPHA;
-        RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
-        DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
-        SamplerMode    samplerMode    = SamplerMode::POINT_CLAMP;
-        Shader*        shader         = nullptr; // Bind Shader
-        // In order to be used in a map, a comparison operator is required
-        bool operator<(const RenderState& other) const
-        {
-            if (blendMode != other.blendMode) return blendMode < other.blendMode;
-            if (rasterizerMode != other.rasterizerMode) return rasterizerMode < other.rasterizerMode;
-            if (depthMode != other.depthMode) return depthMode < other.depthMode;
-            return samplerMode < other.samplerMode;
-        }
-
-
-        bool operator==(const RenderState& other) const
-        {
-            return blendMode == other.blendMode &&
-                rasterizerMode == other.rasterizerMode &&
-                depthMode == other.depthMode &&
-                samplerMode == other.samplerMode;
-        }
-    };
 
     struct ConstantBufferPool
     {
@@ -219,22 +230,14 @@ private:
     std::array<ConstantBufferPool, kBackBufferCount> m_constantBufferPools;
     static constexpr size_t                          kConstantBufferPoolSize = (size_t)2 * 1024 * 1024;
 
-    /// DescriptorSet for each DrawCall
-    /// - Each draw call uses a separate descriptor set
-    /// - BindTexture modifies the texture of the specified slot in the current descriptor set
-    /// - DrawVertexArray commits the current descriptor set before drawing, and then prepares for the next
-    /// - This ensures that each draw call has its own independent texture binding state
-    struct DescriptorSet
-    {
-        UINT            baseIndex; // Starting index in the heap
-        Texture*        boundTextures[kMaxShaderSourceViewSlot]; //Record the bound texture pointer
-        ConstantBuffer* boundConstantBuffers[kMaxConstantBufferSlot];
-        RenderState     renderState; // The rendering state used by this descriptor set
-    };
+    std::unique_ptr<TieredDescriptorHandler> m_descriptorHandler;
 
-    std::vector<DescriptorSet> m_descriptorSets;
-    UINT                       m_currentDescriptorSet     = 0;
-    static constexpr UINT      kMaxDescriptorSetsPerFrame = 2048;
+
+    DrawCall              m_currentDrawCall;
+    std::vector<DrawCall> m_pendingDrawCalls;
+
+    std::unordered_map<Texture*, std::unique_ptr<TextureData>> m_textureData;
+
 
     /// depth Buffer
     ComPtr<ID3D12Resource>       m_depthStencilBuffer             = nullptr;
@@ -261,8 +264,8 @@ private:
     void WaitForGPU();
 
     /// Descriptor Set
-    void CommitCurrentDescriptorSet();
-    void PrepareNextDescriptorSet();
+    void CommitDescriptorsForCurrentDraw();
+    void PrepareNextDrawCall();
 
     /// Constant buffer pool
     void            InitializeConstantBufferPools();

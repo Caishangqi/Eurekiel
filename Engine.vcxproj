@@ -216,6 +216,7 @@
         <ClCompile Include="Math\Vec4.cpp"/>
         <ClCompile Include="Math\ZCylinder.cpp" />
         <ClCompile Include="Network\NetworkSubsystem.cpp" />
+        <ClCompile Include="Renderer\API\DirectX12\DescriptorAllocator.cpp" />
         <ClCompile Include="Renderer\API\DX11Renderer.cpp" />
         <ClCompile Include="Renderer\API\DX12Renderer.cpp" />
         <ClCompile Include="Renderer\API\GLRenderer.cpp" />
@@ -293,6 +294,7 @@
         <ClInclude Include="Math\Vec4.hpp"/>
         <ClInclude Include="Math\ZCylinder.hpp" />
         <ClInclude Include="Network\NetworkSubsystem.hpp" />
+        <ClInclude Include="Renderer\API\DirectX12\DescriptorAllocator.hpp" />
         <ClInclude Include="Renderer\API\DX11Renderer.hpp" />
         <ClInclude Include="Renderer\API\DX12Renderer.hpp" />
         <ClInclude Include="Renderer\API\GLRenderer.hpp" />
@@ -324,9 +326,6 @@
     <ItemGroup>
         <Content Include=".gitignore" />
         <Content Include="README.md"/>
-    </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Renderer\API\DirectX12\" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
