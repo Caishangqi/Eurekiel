@@ -263,13 +263,30 @@ void DX12Renderer::Startup()
         // We set the second parameter of root signature to out cBuffer Descriptor Table
         rootParameters[0].InitAsDescriptorTable(1, &cbvDescriptorRange, D3D12_SHADER_VISIBILITY_ALL); // All means it is visible in vertex/pixel/compute shader, set as needed
         rootParameters[1].InitAsDescriptorTable(1, &shaderResourceDescriptorRange, D3D12_SHADER_VISIBILITY_ALL);
+
+        /// Static Samplers
+        // Create a static sampler array, although we have CreateOrGetRootSignature, but we still create in this way because of tutorial
+        std::vector<CD3DX12_STATIC_SAMPLER_DESC> staticSamplers;
+        staticSamplers.reserve(RenderState::kMaxSamplerSlots);
+
+        // Create a default static sampler for each slot
+        for (UINT i = 0; i < RenderState::kMaxSamplerSlots; ++i)
+        {
+            CD3DX12_STATIC_SAMPLER_DESC samplerDesc(
+                i, // ShaderRegister
+                D3D12_FILTER_MIN_MAG_MIP_POINT, // Use POINT_CLAMP by default
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // AddressU
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // AddressV  
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP // AddressW
+            );
+            staticSamplers.push_back(samplerDesc);
+        }
+
         // define root signature with transformation matrix
         CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc; // always need a descriptor that how GPU will interpolate it
-        // Define static sampler
-        CD3DX12_STATIC_SAMPLER_DESC staticSamplerDesc = {0, D3D12_FILTER_MIN_MAG_MIP_LINEAR};
         // There are numParameters and array of root parameters this is the things that root signature exposing to the shader
         // You can combined flags, we need allow input layout
-        rootSignatureDesc.Init((UINT)std::size(rootParameters), rootParameters, 1, &staticSamplerDesc, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+        rootSignatureDesc.Init((UINT)std::size(rootParameters), rootParameters, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
         // serialize root signature
         // We need tp serialize them into a stream format that drivers will understand, like compiling a shader for hlsl
         ComPtr<ID3DBlob> signatureBlob, errorBlob;
@@ -440,8 +457,6 @@ void DX12Renderer::BeginFrame()
 
     m_currentDrawCall             = DrawCall{};
     m_currentDrawCall.renderState = m_pendingRenderState;
-
-    BindTexture(nullptr);
 
     // Config the Input assembler
     // you may this we have set the primitive in PSO desc. In PSO we saying that we are rendering triangle
@@ -1047,10 +1062,31 @@ void DX12Renderer::SetDepthMode(DepthMode mode)
     m_pendingRenderState.depthMode = mode;
 }
 
+/**
+ * Sets the sampler mode for a specified slot in the rendering pipeline.
+ *
+ * This function updates the current sampler mode and assigns the specified mode
+ * to the corresponding slot within the rendering state's pending configuration.
+ * It verifies that the provided slot index is within the valid range of sampler slots.
+ *
+ * @param mode The SamplerMode to be set for the given slot in the rendering pipeline.
+ * @param slot The index of the sampler slot to update. Must be within the range [0, kMaxSamplerSlots).
+ *
+ * @throws If the slot index is out of bounds, an error is logged, and the function returns without making any changes.
+ */
 void DX12Renderer::SetSamplerMode(SamplerMode mode, int slot)
 {
-    m_currentSamplerMode             = mode;
-    m_pendingRenderState.samplerMode = mode;
+    if (slot < 0 || slot >= static_cast<int>(RenderState::kMaxSamplerSlots))
+    {
+        ERROR_RECOVERABLE("Invalid sampler slot index")
+        return;
+    }
+
+    // Update the current sampler mode
+    m_currentSamplerMode = mode;
+
+    // Update the sampler mode of the corresponding slot in the rendering state to be applied
+    m_pendingRenderState.samplerModes[slot] = mode;
 }
 
 void DX12Renderer::DrawVertexArray(int n, const Vertex_PCU* v)
@@ -1126,8 +1162,19 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::
 
 void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx)
 {
-    UNUSED(v)
-    UNUSED(idx)
+    if (v.empty() || idx.empty()) return;
+    // Allocate vertex space in RingVertexBuffer
+    if (!m_currentVertexBuffer->Allocate(v.data(), v.size() * sizeof(Vertex_PCUTBN)))
+    {
+        return;
+    }
+    unsigned int indexDataSize = static_cast<unsigned int>(idx.size()) * sizeof(unsigned int); // Allocate index space in RingIndexBuffer
+    if (!m_currentIndexBuffer->Allocate(idx.data(), indexDataSize))
+    {
+        return;
+    }
+    // Call internal drawing function
+    DrawVertexIndexedInternal(m_currentVertexBuffer, m_currentIndexBuffer, static_cast<unsigned int>(idx.size()));
 }
 
 void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
@@ -1374,6 +1421,21 @@ ID3D12PipelineState* DX12Renderer::GetOrCreatePipelineState(const RenderState& s
     return newPSO.Get();
 }
 
+/**
+ * Creates a DirectX 12 pipeline state object (PSO) based on the provided render state configuration.
+ *
+ * This function configures a pipeline state stream, which holds various pipeline state settings such as root signature,
+ * input layout, shaders, rasterizer mode, blend mode, depth mode, and render target formats.
+ * Depending on the render state properties, it applies the desired configurations and generates the PSO.
+ *
+ * @param state The RenderState describing the configuration to use for the pipeline state. It specifies the
+ *              shader, rasterizer mode, blend mode, depth mode, and sampler modes.
+ *
+ * @return A ComPtr to the created ID3D12PipelineState object configured according to the provided render state.
+ *
+ * @throws If the render state includes an unsupported value for rasterizer mode, blend mode, or depth mode,
+ *         the program logs the error and terminates execution via ERROR_AND_DIE.
+ */
 ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(const RenderState& state)
 {
     // Create the corresponding PSO description according to the state
@@ -1504,9 +1566,105 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
     ComPtr<ID3D12PipelineState>      pso;
     D3D12_PIPELINE_STATE_STREAM_DESC desc = {sizeof(PipelineStateStream), &pipelineStateStream};
 
+    ID3D12RootSignature* rootSignature = GetOrCreateRootSignature(state.samplerModes);
+    pipelineStateStream.RootSignature  = rootSignature;
+
     // build the pipeline state object
     m_device2->CreatePipelineState(&desc, IID_PPV_ARGS(&pso)) >> chk;
     return pso;
+}
+
+/**
+ * Retrieves an existing root signature from the cache or creates a new one based on the provided sampler modes.
+ *
+ * This function checks the cache for an existing root signature associated with the specified sampler modes.
+ * If a match is found, it returns the cached root signature. Otherwise, it creates a new root signature,
+ * configures its descriptor tables, static samplers, and serialization, then stores it in the cache for future use.
+ *
+ * @param samplerModes An array of SamplerMode representing the modes used for each sampler slot.
+ *                     The array size must match RenderState::kMaxSamplerSlots.
+ *
+ * @return A pointer to the corresponding ID3D12RootSignature object.
+ *
+ * @throws If serialization of the root signature fails, logs the error and terminates execution via ERROR_AND_DIE.
+ */
+ID3D12RootSignature* DX12Renderer::GetOrCreateRootSignature(const std::array<SamplerMode, RenderState::kMaxSamplerSlots>& samplerModes)
+{
+    SamplerStateKey key{samplerModes};
+    // Check the cache
+    auto it = m_rootSignatureCache.find(key);
+    if (it != m_rootSignatureCache.end())
+    {
+        return it->second.Get();
+    }
+    CD3DX12_ROOT_PARAMETER   rootParameters[2] = {};
+    CD3DX12_DESCRIPTOR_RANGE cbvDescriptorRange;
+    cbvDescriptorRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, kMaxConstantBufferSlot, 0, 0,
+                            D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+
+    CD3DX12_DESCRIPTOR_RANGE shaderResourceDescriptorRange;
+    shaderResourceDescriptorRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, kMaxShaderSourceViewSlot, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+
+    rootParameters[0].InitAsDescriptorTable(1, &cbvDescriptorRange, D3D12_SHADER_VISIBILITY_ALL);
+    rootParameters[1].InitAsDescriptorTable(1, &shaderResourceDescriptorRange, D3D12_SHADER_VISIBILITY_ALL);
+
+    // Create a static sampler
+    std::vector<CD3DX12_STATIC_SAMPLER_DESC> staticSamplers;
+    for (UINT i = 0; i < RenderState::kMaxSamplerSlots; ++i)
+    {
+        staticSamplers.push_back(GetSamplerDesc(samplerModes[i], i));
+    }
+
+    CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+    rootSignatureDesc.Init((UINT)std::size(rootParameters), rootParameters, (UINT)staticSamplers.size(), staticSamplers.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+    //Serialize and create root signature
+    ComPtr<ID3DBlob> signatureBlob, errorBlob;
+    HRESULT          hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signatureBlob, &errorBlob);
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            auto errorBufferPtr = errorBlob->GetBufferPointer();
+            ERROR_AND_DIE(static_cast<const char*>(errorBufferPtr));
+        }
+    }
+
+    ComPtr<ID3D12RootSignature> newRootSignature;
+    m_device->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&newRootSignature)) >> chk;
+
+    // Cache root signature
+    m_rootSignatureCache[key] = newRootSignature;
+
+    return newRootSignature.Get();
+}
+
+CD3DX12_STATIC_SAMPLER_DESC DX12Renderer::GetSamplerDesc(SamplerMode mode, UINT shaderRegister)
+{
+    switch (mode)
+    {
+    case SamplerMode::POINT_CLAMP:
+        return CD3DX12_STATIC_SAMPLER_DESC(
+            shaderRegister,
+            D3D12_FILTER_MIN_MAG_MIP_POINT,
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+        );
+
+    case SamplerMode::BILINEAR_WRAP:
+        return CD3DX12_STATIC_SAMPLER_DESC(
+            shaderRegister,
+            D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP
+        );
+
+    default:
+        ERROR_AND_DIE("Unhandled SamplerMode")
+        // return CD3DX12_STATIC_SAMPLER_DESC(shaderRegister);
+    }
 }
 
 void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)

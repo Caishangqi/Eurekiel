@@ -60,15 +60,26 @@ struct RenderState
     BlendMode      blendMode      = BlendMode::ALPHA;
     RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
     DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
-    SamplerMode    samplerMode    = SamplerMode::POINT_CLAMP;
-    Shader*        shader         = nullptr; // Bind Shader
+
+    Shader* shader = nullptr; // Bind Shader
+
+    // Add sampler state array, support up to 16 slots
+    static constexpr size_t                   kMaxSamplerSlots = 16;
+    std::array<SamplerMode, kMaxSamplerSlots> samplerModes;
+
+    RenderState()
+    {
+        samplerModes.fill(SamplerMode::POINT_CLAMP);
+    }
+
     // In order to be used in a map, a comparison operator is required
     bool operator<(const RenderState& other) const
     {
         if (blendMode != other.blendMode) return blendMode < other.blendMode;
         if (rasterizerMode != other.rasterizerMode) return rasterizerMode < other.rasterizerMode;
         if (depthMode != other.depthMode) return depthMode < other.depthMode;
-        return samplerMode < other.samplerMode;
+        if (shader != other.shader) return shader < other.shader;
+        return samplerModes < other.samplerModes;
     }
 
     bool operator==(const RenderState& other) const
@@ -76,7 +87,8 @@ struct RenderState
         return blendMode == other.blendMode &&
             rasterizerMode == other.rasterizerMode &&
             depthMode == other.depthMode &&
-            samplerMode == other.samplerMode;
+            shader == other.shader &&
+            samplerModes == other.samplerModes;
     }
 };
 
@@ -327,6 +339,23 @@ private:
     ConstantBuffer* GetTempConstantBuffer(ConstantBufferPool& pool, size_t alignedSize);
 
 private:
+    /**
+     * Represents a unique key for defining a sampler state configuration.
+     * This structure is used to store and compare sampler modes across multiple
+     * sampler slots, enabling efficient caching and lookup of states in rendering systems.
+     */
+    struct SamplerStateKey
+    {
+        std::array<SamplerMode, RenderState::kMaxSamplerSlots> samplerModes;
+
+        bool operator<(const SamplerStateKey& other) const
+        {
+            return samplerModes < other.samplerModes;
+        }
+    };
+
+    std::map<SamplerStateKey, ComPtr<ID3D12RootSignature>> m_rootSignatureCache;
+
     // PSO Base Templates - These are the fixed parts shared by all PSOs
     // TODO: Consider use hash value to directly access the memory
     struct PSOTemplate
@@ -354,6 +383,9 @@ private:
 
     // Auxiliary method for creating PSO based on status
     [[nodiscard]] ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);
+    [[nodiscard]] ID3D12RootSignature*        GetOrCreateRootSignature(const std::array<SamplerMode, RenderState::kMaxSamplerSlots>& samplerModes);
+
+    [[nodiscard]] CD3DX12_STATIC_SAMPLER_DESC GetSamplerDesc(SamplerMode mode, UINT shaderRegister);
 
     /// Internal auxiliary function: only responsible for executing drawing commands, not copying data
     [[maybe_unused]] void DrawVertexBufferInternal(VertexBuffer* vbo, int count);
