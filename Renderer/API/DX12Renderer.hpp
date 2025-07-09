@@ -60,8 +60,7 @@ struct RenderState
     BlendMode      blendMode      = BlendMode::ALPHA;
     RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
     DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
-
-    Shader* shader = nullptr; // Bind Shader
+    Shader*        shader         = nullptr; // Bind Shader
 
     // Add sampler state array, support up to 16 slots
     static constexpr size_t                   kMaxSamplerSlots = 16;
@@ -75,11 +74,8 @@ struct RenderState
     // In order to be used in a map, a comparison operator is required
     bool operator<(const RenderState& other) const
     {
-        if (blendMode != other.blendMode) return blendMode < other.blendMode;
-        if (rasterizerMode != other.rasterizerMode) return rasterizerMode < other.rasterizerMode;
-        if (depthMode != other.depthMode) return depthMode < other.depthMode;
-        if (shader != other.shader) return shader < other.shader;
-        return samplerModes < other.samplerModes;
+        return std::tie(blendMode, rasterizerMode, depthMode, shader, samplerModes) <
+            std::tie(other.blendMode, other.rasterizerMode, other.depthMode, other.shader, other.samplerModes);
     }
 
     bool operator==(const RenderState& other) const
@@ -89,6 +85,11 @@ struct RenderState
             depthMode == other.depthMode &&
             shader == other.shader &&
             samplerModes == other.samplerModes;
+    }
+
+    bool operator!=(const RenderState& other) const
+    {
+        return !(*this == other);
     }
 };
 
@@ -379,7 +380,7 @@ private:
     ComPtr<ID3D12PipelineState> m_currentPipelineStateObject = nullptr;
 
     // Get or create the PSO of the corresponding state
-    [[maybe_unused]] ID3D12PipelineState* GetOrCreatePipelineState(const RenderState& state);
+    [[maybe_unused]] ComPtr<ID3D12PipelineState> GetOrCreatePipelineState(const RenderState& state);
 
     // Auxiliary method for creating PSO based on status
     [[nodiscard]] ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);

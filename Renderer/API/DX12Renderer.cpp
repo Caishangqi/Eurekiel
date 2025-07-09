@@ -1126,6 +1126,7 @@ void DX12Renderer::DrawVertexArray(int n, const Vertex_PCUTBN* v)
 
 void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCU>& v)
 {
+    if (v.empty()) return;
     DrawVertexArray(static_cast<int>(v.size()), v.data());
 }
 
@@ -1180,12 +1181,23 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const st
 void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
 {
     if (!vbo || count <= 0) return;
+    // Check the stride of the user VBO to determine the data type
+    bool isPCU    = (vbo->GetStride() == sizeof(Vertex_PCU));
+    bool isPCUTBN = (vbo->GetStride() == sizeof(Vertex_PCUTBN));
+
+    if (!isPCU && !isPCUTBN)
+    {
+        ERROR_RECOVERABLE("Unsupported vertex buffer stride");
+        return;
+    }
 
     // Calculate the size of the data to be copied
-    size_t dataSize = (size_t)count * vbo->GetStride();
+    size_t srcDataSize = (size_t)count * vbo->GetStride();
 
     // Read data from the user's VertexBuffer and copy it to RingBuffer
-    void* srcData = nullptr;
+    void* srcData   = nullptr;
+    bool  needUnmap = false;
+
     if (vbo->m_cpuPtr != nullptr)
     {
         // Fast path: persistent mapping
@@ -1194,22 +1206,49 @@ void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
     else
     {
         // Slow path: Map required
-        D3D12_RANGE readRange = {0, dataSize};
+        D3D12_RANGE readRange = {0, srcDataSize};
         vbo->m_dx12buffer->Map(0, &readRange, &srcData) >> chk;
+        needUnmap = true;
     }
 
-    // Assign to the current RingBuffer
-    if (!m_currentVertexBuffer->Allocate(srcData, dataSize))
+    if (isPCU)
     {
-        if (vbo->m_cpuPtr == nullptr)
+        // Need to convert Vertex_PCU to Vertex_PCUTBN
+        const Vertex_PCU* pcuData = static_cast<const Vertex_PCU*>(srcData);
+
+        // Allocate space from the conversion buffer
+        Vertex_PCUTBN* convertedVerts = m_currentConversionBuffer->Allocate(count);
+        if (!convertedVerts)
         {
-            vbo->m_dx12buffer->Unmap(0, nullptr);
+            ERROR_RECOVERABLE("Conversion buffer exhausted");
+            if (needUnmap) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
         }
-        return;
+
+        ConvertPCUArrayToPCUTBN(pcuData, convertedVerts, count);
+
+        // Allocate to the ring buffer
+        size_t pcutbnDataSize = count * sizeof(Vertex_PCUTBN);
+        if (!m_currentVertexBuffer->Allocate(convertedVerts, pcutbnDataSize))
+        {
+            ERROR_RECOVERABLE("Vertex ring buffer exhausted");
+            if (needUnmap) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
+        }
+    }
+    else // isPCUTBN
+    {
+        // Directly copy Vertex_PCUTBN data
+        if (!m_currentVertexBuffer->Allocate(srcData, srcDataSize))
+        {
+            ERROR_RECOVERABLE("Vertex ring buffer exhausted");
+            if (needUnmap) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
+        }
     }
 
     // Unmap (if necessary)
-    if (vbo->m_cpuPtr == nullptr)
+    if (needUnmap)
     {
         vbo->m_dx12buffer->Unmap(0, nullptr);
     }
@@ -1220,9 +1259,117 @@ void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
 
 void DX12Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount)
 {
-    BindVertexBuffer(vbo);
-    BindIndexBuffer(ibo);
-    m_commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+    if (!vbo || !ibo || indexCount == 0) return;
+
+    // Process vertex data - calculate number of vertices needed
+    // Here we assume the user knows how many vertices they need, or that we can infer from the index data
+    // To be safe, we read the entire VBO
+    unsigned int vertexCount = static_cast<unsigned int>(vbo->GetSize() / vbo->GetStride());
+
+    // Check vertex data type
+    bool isPCU    = (vbo->GetStride() == sizeof(Vertex_PCU));
+    bool isPCUTBN = (vbo->GetStride() == sizeof(Vertex_PCUTBN));
+
+    if (!isPCU && !isPCUTBN)
+    {
+        ERROR_RECOVERABLE("Unsupported vertex buffer stride");
+        return;
+    }
+
+    // Read vertex data
+    void*  vertexSrcData     = nullptr;
+    bool   needUnmapVertex   = false;
+    size_t vertexSrcDataSize = (size_t)vertexCount * vbo->GetStride();
+
+    if (vbo->m_cpuPtr != nullptr)
+    {
+        vertexSrcData = vbo->m_cpuPtr;
+    }
+    else
+    {
+        D3D12_RANGE readRange = {0, vertexSrcDataSize};
+        HRESULT     hr        = vbo->m_dx12buffer->Map(0, &readRange, &vertexSrcData);
+        if (FAILED(hr))
+        {
+            ERROR_RECOVERABLE("Failed to map vertex buffer");
+            return;
+        }
+        needUnmapVertex = true;
+    }
+
+    // Handle vertex data conversion and copying
+    if (isPCU)
+    {
+        const Vertex_PCU* pcuData        = static_cast<const Vertex_PCU*>(vertexSrcData);
+        Vertex_PCUTBN*    convertedVerts = m_currentConversionBuffer->Allocate(vertexCount);
+        if (!convertedVerts)
+        {
+            ERROR_RECOVERABLE("Conversion buffer exhausted");
+            if (needUnmapVertex) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
+        }
+
+        ConvertPCUArrayToPCUTBN(pcuData, convertedVerts, vertexCount);
+
+        size_t pcutbnDataSize = vertexCount * sizeof(Vertex_PCUTBN);
+        if (!m_currentVertexBuffer->Allocate(convertedVerts, pcutbnDataSize))
+        {
+            ERROR_RECOVERABLE("Vertex ring buffer exhausted");
+            if (needUnmapVertex) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
+        }
+    }
+    else
+    {
+        if (!m_currentVertexBuffer->Allocate(vertexSrcData, vertexSrcDataSize))
+        {
+            ERROR_RECOVERABLE("Vertex ring buffer exhausted");
+            if (needUnmapVertex) vbo->m_dx12buffer->Unmap(0, nullptr);
+            return;
+        }
+    }
+
+    if (needUnmapVertex)
+    {
+        vbo->m_dx12buffer->Unmap(0, nullptr);
+    }
+
+    // Read index data
+    void*  indexSrcData   = nullptr;
+    bool   needUnmapIndex = false;
+    size_t indexDataSize  = indexCount * sizeof(unsigned int);
+
+    if (ibo->m_cpuPtr != nullptr)
+    {
+        indexSrcData = ibo->m_cpuPtr;
+    }
+    else
+    {
+        D3D12_RANGE readRange = {0, indexDataSize};
+        HRESULT     hr        = ibo->m_dx12buffer->Map(0, &readRange, &indexSrcData);
+        if (FAILED(hr))
+        {
+            ERROR_RECOVERABLE("Failed to map index buffer")
+            return;
+        }
+        needUnmapIndex = true;
+    }
+
+    // Copy index data to ring buffer
+    if (!m_currentIndexBuffer->Allocate(indexSrcData, indexDataSize))
+    {
+        ERROR_RECOVERABLE("Index ring buffer exhausted")
+        if (needUnmapIndex) ibo->m_dx12buffer->Unmap(0, nullptr);
+        return;
+    }
+
+    if (needUnmapIndex)
+    {
+        ibo->m_dx12buffer->Unmap(0, nullptr);
+    }
+
+    // Call internal drawing function
+    DrawVertexIndexedInternal(m_currentVertexBuffer, m_currentIndexBuffer, indexCount);
 }
 
 void DX12Renderer::WaitForGPU()
@@ -1407,8 +1554,12 @@ ConstantBuffer* DX12Renderer::GetTempConstantBuffer(ConstantBufferPool& pool, si
     return tempBuffer;
 }
 
-ID3D12PipelineState* DX12Renderer::GetOrCreatePipelineState(const RenderState& state)
+ComPtr<ID3D12PipelineState> DX12Renderer::GetOrCreatePipelineState(const RenderState& state)
 {
+#ifdef ENGINE_DEBUG_RENDER
+    static int psoCreationCount = 0;
+#endif
+
     // Check the cache first
     auto it = m_pipelineStateCache.find(state);
     if (it != m_pipelineStateCache.end())
@@ -1417,8 +1568,19 @@ ID3D12PipelineState* DX12Renderer::GetOrCreatePipelineState(const RenderState& s
     }
     // If not in cache, create a new PSO
     ComPtr<ID3D12PipelineState> newPSO = CreatePipelineStateForRenderState(state);
-    m_pipelineStateCache[state]        = newPSO;
-    return newPSO.Get();
+    if (newPSO)
+    {
+#ifdef ENGINE_DEBUG_RENDER
+        // Add debug name for PSO
+        std::wstring name = L"PSO_" + std::to_wstring(++psoCreationCount);
+        newPSO->SetName(name.c_str());
+        DebuggerPrintf("Created PSO %d\n", psoCreationCount);
+#endif
+
+        m_pipelineStateCache[state] = newPSO;
+        return newPSO;
+    }
+    ERROR_AND_DIE("Failed to create Pipeline State Object")
 }
 
 /**
@@ -1669,15 +1831,21 @@ CD3DX12_STATIC_SAMPLER_DESC DX12Renderer::GetSamplerDesc(SamplerMode mode, UINT 
 
 void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)
 {
+    if (!m_currentPipelineStateObject)
+    {
+        RenderState defaultState;
+        defaultState.shader          = m_defaultShader;
+        m_currentPipelineStateObject = GetOrCreatePipelineState(defaultState);
+        m_pendingRenderState         = defaultState;
+    }
+
     // Check state changes
     bool stateChanged = !(m_currentDrawCall.renderState == m_pendingRenderState);
     if (stateChanged)
     {
-        // Apply new PSO
         m_currentDrawCall.renderState = m_pendingRenderState;
-        ID3D12PipelineState* pso      = GetOrCreatePipelineState(m_pendingRenderState);
-        m_commandList->SetPipelineState(pso);
-        m_currentPipelineStateObject = pso;
+        m_currentPipelineStateObject  = GetOrCreatePipelineState(m_pendingRenderState);
+        m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     }
 
     // Submit descriptor
@@ -1701,9 +1869,8 @@ void DX12Renderer::DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo
     {
         // Apply new PSO
         m_currentDrawCall.renderState = m_pendingRenderState;
-        ID3D12PipelineState* pso      = GetOrCreatePipelineState(m_pendingRenderState);
-        m_commandList->SetPipelineState(pso);
-        m_currentPipelineStateObject = pso;
+        m_currentPipelineStateObject  = GetOrCreatePipelineState(m_pendingRenderState); // 现在返回ComPtr
+        m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     }
 
     // Submit descriptor
@@ -1711,8 +1878,8 @@ void DX12Renderer::DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo
 
     // Draw
     m_commandList->IASetVertexBuffers(0, 1, &vbo->m_vertexBufferView);
-    m_commandList->DrawInstanced(indexCount, 1, 0, 0);
-
+    m_commandList->IASetIndexBuffer(&ibo->m_indexBufferView);
+    m_commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
     // Prepare for the next drawing
     PrepareNextDrawCall();
 }
