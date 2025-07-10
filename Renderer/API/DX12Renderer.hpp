@@ -373,6 +373,7 @@ private:
 
     /// Pipeline state cache, Cache the created PSO based on the state combination
     std::map<RenderState, ComPtr<ID3D12PipelineState>> m_pipelineStateCache;
+    std::vector<ComPtr<ID3D12PipelineState>>           m_frameUsedPSOs;
 
     // Current waiting application rendering status
     RenderState m_pendingRenderState;

@@ -328,6 +328,7 @@ void DX12Renderer::Startup()
         m_currentPipelineStateObject = CreatePipelineStateForRenderState(m_pendingRenderState);
     }
 
+
     // define scissor rect
     m_scissorRect = CD3DX12_RECT(0, 0,LONG_MAX, LONG_MAX);
     // define viewport
@@ -416,6 +417,8 @@ void DX12Renderer::Shutdown()
 
 void DX12Renderer::BeginFrame()
 {
+    m_frameUsedPSOs.clear();
+
     ConstantBufferPool& pool = m_constantBufferPools[m_currentBackBufferIndex];
     pool.currentOffset       = 0;
     pool.tempBufferIndex     = 0;
@@ -1835,8 +1838,10 @@ void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)
     {
         RenderState defaultState;
         defaultState.shader          = m_defaultShader;
-        m_currentPipelineStateObject = GetOrCreatePipelineState(defaultState);
-        m_pendingRenderState         = defaultState;
+        auto pso                     = GetOrCreatePipelineState(defaultState);
+        m_currentPipelineStateObject = pso;
+        m_frameUsedPSOs.push_back(pso);
+        m_pendingRenderState = defaultState;
     }
 
     // Check state changes
@@ -1844,7 +1849,15 @@ void DX12Renderer::DrawVertexBufferInternal(VertexBuffer* vbo, int count)
     if (stateChanged)
     {
         m_currentDrawCall.renderState = m_pendingRenderState;
-        m_currentPipelineStateObject  = GetOrCreatePipelineState(m_pendingRenderState);
+        auto newPSO                   = GetOrCreatePipelineState(m_pendingRenderState);
+
+        // Keep a reference to the old PSO until the end of the frame
+        if (m_currentPipelineStateObject && m_currentPipelineStateObject != newPSO)
+        {
+            m_frameUsedPSOs.push_back(m_currentPipelineStateObject);
+        }
+
+        m_currentPipelineStateObject = newPSO;
         m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     }
 
@@ -1867,9 +1880,16 @@ void DX12Renderer::DrawVertexIndexedInternal(VertexBuffer* vbo, IndexBuffer* ibo
     bool stateChanged = !(m_currentDrawCall.renderState == m_pendingRenderState);
     if (stateChanged)
     {
-        // Apply new PSO
         m_currentDrawCall.renderState = m_pendingRenderState;
-        m_currentPipelineStateObject  = GetOrCreatePipelineState(m_pendingRenderState); // 现在返回ComPtr
+        auto newPSO                   = GetOrCreatePipelineState(m_pendingRenderState);
+
+        // Keep a reference to the old PSO until the end of the frame
+        if (m_currentPipelineStateObject && m_currentPipelineStateObject != newPSO)
+        {
+            m_frameUsedPSOs.push_back(m_currentPipelineStateObject);
+        }
+
+        m_currentPipelineStateObject = newPSO;
         m_commandList->SetPipelineState(m_currentPipelineStateObject.Get());
     }
 
