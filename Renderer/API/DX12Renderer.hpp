@@ -16,7 +16,7 @@
 class Window;
 class Shader;
 class Texture;
-class VertexBuffer;
+class VertexBuffer;                                                                                    
 class IndexBuffer;
 class ConstantBuffer;
 class Camera;
@@ -373,20 +373,21 @@ private:
 
     /// Pipeline state cache, Cache the created PSO based on the state combination
     std::map<RenderState, ComPtr<ID3D12PipelineState>> m_pipelineStateCache;
-    std::vector<ComPtr<ID3D12PipelineState>>           m_frameUsedPSOs;
+    /// @FIX: DirectX 12 requires that all resources referenced by the command list must remain valid until the command list is executed.
+    /// When change the BlendMode, a new PSO is created. The old PSO reference is overwritten by the new one, causing the reference count to zero and be released.
+    /// However, the old PSO is still referenced in the recorded command list.
+    std::vector<ComPtr<ID3D12PipelineState>> m_frameUsedPSOs;
 
     // Current waiting application rendering status
-    RenderState m_pendingRenderState;
-
+    RenderState                 m_pendingRenderState;
     ComPtr<ID3D12PipelineState> m_currentPipelineStateObject = nullptr;
+
 
     // Get or create the PSO of the corresponding state
     [[maybe_unused]] ComPtr<ID3D12PipelineState> GetOrCreatePipelineState(const RenderState& state);
-
     // Auxiliary method for creating PSO based on status
     [[nodiscard]] ComPtr<ID3D12PipelineState> CreatePipelineStateForRenderState(const RenderState& state);
     [[nodiscard]] ID3D12RootSignature*        GetOrCreateRootSignature(const std::array<SamplerMode, RenderState::kMaxSamplerSlots>& samplerModes);
-
     [[nodiscard]] CD3DX12_STATIC_SAMPLER_DESC GetSamplerDesc(SamplerMode mode, UINT shaderRegister);
 
     /// Internal auxiliary function: only responsible for executing drawing commands, not copying data
