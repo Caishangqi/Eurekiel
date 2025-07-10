@@ -19,6 +19,12 @@ compromising resource efficiency.
 
 > Description of the feature here. This could be a feature that adds new functionality, improves existing features, or enhances the overall performance of the engine.
 
+## Planned Feature
+
+- Support Blindless rendering options, enable by engine.configuration.
+- Support for multiple render backends (DirectX12, DirectX11, OpenGL).
+
+
 ### Rendering Pipeline
 
 TBD
