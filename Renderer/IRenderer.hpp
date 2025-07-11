@@ -31,6 +31,8 @@ struct LightConstants;
 #undef OPAQUE
 #endif
 
+#define DX_SAFE_RELEASE(p) { if(p) { (p)->Release(); (p) = nullptr; } }
+
 enum class RendererBackend
 {
     DirectX11,

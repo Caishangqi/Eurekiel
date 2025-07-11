@@ -27,7 +27,6 @@
 #include "Engine/Math/Mat44.hpp"
 #include "Game/EngineBuildPreferences.hpp"
 ///
-#define DX_SAFE_RELEASE(p) { if(p) { (p)->Release(); (p) = nullptr; } }
 struct LightingConstants;
 class IndexBuffer;
 class Image;
