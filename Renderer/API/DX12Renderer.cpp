@@ -341,78 +341,180 @@ void DX12Renderer::Startup()
 
 void DX12Renderer::Shutdown()
 {
-#ifdef ENGINE_DEBUG_RENDER
-    ComPtr<ID3D12DebugDevice> debugDevice;
-    if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
+    // 1. 首先确保GPU完成所有未完成的工作
+    if (m_commandQueue && m_fence)
     {
-        debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-    }
-#endif
-
-    /// Make sure the queue is empty
-    /// So we insert an fence signal, when it reach the signal , CPU knows that GPU executed all the Command List
-    /// before the fence
-
-    // wait for queue to become completely empty ( 2 seconds max )
-    m_commandQueue->Signal(m_fence.Get(), ++m_fenceValue) >> chk;
-    m_fence->SetEventOnCompletion(m_fenceValue, m_fenceEvent) >> chk;
-    if (WaitForSingleObject(m_fenceEvent, 2000) == WAIT_FAILED)
-    {
-        GetLastError() >> chk;
+        m_commandQueue->Signal(m_fence.Get(), ++m_fenceValue);
+        if (m_fence->SetEventOnCompletion(m_fenceValue, m_fenceEvent) == S_OK)
+        {
+            WaitForSingleObject(m_fenceEvent, 2000);
+        }
     }
 
+    // 2. 关闭Fence事件句柄
     if (m_fenceEvent)
     {
-        // Close the fence event handle
         CloseHandle(m_fenceEvent);
         m_fenceEvent = nullptr;
     }
 
+    // 3. 清理游戏层资源（字体、纹理、着色器）
+    for (BitmapFont* font : m_loadedFonts)
+    {
+        POINTER_SAFE_DELETE(font)
+    }
+    m_loadedFonts.clear();
+    m_fontsCache.clear();
+
+    // 清理纹理缓存
+    for (Texture* texture : m_textureCache)
+    {
+        POINTER_SAFE_DELETE(texture)
+    }
+    m_textureCache.clear();
+
+    // 清理着色器缓存
+    for (Shader* shader : m_shaderCache)
+    {
+        POINTER_SAFE_DELETE(shader)
+    }
+    m_shaderCache.clear();
+
+    // 清理默认纹理（它不在缓存中）
+    POINTER_SAFE_DELETE(m_defaultTexture)
+
+    // 重置指针（避免悬空指针）
+    m_currentShader = nullptr;
+    m_defaultShader = nullptr;
+
+    // 4. 清理纹理数据映射
+    m_textureData.clear();
+
+    // 5. 清理描述符处理器（在释放其他GPU资源之前）
+    m_descriptorHandler.reset();
+
+    // 6. 清理缓冲池
+    for (auto& pool : m_constantBufferPools)
+    {
+        // 先unmap
+        if (pool.poolBuffer && pool.mappedData)
+        {
+            pool.poolBuffer->m_dx12ConstantBuffer->Unmap(0, nullptr);
+            pool.mappedData = nullptr;
+        }
+
+        // 删除池缓冲区
+        POINTER_SAFE_DELETE(pool.poolBuffer)
+
+        // 清理临时缓冲区
+        for (ConstantBuffer* tempBuffer : pool.tempBuffers)
+        {
+            POINTER_SAFE_DELETE(tempBuffer)
+        }
+        pool.tempBuffers.clear();
+    }
+
+    // 7. 清理帧缓冲区
     for (IndexBuffer* indexBuffer : m_frameIndexBuffer)
     {
         POINTER_SAFE_DELETE(indexBuffer)
     }
 
-    m_currentIndexBuffer = nullptr;
-
+    // 8. 清理帧顶点缓冲区
     for (VertexBuffer* vertexBuffer : m_frameVertexBuffer)
     {
         POINTER_SAFE_DELETE(vertexBuffer)
     }
 
+    // 9. **修复：删除在Startup中创建的独立缓冲区**
+    // 检查m_currentVertexBuffer是否是独立创建的（不在m_frameVertexBuffer数组中）
+    bool isIndependentVB = true;
+    for (VertexBuffer* vb : m_frameVertexBuffer)
+    {
+        if (m_currentVertexBuffer == vb)
+        {
+            isIndependentVB = false;
+            break;
+        }
+    }
+    if (isIndependentVB && m_currentVertexBuffer)
+    {
+        delete m_currentVertexBuffer;
+    }
     m_currentVertexBuffer = nullptr;
 
-    for (Shader* shader : m_shaderCache)
+    // 同样处理索引缓冲区
+    bool isIndependentIB = true;
+    for (IndexBuffer* ib : m_frameIndexBuffer)
     {
-        POINTER_SAFE_DELETE(shader)
-    }
-
-
-    for (Texture* texture : m_textureCache)
-    {
-        POINTER_SAFE_DELETE(texture)
-    }
-
-    POINTER_SAFE_DELETE(m_defaultTexture)
-    m_currentShader = nullptr;
-    m_defaultShader = nullptr;
-
-    for (auto& pool : m_constantBufferPools)
-    {
-        if (pool.poolBuffer && pool.mappedData)
+        if (m_currentIndexBuffer == ib)
         {
-            pool.poolBuffer->m_dx12ConstantBuffer->Unmap(0, nullptr);
-        }
-        POINTER_SAFE_DELETE(pool.poolBuffer)
-        for (ConstantBuffer* temp_buffer : pool.tempBuffers)
-        {
-            temp_buffer = nullptr;
+            isIndependentIB = false;
+            break;
         }
     }
+    if (isIndependentIB && m_currentIndexBuffer)
+    {
+        delete m_currentIndexBuffer;
+    }
+    m_currentIndexBuffer = nullptr;
 
+    // 10. 清理PSO缓存和RootSignature缓存
+    m_frameUsedPSOs.clear();
+    m_pipelineStateCache.clear();
+    m_currentPipelineStateObject.Reset();
+
+    m_rootSignatureCache.clear();
+    m_rootSignature.Reset();
+
+    // 11. 清理深度缓冲资源
+    m_depthStencilBuffer.Reset();
+    m_depthStencilViewDescriptorHeap.Reset();
+
+    // 12. 清理后台缓冲区
+    for (auto& buffer : m_backBuffers)
+    {
+        buffer.Reset();
+    }
+
+    // 13. 清理渲染目标视图堆
+    m_renderTargetViewHeap.Reset();
+
+    // 14. 清理命令列表和分配器
+    m_commandList.Reset();
+    m_commandAllocator.Reset();
+    m_uploadCommandList.Reset();
+    m_uploadCommandAllocator.Reset();
+
+    // 15. 清理Fence
+    m_fence.Reset();
+
+    // 16. 清理SwapChain（在命令队列之前）
+    m_swapChain.Reset();
+
+    // 17. 清理命令队列
+    m_copyCommandQueue.Reset();
+    m_commandQueue.Reset();
+
+
+    // 19. 清理其他资源
+    m_boundResources          = BoundResources{};
+    m_conversionBuffers       = {};
+    m_currentConversionBuffer = nullptr;
+
+    // 20. 在Release模式下也报告泄漏（仅用于调试）
 #ifdef ENGINE_DEBUG_RENDER
-    debugDevice.Reset();
+    ComPtr<ID3D12DebugDevice> debugDevice;
+    if (m_device && SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
+    {
+        debugDevice->ReportLiveDeviceObjects(D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+        debugDevice.Reset();
+    }
 #endif
+
+    // 18. 最后清理设备
+    m_device2.Reset();
+    m_device.Reset();
 }
 
 void DX12Renderer::BeginFrame()
@@ -810,6 +912,8 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     );
 
     m_textureData[newTexture] = std::move(textureData);
+
+    DX_SAFE_RELEASE(newTexture->m_textureBufferUploadHeap)
 
     return newTexture;
 }

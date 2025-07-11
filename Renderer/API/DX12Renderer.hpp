@@ -16,7 +16,7 @@
 class Window;
 class Shader;
 class Texture;
-class VertexBuffer;                                                                                    
+class VertexBuffer;
 class IndexBuffer;
 class ConstantBuffer;
 class Camera;
@@ -300,7 +300,6 @@ private:
 
     /// Draw calls
     DrawCall              m_currentDrawCall;
-    std::vector<DrawCall> m_pendingDrawCalls;
 
     std::unordered_map<Texture*, std::unique_ptr<TextureData>> m_textureData;
 
