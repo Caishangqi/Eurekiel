@@ -34,7 +34,7 @@ NetworkSubsystem::~NetworkSubsystem()
  * @param config Reference to a NetworkConfig object containing the configuration
  *               parameters for the network subsystem.
  */
-void NetworkSubsystem::Startup(NetworkConfig& config) : m_config(config)
+void NetworkSubsystem::Startup(NetworkConfig& config)
 {
     m_config = config;
 
@@ -159,7 +159,7 @@ bool NetworkSubsystem::StartServer(uint16_t port)
         return false;
     }
 
-    m_serverListenSocket = FromSOCKET(listenSock);
+    m_serverListenSocket = (unsigned int)FromSOCKET(listenSock);
     m_serverState        = ServerState::LISTENING;
 
     std::cout << "Server started listening on port " << port << "\n";
