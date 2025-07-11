@@ -36,6 +36,10 @@ DescriptorAllocator::DescriptorAllocator(ID3D12Device* device, DescriptorHeapTyp
 
 DescriptorAllocator::~DescriptorAllocator()
 {
+    if (m_heap)
+    {
+        m_heap.Reset();
+    }
 }
 
 DescriptorHandle DescriptorAllocator::Allocate()
@@ -142,6 +146,20 @@ TieredDescriptorHandler::TieredDescriptorHandler(ID3D12Device* device) : m_devic
 
 TieredDescriptorHandler::~TieredDescriptorHandler()
 {
+    // 清理持久化的CPU heap
+    if (m_persistentCBVSRVUAV)
+    {
+        m_persistentCBVSRVUAV.reset();
+    }
+
+    // 清理每帧的GPU heaps
+    for (auto& frameHeap : m_frameHeaps)
+    {
+        if (frameHeap.allocator)
+        {
+            frameHeap.allocator.reset();
+        }
+    }
 }
 
 void TieredDescriptorHandler::Startup(UINT maxTexturesPerFrame, UINT maxCBVsPerFrame)
@@ -282,7 +300,7 @@ void TieredDescriptorHandler::CopyDescriptorsRange(const FrameDescriptorTable& d
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE destCPU = CD3DX12_CPU_DESCRIPTOR_HANDLE(dest.baseHandle.cpu, static_cast<INT>(destOffset), m_cbvSrvUavDescriptorSize);
-    D3D12_CPU_DESCRIPTOR_HANDLE srcCPU = CD3DX12_CPU_DESCRIPTOR_HANDLE(src.cpu, static_cast<INT>(srcOffset), m_cbvSrvUavDescriptorSize);
+    D3D12_CPU_DESCRIPTOR_HANDLE srcCPU  = CD3DX12_CPU_DESCRIPTOR_HANDLE(src.cpu, static_cast<INT>(srcOffset), m_cbvSrvUavDescriptorSize);
 
     m_device->CopyDescriptorsSimple(count, destCPU, srcCPU, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
