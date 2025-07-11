@@ -388,7 +388,9 @@ void DevConsole::Shutdown()
     m_insertionPointBlinkTimer = nullptr;
 
     if (m_config.m_camera)
-        delete m_config.m_camera;
+    {
+        POINTER_SAFE_DELETE(m_config.m_camera)
+    }
 }
 
 void DevConsole::BeginFrame()
