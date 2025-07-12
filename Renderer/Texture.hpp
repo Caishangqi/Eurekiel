@@ -11,6 +11,7 @@ class Texture
 {
     friend class Renderer; // Only the Renderer can create new Texture objects!
     friend class DX12Renderer;
+    friend class DX11Renderer;
 
     Texture(); // can't instantiate directly; must ask Renderer to do it for you
     Texture(const Texture& copy) = delete; // No copying allowed!  This represents GPU memory.

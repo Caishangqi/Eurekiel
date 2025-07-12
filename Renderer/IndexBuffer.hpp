@@ -5,6 +5,7 @@ class IndexBuffer
 {
     friend class Renderer;
     friend class DX12Renderer;
+    friend class DX11Renderer;
 
 public:
     IndexBuffer(ID3D11Device* device, unsigned int size);

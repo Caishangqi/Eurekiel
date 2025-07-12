@@ -7,8 +7,10 @@ struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 
 class ConstantBuffer
 {
+    friend class IRenderer;
     friend class Renderer;
     friend class DX12Renderer;
+    friend class DX11Renderer;
 
 public:
     ConstantBuffer(size_t size);
