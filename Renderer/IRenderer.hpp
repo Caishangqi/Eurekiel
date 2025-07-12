@@ -133,7 +133,7 @@ struct LightingConstants
     float pad0;
     float pad1;
     Light lights[8];
-    float pad2[36];
+    float pad2[36]; // x 1.6875
 };
 
 struct ModelConstants
@@ -173,8 +173,9 @@ public:
     // Constant-buffer helpers
     virtual void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& tint = Rgba8::WHITE) = 0;
     virtual void SetDirectionalLightConstants(const DirectionalLightConstants& dl) = 0;
-    virtual void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& lightView, const Mat44& lightProj) = 0;
-    virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t size, int slot) = 0;
+    virtual void SetLightConstants(const LightingConstants& lightConstants) = 0;
+    virtual void SetFrameConstants(const FrameConstants& frameConstants) = 0;
+    virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) = 0;
 
     // State setters
     virtual void SetBlendMode(BlendMode mode) = 0;
@@ -185,7 +186,7 @@ public:
     // Resource creation
     virtual Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
     virtual Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
-    virtual Shader*     CreateOrGetShader(const char* shaderName) = 0;
+    virtual Shader*     CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) = 0;
     virtual BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) = 0;
     virtual bool        CompileShaderToByteCode(std::vector<uint8_t>& outBytes, const char* name, const char* src, const char* entry, const char* target) = 0;
     virtual void        BindShader(Shader* s) = 0;
