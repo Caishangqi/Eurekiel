@@ -8,7 +8,7 @@
 #include "Engine/Core/FileUtils.hpp"
 #include "Engine/Math/MathUtils.hpp"
 
-ObjModelLoader::ObjModelLoader(Renderer* renderer) : ModelLoader(renderer)
+ObjModelLoader::ObjModelLoader(IRenderer* renderer) : ModelLoader(renderer)
 {
 }
 

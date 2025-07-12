@@ -6,7 +6,7 @@
 class ObjModelLoader : public ModelLoader
 {
 public:
-    ObjModelLoader(Renderer* renderer);
+    ObjModelLoader(IRenderer* renderer);
     std::unique_ptr<FMesh> Load(const ResourceLocation& location, const std::string& filePath) override;
     int                    GetPriority() const override { return 100; }
     std::string            GetLoaderName() const override { return "ObjModelLoader"; }
