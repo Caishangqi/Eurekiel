@@ -194,7 +194,7 @@ public:
     BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) override;
     Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) override;
     Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) override;
-    Shader*     CreateOrGetShader(const char* shaderName) override;
+    Shader*     CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) override;
     bool        CompileShaderToByteCode(std::vector<uint8_t>& outByteCode, const char* name, const char* src, const char* entryPoint, const char* target) override;
     Texture*    CreateTextureFromImage(Image& image) override;
     Texture*    CreateOrGetTexture(const char* imageFilePath) override;
@@ -222,8 +222,9 @@ public:
 
     void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& tint = Rgba8::WHITE) override;
     void SetDirectionalLightConstants(const DirectionalLightConstants&) override;
-    void SetLightConstants(Vec3 lightPos, float ambient, const Mat44& view, const Mat44& proj) override;
-    void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t sz, int slot) override;
+    void SetLightConstants(const LightingConstants& lightConstants) override;
+    void SetFrameConstants(const FrameConstants& frameConstants) override;
+    void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) override;
 
     void SetBlendMode(BlendMode) override;
     void SetRasterizerMode(RasterizerMode) override;

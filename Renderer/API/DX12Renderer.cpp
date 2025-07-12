@@ -409,7 +409,7 @@ void DX12Renderer::Shutdown()
         // 清理临时缓冲区
         for (ConstantBuffer* tempBuffer : pool.tempBuffers)
         {
-            POINTER_SAFE_DELETE(tempBuffer)
+            tempBuffer = nullptr;
         }
         pool.tempBuffers.clear();
     }
@@ -791,7 +791,7 @@ Shader* DX12Renderer::CreateShader(const char* name, VertexType t)
     return CreateShader(name, shaderSource.c_str(), t);
 }
 
-Shader* DX12Renderer::CreateOrGetShader(const char* shaderName)
+Shader* DX12Renderer::CreateOrGetShader(const char* shaderName, VertexType vertexType)
 {
     for (auto& shader : m_shaderCache)
     {
@@ -800,7 +800,7 @@ Shader* DX12Renderer::CreateOrGetShader(const char* shaderName)
             return shader;
         }
     }
-    return CreateShader(shaderName);
+    return CreateShader(shaderName, vertexType);
 }
 
 bool DX12Renderer::CompileShaderToByteCode(std::vector<uint8_t>& out, const char* name, const char* src, const char* entry, const char* target)
@@ -1134,20 +1134,22 @@ void DX12Renderer::SetDirectionalLightConstants(const DirectionalLightConstants&
 {
 }
 
-void DX12Renderer::SetLightConstants(Vec3 lightPos, float ambient, const Mat44& view, const Mat44& proj)
+void DX12Renderer::SetLightConstants(const LightingConstants& lightConstants)
 {
-    UNUSED(lightPos)
-    UNUSED(ambient)
-    UNUSED(view)
-    UNUSED(proj)
+    UNUSED(lightConstants)
 }
 
-void DX12Renderer::SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, size_t sz, int slot)
+void DX12Renderer::SetFrameConstants(const FrameConstants& frameConstants)
+{
+    UNUSED(frameConstants)
+}
+
+void DX12Renderer::SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot)
 {
     UNUSED(cbo)
     UNUSED(slot)
     UNUSED(data)
-    UNUSED(sz)
+    // @note: This function is not implemented in the provided code
 }
 
 void DX12Renderer::SetBlendMode(BlendMode mode)
