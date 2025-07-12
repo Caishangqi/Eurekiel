@@ -1,6 +1,5 @@
 ﻿#include "ThirdParty/stb/stb_image.h"
 
-#include "Engine/Renderer/IRenderer.hpp"
 #include "Engine/Renderer/Renderer.hpp"
 
 #include "VertexBuffer.hpp"
@@ -171,9 +170,7 @@ void Renderer::Startup()
     blendDesc.RenderTarget[0].DestBlendAlpha        = blendDesc.RenderTarget[0].DestBlend;
     blendDesc.RenderTarget[0].BlendOpAlpha          = blendDesc.RenderTarget[0].BlendOp;
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)
-                                    ]
-    );
+    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:OPAQUE failed.")
     // Alpha state

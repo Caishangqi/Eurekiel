@@ -4,7 +4,7 @@
 
 struct Vec2;
 struct Vec3;
-class Renderer;
+class IRenderer;
 
 // TODO: Hack the simple Mesh, need refactor in the future
 struct FMesh
@@ -20,10 +20,10 @@ struct FMesh
 class ModelLoader : public ResourceLoader<FMesh>
 {
 protected:
-    Renderer* m_renderer; // Cached renderer backend
+    IRenderer* m_renderer; // Cached renderer backend
 
 public:
-    ModelLoader(Renderer* renderer) : m_renderer(renderer)
+    ModelLoader(IRenderer* renderer) : m_renderer(renderer)
     {
     }
 
