@@ -16,7 +16,7 @@ struct WindowConfig
 class Window
 {
 public:
-    friend class Renderer;
+    friend class IRenderer;
     Window(const WindowConfig& config);
     ~Window();
 
