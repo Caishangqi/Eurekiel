@@ -99,10 +99,10 @@ void NetworkSubsystem::Shutdown()
 }
 
 /**
- * Starts the server by binding to the specified port and entering the listening state.
+ * Starts the server by binding to the specified serverPort and entering the listening state.
  * This prepares the server to accept incoming connections. The server must be in the
  * IDLE state before this method can be called. The function creates a non-blocking
- * TCP socket, binds it to the specified port, and begins listening on it.
+ * TCP socket, binds it to the specified serverPort, and begins listening on it.
  *
  * @param port The port number on which the server will listen for incoming connections.
  *             Should be provided in host byte order.
@@ -143,10 +143,10 @@ bool NetworkSubsystem::StartServer(uint16_t port)
     addr.sin_addr.s_addr = htonl(INADDR_ANY); // Listen on all network interfaces
     addr.sin_port        = htons(port); // Host byte order to network byte order
 
-    // Bind to the specified port
+    // Bind to the specified serverPort
     if (bind(listenSock, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
     {
-        std::cerr << "Failed to bind to port " << port << ", error: " << WSAGetLastError() << "\n";
+        std::cerr << "Failed to bind to serverPort " << port << ", error: " << WSAGetLastError() << "\n";
         closesocket(listenSock);
         return false;
     }
@@ -162,7 +162,7 @@ bool NetworkSubsystem::StartServer(uint16_t port)
     m_serverListenSocket = (unsigned int)FromSOCKET(listenSock);
     m_serverState        = ServerState::LISTENING;
 
-    std::cout << "Server started listening on port " << port << "\n";
+    std::cout << "Server started listening on serverPort " << port << "\n";
     return true;
 }
 
@@ -195,7 +195,7 @@ void NetworkSubsystem::StopServer()
 }
 
 /**
- * Initiates a client connection to the specified server IP and port. The method
+ * Initiates a client connection to the specified server IP and serverPort. The method
  * creates a non-blocking socket and attempts to connect to the server. If the client
  * is not in the IDLE state or if any step fails, the connection will not proceed.
  *
@@ -350,7 +350,7 @@ void NetworkSubsystem::Update()
             while (!it->outgoing.empty())
             {
                 // Try to send data
-                int               bytesToSend = static_cast<int>(std::min(it->outgoing.size(), size_t(1024)));
+                int               bytesToSend = static_cast<int>(std::min(it->outgoing.size(), size_t(2048)));
                 std::vector<char> sendBuffer(it->outgoing.begin(), it->outgoing.begin() + bytesToSend);
 
                 int sent = send(clientSocket, sendBuffer.data(), bytesToSend, 0);
@@ -380,7 +380,7 @@ void NetworkSubsystem::Update()
             // Receive data
             if (!shouldRemove)
             {
-                char recvBuffer[1024];
+                char recvBuffer[2048];
                 int  received = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
 
                 if (received > 0)
@@ -469,7 +469,8 @@ void NetworkSubsystem::Update()
         //Send the data to be sent
         while (!m_outgoingDataForMe.empty())
         {
-            int               bytesToSend = static_cast<int>(std::min(m_outgoingDataForMe.size(), size_t(1024)));
+            int bytesToSend = static_cast<int>(std::min(m_outgoingDataForMe.size(), size_t(m_config
+                                                            .cachedBufferSize)));
             std::vector<char> sendBuffer(m_outgoingDataForMe.begin(), m_outgoingDataForMe.begin() + bytesToSend);
 
             int sent = send(clientSocket, sendBuffer.data(), bytesToSend, 0);
@@ -497,7 +498,7 @@ void NetworkSubsystem::Update()
         }
 
         // Receive data
-        char recvBuffer[1024];
+        char recvBuffer[2048];
         int  received = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
 
         if (received > 0)

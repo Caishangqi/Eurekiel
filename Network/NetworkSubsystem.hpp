@@ -12,7 +12,7 @@ enum class ServerState
     IDLE, // Ready to do something, but not actively processing any requests.
     // Start Server
     // Create the socket, listen socket, Set to non-blocking
-    // Bind the socket to a port (3100) for listening
+    // Bind the socket to a serverPort (3100) for listening
     // Start listening for incoming connections
     // Wait until a connection is established (Blocking and Non-Blocking version)
     LISTENING, // 0  clients connected
@@ -49,13 +49,16 @@ enum class ClientState
  * @brief Holds the configuration settings for the network subsystem.
  *
  * The NetworkConfig structure defines the parameters used to configure
- * server or client connections. This includes the port number and the
+ * server or client connections. This includes the serverPort number and the
  * server IP address for communication.
  */
 struct NetworkConfig
 {
-    uint16_t    port     = 25565; // default port
-    std::string serverIp = "127.0.0.1"; // default server IP, current computer
+    uint16_t    serverPort       = 25565; // default serverPort
+    std::string serverIp         = "127.0.0.1"; // default server IP, current computer
+    int         maxPlayers       = 2; // max number of players
+    std::string motd             = "default Game Server";   // The default motd of the server in a seaching list
+    size_t      cachedBufferSize = 2048;
 };
 
 /**
@@ -96,7 +99,7 @@ public:
     void Startup(NetworkConfig& config); // Initialize WinSock
     void Shutdown(); // Close all connections and clean up WinSock
 
-    bool StartServer(uint16_t port); // Start the server to listen on the specified port
+    bool StartServer(uint16_t port); // Start the server to listen on the specified serverPort
     void StopServer(); // Stop the server
 
     bool StartClient(const std::string& serverIp, uint16_t port); // Connect to the remote server
