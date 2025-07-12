@@ -257,10 +257,7 @@ void DX11Renderer::Shutdown()
     POINTER_SAFE_DELETE(m_modelCBO)
     POINTER_SAFE_DELETE(m_lightCBO)
     POINTER_SAFE_DELETE(m_perFrameCBO)
-
-    delete m_defaultShader;
-    m_defaultShader = nullptr;
-
+    
     for (Shader* m_loaded_shader : m_loadedShaders)
     {
         POINTER_SAFE_DELETE(m_loaded_shader)
