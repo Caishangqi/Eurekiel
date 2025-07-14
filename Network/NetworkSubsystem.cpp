@@ -7,18 +7,23 @@
 #include "NetworkSubsystem.hpp"
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
 namespace
 {
-    // 辅助：uint64_t 和 SOCKET 互转
     inline SOCKET   ToSOCKET(uint64_t h) { return static_cast<SOCKET>(h); }
     inline uint64_t FromSOCKET(SOCKET s) { return static_cast<uint64_t>(s); }
 }
 
-NetworkSubsystem::NetworkSubsystem()
+NetworkSubsystem::NetworkSubsystem(NetworkConfig& config) : m_config(config)
 {
+    if (!m_config.IsValid())
+    {
+        ERROR_RECOVERABLE("Invalid NetworkConfig provided!")
+        m_config = NetworkConfig{}; // Use default configuration
+    }
 }
 
 NetworkSubsystem::~NetworkSubsystem()
@@ -34,10 +39,8 @@ NetworkSubsystem::~NetworkSubsystem()
  * @param config Reference to a NetworkConfig object containing the configuration
  *               parameters for the network subsystem.
  */
-void NetworkSubsystem::Startup(NetworkConfig& config)
+void NetworkSubsystem::Startup()
 {
-    m_config = config;
-
     // Initialize WinSock 2.2
     // WSAStartup initializes Windows Sockets API, parameter MAKEWORD(2,2) indicates using version 2.2
     WSADATA wsaData;
@@ -286,131 +289,70 @@ void NetworkSubsystem::DisconnectClient()
 }
 
 /**
- * Updates the network subsystem by processing server and client logic. This method
- * manages server-side operations, such as accepting new client connections and
- * handling data transmission or disconnection from connected clients. Additionally,
- * it handles client-side operations, including connection attempts, data sending,
- * and receiving from the server.
+ * Updates the state of the network subsystem, including handling server and
+ * client operations. This method processes incoming and outgoing data,
+ * manages client connections for both server and client modes, and updates
+ * frame-level statistics.
  *
- * Server Logic:
- * - Accepts incoming client connections in non-blocking mode.
- * - Processes connected client data, handling outgoing and incoming message queues.
- * - Manages connection removals on client disconnection or errors.
+ * Server Operations:
+ * - Accepts and processes new client connections when in a listening state.
+ * - Handles data transmission (sending and receiving) for each connected client.
+ * - Removes disconnected clients from the server's active connections list.
  *
- * Client Logic:
- * - Manages the state of the connection to a server, handling connection success
- *   or failure.
- * - Sends queued outgoing client data to the server.
- * - Processes incoming data from the server and manages disconnection scenarios.
+ * Client Operations:
+ * - In the connecting state, checks the connection status and transitions to
+ *   the connected state upon successful connection.
+ * - When connected, processes outgoing and incoming data.
+ * - Disconnects the client and cleans up resources upon errors or disconnection.
  *
- * Any errors during send or receive operations are logged, along with graceful
- * disconnections or failures. The function depends on non-blocking socket I/O,
- * selective I/O operations (`select`), and asynchronous processing mechanisms.
+ * Updates internal statistics for frame processing at the end of the method.
  */
 void NetworkSubsystem::Update()
 {
+    m_frameStartTime = std::chrono::high_resolution_clock::now();
+
     /// Server logic
     if (m_serverState == ServerState::LISTENING)
     {
-        // Try to accept new client connections
-        SOCKET listenSocket = ToSOCKET(m_serverListenSocket);
-
-        // accept returns immediately in non-blocking mode
-        // If there is no pending connection, return INVALID_SOCKET and set error to WSAEWOULDBLOCK
+        // Accept new connections (this is fast, no need to limit)
+        SOCKET listenSocket    = ToSOCKET(m_serverListenSocket);
         SOCKET newClientSocket = accept(listenSocket, nullptr, nullptr);
 
         if (newClientSocket != INVALID_SOCKET)
         {
-            // Set non-blocking mode for new clients
             u_long mode = 1;
             if (ioctlsocket(newClientSocket, FIONBIO, &mode) == 0)
             {
-                // Create a new connection object
                 NetworkConnection conn;
                 conn.socketHandle = FromSOCKET(newClientSocket);
                 conn.state        = ClientState::CONNECTED;
                 m_connections.push_back(std::move(conn));
-
                 std::cout << "Server accepted new client connection. Total clients: " << m_connections.size() << "\n";
             }
             else
             {
-                // Setting non-blocking failed, close this connection
                 closesocket(newClientSocket);
             }
         }
-#undef min
-        // Process each connected client
+
+        // Process each client
         for (auto it = m_connections.begin(); it != m_connections.end();)
         {
             SOCKET clientSocket = ToSOCKET(it->socketHandle);
             bool   shouldRemove = false;
 
-            //Send the data to be sent
-            while (!it->outgoing.empty())
+            // Send data (select strategy according to mode)
+            if (!ProcessOutgoingData(clientSocket, it->outgoing))
             {
-                // Try to send data
-                int               bytesToSend = static_cast<int>(std::min(it->outgoing.size(), size_t(2048)));
-                std::vector<char> sendBuffer(it->outgoing.begin(), it->outgoing.begin() + bytesToSend);
-
-                int sent = send(clientSocket, sendBuffer.data(), bytesToSend, 0);
-                if (sent > 0)
-                {
-                    // Successfully sent, remove the sent data from the queue
-                    it->outgoing.erase(it->outgoing.begin(), it->outgoing.begin() + sent);
-                }
-                else if (sent == SOCKET_ERROR)
-                {
-                    int error = WSAGetLastError();
-                    if (error == WSAEWOULDBLOCK)
-                    {
-                        // The send buffer is full, try again later
-                        break;
-                    }
-                    else
-                    {
-                        // An error occurred, marking for removal
-                        std::cerr << "Server send error: " << error << "\n";
-                        shouldRemove = true;
-                        break;
-                    }
-                }
+                shouldRemove = true;
             }
 
             // Receive data
-            if (!shouldRemove)
+            if (!shouldRemove && !ProcessIncomingData(clientSocket, it->incoming))
             {
-                char recvBuffer[2048];
-                int  received = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-
-                if (received > 0)
-                {
-                    // Add the received data to the queue
-                    for (int i = 0; i < received; ++i)
-                    {
-                        it->incoming.push_back(static_cast<uint8_t>(recvBuffer[i]));
-                    }
-                }
-                else if (received == 0)
-                {
-                    // The client closes the connection normally
-                    std::cout << "Client disconnected gracefully\n";
-                    shouldRemove = true;
-                }
-                else // received == SOCKET_ERROR
-                {
-                    int error = WSAGetLastError();
-                    if (error != WSAEWOULDBLOCK)
-                    {
-                        // An error occurred (not WOULDBLOCK)
-                        std::cerr << "Server recv error: " << error << "\n";
-                        shouldRemove = true;
-                    }
-                    // WSAEWOULDBLOCK means no data is available to read, this is normal
-                }
+                shouldRemove = true;
             }
 
-            // If you need to remove the connection
             if (shouldRemove)
             {
                 closesocket(clientSocket);
@@ -427,16 +369,14 @@ void NetworkSubsystem::Update()
     /// Client Logic
     if (m_clientState == ClientState::CONNECTING)
     {
-        // Use select to check the connection status
+        // Check the connection status (keep the original logic)
         SOCKET clientSocket = ToSOCKET(m_clientSocket);
-
         fd_set writeSet, exceptSet;
         FD_ZERO(&writeSet);
         FD_ZERO(&exceptSet);
         FD_SET(clientSocket, &writeSet);
         FD_SET(clientSocket, &exceptSet);
 
-        // select (timeout = 0) that returns immediately
         timeval timeout      = {0, 0};
         int     selectResult = select(0, nullptr, &writeSet, &exceptSet, &timeout);
 
@@ -444,13 +384,11 @@ void NetworkSubsystem::Update()
         {
             if (FD_ISSET(clientSocket, &exceptSet))
             {
-                // Connection failed
                 std::cerr << "Client connection failed\n";
                 DisconnectClient();
             }
             else if (FD_ISSET(clientSocket, &writeSet))
             {
-                // Connection successful
                 m_clientState = ClientState::CONNECTED;
                 std::cout << "Client connected successfully\n";
             }
@@ -460,74 +398,404 @@ void NetworkSubsystem::Update()
             std::cerr << "Select error: " << WSAGetLastError() << "\n";
             DisconnectClient();
         }
-        // selectResult == 0 means timeout, the connection is still in progress
     }
     else if (m_clientState == ClientState::CONNECTED)
     {
         SOCKET clientSocket = ToSOCKET(m_clientSocket);
-#undef min
-        //Send the data to be sent
-        while (!m_outgoingDataForMe.empty())
-        {
-            int bytesToSend = static_cast<int>(std::min(m_outgoingDataForMe.size(), size_t(m_config
-                                                            .cachedBufferSize)));
-            std::vector<char> sendBuffer(m_outgoingDataForMe.begin(), m_outgoingDataForMe.begin() + bytesToSend);
 
-            int sent = send(clientSocket, sendBuffer.data(), bytesToSend, 0);
-            if (sent > 0)
-            {
-                // Successfully sent, removed from the queue
-                m_outgoingDataForMe.erase(m_outgoingDataForMe.begin(), m_outgoingDataForMe.begin() + sent);
-            }
-            else if (sent == SOCKET_ERROR)
-            {
-                int error = WSAGetLastError();
-                if (error == WSAEWOULDBLOCK)
-                {
-                    // The send buffer is full, try again later
-                    break;
-                }
-                else
-                {
-                    // An error occurred, disconnecting
-                    std::cerr << "Client send error: " << error << "\n";
-                    DisconnectClient();
-                    return;
-                }
-            }
+        // Send data (select strategy according to mode)
+        if (!ProcessOutgoingData(clientSocket, m_outgoingDataForMe))
+        {
+            DisconnectClient();
+            return;
         }
 
         // Receive data
-        char recvBuffer[2048];
-        int  received = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
-
-        if (received > 0)
+        if (!ProcessIncomingData(clientSocket, m_incomingDataForMe))
         {
-            // Add the received data to the queue
-            for (int i = 0; i < received; ++i)
-            {
-                m_incomingDataForMe.push_back(static_cast<uint8_t>(recvBuffer[i]));
-            }
-        }
-        else if (received == 0)
-        {
-            // Server closes the connection
-            std::cout << "Server closed connection\n";
             DisconnectClient();
         }
-        else // received == SOCKET_ERROR
-        {
-            int error = WSAGetLastError();
-            if (error != WSAEWOULDBLOCK)
-            {
-                // An error occurred
-                std::cerr << "Client recv error: " << error << "\n";
-                DisconnectClient();
-            }
-            // WSAEWOULDBLOCK is normal, indicating that no data is available to read
-        }
+    }
+
+    // Update statistics
+    UpdateFrameStatistics();
+}
+
+/**
+ * Processes outgoing data for the given socket using the configured send mode.
+ * Depending on the send mode, the method uses either a blocking, non-blocking,
+ * or adaptive strategy to transmit data from the outgoing queue.
+ *
+ * @param socket The socket handle corresponding to the connection for which
+ *               outgoing data needs to be transmitted.
+ * @param outgoingQueue A reference to a deque containing the outgoing data
+ *                      to be sent over the network.
+ * @return Returns true if the data transmission is successful; otherwise,
+ *         returns false if there is an error during the transmission process.
+ */
+bool NetworkSubsystem::ProcessOutgoingData(uint64_t socket, std::deque<uint8_t>& outgoingQueue)
+{
+    switch (m_config.sendMode)
+    {
+    case SendMode::BLOCKING:
+        return SendAllDataBlocking(socket, outgoingQueue);
+
+    case SendMode::NON_BLOCKING:
+        return SendDataNonBlocking(socket, outgoingQueue);
+
+    case SendMode::ADAPTIVE:
+        // TODO: Automatically select based on network conditions
+        // Currently fall back to non-blocking mode
+        return SendDataNonBlocking(socket, outgoingQueue);
+
+    default:
+        return SendDataNonBlocking(socket, outgoingQueue);
     }
 }
+
+/**
+ * Sends all data from the specified outgoing queue to the given socket in blocking mode.
+ * This method attempts to send data until the entire outgoing queue is empty or an
+ * error occurs. If the socket's send buffer is full, the method exits instead of blocking indefinitely.
+ *
+ * @param socket The socket to which data will be sent.
+ * @param outgoingQueue Reference to a deque containing the data to be sent.
+ *                      Data will be removed from this queue as it is sent successfully.
+ * @return True if all data in the queue is successfully sent or partially sent
+ *         without encountering unrecoverable errors. False if an unrecoverable
+ *         error occurs during the sending process.
+ */
+bool NetworkSubsystem::SendAllDataBlocking(uint64_t socket, std::deque<uint8_t>& outgoingQueue)
+{
+#undef min
+    // Blocking mode: try to send all data
+    while (!outgoingQueue.empty())
+    {
+        size_t            bytesToSend = std::min(outgoingQueue.size(), m_config.cachedBufferSize);
+        std::vector<char> sendBuffer(outgoingQueue.begin(), outgoingQueue.begin() + (unsigned long long)bytesToSend);
+
+        int sent = send(socket, sendBuffer.data(), static_cast<int>(bytesToSend), 0);
+        m_stats.sendAttemptsThisFrame++;
+
+        if (sent > 0)
+        {
+            outgoingQueue.erase(outgoingQueue.begin(), outgoingQueue.begin() + sent);
+            m_stats.bytesSentThisFrame += sent;
+            m_stats.totalBytesSent += sent;
+
+            // If it is not completely sent, it means the buffer is full
+            if (sent < static_cast<int>(bytesToSend))
+            {
+                break; // Even in blocking mode, the game cannot be blocked
+            }
+        }
+        else if (sent == SOCKET_ERROR)
+        {
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK)
+            {
+                // The send buffer is full, we also need to exit in blocking mode to avoid real blocking
+                break;
+            }
+            else
+            {
+                std::cerr << "Send error: " << error << "\n";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Sends data in a non-blocking mode over the specified socket. This function attempts
+ * to send queued data in small batches while adhering to configured performance limits.
+ * The function will send as much data as possible within these limits without blocking.
+ *
+ * @param socket The socket identifier to which the data will be sent.
+ * @param outgoingQueue The queue of bytes representing the data to be sent.
+ *                      Bytes will be removed from this queue as they are successfully sent.
+ *
+ * @return True if the sending process completes successfully or no critical errors occur,
+ *         false if a critical error is encountered during sending.
+ */
+bool NetworkSubsystem::SendDataNonBlocking(uint64_t socket, std::deque<uint8_t>& outgoingQueue)
+{
+    // Non-blocking mode: limit the amount of frames sent per frame
+    size_t sendAttempts = 0;
+
+    while (!outgoingQueue.empty() &&
+        sendAttempts < m_config.performanceLimits.maxSendAttemptsPerFrame &&
+        m_stats.bytesSentThisFrame < m_config.performanceLimits.maxSendBytesPerFrame &&
+        !ShouldStopNetworkProcessing())
+    {
+        size_t bytesToSend = std::min({
+            outgoingQueue.size(),
+            m_config.performanceLimits.sendBatchSize,
+            m_config.performanceLimits.maxSendBytesPerFrame - m_stats.bytesSentThisFrame
+        });
+
+        std::vector<char> sendBuffer(outgoingQueue.begin(), outgoingQueue.begin() + bytesToSend);
+
+        int sent = send(socket, sendBuffer.data(), static_cast<int>(bytesToSend), 0);
+        sendAttempts++;
+        m_stats.sendAttemptsThisFrame++;
+
+        if (sent > 0)
+        {
+            outgoingQueue.erase(outgoingQueue.begin(), outgoingQueue.begin() + sent);
+            m_stats.bytesSentThisFrame += sent;
+            m_stats.totalBytesSent += sent;
+
+            if (sent < static_cast<int>(bytesToSend))
+            {
+                break; // Send buffer full
+            }
+        }
+        else if (sent == SOCKET_ERROR)
+        {
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK)
+            {
+                break; // Send buffer full
+            }
+            else
+            {
+                std::cerr << "Send error: " << error << "\n";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Processes incoming data from a specific socket and appends it to the provided
+ * incoming data queue. The method handles scenarios such as successfully
+ * received data, socket closure, and errors during the receiving process.
+ *
+ * @param socket The identifier for the socket from which to receive incoming data.
+ * @param incomingQueue Reference to a queue where the received data will be appended.
+ *                      Each byte of the received data is added to the queue in the
+ *                      order it was received.
+ * @return Returns true if the data was processed successfully or the operation
+ *         should continue (e.g., would-block errors). Returns false if the connection
+ *         was closed or a fatal error occurred.
+ */
+bool NetworkSubsystem::ProcessIncomingData(uint64_t socket, std::deque<uint8_t>& incomingQueue)
+{
+    char recvBuffer[2048];
+    int  received = recv(socket, recvBuffer, sizeof(recvBuffer), 0);
+
+    if (received > 0)
+    {
+        for (int i = 0; i < received; ++i)
+        {
+            incomingQueue.push_back(static_cast<uint8_t>(recvBuffer[i]));
+        }
+        m_stats.bytesReceivedThisFrame += received;
+        m_stats.totalBytesReceived += received;
+    }
+    else if (received == 0)
+    {
+        return false; // Connection closed
+    }
+    else // SOCKET_ERROR
+    {
+        int error = WSAGetLastError();
+        if (error != WSAEWOULDBLOCK)
+        {
+            std::cerr << "Recv error: " << error << "\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Appends a message to a given queue with a message boundary, based on the
+ * currently configured boundary mode. The message can be appended using
+ * NULL-terminated boundaries, raw bytes, or a length-prefixed approach
+ * (if implemented).
+ *
+ * @param queue A reference to a deque of uint8_t where the message and its
+ *              boundary will be appended.
+ * @param message The message to be appended to the queue, represented as a
+ *                standard string.
+ */
+void NetworkSubsystem::AppendMessageWithBoundary(std::deque<uint8_t>& queue, const std::string& message)
+{
+    switch (m_config.boundaryMode)
+    {
+    case MessageBoundaryMode::NULL_TERMINATED:
+        // Add message content
+        for (char c : message)
+        {
+            queue.push_back(static_cast<uint8_t>(c));
+        }
+        // Add separator
+        queue.push_back(static_cast<uint8_t>(m_config.messageDelimiter));
+        break;
+
+    case MessageBoundaryMode::RAW_BYTES:
+        // Add directly without processing the border
+        for (char c : message)
+        {
+            queue.push_back(static_cast<uint8_t>(c));
+        }
+        break;
+
+    case MessageBoundaryMode::LENGTH_PREFIXED:
+        // TODO: length prefix mode
+        // Currently falls back to NULL_TERMINATED
+        AppendMessageWithBoundary(queue, message);
+        break;
+    }
+}
+
+/**
+ * Determines if the provided message complies with the configured safety limits
+ * to ensure it is safe for transmission. This includes checks for maximum
+ * message size and the presence of invalid delimiters that may disrupt message
+ * boundaries.
+ *
+ * @param message The message string to be validated for safety.
+ * @return True if the message passes all safety checks, false otherwise.
+ */
+bool NetworkSubsystem::IsMessageSafe(const std::string& message) const
+{
+    if (!m_config.safetyLimits.enableSafetyChecks)
+        return true;
+
+    // Check message size
+    if (message.size() > m_config.safetyLimits.maxMessageSize)
+    {
+        return false;
+    }
+
+    // Check if it contains delimiters (will break message boundaries)
+    if (m_config.boundaryMode == MessageBoundaryMode::NULL_TERMINATED &&
+        message.find(m_config.messageDelimiter) != std::string::npos)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Checks if the size of the specified queue is within the permissible limits,
+ * based on the safety checks and configuration.
+ *
+ * @param queue Reference to a deque of uint8_t representing the queue whose size
+ *              needs to be validated.
+ *
+ * @return True if the queue size is within the permissible limit or if safety
+ *         checks are disabled. False otherwise.
+ */
+bool NetworkSubsystem::IsQueueSizeOk(const std::deque<uint8_t>& queue) const
+{
+    if (!m_config.safetyLimits.enableSafetyChecks)
+        return true;
+
+    return queue.size() < m_config.safetyLimits.maxQueueSize;
+}
+
+/**
+ * Determines whether network processing should stop in the current frame based
+ * on the elapsed time and the current network configuration. This check is only
+ * relevant in non-blocking send mode.
+ *
+ * @return true if the elapsed time since the start of the frame exceeds the
+ *         maximum allowed network time per frame as specified in the configuration;
+ *         false otherwise.
+ */
+bool NetworkSubsystem::ShouldStopNetworkProcessing() const
+{
+    if (m_config.sendMode != SendMode::NON_BLOCKING)
+        return false; // Only check the time limit in non-blocking mode
+
+    auto now     = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration<double>(now - m_frameStartTime).count();
+    return elapsed >= m_config.performanceLimits.maxNetworkTimePerFrame;
+}
+
+/**
+ * Updates the current frame's network statistics, including timings, queue sizes,
+ * active connections, and performance limits. This method calculates the elapsed
+ * network time for the current frame and updates various counters that track the
+ * state and limitations of the network subsystem.
+ *
+ * The method checks for potential performance limitations based on pre-configured
+ * thresholds, such as the maximum number of send attempts, maximum bytes sent,
+ * and the maximum allowable network time per frame.
+ *
+ * It is typically invoked at the end of a frame processing cycle to capture accurate
+ * metrics for the ongoing frame.
+ */
+void NetworkSubsystem::UpdateFrameStatistics()
+{
+    auto now                     = std::chrono::high_resolution_clock::now();
+    m_stats.networkTimeThisFrame = std::chrono::duration<double>(now - m_frameStartTime).count();
+
+    // Update queue status
+    m_stats.outgoingQueueSize = m_outgoingDataForMe.size();
+    m_stats.incomingQueueSize = m_incomingDataForMe.size();
+    m_stats.activeConnections = m_connections.size();
+
+    // Check if performance is limited
+    m_stats.isNetworkLimited = (
+        m_stats.sendAttemptsThisFrame >= m_config.performanceLimits.maxSendAttemptsPerFrame ||
+        m_stats.bytesSentThisFrame >= m_config.performanceLimits.maxSendBytesPerFrame ||
+        m_stats.networkTimeThisFrame >= m_config.performanceLimits.maxNetworkTimePerFrame
+    );
+}
+
+/**
+ * Retrieves and returns the current network statistics for the subsystem. This
+ * includes details such as the number of active connections, the size of the
+ * outgoing and incoming data queues, and other performance metrics.
+ *
+ * @return A NetworkStats object containing the current metrics and states of
+ *         the network subsystem.
+ */
+NetworkStats NetworkSubsystem::GetNetworkStatistics() const
+{
+    NetworkStats stats = m_stats;
+
+    // Update real-time queue information
+    stats.outgoingQueueSize = m_outgoingDataForMe.size();
+    stats.incomingQueueSize = m_incomingDataForMe.size();
+    stats.activeConnections = m_connections.size();
+
+    return stats;
+}
+
+void NetworkSubsystem::ResetStatistics()
+{
+    m_stats = NetworkStats{};
+}
+
+/**
+ * Clears all data queues within the network subsystem to reset the state of
+ * outgoing and incoming data buffers. This includes clearing the shared buffers
+ * as well as all individual connection-specific queues.
+ */
+void NetworkSubsystem::ClearAllQueues()
+{
+    m_outgoingDataForMe.clear();
+    m_incomingDataForMe.clear();
+
+    for (auto& connection : m_connections)
+    {
+        connection.incoming.clear();
+        connection.outgoing.clear();
+    }
+}
+
 
 /**
  * Queues the specified data to be sent to the server. The data will be added
@@ -585,7 +853,7 @@ void NetworkSubsystem::SendToClient(size_t clientIndex, const std::vector<uint8_
  *
  * @return True if there is incoming data for the server, otherwise false.
  */
-bool NetworkSubsystem::HasServerData() const
+bool NetworkSubsystem::HasDataFromServer() const
 {
     return !m_incomingDataForMe.empty();
 }
@@ -600,21 +868,21 @@ bool NetworkSubsystem::HasServerData() const
  */
 std::vector<uint8_t> NetworkSubsystem::ReceiveFromServer()
 {
-    std::vector<uint8_t> out(m_incomingDataForMe.begin(), m_incomingDataForMe.end());
+    std::vector<uint8_t> data(m_incomingDataForMe.begin(), m_incomingDataForMe.end());
     m_incomingDataForMe.clear();
-    return out;
+    return data;
 }
 
 /**
  * Checks if the client at the specified index has incoming data in the queue.
  *
- * @param idx The index of the client to check within the connection list.
+ * @param clientIndex The index of the client to check within the connection list.
  * @return True if the specified client index is within bounds and has incoming
  *         data; otherwise, false.
  */
-bool NetworkSubsystem::HasClientData(size_t idx) const
+bool NetworkSubsystem::HasDataFromClient(size_t clientIndex) const
 {
-    return idx < m_connections.size() && !m_connections[idx].incoming.empty();
+    return clientIndex < m_connections.size() && !m_connections[clientIndex].incoming.empty();
 }
 
 /**
@@ -638,3 +906,82 @@ std::vector<uint8_t> NetworkSubsystem::ReceiveFromClient(size_t idx)
     }
     return result;
 }
+
+/**
+ * Clears the internal buffer of received data intended for the subsystem
+ * and checks whether the buffer is empty after the operation.
+ *
+ * @return True if the buffer is successfully cleared and is empty, false otherwise.
+ */
+bool NetworkSubsystem::ClearReceivedData()
+{
+    m_incomingDataForMe.clear();
+    return m_incomingDataForMe.empty();
+}
+
+/**
+ * Sends a string message to the server after performing safety checks.
+ * The message is appended with a boundary marker before being sent.
+ * Updates statistics about the total number of messages sent.
+ *
+ * @param message The string message to be sent to the server. The method will
+ *                ensure the message passes safety checks before taking any action.
+ */
+void NetworkSubsystem::SendStringToServer(const std::string& message)
+{
+    if (!IsMessageSafe(message))
+    {
+        std::cerr << "Message failed safety check: " << message.substr(0, 50) << "..." << std::endl;
+        return;
+    }
+
+    AppendMessageWithBoundary(m_outgoingDataForMe, message);
+    m_stats.totalMessagesSent++;
+}
+
+/**
+ * Sends a string message to the specified client by appending it to the client's
+ * outgoing message queue. The message is first validated for safety before being sent.
+ * If the client index is invalid or the message fails the safety check, the operation
+ * is aborted.
+ *
+ * @param clientIndex The index of the client in the connection list to whom the
+ *                    message should be sent.
+ * @param message The message string to be sent to the specified client.
+ */
+void NetworkSubsystem::SendStringToClient(size_t clientIndex, const std::string& message)
+{
+    if (clientIndex >= m_connections.size()) return;
+
+    if (!IsMessageSafe(message))
+    {
+        std::cerr << "Message failed safety check for client " << clientIndex << std::endl;
+        return;
+    }
+
+    AppendMessageWithBoundary(m_connections[clientIndex].outgoing, message);
+    m_stats.totalMessagesSent++;
+}
+
+/**
+ * Broadcasts a given string message to all connected clients in the network subsystem.
+ * Before broadcasting, the message undergoes a safety check, and only safe messages
+ * are sent to all clients. Increments the total message count after a successful broadcast.
+ *
+ * @param message The string message to be broadcasted to all connected clients.
+ */
+void NetworkSubsystem::BroadcastStringToClients(const std::string& message)
+{
+    if (!IsMessageSafe(message))
+    {
+        std::cerr << "Message failed safety check for broadcast" << std::endl;
+        return;
+    }
+
+    for (auto& connection : m_connections)
+    {
+        AppendMessageWithBoundary(connection.outgoing, message);
+    }
+    m_stats.totalMessagesSent += m_connections.size();
+}
+

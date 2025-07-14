@@ -1,83 +1,6 @@
 ﻿#pragma once
-#include <cstdint>
-#include <deque>
-#include <vector>
-#include <string>
+#include "NetworkCommon.hpp"    // Common Header
 
-enum class ServerState
-{
-    // Startup
-    UNINITIALIZED,
-    // Win socket startup
-    IDLE, // Ready to do something, but not actively processing any requests.
-    // Start Server
-    // Create the socket, listen socket, Set to non-blocking
-    // Bind the socket to a serverPort (3100) for listening
-    // Start listening for incoming connections
-    // Wait until a connection is established (Blocking and Non-Blocking version)
-    LISTENING, // 0  clients connected
-    // Begin Frame()
-    // Accept the connection (m_Listener), if we accept a connection, we return a new socket, Set to non-blocking
-    // We push back the new client to the vector
-    STOP_LISTENING
-    /// When we disconnect the client
-    /// We first Disconnect the client by Disconnect(m_client)
-    /// We turn the state to @see ServerState::IDLE
-    /// Shutdown the subsystem
-    /// We then close the socket
-    /// Win socket cleanup
-    /// turn the state to @see ServerState::UNINITIALIZED
-};
-
-enum class ClientState
-{
-    UNINITIALIZED,
-    IDLE, // Ready to do something, but not actively processing any requests.
-    // Start Client function
-    // We create the client socket, Set to non-blocking
-    // Connect(IP, Port) this function have block and unblock version
-    /// Try to connect, and put into new state @see ClientState::CONNECTING
-    CONNECTING,
-    // Begin frame
-    /// Select(m_client), if successful, we turn to new state @see ClientState::CONNECTED
-    CONNECTED,
-};
-
-/**
- * @struct NetworkConfig
- *
- * @brief Holds the configuration settings for the network subsystem.
- *
- * The NetworkConfig structure defines the parameters used to configure
- * server or client connections. This includes the serverPort number and the
- * server IP address for communication.
- */
-struct NetworkConfig
-{
-    uint16_t    serverPort       = 25565; // default serverPort
-    std::string serverIp         = "127.0.0.1"; // default server IP, current computer
-    int         maxPlayers       = 2; // max number of players
-    std::string motd             = "default Game Server";   // The default motd of the server in a seaching list
-    size_t      cachedBufferSize = 2048;
-};
-
-/**
- * @struct NetworkConnection
- *
- * @brief Represents a single network connection in the system.
- *
- * The NetworkConnection structure is used to maintain the state and data
- * associated with a specific client or server connection. It stores the raw
- * socket handle for communication, the current connection state, and the data
- * queues for incoming and outgoing messages.
- */
-struct NetworkConnection
-{
-    uint64_t            socketHandle = 0; // raw socket handle
-    ClientState         state        = ClientState::UNINITIALIZED;
-    std::deque<uint8_t> incoming;
-    std::deque<uint8_t> outgoing;
-};
 
 /**
  * @class NetworkSubsystem
@@ -92,35 +15,67 @@ struct NetworkConnection
 class NetworkSubsystem
 {
 public:
-    NetworkSubsystem();
+    NetworkSubsystem(NetworkConfig& config);
     ~NetworkSubsystem();
 
 public:
-    void Startup(NetworkConfig& config); // Initialize WinSock
+    void Startup(); // Initialize WinSock
     void Shutdown(); // Close all connections and clean up WinSock
+    void Update();
 
+public: /// Server side API
     bool StartServer(uint16_t port); // Start the server to listen on the specified serverPort
     void StopServer(); // Stop the server
 
+    // Server States
+    ServerState GetServerState() const { return m_serverState; }
+    size_t      GetConnectedClientCount() const { return m_connections.size(); }
+
+    // Server Data handling
+    void                 BroadcastToClients(const std::vector<uint8_t>& data); // The server broadcasts to all clients
+    void                 SendToClient(size_t clientIndex, const std::vector<uint8_t>& data); // The server sends a message to the specified client
+    bool                 HasDataFromClient(size_t clientIndex) const; // Is there any new data from the specified client?
+    std::vector<uint8_t> ReceiveFromClient(size_t clientIndex); // Get all data from the specified client
+    void                 BroadcastStringToClients(const std::string& message);
+    void                 SendStringToClient(size_t clientIndex, const std::string& message);
+
+public: /// Client side API
     bool StartClient(const std::string& serverIp, uint16_t port); // Connect to the remote server
     void DisconnectClient(); // Disconnect the client
 
-    void Update();
-
-    void                 SendToServer(const std::vector<uint8_t>& data); // The client sends data to the server
-    void                 BroadcastToClients(const std::vector<uint8_t>& data); // The server broadcasts to all clients
-    void                 SendToClient(size_t clientIndex, const std::vector<uint8_t>& data); // The server sends a message to the specified client
-    bool                 HasServerData() const;
-    std::vector<uint8_t> ReceiveFromServer();
-
-    bool                 HasClientData(size_t clientIndex) const; // Is there any new data from the specified client?
-    std::vector<uint8_t> ReceiveFromClient(size_t clientIndex); // Get all data from the specified client
-
+    // Client Status
     ClientState GetClientState() const { return m_clientState; }
-    ServerState GetServerState() const { return m_serverState; }
+
+    // Client Data handling
+    void                 SendToServer(const std::vector<uint8_t>& data); // The client sends data to the server
+    bool                 HasDataFromServer() const;
+    std::vector<uint8_t> ReceiveFromServer();
+    bool                 ClearReceivedData(); // Refresh the client data
+    void                 SendStringToServer(const std::string& message);
+
+public:
+    // Configuration
+    NetworkConfig&      GetConfig() { return m_config; }
+    void                SetSendMode(SendMode mode) { m_config.sendMode = mode; }
+    SendMode            GetSendMode() const { return m_config.sendMode; }
+    void                SetMessageBoundaryMode(MessageBoundaryMode mode) { m_config.boundaryMode = mode; }
+    MessageBoundaryMode GetMessageBoundaryMode() const { return m_config.boundaryMode; }
+
+    // Performance Matrices
+    NetworkStats GetNetworkStatistics() const;
+    void         ResetStatistics();
+
+    // Queue States
+    size_t GetOutgoingQueueSize() const { return m_outgoingDataForMe.size(); }
+    size_t GetIncomingQueueSize() const { return m_incomingDataForMe.size(); }
+    void   ClearAllQueues();
 
 private:
     NetworkConfig m_config;
+
+    // Statistic Information
+    mutable NetworkStats                           m_stats;
+    std::chrono::high_resolution_clock::time_point m_frameStartTime;
 
     // Client variable
     [[maybe_unused]] uint64_t m_clientSocket = 0;
@@ -132,4 +87,29 @@ private:
     [[maybe_unused]] unsigned int  m_serverListenSocket = 0;
     ServerState                    m_serverState        = ServerState::UNINITIALIZED;
     std::vector<NetworkConnection> m_connections;
+
+private:
+    // Choose sending strategy based on send mode
+    bool ProcessOutgoingData(uint64_t socket, std::deque<uint8_t>& outgoingQueue);
+
+    // Blocking send: attempt to send all data
+    bool SendAllDataBlocking(uint64_t socket, std::deque<uint8_t>& outgoingQueue);
+
+    // Non-blocking send: limit send amount per frame
+    bool SendDataNonBlocking(uint64_t socket, std::deque<uint8_t>& outgoingQueue);
+
+    // Receive data
+    bool ProcessIncomingData(uint64_t socket, std::deque<uint8_t>& incomingQueue);
+
+    // Performance control
+    bool ShouldStopNetworkProcessing() const;
+    void UpdateFrameStatistics();
+
+    // Message boundary handling
+    void AppendMessageWithBoundary(std::deque<uint8_t>& queue, const std::string& message);
+
+    // Safety checks
+    bool IsMessageSafe(const std::string& message) const;
+    bool IsQueueSizeOk(const std::deque<uint8_t>& queue) const;
 };
+
