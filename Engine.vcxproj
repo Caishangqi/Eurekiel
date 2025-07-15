@@ -218,6 +218,7 @@
         <ClCompile Include="Math\ZCylinder.cpp" />
         <ClCompile Include="Network\NetworkCommon.cpp" />
         <ClCompile Include="Network\NetworkSubsystem.cpp" />
+        <ClCompile Include="Register\RegisterSubsystem.cpp" />
         <ClCompile Include="Renderer\API\DirectX12\DescriptorAllocator.cpp" />
         <ClCompile Include="Renderer\API\DX11Renderer.cpp" />
         <ClCompile Include="Renderer\API\DX12Renderer.cpp" />
@@ -299,6 +300,7 @@
         <ClInclude Include="Math\ZCylinder.hpp" />
         <ClInclude Include="Network\NetworkCommon.hpp" />
         <ClInclude Include="Network\NetworkSubsystem.hpp" />
+        <ClInclude Include="Register\RegisterSubsystem.hpp" />
         <ClInclude Include="Renderer\API\DirectX12\DescriptorAllocator.hpp" />
         <ClInclude Include="Renderer\API\DX11Renderer.hpp" />
         <ClInclude Include="Renderer\API\DX12Renderer.hpp" />
