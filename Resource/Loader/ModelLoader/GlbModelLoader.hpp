@@ -32,6 +32,9 @@ private:
     std::unique_ptr<FMesh> ProcessMesh(const tinygltf::Model& model, int meshIndex);
     void                   ProcessPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& primitive, FMesh& mesh);
 
+    // Data generation
+    void CalculateTangentsAndBitangents(std::unique_ptr<FMesh>::element_type& mesh);
+
     // Data extraction
     void ExtractPositions(const tinygltf::Model& model, int accessorIndex, FMesh& mesh);
     void ExtractNormals(const tinygltf::Model& model, int accessorIndex, FMesh& mesh);
@@ -49,7 +52,7 @@ private:
     std::unique_ptr<Texture> ExtractTextureFromNormalInfo(const tinygltf::NormalTextureInfo& normalInfo, const tinygltf::Model& model);
     std::unique_ptr<Texture> ExtractTextureFromOcclusionInfo(const tinygltf::OcclusionTextureInfo& occlusionInfo, const tinygltf::Model& model);
 
-    // Accesor
+    // Accessor
     template <typename T>
     void ExtractAccessorData(const tinygltf::Model& model, int accessorIndex, std::vector<T>& output);
 };
