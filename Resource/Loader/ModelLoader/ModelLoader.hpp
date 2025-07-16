@@ -33,7 +33,7 @@ struct FMaterial
     FMaterial& operator=(const FMaterial&) = delete;
 
     // Allow moves (efficiently transfer resource ownership)
-    FMaterial(FMaterial&&)            = default;
+    FMaterial(FMaterial&&) noexcept   = default;
     FMaterial& operator=(FMaterial&&) = default;
 
     ~FMaterial() = default;
@@ -41,7 +41,7 @@ struct FMaterial
 
     std::string name = "DefaultMaterial";
 
-    // PBR基础参数
+    // Basic parameters of PBR
     Vec4  baseColorFactor   = Vec4(1.0f, 1.0f, 1.0f, 1.0f);
     float metallicFactor    = 1.0f;
     float roughnessFactor   = 1.0f;
@@ -50,7 +50,7 @@ struct FMaterial
     float occlusionStrength = 1.0f;
     float alphaCutoff       = 0.5f;
 
-    // 透明度模式
+    // Transparency mode
     enum class AlphaMode
     {
         OPAQUE,
@@ -60,19 +60,26 @@ struct FMaterial
 
     bool doubleSided = false;
 
-    // 纹理存储 - 直接存储Texture对象，不需要路径
+    // Texture Storage - Texture objects are stored directly, no path is required
     std::unordered_map<EMaterialChannel, std::unique_ptr<Texture>> textures;
 
-    // 纹理坐标集映射
+    // Texture coordinate set mapping
     std::unordered_map<EMaterialChannel, int> textureCoordSets;
 
-    // 辅助方法
-    bool HasTexture(EMaterialChannel channel) const;
-
+    // Helper functions
+    bool     HasTexture(EMaterialChannel channel) const;
     Texture* GetTexture(EMaterialChannel channel) const;
     void     SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture);
+    int      GetTextureCoordSet(EMaterialChannel channel) const;
+};
 
-    int GetTextureCoordSet(EMaterialChannel channel) const;
+// Submesh Information
+struct SubMesh
+{
+    unsigned int materialIndex = 0;
+    unsigned int indexStart    = 0;
+    unsigned int indexCount    = 0;
+    std::string  name;
 };
 
 // TODO: Hack the simple Mesh, need refactor in the future
@@ -91,7 +98,7 @@ struct FMesh
     size_t GetVertexCount() const { return m_vertices.size(); }
     size_t GetIndexCount() const { return m_indices.size(); }
     size_t GetMaterialCount() const { return materials.size(); }
-    size_t GetSubMeshCount() const { return subMeshes.size(); }
+    size_t GetSubMeshCount() const { return m_subMeshes.size(); }
 
     const FMaterial* GetMaterial(size_t index) const
     {
@@ -115,16 +122,7 @@ struct FMesh
     // Material Information
     std::vector<FMaterial> materials;
 
-    // Submesh Information
-    struct SubMesh
-    {
-        unsigned int materialIndex = 0;
-        unsigned int indexStart    = 0;
-        unsigned int indexCount    = 0;
-        std::string  name;
-    };
-
-    std::vector<SubMesh> subMeshes;
+    std::vector<SubMesh> m_subMeshes;
 
     mutable std::shared_ptr<VertexBuffer> vertexBuffer = nullptr;
     mutable std::shared_ptr<IndexBuffer>  indexBuffer  = nullptr;
