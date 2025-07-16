@@ -26,6 +26,19 @@ enum class EMaterialChannel : uint8_t
 
 struct FMaterial
 {
+    FMaterial() = default;
+
+    // Disable copying (because unique_ptr cannot be copied)
+    FMaterial(const FMaterial&)            = delete;
+    FMaterial& operator=(const FMaterial&) = delete;
+
+    // Allow moves (efficiently transfer resource ownership)
+    FMaterial(FMaterial&&)            = default;
+    FMaterial& operator=(FMaterial&&) = default;
+
+    ~FMaterial() = default;
+
+
     std::string name = "DefaultMaterial";
 
     // PBR基础参数
@@ -57,7 +70,7 @@ struct FMaterial
     bool HasTexture(EMaterialChannel channel) const;
 
     Texture* GetTexture(EMaterialChannel channel) const;
-    void SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture);
+    void     SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture);
 
     int GetTextureCoordSet(EMaterialChannel channel) const;
 };
