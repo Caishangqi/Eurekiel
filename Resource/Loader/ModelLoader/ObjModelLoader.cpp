@@ -28,7 +28,7 @@ bool ObjModelLoader::CanLoad(const std::string& extension) const
 std::unique_ptr<FMesh> ObjModelLoader::LoadObjModel(const std::string& filePath)
 {
     // Prepare FMesh
-    FMesh mesh;
+    std::unique_ptr<FMesh> mesh = std::make_unique<FMesh>();
 
     // Read the entire file into a string at once
     std::string fileContent;
@@ -43,23 +43,23 @@ std::unique_ptr<FMesh> ObjModelLoader::LoadObjModel(const std::string& filePath)
     size_t fileSize       = fileContent.size();
     size_t estimatedLines = fileSize / 20; // Average 20 characters per line
 
-    mesh.vertexPosition.reserve(estimatedLines / 8); // Estimate the number of v rows
-    mesh.vertexNormal.reserve(estimatedLines / 10); // Estimate the number of vn rows
-    mesh.uvTexCoords.reserve(estimatedLines / 10); // Estimate the number of vt rows
+    mesh->vertexPosition.reserve(estimatedLines / 8); // Estimate the number of v rows
+    mesh->vertexNormal.reserve(estimatedLines / 10); // Estimate the number of vn rows
+    mesh->uvTexCoords.reserve(estimatedLines / 10); // Estimate the number of vt rows
 
     std::vector<std::string> faceLines;
     faceLines.reserve(estimatedLines / 4); // Estimate the number of face rows
 
     // Use efficient string parsing, avoiding regular expressions
-    ParseObjContentOptimized(fileContent, mesh, faceLines);
+    ParseObjContentOptimized(fileContent, *mesh.get(), faceLines);
 
     // Process face data
-    ProcessFacesOptimized(mesh, faceLines);
+    ProcessFacesOptimized(*mesh.get(), faceLines);
 
     // Generate normal and tangent space
-    GenerateNormalsIfNeeded(mesh);
+    GenerateNormalsIfNeeded(*mesh.get());
 
-    return std::make_unique<FMesh>(mesh);
+    return mesh;
 }
 
 // Optimized content parsing function - avoid line-by-line splitting and regular expressions
@@ -294,8 +294,8 @@ void ObjModelLoader::ProcessFacesOptimized(FMesh& mesh, const std::vector<std::s
     }
 
     // Generate vertex data - process it here directly to avoid type conversion issues
-    mesh.vertices.clear();
-    mesh.vertices.reserve(allTriangles.size() * 3);
+    mesh.m_vertices.clear();
+    mesh.m_vertices.reserve(allTriangles.size() * 3);
 
     // Default Value
     const Vec3  defaultPosition(0.0f, 0.0f, 0.0f);
@@ -330,7 +330,7 @@ void ObjModelLoader::ProcessFacesOptimized(FMesh& mesh, const std::vector<std::s
             vertex.m_tangent   = defaultTangent;
             vertex.m_bitangent = defaultBinormal;
 
-            mesh.vertices.push_back(vertex);
+            mesh.m_vertices.push_back(vertex);
         }
     }
 }
@@ -436,9 +436,9 @@ void ObjModelLoader::ProcessFaces(FMesh& mesh, Strings& data)
         // Split face row: "f v1//n1 v2//n2 v3//n3 ..."
         Strings faceTokens = SplitStringOnDelimiter(faceLine, ' ');
 
-        if (faceTokens.size() < 4) continue; // At least "f" + 3 vertices are required
+        if (faceTokens.size() < 4) continue; // At least "f" + 3 m_vertices are required
 
-        // parse all vertices of the face (skipping the first "f" marker)
+        // parse all m_vertices of the face (skipping the first "f" marker)
         std::vector<FaceVertex> faceVertices;
         for (size_t i = 1; i < faceTokens.size(); ++i)
         {
@@ -452,8 +452,8 @@ void ObjModelLoader::ProcessFaces(FMesh& mesh, Strings& data)
     }
 
     // Generate the final Vertex_PCUTBN vertex data
-    mesh.vertices.clear();
-    mesh.vertices.reserve(allTriangles.size() * 3);
+    mesh.m_vertices.clear();
+    mesh.m_vertices.reserve(allTriangles.size() * 3);
 
     // Default Value
     const Vec3  defaultPosition(0.0f, 0.0f, 0.0f);
@@ -497,8 +497,8 @@ void ObjModelLoader::ProcessFaces(FMesh& mesh, Strings& data)
             vertex.m_tangent     = defaultTangent;
             vertex.m_bitangent   = defaultBinormal;
             vertex.m_normal      = normal;
-            
-            mesh.vertices.push_back(vertex);
+
+            mesh.m_vertices.push_back(vertex);
         }
     }
 
@@ -508,31 +508,31 @@ void ObjModelLoader::ProcessFaces(FMesh& mesh, Strings& data)
 
 void ObjModelLoader::ValidateMeshData(const FMesh& mesh) const
 {
-    // Check if the number of vertices is a multiple of 3 (triangle)
-    if (mesh.vertices.size() % 3 != 0)
+    // Check if the number of m_vertices is a multiple of 3 (triangle)
+    if (mesh.m_vertices.size() % 3 != 0)
     {
-        ERROR_AND_DIE("The number of vertices in the OBJ model is not a multiple of 3 and cannot form a complete triangle")
+        ERROR_AND_DIE("The number of m_vertices in the OBJ model is not a multiple of 3 and cannot form a complete triangle")
     }
 
     // Output loading statistics
-    // int triangleCount = (int)mesh.vertices.size() / 3;
+    // int triangleCount = (int)mesh.m_vertices.size() / 3;
     // You can add log output here, for example:
-    // DebuggerPrintf("Successfully loaded OBJ model: %d triangles, %d vertices\n", triangleCount, (int)mesh.vertices.size());
+    // DebuggerPrintf("Successfully loaded OBJ model: %d triangles, %d m_vertices\n", triangleCount, (int)mesh.m_vertices.size());
 }
 
 void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh) const
 {
-    if (mesh.vertices.size() % 3 != 0) return;
+    if (mesh.m_vertices.size() % 3 != 0) return;
 
     // 1. If there are UVs, calculate T, B
     // 2. If there is no Normal, but there are T, B, N = (T×B).GetNormalized()
     // 3. If there is no Normal, and no T, B, N = (P01 × P02) Calculate using points
 
-    for (size_t i = 0; i < mesh.vertices.size(); i += 3)
+    for (size_t i = 0; i < mesh.m_vertices.size(); i += 3)
     {
-        Vertex_PCUTBN& v0 = mesh.vertices[i];
-        Vertex_PCUTBN& v1 = mesh.vertices[i + 1];
-        Vertex_PCUTBN& v2 = mesh.vertices[i + 2];
+        Vertex_PCUTBN& v0 = mesh.m_vertices[i];
+        Vertex_PCUTBN& v1 = mesh.m_vertices[i + 1];
+        Vertex_PCUTBN& v2 = mesh.m_vertices[i + 2];
 
         // Check if there is a valid normal (not the default)
         bool hasValidNormals = !IsDefaultNormal(v0.m_normal) || !IsDefaultNormal(v1.m_normal) || !IsDefaultNormal(v2.m_normal);
@@ -601,13 +601,13 @@ void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh) const
 // This function is now specifically used to calculate tangent space for meshes with existing normals
 void ObjModelLoader::CalculateTangentSpace(FMesh& mesh) const
 {
-    if (mesh.vertices.size() % 3 != 0) return;
+    if (mesh.m_vertices.size() % 3 != 0) return;
 
-    for (size_t i = 0; i < mesh.vertices.size(); i += 3)
+    for (size_t i = 0; i < mesh.m_vertices.size(); i += 3)
     {
-        Vertex_PCUTBN& v0 = mesh.vertices[i];
-        Vertex_PCUTBN& v1 = mesh.vertices[i + 1];
-        Vertex_PCUTBN& v2 = mesh.vertices[i + 2];
+        Vertex_PCUTBN& v0 = mesh.m_vertices[i];
+        Vertex_PCUTBN& v1 = mesh.m_vertices[i + 1];
+        Vertex_PCUTBN& v2 = mesh.m_vertices[i + 2];
 
         if (HasValidUVs(v0, v1, v2))
         {
@@ -668,7 +668,7 @@ void ObjModelLoader::CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_
         Vec3 B = r * (Δu0 * E1 - Δu1 * E0);
         B      = B.GetNormalized();
 
-        // Apply to three vertices
+        // Apply to three m_vertices
         v0.m_tangent = T;
         v1.m_tangent = T;
         v2.m_tangent = T;

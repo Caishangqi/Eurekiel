@@ -241,6 +241,7 @@
         <ClCompile Include="Renderer\VertexBuffer.cpp"/>
         <ClCompile Include="Resource\Loader\Loader.cpp" />
         <ClCompile Include="Resource\Loader\ModelLoader\GlbModelLoader.cpp" />
+        <ClCompile Include="Resource\Loader\ModelLoader\ModelLoader.cpp" />
         <ClCompile Include="Resource\Loader\ModelLoader\ObjModelLoader.cpp" />
         <ClCompile Include="Resource\Resource.cpp" />
         <ClCompile Include="Resource\ResourceCommon.cpp" />
