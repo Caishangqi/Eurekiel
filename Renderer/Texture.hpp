@@ -13,8 +13,11 @@ class Texture
     friend class DX12Renderer;
     friend class DX11Renderer;
 
+    // TODO: In the future, the resource subsystem will owned the textures.
     Texture(); // can't instantiate directly; must ask Renderer to do it for you
     Texture(const Texture& copy) = delete; // No copying allowed!  This represents GPU memory.
+
+public:
     ~Texture();
 
 public:
