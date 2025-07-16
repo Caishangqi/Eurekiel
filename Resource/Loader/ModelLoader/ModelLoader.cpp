@@ -1,7 +1,31 @@
 ﻿#include "ModelLoader.hpp"
 
+#include "Engine/Renderer/Texture.hpp"
 #include "Engine/Renderer/IndexBuffer.hpp"
 #include "Engine/Renderer/IRenderer.hpp"
+
+bool FMaterial::HasTexture(EMaterialChannel channel) const
+{
+    auto it = textures.find(channel);
+    return it != textures.end() && it->second != nullptr;
+}
+Texture* FMaterial::GetTexture(EMaterialChannel channel) const
+{
+    auto it = textures.find(channel);
+    return (it != textures.end()) ? it->second.get() : nullptr;
+}
+
+
+void FMaterial::SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture)
+{
+    textures[channel] = std::move(texture);
+}
+
+int FMaterial::GetTextureCoordSet(EMaterialChannel channel) const
+{
+    auto it = textureCoordSets.find(channel);
+    return (it != textureCoordSets.end()) ? it->second : 0;
+}
 
 FMesh::FMesh()
 {

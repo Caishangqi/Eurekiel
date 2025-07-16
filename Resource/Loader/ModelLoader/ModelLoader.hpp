@@ -54,28 +54,12 @@ struct FMaterial
     std::unordered_map<EMaterialChannel, int> textureCoordSets;
 
     // 辅助方法
-    bool HasTexture(EMaterialChannel channel) const
-    {
-        auto it = textures.find(channel);
-        return it != textures.end() && it->second != nullptr;
-    }
+    bool HasTexture(EMaterialChannel channel) const;
 
-    Texture* GetTexture(EMaterialChannel channel) const
-    {
-        auto it = textures.find(channel);
-        return (it != textures.end()) ? it->second.get() : nullptr;
-    }
+    Texture* GetTexture(EMaterialChannel channel) const;
+    void SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture);
 
-    void SetTexture(EMaterialChannel channel, std::unique_ptr<Texture> texture)
-    {
-        textures[channel] = std::move(texture);
-    }
-
-    int GetTextureCoordSet(EMaterialChannel channel) const
-    {
-        auto it = textureCoordSets.find(channel);
-        return (it != textureCoordSets.end()) ? it->second : 0;
-    }
+    int GetTextureCoordSet(EMaterialChannel channel) const;
 };
 
 // TODO: Hack the simple Mesh, need refactor in the future
