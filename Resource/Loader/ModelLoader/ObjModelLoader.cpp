@@ -520,7 +520,7 @@ void ObjModelLoader::ValidateMeshData(const FMesh& mesh) const
     // DebuggerPrintf("Successfully loaded OBJ model: %d triangles, %d m_vertices\n", triangleCount, (int)mesh.m_vertices.size());
 }
 
-void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh) const
+void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh)
 {
     if (mesh.m_vertices.size() % 3 != 0) return;
 
@@ -599,7 +599,7 @@ void ObjModelLoader::GenerateNormalsIfNeeded(FMesh& mesh) const
 }
 
 // This function is now specifically used to calculate tangent space for meshes with existing normals
-void ObjModelLoader::CalculateTangentSpace(FMesh& mesh) const
+void ObjModelLoader::CalculateTangentSpace(FMesh& mesh)
 {
     if (mesh.m_vertices.size() % 3 != 0) return;
 
@@ -628,20 +628,20 @@ void ObjModelLoader::CalculateTangentSpace(FMesh& mesh) const
     }
 }
 
-bool ObjModelLoader::IsDefaultNormal(const Vec3& normal) const
+bool ObjModelLoader::IsDefaultNormal(const Vec3& normal)
 {
     return (normal.x == 0.0f && normal.y == 0.0f && normal.z == 1.0f);
 }
 
 // Check if UV is not all default (0,0)
-bool ObjModelLoader::HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2) const
+bool ObjModelLoader::HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2)
 {
     return !((v0.m_uvTexCoords.x == 0.0f && v0.m_uvTexCoords.y == 0.0f) &&
         (v1.m_uvTexCoords.x == 0.0f && v1.m_uvTexCoords.y == 0.0f) &&
         (v2.m_uvTexCoords.x == 0.0f && v2.m_uvTexCoords.y == 0.0f));
 }
 
-void ObjModelLoader::CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2) const
+void ObjModelLoader::CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2)
 {
     // Calculate edge vectors E0, E1
     Vec3 E0 = v1.m_position - v0.m_position; // P1 - P0
@@ -691,7 +691,7 @@ void ObjModelLoader::CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_
     }
 }
 
-void ObjModelLoader::OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex) const
+void ObjModelLoader::OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex)
 {
     // Gram-Schmidt orthogonalization, keeping N unchanged
     Vec3&       T = vertex.m_tangent;

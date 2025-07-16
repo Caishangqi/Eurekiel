@@ -12,6 +12,15 @@ public:
     std::string            GetLoaderName() const override { return "ObjModelLoader"; }
     bool                   CanLoad(const std::string& extension) const override;
 
+public:
+    // Helper functions
+    void        ValidateMeshData(const FMesh& mesh) const;
+    static void CalculateTangentSpace(FMesh& mesh);
+    static bool IsDefaultNormal(const Vec3& normal);
+    static void GenerateNormalsIfNeeded(FMesh& mesh);
+    static bool HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2);
+    static void CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2);
+    static void OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex);
 private:
     std::unique_ptr<FMesh> LoadObjModel(const std::string& filePath);
 
@@ -23,14 +32,6 @@ private:
 
     void ProcessFacesOptimized(FMesh& mesh, const std::vector<std::string>& faceLines);
 
-    // Helper functions
-    void ValidateMeshData(const FMesh& mesh) const;
-    void GenerateNormalsIfNeeded(FMesh& mesh) const;
-    void CalculateTangentSpace(FMesh& mesh) const;
-    bool IsDefaultNormal(const Vec3& normal) const;
-    bool HasValidUVs(const Vertex_PCUTBN& v0, const Vertex_PCUTBN& v1, const Vertex_PCUTBN& v2) const;
-    void CalculateTangentSpaceForTriangle(Vertex_PCUTBN& v0, Vertex_PCUTBN& v1, Vertex_PCUTBN& v2) const;
-    void OrthonormalizeVertexTangentSpace(Vertex_PCUTBN& vertex) const;
 
     [[deprecated]] void ProcessVertex(FMesh& mesh, std::string& data);
     [[deprecated]] void ProcessNormal(FMesh& mesh, std::string& data);
