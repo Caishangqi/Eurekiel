@@ -39,7 +39,7 @@ public:
     /// 
     /// Example Usage AddVertsForText2D( textVerts, Vec2( 250.f, 400.f ), 15.f, "It's nice to have options!", Rgba8::RED, 0.6f );
     /// 
-    /// @param vertexArray the vertices that will received
+    /// @param vertexArray the m_vertices that will received
     /// @param textMins The text left bottom position
     /// @param cellHeight The text height
     /// @param text The target text you want to render
@@ -68,7 +68,7 @@ public:
     ///         with the X-axis pointing forward (towards the screen or the camera), the Y-axis aligned horizontally,
     ///         and the Z-axis aligned vertically.
     ///
-    /// @param [out] verts            A container to which the resulting vertices will be appended.
+    /// @param [out] verts            A container to which the resulting m_vertices will be appended.
     /// @param        cellHeight       The height of each character in 3D space, controlling the overall text size.
     /// @param        text             The string content to be rendered.
     /// @param        tint             Vertex color, defaulting to Rgba8::WHITE.
@@ -82,7 +82,7 @@ public:
     /// - The function determines each character's size based on the given `cellHeight` and `cellAspect`.
     /// - The `alignment` parameter offsets the starting position of the text for centering or other alignment forms.
     /// - Each character's UV coordinates are computed internally, and then converted to a quadrilateral using `AddVertsForQuad3D`.
-    /// - The X direction is considered “forward,” so all vertices are at X=0 by default, with Y and Z coordinates
+    /// - The X direction is considered “forward,” so all m_vertices are at X=0 by default, with Y and Z coordinates
     ///   positioning the text horizontally and vertically.
     /// - Newline m_characters (`\n`) are skipped, and no line-breaking logic is implemented.
     ///
