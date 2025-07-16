@@ -44,7 +44,7 @@ private:
     void ProcessMaterial(const tinygltf::Material& gltfMaterial, FMaterial& material, const tinygltf::Model& model);
 
     // Create texture from image from tinygltf::Image
-    std::unique_ptr<Texture> CreateTextureFromGLTFImage(const tinygltf::Image& image, const std::string& debugName = "");
+    std::unique_ptr<Texture> CreateTextureFromGLTFImage(const tinygltf::Image& gltfImage, const std::string& debugName);
     std::unique_ptr<Texture> ExtractTextureFromInfo(const tinygltf::TextureInfo& textureInfo, const tinygltf::Model& model, const std::string& channelName);
     std::unique_ptr<Texture> ExtractTextureFromNormalInfo(const tinygltf::NormalTextureInfo& normalInfo, const tinygltf::Model& model);
     std::unique_ptr<Texture> ExtractTextureFromOcclusionInfo(const tinygltf::OcclusionTextureInfo& occlusionInfo, const tinygltf::Model& model);
