@@ -26,8 +26,16 @@ Rgba8::Rgba8()
 }
 
 Rgba8::Rgba8(const unsigned char r, const unsigned char g, const unsigned char b,
-             const unsigned char a): r(r), g(g), b(b), a(a)
+             const unsigned char a) : r(r), g(g), b(b), a(a)
 {
+}
+
+Rgba8::Rgba8(Vec4 vec4Color)
+{
+    r = static_cast<char>(GetClamped(static_cast<float>(vec4Color.x) * 255.0f, 0, 255));
+    g = static_cast<char>(GetClamped(static_cast<float>(vec4Color.y) * 255.0f, 0, 255));
+    b = static_cast<char>(GetClamped(static_cast<float>(vec4Color.z) * 255.0f, 0, 255));
+    a = static_cast<char>(GetClamped(static_cast<float>(vec4Color.w) * 255.0f, 0, 255));
 }
 
 Rgba8::Rgba8(const Rgba8& copyFrom)

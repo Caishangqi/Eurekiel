@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+struct Vec4;
+
 struct Rgba8
 {
     unsigned char r = 255;
@@ -25,6 +27,7 @@ struct Rgba8
     // then the object can be created through implicit conversion or copy initialization, as shown below:
     // Rgba8 m_color = Rgba8(255, 0, 0, 255); implicit conversion or copy initialization
     explicit Rgba8(unsigned char r, unsigned char g, unsigned char b, unsigned char a = 255);
+    Rgba8(Vec4 vec4Color);
     explicit Rgba8();
     Rgba8(const Rgba8& copyFrom);
 
