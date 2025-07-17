@@ -1145,10 +1145,8 @@ static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float rad
 
 void ConvertSingleVertex(const Vertex_PCU& src, Vertex_PCUTBN& dst)
 {
+    // Only copy the desired data, not set the TBN
     memcpy(&dst, &src, sizeof(Vertex_PCU));
-    dst.m_tangent   = Vec3(1.0f, 0.0f, 0.0f);
-    dst.m_bitangent = Vec3(0.0f, 1.0f, 0.0f);
-    dst.m_normal    = Vec3(0.0f, 0.0f, 1.0f);
 }
 
 
