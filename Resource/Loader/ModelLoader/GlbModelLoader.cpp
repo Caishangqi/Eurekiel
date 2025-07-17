@@ -24,6 +24,7 @@ bool GlbModelLoader::CanLoad(const std::string& extension) const
 
 std::unique_ptr<FMesh> GlbModelLoader::Load(const ResourceLocation& location, const std::string& filePath)
 {
+    UNUSED(location)
     tinygltf::Model model;
     std::string     err;
     std::string     warn;
@@ -74,6 +75,8 @@ std::unique_ptr<FMesh> GlbModelLoader::Load(const ResourceLocation& location, co
 
 std::unique_ptr<FMesh> GlbModelLoader::ProcessMesh(const tinygltf::Model& model, int meshIndex)
 {
+    UNUSED(meshIndex)
+    UNUSED(model)
     return nullptr;
 }
 
@@ -273,7 +276,6 @@ void GlbModelLoader::ExtractTangents(const tinygltf::Model& model, int accessorI
         mesh.m_vertices[currentSize + i].m_tangent = tangent.GetNormalized();
         // The fourth component (w) is usually used to calculate the direction of the bi-tangent,
         // which is ignored here for the time being
-
     }
 }
 
@@ -481,6 +483,7 @@ void GlbModelLoader::ProcessMaterial(const tinygltf::Material& gltfMaterial, FMa
  */
 std::unique_ptr<Texture> GlbModelLoader::CreateTextureFromGLTFImage(const tinygltf::Image& gltfImage, const std::string& debugName)
 {
+    UNUSED(debugName)
     if (gltfImage.image.empty())
     {
         return nullptr;

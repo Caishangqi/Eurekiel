@@ -10,8 +10,8 @@ namespace tinygltf
     struct Material;
     class Model;
     class TinyGLTF;
-    class Mesh;
-    class Primitive;
+    struct Mesh;
+    struct Primitive;
 }
 
 class GlbModelLoader : public ModelLoader
