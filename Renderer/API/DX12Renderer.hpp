@@ -43,10 +43,10 @@ struct D3D12_BLEND_DESC;
 struct D3D12_DEPTH_STENCIL_DESC;
 
 #define ENGINE_DEBUG_RENDER
-static constexpr uint32_t kBackBufferCount         = 2;
+static constexpr uint32_t kBackBufferCount         = 4;
 constexpr uint32_t        kMaxConstantBufferSlot   = 14;
 constexpr uint32_t        kMaxShaderSourceViewSlot = 128;
-constexpr uint32_t        kMaxTextureCached        = 4096;
+constexpr uint32_t        kMaxTextureCached        = 2048;
 using Microsoft::WRL::ComPtr;
 
 /**
