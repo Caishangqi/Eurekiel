@@ -39,40 +39,49 @@ public:
     void            ClearScreen(const Rgba8& clear) override;
     void            BeginCamera(const Camera& cam) override;
     void            EndCamera(const Camera& camera) override;
+    
     void            SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& modelColor = Rgba8::WHITE) override;
     void            SetDirectionalLightConstants(const DirectionalLightConstants& dl) override;
     void            SetFrameConstants(const FrameConstants& frameConstants) override;
     void            SetLightConstants(const LightingConstants& lightConstants) override;
     void            SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) override;
+    
     void            SetBlendMode(BlendMode mode) override;
     void            SetRasterizerMode(RasterizerMode mode) override;
     void            SetDepthMode(DepthMode mode) override;
     void            SetSamplerMode(SamplerMode mode, int slot = 0) override;
+    
     Shader*         CreateShader(const char* shaderName, const char* src, VertexType t) override;
     Shader*         CreateShader(const char* name, VertexType vertexType) override;
     Shader*         CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) override;
     BitmapFont*     CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) override;
     bool            CompileShaderToByteCode(std::vector<uint8_t>& outBytes, const char* name, const char* src, const char* entry, const char* target) override;
     void            BindShader(Shader* shader) override;
+    
     Texture*        CreateOrGetTexture(const char* imageFilePath) override;
     Image*          CreateImageFromFile(const char* imageFilePath) override;
     Texture*        CreateTextureFromImage(Image& image) override;
     Texture*        CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) override;
     Texture*        CreateTextureFromFile(const char* imageFilePath) override;
     Texture*        GetTextureForFileName(const char* imageFilePath) override;
+    
     BitmapFont*     CreateBitmapFont(const char* bitmapFontFilePathWithNoExtension, Texture& fontTexture) override;
+    
     VertexBuffer*   CreateVertexBuffer(size_t size, unsigned stride) override;
     IndexBuffer*    CreateIndexBuffer(size_t size) override;
     ConstantBuffer* CreateConstantBuffer(size_t size) override;
+    
     void            CopyCPUToGPU(const void* data, size_t size, VertexBuffer* v, size_t offset = 0) override;
     void            CopyCPUToGPU(const Vertex_PCU* data, size_t size, VertexBuffer* v, size_t offset = 0) override;
     void            CopyCPUToGPU(const Vertex_PCUTBN* data, size_t size, VertexBuffer* v, size_t offset = 0) override;
     void            CopyCPUToGPU(const void* data, size_t size, IndexBuffer* ibo) override;
     void            CopyCPUToGPU(const void* data, size_t size, ConstantBuffer* cb) override;
+    
     void            BindVertexBuffer(VertexBuffer* v) override;
     void            BindIndexBuffer(IndexBuffer* i) override;
     void            BindConstantBuffer(int slot, ConstantBuffer* c) override;
     void            BindTexture(Texture* texture, int slot = 0) override;
+    
     void            DrawVertexArray(int num, const Vertex_PCU* v) override;
     void            DrawVertexArray(int num, const Vertex_PCUTBN* v) override;
     void            DrawVertexArray(const std::vector<Vertex_PCU>& v) override;
@@ -81,6 +90,12 @@ public:
     void            DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) override;
     void            DrawVertexBuffer(VertexBuffer* v, int count) override;
     void            DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, unsigned indexCount) override;
+
+    RenderTarget* CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format) override;
+    void          SetRenderTarget(RenderTarget* renderTarget) override;
+    void          SetRenderTarget(RenderTarget** renderTargets, int count) override;
+    void          ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) override;
+    RenderTarget* GetBackBufferRenderTarget() override;
 
 private:
     /// DirectX
@@ -118,7 +133,7 @@ private:
     DepthMode                m_desiredDepthMode                                       = DepthMode::READ_WRITE_LESS_EQUAL;
     ID3D11DepthStencilState* m_depthStencilStates[static_cast<int>(DepthMode::COUNT)] = {};
     ID3D11DepthStencilState* m_depthStencilState                                      = nullptr;
-
+    
 #if defined(ENGINE_DEBUG_RENDER)
     void* m_dxgiDebug       = nullptr;
     void* m_dxgiDebugModule = nullptr;

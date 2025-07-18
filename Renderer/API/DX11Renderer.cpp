@@ -11,6 +11,8 @@
 #include "Engine/Window/Window.hpp"
 
 #include "Engine/Renderer/ConstantBuffer.hpp"
+#include "Engine/Renderer/GraphicsError.hpp"
+#include "Engine/Renderer/RenderTarget.hpp"
 #include "Engine/Renderer/Shader.hpp"
 #include "Engine/Renderer/Texture.hpp"
 
@@ -76,7 +78,7 @@ void DX11Renderer::Startup()
     {
         ERROR_AND_DIE("Could not create render target view for swap chain buffer")
     }
-
+    /// @link https://stackoverflow.com/questions/65246961/does-the-backbuffer-that-a-rendertargetview-points-to-automagically-change-after
     DX_SAFE_RELEASE(backBuffer)
 
     m_immediateVBO     = CreateVertexBuffer(sizeof(Vertex_PCU), sizeof(Vertex_PCU));
@@ -257,7 +259,7 @@ void DX11Renderer::Shutdown()
     POINTER_SAFE_DELETE(m_modelCBO)
     POINTER_SAFE_DELETE(m_lightCBO)
     POINTER_SAFE_DELETE(m_perFrameCBO)
-    
+
     for (Shader* m_loaded_shader : m_loadedShaders)
     {
         POINTER_SAFE_DELETE(m_loaded_shader)
@@ -832,6 +834,147 @@ void DX11Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsign
     BindVertexBuffer(vbo);
     BindIndexBuffer(ibo);
     m_deviceContext->DrawIndexed(indexCount, 0, 0);
+}
+
+/**
+ * Creates a new render target with the specified dimensions and format.
+ *
+ * This method initializes a 2D texture as the base resource for the render target.
+ * It also creates a render target view (RTV) and a shader resource view (SRV)
+ * for the texture, which can be used for rendering and shader binding operations.
+ *
+ * @param dimension The resolution of the render target, specified as an IntVec2.
+ * @param format The DXGI_FORMAT that specifies the pixel format of the render target.
+ * @return A pointer to the created RenderTarget. The caller is responsible for managing its lifetime.
+ */
+RenderTarget* DX11Renderer::CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format)
+{
+    RenderTarget* rt = new RenderTarget();
+    rt->dimensions   = dimension;
+
+    // Create texture 2D
+    D3D11_TEXTURE2D_DESC textureDesc = {};
+    textureDesc.Width                = dimension.x;
+    textureDesc.Height               = dimension.y;
+    textureDesc.MipLevels            = 1;
+    textureDesc.ArraySize            = 1;
+    textureDesc.Format               = format;
+    textureDesc.SampleDesc.Count     = 1;
+    textureDesc.SampleDesc.Quality   = 0;
+    textureDesc.Usage                = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags            = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.CPUAccessFlags       = D3D11_CPU_ACCESS_WRITE; // 0
+    textureDesc.MiscFlags            = 0;
+
+    m_device->CreateTexture2D(&textureDesc, nullptr, &rt->texture) >> chk;
+
+    // Create Render Target view
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.Format                        = format;
+    rtvDesc.ViewDimension                 = D3D11_RTV_DIMENSION_TEXTURE2D;
+    rtvDesc.Texture2D.MipSlice            = 0;
+    m_device->CreateRenderTargetView(rt->texture, &rtvDesc, &rt->rtv) >> chk;
+
+    // Create Shader Resource view
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                          = format;
+    srvDesc.ViewDimension                   = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
+    srvDesc.Texture2D.MipLevels             = 1;
+    m_device->CreateShaderResourceView(rt->texture, &srvDesc, &rt->srv) >> chk;
+
+    return rt;
+}
+
+/**
+ * Sets the active render target for subsequent rendering operations.
+ *
+ * This method replaces the current render target with the specified one.
+ * If the provided render target is null, the method reverts to using the default
+ * background buffer as the render target.
+ *
+ * @param renderTarget A pointer to the custom RenderTarget to set, or nullptr to use the default render target.
+ *                      The render target must have a valid render target view (RTV).
+ */
+void DX11Renderer::SetRenderTarget(RenderTarget* renderTarget)
+{
+    if (renderTarget == nullptr)
+    {
+        // Revert to the background buffer
+        m_deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilDSV);
+        m_currentRenderTarget = &m_backBufferRenderTarget;
+    }
+    else
+    {
+        // Set a custom render target (without depth buffering)
+        m_deviceContext->OMSetRenderTargets(1, &renderTarget->rtv, nullptr);
+        m_currentRenderTarget = renderTarget;
+    }
+}
+
+/**
+ * Binds the specified render targets to the Direct3D 11 pipeline.
+ *
+ * This method sets up to 8 render targets for the output-merger stage of the pipeline.
+ * It retrieves the render target views (RTVs) from the provided render targets and applies
+ * them to the pipeline. The first render target in the array will be considered as the
+ * primary render target.
+ *
+ * @param renderTargets An array of pointers to RenderTarget objects whose render views should be bound.
+ *                      Each RenderTarget in the array must have a valid render target view (RTV).
+ * @param count The number of render targets to bind. Must not exceed the DirectX limit of 8.
+ */
+void DX11Renderer::SetRenderTarget(RenderTarget** renderTargets, int count)
+{
+    ID3D11RenderTargetView* rtvs[8] = {}; // DirectX11 Support max 8 Render Target View
+    for (int i = 0; i < 8; ++i)
+    {
+        if (renderTargets[i]->rtv)
+        {
+            rtvs[i] = renderTargets[i]->rtv;
+        }
+    }
+
+    m_deviceContext->OMSetRenderTargets(count, rtvs, nullptr);
+    m_currentRenderTarget = count > 0 ? renderTargets[0] : nullptr;
+}
+
+/**
+ * Clears the specified render target and fills it with the provided clear color.
+ *
+ * This method resets the contents of the render target to the given color, which
+ * is converted internally to a floating-point representation before being applied.
+ * If the render target or its render target view (RTV) is invalid, the method returns
+ * without performing any operation.
+ *
+ * @param renderTarget Pointer to the RenderTarget to be cleared. Must be valid and have an active RTV.
+ * @param clearColor An Rgba8 structure specifying the color to fill the render target with.
+ */
+void DX11Renderer::ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor)
+{
+    if (!renderTarget || !renderTarget->rtv)
+        return;
+
+    float colorAsFloat[4];
+    clearColor.GetAsFloats(colorAsFloat);
+    m_deviceContext->ClearRenderTargetView(renderTarget->rtv, colorAsFloat);
+}
+
+RenderTarget* DX11Renderer::GetBackBufferRenderTarget()
+{
+    // Lazy initialization of the backbuffer RenderTarget encapsulation
+    if (!m_backBufferRenderTarget.rtv)
+    {
+        // Get the background buffer texture
+        ID3D11Texture2D* backBuffer = nullptr;
+        m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer) >> chk;
+
+        m_backBufferRenderTarget.texture    = backBuffer;
+        m_backBufferRenderTarget.rtv        = m_renderTargetView; // Use the current render target view
+        m_backBufferRenderTarget.srv        = nullptr;
+        m_backBufferRenderTarget.dimensions = m_config.m_window->GetClientDimensions();
+    }
+    return &m_backBufferRenderTarget;
 }
 
 void DX11Renderer::SetStatesIfChanged()
