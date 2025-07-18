@@ -1,6 +1,9 @@
 ﻿#include "ObjModelLoader.hpp"
 
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <regex>
 #include <sstream>
 
@@ -27,8 +30,20 @@ bool ObjModelLoader::CanLoad(const std::string& extension) const
 
 std::unique_ptr<FMesh> ObjModelLoader::LoadObjModel(const std::string& filePath)
 {
+    std::filesystem::path path       = filePath;
+    std::filesystem::path parentPath = path.parent_path();
+    std::filesystem::path fileName   = path.filename();
+    std::filesystem::path metaPath   = parentPath / fileName.replace_extension().concat(".meta.json");
+
     // Prepare FMesh
     std::unique_ptr<FMesh> mesh = std::make_unique<FMesh>();
+
+    if (std::filesystem::exists(metaPath))
+    {
+        std::ifstream f(metaPath.c_str(), std::ios::binary);
+        mesh->m_MetaData = json::parse(f, nullptr, false, true);
+    }
+
 
     // Read the entire file into a string at once
     std::string fileContent;
@@ -58,6 +73,9 @@ std::unique_ptr<FMesh> ObjModelLoader::LoadObjModel(const std::string& filePath)
 
     // Generate normal and tangent space
     GenerateNormalsIfNeeded(*mesh.get());
+
+    // Process MetaData
+    ProcessMetaData(mesh);
 
     return mesh;
 }
@@ -331,6 +349,41 @@ void ObjModelLoader::ProcessFacesOptimized(FMesh& mesh, const std::vector<std::s
             vertex.m_bitangent = defaultBinormal;
 
             mesh.m_vertices.push_back(vertex);
+        }
+    }
+}
+
+void ObjModelLoader::ProcessMetaData(std::unique_ptr<FMesh>& mesh)
+{
+    if (!mesh->m_MetaData.is_object())
+        return;
+    json  meta = mesh->m_MetaData;
+    Mat44 transform;
+    float scale = meta["scale"].get<float>();
+
+    Vec3 forward = Vec3(meta["axis"]["forward"].get<std::string>().c_str());
+    Vec3 left    = Vec3(meta["axis"]["left"].get<std::string>().c_str());
+    Vec3 up      = Vec3(meta["axis"]["up"].get<std::string>().c_str());
+
+    transform.SetIJK3D(forward, left, up);
+    transform.AppendScaleUniform3D(scale);
+
+    // Detection of Chirality: Calculation Forward · (left × up)
+    Vec3  cross       = CrossProduct3D(left, up);
+    float determinant = DotProduct3D(forward, cross);
+
+    bool needsHandednessCorrection = determinant < 0; // if it is left handed it needs to be corrected
+
+    for (Vertex_PCUTBN& vertex : mesh->m_vertices)
+    {
+        vertex.m_position = transform.TransformPosition3D(vertex.m_position);
+        if (needsHandednessCorrection)
+        {
+            // Chiral correction is performed automatically
+            vertex.m_position.x  = -vertex.m_position.x;
+            vertex.m_normal.x    = -vertex.m_normal.x;
+            vertex.m_tangent.x   = -vertex.m_tangent.x;
+            vertex.m_bitangent.x = -vertex.m_bitangent.x;
         }
     }
 }
