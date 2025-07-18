@@ -4,8 +4,10 @@
  *  Any engine system should talk ONLY to this interface.
  *-------------------------------------------------------------*/
 #pragma once
+#include <dxgiformat.h>
 #include <vector>
 
+#include "RenderTarget.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Mat44.hpp"
@@ -251,6 +253,13 @@ public:
     virtual void DrawVertexBuffer(VertexBuffer* v, int count) = 0;
     virtual void DrawVertexIndexed(VertexBuffer* v, IndexBuffer* i, unsigned int indexCount) = 0;
 
+    // Render Targets
+    [[maybe_unused]] virtual RenderTarget* CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format) = 0;
+    virtual void                           SetRenderTarget(RenderTarget* renderTarget) = 0;
+    virtual void                           SetRenderTarget(RenderTarget** renderTargets, int count) = 0;
+    virtual void                           ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) = 0;
+    [[maybe_unused]] virtual RenderTarget* GetBackBufferRenderTarget() = 0;
+
     static IRenderer* CreateRenderer(RenderConfig& config);
 
     /// Conversion
@@ -261,6 +270,11 @@ protected:
     RasterizerMode m_currentRasterizerMode = RasterizerMode::SOLID_CULL_BACK;
     DepthMode      m_currentDepthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
     SamplerMode    m_currentSamplerMode    = SamplerMode::POINT_CLAMP;
+
+protected:
+    /// Render Targets
+    RenderTarget* m_currentRenderTarget    = nullptr;
+    RenderTarget m_backBufferRenderTarget;
 };
 
 template <typename T>
