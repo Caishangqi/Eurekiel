@@ -2,6 +2,7 @@
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Vec4.hpp"
 #include "Engine/Resource/Loader/Loader.hpp"
+#include "ThirdParty/json/json.hpp"
 
 class VertexBuffer;
 class IndexBuffer;
@@ -9,6 +10,8 @@ struct Vec2;
 struct Vec3;
 class IRenderer;
 class Texture;
+
+using json = nlohmann::json;
 
 enum class EMaterialChannel : uint8_t
 {
@@ -126,6 +129,9 @@ struct FMesh
 
     mutable std::shared_ptr<VertexBuffer> vertexBuffer = nullptr;
     mutable std::shared_ptr<IndexBuffer>  indexBuffer  = nullptr;
+
+    // Meta
+    json m_MetaData;
 };
 
 class ModelLoader : public ResourceLoader<FMesh>
