@@ -19,7 +19,7 @@ Vec3::Vec3(const Vec3& copyFrom)
     z = copyFrom.z;
 }
 
-Vec3::Vec3(float initialX, float initialY, float initialZ): x(initialX), y(initialY), z(initialZ)
+Vec3::Vec3(float initialX, float initialY, float initialZ) : x(initialX), y(initialY), z(initialZ)
 {
 }
 
@@ -28,6 +28,11 @@ Vec3::Vec3(const EulerAngles& angles)
     x = angles.m_yawDegrees;
     y = angles.m_pitchDegrees;
     z = angles.m_rollDegrees;
+}
+
+Vec3::Vec3(const char* stringVec)
+{
+    SetFromText(stringVec);
 }
 
 Vec3::Vec3(float length)

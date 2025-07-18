@@ -13,6 +13,7 @@ struct Vec3
     float z = 0.f;
 
     Vec3() = default;
+    Vec3(const char* stringVec);
     Vec3(const Vec3& copyFrom); // copy constructor (from another Vec3)
     explicit Vec3(float initialX, float initialY, float initialZ);
     explicit Vec3(const EulerAngles& angles);
