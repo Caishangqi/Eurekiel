@@ -1287,6 +1287,12 @@ void DX12Renderer::DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const st
     DrawVertexIndexedInternal(m_currentVertexBuffer, m_currentIndexBuffer, static_cast<unsigned int>(idx.size()));
 }
 
+/**
+ * Draws vertices using the specified vertex buffer.
+ *
+ * @param vbo The vertex buffer object containing vertex data.
+ * @param count The number of vertices to draw.
+ */
 void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
 {
     if (!vbo || count <= 0) return;
@@ -1366,6 +1372,13 @@ void DX12Renderer::DrawVertexBuffer(VertexBuffer* vbo, int count)
     DrawVertexBufferInternal(m_currentVertexBuffer, count);
 }
 
+/**
+ * Draws indexed vertices using the specified vertex and index buffers.
+ *
+ * @param vbo The vertex buffer object containing vertex data.
+ * @param ibo The index buffer object containing index data.
+ * @param indexCount The number of indices to draw.
+ */
 void DX12Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount)
 {
     if (!vbo || !ibo || indexCount == 0) return;
@@ -1479,6 +1492,38 @@ void DX12Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsign
 
     // Call internal drawing function
     DrawVertexIndexedInternal(m_currentVertexBuffer, m_currentIndexBuffer, indexCount);
+}
+
+RenderTarget* DX12Renderer::CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format)
+{
+    UNUSED(dimension)
+    UNUSED(format)
+    ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
+}
+
+void DX12Renderer::SetRenderTarget(RenderTarget* renderTarget)
+{
+    UNUSED(renderTarget)
+    ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
+}
+
+void DX12Renderer::SetRenderTarget(RenderTarget** renderTargets, int count)
+{
+    UNUSED(renderTargets)
+    UNUSED(count)
+    ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
+}
+
+void DX12Renderer::ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor)
+{
+    UNUSED(clearColor)
+    UNUSED(renderTarget)
+    ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
+}
+
+RenderTarget* DX12Renderer::GetBackBufferRenderTarget()
+{
+    ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
 }
 
 void DX12Renderer::WaitForGPU()

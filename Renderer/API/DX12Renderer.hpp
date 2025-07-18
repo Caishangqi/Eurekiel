@@ -237,21 +237,14 @@ public:
     void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v) override;
     void DrawVertexArray(const std::vector<Vertex_PCU>& v, const std::vector<unsigned>& idx) override;
     void DrawVertexArray(const std::vector<Vertex_PCUTBN>& v, const std::vector<unsigned>& idx) override;
-    /**
-     * Draws vertices using the specified vertex buffer.
-     *
-     * @param vbo The vertex buffer object containing vertex data.
-     * @param count The number of vertices to draw.
-     */
     void DrawVertexBuffer(VertexBuffer* vbo, int count) override; // DrawVertexBuffer - handles user buffered data
-    /**
-     * Draws indexed vertices using the specified vertex and index buffers.
-     *
-     * @param vbo The vertex buffer object containing vertex data.
-     * @param ibo The index buffer object containing index data.
-     * @param indexCount The number of indices to draw.
-     */
     void DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsigned int indexCount) override;
+
+    RenderTarget* CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format) override;
+    void          SetRenderTarget(RenderTarget* renderTarget) override;
+    void          SetRenderTarget(RenderTarget** renderTargets, int count) override;
+    void          ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) override;
+    RenderTarget* GetBackBufferRenderTarget() override;
 
 private:
     // Device-level resources (StartUp / Shutdown lifecycle)
