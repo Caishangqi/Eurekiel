@@ -249,19 +249,6 @@
         <ClCompile Include="Window\Window.cpp"/>
     </ItemGroup>
     <ItemGroup>
-        <ClInclude Include="..\ThirdParty\d3dx12\d3dx12.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod.hpp" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_codec.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_common.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp_effects.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_errors.h" />
-        <ClInclude Include="..\ThirdParty\fmod\fmod_output.h" />
-        <ClInclude Include="..\ThirdParty\json\json.hpp" />
-        <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
-        <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h"/>
-        <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h" />
         <ClInclude Include="Audio\AudioSystem.hpp"/>
         <ClInclude Include="Core\Clock.hpp"/>
         <ClInclude Include="Core\CubicHermiteSpline.hpp" />
