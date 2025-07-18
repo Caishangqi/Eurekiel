@@ -232,6 +232,7 @@
         <ClCompile Include="Renderer\IRenderer.cpp" />
         <ClCompile Include="Renderer\Light\Light.cpp" />
         <ClCompile Include="Renderer\Renderer.cpp"/>
+        <ClCompile Include="Renderer\RenderTarget.cpp" />
         <ClCompile Include="Renderer\Shader.cpp"/>
         <ClCompile Include="Renderer\SimpleTriangleFont.cpp"/>
         <ClCompile Include="Renderer\SpriteAnimDefinition.cpp"/>
@@ -315,6 +316,7 @@
         <ClInclude Include="Renderer\IRenderer.hpp" />
         <ClInclude Include="Renderer\Light\Light.hpp" />
         <ClInclude Include="Renderer\Renderer.hpp" />
+        <ClInclude Include="Renderer\RenderTarget.hpp" />
         <ClInclude Include="Renderer\Shader.hpp" />
         <ClInclude Include="Renderer\SimpleTriangleFont.hpp" />
         <ClInclude Include="Renderer\SpriteAnimDefinition.hpp" />
