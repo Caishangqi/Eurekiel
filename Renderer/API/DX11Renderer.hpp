@@ -99,6 +99,8 @@ public:
     void          ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) override;
     RenderTarget* GetBackBufferRenderTarget() override;
 
+    void SetViewport(const IntVec2& dimension) override;
+
 private:
     /// DirectX
     ID3D11RenderTargetView* m_renderTargetView = nullptr;

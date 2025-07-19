@@ -907,7 +907,7 @@ RenderTarget* DX11Renderer::CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT fo
     srvDesc.ViewDimension                   = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MostDetailedMip       = 0;
     srvDesc.Texture2D.MipLevels             = 1;
-    m_device->CreateShaderResourceView(rt->texture, &srvDesc, &rt->srv) >> chk;
+    m_device->CreateShaderResourceView(rt->texture, &srvDesc, &rt->srv->m_shaderResourceView) >> chk;
 
     return rt;
 }
@@ -1001,6 +1001,19 @@ RenderTarget* DX11Renderer::GetBackBufferRenderTarget()
         m_backBufferRenderTarget.dimensions = m_config.m_window->GetClientDimensions();
     }
     return &m_backBufferRenderTarget;
+}
+
+void DX11Renderer::SetViewport(const IntVec2& dimension)
+{
+    D3D11_VIEWPORT viewport = {};
+    viewport.TopLeftX       = 0.0f;
+    viewport.TopLeftY       = 0.0f;
+    viewport.Width          = static_cast<float>(dimension.x);
+    viewport.Height         = static_cast<float>(dimension.y);
+    viewport.MinDepth       = 0.0f;
+    viewport.MaxDepth       = 1.0f;
+
+    m_deviceContext->RSSetViewports(1, &viewport);
 }
 
 void DX11Renderer::SetStatesIfChanged()
