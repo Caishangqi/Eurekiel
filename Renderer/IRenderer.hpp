@@ -188,6 +188,8 @@ public:
     // Resource creation
     virtual Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) = 0;
     virtual Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) = 0;
+    virtual Shader*     CreateShader(const char* name, const char* shaderPath, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType = VertexType::Vertex_PCU) = 0;
+    virtual Shader*     CreateShaderFromSource(const char* name, const char* shaderSource, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType = VertexType::Vertex_PCU) = 0;
     virtual Shader*     CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) = 0;
     virtual BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) = 0;
     virtual bool        CompileShaderToByteCode(std::vector<uint8_t>& outBytes, const char* name, const char* src, const char* entry, const char* target) = 0;
@@ -273,8 +275,8 @@ protected:
 
 protected:
     /// Render Targets
-    RenderTarget* m_currentRenderTarget    = nullptr;
-    RenderTarget m_backBufferRenderTarget;
+    RenderTarget* m_currentRenderTarget = nullptr;
+    RenderTarget  m_backBufferRenderTarget;
 };
 
 template <typename T>
