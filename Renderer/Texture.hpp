@@ -26,6 +26,8 @@ public:
     const std::string& GetImageFilePath() const { return m_name; }
     static UINT        IncrementInternalID() { return ++s_internalID; }
 
+    ID3D11ShaderResourceView* GetShaderResourceView() const { return m_shaderResourceView; }
+
 protected:
     std::string m_name;
     IntVec2     m_dimensions;
