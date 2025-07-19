@@ -287,6 +287,19 @@ void DX11Renderer::Shutdown()
         DX_SAFE_RELEASE(m_rasterizer_state)
     }
 
+    // Clean up the RenderTarget background buffer
+    if (m_backBufferRenderTarget)
+    {
+        // Note: Do not release the RTV as it is a reference to the m_renderTargetView
+        m_backBufferRenderTarget->rtv = nullptr;
+
+        // Release the Texture object (ID3D11Texture2D*)
+        POINTER_SAFE_DELETE(m_backBufferRenderTarget->texture)
+
+        POINTER_SAFE_DELETE(m_backBufferRenderTarget)
+    }
+    m_currentRenderTarget = nullptr;
+
     DX_SAFE_RELEASE(m_depthStencilTexture)
     DX_SAFE_RELEASE(m_depthStencilDSV)
     DX_SAFE_RELEASE(m_renderTargetView)
@@ -876,7 +889,6 @@ void DX11Renderer::DrawVertexIndexed(VertexBuffer* vbo, IndexBuffer* ibo, unsign
 RenderTarget* DX11Renderer::CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT format)
 {
     RenderTarget* rt = new RenderTarget();
-    rt->dimensions   = dimension;
 
     // Create texture 2D
     D3D11_TEXTURE2D_DESC textureDesc = {};
@@ -892,22 +904,30 @@ RenderTarget* DX11Renderer::CreateRenderTarget(IntVec2 dimension, DXGI_FORMAT fo
     textureDesc.CPUAccessFlags       = D3D11_CPU_ACCESS_WRITE; // 0
     textureDesc.MiscFlags            = 0;
 
-    m_device->CreateTexture2D(&textureDesc, nullptr, &rt->texture) >> chk;
+    ID3D11Texture2D* d3dTexture = nullptr;
+    m_device->CreateTexture2D(&textureDesc, nullptr, &d3dTexture) >> chk;
 
-    // Create Render Target view
-    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.Format                        = format;
-    rtvDesc.ViewDimension                 = D3D11_RTV_DIMENSION_TEXTURE2D;
-    rtvDesc.Texture2D.MipSlice            = 0;
-    m_device->CreateRenderTargetView(rt->texture, &rtvDesc, &rt->rtv) >> chk;
+    // Create a Texture object to wrap D3D resources
+    rt->texture               = new Texture();
+    rt->texture->m_texture    = d3dTexture;
+    rt->texture->m_dimensions = dimension;
+    rt->texture->m_name       = "RenderTarget";
 
+    // Create an SRV
     // Create Shader Resource view
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format                          = format;
     srvDesc.ViewDimension                   = D3D11_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MostDetailedMip       = 0;
     srvDesc.Texture2D.MipLevels             = 1;
-    m_device->CreateShaderResourceView(rt->texture, &srvDesc, &rt->srv->m_shaderResourceView) >> chk;
+    m_device->CreateShaderResourceView(d3dTexture, &srvDesc, &rt->texture->m_shaderResourceView) >> chk;
+    // Create RTV
+    // Create Render Target view
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+    rtvDesc.Format                        = format;
+    rtvDesc.ViewDimension                 = D3D11_RTV_DIMENSION_TEXTURE2D;
+    rtvDesc.Texture2D.MipSlice            = 0;
+    m_device->CreateRenderTargetView(d3dTexture, &rtvDesc, &rt->rtv) >> chk;
 
     return rt;
 }
@@ -928,12 +948,36 @@ void DX11Renderer::SetRenderTarget(RenderTarget* renderTarget)
     {
         // Revert to the background buffer
         m_deviceContext->OMSetRenderTargets(1, &m_renderTargetView, m_depthStencilDSV);
-        m_currentRenderTarget = &m_backBufferRenderTarget;
+
+        // Restore the full-screen Viewport
+        D3D11_VIEWPORT viewport = {};
+        viewport.TopLeftX       = 0.0f;
+        viewport.TopLeftY       = 0.0f;
+        viewport.Width          = static_cast<float>(m_config.m_window->GetClientDimensions().x);
+        viewport.Height         = static_cast<float>(m_config.m_window->GetClientDimensions().y);
+        viewport.MinDepth       = 0.0f;
+        viewport.MaxDepth       = 1.0f;
+        m_deviceContext->RSSetViewports(1, &viewport);
+
+        // Sets the current render target
+        m_currentRenderTarget = GetBackBufferRenderTarget();
     }
     else
     {
         // Set a custom render target (without depth buffering)
         m_deviceContext->OMSetRenderTargets(1, &renderTarget->rtv, nullptr);
+
+        // Automatically resizes the Viewport to match the render target size
+        D3D11_VIEWPORT viewport = {};
+        viewport.TopLeftX       = 0.0f;
+        viewport.TopLeftY       = 0.0f;
+        viewport.Width          = static_cast<float>(renderTarget->texture->GetDimensions().x);
+        viewport.Height         = static_cast<float>(renderTarget->texture->GetDimensions().y);
+        viewport.MinDepth       = 0.0f;
+        viewport.MaxDepth       = 1.0f;
+        m_deviceContext->RSSetViewports(1, &viewport);
+
+        // Sets the current render target
         m_currentRenderTarget = renderTarget;
     }
 }
@@ -989,18 +1033,36 @@ void DX11Renderer::ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& cl
 RenderTarget* DX11Renderer::GetBackBufferRenderTarget()
 {
     // Lazy initialization of the backbuffer RenderTarget encapsulation
-    if (!m_backBufferRenderTarget.rtv)
+    if (!m_backBufferRenderTarget)
     {
+        m_backBufferRenderTarget = new RenderTarget();
+
         // Get the background buffer texture
         ID3D11Texture2D* backBuffer = nullptr;
-        m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer) >> chk;
+        HRESULT          hr         = m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
+        if (FAILED(hr))
+        {
+            delete m_backBufferRenderTarget;
+            m_backBufferRenderTarget = nullptr;
+            ERROR_AND_DIE("Failed to get swap chain back buffer");
+        }
 
-        m_backBufferRenderTarget.texture    = backBuffer;
-        m_backBufferRenderTarget.rtv        = m_renderTargetView; // Use the current render target view
-        m_backBufferRenderTarget.srv        = nullptr;
-        m_backBufferRenderTarget.dimensions = m_config.m_window->GetClientDimensions();
+        // Create a background buffer to wrap the Texture object
+        m_backBufferRenderTarget->texture               = new Texture();
+        m_backBufferRenderTarget->texture->m_texture    = backBuffer;
+        m_backBufferRenderTarget->texture->m_dimensions = m_config.m_window->GetClientDimensions();
+        m_backBufferRenderTarget->texture->m_name       = "BackBuffer";
+
+        // Background buffers usually don't require SRV (can't be sampled as textures)
+        m_backBufferRenderTarget->texture->m_shaderResourceView = nullptr;
+
+        // Use an existing render target view
+        m_backBufferRenderTarget->rtv = m_renderTargetView;
+
+        // Note: Don't Release backBuffer here, as it's held by a Texture object
     }
-    return &m_backBufferRenderTarget;
+
+    return m_backBufferRenderTarget;
 }
 
 void DX11Renderer::SetViewport(const IntVec2& dimension)
