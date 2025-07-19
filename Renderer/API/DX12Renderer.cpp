@@ -791,6 +791,26 @@ Shader* DX12Renderer::CreateShader(const char* name, VertexType t)
     return CreateShader(name, shaderSource.c_str(), t);
 }
 
+Shader* DX12Renderer::CreateShader(const char* name, const char* shaderPath, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType)
+{
+    UNUSED(name)
+    UNUSED(shaderPath)
+    UNUSED(vsEntryPoint)
+    UNUSED(psEntryPoint)
+    UNUSED(vertexType)
+    ERROR_AND_DIE("DX12Renderer::CreateShader not implemented yet")
+}
+
+Shader* DX12Renderer::CreateShaderFromSource(const char* name, const char* shaderSource, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType)
+{
+    UNUSED(name)
+    UNUSED(shaderSource)
+    UNUSED(vsEntryPoint)
+    UNUSED(psEntryPoint)
+    UNUSED(vertexType)
+    ERROR_AND_DIE("DX12Renderer::CreateShaderFromSource not implemented yet")
+}
+
 Shader* DX12Renderer::CreateOrGetShader(const char* shaderName, VertexType vertexType)
 {
     for (auto& shader : m_shaderCache)

@@ -194,6 +194,8 @@ public:
     BitmapFont* CreateOrGetBitmapFont(const char* bitmapFontFilePathWithNoExtension) override;
     Shader*     CreateShader(const char* name, const char* src, VertexType t = VertexType::Vertex_PCU) override;
     Shader*     CreateShader(const char* name, VertexType t = VertexType::Vertex_PCU) override;
+    Shader*     CreateShader(const char* name, const char* shaderPath, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType) override;
+    Shader*     CreateShaderFromSource(const char* name, const char* shaderSource, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType) override;
     Shader*     CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) override;
     bool        CompileShaderToByteCode(std::vector<uint8_t>& outByteCode, const char* name, const char* src, const char* entryPoint, const char* target) override;
     Texture*    CreateTextureFromImage(Image& image) override;
@@ -293,7 +295,7 @@ private:
     std::unique_ptr<TieredDescriptorHandler> m_descriptorHandler;
 
     /// Draw calls
-    DrawCall              m_currentDrawCall;
+    DrawCall m_currentDrawCall;
 
     std::unordered_map<Texture*, std::unique_ptr<TextureData>> m_textureData;
 
