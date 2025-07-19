@@ -262,6 +262,8 @@ public:
     virtual void                           ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) = 0;
     [[maybe_unused]] virtual RenderTarget* GetBackBufferRenderTarget() = 0;
 
+    [[maybe_unused]] virtual void SetViewport(const IntVec2& dimension) = 0;
+
     static IRenderer* CreateRenderer(RenderConfig& config);
 
     /// Conversion
