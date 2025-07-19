@@ -1,5 +1,7 @@
 ﻿#include "DX11Renderer.hpp"
 
+#include <filesystem>
+
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/FileUtils.hpp"
@@ -428,70 +430,7 @@ void DX11Renderer::SetSamplerMode(SamplerMode mode, int slot)
 
 Shader* DX11Renderer::CreateShader(const char* shaderName, const char* shaderSource, VertexType vertexType)
 {
-    ShaderConfig shaderConfig;
-    shaderConfig.m_name               = shaderName;
-    auto                       shader = new Shader(shaderConfig);
-    std::vector<unsigned char> outVertexShaderByteCode;
-    std::vector<unsigned char> outPixelShaderByteCode;
-    HRESULT                    hr;
-
-    CompileShaderToByteCode(outVertexShaderByteCode, shaderName, shaderSource, shader->m_config.m_vertexEntryPoint.c_str(), "vs_5_0");
-    hr = m_device->CreateVertexShader(outVertexShaderByteCode.data(), outVertexShaderByteCode.size(), nullptr, &shader->m_vertexShader);
-    if (!SUCCEEDED(hr))
-    {
-        ERROR_AND_DIE(Stringf("Could not create vertex shader."))
-    }
-    CompileShaderToByteCode(outPixelShaderByteCode, shaderName, shaderSource, shader->m_config.m_pixelEntryPoint.c_str(), "ps_5_0");
-
-    hr = m_device->CreatePixelShader(outPixelShaderByteCode.data(), outPixelShaderByteCode.size(), nullptr, &shader->m_pixelShader);
-
-    if (!SUCCEEDED(hr))
-    {
-        ERROR_AND_DIE(Stringf("Could not create pixel shader."))
-    }
-
-    if (vertexType == VertexType::Vertex_PCU)
-    {
-        // Create an input layout and store it on the new shader we created
-        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-
-        UINT numElements = ARRAYSIZE(inputElementDesc);
-        hr               = m_device->CreateInputLayout(
-            inputElementDesc, numElements, outVertexShaderByteCode.data(), outVertexShaderByteCode.size(), &shader->m_inputLayout);
-        if (!SUCCEEDED(hr))
-        {
-            ERROR_AND_DIE("Could not create vertex layout")
-        }
-
-        return shader;
-    }
-    if (vertexType == VertexType::Vertex_PCUTBN)
-    {
-        // Create an input layout and store it on the new shader we created
-        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, /* Be careful of the alignment*/D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
-
-        UINT numElements = ARRAYSIZE(inputElementDesc);
-        hr               = m_device->CreateInputLayout(
-            inputElementDesc, numElements, outVertexShaderByteCode.data(), outVertexShaderByteCode.size(), &shader->m_inputLayout);
-        if (!SUCCEEDED(hr))
-        {
-            ERROR_AND_DIE("Could not create vertex layout")
-        }
-
-        return shader;
-    }
-    return nullptr;
+    return CreateShaderFromSource(shaderName, shaderSource, "VertexMain", "PixelMain", vertexType);
 }
 
 Shader* DX11Renderer::CreateShader(const char* shaderName, VertexType vertexType)
@@ -504,6 +443,93 @@ Shader* DX11Renderer::CreateShader(const char* shaderName, VertexType vertexType
         ERROR_RECOVERABLE(Stringf( "Could not read shader \"%s\"", shaderName ))
     }
     return CreateShader(shaderName, shaderSource.c_str(), vertexType);
+}
+
+/**
+ * Creates a shader from the specified file path and entry points for the vertex and pixel shaders.
+ *
+ * This method reads the shader source from the given file, handles errors if the file cannot be read,
+ * and delegates the shader creation to `CreateShaderFromSource`.
+ *
+ * @param name The name of the shader, used for identification purposes.
+ * @param shaderPath The file path to the shader source code.
+ * @param vsEntryPoint The entry point function name for the vertex shader.
+ * @param psEntryPoint The entry point function name for the pixel shader.
+ * @param vertexType The type of vertex data that the shader will handle, specified as a VertexType enum.
+ * @return A pointer to the created Shader, or nullptr if the shader creation failed.
+ *         The caller is responsible for managing the lifetime of the returned Shader.
+ */
+Shader* DX11Renderer::CreateShader(const char* name, const char* shaderPath, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType)
+{
+    std::string           shaderSource;
+    std::filesystem::path path       = std::filesystem::path(shaderPath);
+    int                   readResult = FileReadToString(shaderSource, path.string());
+    if (readResult <= 0)
+    {
+        ERROR_RECOVERABLE(Stringf("Failed to read shader file: %s", path.c_str()));
+        return nullptr;
+    }
+    return CreateShaderFromSource(name, shaderSource.c_str(), vsEntryPoint, psEntryPoint, vertexType);
+}
+
+/**
+ * Creates a shader from source code and entry points for vertex and pixel shaders.
+ *
+ * This method compiles the provided shader source into bytecode, creates vertex and pixel shaders,
+ * and initializes the shader's input layout based on the specified vertex type. If any step fails,
+ * an error is logged and the method terminates the application.
+ *
+ * @param name The name of the shader, used for identification purposes.
+ * @param shaderSource The source code of the shader to be compiled.
+ * @param vsEntryPoint The entry point function name for the vertex shader.
+ * @param psEntryPoint The entry point function name for the pixel shader.
+ * @param vertexType The type of vertex data that the shader will handle, specified as a VertexType enum.
+ * @return A pointer to the created Shader. The caller is responsible for managing the lifetime of the returned Shader.
+ *         If an error occurs during creation, the application terminates.
+ */
+Shader* DX11Renderer::CreateShaderFromSource(const char* name, const char* shaderSource, const char* vsEntryPoint, const char* psEntryPoint, VertexType vertexType)
+{
+    // Shader Config
+    ShaderConfig shaderConfig;
+    shaderConfig.m_name             = name;
+    shaderConfig.m_vertexEntryPoint = vsEntryPoint;
+    shaderConfig.m_pixelEntryPoint  = psEntryPoint;
+
+    auto                 shader = new Shader(shaderConfig);
+    std::vector<uint8_t> vertexShaderByteCode;
+    std::vector<uint8_t> pixelShaderByteCode;
+
+    if (!CompileShaderToByteCode(vertexShaderByteCode, name, shaderSource, vsEntryPoint, "vs_5_0"))
+    {
+        delete shader;
+        ERROR_AND_DIE(Stringf("Failed to compile vertex shader '%s' with entry point '%s'", name, vsEntryPoint))
+    }
+    // Vertex Shader
+    HRESULT hr = m_device->CreateVertexShader(vertexShaderByteCode.data(), vertexShaderByteCode.size(), nullptr, &shader->m_vertexShader);
+    if (FAILED(hr))
+    {
+        delete shader;
+        ERROR_AND_DIE(Stringf("Failed to create vertex shader '%s'", name))
+    }
+
+    if (!CompileShaderToByteCode(pixelShaderByteCode, name, shaderSource, psEntryPoint, "ps_5_0"))
+    {
+        shader->m_vertexShader->Release();
+        delete shader;
+        ERROR_AND_DIE(Stringf("Failed to compile pixel shader '%s' with entry point '%s'", name, psEntryPoint));
+    }
+
+    // Pixel Shader
+    hr = m_device->CreatePixelShader(pixelShaderByteCode.data(), pixelShaderByteCode.size(), nullptr, &shader->m_pixelShader);
+    if (FAILED(hr))
+    {
+        shader->m_vertexShader->Release();
+        delete shader;
+        ERROR_AND_DIE(Stringf("Failed to create pixel shader '%s'", name))
+    }
+
+    CreateInputLayoutFromShader(shader, vertexShaderByteCode, vertexType); // Create input layout
+    return shader;
 }
 
 Shader* DX11Renderer::CreateOrGetShader(const char* sourcePath, VertexType vertexType)
@@ -1027,4 +1053,61 @@ void DX11Renderer::DrawIndexedVertexArray(int numVertexes, const Vertex_PCUTBN* 
 
     // 3. 绘制索引顶点缓冲区
     DrawVertexIndexed(m_immediateVBO_TBN, m_immediateIBO, numIndices);
+}
+
+/**
+ * Creates an input layout for the provided shader based on the specified vertex type and vertex shader bytecode.
+ *
+ * Depending on the specified vertex type, an appropriate configuration of input elements is created
+ * and used to generate the input layout. This input layout defines how vertex buffer data is mapped to shader input.
+ * If creation fails, an error is logged, and the program terminates.
+ *
+ * @param shader A pointer to the Shader object where the input layout will be stored.
+ * @param vertexShaderByteCode A vector containing the bytecode of the compiled vertex shader.
+ * @param vertexType The type of vertex data that this shader is designed to handle, specified as a VertexType enum.
+ */
+void DX11Renderer::CreateInputLayoutFromShader(Shader* shader, std::vector<uint8_t> vertexShaderByteCode, VertexType vertexType)
+{
+    if (vertexType == VertexType::Vertex_PCU)
+    {
+        // Create an input layout and store it on the new shader we created
+        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+
+        UINT    numElements = ARRAYSIZE(inputElementDesc);
+        HRESULT hr;
+        hr = m_device->CreateInputLayout(
+            inputElementDesc, numElements, vertexShaderByteCode.data(), vertexShaderByteCode.size(), &shader->m_inputLayout);
+        if (!SUCCEEDED(hr))
+        {
+            ERROR_AND_DIE("Could not create vertex layout")
+        }
+        return;
+    }
+    if (vertexType == VertexType::Vertex_PCUTBN)
+    {
+        // Create an input layout and store it on the new shader we created
+        D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
+            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, /* Be careful of the alignment*/D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+
+        UINT    numElements = ARRAYSIZE(inputElementDesc);
+        HRESULT hr;
+        hr = m_device->CreateInputLayout(
+            inputElementDesc, numElements, vertexShaderByteCode.data(), vertexShaderByteCode.size(), &shader->m_inputLayout);
+        if (!SUCCEEDED(hr))
+        {
+            ERROR_AND_DIE("Could not create vertex layout")
+        }
+
+        return;
+    }
 }
