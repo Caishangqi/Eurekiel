@@ -1546,6 +1546,11 @@ RenderTarget* DX12Renderer::GetBackBufferRenderTarget()
     ERROR_AND_DIE("Unsupported render target in DX12Renderer now")
 }
 
+void DX12Renderer::SetViewport(const IntVec2& dimension)
+{
+    UNUSED(dimension)
+}
+
 void DX12Renderer::WaitForGPU()
 {
     // wait our command list / allocator to become free

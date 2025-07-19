@@ -248,6 +248,8 @@ public:
     void          ClearRenderTarget(RenderTarget* renderTarget, const Rgba8& clearColor) override;
     RenderTarget* GetBackBufferRenderTarget() override;
 
+    void SetViewport(const IntVec2& dimension) override;
+
 private:
     // Device-level resources (StartUp / Shutdown lifecycle)
     RenderConfig                 m_config{};
