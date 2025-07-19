@@ -2,6 +2,8 @@
 #include "Engine/Math/IntVec2.hpp"
 #include <d3d11.h>
 
+#include "Texture.hpp"
+
 /**
  * @class RenderTarget
  *
@@ -21,8 +23,8 @@ public:
     void Release();
 
 public:
-    ID3D11Texture2D*          texture = nullptr;
-    ID3D11RenderTargetView*   rtv     = nullptr;
-    ID3D11ShaderResourceView* srv     = nullptr;
-    IntVec2                   dimensions;
+    ID3D11Texture2D*        texture = nullptr;
+    ID3D11RenderTargetView* rtv     = nullptr;
+    Texture*                srv     = nullptr;
+    IntVec2                 dimensions;
 };
