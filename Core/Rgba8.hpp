@@ -16,6 +16,7 @@ struct Rgba8
     static const Rgba8 YELLOW;
     static const Rgba8 BLUE;
     static const Rgba8 WHITE;
+    static const Rgba8 BLACK;
     static const Rgba8 GRAY;
     static const Rgba8 ORANGE;
     static const Rgba8 MAGENTA;
