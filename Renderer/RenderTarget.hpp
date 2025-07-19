@@ -22,9 +22,10 @@ public:
 
     void Release();
 
+    IntVec2                   GetDimensions();
+    ID3D11ShaderResourceView* GetSRV() const;
+
 public:
-    ID3D11Texture2D*        texture = nullptr;
+    Texture*                texture = nullptr;
     ID3D11RenderTargetView* rtv     = nullptr;
-    Texture*                srv     = nullptr;
-    IntVec2                 dimensions;
 };

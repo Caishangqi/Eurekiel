@@ -7,19 +7,21 @@ RenderTarget::~RenderTarget()
 
 void RenderTarget::Release()
 {
-    if (srv)
-    {
-        srv->Release();
-        srv = nullptr;
-    }
     if (rtv)
     {
         rtv->Release();
         rtv = nullptr;
     }
-    if (texture)
-    {
-        texture->Release();
-        texture = nullptr;
-    }
+    delete texture;
+    texture = nullptr;
+}
+
+IntVec2 RenderTarget::GetDimensions()
+{
+    return texture->GetDimensions();
+}
+
+ID3D11ShaderResourceView* RenderTarget::GetSRV() const
+{
+    return texture->GetShaderResourceView();
 }
