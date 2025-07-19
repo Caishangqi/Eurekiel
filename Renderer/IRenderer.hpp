@@ -278,7 +278,7 @@ protected:
 protected:
     /// Render Targets
     RenderTarget* m_currentRenderTarget = nullptr;
-    RenderTarget  m_backBufferRenderTarget;
+    RenderTarget* m_backBufferRenderTarget;
 };
 
 template <typename T>
