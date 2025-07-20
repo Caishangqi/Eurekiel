@@ -965,7 +965,7 @@ void DX11Renderer::SetRenderTarget(RenderTarget* renderTarget)
     else
     {
         // Set a custom render target (without depth buffering)
-        m_deviceContext->OMSetRenderTargets(1, &renderTarget->rtv, nullptr);
+        m_deviceContext->OMSetRenderTargets(1, &renderTarget->rtv, m_depthStencilDSV);
 
         // Automatically resizes the Viewport to match the render target size
         D3D11_VIEWPORT viewport = {};
