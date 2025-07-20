@@ -26,6 +26,8 @@ public:
     ID3D11ShaderResourceView* GetSRV() const;
 
 public:
-    Texture*                texture = nullptr;
-    ID3D11RenderTargetView* rtv     = nullptr;
+    Texture*                texture          = nullptr;
+    ID3D11RenderTargetView* rtv              = nullptr;
+    ID3D11Texture2D*        depthTexture     = nullptr;
+    ID3D11DepthStencilView* depthStencilView = nullptr;
 };
