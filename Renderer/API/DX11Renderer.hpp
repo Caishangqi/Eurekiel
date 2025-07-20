@@ -1,5 +1,4 @@
 ﻿#pragma once
-#include "Engine/Renderer/IRenderer.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -9,10 +8,6 @@
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "dxgi.lib")
 #pragma comment (lib, "d3dcompiler.lib")
-
-#if defined(_DEBUG)
-#define  ENGINE_DEBUG_RENDER
-#endif
 
 #if defined(ENGINE_DEBUG_RENDER)
 #include <dxgidebug.h>
@@ -24,6 +19,8 @@
 #if defined(OPAQUE)
 #undef OPAQUE
 #endif
+
+#include "Engine/Renderer/IRenderer.hpp"
 
 
 class DX11Renderer : public IRenderer

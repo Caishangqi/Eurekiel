@@ -7,16 +7,16 @@
 #include "Engine/Core/FileUtils.hpp"
 #include "Engine/Core/Image.hpp"
 #include "Engine/Math/MathUtils.hpp"
-#include "Engine/Renderer/BitmapFont.hpp"
-#include "Engine/Renderer/Camera.hpp"
-#include "Engine/Renderer/IndexBuffer.hpp"
 #include "Engine/Window/Window.hpp"
 
+#include "Engine/Renderer/BitmapFont.hpp"
+#include "Engine/Renderer/Camera.hpp"
 #include "Engine/Renderer/ConstantBuffer.hpp"
 #include "Engine/Renderer/GraphicsError.hpp"
 #include "Engine/Renderer/RenderTarget.hpp"
 #include "Engine/Renderer/Shader.hpp"
 #include "Engine/Renderer/Texture.hpp"
+
 
 DX11Renderer::DX11Renderer(RenderConfig& config)
 {
