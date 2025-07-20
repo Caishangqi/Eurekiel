@@ -8,9 +8,7 @@
 #pragma comment (lib, "dxgi.lib")
 #pragma comment (lib, "d3dcompiler.lib")
 
-#if defined(_DEBUG)
-#define  ENGINE_DEBUG_RENDER
-#endif
+#include "Game/EngineBuildPreferences.hpp"
 
 #if defined(ENGINE_DEBUG_RENDER)
 #include <dxgidebug.h>
@@ -25,7 +23,7 @@
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Mat44.hpp"
-#include "Game/EngineBuildPreferences.hpp"
+
 ///
 struct LightingConstants;
 class IndexBuffer;
