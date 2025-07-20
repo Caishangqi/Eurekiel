@@ -1,7 +1,9 @@
 ﻿#include "DX12Renderer.hpp"
 
+#include "ThirdParty/d3dx12/d3dx12.h"
+
 #include <d3dcompiler.h>
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 
 #include "Engine/Window/Window.hpp"
 #include "Engine/Core/EngineCommon.hpp"
@@ -13,11 +15,12 @@
 #include "Engine/Renderer/GraphicsError.hpp"
 #include "Engine/Renderer/Shader.hpp"
 #include "Engine/Renderer/Texture.hpp"
-#include "ThirdParty/d3dx12/d3dx12.h"
+
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
+#pragma comment(lib,"dxguid.lib")
 
 DX12Renderer::DX12Renderer(const RenderConfig& cfg) : m_config(cfg)
 {

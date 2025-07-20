@@ -42,7 +42,6 @@ struct D3D12_RASTERIZER_DESC;
 struct D3D12_BLEND_DESC;
 struct D3D12_DEPTH_STENCIL_DESC;
 
-#define ENGINE_DEBUG_RENDER
 static constexpr uint32_t kBackBufferCount         = 4;
 constexpr uint32_t        kMaxConstantBufferSlot   = 14;
 constexpr uint32_t        kMaxShaderSourceViewSlot = 128;
