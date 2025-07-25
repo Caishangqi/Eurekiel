@@ -11,7 +11,14 @@ struct CheckerToken
 };
 
 extern CheckerToken chk;
-
+/**
+ * @brief A helper structure to encapsulate and manage HRESULT values in Windows API operations.
+ *
+ * The HResultGrabber is used to handle and store the result of Windows API calls that return HRESULT.
+ * It provides a utility for tracking failure codes and facilitates integration with error-checking mechanisms.
+ *
+ * This structure is particularly useful in scenarios where HRESULT values need to be checked for success or failure.
+ */
 struct HResultGrabber
 {
     HResultGrabber() = default;
