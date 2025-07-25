@@ -171,6 +171,7 @@
         </Lib>
     </ItemDefinitionGroup>
     <ItemGroup>
+        <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
         <ClCompile Include="Audio\AudioSystem.cpp"/>
         <ClCompile Include="Core\Clock.cpp"/>
         <ClCompile Include="Core\CubicHermiteSpline.cpp" />
@@ -253,6 +254,19 @@
         <ClCompile Include="Window\Window.cpp"/>
     </ItemGroup>
     <ItemGroup>
+        <ClInclude Include="..\ThirdParty\d3dx12\d3dx12.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod.hpp" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_codec.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_common.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp_effects.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_errors.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_output.h" />
+        <ClInclude Include="..\ThirdParty\json\json.hpp" />
+        <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
+        <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h" />
+        <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h" />
         <ClInclude Include="Audio\AudioSystem.hpp"/>
         <ClInclude Include="Core\Clock.hpp"/>
         <ClInclude Include="Core\CubicHermiteSpline.hpp" />
@@ -337,8 +351,20 @@
         <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
     <ItemGroup>
+        <Content Include="..\..\.enigma\assets\engine\resource_type_category" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii-1920_1.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii_opaque.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\cat.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\pot_gui.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\module" />
+        <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png" />
         <Content Include="..\..\.gitignore" />
         <Content Include="..\..\Readme.md" />
+        <Content Include="..\..\Scripts\CopyEngineResources.bat" />
+        <Content Include="..\..\Scripts\CopyEngineResources.ps1" />
+        <Content Include="..\ThirdParty\fmod\fmod64_vc.lib" />
+        <Content Include="..\ThirdParty\fmod\fmod_vc.lib" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
