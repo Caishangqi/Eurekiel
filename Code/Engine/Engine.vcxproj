@@ -171,7 +171,6 @@
         </Lib>
     </ItemDefinitionGroup>
     <ItemGroup>
-        <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp"/>
         <ClCompile Include="Audio\AudioSystem.cpp"/>
         <ClCompile Include="Core\Clock.cpp"/>
         <ClCompile Include="Core\CubicHermiteSpline.cpp" />
@@ -338,10 +337,8 @@
         <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
     <ItemGroup>
-        <Content Include="..\ThirdParty\fmod\fmod64_vc.lib" />
-        <Content Include="..\ThirdParty\fmod\fmod_vc.lib" />
-        <Content Include=".gitignore" />
-        <Content Include="README.md" />
+        <Content Include="..\..\.gitignore" />
+        <Content Include="..\..\Readme.md" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">

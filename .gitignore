@@ -6,3 +6,5 @@ Engine.vcxproj.filters
 Temporary
 /.idea/
 /.vs/
+*.user
+*.filter
