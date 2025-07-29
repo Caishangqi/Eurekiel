@@ -16,7 +16,7 @@ namespace enigma::resource
 
         virtual ResourcePtr           Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) = 0; // Load the resource
         virtual std::set<std::string> GetSupportedExtensions() const = 0; // Get supported file extensions
-        virtual std::string           GetName() const = 0; // Get the loader name
+        virtual std::string           GetLoaderName() const = 0; // Get the loader name
         virtual int                   GetPriority() const { return 0; } // Get priority (higher value, higher priority)
 
         // Check if this resource can be loaded
