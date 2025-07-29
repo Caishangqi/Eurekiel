@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Vec4.hpp"
-#include "Engine/Resource/Loader/Loader.hpp"
+#include "Engine/Resource/Loader/ResourceLoader.hpp"
 #include "ThirdParty/json/json.hpp"
 
 class VertexBuffer;
@@ -12,6 +12,7 @@ class IRenderer;
 class Texture;
 
 using json = nlohmann::json;
+using namespace enigma::resource;
 
 enum class EMaterialChannel : uint8_t
 {
@@ -134,7 +135,7 @@ struct FMesh
     json m_MetaData;
 };
 
-class ModelLoader : public ResourceLoader<FMesh>
+class ModelLoader : public IResourceLoader
 {
 protected:
     IRenderer* m_renderer; // Cached renderer backend
