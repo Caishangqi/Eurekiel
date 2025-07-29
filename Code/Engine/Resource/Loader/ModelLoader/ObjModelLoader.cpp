@@ -15,15 +15,17 @@ ObjModelLoader::ObjModelLoader(IRenderer* renderer) : ModelLoader(renderer)
 {
 }
 
-std::unique_ptr<FMesh> ObjModelLoader::Load(const ResourceLocation& location, const std::string& filePath)
+ResourcePtr ObjModelLoader::Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data)
 {
-    UNUSED(location)
-    return LoadObjModel(filePath);
+    UNUSED(metadata)
+    UNUSED(data)
+    return nullptr; // TODO: Fix the Load function and define the model resource.
+    //return LoadObjModel(filePath);
 }
 
-bool ObjModelLoader::CanLoad(const std::string& extension) const
+bool ObjModelLoader::CanLoad(const ResourceMetadata& metadata) const
 {
-    UNUSED(extension)
+    UNUSED(metadata)
     // TODO: Check whether or not have meta file and extension matches
     return true;
 }

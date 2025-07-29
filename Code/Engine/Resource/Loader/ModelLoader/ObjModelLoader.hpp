@@ -6,10 +6,10 @@ class ObjModelLoader : public ModelLoader
 {
 public:
     ObjModelLoader(IRenderer* renderer);
-    std::unique_ptr<FMesh> Load(const ResourceLocation& location, const std::string& filePath) override;
+    ResourcePtr Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) override;
     int                    GetPriority() const override { return 100; }
     std::string            GetLoaderName() const override { return "ObjModelLoader"; }
-    bool                   CanLoad(const std::string& extension) const override;
+    bool                   CanLoad(const ResourceMetadata& metadata) const override;
 
 public:
     // Helper functions
