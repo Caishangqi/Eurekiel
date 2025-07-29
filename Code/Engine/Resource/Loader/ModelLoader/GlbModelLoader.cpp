@@ -17,14 +17,24 @@ GlbModelLoader::GlbModelLoader(IRenderer* renderer) : ModelLoader(renderer), m_l
 
 GlbModelLoader::~GlbModelLoader() = default;
 
-bool GlbModelLoader::CanLoad(const std::string& extension) const
+bool GlbModelLoader::CanLoad(const ResourceMetadata& metadata) const
 {
-    return extension == ".glb" || extension == ".gltf";
+    // TODO: Fix the Can load for Glb Model Loader.
+    UNUSED(metadata)
+    return false;
 }
 
-std::unique_ptr<FMesh> GlbModelLoader::Load(const ResourceLocation& location, const std::string& filePath)
+ResourcePtr GlbModelLoader::Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data)
 {
-    UNUSED(location)
+    // TODO: Fix the Glb Load function.
+    UNUSED(metadata)
+    UNUSED(data)
+    return nullptr;
+}
+
+std::unique_ptr<FMesh> GlbModelLoader::LoadGlbModel(const std::string& filePath)
+{
+    UNUSED(filePath)
     tinygltf::Model model;
     std::string     err;
     std::string     warn;

@@ -20,14 +20,16 @@ public:
     GlbModelLoader(IRenderer* renderer);
     ~GlbModelLoader() override;
 
-    bool                   CanLoad(const std::string& extension) const override;
-    std::unique_ptr<FMesh> Load(const ResourceLocation& location, const std::string& filePath) override;
-    int                    GetPriority() const override { return 101; }
-    std::string            GetLoaderName() const override { return "GlbModelLoader"; }
+    bool        CanLoad(const ResourceMetadata& metadata) const override;
+    ResourcePtr Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) override;
+    int         GetPriority() const override { return 101; }
+    std::string GetLoaderName() const override { return "GlbModelLoader"; }
 
 private:
     std::unique_ptr<tinygltf::TinyGLTF> m_loader;
 
+    std::unique_ptr<FMesh> LoadGlbModel(const std::string& filePath);
+    
     // Helper functions
     std::unique_ptr<FMesh> ProcessMesh(const tinygltf::Model& model, int meshIndex);
     void                   ProcessPrimitive(const tinygltf::Model& model, const tinygltf::Primitive& primitive, FMesh& mesh);
