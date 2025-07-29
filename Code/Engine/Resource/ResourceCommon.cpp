@@ -2,7 +2,7 @@
 
 #include "Engine/Core/StringUtils.hpp"
 
-using namespace resource;
+using namespace enigma::resource;
 
 std::string GetFileExtension(const std::string& filePath)
 {
