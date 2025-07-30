@@ -43,6 +43,7 @@ namespace enigma::resource
      */
     class ResourceLocation
     {
+    public:
         ResourceLocation() = default;
         ResourceLocation(std::string_view namespace_id, std::string_view path);
         ResourceLocation(std::string_view fullLocation); // Supports the "namespace:path" format
@@ -77,6 +78,8 @@ namespace enigma::resource
     private:
         std::string m_namespace;
         std::string m_path;
+
+        static constexpr std::string_view DEFAULT_NAMESPACE = "engine";
     };
 
 
