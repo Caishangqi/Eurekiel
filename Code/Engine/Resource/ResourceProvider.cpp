@@ -93,21 +93,16 @@ namespace enigma::resource
 
         // Check if there are custom mappings
         auto it = m_namespaceMappings.find(location.GetNamespace());
-        if (it != m_namespaceMappings.end())
-        {
+        if (it != m_namespaceMappings.end()) {
             namespacePath = it->second;
-        }
-        else
-        {
+        } else {
             namespacePath = m_basePath / location.GetNamespace();
         }
 
-        // Convert the forward slash in the path to a system path separator
-        std::string pathStr = location.GetPath();
-        std::replace(pathStr.begin(), pathStr.end(), L'/', std::filesystem::path::preferred_separator);
-
-        auto basePath = namespacePath / pathStr;
-
+        // Automatically process path separators using filesystem
+        std::filesystem::path resourcePath(location.GetPath());
+        auto basePath = namespacePath / resourcePath;
+    
         // Try different extensions
         return findResourceFile(basePath);
     }
