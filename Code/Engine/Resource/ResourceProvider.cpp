@@ -1,1 +1,178 @@
 ﻿#include "ResourceProvider.hpp"
+
+#include <fstream>
+
+namespace enigma::resource
+{
+    FileSystemResourceProvider::FileSystemResourceProvider(const std::filesystem::path& basePath, const std::string& name) : m_basePath(basePath), m_name(name)
+    {
+        if (!std::filesystem::exists(m_basePath))
+            throw std::runtime_error("Base path does not exist: " + m_basePath.string());
+    }
+
+    bool FileSystemResourceProvider::HasResource(const ResourceLocation& location) const
+    {
+        auto path = locationToPath(location);
+        return path.has_value();
+    }
+
+    std::optional<ResourceMetadata> FileSystemResourceProvider::GetMetadata(const ResourceLocation& location) const
+    {
+        auto pathOpt = locationToPath(location);
+        if (!pathOpt)
+            return std::nullopt;
+
+
+        return ResourceMetadata(location, *pathOpt);
+    }
+
+    std::vector<uint8_t> FileSystemResourceProvider::ReadResource(const ResourceLocation& location)
+    {
+        auto pathOpt = locationToPath(location);
+        if (!pathOpt)
+        {
+            throw std::runtime_error("Resource not found: " + location.ToString());
+        }
+
+        std::ifstream file(*pathOpt, std::ios::binary | std::ios::ate);
+        if (!file.is_open())
+        {
+            throw std::runtime_error("Failed to open resource: " + location.ToString());
+        }
+
+        auto fileSize = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        std::vector<uint8_t> data(fileSize);
+        file.read(reinterpret_cast<char*>(data.data()), fileSize);
+
+        return data;
+    }
+
+    std::vector<ResourceLocation> FileSystemResourceProvider::ListResources(const std::string& namespace_id, ResourceType type) const
+    {
+        std::vector<ResourceLocation> results;
+
+        if (namespace_id.empty())
+        {
+            // Scan all namespaces
+            for (const auto& entry : std::filesystem::directory_iterator(m_basePath))
+            {
+                if (entry.is_directory())
+                {
+                    scanDirectory(entry.path(), entry.path().filename().string(), results, type);
+                }
+            }
+        }
+        else
+        {
+            // Scan a specific namespace
+            auto namespacePath = m_basePath / namespace_id;
+            if (std::filesystem::exists(namespacePath))
+            {
+                scanDirectory(namespacePath, namespace_id, results, type);
+            }
+        }
+
+        return results;
+    }
+
+    void FileSystemResourceProvider::SetNamespaceMapping(const std::string& namespace_id, const std::filesystem::path& path)
+    {
+        m_namespaceMappings[namespace_id] = path;
+    }
+
+    void FileSystemResourceProvider::SetSearchExtensions(const std::vector<std::string>& extensions)
+    {
+        m_searchExtensions = extensions;
+    }
+
+    std::optional<std::filesystem::path> FileSystemResourceProvider::locationToPath(const ResourceLocation& location) const
+    {
+        std::filesystem::path namespacePath;
+
+        // Check if there are custom mappings
+        auto it = m_namespaceMappings.find(location.GetNamespace());
+        if (it != m_namespaceMappings.end())
+        {
+            namespacePath = it->second;
+        }
+        else
+        {
+            namespacePath = m_basePath / location.GetNamespace();
+        }
+
+        // Convert the forward slash in the path to a system path separator
+        std::string pathStr = location.GetPath();
+        std::replace(pathStr.begin(), pathStr.end(), L'/', std::filesystem::path::preferred_separator);
+
+        auto basePath = namespacePath / pathStr;
+
+        // Try different extensions
+        return findResourceFile(basePath);
+    }
+
+    std::optional<std::filesystem::path> FileSystemResourceProvider::findResourceFile(const std::filesystem::path& basePath) const
+    {
+        // First, check if a file with an extension already exists
+        if (std::filesystem::exists(basePath) && std::filesystem::is_regular_file(basePath))
+        {
+            return basePath;
+        }
+
+        // Try all configured extensions
+        for (const auto& ext : m_searchExtensions)
+        {
+            auto pathWithExt = basePath.string() + ext;
+            if (std::filesystem::exists(pathWithExt) && std::filesystem::is_regular_file(pathWithExt))
+            {
+                return pathWithExt;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    void FileSystemResourceProvider::scanDirectory(const std::filesystem::path& dir, const std::string& namespace_id, std::vector<ResourceLocation>& results, ResourceType filterType) const
+    {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(dir))
+        {
+            if (!entry.is_regular_file()) continue;
+
+            // Get the relative path
+            auto relativePath = std::filesystem::relative(entry.path(), dir);
+
+            // Path converted to ResourceLocation format (extension removed)
+            std::string locationPath = relativePath.generic_string();
+
+            // Remove the file extension
+            size_t lastDot = locationPath.find_last_of('.');
+            if (lastDot != std::string::npos)
+            {
+                locationPath = locationPath.substr(0, lastDot);
+            }
+
+            // If there is type filtering, check the file type
+            if (filterType != ResourceType::UNKNOWN)
+            {
+                auto detectedType = ResourceMetadata::DetectType(entry.path());
+                if (detectedType != filterType) continue;
+            }
+
+            // Create ResourceLocation
+            try
+            {
+                ResourceLocation loc(namespace_id, locationPath);
+                // Avoid duplicate additions (the same resource may have multiple extensions)
+                if (std::find(results.begin(), results.end(), loc) == results.end())
+                {
+                    results.push_back(loc);
+                }
+            }
+            catch (const std::exception&)
+            {
+                // Ignore invalid resource locations
+            }
+        }
+    }
+}

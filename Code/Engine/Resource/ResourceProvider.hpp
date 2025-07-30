@@ -30,6 +30,15 @@ namespace enigma::resource
     public:
         FileSystemResourceProvider(const std::filesystem::path& basePath, const std::string& name);
 
+        std::string                     GetName() const override { return m_name; }
+        bool                            HasResource(const ResourceLocation& location) const override;
+        std::optional<ResourceMetadata> GetMetadata(const ResourceLocation& location) const override;
+        std::vector<uint8_t>            ReadResource(const ResourceLocation& location) override;
+        std::vector<ResourceLocation>   ListResources(const std::string& namespace_id = "", ResourceType type = ResourceType::UNKNOWN) const override;
+
+
+        void SetNamespaceMapping(const std::string& namespace_id, const std::filesystem::path& path); // Set namespace mapping (optional)
+        void SetSearchExtensions(const std::vector<std::string>& extensions); // Set the file extension for the search
     private:
         std::filesystem::path                                  m_basePath;
         std::string                                            m_name;
