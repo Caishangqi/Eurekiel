@@ -28,7 +28,27 @@ namespace enigma::resource
         }
     };
 
-    using ResourceLoaderPtr = std::unique_ptr<IResourceLoader>;
+    using ResourceLoaderPtr = std::shared_ptr<IResourceLoader>;
+
+    /**
+     * RawResourceLoader - Class for loading raw resources
+     * Implements the IResourceLoader interface to provide basic support for handling raw resource data.
+     * This loader processes raw data without interpreting its specific structure or content.
+     */
+    class RawResourceLoader : public IResourceLoader
+    {
+    public:
+        ResourcePtr           Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) override;
+        std::set<std::string> GetSupportedExtensions() const override { return {"*"}; }
+        std::string           GetLoaderName() const override { return "RawResourceLoader"; }
+        int                   GetPriority() const override { return -1000; } // Minimum priority
+        bool                  CanLoad(const ResourceMetadata& metadata) const override
+        {
+            UNUSED(metadata)
+            return true;
+        }
+    };
+
 
     /**
      * LoaderRegistry - Registry for managing resource loaders
