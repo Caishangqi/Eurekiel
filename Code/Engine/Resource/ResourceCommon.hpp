@@ -4,6 +4,8 @@
 #include <functional>
 #include <optional>
 #include <memory>
+/// Engine
+#include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::resource
 {
