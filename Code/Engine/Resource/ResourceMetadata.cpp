@@ -15,7 +15,7 @@ namespace enigma::resource
     ResourceType ResourceMetadata::DetectType(const std::filesystem::path& path)
     {
         std::string ext = path.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });    // Use lambda to avoid type conversion warnings
 
         if (ext == ".png" || ext == ".jpg")
             return ResourceType::TEXTURE;
