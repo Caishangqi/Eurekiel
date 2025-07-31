@@ -8,6 +8,15 @@ namespace enigma::resource
     {
         if (!std::filesystem::exists(m_basePath))
             throw std::runtime_error("Base path does not exist: " + m_basePath.string());
+
+        // Default search extension
+        m_searchExtensions = {
+            ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".dds", // Texture
+            ".obj", ".fbx", ".gltf", ".glb", ".dae", // Model
+            ".json", ".txt", ".cfg", ".xml", ".yaml", // Configuration
+            ".wav", ".ogg", ".mp3", // Audio
+            ".vert", ".frag", ".glsl", ".hlsl" // Shader
+        };
     }
 
     bool FileSystemResourceProvider::HasResource(const ResourceLocation& location) const
@@ -93,16 +102,19 @@ namespace enigma::resource
 
         // Check if there are custom mappings
         auto it = m_namespaceMappings.find(location.GetNamespace());
-        if (it != m_namespaceMappings.end()) {
+        if (it != m_namespaceMappings.end())
+        {
             namespacePath = it->second;
-        } else {
+        }
+        else
+        {
             namespacePath = m_basePath / location.GetNamespace();
         }
 
         // Automatically process path separators using filesystem
         std::filesystem::path resourcePath(location.GetPath());
-        auto basePath = namespacePath / resourcePath;
-    
+        auto                  basePath = namespacePath / resourcePath;
+
         // Try different extensions
         return findResourceFile(basePath);
     }
