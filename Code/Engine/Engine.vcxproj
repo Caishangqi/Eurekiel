@@ -182,6 +182,7 @@
         <ClCompile Include="Core\FileUtils.cpp"/>
         <ClCompile Include="Core\HeatMaps.cpp"/>
         <ClCompile Include="Core\Image.cpp"/>
+        <ClCompile Include="Core\Json.cpp" />
         <ClCompile Include="Core\NamedStrings.cpp"/>
         <ClCompile Include="Core\Rgba8.cpp"/>
         <ClCompile Include="Core\Schedule\ScheduleSubsystem.cpp" />
@@ -278,6 +279,7 @@
         <ClInclude Include="Core\FileUtils.hpp"/>
         <ClInclude Include="Core\HeatMaps.hpp"/>
         <ClInclude Include="Core\Image.hpp"/>
+        <ClInclude Include="Core\Json.hpp" />
         <ClInclude Include="Core\NamedStrings.hpp"/>
         <ClInclude Include="Core\Rgba8.hpp"/>
         <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp" />
