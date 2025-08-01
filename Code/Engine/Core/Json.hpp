@@ -10,11 +10,13 @@ namespace enigma::core
     using Json = nlohmann::json;
 
     /**
-     * JsonObject - JSON object wrapper for handling key-value JSON structures.
-     * Provides methods for creating, parsing, manipulating, and accessing JSON object data.
+     * JsonObject - JSON object wrapper for managing JSON objects
+     * Allows parsing, serialization, and manipulation of JSON structures
+     * Provides helper methods for type checking, key checking, and data access
      */
     class JsonObject
     {
+    public:
         // Constructors
         JsonObject();
         explicit JsonObject(const std::string& jsonString);
@@ -99,8 +101,9 @@ namespace enigma::core
     };
 
     /**
-     * JsonArray - JSON array wrapper for handling JSON array structures
-     * Provides methods for manipulating and accessing JSON array data
+     * JsonArray - JSON array wrapper for managing JSON arrays
+     * Facilitates parsing, adding elements, retrieving elements, and array manipulation
+     * Provides methods for type-safe element access and JSON conversion
      */
     class JsonArray
     {
@@ -135,6 +138,11 @@ namespace enigma::core
         Json m_json;
     };
 
+    /**
+     * JsonException - Represents exceptions specific to JSON operations
+     * Provides detailed error messages for issues encountered during JSON parsing and manipulation
+     * Inherits from std::runtime_error for standard exception handling
+     */
     class JsonException : public std::runtime_error
     {
     public:
