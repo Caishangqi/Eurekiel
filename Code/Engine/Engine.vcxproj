@@ -249,9 +249,9 @@
         <ClCompile Include="Resource\Loader\ModelLoader\GlbModelLoader.cpp" />
         <ClCompile Include="Resource\Loader\ModelLoader\ModelLoader.cpp" />
         <ClCompile Include="Resource\Loader\ModelLoader\ObjModelLoader.cpp" />
+        <ClCompile Include="Resource\Provider\ResourceProvider.cpp"/>
         <ClCompile Include="Resource\ResourceMetadata.cpp" />
         <ClCompile Include="Resource\ResourceCommon.cpp" />
-        <ClCompile Include="Resource\ResourceProvider.cpp" />
         <ClCompile Include="Resource\ResourceSubsystem.cpp" />
         <ClCompile Include="Window\Window.cpp"/>
     </ItemGroup>
@@ -348,9 +348,9 @@
         <ClInclude Include="Resource\Loader\ModelLoader\GlbModelLoader.hpp" />
         <ClInclude Include="Resource\Loader\ModelLoader\ModelLoader.hpp" />
         <ClInclude Include="Resource\Loader\ModelLoader\ObjModelLoader.hpp" />
+        <ClInclude Include="Resource\Provider\ResourceProvider.hpp" />
         <ClInclude Include="Resource\ResourceMetadata.hpp" />
         <ClInclude Include="Resource\ResourceCommon.hpp" />
-        <ClInclude Include="Resource\ResourceProvider.hpp" />
         <ClInclude Include="Resource\ResourceSubsystem.hpp" />
         <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
