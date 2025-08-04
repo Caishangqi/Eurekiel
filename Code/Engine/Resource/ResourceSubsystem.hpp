@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 
+
 namespace enigma::resource
 {
     /**
@@ -53,13 +54,8 @@ namespace enigma::resource
         bool printScanResults          = false;
         bool traceResourceDependencies = false;
 
-        // Performance limits
-        struct PerformanceLimits
-        {
-            size_t maxLoadAttemptsPerFrame = 5;
-            size_t maxBytesPerFrame        = (size_t)10 * 1024 * 1024; // 10MB
-            double maxLoadTimePerFrame     = 0.005; // 5ms
-        } performanceLimits;
+        // Performance limits (disabled - load resources immediately like Minecraft Neoforge)
+        // struct PerformanceLimits {} performanceLimits;
 
         // Namespace configuration
         struct NamespaceEntry
@@ -89,18 +85,26 @@ namespace enigma::resource
             {".bmp", ResourceType::TEXTURE},
             {".tga", ResourceType::TEXTURE},
             {".dds", ResourceType::TEXTURE},
-            {".json", ResourceType::MODEL}, // JSON files are treated as models
             {".obj", ResourceType::MODEL},
             {".fbx", ResourceType::MODEL},
             {".gltf", ResourceType::MODEL},
             {".glb", ResourceType::MODEL},
-            {".wav", ResourceType::AUDIO},
-            {".ogg", ResourceType::AUDIO},
-            {".mp3", ResourceType::AUDIO},
+            {".dae", ResourceType::MODEL},
+            {".wav", ResourceType::SOUND},
+            {".wave", ResourceType::SOUND},
+            {".mp3", ResourceType::SOUND},
+            {".ogg", ResourceType::SOUND},
+            {".flac", ResourceType::SOUND},
+            {".m4a", ResourceType::SOUND},
+            {".mp4", ResourceType::SOUND},
+            {".aiff", ResourceType::SOUND},
+            {".aif", ResourceType::SOUND},
+            {".wma", ResourceType::SOUND},
             {".vert", ResourceType::SHADER},
             {".frag", ResourceType::SHADER},
             {".glsl", ResourceType::SHADER},
-            {".hlsl", ResourceType::SHADER}
+            {".hlsl", ResourceType::SHADER},
+            {".shader", ResourceType::SHADER}
         };
 
         bool         IsValid();

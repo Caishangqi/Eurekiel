@@ -16,10 +16,7 @@ bool ResourceConfig::IsValid()
         maxCacheSize > 0 &&
         maxCachedResources > 0 &&
         loadThreadCount > 0 &&
-        hotReloadCheckInterval > 0 &&
-        performanceLimits.maxLoadAttemptsPerFrame > 0 &&
-        performanceLimits.maxBytesPerFrame > 0 &&
-        performanceLimits.maxLoadTimePerFrame > 0;
+        hotReloadCheckInterval > 0;
 }
 
 void ResourceConfig::AddNamespace(const std::string& name, const std::filesystem::path& path)
@@ -225,14 +222,8 @@ ResourcePtr ResourceSubsystem::GetResource(const ResourceLocation& location)
         std::cout << "[ResourceSubsystem] Cache miss: " << location.ToString() << std::endl;
     }
 
-    // Check if we should stop loading this frame
-    if (ShouldStopLoadingThisFrame())
-    {
-        m_perfStats.isLoadLimited = true;
-        return nullptr;
-    }
-
-    // Load resource
+    // Load resource directly (performance limiting removed)
+    DebuggerPrintf("[RESOURCE DEBUG] About to call LoadResourceInternal for: %s\n", location.ToString().c_str());
     return LoadResourceInternal(location);
 }
 
@@ -504,7 +495,9 @@ void ResourceSubsystem::InitializeDefaultLoaders()
 
     // Future: Register other default loaders
     // m_loaderRegistry.RegisterLoader(std::make_shared<TextureLoader>());
-    // m_loaderRegistry.RegisterLoader(std::make_shared<AudioLoader>());
+    
+    // Note: SoundLoader will be registered when AudioSystem is available
+    // This is done externally to avoid circular dependencies
 }
 
 void ResourceSubsystem::InitializeDefaultProviders()
@@ -590,9 +583,9 @@ void ResourceSubsystem::WorkerThreadFunc()
 
 ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& location)
 {
-    // Update performance stats
-    auto loadStart = std::chrono::steady_clock::now();
-    m_perfStats.loadAttemptsThisFrame++;
+    // Debug logging to track namespace corruption
+    DebuggerPrintf("[RESOURCE DEBUG] LoadResourceInternal called with namespace='%s', path='%s', toString='%s'\n", 
+                   location.GetNamespace().c_str(), location.GetPath().c_str(), location.ToString().c_str());
 
     // Find provider
     auto provider = FindProviderForResource(location);
@@ -643,10 +636,6 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     {
         m_fileModificationTimes[location] = std::filesystem::last_write_time(metadataOpt->filePath);
     }
-
-    // Update performance stats
-    auto loadEnd = std::chrono::steady_clock::now();
-    m_perfStats.loadTimeThisFrame += std::chrono::duration<double>(loadEnd - loadStart).count();
 
     return resource;
 }
@@ -766,11 +755,8 @@ void ResourceSubsystem::UpdateFrameStatistics()
 
     UNUSED(elapsed)
 
-    m_perfStats.isLoadLimited = (
-        m_perfStats.loadAttemptsThisFrame >= m_config.performanceLimits.maxLoadAttemptsPerFrame ||
-        m_perfStats.bytesLoadedThisFrame >= m_config.performanceLimits.maxBytesPerFrame ||
-        m_perfStats.loadTimeThisFrame >= m_config.performanceLimits.maxLoadTimePerFrame
-    );
+    // Performance limits disabled - resources load immediately like Minecraft Neoforge
+    m_perfStats.isLoadLimited = false;
 
     m_perfStats.activeLoadThreads = 0;
     {
@@ -781,14 +767,8 @@ void ResourceSubsystem::UpdateFrameStatistics()
 
 bool ResourceSubsystem::ShouldStopLoadingThisFrame() const
 {
-    if (!m_config.enableParallelLoading)
-    {
-        return false;
-    }
-
-    return m_perfStats.loadAttemptsThisFrame >= m_config.performanceLimits.maxLoadAttemptsPerFrame ||
-        m_perfStats.bytesLoadedThisFrame >= m_config.performanceLimits.maxBytesPerFrame ||
-        m_perfStats.loadTimeThisFrame >= m_config.performanceLimits.maxLoadTimePerFrame;
+    // Performance limits disabled - never stop loading resources in a frame
+    return false;
 }
 
 void ResourceSubsystem::EvictLRUResources()
