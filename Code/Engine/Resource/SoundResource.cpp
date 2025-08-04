@@ -55,6 +55,7 @@ size_t SoundResource::GetRawDataSize() const
 
 SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
+    UNUSED(audioSystem)
     if (!IsLoaded())
         return MISSING_SOUND_ID;
     
@@ -103,6 +104,7 @@ SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, flo
 
 SoundPlaybackID SoundResource::PlayAt(AudioSystem& audioSystem, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
+    UNUSED(audioSystem)
     if (!IsLoaded() || !m_config.is3D)
         return MISSING_SOUND_ID;
     
@@ -226,6 +228,8 @@ void SoundResource::Unload()
 
 bool SoundResource::Reload(const std::vector<uint8_t>& data, const SoundConfig& config)
 {
+    UNUSED(data)
+    
     // Unload current sound
     Unload();
     
