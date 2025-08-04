@@ -17,24 +17,31 @@ namespace enigma::resource
         std::string ext = path.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });    // Use lambda to avoid type conversion warnings
 
-        if (ext == ".png" || ext == ".jpg")
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga" || ext == ".dds")
             return ResourceType::TEXTURE;
 
-        if (ext == ".json" || ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae")
+        if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae")
             return ResourceType::MODEL;
 
         if (ext == ".vert" || ext == ".frag" || ext == ".glsl" || ext == ".hlsl" || ext == ".shader")
             return ResourceType::SHADER;
 
-
-        if (ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac" || ext == ".m4a")
-            return ResourceType::AUDIO;
+        // Audio files now map to SOUND type (following Neoforge convention)
+        if (ext == ".wav" || ext == ".wave" || ext == ".mp3" || ext == ".ogg" || ext == ".flac" || ext == ".m4a" || ext == ".mp4" || ext == ".aiff" || ext == ".aif" || ext == ".wma")
+            return ResourceType::SOUND;
 
         if (ext == ".ttf" || ext == ".otf" || ext == ".fnt")
             return ResourceType::FONT;
 
         if (ext == ".txt" || ext == ".cfg" || ext == ".ini" || ext == ".xml" || ext == ".yaml" || ext == ".yml")
             return ResourceType::TEXT;
+
+        if (ext == ".json")
+        {
+            // JSON files can be different types depending on context
+            // For now, treat as TEXT, but specific loaders can override this
+            return ResourceType::TEXT;
+        }
 
         if (ext == ".bin" || ext == ".dat")
             return ResourceType::BINARY;
