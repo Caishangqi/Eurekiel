@@ -133,3 +133,13 @@ void LoaderRegistry::Clear()
     m_loadersByExtension.clear();
     m_loadersByName.clear();
 }
+
+// RawResourceLoader implementation
+ResourcePtr RawResourceLoader::Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data)
+{
+    // For now, we'll just return nullptr since we haven't defined a generic raw resource class
+    // This would need to be implemented with a proper raw resource container
+    UNUSED(metadata)
+    UNUSED(data)
+    return nullptr;
+}
