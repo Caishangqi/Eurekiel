@@ -15,6 +15,12 @@
 #include "Engine/Math/Vec3.hpp"
 #include "ThirdParty/fmod/fmod.hpp"
 #include "Game/EngineBuildPreferences.hpp"
+
+// Resource system integration
+#include "Engine/Resource/ResourceSubsystem.hpp"
+#include "Engine/Resource/SoundResource.hpp"
+#include "Engine/Resource/Loader/SoundLoader.hpp"
+
 #if !defined( ENGINE_DISABLE_AUDIO )
 
 
@@ -57,6 +63,13 @@ void AudioSystem::Startup()
     // When calling fmod init, pass in the flag FMOD_INIT_3D_RIGHTHANDED.
     result = m_fmodSystem->init(512, FMOD_INIT_3D_RIGHTHANDED, nullptr);
     ValidateResult(result);
+    
+    // Register SoundLoader with ResourceSubsystem if available
+    if (m_audioConfig.enableResourceIntegration && m_resourceSubsystem)
+    {
+        auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
+        m_resourceSubsystem->RegisterLoader(soundLoader);
+    }
 }
 
 
@@ -306,4 +319,82 @@ FMOD_VECTOR AudioSystem::GameToFmodVec(const Vec3& v)
     o.z = -v.x; // game.x → fmod.z (Back)
     return o;
 }
+
+// Resource system integration methods
+void AudioSystem::SetResourceSubsystem(enigma::resource::ResourceSubsystem* resourceSystem)
+{
+    m_resourceSubsystem = resourceSystem;
+    
+    // Register SoundLoader if the system is already started
+    if (m_fmodSystem && m_audioConfig.enableResourceIntegration && m_resourceSubsystem)
+    {
+        auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
+        m_resourceSubsystem->RegisterLoader(soundLoader);
+    }
+}
+
+std::shared_ptr<enigma::resource::SoundResource> AudioSystem::LoadSound(const enigma::resource::ResourceLocation& location)
+{
+    if (!m_resourceSubsystem)
+    {
+        ERROR_RECOVERABLE("AudioSystem: No ResourceSubsystem set");
+        return nullptr;
+    }
+    
+    std::string locationStr = location.ToString();
+    
+    // Debug logging to track namespace corruption
+    DebuggerPrintf("[AUDIO DEBUG] LoadSound called with namespace='%s', path='%s', toString='%s'\n", 
+                   location.GetNamespace().c_str(), location.GetPath().c_str(), locationStr.c_str());
+    
+    // Check if already loaded
+    auto it = m_soundResources.find(locationStr);
+    if (it != m_soundResources.end())
+    {
+        return it->second;
+    }
+    
+    // Load through resource system
+    auto resource = m_resourceSubsystem->GetResource(location);
+    if (!resource)
+    {
+        ERROR_RECOVERABLE("AudioSystem: Failed to load sound resource: " + locationStr);
+        return nullptr;
+    }
+    
+    // Cast to SoundResource
+    auto soundResource = std::dynamic_pointer_cast<enigma::resource::SoundResource>(resource);
+    if (!soundResource)
+    {
+        ERROR_RECOVERABLE("AudioSystem: Resource is not a SoundResource: " + locationStr);
+        return nullptr;
+    }
+    
+    // Cache the sound resource
+    m_soundResources[locationStr] = soundResource;
+    return soundResource;
+}
+
+SoundPlaybackID AudioSystem::PlaySound(const enigma::resource::ResourceLocation& location, bool isLooped, float volume, float balance, float speed, bool isPaused)
+{
+    auto soundResource = LoadSound(location);
+    if (!soundResource)
+    {
+        return MISSING_SOUND_ID;
+    }
+    
+    return soundResource->Play(*this, isLooped, volume, balance, speed, isPaused);
+}
+
+SoundPlaybackID AudioSystem::PlaySoundAt(const enigma::resource::ResourceLocation& location, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused)
+{
+    auto soundResource = LoadSound(location);
+    if (!soundResource)
+    {
+        return MISSING_SOUND_ID;
+    }
+    
+    return soundResource->PlayAt(*this, position, isLooped, volume, balance, speed, isPaused);
+}
+
 #endif // !defined( ENGINE_DISABLE_AUDIO )

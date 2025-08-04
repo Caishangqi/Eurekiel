@@ -7,6 +7,12 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
+
+// Undefine Windows API macros that conflict with our method names
+#ifdef PlaySound
+#undef PlaySound
+#endif
 
 
 struct Vec3;
@@ -15,6 +21,14 @@ namespace FMOD
 {
     class Sound;
     class System;
+}
+
+// Forward declarations for resource system integration
+namespace enigma::resource
+{
+    class ResourceSubsystem;
+    class SoundResource;
+    class ResourceLocation;
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -28,6 +42,7 @@ class AudioSystem;
 
 struct AudioSystemConfig
 {
+    bool enableResourceIntegration = true; // Enable resource system integration
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,9 +58,19 @@ public:
     virtual void BeginFrame();
     virtual void EndFrame();
 
+    // Legacy API (file path based)
     virtual SoundID         CreateOrGetSound(const std::string& soundFilePath, FMOD_INITFLAGS flags = FMOD_3D);
     virtual SoundPlaybackID StartSound(SoundID soundID, bool isLooped = false, float volume   = 1.f, float balance = 0.0f,
                                        float   speed                  = 1.0f, bool   isPaused = false);
+
+    // Resource system integration (Neoforge style)
+    void SetResourceSubsystem(enigma::resource::ResourceSubsystem* resourceSystem);
+    std::shared_ptr<enigma::resource::SoundResource> LoadSound(const enigma::resource::ResourceLocation& location);
+    SoundPlaybackID PlaySound(const enigma::resource::ResourceLocation& location, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false);
+    SoundPlaybackID PlaySoundAt(const enigma::resource::ResourceLocation& location, const Vec3& position, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f,
+                                bool isPaused = false);
+
+    // Playback control
     virtual void StopSound(SoundPlaybackID soundPlaybackID);
     virtual void SetSoundPlaybackVolume(SoundPlaybackID soundPlaybackID, float volume); // volume is in [0,1]
     virtual void SetSoundPlaybackBalance(SoundPlaybackID soundPlaybackID, float balance);
@@ -65,10 +90,17 @@ public:
 private:
     static FMOD_VECTOR GameToFmodVec(const Vec3& v);
 
+public:
+    // Public access to FMOD system for resource loaders
+    FMOD::System* m_fmodSystem;
+
 protected:
-    FMOD::System*                  m_fmodSystem;
     std::map<std::string, SoundID> m_registeredSoundIDs;
     std::vector<FMOD::Sound*>      m_registeredSounds;
+
+    // Resource system integration
+    std::map<std::string, std::shared_ptr<enigma::resource::SoundResource>> m_soundResources;
+    enigma::resource::ResourceSubsystem*                                    m_resourceSubsystem = nullptr;
 
 private:
     AudioSystemConfig m_audioConfig;
