@@ -64,12 +64,27 @@ namespace enigma::resource
 
         if (namespace_id.empty())
         {
-            // Scan all namespaces
-            for (const auto& entry : std::filesystem::directory_iterator(m_basePath))
+            // Scan all configured namespaces
+            if (!m_namespaceMappings.empty())
             {
-                if (entry.is_directory())
+                // Use configured namespace mappings
+                for (const auto& [ns, path] : m_namespaceMappings)
                 {
-                    scanDirectory(entry.path(), entry.path().filename().string(), results, type);
+                    if (std::filesystem::exists(path) && std::filesystem::is_directory(path))
+                    {
+                        scanDirectory(path, ns, results, type);
+                    }
+                }
+            }
+            else
+            {
+                // Fallback: scan base directory using directory names as namespaces
+                for (const auto& entry : std::filesystem::directory_iterator(m_basePath))
+                {
+                    if (entry.is_directory())
+                    {
+                        scanDirectory(entry.path(), entry.path().filename().string(), results, type);
+                    }
                 }
             }
         }
@@ -170,6 +185,8 @@ namespace enigma::resource
             try
             {
                 ResourceLocation loc(namespace_id, locationPath);
+                
+                
                 // Avoid duplicate additions (the same resource may have multiple extensions)
                 if (std::find(results.begin(), results.end(), loc) == results.end())
                 {
