@@ -165,29 +165,25 @@ namespace enigma::resource
         bool                     HasResource(const ResourceLocation& location) const;
         ResourcePtr              GetResource(const ResourceLocation& location);
         std::future<ResourcePtr> GetResourceAsync(const ResourceLocation& location);
-        void                     PreloadResources(const std::vector<ResourceLocation>& locations, std::function<void(size_t loaded, size_t total)> callback = nullptr);
+        void                     PreloadAllResources(std::function<void(size_t loaded, size_t total)> callback = nullptr);
 
         /// Resource Queries
         std::optional<ResourceMetadata> GetMetadata(const ResourceLocation& location) const;
         std::vector<ResourceLocation>   ListResources(const std::string& namespaceName = "", ResourceType type = ResourceType::UNKNOWN) const;
         std::vector<ResourceLocation>   SearchResources(const std::string& pattern, ResourceType type = ResourceType::UNKNOWN) const;
 
-        /// Cache Management
-        void ClearCache();
+        /// Resource Management
+        void ClearAllResources();
         void UnloadResource(const ResourceLocation& location);
 
-        struct CacheStats
+        struct ResourceStats
         {
             size_t totalSize     = 0;
             size_t resourceCount = 0;
-            size_t hitCount      = 0;
-            size_t missCount     = 0;
-            float  hitRate       = 0.0f;
-            size_t evictionCount = 0;
+            size_t totalLoaded   = 0;
         };
 
-        CacheStats GetCacheStats() const;
-        void       ResetCacheStats();
+        ResourceStats GetResourceStats() const;
 
         /// Resource Scanning
         void ScanResources(std::function<void(const std::string& current, size_t scanned)> callback = nullptr);
@@ -223,7 +219,7 @@ namespace enigma::resource
         void                               ProcessNamespacePreloads();
         void                               UpdateFrameStatistics();
         bool                               ShouldStopLoadingThisFrame() const;
-        void                               EvictLRUResources();
+        void                               PreloadAllDiscoveredResources();
 
     private:
         // Configuration (reference, not owned)
@@ -244,21 +240,12 @@ namespace enigma::resource
         mutable std::shared_mutex                              m_indexMutex;
         std::unordered_map<ResourceLocation, ResourceMetadata> m_resourceIndex;
 
-        // Resource cache with LRU tracking
-        struct CacheEntry
-        {
-            ResourcePtr                           resource;
-            std::chrono::steady_clock::time_point lastAccess;
-            size_t                                accessCount = 0;
-        };
+        // Preloaded resources storage
+        mutable std::shared_mutex                      m_resourceMutex;
+        std::unordered_map<ResourceLocation, ResourcePtr> m_preloadedResources;
 
-        mutable std::shared_mutex                        m_cacheMutex;
-        std::unordered_map<ResourceLocation, CacheEntry> m_resourceCache;
-
-        // Cache statistics
-        mutable std::atomic<size_t> m_cacheHits{0};
-        mutable std::atomic<size_t> m_cacheMisses{0};
-        mutable std::atomic<size_t> m_cacheEvictions{0};
+        // Resource statistics
+        mutable std::atomic<size_t> m_totalLoaded{0};
 
         // Resource providers
         mutable std::shared_mutex                       m_providerMutex;

@@ -91,8 +91,8 @@ void ResourceSubsystem::Startup()
     // Initial resource scan
     ScanResources();
 
-    // Process namespace preloads
-    ProcessNamespacePreloads();
+    // Preload all discovered resources
+    PreloadAllDiscoveredResources();
 
     m_state = SubsystemState::READY;
 
@@ -121,7 +121,7 @@ void ResourceSubsystem::Shutdown()
     StopWorkerThreads();
 
     // Clear all resources
-    ClearCache();
+    ClearAllResources();
 
     // Clear providers
     {
@@ -200,110 +200,44 @@ bool ResourceSubsystem::HasResource(const ResourceLocation& location) const
 
 ResourcePtr ResourceSubsystem::GetResource(const ResourceLocation& location)
 {
-    // Check cache first
+    // Check exact match first
     {
-        std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
-        auto                                it = m_resourceCache.find(location);
-        if (it != m_resourceCache.end())
+        std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
+        auto                                it = m_preloadedResources.find(location);
+        if (it != m_preloadedResources.end())
         {
-            // Update access time and count
-            const_cast<CacheEntry&>(it->second).lastAccess = std::chrono::steady_clock::now();
-            const_cast<CacheEntry&>(it->second).accessCount++;
-
-            m_cacheHits.fetch_add(1);
-            return it->second.resource;
+            return it->second;
         }
     }
 
-    m_cacheMisses.fetch_add(1);
+    // Since ResourceLocation no longer contains extensions, exact match failure means resource not found
 
-    if (m_config.logCacheMisses)
+    if (m_config.logResourceLoads)
     {
-        std::cout << "[ResourceSubsystem] Cache miss: " << location.ToString() << std::endl;
+        std::cout << "[ResourceSubsystem] Resource not preloaded: " << location.ToString() << std::endl;
     }
 
-    // Load resource directly (performance limiting removed)
-    DebuggerPrintf("[RESOURCE DEBUG] About to call LoadResourceInternal for: %s\n", location.ToString().c_str());
-    return LoadResourceInternal(location);
+    // Resource not found in preloaded resources
+    return nullptr;
 }
 
 std::future<ResourcePtr> ResourceSubsystem::GetResourceAsync(const ResourceLocation& location)
 {
-    // Check cache first
-    {
-        std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
-        auto                                it = m_resourceCache.find(location);
-        if (it != m_resourceCache.end())
-        {
-            m_cacheHits.fetch_add(1);
-            std::promise<ResourcePtr> promise;
-            promise.set_value(it->second.resource);
-            return promise.get_future();
-        }
-    }
-
-    m_cacheMisses.fetch_add(1);
-
-    // Get estimated size for the resource
-    size_t estimatedSize = 0;
-    {
-        std::shared_lock<std::shared_mutex> lock(m_indexMutex);
-        auto                                it = m_resourceIndex.find(location);
-        if (it != m_resourceIndex.end())
-        {
-            estimatedSize = it->second.fileSize;
-        }
-    }
-
-    // Add to load queue
-    LoadRequest request;
-    request.location      = location;
-    request.requestTime   = std::chrono::steady_clock::now();
-    request.estimatedSize = estimatedSize;
-    auto future           = request.promise.get_future();
-
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        m_loadQueue.push(std::move(request));
-    }
-    m_queueCV.notify_one();
-
-    return future;
+    // Since all resources are preloaded, return immediately
+    std::promise<ResourcePtr> promise;
+    auto resource = GetResource(location);
+    promise.set_value(resource);
+    return promise.get_future();
 }
 
-void ResourceSubsystem::PreloadResources(const std::vector<ResourceLocation>& locations,
-                                         std::function<void(size_t, size_t)>  callback)
+void ResourceSubsystem::PreloadAllResources(std::function<void(size_t, size_t)> callback)
 {
-    size_t total  = locations.size();
-    size_t loaded = 0;
-
-    for (const auto& location : locations)
+    PreloadAllDiscoveredResources();
+    
+    if (callback)
     {
-        // Check if resource should be loaded async based on size
-        bool useAsync = false;
-        {
-            std::shared_lock<std::shared_mutex> lock(m_indexMutex);
-            auto                                it = m_resourceIndex.find(location);
-            if (it != m_resourceIndex.end())
-            {
-                useAsync = it->second.fileSize >= m_config.minFileSizeForAsync;
-            }
-        }
-
-        if (useAsync)
-        {
-            GetResourceAsync(location);
-        }
-        else
-        {
-            GetResource(location);
-        }
-
-        loaded++;
-        if (callback)
-        {
-            callback(loaded, total);
-        }
+        std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
+        callback(m_preloadedResources.size(), m_preloadedResources.size());
     }
 }
 
@@ -358,56 +292,46 @@ std::vector<ResourceLocation> ResourceSubsystem::SearchResources(const std::stri
     return results;
 }
 
-void ResourceSubsystem::ClearCache()
+void ResourceSubsystem::ClearAllResources()
 {
-    std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
-    m_resourceCache.clear();
+    std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
+    m_preloadedResources.clear();
 
     if (m_config.logResourceLoads)
     {
-        std::cout << "[ResourceSubsystem] Cache cleared." << '\n';
+        std::cout << "[ResourceSubsystem] All resources cleared." << '\n';
     }
 }
 
 void ResourceSubsystem::UnloadResource(const ResourceLocation& location)
 {
-    std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
-    m_resourceCache.erase(location);
+    std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
+    m_preloadedResources.erase(location);
 }
 
-ResourceSubsystem::CacheStats ResourceSubsystem::GetCacheStats() const
+ResourceSubsystem::ResourceStats ResourceSubsystem::GetResourceStats() const
 {
-    CacheStats stats;
+    ResourceStats stats;
 
     {
-        std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
-        stats.resourceCount = m_resourceCache.size();
+        std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
+        stats.resourceCount = m_preloadedResources.size();
 
-        for (const auto& [loc, entry] : m_resourceCache)
+        for (const auto& [loc, resource] : m_preloadedResources)
         {
-            if (entry.resource)
+            if (resource)
             {
-                stats.totalSize += entry.resource->GetRawDataSize();
+                stats.totalSize += resource->GetRawDataSize();
             }
         }
     }
 
-    stats.hitCount      = m_cacheHits.load();
-    stats.missCount     = m_cacheMisses.load();
-    stats.evictionCount = m_cacheEvictions.load();
-
-    size_t total  = stats.hitCount + stats.missCount;
-    stats.hitRate = total > 0 ? (float)stats.hitCount / (float)total * 100.0f : 0.0f;
+    stats.totalLoaded = m_totalLoaded.load();
 
     return stats;
 }
 
-void ResourceSubsystem::ResetCacheStats()
-{
-    m_cacheHits      = 0;
-    m_cacheMisses    = 0;
-    m_cacheEvictions = 0;
-}
+// ResourceStats reset is not needed since we only track current state
 
 void ResourceSubsystem::ScanResources(std::function<void(const std::string&, size_t)> callback)
 {
@@ -615,20 +539,33 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     auto loader = m_loaderRegistry.FindLoaderForResource(*metadataOpt);
     if (!loader)
     {
+        if (m_config.logResourceLoads)
+        {
+            std::cout << "[ResourceSubsystem] No specific loader found for " << location.ToString() 
+                      << " (extension: " << metadataOpt->GetFileExtension() << "), using RawResourceLoader" << std::endl;
+        }
         loader = std::make_shared<RawResourceLoader>();
+    }
+    else
+    {
+        if (m_config.logResourceLoads)
+        {
+            std::cout << "[ResourceSubsystem] Using loader: " << loader->GetLoaderName() 
+                      << " for " << location.ToString() << " (extension: " << metadataOpt->GetFileExtension() << ")" << std::endl;
+        }
     }
 
     // Load resource
     ResourcePtr resource = loader->Load(*metadataOpt, data);
 
-    // Cache resource
+    // Store resource in preloaded resources (if not already there)
     {
-        std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
-        CacheEntry                          entry;
-        entry.resource            = resource;
-        entry.lastAccess          = std::chrono::steady_clock::now();
-        entry.accessCount         = 1;
-        m_resourceCache[location] = entry;
+        std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
+        if (m_preloadedResources.find(location) == m_preloadedResources.end())
+        {
+            m_preloadedResources[location] = resource;
+            m_totalLoaded.fetch_add(1);
+        }
     }
 
     // Update file modification time for hot reload
@@ -694,56 +631,53 @@ bool ResourceSubsystem::MatchesPattern(const std::string& str, const std::string
     return std::regex_match(str, re);
 }
 
-void ResourceSubsystem::ProcessNamespacePreloads()
+void ResourceSubsystem::PreloadAllDiscoveredResources()
 {
-    for (const auto& nsEntry : m_config.namespaces)
+    std::vector<ResourceLocation> toPreload;
+
     {
-        if (!nsEntry.preloadAll && nsEntry.preloadPatterns.empty())
+        std::shared_lock<std::shared_mutex> lock(m_indexMutex);
+        for (const auto& [location, metadata] : m_resourceIndex)
         {
-            continue;
+            toPreload.push_back(location);
+        }
+    }
+
+    if (!toPreload.empty())
+    {
+        if (m_config.logResourceLoads)
+        {
+            std::cout << "[ResourceSubsystem] Preloading all " << toPreload.size()
+                << " discovered resources..." << std::endl;
         }
 
-        std::vector<ResourceLocation> toPreload;
-
+        size_t loaded = 0;
+        size_t total = toPreload.size();
+        
+        for (const auto& location : toPreload)
         {
-            std::shared_lock<std::shared_mutex> lock(m_indexMutex);
-            for (const auto& [location, metadata] : m_resourceIndex)
+            try
             {
-                if (location.GetNamespace() != nsEntry.name)
+                auto resource = LoadResourceInternal(location);
+                loaded++;
+                
+                if (m_config.logResourceLoads && loaded % 10 == 0)
                 {
-                    continue;
+                    std::cout << "[ResourceSubsystem] Loaded " << loaded << "/" << total << " resources" << std::endl;
                 }
-
-                bool shouldPreload = nsEntry.preloadAll;
-
-                if (!shouldPreload)
+            }
+            catch (const std::exception& e)
+            {
+                if (m_config.logResourceLoads)
                 {
-                    for (const auto& pattern : nsEntry.preloadPatterns)
-                    {
-                        if (MatchesPattern(location.GetPath(), pattern))
-                        {
-                            shouldPreload = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (shouldPreload)
-                {
-                    toPreload.push_back(location);
+                    std::cout << "[ResourceSubsystem] Failed to load resource: " << location.ToString() << " - " << e.what() << std::endl;
                 }
             }
         }
-
-        if (!toPreload.empty())
+        
+        if (m_config.logResourceLoads)
         {
-            if (m_config.logResourceLoads)
-            {
-                std::cout << "[ResourceSubsystem] Preloading " << toPreload.size()
-                    << " resources from namespace '" << nsEntry.name << "'" << std::endl;
-            }
-
-            PreloadResources(toPreload);
+            std::cout << "[ResourceSubsystem] Preloading complete. Loaded " << loaded << "/" << total << " resources." << std::endl;
         }
     }
 }
@@ -771,67 +705,4 @@ bool ResourceSubsystem::ShouldStopLoadingThisFrame() const
     return false;
 }
 
-void ResourceSubsystem::EvictLRUResources()
-{
-    if (m_config.logCacheEvictions)
-    {
-        std::cout << "[ResourceSubsystem] Starting cache eviction..." << std::endl;
-    }
-
-    std::vector<std::pair<ResourceLocation, std::chrono::steady_clock::time_point>> sortedResources;
-
-    {
-        std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
-        for (const auto& [location, entry] : m_resourceCache)
-        {
-            sortedResources.emplace_back(location, entry.lastAccess);
-        }
-    }
-
-    // Sort by last access time (oldest first)
-    std::sort(sortedResources.begin(), sortedResources.end(),
-              [](const auto& a, const auto& b)
-              {
-                  return a.second < b.second;
-              });
-
-    // Evict oldest resources until we're under the threshold
-    size_t currentSize  = 0;
-    size_t evictedCount = 0;
-
-    {
-        std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
-
-        // Calculate current size
-        for (const auto& [loc, entry] : m_resourceCache)
-        {
-            if (entry.resource)
-            {
-                currentSize += entry.resource->GetRawDataSize();
-            }
-        }
-
-        // Evict resources
-        for (const auto& [location, lastAccess] : sortedResources)
-        {
-            if (currentSize <= m_config.maxCacheSize * m_config.cacheEvictionThreshold)
-            {
-                break;
-            }
-
-            auto it = m_resourceCache.find(location);
-            if (it != m_resourceCache.end())
-            {
-                currentSize -= it->second.resource->GetRawDataSize();
-                m_resourceCache.erase(it);
-                evictedCount++;
-                m_cacheEvictions.fetch_add(1);
-            }
-        }
-    }
-
-    if (m_config.logCacheEvictions)
-    {
-        std::cout << "[ResourceSubsystem] Evicted " << evictedCount << " resources." << std::endl;
-    }
-}
+// Preload all discovered resources method implementation moved above
