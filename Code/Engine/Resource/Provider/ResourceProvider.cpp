@@ -22,22 +22,71 @@ namespace enigma::resource
     bool FileSystemResourceProvider::HasResource(const ResourceLocation& location) const
     {
         auto path = locationToPath(location);
-        return path.has_value();
+        if (path.has_value()) {
+            return true;
+        }
+        
+        // If exact match failed, try to find the actual file path with extension
+        std::filesystem::path namespacePath;
+        auto it = m_namespaceMappings.find(location.GetNamespace());
+        if (it != m_namespaceMappings.end()) {
+            namespacePath = it->second;
+        } else {
+            namespacePath = m_basePath / location.GetNamespace();
+        }
+        
+        std::filesystem::path resourcePath(location.GetPath());
+        auto basePath = namespacePath / resourcePath;
+        
+        return findResourceFile(basePath).has_value();
     }
 
     std::optional<ResourceMetadata> FileSystemResourceProvider::GetMetadata(const ResourceLocation& location) const
     {
         auto pathOpt = locationToPath(location);
-        if (!pathOpt)
-            return std::nullopt;
-
-
-        return ResourceMetadata(location, *pathOpt);
+        if (pathOpt) {
+            return ResourceMetadata(location, *pathOpt);
+        }
+        
+        // If exact match failed, try to find the actual file path with extension
+        std::filesystem::path namespacePath;
+        auto it = m_namespaceMappings.find(location.GetNamespace());
+        if (it != m_namespaceMappings.end()) {
+            namespacePath = it->second;
+        } else {
+            namespacePath = m_basePath / location.GetNamespace();
+        }
+        
+        std::filesystem::path resourcePath(location.GetPath());
+        auto basePath = namespacePath / resourcePath;
+        
+        auto foundPath = findResourceFile(basePath);
+        if (foundPath) {
+            return ResourceMetadata(location, *foundPath);
+        }
+        
+        return std::nullopt;
     }
 
     std::vector<uint8_t> FileSystemResourceProvider::ReadResource(const ResourceLocation& location)
     {
         auto pathOpt = locationToPath(location);
+        if (!pathOpt) {
+            // If exact match failed, try to find the actual file path with extension
+            std::filesystem::path namespacePath;
+            auto it = m_namespaceMappings.find(location.GetNamespace());
+            if (it != m_namespaceMappings.end()) {
+                namespacePath = it->second;
+            } else {
+                namespacePath = m_basePath / location.GetNamespace();
+            }
+            
+            std::filesystem::path resourcePath(location.GetPath());
+            auto basePath = namespacePath / resourcePath;
+            
+            pathOpt = findResourceFile(basePath);
+        }
+        
         if (!pathOpt)
         {
             throw std::runtime_error("Resource not found: " + location.ToString());
@@ -130,8 +179,22 @@ namespace enigma::resource
         std::filesystem::path resourcePath(location.GetPath());
         auto                  basePath = namespacePath / resourcePath;
 
-        // Try different extensions
-        return findResourceFile(basePath);
+        // Check if the path already has an extension
+        if (basePath.has_extension())
+        {
+            // If the path already has an extension, check if file exists directly
+            if (std::filesystem::exists(basePath) && std::filesystem::is_regular_file(basePath))
+            {
+                return basePath;
+            }
+            // If file with specified extension doesn't exist, return nullopt
+            return std::nullopt;
+        }
+        else
+        {
+            // If no extension, try different extensions
+            return findResourceFile(basePath);
+        }
     }
 
     std::optional<std::filesystem::path> FileSystemResourceProvider::findResourceFile(const std::filesystem::path& basePath) const
@@ -164,14 +227,14 @@ namespace enigma::resource
             // Get the relative path
             auto relativePath = std::filesystem::relative(entry.path(), dir);
 
-            // Path converted to ResourceLocation format (extension removed)
+            // Path converted to ResourceLocation format (remove extension following Minecraft Neoforge API design)
             std::string locationPath = relativePath.generic_string();
-
-            // Remove the file extension
-            size_t lastDot = locationPath.find_last_of('.');
-            if (lastDot != std::string::npos)
-            {
-                locationPath = locationPath.substr(0, lastDot);
+            
+            // Remove file extension - ResourceLocation should not contain extensions
+            // Extensions are stored in ResourceMetadata instead
+            auto extensionPos = locationPath.find_last_of('.');
+            if (extensionPos != std::string::npos) {
+                locationPath = locationPath.substr(0, extensionPos);
             }
 
             // If there is type filtering, check the file type
@@ -198,5 +261,47 @@ namespace enigma::resource
                 // Ignore invalid resource locations
             }
         }
+    }
+    
+    std::optional<ResourceLocation> FileSystemResourceProvider::findResourceByPath(const ResourceLocation& location) const
+    {
+        std::filesystem::path namespacePath;
+
+        // Check if there are custom mappings
+        auto it = m_namespaceMappings.find(location.GetNamespace());
+        if (it != m_namespaceMappings.end())
+        {
+            namespacePath = it->second;
+        }
+        else
+        {
+            namespacePath = m_basePath / location.GetNamespace();
+        }
+
+        std::filesystem::path resourcePath(location.GetPath());
+        auto basePath = namespacePath / resourcePath;
+        
+        // If the requested location already has an extension, try exact match first
+        if (basePath.has_extension())
+        {
+            if (std::filesystem::exists(basePath) && std::filesystem::is_regular_file(basePath))
+            {
+                return location;
+            }
+        }
+        
+        // Try adding each possible extension
+        for (const auto& ext : m_searchExtensions)
+        {
+            auto pathWithExt = basePath.string() + ext;
+            if (std::filesystem::exists(pathWithExt) && std::filesystem::is_regular_file(pathWithExt))
+            {
+                // Return the original ResourceLocation without extension
+                // The actual file path with extension is handled in metadata
+                return location;
+            }
+        }
+
+        return std::nullopt;
     }
 }
