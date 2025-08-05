@@ -99,8 +99,7 @@ protected:
     std::vector<FMOD::Sound*>      m_registeredSounds;
 
     // Resource system integration
-    std::map<std::string, std::shared_ptr<enigma::resource::SoundResource>> m_soundResources;
-    enigma::resource::ResourceSubsystem*                                    m_resourceSubsystem = nullptr;
+    enigma::resource::ResourceSubsystem* m_resourceSubsystem = nullptr;
 
 private:
     AudioSystemConfig m_audioConfig;

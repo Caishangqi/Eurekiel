@@ -341,24 +341,11 @@ std::shared_ptr<enigma::resource::SoundResource> AudioSystem::LoadSound(const en
         return nullptr;
     }
     
-    std::string locationStr = location.ToString();
-    
-    // Debug logging to track namespace corruption
-    DebuggerPrintf("[AUDIO DEBUG] LoadSound called with namespace='%s', path='%s', toString='%s'\n", 
-                   location.GetNamespace().c_str(), location.GetPath().c_str(), locationStr.c_str());
-    
-    // Check if already loaded
-    auto it = m_soundResources.find(locationStr);
-    if (it != m_soundResources.end())
-    {
-        return it->second;
-    }
-    
-    // Load through resource system
+    // Load directly through resource system (no caching in AudioSystem)
     auto resource = m_resourceSubsystem->GetResource(location);
     if (!resource)
     {
-        ERROR_RECOVERABLE("AudioSystem: Failed to load sound resource: " + locationStr);
+        ERROR_RECOVERABLE("AudioSystem: Failed to load sound resource: " + location.ToString());
         return nullptr;
     }
     
@@ -366,12 +353,10 @@ std::shared_ptr<enigma::resource::SoundResource> AudioSystem::LoadSound(const en
     auto soundResource = std::dynamic_pointer_cast<enigma::resource::SoundResource>(resource);
     if (!soundResource)
     {
-        ERROR_RECOVERABLE("AudioSystem: Resource is not a SoundResource: " + locationStr);
+        ERROR_RECOVERABLE("AudioSystem: Resource is not a SoundResource: " + location.ToString());
         return nullptr;
     }
     
-    // Cache the sound resource
-    m_soundResources[locationStr] = soundResource;
     return soundResource;
 }
 
