@@ -82,6 +82,7 @@ namespace enigma::resource
      */
     class RawResource : public IResource
     {
+    public:
         RawResource(const ResourceMetadata& metadata, std::vector<uint8_t> data) : m_metadata(metadata), m_data(std::move(data))
         {
             m_metadata.state = ResourceState::LOADED;
