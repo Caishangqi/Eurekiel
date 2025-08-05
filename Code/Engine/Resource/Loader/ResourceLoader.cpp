@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "Engine/Resource/ResourceCommon.hpp"
+#include "Engine/Resource/ResourceMetadata.hpp"
 
 using namespace enigma::resource;
 
@@ -137,9 +138,6 @@ void LoaderRegistry::Clear()
 // RawResourceLoader implementation
 ResourcePtr RawResourceLoader::Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data)
 {
-    // For now, we'll just return nullptr since we haven't defined a generic raw resource class
-    // This would need to be implemented with a proper raw resource container
-    UNUSED(metadata)
-    UNUSED(data)
-    return nullptr;
+    // Create and return a RawResource instance
+    return std::make_shared<RawResource>(metadata, data);
 }
