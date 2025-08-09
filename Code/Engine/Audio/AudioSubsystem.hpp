@@ -38,20 +38,21 @@ constexpr size_t MISSING_SOUND_ID = static_cast<size_t>(-1); // for bad SoundIDs
 
 
 //-----------------------------------------------------------------------------------------------
-class AudioSystem;
+class AudioSubsystem;
 
 struct AudioSystemConfig
 {
-    bool enableResourceIntegration = true; // Enable resource system integration
+    bool                                 enableResourceIntegration = true; // Enable resource system integration
+    enigma::resource::ResourceSubsystem* resourceSubsystem         = nullptr;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-class AudioSystem
+class AudioSubsystem
 {
 public:
-    AudioSystem();
-    AudioSystem(const AudioSystemConfig& audio_config);
-    virtual ~AudioSystem();
+    AudioSubsystem();
+    AudioSubsystem(const AudioSystemConfig& audio_config);
+    virtual ~AudioSubsystem();
 
     void         Startup();
     void         Shutdown();
@@ -63,8 +64,6 @@ public:
     virtual SoundPlaybackID StartSound(SoundID soundID, bool isLooped = false, float volume   = 1.f, float balance = 0.0f,
                                        float   speed                  = 1.0f, bool   isPaused = false);
 
-    // Resource system integration (Neoforge style)
-    void SetResourceSubsystem(enigma::resource::ResourceSubsystem* resourceSystem);
     std::shared_ptr<enigma::resource::SoundResource> LoadSound(const enigma::resource::ResourceLocation& location);
     SoundPlaybackID PlaySound(const enigma::resource::ResourceLocation& location, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false);
     SoundPlaybackID PlaySoundAt(const enigma::resource::ResourceLocation& location, const Vec3& position, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f,

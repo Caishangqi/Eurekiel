@@ -1,4 +1,4 @@
-﻿#include "Engine/Audio/AudioSystem.hpp"
+﻿#include "Engine/Audio/AudioSubsystem.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
@@ -37,25 +37,25 @@
 //-----------------------------------------------------------------------------------------------
 // Initialization code based on example from "FMOD Studio Programmers API for Windows"
 //
-AudioSystem::AudioSystem()
+AudioSubsystem::AudioSubsystem()
     : m_fmodSystem(nullptr)
 {
 }
 
-AudioSystem::AudioSystem(const AudioSystemConfig& audio_config): m_fmodSystem(nullptr)
+AudioSubsystem::AudioSubsystem(const AudioSystemConfig& audio_config) : m_fmodSystem(nullptr)
 {
     m_audioConfig = audio_config;
 }
 
 
 //-----------------------------------------------------------------------------------------------
-AudioSystem::~AudioSystem()
+AudioSubsystem::~AudioSubsystem()
 {
 }
 
 
 //------------------------------------------------------------------------------------------------
-void AudioSystem::Startup()
+void AudioSubsystem::Startup()
 {
     FMOD_RESULT result;
     result = System_Create(&m_fmodSystem);
@@ -63,18 +63,19 @@ void AudioSystem::Startup()
     // When calling fmod init, pass in the flag FMOD_INIT_3D_RIGHTHANDED.
     result = m_fmodSystem->init(512, FMOD_INIT_3D_RIGHTHANDED, nullptr);
     ValidateResult(result);
-    
+
     // Register SoundLoader with ResourceSubsystem if available
-    if (m_audioConfig.enableResourceIntegration && m_resourceSubsystem)
+    if (m_audioConfig.enableResourceIntegration && m_audioConfig.resourceSubsystem)
     {
-        auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
+        m_resourceSubsystem = m_audioConfig.resourceSubsystem;
+        auto soundLoader    = std::make_shared<enigma::resource::SoundLoader>(this);
         m_resourceSubsystem->RegisterLoader(soundLoader);
     }
 }
 
 
 //------------------------------------------------------------------------------------------------
-void AudioSystem::Shutdown()
+void AudioSubsystem::Shutdown()
 {
     FMOD_RESULT result = m_fmodSystem->release();
     ValidateResult(result);
@@ -84,20 +85,20 @@ void AudioSystem::Shutdown()
 
 
 //-----------------------------------------------------------------------------------------------
-void AudioSystem::BeginFrame()
+void AudioSubsystem::BeginFrame()
 {
     m_fmodSystem->update();
 }
 
 
 //-----------------------------------------------------------------------------------------------
-void AudioSystem::EndFrame()
+void AudioSubsystem::EndFrame()
 {
 }
 
 
 //-----------------------------------------------------------------------------------------------
-SoundID AudioSystem::CreateOrGetSound(const std::string& soundFilePath, FMOD_INITFLAGS flags)
+SoundID AudioSubsystem::CreateOrGetSound(const std::string& soundFilePath, FMOD_INITFLAGS flags)
 {
     auto found = m_registeredSoundIDs.find(soundFilePath);
     if (found != m_registeredSoundIDs.end())
@@ -119,7 +120,7 @@ SoundID AudioSystem::CreateOrGetSound(const std::string& soundFilePath, FMOD_INI
 
 
 //-----------------------------------------------------------------------------------------------
-SoundPlaybackID AudioSystem::StartSound(SoundID soundID, bool isLooped, float volume, float balance, float speed,
+SoundPlaybackID AudioSubsystem::StartSound(SoundID soundID, bool isLooped, float volume, float balance, float speed,
                                         bool    isPaused)
 {
     size_t numSounds = m_registeredSounds.size();
@@ -150,7 +151,7 @@ SoundPlaybackID AudioSystem::StartSound(SoundID soundID, bool isLooped, float vo
 
 
 //-----------------------------------------------------------------------------------------------
-void AudioSystem::StopSound(SoundPlaybackID soundPlaybackID)
+void AudioSubsystem::StopSound(SoundPlaybackID soundPlaybackID)
 {
     if (soundPlaybackID == MISSING_SOUND_ID)
     {
@@ -166,7 +167,7 @@ void AudioSystem::StopSound(SoundPlaybackID soundPlaybackID)
 //-----------------------------------------------------------------------------------------------
 // Volume is in [0,1]
 //
-void AudioSystem::SetSoundPlaybackVolume(SoundPlaybackID soundPlaybackID, float volume)
+void AudioSubsystem::SetSoundPlaybackVolume(SoundPlaybackID soundPlaybackID, float volume)
 {
     if (soundPlaybackID == MISSING_SOUND_ID)
     {
@@ -182,7 +183,7 @@ void AudioSystem::SetSoundPlaybackVolume(SoundPlaybackID soundPlaybackID, float 
 //-----------------------------------------------------------------------------------------------
 // Balance is in [-1,1], where 0 is L/R centered
 //
-void AudioSystem::SetSoundPlaybackBalance(SoundPlaybackID soundPlaybackID, float balance)
+void AudioSubsystem::SetSoundPlaybackBalance(SoundPlaybackID soundPlaybackID, float balance)
 {
     if (soundPlaybackID == MISSING_SOUND_ID)
     {
@@ -200,7 +201,7 @@ void AudioSystem::SetSoundPlaybackBalance(SoundPlaybackID soundPlaybackID, float
 //	A speed of 2.0 gives 2x frequency, i.e. exactly one octave higher
 //	A speed of 0.5 gives 1/2 frequency, i.e. exactly one octave lower
 //
-void AudioSystem::SetSoundPlaybackSpeed(SoundPlaybackID soundPlaybackID, float speed)
+void AudioSubsystem::SetSoundPlaybackSpeed(SoundPlaybackID soundPlaybackID, float speed)
 {
     if (soundPlaybackID == MISSING_SOUND_ID)
     {
@@ -222,7 +223,7 @@ void AudioSystem::SetSoundPlaybackSpeed(SoundPlaybackID soundPlaybackID, float s
 
 
 //-----------------------------------------------------------------------------------------------
-void AudioSystem::ValidateResult(FMOD_RESULT result)
+void AudioSubsystem::ValidateResult(FMOD_RESULT result)
 {
     if (result != FMOD_OK)
     {
@@ -232,13 +233,13 @@ void AudioSystem::ValidateResult(FMOD_RESULT result)
     }
 }
 
-void AudioSystem::SetNumListeners(int numListeners)
+void AudioSubsystem::SetNumListeners(int numListeners)
 {
     FMOD_RESULT r = m_fmodSystem->set3DNumListeners(numListeners);
     ValidateResult(r);
 }
 
-void AudioSystem::UpdateListener(int listenerIndex, const Vec3& listenerPosition, const Vec3& listenerForward, const Vec3& listenerUp)
+void AudioSubsystem::UpdateListener(int listenerIndex, const Vec3& listenerPosition, const Vec3& listenerForward, const Vec3& listenerUp)
 {
     FMOD_VECTOR pos     = GameToFmodVec(listenerPosition);
     FMOD_VECTOR vel     = {0.f, 0.f, 0.f};
@@ -250,7 +251,7 @@ void AudioSystem::UpdateListener(int listenerIndex, const Vec3& listenerPosition
     ValidateResult(r);
 }
 
-SoundPlaybackID AudioSystem::StartSoundAt(SoundID soundID, const Vec3& soundPosition, bool isLooped, float volume, float balance, float speed, bool isPaused)
+SoundPlaybackID AudioSubsystem::StartSoundAt(SoundID soundID, const Vec3& soundPosition, bool isLooped, float volume, float balance, float speed, bool isPaused)
 {
     size_t numSounds = m_registeredSounds.size();
     if (soundID < 0 || soundID >= numSounds)
@@ -285,7 +286,7 @@ SoundPlaybackID AudioSystem::StartSoundAt(SoundID soundID, const Vec3& soundPosi
     return (SoundPlaybackID)chan;
 }
 
-void AudioSystem::SetSoundPosition(SoundPlaybackID soundPlaybackID, const Vec3& soundPosition)
+void AudioSubsystem::SetSoundPosition(SoundPlaybackID soundPlaybackID, const Vec3& soundPosition)
 {
     if (soundPlaybackID == MISSING_SOUND_ID) return;
 
@@ -300,7 +301,7 @@ void AudioSystem::SetSoundPosition(SoundPlaybackID soundPlaybackID, const Vec3& 
     chan->set3DAttributes(&pos, &vel);
 }
 
-bool AudioSystem::IsPlaying(SoundPlaybackID soundPlaybackID)
+bool AudioSubsystem::IsPlaying(SoundPlaybackID soundPlaybackID)
 {
     if (soundPlaybackID == MISSING_SOUND_ID) return false;
 
@@ -311,7 +312,7 @@ bool AudioSystem::IsPlaying(SoundPlaybackID soundPlaybackID)
     return isPlayingFlag;
 }
 
-FMOD_VECTOR AudioSystem::GameToFmodVec(const Vec3& v)
+FMOD_VECTOR AudioSubsystem::GameToFmodVec(const Vec3& v)
 {
     FMOD_VECTOR o;
     o.x = -v.y; // game.y → fmod.x (Right)
@@ -320,65 +321,52 @@ FMOD_VECTOR AudioSystem::GameToFmodVec(const Vec3& v)
     return o;
 }
 
-// Resource system integration methods
-void AudioSystem::SetResourceSubsystem(enigma::resource::ResourceSubsystem* resourceSystem)
-{
-    m_resourceSubsystem = resourceSystem;
-    
-    // Register SoundLoader if the system is already started
-    if (m_fmodSystem && m_audioConfig.enableResourceIntegration && m_resourceSubsystem)
-    {
-        auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
-        m_resourceSubsystem->RegisterLoader(soundLoader);
-    }
-}
-
-std::shared_ptr<enigma::resource::SoundResource> AudioSystem::LoadSound(const enigma::resource::ResourceLocation& location)
+std::shared_ptr<enigma::resource::SoundResource> AudioSubsystem::LoadSound(const enigma::resource::ResourceLocation& location)
 {
     if (!m_resourceSubsystem)
     {
-        ERROR_RECOVERABLE("AudioSystem: No ResourceSubsystem set");
+        ERROR_RECOVERABLE("AudioSubsystem: No ResourceSubsystem set");
         return nullptr;
     }
-    
-    // Load directly through resource system (no caching in AudioSystem)
+
+    // Load directly through resource system (no caching in AudioSubsystem)
     auto resource = m_resourceSubsystem->GetResource(location);
     if (!resource)
     {
-        ERROR_RECOVERABLE("AudioSystem: Failed to load sound resource: " + location.ToString());
+        ERROR_RECOVERABLE("AudioSubsystem: Failed to load sound resource: " + location.ToString());
         return nullptr;
     }
-    
+
     // Cast to SoundResource
     auto soundResource = std::dynamic_pointer_cast<enigma::resource::SoundResource>(resource);
     if (!soundResource)
     {
-        ERROR_RECOVERABLE("AudioSystem: Resource is not a SoundResource: " + location.ToString());
+        ERROR_RECOVERABLE("AudioSubsystem: Resource is not a SoundResource: " + location.ToString());
         return nullptr;
     }
-    
+
     return soundResource;
 }
 
-SoundPlaybackID AudioSystem::PlaySound(const enigma::resource::ResourceLocation& location, bool isLooped, float volume, float balance, float speed, bool isPaused)
+SoundPlaybackID AudioSubsystem::PlaySound(const enigma::resource::ResourceLocation& location, bool isLooped, float volume, float balance, float speed, bool isPaused)
 {
     auto soundResource = LoadSound(location);
     if (!soundResource)
     {
         return MISSING_SOUND_ID;
     }
-    
+
     return soundResource->Play(*this, isLooped, volume, balance, speed, isPaused);
 }
 
-SoundPlaybackID AudioSystem::PlaySoundAt(const enigma::resource::ResourceLocation& location, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused)
+SoundPlaybackID AudioSubsystem::PlaySoundAt(const enigma::resource::ResourceLocation& location, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused)
 {
     auto soundResource = LoadSound(location);
     if (!soundResource)
     {
         return MISSING_SOUND_ID;
     }
-    
+
     return soundResource->PlayAt(*this, position, isLooped, volume, balance, speed, isPaused);
 }
 
