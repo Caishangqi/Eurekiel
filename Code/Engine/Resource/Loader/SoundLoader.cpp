@@ -7,7 +7,7 @@ using namespace enigma::resource;
 
 #if !defined(ENGINE_DISABLE_AUDIO)
 
-SoundLoader::SoundLoader(AudioSystem* audioSystem)
+SoundLoader::SoundLoader(AudioSubsystem* audioSystem)
     : m_audioSystem(audioSystem)
 {
     // Set up default configuration
@@ -26,7 +26,7 @@ ResourcePtr SoundLoader::Load(const ResourceMetadata& metadata, const std::vecto
 {
     if (!m_audioSystem)
     {
-        ERROR_RECOVERABLE("SoundLoader: No AudioSystem provided");
+        ERROR_RECOVERABLE("SoundLoader: No AudioSubsystem provided");
         return nullptr;
     }
 
@@ -48,7 +48,7 @@ ResourcePtr SoundLoader::Load(const ResourceMetadata& metadata, const std::vecto
     exinfo.length                 = static_cast<unsigned int>(data.size());
 
     FMOD::Sound*  fmodSound  = nullptr;
-    FMOD::System* fmodSystem = m_audioSystem->m_fmodSystem; // Access FMOD system through AudioSystem
+    FMOD::System* fmodSystem = m_audioSystem->m_fmodSystem; // Access FMOD system through AudioSubsystem
 
     if (!fmodSystem)
     {
@@ -303,7 +303,7 @@ SoundResource::SoundConfig SoundConfigLoader::GetEffectConfig()
 #else // ENGINE_DISABLE_AUDIO
 
 // Dummy implementations when audio is disabled
-SoundLoader::SoundLoader(AudioSystem* audioSystem)
+SoundLoader::SoundLoader(AudioSubsystem* audioSystem)
     : m_audioSystem(audioSystem)
 {
 }

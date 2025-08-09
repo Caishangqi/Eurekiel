@@ -172,7 +172,7 @@
     </ItemDefinitionGroup>
     <ItemGroup>
         <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
-        <ClCompile Include="Audio\AudioSystem.cpp"/>
+        <ClCompile Include="Audio\AudioSubsystem.cpp" />
         <ClCompile Include="Core\Clock.cpp"/>
         <ClCompile Include="Core\CubicHermiteSpline.cpp" />
         <ClCompile Include="Core\DevConsole.cpp"/>
@@ -271,7 +271,7 @@
         <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
         <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h" />
         <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h" />
-        <ClInclude Include="Audio\AudioSystem.hpp"/>
+        <ClInclude Include="Audio\AudioSubsystem.hpp" />
         <ClInclude Include="Core\Clock.hpp"/>
         <ClInclude Include="Core\CubicHermiteSpline.hpp" />
         <ClInclude Include="Core\DevConsole.hpp"/>

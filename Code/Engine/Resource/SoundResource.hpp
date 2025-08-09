@@ -1,6 +1,6 @@
 #pragma once
 #include "ResourceMetadata.hpp"
-#include "Engine/Audio/AudioSystem.hpp"
+#include "Engine/Audio/AudioSubsystem.hpp"
 #include "ThirdParty/fmod/fmod.hpp"
 #include <memory>
 
@@ -51,8 +51,8 @@ namespace enigma::resource
         const SoundConfig& GetConfig() const { return m_config; }
 
         // Convenience methods
-        SoundPlaybackID Play(AudioSystem& audioSystem, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false) const;
-        SoundPlaybackID PlayAt(AudioSystem& audioSystem, const Vec3& position, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false) const;
+        SoundPlaybackID Play(AudioSubsystem& audioSystem, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false) const;
+        SoundPlaybackID PlayAt(AudioSubsystem& audioSystem, const Vec3& position, bool isLooped = false, float volume = 1.0f, float balance = 0.0f, float speed = 1.0f, bool isPaused = false) const;
 
         // Sound properties
         float             GetLength() const; // Get sound length in seconds

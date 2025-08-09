@@ -242,7 +242,7 @@ namespace enigma::resource
 
         // Preloaded resources storage
         mutable std::shared_mutex                      m_resourceMutex;
-        std::unordered_map<ResourceLocation, ResourcePtr> m_preloadedResources;
+        std::unordered_map<ResourceLocation, ResourcePtr> m_loadedResources;
 
         // Resource statistics
         mutable std::atomic<size_t> m_totalLoaded{0};

@@ -53,7 +53,7 @@ size_t SoundResource::GetRawDataSize() const
     return m_rawData.size();
 }
 
-SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, float volume, float balance, float speed, bool isPaused) const
+SoundPlaybackID SoundResource::Play(AudioSubsystem& audioSystem, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
     UNUSED(audioSystem)
     if (!IsLoaded())
@@ -102,7 +102,7 @@ SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, flo
     return (SoundPlaybackID)channel;
 }
 
-SoundPlaybackID SoundResource::PlayAt(AudioSystem& audioSystem, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused) const
+SoundPlaybackID SoundResource::PlayAt(AudioSubsystem& audioSystem, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
     UNUSED(audioSystem)
     if (!IsLoaded() || !m_config.is3D)
@@ -249,10 +249,10 @@ bool SoundResource::Reload(const std::vector<uint8_t>& data, const SoundConfig& 
     UNUSED(system)
 
     // We need access to the FMOD system, but we don't have it directly
-    // This would need to be passed in or accessed through a global AudioSystem instance
+    // This would need to be passed in or accessed through a global AudioSubsystem instance
     // For now, we'll return false as this operation requires more context
 
-    ERROR_RECOVERABLE("SoundResource::Reload not fully implemented - requires AudioSystem context");
+    ERROR_RECOVERABLE("SoundResource::Reload not fully implemented - requires AudioSubsystem context");
     return false;
 }
 
@@ -318,7 +318,7 @@ SoundResource::~SoundResource()
 const void* SoundResource::GetRawData() const { return nullptr; }
 size_t      SoundResource::GetRawDataSize() const { return 0; }
 
-SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, float volume, float balance, float speed, bool isPaused) const
+SoundPlaybackID SoundResource::Play(AudioSubsystem& audioSystem, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
     UNUSED(audioSystem);
     UNUSED(isLooped);
@@ -329,7 +329,7 @@ SoundPlaybackID SoundResource::Play(AudioSystem& audioSystem, bool isLooped, flo
     return MISSING_SOUND_ID;
 }
 
-SoundPlaybackID SoundResource::PlayAt(AudioSystem& audioSystem, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused) const
+SoundPlaybackID SoundResource::PlayAt(AudioSubsystem& audioSystem, const Vec3& position, bool isLooped, float volume, float balance, float speed, bool isPaused) const
 {
     UNUSED(audioSystem);
     UNUSED(position);

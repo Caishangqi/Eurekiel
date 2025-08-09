@@ -1,6 +1,5 @@
 ﻿#include "ResourceSubsystem.hpp"
 
-#include "ResourceSubsystem.hpp"
 #include "Provider/ResourceProvider.hpp"
 #include "Loader/ResourceLoader.hpp"
 #include <iostream>
@@ -203,8 +202,8 @@ ResourcePtr ResourceSubsystem::GetResource(const ResourceLocation& location)
     // Check exact match first
     {
         std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
-        auto                                it = m_preloadedResources.find(location);
-        if (it != m_preloadedResources.end())
+        auto                                it = m_loadedResources.find(location);
+        if (it != m_loadedResources.end())
         {
             return it->second;
         }
@@ -225,7 +224,7 @@ std::future<ResourcePtr> ResourceSubsystem::GetResourceAsync(const ResourceLocat
 {
     // Since all resources are preloaded, return immediately
     std::promise<ResourcePtr> promise;
-    auto resource = GetResource(location);
+    auto                      resource = GetResource(location);
     promise.set_value(resource);
     return promise.get_future();
 }
@@ -233,11 +232,11 @@ std::future<ResourcePtr> ResourceSubsystem::GetResourceAsync(const ResourceLocat
 void ResourceSubsystem::PreloadAllResources(std::function<void(size_t, size_t)> callback)
 {
     PreloadAllDiscoveredResources();
-    
+
     if (callback)
     {
         std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
-        callback(m_preloadedResources.size(), m_preloadedResources.size());
+        callback(m_loadedResources.size(), m_loadedResources.size());
     }
 }
 
@@ -295,7 +294,7 @@ std::vector<ResourceLocation> ResourceSubsystem::SearchResources(const std::stri
 void ResourceSubsystem::ClearAllResources()
 {
     std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
-    m_preloadedResources.clear();
+    m_loadedResources.clear();
 
     if (m_config.logResourceLoads)
     {
@@ -306,7 +305,7 @@ void ResourceSubsystem::ClearAllResources()
 void ResourceSubsystem::UnloadResource(const ResourceLocation& location)
 {
     std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
-    m_preloadedResources.erase(location);
+    m_loadedResources.erase(location);
 }
 
 ResourceSubsystem::ResourceStats ResourceSubsystem::GetResourceStats() const
@@ -315,9 +314,9 @@ ResourceSubsystem::ResourceStats ResourceSubsystem::GetResourceStats() const
 
     {
         std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
-        stats.resourceCount = m_preloadedResources.size();
+        stats.resourceCount = m_loadedResources.size();
 
-        for (const auto& [loc, resource] : m_preloadedResources)
+        for (const auto& [loc, resource] : m_loadedResources)
         {
             if (resource)
             {
@@ -419,7 +418,7 @@ void ResourceSubsystem::InitializeDefaultLoaders()
 
     // Future: Register other default loaders
     // m_loaderRegistry.RegisterLoader(std::make_shared<TextureLoader>());
-    
+
     // Note: SoundLoader will be registered when AudioSystem is available
     // This is done externally to avoid circular dependencies
 }
@@ -508,7 +507,7 @@ void ResourceSubsystem::WorkerThreadFunc()
 ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& location)
 {
     // Debug logging to track namespace corruption
-    DebuggerPrintf("[RESOURCE DEBUG] LoadResourceInternal called with namespace='%s', path='%s', toString='%s'\n", 
+    DebuggerPrintf("[RESOURCE DEBUG] LoadResourceInternal called with namespace='%s', path='%s', toString='%s'\n",
                    location.GetNamespace().c_str(), location.GetPath().c_str(), location.ToString().c_str());
 
     // Find provider
@@ -541,8 +540,8 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     {
         if (m_config.logResourceLoads)
         {
-            std::cout << "[ResourceSubsystem] No specific loader found for " << location.ToString() 
-                      << " (extension: " << metadataOpt->GetFileExtension() << "), using RawResourceLoader" << std::endl;
+            std::cout << "[ResourceSubsystem] No specific loader found for " << location.ToString()
+                << " (extension: " << metadataOpt->GetFileExtension() << "), using RawResourceLoader" << std::endl;
         }
         loader = std::make_shared<RawResourceLoader>();
     }
@@ -550,8 +549,8 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     {
         if (m_config.logResourceLoads)
         {
-            std::cout << "[ResourceSubsystem] Using loader: " << loader->GetLoaderName() 
-                      << " for " << location.ToString() << " (extension: " << metadataOpt->GetFileExtension() << ")" << std::endl;
+            std::cout << "[ResourceSubsystem] Using loader: " << loader->GetLoaderName()
+                << " for " << location.ToString() << " (extension: " << metadataOpt->GetFileExtension() << ")" << std::endl;
         }
     }
 
@@ -561,9 +560,9 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     // Store resource in preloaded resources (if not already there)
     {
         std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
-        if (m_preloadedResources.find(location) == m_preloadedResources.end())
+        if (m_loadedResources.find(location) == m_loadedResources.end())
         {
-            m_preloadedResources[location] = resource;
+            m_loadedResources[location] = resource;
             m_totalLoaded.fetch_add(1);
         }
     }
@@ -652,15 +651,15 @@ void ResourceSubsystem::PreloadAllDiscoveredResources()
         }
 
         size_t loaded = 0;
-        size_t total = toPreload.size();
-        
+        size_t total  = toPreload.size();
+
         for (const auto& location : toPreload)
         {
             try
             {
                 auto resource = LoadResourceInternal(location);
                 loaded++;
-                
+
                 if (m_config.logResourceLoads && loaded % 10 == 0)
                 {
                     std::cout << "[ResourceSubsystem] Loaded " << loaded << "/" << total << " resources" << std::endl;
@@ -674,7 +673,7 @@ void ResourceSubsystem::PreloadAllDiscoveredResources()
                 }
             }
         }
-        
+
         if (m_config.logResourceLoads)
         {
             std::cout << "[ResourceSubsystem] Preloading complete. Loaded " << loaded << "/" << total << " resources." << std::endl;
