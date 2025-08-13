@@ -192,6 +192,7 @@
         <ClCompile Include="Core\VertexUtils.cpp"/>
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
         <ClCompile Include="Core\XmlUtils.cpp"/>
+        <ClCompile Include="Core\Yaml.cpp" />
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>
         <ClCompile Include="Input\KeyButtonState.cpp"/>
@@ -271,6 +272,7 @@
         <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
         <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h" />
         <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h" />
+        <ClInclude Include="..\ThirdParty\yaml-cpp\yaml.h" />
         <ClInclude Include="Audio\AudioSubsystem.hpp" />
         <ClInclude Include="Core\Clock.hpp"/>
         <ClInclude Include="Core\CubicHermiteSpline.hpp" />
@@ -291,6 +293,7 @@
         <ClInclude Include="Core\VertexUtils.hpp" />
         <ClInclude Include="Core\Vertex_PCU.hpp" />
         <ClInclude Include="Core\XmlUtils.hpp" />
+        <ClInclude Include="Core\Yaml.hpp" />
         <ClInclude Include="Input\AnalogJoystick.hpp" />
         <ClInclude Include="Input\InputSystem.hpp" />
         <ClInclude Include="Input\KeyButtonState.hpp" />
