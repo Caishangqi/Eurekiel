@@ -1,8 +1,14 @@
 ﻿#pragma once
 #pragma warning(push)
-#pragma warning(disable: 4251 4275)
+#pragma warning(disable: 4244 4275 4251 4702 4217)
 #include <ThirdParty/yaml-cpp/yaml.h>
 #pragma warning(pop)
+
+#if defined(_DEBUG)
+#pragma comment(lib, "ThirdParty/yaml-cpp/yaml-cppd.lib")
+#else
+#pragma comment(lib, "ThirdParty/yaml-cpp/yaml-cpp.lib")
+#endif
 #include <string>
 #include <vector>
 #include <optional>
