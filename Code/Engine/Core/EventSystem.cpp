@@ -1,6 +1,6 @@
 ﻿#include "EventSystem.hpp"
 
-#include "DevConsole.hpp"
+#include "Console/DevConsole.hpp"
 #include "NamedStrings.hpp"
 #include "Rgba8.hpp"
 EventSystem* g_theEventSystem = nullptr;
