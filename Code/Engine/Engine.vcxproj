@@ -174,8 +174,9 @@
         <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
         <ClCompile Include="Audio\AudioSubsystem.cpp" />
         <ClCompile Include="Core\Clock.cpp"/>
+        <ClCompile Include="Core\Console\DevConsole.cpp"/>
         <ClCompile Include="Core\CubicHermiteSpline.cpp" />
-        <ClCompile Include="Core\DevConsole.cpp"/>
+        <ClCompile Include="Core\Engine.cpp" />
         <ClCompile Include="Core\EngineCommon.cpp"/>
         <ClCompile Include="Core\ErrorWarningAssert.cpp"/>
         <ClCompile Include="Core\EventSystem.cpp"/>
@@ -187,6 +188,7 @@
         <ClCompile Include="Core\Rgba8.cpp"/>
         <ClCompile Include="Core\Schedule\ScheduleSubsystem.cpp" />
         <ClCompile Include="Core\StringUtils.cpp"/>
+        <ClCompile Include="Core\SubsystemManager.cpp" />
         <ClCompile Include="Core\Time.cpp"/>
         <ClCompile Include="Core\Timer.cpp"/>
         <ClCompile Include="Core\VertexUtils.cpp"/>
@@ -275,19 +277,21 @@
         <ClInclude Include="..\ThirdParty\yaml-cpp\yaml.h" />
         <ClInclude Include="Audio\AudioSubsystem.hpp" />
         <ClInclude Include="Core\Clock.hpp"/>
+        <ClInclude Include="Core\Console\DevConsole.hpp" />
         <ClInclude Include="Core\CubicHermiteSpline.hpp" />
-        <ClInclude Include="Core\DevConsole.hpp"/>
-        <ClInclude Include="Core\EngineCommon.hpp"/>
-        <ClInclude Include="Core\ErrorWarningAssert.hpp"/>
-        <ClInclude Include="Core\EventSystem.hpp"/>
-        <ClInclude Include="Core\FileUtils.hpp"/>
-        <ClInclude Include="Core\HeatMaps.hpp"/>
-        <ClInclude Include="Core\Image.hpp"/>
+        <ClInclude Include="Core\Engine.hpp" />
+        <ClInclude Include="Core\EngineCommon.hpp" />
+        <ClInclude Include="Core\ErrorWarningAssert.hpp" />
+        <ClInclude Include="Core\EventSystem.hpp" />
+        <ClInclude Include="Core\FileUtils.hpp" />
+        <ClInclude Include="Core\HeatMaps.hpp" />
+        <ClInclude Include="Core\Image.hpp" />
         <ClInclude Include="Core\Json.hpp" />
-        <ClInclude Include="Core\NamedStrings.hpp"/>
-        <ClInclude Include="Core\Rgba8.hpp"/>
+        <ClInclude Include="Core\NamedStrings.hpp" />
+        <ClInclude Include="Core\Rgba8.hpp" />
         <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp" />
         <ClInclude Include="Core\StringUtils.hpp" />
+        <ClInclude Include="Core\SubsystemManager.hpp" />
         <ClInclude Include="Core\Time.hpp" />
         <ClInclude Include="Core\Timer.hpp" />
         <ClInclude Include="Core\VertexUtils.hpp" />
@@ -376,6 +380,9 @@
         <Content Include="..\..\Scripts\CopyEngineResources.ps1" />
         <Content Include="..\ThirdParty\fmod\fmod64_vc.lib" />
         <Content Include="..\ThirdParty\fmod\fmod_vc.lib" />
+    </ItemGroup>
+    <ItemGroup>
+      <Folder Include="Core\Logger\" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
