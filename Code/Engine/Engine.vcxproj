@@ -374,6 +374,7 @@
         <Content Include="..\..\.enigma\assets\engine\textures\module" />
         <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png" />
         <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png" />
+        <Content Include="..\..\.enigma\config\engine\module.yml" />
         <Content Include="..\..\.gitignore" />
         <Content Include="..\..\Readme.md" />
         <Content Include="..\..\Scripts\CopyEngineResources.bat" />

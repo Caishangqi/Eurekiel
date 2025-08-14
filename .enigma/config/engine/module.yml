@@ -1,0 +1,5 @@
+moduleConfig:
+  logger:
+    globalLogLevel: INFO
+    enableFileLogging: true
+    logFilePath: logs
