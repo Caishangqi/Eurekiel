@@ -1,0 +1,41 @@
+﻿#pragma once
+#include <memory>
+
+namespace enigma::core
+{
+    class SubsystemManager;
+
+    class Engine
+    {
+    public:
+        static Engine* GetInstance();
+        static void    CreateInstance();
+        static void    DestroyInstance();
+
+        template <typename T>
+        T* GetSubsystem() const;
+
+        // Life cycle
+        void Startup();
+        void Shutdown();
+
+        // Game Loop
+        void BeginFrame();
+        void Update(float deltaTime);
+        void EndFrame();
+
+    private:
+        Engine();
+        ~Engine();
+
+        // Singleton
+        static Engine*                    s_instance;
+        std::unique_ptr<SubsystemManager> m_subsystemManager;
+    };
+}
+
+// Global convenient access
+extern enigma::core::Engine* g_theEngine;
+
+// Convenient macro definition
+#define GEngine enigma::core::Engine::GetInstance()
