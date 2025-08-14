@@ -2,9 +2,9 @@
 #include <string>
 #include <vector>
 
-#include "EventSystem.hpp"
-#include "NamedStrings.hpp"
-#include "Rgba8.hpp"
+#include "../EventSystem.hpp"
+#include "../NamedStrings.hpp"
+#include "../Rgba8.hpp"
 #include "Engine/Math/AABB2.hpp"
 
 class Timer;
