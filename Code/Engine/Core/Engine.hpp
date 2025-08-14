@@ -34,8 +34,5 @@ namespace enigma::core
     };
 }
 
-// Global convenient access
-extern enigma::core::Engine* g_theEngine;
-
 // Convenient macro definition
 #define GEngine enigma::core::Engine::GetInstance()
