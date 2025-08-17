@@ -12,8 +12,13 @@ namespace enigma::core
         static void    CreateInstance();
         static void    DestroyInstance();
 
+        // Subsystem access
         template <typename T>
         T* GetSubsystem() const;
+
+        // Subsystem registration
+        template <typename T>
+        void RegisterSubsystem(std::unique_ptr<T> subsystem);
 
         // Life cycle
         void Startup();
