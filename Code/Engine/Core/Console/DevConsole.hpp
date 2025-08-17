@@ -34,7 +34,7 @@ enum class DevConsoleMode
 struct DevConsoleConfig
 {
     Camera*     m_camera            = nullptr;
-    IRenderer*   renderer            = nullptr;
+    IRenderer*  renderer            = nullptr;
     std::string m_defaultFontName   = "CaiziiFixedFont";
     std::string m_fontPath          = ".enigma/data/Fonts/";
     float       m_defaultFontAspect = 0.7f;
