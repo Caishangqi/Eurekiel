@@ -28,6 +28,30 @@ namespace enigma::core
         return nullptr;
     }
 
+    EngineSubsystem* SubsystemManager::GetSubsystem(const std::type_index& typeId) const
+    {
+        auto it = m_subsystemsByType.find(typeId);
+        if (it != m_subsystemsByType.end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    void SubsystemManager::RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem)
+    {
+        const char* name = subsystem->GetSubsystemName();
+        auto entry = std::make_unique<SubsystemEntry>();
+        
+        // Store type info for type-based lookup
+        std::type_index typeId = std::type_index(typeid(*subsystem));
+        m_subsystemsByType[typeId] = subsystem.get();
+        
+        entry->subsystem = std::move(subsystem);
+        entry->dependencies = GetSubsystemDependencies(name);
+        m_subsystemsByName[name] = std::move(entry);
+    }
+
     void SubsystemManager::InitializeAllSubsystems()
     {
         CreateStartupOrder();

@@ -45,14 +45,23 @@ namespace enigma::core
         // Configuration loading
         void LoadConfiguration(const std::string& configPath, const std::string& modulePath);
 
-        // Subsystem registration and access
-        template<typename T>
-        void RegisterSubsystem(std::unique_ptr<T> subsystem);
-
-        template<typename T>
-        T* GetSubsystem() const;
-
+        // Subsystem registration and access (non-template version)
+        void RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem);
         EngineSubsystem* GetSubsystem(const std::string& name) const;
+        EngineSubsystem* GetSubsystem(const std::type_index& typeId) const;
+
+        // Template convenience methods (inline)
+        template<typename T>
+        void RegisterSubsystem(std::unique_ptr<T> subsystem) {
+            static_assert(std::is_base_of_v<EngineSubsystem, T>, "T must derive from EngineSubsystem");
+            RegisterSubsystem(std::unique_ptr<EngineSubsystem>(subsystem.release()));
+        }
+
+        template<typename T>
+        T* GetSubsystem() const {
+            auto* subsystem = GetSubsystem(std::type_index(typeid(T)));
+            return static_cast<T*>(subsystem);
+        }
 
         // Lifecycle management
         void InitializeAllSubsystems();  // First phase: Initialize subsystems that need early setup
@@ -91,30 +100,4 @@ namespace enigma::core
         std::vector<std::string> GetSubsystemDependencies(const std::string& subsystemName) const;
     };
 
-    // Template implementations
-    template<typename T>
-    void SubsystemManager::RegisterSubsystem(std::unique_ptr<T> subsystem)
-    {
-        static_assert(std::is_base_of_v<EngineSubsystem, T>, "T must derive from EngineSubsystem");
-        
-        const char* name = subsystem->GetSubsystemName();
-        auto entry = std::make_unique<SubsystemEntry>();
-        entry->subsystem = std::move(subsystem);
-        entry->dependencies = GetSubsystemDependencies(name);
-
-        // Store both by type and by name
-        m_subsystemsByType[std::type_index(typeid(T))] = entry->subsystem.get();
-        m_subsystemsByName[name] = std::move(entry);
-    }
-
-    template<typename T>
-    T* SubsystemManager::GetSubsystem() const
-    {
-        auto it = m_subsystemsByType.find(std::type_index(typeid(T)));
-        if (it != m_subsystemsByType.end())
-        {
-            return static_cast<T*>(it->second);
-        }
-        return nullptr;
-    }
 }
