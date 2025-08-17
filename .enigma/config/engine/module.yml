@@ -1,5 +1,23 @@
 moduleConfig:
   logger:
+    dependencies:
     globalLogLevel: INFO
     enableFileLogging: true
     logFilePath: logs
+  console:
+    dependencies:
+      - renderer
+    defaultFontName: CaiziiFixedFont
+    fontPath: .enigma/data/Fonts/
+    defaultFontAspect: 0.7
+    maxLinesDisplay: 40.5
+    maxCommandHistory: 128
+    startOpen: false
+  audio:
+    dependencies:
+      - resource
+    enableResourceIntegration: true
+  resource:
+    dependencies:
+    baseAssetPath: .enigma/assets
+    
