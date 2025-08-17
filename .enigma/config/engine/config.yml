@@ -1,0 +1,9 @@
+﻿engine:
+  modules:
+    - logger
+    - console
+    - renderer
+    - input
+    - audio
+    - network
+    - resource
