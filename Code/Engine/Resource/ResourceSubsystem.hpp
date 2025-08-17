@@ -2,6 +2,7 @@
 #include "ResourceCommon.hpp"
 #include "Provider/ResourceProvider.hpp"
 #include "Loader/ResourceLoader.hpp"
+#include "../Core/SubsystemManager.hpp"
 #include <mutex>
 #include <shared_mutex>
 #include <future>
@@ -126,11 +127,11 @@ namespace enigma::resource
  * This class provides an abstraction over the raw file system operations, enabling applications
  * to focus on high-level resource management without dealing with low-level details.
  */
-    class ResourceSubsystem
+    class ResourceSubsystem : public enigma::core::EngineSubsystem
     {
     public:
         explicit ResourceSubsystem(ResourceConfig& config);
-        ~ResourceSubsystem();
+        ~ResourceSubsystem() override;
 
         // Disable copy and move
         ResourceSubsystem(const ResourceSubsystem&)            = delete;
@@ -138,10 +139,14 @@ namespace enigma::resource
         ResourceSubsystem(ResourceSubsystem&&)                 = delete;
         ResourceSubsystem& operator=(ResourceSubsystem&&)      = delete;
 
-        /// Lifecycle Management 
-        void Startup(); // Initialize the resource system
-        void Shutdown(); // Clean up all resources and threads
-        void Update(); // Update per frame (hot reload, async loading, etc.)
+        // EngineSubsystem interface
+        DECLARE_SUBSYSTEM(ResourceSubsystem, "resource", 100);
+        void Startup() override;
+        void Shutdown() override;
+        bool RequiresGameLoop() const override { return false; }
+
+        /// Update for resource management (hot reload, async loading, etc.)
+        void Update(); // Called manually when needed, not part of game loop
 
         /// Configuration
         ResourceConfig&       GetConfig() { return m_config; }
