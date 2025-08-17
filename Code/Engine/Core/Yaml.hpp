@@ -4,6 +4,7 @@
 #include <ThirdParty/yaml-cpp/yaml.h>
 #pragma warning(pop)
 
+// Link with DLL import libraries
 #if defined(_DEBUG)
 #pragma comment(lib, "ThirdParty/yaml-cpp/yaml-cppd.lib")
 #else
