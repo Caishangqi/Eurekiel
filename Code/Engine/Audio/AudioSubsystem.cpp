@@ -2,6 +2,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
+#include "Engine/Core/Engine.hpp"
 
 //-----------------------------------------------------------------------------------------------
 // To disable audio entirely (and remove requirement for fmod.dll / fmod64.dll) for any game,
@@ -55,8 +56,9 @@ AudioSubsystem::~AudioSubsystem()
 
 
 //------------------------------------------------------------------------------------------------
-void AudioSubsystem::Startup()
+void AudioSubsystem::Initialize()
 {
+    // Phase 1: Early initialization - Create FMOD system and register SoundLoader
     FMOD_RESULT result;
     result = System_Create(&m_fmodSystem);
     ValidateResult(result);
@@ -64,13 +66,28 @@ void AudioSubsystem::Startup()
     result = m_fmodSystem->init(512, FMOD_INIT_3D_RIGHTHANDED, nullptr);
     ValidateResult(result);
 
-    // Register SoundLoader with ResourceSubsystem if available
-    if (m_audioConfig.enableResourceIntegration && m_audioConfig.resourceSubsystem)
+    // Get ResourceSubsystem dependency from Engine and register SoundLoader
+    if (m_audioConfig.enableResourceIntegration)
     {
-        m_resourceSubsystem = m_audioConfig.resourceSubsystem;
-        auto soundLoader    = std::make_shared<enigma::resource::SoundLoader>(this);
-        m_resourceSubsystem->RegisterLoader(soundLoader);
+        auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+        if (resourceSubsystem)
+        {
+            m_resourceSubsystem = resourceSubsystem;
+            auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
+            m_resourceSubsystem->RegisterLoader(soundLoader);
+        }
+        else
+        {
+            ERROR_RECOVERABLE("AudioSubsystem: ResourceSubsystem dependency not found!")
+        }
     }
+}
+
+//------------------------------------------------------------------------------------------------
+void AudioSubsystem::Startup()
+{
+    // Phase 2: Main startup - FMOD is already initialized, just continue with any additional setup
+    // Currently no additional setup needed beyond Initialize phase
 }
 
 
@@ -121,7 +138,7 @@ SoundID AudioSubsystem::CreateOrGetSound(const std::string& soundFilePath, FMOD_
 
 //-----------------------------------------------------------------------------------------------
 SoundPlaybackID AudioSubsystem::StartSound(SoundID soundID, bool isLooped, float volume, float balance, float speed,
-                                        bool    isPaused)
+                                           bool    isPaused)
 {
     size_t numSounds = m_registeredSounds.size();
     if (soundID < 0 || soundID >= numSounds)

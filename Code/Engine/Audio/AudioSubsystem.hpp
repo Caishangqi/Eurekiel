@@ -1,8 +1,8 @@
 #pragma once
 
-
 //-----------------------------------------------------------------------------------------------
 #include "ThirdParty/fmod/fmod.h"
+#include "../Core/SubsystemManager.hpp"
 
 #include <string>
 #include <vector>
@@ -13,7 +13,6 @@
 #ifdef PlaySound
 #undef PlaySound
 #endif
-
 
 struct Vec3;
 
@@ -47,17 +46,22 @@ struct AudioSystemConfig
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-class AudioSubsystem
+class AudioSubsystem : public enigma::core::EngineSubsystem
 {
 public:
     AudioSubsystem();
     AudioSubsystem(const AudioSystemConfig& audio_config);
-    virtual ~AudioSubsystem();
+    ~AudioSubsystem() override;
 
-    void         Startup();
-    void         Shutdown();
-    virtual void BeginFrame();
-    virtual void EndFrame();
+    // EngineSubsystem interface
+    DECLARE_SUBSYSTEM(AudioSubsystem, "audio", 50)
+
+    void Initialize() override; // Early initialization: FMOD setup + SoundLoader registration
+    void Startup() override; // Main startup: Continue with existing startup logic
+    void Shutdown() override;
+    void BeginFrame() override;
+    void EndFrame() override;
+    bool RequiresInitialize() const override { return true; } // AudioSubsystem needs early init
 
     // Legacy API (file path based)
     virtual SoundID         CreateOrGetSound(const std::string& soundFilePath, FMOD_INITFLAGS flags = FMOD_3D);
