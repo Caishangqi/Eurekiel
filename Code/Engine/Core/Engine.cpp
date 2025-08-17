@@ -71,22 +71,19 @@ namespace enigma::core
         m_subsystemManager->EndFrameAllSubsystems();
     }
 
-    // Template method implementations
-    template <typename T>
-    T* Engine::GetSubsystem() const
+    // Non-template subsystem access
+    EngineSubsystem* Engine::GetSubsystem(const std::string& name) const
     {
-        return m_subsystemManager->GetSubsystem<T>();
+        return m_subsystemManager->GetSubsystem(name);
     }
 
-    template <typename T>
-    void Engine::RegisterSubsystem(std::unique_ptr<T> subsystem)
+    EngineSubsystem* Engine::GetSubsystem(const std::type_index& typeId) const
+    {
+        return m_subsystemManager->GetSubsystem(typeId);
+    }
+
+    void Engine::RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem)
     {
         m_subsystemManager->RegisterSubsystem(std::move(subsystem));
     }
-
-    // Explicit instantiations for commonly used types
-    template AudioSubsystem*                      Engine::GetSubsystem<AudioSubsystem>() const;
-    template enigma::resource::ResourceSubsystem* Engine::GetSubsystem<enigma::resource::ResourceSubsystem>() const;
-    template void                                 Engine::RegisterSubsystem<AudioSubsystem>(std::unique_ptr<AudioSubsystem>);
-    template void                                 Engine::RegisterSubsystem<enigma::resource::ResourceSubsystem>(std::unique_ptr<enigma::resource::ResourceSubsystem>);
 }

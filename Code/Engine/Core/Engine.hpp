@@ -1,9 +1,12 @@
 ﻿#pragma once
 #include <memory>
+#include <string>
+#include <typeindex>
 
 namespace enigma::core
 {
     class SubsystemManager;
+    class EngineSubsystem;
 
     class Engine
     {
@@ -12,13 +15,19 @@ namespace enigma::core
         static void    CreateInstance();
         static void    DestroyInstance();
 
-        // Subsystem access
+        // Subsystem access (non-template version)
+        EngineSubsystem* GetSubsystem(const std::string& name) const;
+        EngineSubsystem* GetSubsystem(const std::type_index& typeId) const;
+        
+        // Template convenience methods (inline)
         template <typename T>
-        T* GetSubsystem() const;
+        T* GetSubsystem() const {
+            auto* subsystem = GetSubsystem(std::type_index(typeid(T)));
+            return static_cast<T*>(subsystem);
+        }
 
-        // Subsystem registration
-        template <typename T>
-        void RegisterSubsystem(std::unique_ptr<T> subsystem);
+        // Subsystem registration (non-template version)
+        void RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem);
 
         // Life cycle
         void Startup();
