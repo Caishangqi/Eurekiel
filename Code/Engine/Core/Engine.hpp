@@ -7,6 +7,7 @@ namespace enigma::core
 {
     class SubsystemManager;
     class EngineSubsystem;
+    class LoggerSubsystem;
 
     class Engine
     {
@@ -37,6 +38,9 @@ namespace enigma::core
         void BeginFrame();
         void Update(float deltaTime);
         void EndFrame();
+
+        // Convenience accessors for commonly used subsystems
+        LoggerSubsystem* GetLogger() const;
 
     private:
         Engine();

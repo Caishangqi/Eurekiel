@@ -3,6 +3,7 @@
 #include "ErrorWarningAssert.hpp"
 #include "../Audio/AudioSubsystem.hpp"
 #include "../Resource/ResourceSubsystem.hpp"
+#include "Logger/LoggerSubsystem.hpp"
 
 namespace enigma::core
 {
@@ -85,5 +86,11 @@ namespace enigma::core
     void Engine::RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem)
     {
         m_subsystemManager->RegisterSubsystem(std::move(subsystem));
+    }
+
+    // Convenience accessors
+    LoggerSubsystem* Engine::GetLogger() const
+    {
+        return GetSubsystem<LoggerSubsystem>();
     }
 }
