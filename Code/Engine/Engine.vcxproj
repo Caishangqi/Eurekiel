@@ -192,6 +192,12 @@
         <ClCompile Include="Core\Time.cpp"/>
         <ClCompile Include="Core\Timer.cpp"/>
         <ClCompile Include="Core\VertexUtils.cpp"/>
+        <ClCompile Include="Core\Logger\LogLevel.cpp" />
+        <ClCompile Include="Core\Logger\LogMessage.cpp" />
+        <ClCompile Include="Core\Logger\LoggerSubsystem.cpp" />
+        <ClCompile Include="Core\Logger\Appenders\ConsoleAppender.cpp" />
+        <ClCompile Include="Core\Logger\Appenders\DevConsoleAppender.cpp" />
+        <ClCompile Include="Core\Logger\Appenders\FileAppender.cpp" />
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
         <ClCompile Include="Core\XmlUtils.cpp"/>
         <ClCompile Include="Core\Yaml.cpp" />
@@ -295,6 +301,15 @@
         <ClInclude Include="Core\Time.hpp" />
         <ClInclude Include="Core\Timer.hpp" />
         <ClInclude Include="Core\VertexUtils.hpp" />
+        <ClInclude Include="Core\Logger\Logger.hpp" />
+        <ClInclude Include="Core\Logger\LoggerAPI.hpp" />
+        <ClInclude Include="Core\Logger\LogLevel.hpp" />
+        <ClInclude Include="Core\Logger\LogMessage.hpp" />
+        <ClInclude Include="Core\Logger\LoggerSubsystem.hpp" />
+        <ClInclude Include="Core\Logger\Appenders\ILogAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appenders\ConsoleAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appenders\DevConsoleAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appenders\FileAppender.hpp" />
         <ClInclude Include="Core\Vertex_PCU.hpp" />
         <ClInclude Include="Core\XmlUtils.hpp" />
         <ClInclude Include="Core\Yaml.hpp" />
@@ -384,7 +399,7 @@
         <Content Include="..\ThirdParty\fmod\fmod_vc.lib" />
     </ItemGroup>
     <ItemGroup>
-      <Folder Include="Core\Logger\" />
+      <Folder Include="Core\Logger\Appenders\" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
