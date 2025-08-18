@@ -3,7 +3,23 @@ moduleConfig:
     dependencies:
     globalLogLevel: INFO
     enableFileLogging: true
-    logFilePath: logs
+    logDirectory: .enigma/logs
+    latestLogFileName: latest.log
+    enableLogRotation: true
+    maxLogFiles: 10
+    enableConsoleLogging: true
+    enableConsoleColors: true
+    enableDevConsoleLogging: true
+    includeTimestamp: true
+    includeThreadId: false
+    includeFrameNumber: true
+    includeCategory: true
+    flushImmediately: false
+    categoryLogLevels:
+      Engine: INFO
+      Renderer: WARN
+      Audio: INFO
+      Game: DEBUG
   console:
     dependencies:
       - renderer
