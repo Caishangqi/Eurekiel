@@ -195,6 +195,7 @@
         <ClCompile Include="Core\Logger\LogLevel.cpp" />
         <ClCompile Include="Core\Logger\LogMessage.cpp" />
         <ClCompile Include="Core\Logger\LoggerSubsystem.cpp" />
+        <ClCompile Include="Core\Logger\LogFileManager.cpp" />
         <ClCompile Include="Core\Logger\Appenders\ConsoleAppender.cpp" />
         <ClCompile Include="Core\Logger\Appenders\DevConsoleAppender.cpp" />
         <ClCompile Include="Core\Logger\Appenders\FileAppender.cpp" />
@@ -306,6 +307,8 @@
         <ClInclude Include="Core\Logger\LogLevel.hpp" />
         <ClInclude Include="Core\Logger\LogMessage.hpp" />
         <ClInclude Include="Core\Logger\LoggerSubsystem.hpp" />
+        <ClInclude Include="Core\Logger\LoggerConfig.hpp" />
+        <ClInclude Include="Core\Logger\LogFileManager.hpp" />
         <ClInclude Include="Core\Logger\Appenders\ILogAppender.hpp" />
         <ClInclude Include="Core\Logger\Appenders\ConsoleAppender.hpp" />
         <ClInclude Include="Core\Logger\Appenders\DevConsoleAppender.hpp" />
