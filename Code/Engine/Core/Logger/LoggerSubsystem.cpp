@@ -1,0 +1,204 @@
+#include "LoggerSubsystem.hpp"
+#include "../Console/DevConsole.hpp"
+#include <stdarg.h>
+#include <stdio.h>
+#include <iostream>
+#include <algorithm>
+
+// Forward declaration for g_theDevConsole (will be properly included later)
+extern DevConsole* g_theDevConsole;
+
+namespace enigma::core
+{
+    void LoggerSubsystem::Startup()
+    {
+        // Initialize with default settings
+        m_globalLogLevel = LogLevel::INFO;
+        m_asyncMode = false; // Start with synchronous mode for Phase 3.1
+        
+        // Don't log during startup to avoid circular dependencies
+        // Startup message will be logged after configuration is complete
+    }
+
+    void LoggerSubsystem::Shutdown()
+    {
+        // Don't log during shutdown to avoid issues with destroyed components
+        
+        // If async mode is active, stop worker thread
+        if (m_asyncMode && m_workerThread.joinable()) {
+            m_shouldStop = true;
+            m_queueCondition.notify_all();
+            m_workerThread.join();
+        }
+        
+        // Flush all appenders
+        Flush();
+        
+        // Clear all appenders
+        RemoveAllAppenders();
+    }
+
+    void LoggerSubsystem::Log(LogLevel level, const std::string& category, const std::string& message)
+    {
+        // Quick level check to avoid unnecessary work
+        if (!ShouldLogMessage(level, category)) {
+            return;
+        }
+
+        // Create log message with current frame number
+        LogMessage logMessage(level, category, message, GetCurrentFrameNumber());
+        
+        // Process based on current mode
+        if (m_asyncMode) {
+            ProcessMessageAsync(logMessage);
+        } else {
+            ProcessMessageSync(logMessage);
+        }
+    }
+
+    void LoggerSubsystem::LogFormatted(LogLevel level, const std::string& category, const char* format, ...)
+    {
+        // Quick level check
+        if (!ShouldLogMessage(level, category)) {
+            return;
+        }
+
+        // Format the message
+        va_list args;
+        va_start(args, format);
+        
+        // First, determine the size needed
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int size = vsnprintf(nullptr, 0, format, args_copy);
+        va_end(args_copy);
+        
+        if (size > 0) {
+            std::string formatted(size + 1, '\0');
+            vsnprintf(&formatted[0], size + 1, format, args);
+            formatted.resize(size); // Remove the null terminator
+            
+            Log(level, category, formatted);
+        }
+        
+        va_end(args);
+    }
+
+    // Convenience methods
+    void LoggerSubsystem::LogTrace(const std::string& category, const std::string& message) {
+        Log(LogLevel::TRACE, category, message);
+    }
+
+    void LoggerSubsystem::LogDebug(const std::string& category, const std::string& message) {
+        Log(LogLevel::DEBUG, category, message);
+    }
+
+    void LoggerSubsystem::LogInfo(const std::string& category, const std::string& message) {
+        Log(LogLevel::INFO, category, message);
+    }
+
+    void LoggerSubsystem::LogWarn(const std::string& category, const std::string& message) {
+        Log(LogLevel::WARNING, category, message);
+    }
+
+    void LoggerSubsystem::LogError(const std::string& category, const std::string& message) {
+        Log(LogLevel::ERROR_, category, message);
+    }
+
+    void LoggerSubsystem::LogFatal(const std::string& category, const std::string& message) {
+        Log(LogLevel::FATAL, category, message);
+    }
+
+    // Appender management
+    void LoggerSubsystem::AddAppender(std::unique_ptr<ILogAppender> appender)
+    {
+        std::lock_guard<std::mutex> lock(m_appendersMutex);
+        m_appenders.push_back(std::move(appender));
+    }
+
+    void LoggerSubsystem::RemoveAllAppenders()
+    {
+        std::lock_guard<std::mutex> lock(m_appendersMutex);
+        m_appenders.clear();
+    }
+
+    // Configuration
+    void LoggerSubsystem::SetGlobalLogLevel(LogLevel level)
+    {
+        std::lock_guard<std::mutex> lock(m_configMutex);
+        m_globalLogLevel = level;
+    }
+
+    void LoggerSubsystem::SetCategoryLogLevel(const std::string& category, LogLevel level)
+    {
+        std::lock_guard<std::mutex> lock(m_configMutex);
+        m_categoryLogLevels[category] = level;
+    }
+
+    LogLevel LoggerSubsystem::GetEffectiveLogLevel(const std::string& category) const
+    {
+        std::lock_guard<std::mutex> lock(m_configMutex);
+        
+        auto it = m_categoryLogLevels.find(category);
+        if (it != m_categoryLogLevels.end()) {
+            return it->second;
+        }
+        
+        return m_globalLogLevel;
+    }
+
+    void LoggerSubsystem::Flush()
+    {
+        std::lock_guard<std::mutex> lock(m_appendersMutex);
+        
+        for (auto& appender : m_appenders) {
+            if (appender && appender->IsEnabled()) {
+                appender->Flush();
+            }
+        }
+    }
+
+    // Private methods
+    void LoggerSubsystem::ProcessMessageSync(const LogMessage& message)
+    {
+        std::lock_guard<std::mutex> lock(m_appendersMutex);
+        
+        for (auto& appender : m_appenders) {
+            if (appender && appender->IsEnabled()) {
+                try {
+                    appender->Write(message);
+                } catch (const std::exception& e) {
+                    // Prevent logging failures from crashing the application
+                    // In a real implementation, we might want to disable the failing appender
+                    std::cerr << "Logger appender failed: " << e.what() << std::endl;
+                }
+            }
+        }
+    }
+
+    void LoggerSubsystem::ProcessMessageAsync(const LogMessage& message)
+    {
+        // Phase 3.4 implementation - for now, fall back to sync
+        ProcessMessageSync(message);
+    }
+
+    void LoggerSubsystem::WorkerThreadFunction()
+    {
+        // Phase 3.4 implementation - placeholder
+    }
+
+    bool LoggerSubsystem::ShouldLogMessage(LogLevel level, const std::string& category) const
+    {
+        LogLevel effectiveLevel = GetEffectiveLogLevel(category);
+        return level >= effectiveLevel;
+    }
+
+    int LoggerSubsystem::GetCurrentFrameNumber() const
+    {
+        // Try to get frame number from DevConsole if available
+        if (g_theDevConsole) {
+            return g_theDevConsole->GetFrameNumber();
+        }
+        return 0;
+    }
+}
