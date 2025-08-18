@@ -2,6 +2,8 @@
 #include "../SubsystemManager.hpp"
 #include "LogLevel.hpp"
 #include "LogMessage.hpp"
+#include "LoggerConfig.hpp"
+#include "LogFileManager.hpp"
 #include "Appenders/ILogAppender.hpp"
 #include <memory>
 #include <vector>
@@ -18,10 +20,16 @@ namespace enigma::core
     public:
         DECLARE_SUBSYSTEM(LoggerSubsystem, "Logger", 100)  // Highest priority
         
+        // Constructors
+        LoggerSubsystem();
+        explicit LoggerSubsystem(const LoggerConfig& config);
+        
         // EngineSubsystem interface
+        void Initialize() override;  // Load configuration
         void Startup() override;
         void Shutdown() override;
         bool RequiresGameLoop() const override { return false; }
+        bool RequiresInitialize() const override { return true; }  // Need early init for config loading
         
         // Main logging interface
         void Log(LogLevel level, const std::string& category, const std::string& message);
@@ -46,6 +54,10 @@ namespace enigma::core
         
         // Thread safety
         void Flush();  // Force process all pending messages
+        
+        // Configuration access
+        const LoggerConfig& GetConfig() const { return m_config; }
+        LogFileManager& GetFileManager() { return *m_fileManager; }
 
     private:
         // Phase 3.1: Synchronous processing
@@ -61,10 +73,20 @@ namespace enigma::core
         // Get current frame number (from DevConsole)
         int GetCurrentFrameNumber() const;
         
+        // Configuration loading
+        void LoadConfigurationFromYaml();
+        LoggerConfig LoadLoggerConfigFromYaml() const;
+        void ApplyConfiguration();
+        void CreateDefaultAppenders();
+        
         // Configuration
-        LogLevel m_globalLogLevel = LogLevel::INFO;
-        std::unordered_map<std::string, LogLevel> m_categoryLogLevels;
+        LoggerConfig m_config;
+        std::unique_ptr<LogFileManager> m_fileManager;
         mutable std::mutex m_configMutex;
+        
+        // Runtime configuration state
+        LogLevel m_globalLogLevel;
+        std::unordered_map<std::string, LogLevel> m_categoryLogLevels;
         
         // Appenders
         std::vector<std::unique_ptr<ILogAppender>> m_appenders;
