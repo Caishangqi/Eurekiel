@@ -10,6 +10,10 @@
 #include <unistd.h>
 #endif
 
+// Include our smart console system
+#include "Engine/Core/Console/ConsoleSubsystem.hpp"
+#include "Engine/Core/EngineCommon.hpp"
+
 namespace enigma::core
 {
     ConsoleAppender::ConsoleAppender(bool enableColors)
@@ -40,13 +44,51 @@ namespace enigma::core
         
         std::string formattedMessage = FormatLogMessage(message);
         
-        if (m_enableColors && SupportsAnsiColors()) {
-            std::cout << GetAnsiColorCode(message.level) 
-                      << formattedMessage 
-                      << GetAnsiResetCode() 
-                      << std::endl;
+        // Try to use our smart console system first
+        if (::g_theConsole && ::g_theConsole->IsInitialized()) {
+            // Use our intelligent output system
+            if (m_enableColors) {
+                // Convert LogLevel to color
+                Rgba8 color = Rgba8::WHITE;
+                switch (message.level) {
+                    case LogLevel::ERROR_: color = Rgba8::RED; break;
+                    case LogLevel::WARNING: color = Rgba8::YELLOW; break;
+                    case LogLevel::INFO: color = Rgba8::WHITE; break;
+                    case LogLevel::DEBUG: color = Rgba8::GRAY; break;
+                    case LogLevel::TRACE: color = Rgba8::GRAY; break;
+                }
+                ::g_theConsole->WriteLineColored(formattedMessage, color);
+            } else {
+                ::g_theConsole->WriteLine(formattedMessage, message.level);
+            }
         } else {
-            std::cout << formattedMessage << std::endl;
+            // Fallback to standard output with intelligent detection
+#ifdef _WIN32
+            // In Debug mode with debugger, use OutputDebugString for IDE Console
+            if (IsDebuggerPresent()) {
+                OutputDebugStringA((formattedMessage + "\r\n").c_str());
+            } else {
+                // Use standard cout
+                if (m_enableColors && SupportsAnsiColors()) {
+                    std::cout << GetAnsiColorCode(message.level) 
+                              << formattedMessage 
+                              << GetAnsiResetCode() 
+                              << std::endl;
+                } else {
+                    std::cout << formattedMessage << std::endl;
+                }
+            }
+#else
+            // Non-Windows platforms use standard cout
+            if (m_enableColors && SupportsAnsiColors()) {
+                std::cout << GetAnsiColorCode(message.level) 
+                          << formattedMessage 
+                          << GetAnsiResetCode() 
+                          << std::endl;
+            } else {
+                std::cout << formattedMessage << std::endl;
+            }
+#endif
         }
     }
 
