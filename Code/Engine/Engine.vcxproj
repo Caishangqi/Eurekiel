@@ -199,6 +199,12 @@
         <ClCompile Include="Core\Logger\Appenders\ConsoleAppender.cpp" />
         <ClCompile Include="Core\Logger\Appenders\DevConsoleAppender.cpp" />
         <ClCompile Include="Core\Logger\Appenders\FileAppender.cpp" />
+        <ClCompile Include="Core\Console\ConsoleConfig.cpp" />
+        <ClCompile Include="Core\Console\ConsoleSubsystem.cpp" />
+        <ClCompile Include="Core\Console\ExternalConsole.cpp" />
+        <ClCompile Include="Core\Console\AnsiColorManager.cpp" />
+        <ClCompile Include="Core\Console\ConsoleCommandManager.cpp" />
+        <ClCompile Include="Core\Console\Platform\WindowsConsole.cpp" />
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
         <ClCompile Include="Core\XmlUtils.cpp"/>
         <ClCompile Include="Core\Yaml.cpp" />
@@ -313,6 +319,13 @@
         <ClInclude Include="Core\Logger\Appenders\ConsoleAppender.hpp" />
         <ClInclude Include="Core\Logger\Appenders\DevConsoleAppender.hpp" />
         <ClInclude Include="Core\Logger\Appenders\FileAppender.hpp" />
+        <ClInclude Include="Core\Console\ConsoleMessage.hpp" />
+        <ClInclude Include="Core\Console\ConsoleConfig.hpp" />
+        <ClInclude Include="Core\Console\ConsoleSubsystem.hpp" />
+        <ClInclude Include="Core\Console\ExternalConsole.hpp" />
+        <ClInclude Include="Core\Console\AnsiColorManager.hpp" />
+        <ClInclude Include="Core\Console\ConsoleCommandManager.hpp" />
+        <ClInclude Include="Core\Console\Platform\WindowsConsole.hpp" />
         <ClInclude Include="Core\Vertex_PCU.hpp" />
         <ClInclude Include="Core\XmlUtils.hpp" />
         <ClInclude Include="Core\Yaml.hpp" />
