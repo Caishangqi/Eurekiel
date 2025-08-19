@@ -8,6 +8,7 @@ namespace enigma::core
     class SubsystemManager;
     class EngineSubsystem;
     class LoggerSubsystem;
+    class ConsoleSubsystem;
 
     class Engine
     {
@@ -41,6 +42,7 @@ namespace enigma::core
 
         // Convenience accessors for commonly used subsystems
         LoggerSubsystem* GetLogger() const;
+        ConsoleSubsystem* GetConsole() const;
 
     private:
         Engine();

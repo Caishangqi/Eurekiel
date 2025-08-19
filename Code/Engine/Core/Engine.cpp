@@ -4,6 +4,7 @@
 #include "../Audio/AudioSubsystem.hpp"
 #include "../Resource/ResourceSubsystem.hpp"
 #include "Logger/LoggerSubsystem.hpp"
+#include "Console/ConsoleSubsystem.hpp"
 
 namespace enigma::core
 {
@@ -92,5 +93,10 @@ namespace enigma::core
     LoggerSubsystem* Engine::GetLogger() const
     {
         return GetSubsystem<LoggerSubsystem>();
+    }
+
+    ConsoleSubsystem* Engine::GetConsole() const
+    {
+        return GetSubsystem<ConsoleSubsystem>();
     }
 }
