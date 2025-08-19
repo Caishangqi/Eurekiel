@@ -451,6 +451,15 @@ void DevConsole::AddLine(const Rgba8& color, const std::string& text)
         devConsoleLine.m_frameNumberPrinted = m_frameNumber;
         // TODO: Add m_timePrinted
         m_lines.push_back(devConsoleLine);
+        
+        // Fire event for External Console to receive DevConsole output
+        EventArgs args;
+        args.SetValue("Text", line);
+        args.SetValue("ColorR", std::to_string(color.r));
+        args.SetValue("ColorG", std::to_string(color.g));
+        args.SetValue("ColorB", std::to_string(color.b));
+        args.SetValue("ColorA", std::to_string(color.a));
+        FireEvent("DevConsoleOutput", args);
     }
 }
 
