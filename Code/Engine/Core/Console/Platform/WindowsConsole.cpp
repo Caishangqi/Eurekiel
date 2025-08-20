@@ -551,6 +551,18 @@ namespace enigma::core {
                     // Send backspace event to ConsoleSubsystem  
                     NamedStrings args;
                     FireEvent("ConsoleDirectBackspace", args);
+                } else if (keyEvent.wVirtualKeyCode == VK_UP) {
+                    // Send up arrow event for history navigation
+                    NamedStrings args;
+                    FireEvent("ConsoleDirectUpArrow", args);
+                } else if (keyEvent.wVirtualKeyCode == VK_DOWN) {
+                    // Send down arrow event for history navigation
+                    NamedStrings args;
+                    FireEvent("ConsoleDirectDownArrow", args);
+                } else if (keyEvent.wVirtualKeyCode == 'V' && (keyEvent.dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))) {
+                    // Send paste event (Ctrl+V)
+                    NamedStrings args;
+                    FireEvent("ConsoleDirectPaste", args);
                 } else if (keyEvent.uChar.AsciiChar >= 32 && keyEvent.uChar.AsciiChar <= 126) {
                     // Send character event to ConsoleSubsystem
                     NamedStrings args;
