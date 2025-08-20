@@ -47,6 +47,9 @@ namespace enigma::core {
         static bool Event_ConsoleDirectChar(EventArgs& args);
         static bool Event_ConsoleDirectEnter(EventArgs& args);
         static bool Event_ConsoleDirectBackspace(EventArgs& args);
+        static bool Event_ConsoleDirectUpArrow(EventArgs& args);
+        static bool Event_ConsoleDirectDownArrow(EventArgs& args);
+        static bool Event_ConsoleDirectPaste(EventArgs& args);
         
         // DevConsole output mirroring event
         static bool Event_DevConsoleOutput(EventArgs& args);
@@ -69,6 +72,9 @@ namespace enigma::core {
         void ProcessCharInput(unsigned char character);
         void HandleBackspace();
         void HandleEnter();
+        void HandleUpArrow();
+        void HandleDownArrow();
+        void HandlePaste();
         void HandleEscape();
         void HandleArrowKeys(unsigned char keyCode);
         
@@ -87,6 +93,10 @@ namespace enigma::core {
         // Input state for forwarding to DevConsole
         std::string m_currentInput;
         int m_cursorPosition = 0;
+        
+        // History management (similar to DevConsole)
+        std::vector<std::string> m_commandHistory;
+        int m_historyIndex = -1;
     };
 
 } // namespace enigma::core

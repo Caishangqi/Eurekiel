@@ -299,6 +299,39 @@ namespace enigma::core {
         
         return false; // Don't consume - let other systems handle it too
     }
+    
+    bool ConsoleSubsystem::Event_ConsoleDirectUpArrow(EventArgs& args) {
+        (void)args; // Suppress unused parameter warning
+        auto* console = ::g_theConsole;
+        if (!console || !console->IsVisible()) {
+            return false;
+        }
+        
+        console->HandleUpArrow();
+        return true;
+    }
+    
+    bool ConsoleSubsystem::Event_ConsoleDirectDownArrow(EventArgs& args) {
+        (void)args; // Suppress unused parameter warning
+        auto* console = ::g_theConsole;
+        if (!console || !console->IsVisible()) {
+            return false;
+        }
+        
+        console->HandleDownArrow();
+        return true;
+    }
+    
+    bool ConsoleSubsystem::Event_ConsoleDirectPaste(EventArgs& args) {
+        (void)args; // Suppress unused parameter warning
+        auto* console = ::g_theConsole;
+        if (!console || !console->IsVisible()) {
+            return false;
+        }
+        
+        console->HandlePaste();
+        return true;
+    }
 
 
     void ConsoleSubsystem::SetVisible(bool visible) {
@@ -348,6 +381,9 @@ namespace enigma::core {
         SubscribeEventCallbackFunction("ConsoleDirectChar", Event_ConsoleDirectChar);
         SubscribeEventCallbackFunction("ConsoleDirectEnter", Event_ConsoleDirectEnter);
         SubscribeEventCallbackFunction("ConsoleDirectBackspace", Event_ConsoleDirectBackspace);
+        SubscribeEventCallbackFunction("ConsoleDirectUpArrow", Event_ConsoleDirectUpArrow);
+        SubscribeEventCallbackFunction("ConsoleDirectDownArrow", Event_ConsoleDirectDownArrow);
+        SubscribeEventCallbackFunction("ConsoleDirectPaste", Event_ConsoleDirectPaste);
         
         // Register DevConsole output event for mirroring output to External Console
         SubscribeEventCallbackFunction("DevConsoleOutput", Event_DevConsoleOutput);
@@ -363,6 +399,9 @@ namespace enigma::core {
         UnsubscribeEventCallbackFunction("ConsoleDirectChar", Event_ConsoleDirectChar);
         UnsubscribeEventCallbackFunction("ConsoleDirectEnter", Event_ConsoleDirectEnter);
         UnsubscribeEventCallbackFunction("ConsoleDirectBackspace", Event_ConsoleDirectBackspace);
+        UnsubscribeEventCallbackFunction("ConsoleDirectUpArrow", Event_ConsoleDirectUpArrow);
+        UnsubscribeEventCallbackFunction("ConsoleDirectDownArrow", Event_ConsoleDirectDownArrow);
+        UnsubscribeEventCallbackFunction("ConsoleDirectPaste", Event_ConsoleDirectPaste);
         
         // Unregister DevConsole output event
         UnsubscribeEventCallbackFunction("DevConsoleOutput", Event_DevConsoleOutput);
@@ -391,12 +430,20 @@ namespace enigma::core {
             // Echo the command in external console
             WriteLineColored("> " + m_currentInput, Rgba8::CYAN);
             
+            // Add to history
+            m_commandHistory.push_back(m_currentInput);
+            if (m_commandHistory.size() > 1000) { // Limit history size
+                m_commandHistory.erase(m_commandHistory.begin());
+            }
+            
             // Forward command to DevConsole for execution
             ForwardCommandToDevConsole(m_currentInput);
         }
         
+        // Reset input state
         m_currentInput.clear();
         m_cursorPosition = 0;
+        m_historyIndex = -1; // Reset history navigation
         UpdateInputDisplay();
     }
 
@@ -424,9 +471,78 @@ namespace enigma::core {
                 
             case KEYCODE_UPARROW:
             case KEYCODE_DOWNARROW:
-                // History is handled by DevConsole, not here
+                // History is handled by dedicated methods
                 break;
         }
+    }
+    
+    void ConsoleSubsystem::HandleUpArrow() {
+        if (m_commandHistory.empty()) {
+            return;
+        }
+        
+        if (m_historyIndex >= -1) {
+            m_historyIndex++;
+            // Clamp to maximum index
+            if (m_historyIndex > static_cast<int>(m_commandHistory.size()) - 1) {
+                m_historyIndex = static_cast<int>(m_commandHistory.size()) - 1;
+            }
+        }
+        
+        if (m_historyIndex < static_cast<int>(m_commandHistory.size())) {
+            // Get command from history (reverse order, most recent first)
+            m_currentInput = m_commandHistory[m_commandHistory.size() - m_historyIndex - 1];
+            m_cursorPosition = static_cast<int>(m_currentInput.length());
+            UpdateInputDisplay();
+        }
+    }
+    
+    void ConsoleSubsystem::HandleDownArrow() {
+        if (m_commandHistory.empty()) {
+            return;
+        }
+        
+        m_historyIndex--;
+        if (m_historyIndex < 0) {
+            m_historyIndex = -1;
+            m_currentInput.clear();
+            m_cursorPosition = 0;
+        } else if (m_historyIndex < static_cast<int>(m_commandHistory.size())) {
+            // Get command from history (reverse order, most recent first)
+            m_currentInput = m_commandHistory[m_commandHistory.size() - m_historyIndex - 1];
+            m_cursorPosition = static_cast<int>(m_currentInput.length());
+        }
+        
+        UpdateInputDisplay();
+    }
+    
+    void ConsoleSubsystem::HandlePaste() {
+        // Use Windows clipboard API to get clipboard text
+        if (!OpenClipboard(nullptr)) {
+            return;
+        }
+        
+        HANDLE hData = GetClipboardData(CF_TEXT);
+        if (hData == nullptr) {
+            CloseClipboard();
+            return;
+        }
+        
+        char* pszText = static_cast<char*>(GlobalLock(hData));
+        if (pszText == nullptr) {
+            CloseClipboard();
+            return;
+        }
+        
+        // Insert clipboard text at cursor position
+        std::string clipboardText(pszText);
+        m_currentInput.insert(m_cursorPosition, clipboardText);
+        m_cursorPosition += static_cast<int>(clipboardText.length());
+        
+        GlobalUnlock(hData);
+        CloseClipboard();
+        
+        UpdateInputDisplay();
     }
 
 
