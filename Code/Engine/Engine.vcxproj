@@ -248,6 +248,8 @@
         <ClCompile Include="Renderer\Camera.cpp"/>
         <ClCompile Include="Renderer\ConstantBuffer.cpp"/>
         <ClCompile Include="Renderer\DebugRenderSystem.cpp" />
+        <ClCompile Include="Renderer\Enigma\EnigmaRenderer.cpp" />
+        <ClCompile Include="Renderer\Enigma\RendererSubsystem.cpp" />
         <ClCompile Include="Renderer\GraphicsError.cpp" />
         <ClCompile Include="Renderer\IndexBuffer.cpp" />
         <ClCompile Include="Renderer\IRenderer.cpp" />
@@ -371,6 +373,8 @@
         <ClInclude Include="Renderer\ConstantBuffer.hpp" />
         <ClInclude Include="Renderer\DebugRenderSystem.hpp" />
         <ClInclude Include="Renderer\DefaultShader.hpp" />
+        <ClInclude Include="Renderer\Enigma\EnigmaRenderer.hpp" />
+        <ClInclude Include="Renderer\Enigma\RendererSubsystem.hpp" />
         <ClInclude Include="Renderer\GraphicsError.hpp" />
         <ClInclude Include="Renderer\IndexBuffer.hpp" />
         <ClInclude Include="Renderer\IRenderer.hpp" />
