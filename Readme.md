@@ -47,7 +47,8 @@ TBD
 | `enigma::audio`        | Audio subsystem that implement FMOD API wrapper functions and encapsulation |      stable       |
 | `enigma::input`        |                 The input subsystem that use the XInput API                 |      stable       |
 | `enigma::math`         |                 The Engine math datastructures and geometry                 | unstable/refactor |
-| `enigma::render::dx11` |     The DirectX 11 Renderer API that implements the rendering pipeline      |       beta        |
+| `enigma::graphic`      |                  The Engine voxel graphic pipeline and API                  | unstable/refactor |
+| `enigma::render::dx11` |     The DirectX 11 Renderer API that implements the rendering pipeline      |      stable       |
 | `enigma::render::dx12` |     The DirectX 12 Renderer API that implements the rendering pipeline      |       beta        |
 | `enigma::resource`     |              The Namespace resource register and cache system               |       alpha       |
 | `enigma::window`       |          The Native window API that with wrapper and encapsulation          |      stable       |
