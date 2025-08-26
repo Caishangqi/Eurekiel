@@ -529,7 +529,7 @@ Shader* DX11Renderer::CreateShaderFromSource(const char* name, const char* shade
     {
         shader->m_vertexShader->Release();
         delete shader;
-        ERROR_AND_DIE(Stringf("Failed to compile pixel shader '%s' with entry point '%s'", name, psEntryPoint));
+        ERROR_AND_DIE(Stringf("Failed to compile pixel shader '%s' with entry point '%s'", name, psEntryPoint))
     }
 
     // Pixel Shader
