@@ -2,9 +2,9 @@
 #include "../Console/DevConsole.hpp"
 #include "../Engine.hpp"
 #include "../Yaml.hpp"
-#include "Appenders/ConsoleAppender.hpp"
-#include "Appenders/DevConsoleAppender.hpp"
-#include "Appenders/FileAppender.hpp"
+#include "Appender/ConsoleAppender.hpp"
+#include "Appender/DevConsoleAppender.hpp"
+#include "Appender/FileAppender.hpp"
 #include <stdarg.h>
 #include <stdio.h>
 #include <iostream>

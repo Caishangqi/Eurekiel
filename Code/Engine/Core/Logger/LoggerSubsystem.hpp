@@ -4,7 +4,7 @@
 #include "LogMessage.hpp"
 #include "LoggerConfig.hpp"
 #include "LogFileManager.hpp"
-#include "Appenders/ILogAppender.hpp"
+#include "Appender/ILogAppender.hpp"
 #include <memory>
 #include <vector>
 #include <unordered_map>

@@ -4,10 +4,10 @@
 #include "LoggerSubsystem.hpp"
 #include "LogLevel.hpp"
 #include "LogMessage.hpp"
-#include "Appenders/ILogAppender.hpp"
-#include "Appenders/ConsoleAppender.hpp"
-#include "Appenders/DevConsoleAppender.hpp"
-#include "Appenders/FileAppender.hpp"
+#include "Appender/ILogAppender.hpp"
+#include "Appender/ConsoleAppender.hpp"
+#include "Appender/DevConsoleAppender.hpp"
+#include "Appender/FileAppender.hpp"
 
 // Include the new elegant API
 #include "LoggerAPI.hpp"
