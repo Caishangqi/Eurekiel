@@ -375,6 +375,10 @@
         <ClInclude Include="Math\ZCylinder.hpp" />
         <ClInclude Include="Network\NetworkCommon.hpp" />
         <ClInclude Include="Network\NetworkSubsystem.hpp" />
+        <ClInclude Include="Register\IRegistrable.hpp" />
+        <ClInclude Include="Register\IRegistry.hpp" />
+        <ClInclude Include="Register\RegistrationKey.hpp" />
+        <ClInclude Include="Register\Registry.hpp" />
         <ClInclude Include="Register\RegisterSubsystem.hpp" />
         <ClInclude Include="Renderer\API\DirectX12\DescriptorAllocator.hpp" />
         <ClInclude Include="Renderer\API\DX11Renderer.hpp" />
