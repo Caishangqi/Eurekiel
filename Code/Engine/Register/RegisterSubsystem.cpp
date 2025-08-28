@@ -2,6 +2,7 @@
 #include "../Core/EventSystem.hpp"
 #include "../Core/Logger/LoggerSubsystem.hpp"
 #include "../Core/NamedStrings.hpp"
+#include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::core
 {
@@ -11,7 +12,7 @@ namespace enigma::core
         {
             return false;
         }
-        
+
         for (const auto& ns : defaultNamespaces)
         {
             if (ns.name.empty())
@@ -19,7 +20,7 @@ namespace enigma::core
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -59,7 +60,7 @@ namespace enigma::core
         InitializeDefaultNamespaces();
 
         m_initialized = true;
-        
+
         // Log initialization
         auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
         if (logger)
@@ -86,7 +87,7 @@ namespace enigma::core
         ClearAllRegistries();
 
         m_initialized = false;
-        
+
         // Log shutdown
         auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
         if (logger)
@@ -98,54 +99,54 @@ namespace enigma::core
     IRegistry* RegisterSubsystem::GetRegistry(const std::string& typeName)
     {
         std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
-        auto it = m_registriesByName.find(typeName);
+        auto                                it = m_registriesByName.find(typeName);
         return it != m_registriesByName.end() ? it->second : nullptr;
     }
 
     const IRegistry* RegisterSubsystem::GetRegistry(const std::string& typeName) const
     {
         std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
-        auto it = m_registriesByName.find(typeName);
+        auto                                it = m_registriesByName.find(typeName);
         return it != m_registriesByName.end() ? it->second : nullptr;
     }
 
     std::vector<std::string> RegisterSubsystem::GetAllRegistryTypes() const
     {
         std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
-        std::vector<std::string> types;
+        std::vector<std::string>            types;
         types.reserve(m_registriesByName.size());
-        
+
         for (const auto& pair : m_registriesByName)
         {
             types.push_back(pair.first);
         }
-        
+
         return types;
     }
 
     size_t RegisterSubsystem::GetTotalRegistrations() const
     {
         std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
-        size_t total = 0;
-        
+        size_t                              total = 0;
+
         for (const auto& pair : m_registriesByType)
         {
             total += pair.second->GetRegistrationCount();
         }
-        
+
         return total;
     }
 
     void RegisterSubsystem::ClearAllRegistries()
     {
         std::unique_lock<std::shared_mutex> lock(m_registriesMutex);
-        
+
         // Clear all registrations in each registry
         for (auto& pair : m_registriesByType)
         {
             pair.second->Clear();
         }
-        
+
         // Clear the registry mappings
         m_registriesByType.clear();
         m_registriesByName.clear();
@@ -155,7 +156,7 @@ namespace enigma::core
     {
         // Default namespaces are primarily for organizational purposes
         // The actual namespace handling is done at the registration level
-        
+
         auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
         if (logger && m_config.enableNamespaces)
         {
@@ -168,6 +169,8 @@ namespace enigma::core
 
     void RegisterSubsystem::FireRegistrationEvent(const std::string& eventType, const RegistrationKey& key, const std::string& typeName)
     {
+        UNUSED(key)
+        UNUSED(typeName)
         if (!m_config.enableEvents)
         {
             return;
@@ -175,25 +178,29 @@ namespace enigma::core
 
         // Create event arguments
         EventArgs args;
-        
+
         // Use the event system's NamedStrings functionality
         // Note: We need to check how NamedStrings works in the engine
         // For now, we'll fire a simple event
-        
+
         FireEvent(eventType);
+
+        UNUSED(args)
     }
 
     bool RegisterSubsystem::Event_RegistrationChanged(EventArgs& args)
     {
+        UNUSED(args)
+
         // Handle registration change events
         // This could be used for logging, validation, or other system notifications
-        
+
         auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
         if (logger)
         {
             logger->LogDebug("RegisterSubsystem", "Registration changed event fired");
         }
-        
+
         return false; // Allow other handlers to process
     }
 }
