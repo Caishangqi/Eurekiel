@@ -140,7 +140,7 @@ namespace enigma::resource
         ResourceSubsystem& operator=(ResourceSubsystem&&)      = delete;
 
         // EngineSubsystem interface
-        DECLARE_SUBSYSTEM(ResourceSubsystem, "resource", 100);
+        DECLARE_SUBSYSTEM(ResourceSubsystem, "resource", 100)
         void Startup() override;
         void Shutdown() override;
         bool RequiresGameLoop() const override { return false; }
@@ -221,7 +221,6 @@ namespace enigma::resource
         void                               UpdateResourceIndex();
         std::shared_ptr<IResourceProvider> FindProviderForResource(const ResourceLocation& location) const;
         bool                               MatchesPattern(const std::string& str, const std::string& pattern) const;
-        void                               ProcessNamespacePreloads();
         void                               UpdateFrameStatistics();
         bool                               ShouldStopLoadingThisFrame() const;
         void                               PreloadAllDiscoveredResources();
