@@ -7,9 +7,9 @@ moduleConfig:
     latestLogFileName: latest.log
     enableLogRotation: true
     maxLogFiles: 10
-    enableConsoleLogging: true
+    enableConsoleLogging: false
     enableConsoleColors: true
-    enableDevConsoleLogging: true
+    enableDevConsoleLogging: false
     includeTimestamp: true
     includeThreadId: false
     includeFrameNumber: true
