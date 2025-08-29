@@ -285,6 +285,10 @@
         <ClCompile Include="Resource\ResourceCommon.cpp" />
         <ClCompile Include="Resource\ResourceSubsystem.cpp" />
         <ClCompile Include="Resource\SoundResource.cpp" />
+        <ClCompile Include="Resource\Atlas\ImageResource.cpp" />
+        <ClCompile Include="Resource\Atlas\ImageLoader.cpp" />
+        <ClCompile Include="Resource\Atlas\TextureAtlas.cpp" />
+        <ClCompile Include="Resource\Atlas\AtlasManager.cpp" />
         <ClCompile Include="Window\Window.cpp" />
     </ItemGroup>
     <ItemGroup>
@@ -426,6 +430,11 @@
         <ClInclude Include="Resource\ResourceCommon.hpp" />
         <ClInclude Include="Resource\ResourceSubsystem.hpp" />
         <ClInclude Include="Resource\SoundResource.hpp" />
+        <ClInclude Include="Resource\Atlas\AtlasConfig.hpp" />
+        <ClInclude Include="Resource\Atlas\ImageResource.hpp" />
+        <ClInclude Include="Resource\Atlas\ImageLoader.hpp" />
+        <ClInclude Include="Resource\Atlas\TextureAtlas.hpp" />
+        <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
         <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
     <ItemGroup>
