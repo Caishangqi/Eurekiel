@@ -19,8 +19,8 @@
 
 // Resource system integration
 #include "Engine/Resource/ResourceSubsystem.hpp"
-#include "Engine/Resource/SoundResource.hpp"
-#include "Engine/Resource/Loader/SoundLoader.hpp"
+#include "Engine/Resource/Sound/SoundResource.hpp"
+#include "Engine/Resource/Sound/SoundLoader.hpp"
 
 #if !defined( ENGINE_DISABLE_AUDIO )
 
