@@ -6,10 +6,13 @@
 #include <memory>
 #include <atomic>
 
+#include "Engine/Math/AABB3.hpp"
+#include "Engine/Math/IntVec2.hpp"
+
 namespace enigma::voxel::chunk
 {
     using namespace enigma::voxel::block;
-    
+
     /**
      * @brief Represents a 16x16x(height) section of the world
      * 
@@ -22,7 +25,7 @@ namespace enigma::voxel::chunk
      * 
      * REQUIRED CONSTANTS:
      * - static constexpr int32_t CHUNK_SIZE = 16;     // Horizontal size
-     * - static constexpr int32_t CHUNK_HEIGHT = 384;  // Vertical size (adjust as needed)
+     * - static constexpr int32_t CHUNK_HEIGHT = 128;  // Vertical size (adjust as needed)
      * - static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT;
      * 
      * REQUIRED MEMBER VARIABLES:
@@ -90,18 +93,55 @@ namespace enigma::voxel::chunk
     {
         // TODO: Implement according to comments above
     public:
-        static constexpr int32_t CHUNK_SIZE = 16;
-        static constexpr int32_t CHUNK_HEIGHT = 384;  // Adjust based on world height needs
-        
-        Chunk(int32_t chunkX, int32_t chunkZ) : m_chunkX(chunkX), m_chunkZ(chunkZ) {}
+        static constexpr int32_t CHUNK_SIZE       = 16;
+        static constexpr int32_t CHUNK_HEIGHT     = 128; // Adjust based on world height needs
+        static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT;
+
+        Chunk(IntVec2 chunkCoords);
         ~Chunk() = default;
-        
+
+        // Block Access - PUBLIC for World class access
+        BlockState GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
+        void       SetBlock(int32_t x, int32_t y, int32_t z, BlockState state);
+        BlockState GetBlockWorld(const BlockPos& worldPos); // World coordinates
+        void       SetBlockWorld(const BlockPos& worldPos, BlockState state);
+
+        // Coordinate Conversion - PUBLIC for World class
+        BlockPos LocalToWorld(int32_t x, int32_t y, int32_t z);
+        bool     WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32_t& z);
+        bool     ContainsWorldPos(const BlockPos& worldPos);
+
+        // Mesh Management - PUBLIC for rendering system
+        void       MarkDirty(); // Mark chunk as needing mesh rebuild
+        void       RebuildMesh(); // Regenerate ChunkMesh from block data
+        ChunkMesh* GetMesh() const; // Get mesh for rendering
+        bool       NeedsMeshRebuild() const; // Check if mesh needs rebuilding
+
+        // State Management - PUBLIC for World management
+        bool IsGenerated() const { return m_isGenerated; }
+        void SetGenerated(bool generated) { m_isGenerated = generated; }
+        bool IsPopulated() const { return m_isPopulated; }
+        void SetPopulated(bool populated) { m_isPopulated = populated; }
+        bool IsLoading() const { return m_isLoading.load(); }
+        void SetLoading(bool loading) { m_isLoading.store(loading); }
+
+        // Utility - PUBLIC for World class
+        void     Clear(); // Clear all blocks to air
+        IntVec2  GetChunkCoords() const { return m_chunkCoords; }
+        int32_t  GetChunkX() const { return m_chunkCoords.x; }
+        int32_t  GetChunkZ() const { return m_chunkCoords.y; }
+        BlockPos GetWorldPos() const; // Bottom corner world position
+
     private:
-        int32_t m_chunkX, m_chunkZ;
-        
-        // Placeholder methods - implement these:
-        // BlockState* GetBlock(int32_t x, int32_t y, int32_t z);
-        // void SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state);
-        // void RebuildMesh();
+        IntVec2                    m_chunkCoords = IntVec2(0, 0);
+        std::vector<BlockState>    m_blocks; // Block storage  
+        std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering
+        bool                       m_isDirty     = true; // Needs mesh rebuild
+        bool                       m_isGenerated = false; // Has been world-generated
+        bool                       m_isPopulated = false; // Has decorations/structures
+        std::atomic<bool>          m_isLoading{false}; // Currently being loaded/generated
+
+        /// Debug Drawing
+        AABB3 m_chunkBounding;  // Need generated based on chunk coords
     };
 }
