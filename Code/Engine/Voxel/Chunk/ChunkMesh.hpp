@@ -5,6 +5,8 @@
 #include <vector>
 #include <memory>
 
+class IRenderer;
+
 namespace enigma::voxel::chunk
 {
     /**
@@ -96,15 +98,50 @@ namespace enigma::voxel::chunk
     struct ChunkMesh
     {
         // TODO: Implement according to comments above
-        
-        ChunkMesh() = default;
+
+        ChunkMesh()  = default;
         ~ChunkMesh() = default;
-        
-        // Placeholder methods - implement these:
-        // void Clear();
-        // void AddOpaqueQuad(const std::array<Vertex_PCU, 4>& vertices);
-        // void CompileToGPU();
-        // void RenderOpaque(IRenderer* renderer);
-        // bool IsEmpty() const;
+
+        // Data Management:
+        void Clear(); // Clear all mesh data
+        void AddOpaqueQuad(const std::array<Vertex_PCU, 4>& vertices); // Add quad to opaque mesh
+        void AddTransparentQuad(const std::array<Vertex_PCU, 4>& vertices); // Add quad to transparent mesh
+        void Reserve(size_t opaqueQuads, size_t transparentQuads); // Pre-allocate space
+
+        // Statistics:
+        size_t GetOpaqueVertexCount() const;
+        size_t GetOpaqueTriangleCount() const;
+        size_t GetTransparentVertexCount() const;
+        size_t GetTransparentTriangleCount() const;
+        bool   IsEmpty() const;
+        bool   HasOpaqueGeometry() const;
+        bool   HasTransparentGeometry() const;
+
+        // GPU Buffer Management:
+        void                          CompileToGPU(); // Upload data to GPU buffers
+        void                          InvalidateGPUData(); // Mark GPU buffers as outdated
+        std::shared_ptr<VertexBuffer> GetOpaqueVertexBuffer();
+        std::shared_ptr<IndexBuffer>  GetOpaqueIndexBuffer();
+        std::shared_ptr<VertexBuffer> GetTransparentVertexBuffer();
+        std::shared_ptr<IndexBuffer>  GetTransparentIndexBuffer();
+
+        // Rendering:
+        void RenderOpaque(IRenderer* renderer); // Render solid geometry
+        void RenderTransparent(IRenderer* renderer); // Render transparent geometry
+        void RenderAll(IRenderer* renderer); // Render both passes
+
+    private:
+        // Geometry Data
+        std::vector<Vertex_PCU> m_opaqueVertices; // Solid block faces
+        std::vector<uint32_t>   m_opaqueIndices; // Indices for solid geometry
+        std::vector<Vertex_PCU> m_transparentVertices; // Transparent/translucent faces
+        std::vector<uint32_t>   m_transparentIndices; // Indices for transparent geometry
+
+        // GPU Resources
+        std::shared_ptr<VertexBuffer> m_opaqueVertexBuffer;
+        std::shared_ptr<IndexBuffer>  m_opaqueIndexBuffer;
+        std::shared_ptr<VertexBuffer> m_transparentVertexBuffer;
+        std::shared_ptr<IndexBuffer>  m_transparentIndexBuffer;
+        bool                          m_gpuDataValid = false; // Whether GPU buffers are up to date
     };
 }

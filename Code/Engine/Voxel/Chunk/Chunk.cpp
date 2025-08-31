@@ -122,7 +122,7 @@ bool Chunk::WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32
     int32_t chunkX = worldPos.x / CHUNK_SIZE;
     int32_t chunkZ = worldPos.z / CHUNK_SIZE;
 
-    // Handle the special case of negative number coordinates (C++ integer division processing for negative numbers)
+    // Handle the special case of negative number coordinates
     if (worldPos.x < 0 && worldPos.x % CHUNK_SIZE != 0) chunkX--;
     if (worldPos.z < 0 && worldPos.z % CHUNK_SIZE != 0) chunkZ--;
 
@@ -135,7 +135,7 @@ bool Chunk::WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32
     // Calculate local coordinates (world coordinates - chunk starting world coordinates)
     x = worldPos.x - (m_chunkCoords.x * CHUNK_SIZE); // Local X = World X - chunk Start X
     y = worldPos.y; // The Y coordinate remains unchanged
-    z = worldPos.z - (m_chunkCoords.y * CHUNK_SIZE); // 本地Z = 世界Z - chunk起始Z
+    z = worldPos.z - (m_chunkCoords.y * CHUNK_SIZE); // Local Z = World Z - chunk Start Z
 
     // Verify that local coordinates are in the valid range [0, CHUNK_SIZE) and [0, CHUNK_HEIGHT)
     if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE)
