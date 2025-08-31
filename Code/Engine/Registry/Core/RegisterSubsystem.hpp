@@ -1,6 +1,6 @@
 #pragma once
-#include "../Core/SubsystemManager.hpp"
-#include "../Core/EventSystem.hpp"
+#include "../../Core/SubsystemManager.hpp"
+#include "../../Core/EventSystem.hpp"
 #include "IRegistrable.hpp"
 #include "RegistrationKey.hpp"
 #include "IRegistry.hpp"

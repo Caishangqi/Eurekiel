@@ -1,7 +1,7 @@
 #include "RegisterSubsystem.hpp"
-#include "../Core/EventSystem.hpp"
-#include "../Core/Logger/LoggerSubsystem.hpp"
-#include "../Core/NamedStrings.hpp"
+#include "../../Core/EventSystem.hpp"
+#include "../../Core/Logger/LoggerSubsystem.hpp"
+#include "../../Core/NamedStrings.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::core
