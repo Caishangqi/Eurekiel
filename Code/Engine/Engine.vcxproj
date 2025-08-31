@@ -300,7 +300,6 @@
         <ClCompile Include="Resource\Atlas\AtlasManager.cpp" />
         <ClCompile Include="Resource\Sound\SoundLoader.cpp"/>
         <ClCompile Include="Resource\Sound\SoundResource.cpp"/>
-        <ClCompile Include="Voxel\Block\BlockFace.cpp"/>
         <ClCompile Include="Voxel\Block\BlockPos.cpp"/>
         <ClCompile Include="Voxel\Block\BlockState.cpp"/>
         <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
@@ -468,7 +467,6 @@
         <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
         <ClInclude Include="Resource\Sound\SoundLoader.hpp" />
         <ClInclude Include="Resource\Sound\SoundResource.hpp" />
-        <ClInclude Include="Voxel\Block\BlockFace.hpp" />
         <ClInclude Include="Voxel\Block\BlockPos.hpp" />
         <ClInclude Include="Voxel\Block\BlockState.hpp" />
         <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
