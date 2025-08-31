@@ -1,5 +1,5 @@
 #pragma once
-#include "../Loader/ResourceLoader.hpp"
+#include "../ResourceLoader.hpp"
 #include "../ResourceCommon.hpp"
 #include "ImageResource.hpp"
 #include <set>

@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "../ResourceMetadata.hpp"
+#include "ResourceMetadata.hpp"
 #include <set>
 #include <unordered_map>
 

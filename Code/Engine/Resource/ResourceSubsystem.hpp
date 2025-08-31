@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "ResourceCommon.hpp"
 #include "Provider/ResourceProvider.hpp"
-#include "Loader/ResourceLoader.hpp"
+#include "ResourceLoader.hpp"
 #include "../Core/SubsystemManager.hpp"
 #include <mutex>
 #include <shared_mutex>

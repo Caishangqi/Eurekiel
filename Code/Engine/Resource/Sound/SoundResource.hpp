@@ -1,5 +1,5 @@
 #pragma once
-#include "ResourceMetadata.hpp"
+#include "../ResourceMetadata.hpp"
 #include "Engine/Audio/AudioSubsystem.hpp"
 #include "ThirdParty/fmod/fmod.hpp"
 #include <memory>

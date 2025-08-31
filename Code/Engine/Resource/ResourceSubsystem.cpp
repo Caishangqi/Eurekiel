@@ -1,7 +1,7 @@
 ﻿#include "ResourceSubsystem.hpp"
 
 #include "Provider/ResourceProvider.hpp"
-#include "Loader/ResourceLoader.hpp"
+#include "ResourceLoader.hpp"
 #include <iostream>
 #include <algorithm>
 #include <regex>

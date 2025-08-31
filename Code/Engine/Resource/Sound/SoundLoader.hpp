@@ -1,6 +1,6 @@
 #pragma once
-#include "../SoundResource.hpp"
-#include "ResourceLoader.hpp"
+#include "SoundResource.hpp"
+#include "../ResourceLoader.hpp"
 #include "Engine/Audio/AudioSubsystem.hpp"
 #include <set>
 
