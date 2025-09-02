@@ -79,12 +79,12 @@ namespace enigma::voxel::block
         {
             switch (direction)
             {
-            case Direction::NORTH: return BlockPos(x, y, z - 1);
-            case Direction::SOUTH: return BlockPos(x, y, z + 1);
+            case Direction::NORTH: return BlockPos(x, y + 1, z);
+            case Direction::SOUTH: return BlockPos(x, y - 1, z);
             case Direction::EAST: return BlockPos(x + 1, y, z);
             case Direction::WEST: return BlockPos(x - 1, y, z);
-            case Direction::UP: return BlockPos(x, y + 1, z);
-            case Direction::DOWN: return BlockPos(x, y - 1, z);
+            case Direction::UP: return BlockPos(x, y, z + 1);
+            case Direction::DOWN: return BlockPos(x, y, z - 1);
             default: return *this;
             }
         }
@@ -121,11 +121,11 @@ namespace enigma::voxel::block
 
         // Chunk coordinates (assuming 16x16 chunks)
         int32_t GetChunkX() const { return x >> 4; }
-        int32_t GetChunkZ() const { return z >> 4; }
+        int32_t GetChunkY() const { return y >> 4; }
 
         // Position within chunk (0-15)
         int32_t GetBlockXInChunk() const { return x & 15; }
-        int32_t GetBlockZInChunk() const { return z & 15; }
+        int32_t GetBlockYInChunk() const { return y & 15; }
 
         // Utility methods
         std::string ToString() const
@@ -144,9 +144,9 @@ namespace enigma::voxel::block
         }
 
         // Static utility methods
-        static BlockPos FromChunkCoords(int32_t chunkX, int32_t chunkZ, int32_t blockX, int32_t blockY, int32_t blockZ)
+        static BlockPos FromChunkCoords(int32_t chunkX, int32_t chunkY, int32_t blockX, int32_t blockY, int32_t blockZ)
         {
-            return BlockPos((chunkX << 4) + blockX, blockY, (chunkZ << 4) + blockZ);
+            return BlockPos((chunkX << 4) + blockX, (chunkY << 4) + blockY, +blockZ);
         }
 
         static BlockPos Origin() { return BlockPos(0, 0, 0); }
