@@ -9,7 +9,7 @@ namespace enigma::voxel::world
 {
     using namespace enigma::voxel::block;
     using namespace enigma::voxel::chunk;
-    
+
     /**
      * @brief Main world class - manages the voxel world and its chunks
      * 
@@ -68,13 +68,37 @@ namespace enigma::voxel::world
     {
         // TODO: Implement according to comments above
     public:
-        World() = default;
-        ~World() = default;
-        
-        // Placeholder methods - implement these:
-        // BlockState* GetBlockState(const BlockPos& pos);
-        // void SetBlockState(const BlockPos& pos, BlockState* state);
-        // Chunk* GetChunk(int32_t chunkX, int32_t chunkZ);
-        // void Update(float deltaTime);
+        explicit World(std::string worldName, uint64_t worldSeed, std::unique_ptr<ChunkManager> chunkManager);
+        World()  = default;
+        ~World();
+
+        // Block Operations:
+        BlockState GetBlockState(const BlockPos& pos);
+        void       SetBlockState(const BlockPos& pos, BlockState* state) const;
+        bool       IsValidPosition(const BlockPos& pos);
+        bool       IsBlockLoaded(const BlockPos& pos);
+
+        // Chunk Operations:
+        Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
+        Chunk* GetChunkAt(const BlockPos& pos);
+        bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
+        void   LoadChunk(int32_t chunkX, int32_t chunkY);
+        void   UnloadChunk(int32_t chunkX, int32_t chunkY);
+
+        // Update and Management:
+        void Update(float deltaTime); // Update world systems
+        // void SetLoadDistance(int32_t chunks); // How many chunks to keep loaded around player
+        // void SetPlayerPosition(const Vec3& pos); // Update player position for chunk loading
+
+        // Rendering:
+        void Render(IRenderer* renderer); // Render world
+
+    private:
+        std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
+        int32_t                       m_worldHeight = 128; // World height in blocks
+        int32_t                       m_minY        = -64; // Minimum Y coordinate
+        int32_t                       m_maxY        = 320; // Maximum Y coordinate
+        std::string                   m_worldName; // World identifier
+        uint64_t                      m_worldSeed = 0; // World generation seed
     };
 }
