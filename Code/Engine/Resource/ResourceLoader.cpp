@@ -94,14 +94,22 @@ ResourceLoaderPtr LoaderRegistry::FindLoaderByExtension(const std::string& exten
  */
 ResourceLoaderPtr LoaderRegistry::FindLoaderForResource(const ResourceMetadata& metadata) const
 {
-    // First look up according to the file extension
-    auto loader = FindLoaderByExtension(metadata.GetFileExtension());
-    if (loader && loader->CanLoad(metadata))
+    // First, try to find loaders by extension and test each one
+    const std::string& extension = metadata.GetFileExtension();
+    auto               it        = m_loadersByExtension.find(extension);
+    if (it != m_loadersByExtension.end())
     {
-        return loader;
+        // Try each loader that supports this extension, starting with highest priority
+        for (const auto& loader : it->second)
+        {
+            if (loader->CanLoad(metadata))
+            {
+                return loader;
+            }
+        }
     }
 
-    // Iterate through all loaders and find the first one that can be loaded
+    // Fallback: iterate through all loaders and find the first one that can be loaded
     for (const auto& [name, loaderPtr] : m_loadersByName)
     {
         if (loaderPtr->CanLoad(metadata))
