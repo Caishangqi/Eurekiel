@@ -106,8 +106,10 @@ namespace enigma::voxel::chunk
 
         // Rendering:
         void Render(IRenderer* renderer); // Render all loadedChunks
+        bool SetEnableChunkDebug(bool enable = true);
 
     private:
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
+        bool                                                m_enableChunkDebug = false; // Enable debug drawing for chunks
     };
 }
