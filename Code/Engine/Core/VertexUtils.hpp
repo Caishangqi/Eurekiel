@@ -60,7 +60,7 @@ void AddVertsForIndexedSphere3D(std::vector<Vertex_PCU>& verts, const Vec3& cent
                                 int                      numStacks                                                   = 16);
 void AddVertsForCube3D(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE);
 void AddVertsForCube3D(std::vector<Vertex_PCU>& verts, std::vector<unsigned int>& indexes, const AABB3& box, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE);
-void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color);
+void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color, float thickness = 0.006f);
 void AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCylinder& cylinder, const Rgba8& color, int numSlices = 32);
 void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, ZCylinder cylinder, const Rgba8& color, const AABB2& UVs = AABB2::ZERO_TO_ONE, int numSlices = 32);
 
@@ -71,5 +71,5 @@ void AddVertsForPlane3D(std::vector<Vertex_PCU>& verts, const Plane3& plane3, co
 
 static Vec2 CalcRadialUVForCircle(const Vec3& pos, const Vec3& center, float radius, const Vec2& uvCenter, float uvRadius, float rotateDegrees = 0.f, bool flipAboutY = false);
 
-[[maybe_unused]] void           ConvertSingleVertex(const Vertex_PCU& src, Vertex_PCUTBN& dst);
-[[maybe_unused]] void           ConvertPCUArrayToPCUTBN(const Vertex_PCU* src, Vertex_PCUTBN* dst, size_t count);
+[[maybe_unused]] void ConvertSingleVertex(const Vertex_PCU& src, Vertex_PCUTBN& dst);
+[[maybe_unused]] void ConvertPCUArrayToPCUTBN(const Vertex_PCU* src, Vertex_PCUTBN* dst, size_t count);

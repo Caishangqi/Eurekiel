@@ -887,7 +887,7 @@ void AddVertsForCube3D(std::vector<Vertex_PCU>& verts, std::vector<unsigned>& in
 }
 
 
-void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color)
+void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box, const Rgba8& color, float thickness)
 {
     float length, width, height;
     length = box.m_maxs.x - box.m_mins.x;
@@ -905,20 +905,20 @@ void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box
     Vec3 backTopLeft     = backBottomLeft + Vec3(0, 0, height);
     Vec3 backTopRight    = backBottomRight + Vec3(0, 0, height);
 
-    AddVertsForCylinder3D(verts, facingBottomLeft, facingBottomRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingBottomRight, facingTopRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingTopRight, facingTopLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingTopLeft, facingBottomLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingBottomLeft, facingBottomRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingBottomRight, facingTopRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingTopRight, facingTopLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingTopLeft, facingBottomLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
 
-    AddVertsForCylinder3D(verts, backBottomLeft, backBottomRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, backBottomRight, backTopRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, backTopRight, backTopLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, backTopLeft, backBottomLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, backBottomLeft, backBottomRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, backBottomRight, backTopRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, backTopRight, backTopLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, backTopLeft, backBottomLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
 
-    AddVertsForCylinder3D(verts, facingBottomRight, backBottomRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingTopRight, backTopRight, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingBottomLeft, backBottomLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
-    AddVertsForCylinder3D(verts, facingTopLeft, backTopLeft, 0.006f, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingBottomRight, backBottomRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingTopRight, backTopRight, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingBottomLeft, backBottomLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
+    AddVertsForCylinder3D(verts, facingTopLeft, backTopLeft, thickness, color, AABB2::ZERO_TO_ONE, 3);
 }
 
 void AddVertsForCylinderZ3DWireFrame(std::vector<Vertex_PCU>& verts, const ZCylinder& cylinder, const Rgba8& color, int numSlices)
