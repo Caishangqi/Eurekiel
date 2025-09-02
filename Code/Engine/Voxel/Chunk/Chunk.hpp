@@ -98,7 +98,7 @@ namespace enigma::voxel::chunk
         static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT;
 
         Chunk(IntVec2 chunkCoords);
-        ~Chunk() = default;
+        ~Chunk();
 
         // Block Access - PUBLIC for World class access
         BlockState GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
@@ -125,6 +125,10 @@ namespace enigma::voxel::chunk
         bool IsLoading() const { return m_isLoading.load(); }
         void SetLoading(bool loading) { m_isLoading.store(loading); }
 
+        //Update and Management:
+        void Update(float deltaTime); // Update chunk
+        void DebugDraw(IRenderer* renderer);
+
         // Utility - PUBLIC for World class
         void     Clear(); // Clear all blocks to air
         IntVec2  GetChunkCoords() const { return m_chunkCoords; }
@@ -142,6 +146,6 @@ namespace enigma::voxel::chunk
         std::atomic<bool>          m_isLoading{false}; // Currently being loaded/generated
 
         /// Debug Drawing
-        AABB3 m_chunkBounding;  // Need generated based on chunk coords
+        AABB3 m_chunkBounding; // Need generated based on chunk coords
     };
 }

@@ -1,11 +1,25 @@
 ﻿#include "Chunk.hpp"
 
+#include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Renderer/IRenderer.hpp"
+#include "Game/GameCommon.hpp"
 using namespace enigma::voxel::chunk;
 
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
+    core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
     m_blocks.reserve(BLOCKS_PER_CHUNK);
+
+    /// Calculate chunk bound aabb3
+    BlockPos chunkBottomPos = GetWorldPos();
+    m_chunkBounding.m_mins  = Vec3((float)chunkBottomPos.x, (float)chunkBottomPos.y, (float)chunkBottomPos.z);
+    m_chunkBounding.m_maxs  = m_chunkBounding.m_mins + Vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_HEIGHT);
+}
+
+Chunk::~Chunk()
+{
 }
 
 BlockState Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
@@ -163,6 +177,18 @@ bool Chunk::ContainsWorldPos(const BlockPos& worldPos)
     return WorldToLocal(worldPos, localX, localY, localZ); // Try to convert to local coordinates, if successful, include
 }
 
+void Chunk::Update(float deltaTime)
+{
+    UNUSED(deltaTime)
+}
+
+void Chunk::DebugDraw(IRenderer* renderer)
+{
+    std::vector<Vertex_PCU> outVertices;
+    AddVertsForCube3DWireFrame(outVertices, m_chunkBounding, Rgba8::WHITE, 0.06f);
+    renderer->DrawVertexArray(outVertices);
+}
+
 /**
  * Clears all data within the chunk.
  *
@@ -187,8 +213,8 @@ void Chunk::Clear()
 BlockPos Chunk::GetWorldPos() const
 {
     int32_t worldX = m_chunkCoords.x * CHUNK_SIZE; // The world start X coordinate of chunk
-    int32_t worldY = 0; // Start at the bottom of the world
-    int32_t worldZ = m_chunkCoords.y * CHUNK_SIZE; // The world start Z coordinate of chunk
+    int32_t worldY = m_chunkCoords.y * CHUNK_SIZE; // The world start Z coordinate of chunk
+    int32_t worldZ = 0; // Start at the bottom of the world
 
     return BlockPos(worldX, worldY, worldZ);
 }
