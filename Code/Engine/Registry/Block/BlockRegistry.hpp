@@ -2,6 +2,7 @@
 #include "../Core/Registry.hpp"
 #include "../Core/RegisterSubsystem.hpp"
 #include "../../Core/Engine.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
 #include "Block.hpp"
 #include <memory>
 #include <string>
@@ -9,7 +10,7 @@
 namespace enigma::registry::block
 {
     using namespace enigma::core;
-    
+
     /**
      * @brief Specialized registry for Block types
      * 
@@ -20,7 +21,7 @@ namespace enigma::registry::block
     {
     private:
         static inline Registry<Block>* s_registry = nullptr;
-        
+
         // Ensure registry is initialized
         static Registry<Block>* GetOrCreateRegistry()
         {
@@ -30,11 +31,16 @@ namespace enigma::registry::block
                 if (registerSubsystem)
                 {
                     s_registry = registerSubsystem->CreateRegistry<Block>("blocks");
+                    LogInfo("registry", "Block registry initialized successfully");
+                }
+                else
+                {
+                    LogError("registry", "Failed to initialize block registry: RegisterSubsystem not found in engine");
                 }
             }
             return s_registry;
         }
-        
+
     public:
         /**
          * @brief Register a block type
@@ -49,7 +55,7 @@ namespace enigma::registry::block
                 registry->Register(name, block);
             }
         }
-        
+
         /**
          * @brief Register a block type with namespace
          */
@@ -63,7 +69,7 @@ namespace enigma::registry::block
                 registry->Register(namespaceName, name, block);
             }
         }
-        
+
         /**
          * @brief Get a block by name
          */
@@ -72,7 +78,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->Get(name) : nullptr;
         }
-        
+
         /**
          * @brief Get a block by namespace and name
          */
@@ -81,7 +87,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->Get(namespaceName, name) : nullptr;
         }
-        
+
         /**
          * @brief Get all registered blocks
          */
@@ -90,7 +96,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->GetAll() : std::vector<std::shared_ptr<Block>>{};
         }
-        
+
         /**
          * @brief Get blocks from a specific namespace
          */
@@ -99,7 +105,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->GetByNamespace(namespaceName) : std::vector<std::shared_ptr<Block>>{};
         }
-        
+
         /**
          * @brief Check if a block is registered
          */
@@ -108,7 +114,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->HasRegistration(RegistrationKey(name)) : false;
         }
-        
+
         /**
          * @brief Check if a block is registered with namespace
          */
@@ -117,7 +123,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->HasRegistration(RegistrationKey(namespaceName, name)) : false;
         }
-        
+
         /**
          * @brief Get the total number of registered blocks
          */
@@ -126,7 +132,7 @@ namespace enigma::registry::block
             auto* registry = GetOrCreateRegistry();
             return registry ? registry->GetRegistrationCount() : 0;
         }
-        
+
         /**
          * @brief Clear all registered blocks (mainly for testing)
          */
@@ -138,7 +144,7 @@ namespace enigma::registry::block
                 registry->Clear();
             }
         }
-        
+
         /**
          * @brief Get the underlying registry (for advanced usage)
          */
@@ -146,9 +152,9 @@ namespace enigma::registry::block
         {
             return GetOrCreateRegistry();
         }
-        
+
         // Convenience methods for common operations
-        
+
         /**
          * @brief Register multiple blocks from a namespace
          */
@@ -159,7 +165,7 @@ namespace enigma::registry::block
                 RegisterBlock(namespaceName, name, block);
             }
         }
-        
+
         /**
          * @brief Get all block names from a namespace
          */
@@ -167,10 +173,10 @@ namespace enigma::registry::block
         {
             auto* registry = GetOrCreateRegistry();
             if (!registry) return {};
-            
-            auto keys = registry->GetAllKeys();
+
+            auto                     keys = registry->GetAllKeys();
             std::vector<std::string> names;
-            
+
             for (const auto& key : keys)
             {
                 if (namespaceName.empty() || key.namespaceName == namespaceName)
@@ -178,8 +184,47 @@ namespace enigma::registry::block
                     names.push_back(key.name);
                 }
             }
-            
+
             return names;
         }
+
+        // YAML loading methods
+
+        /**
+         * @brief Register a block from YAML file
+         */
+        static bool RegisterBlockFromYaml(const std::string& filePath);
+
+        /**
+         * @brief Register a block from YAML file with explicit namespace and name
+         */
+        static bool RegisterBlockFromYaml(const std::string& namespaceName, const std::string& blockName, const std::string& filePath);
+
+        /**
+         * @brief Load all blocks from a namespace data directory
+         * Expected structure: dataPath/namespace/block/*.yml
+         */
+        static void LoadNamespaceBlocks(const std::string& dataPath, const std::string& namespaceName);
+
+        /**
+         * @brief Load all blocks from a directory recursively
+         */
+        static void LoadBlocksFromDirectory(const std::string& directoryPath, const std::string& namespaceName = "");
+
+    private:
+        /**
+         * @brief Create a Block from YAML configuration
+         */
+        static std::shared_ptr<Block> CreateBlockFromYaml(const std::string& blockName, const std::string& namespaceName, const enigma::core::YamlConfiguration& yaml);
+
+        /**
+         * @brief Parse properties from YAML
+         */
+        static std::vector<std::shared_ptr<enigma::voxel::property::IProperty>> ParsePropertiesFromYaml(const enigma::core::YamlConfiguration& yaml);
+
+        /**
+         * @brief Extract block name from file path
+         */
+        static std::string ExtractBlockNameFromPath(const std::string& filePath);
     };
 }
