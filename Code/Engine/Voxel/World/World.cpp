@@ -90,3 +90,8 @@ void World::Render(IRenderer* renderer)
 {
     m_chunkManager->Render(renderer);
 }
+
+bool World::SetEnableChunkDebug(bool enable)
+{
+    return m_chunkManager->SetEnableChunkDebug(enable);
+}

@@ -69,7 +69,7 @@ namespace enigma::voxel::world
         // TODO: Implement according to comments above
     public:
         explicit World(std::string worldName, uint64_t worldSeed, std::unique_ptr<ChunkManager> chunkManager);
-        World()  = default;
+        World() = default;
         ~World();
 
         // Block Operations:
@@ -92,6 +92,7 @@ namespace enigma::voxel::world
 
         // Rendering:
         void Render(IRenderer* renderer); // Render world
+        bool SetEnableChunkDebug(bool enable = true);
 
     private:
         std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
