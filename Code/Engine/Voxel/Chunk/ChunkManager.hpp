@@ -90,14 +90,24 @@ namespace enigma::voxel::chunk
     {
         // TODO: Implement according to comments above
     public:
-        ChunkManager() = default;
-        ~ChunkManager() = default;
-        
-        // Placeholder methods - implement these:
-        // Chunk* GetChunk(int32_t chunkX, int32_t chunkZ);
-        // void SetPlayerPosition(const Vec3& position);
-        // void Update(float deltaTime);
-        // void StartGenerationThread();
-        // void StopGenerationThread();
+        ChunkManager();
+        ~ChunkManager();
+
+        // Chunk Access:
+        Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
+        void   LoadChunk(int32_t chunkX, int32_t chunkY); // Immediate load
+
+        // Utility:
+        static int64_t PackCoordinates(int32_t x, int32_t y); // Pack coords into single key
+        static void    UnpackCoordinates(int64_t packed, int32_t& x, int32_t& y);
+
+        // Update Loop:
+        void Update(float deltaTime); // Called each frame
+
+        // Rendering:
+        void Render(IRenderer* renderer); // Render all loadedChunks
+
+    private:
+        std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
     };
 }
