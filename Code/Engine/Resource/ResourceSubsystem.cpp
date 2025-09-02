@@ -2,9 +2,15 @@
 
 #include "Provider/ResourceProvider.hpp"
 #include "ResourceLoader.hpp"
+#include "Atlas/ImageLoader.hpp"
+#include "Atlas/AtlasManager.hpp"
+#include "Atlas/TextureAtlas.hpp"
+#include "Model/ModelLoader.hpp"
+#include "BlockState/BlockStateLoader.hpp"
 #include <iostream>
 #include <algorithm>
 #include <regex>
+#include <thread>
 
 
 using namespace enigma::resource;
@@ -93,6 +99,13 @@ void ResourceSubsystem::Startup()
     // Preload all discovered resources
     PreloadAllDiscoveredResources();
 
+    // Initialize AtlasManager after resources are loaded
+    m_atlasManager = std::make_unique<AtlasManager>(this);
+
+    // Set up default atlas configurations and build atlases
+    m_atlasManager->SetDefaultAtlasConfigs();
+    m_atlasManager->BuildAllAtlases();
+
     m_state = SubsystemState::READY;
 
     if (m_config.printScanResults)
@@ -121,6 +134,9 @@ void ResourceSubsystem::Shutdown()
 
     // Clear all resources
     ClearAllResources();
+
+    // Shutdown AtlasManager
+    m_atlasManager.reset();
 
     // Clear providers
     {
@@ -413,11 +429,14 @@ void ResourceSubsystem::InitializeDefaultLoaders()
     // Register default loaders
     m_loaderRegistry.RegisterLoader(std::make_shared<RawResourceLoader>());
 
-    // Register JSON model loader
-    //  m_loaderRegistry.RegisterLoader(std::make_shared<ModelJsonLoader>());
+    // Register image loader for atlas system
+    m_loaderRegistry.RegisterLoader(std::make_shared<enigma::resource::ImageLoader>());
 
-    // Future: Register other default loaders
-    // m_loaderRegistry.RegisterLoader(std::make_shared<TextureLoader>());
+    // Register model loader for JSON models
+    m_loaderRegistry.RegisterLoader(std::make_shared<enigma::resource::model::ModelLoader>());
+
+    // Register blockstate loader for JSON blockstates
+    m_loaderRegistry.RegisterLoader(std::make_shared<enigma::resource::blockstate::BlockStateLoader>());
 
     // Note: SoundLoader will be registered when AudioSystem is available
     // This is done externally to avoid circular dependencies
@@ -446,7 +465,7 @@ void ResourceSubsystem::InitializeDefaultProviders()
 void ResourceSubsystem::StartWorkerThreads()
 {
     m_running          = true;
-    size_t threadCount = std::min(m_config.loadThreadCount, (size_t)std::thread::hardware_concurrency());
+    size_t threadCount = (std::min)(m_config.loadThreadCount, (size_t)std::thread::hardware_concurrency());
 
     for (size_t i = 0; i < threadCount; ++i)
     {
@@ -702,6 +721,44 @@ bool ResourceSubsystem::ShouldStopLoadingThisFrame() const
 {
     // Performance limits disabled - never stop loading resources in a frame
     return false;
+}
+
+// Atlas Management Implementation
+AtlasManager* ResourceSubsystem::GetAtlasManager()
+{
+    return m_atlasManager.get();
+}
+
+const AtlasManager* ResourceSubsystem::GetAtlasManager() const
+{
+    return m_atlasManager.get();
+}
+
+const AtlasSprite* ResourceSubsystem::FindSprite(const ResourceLocation& spriteLocation) const
+{
+    if (!m_atlasManager)
+        return nullptr;
+    return m_atlasManager->FindSprite(spriteLocation);
+}
+
+const AtlasSprite* ResourceSubsystem::FindSprite(const std::string& namespaceName, const std::string& path) const
+{
+    ResourceLocation location(namespaceName, path);
+    return FindSprite(location);
+}
+
+TextureAtlas* ResourceSubsystem::GetAtlas(const std::string& atlasName)
+{
+    if (!m_atlasManager)
+        return nullptr;
+    return m_atlasManager->GetAtlas(atlasName);
+}
+
+const TextureAtlas* ResourceSubsystem::GetAtlas(const std::string& atlasName) const
+{
+    if (!m_atlasManager)
+        return nullptr;
+    return m_atlasManager->GetAtlas(atlasName);
 }
 
 // Preload all discovered resources method implementation moved above

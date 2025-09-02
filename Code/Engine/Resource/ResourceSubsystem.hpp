@@ -12,6 +12,13 @@
 #include <atomic>
 #include <chrono>
 
+// Forward declarations
+namespace enigma::resource
+{
+    class AtlasManager;
+    class TextureAtlas;
+    struct AtlasSprite;
+}
 
 namespace enigma::resource
 {
@@ -197,6 +204,16 @@ namespace enigma::resource
         /// Hot Reload
         size_t CheckAndReloadModifiedResources();
 
+        /// Atlas Management
+        class AtlasManager*       GetAtlasManager();
+        const class AtlasManager* GetAtlasManager() const;
+
+        // Convenience functions for Atlas and UV access
+        const struct AtlasSprite* FindSprite(const ResourceLocation& spriteLocation) const;
+        const struct AtlasSprite* FindSprite(const std::string& namespaceName, const std::string& path) const;
+        class TextureAtlas*       GetAtlas(const std::string& atlasName);
+        const class TextureAtlas* GetAtlas(const std::string& atlasName) const;
+
         /// Performance Stats
         struct PerformanceStats
         {
@@ -245,7 +262,7 @@ namespace enigma::resource
         std::unordered_map<ResourceLocation, ResourceMetadata> m_resourceIndex;
 
         // Preloaded resources storage
-        mutable std::shared_mutex                      m_resourceMutex;
+        mutable std::shared_mutex                         m_resourceMutex;
         std::unordered_map<ResourceLocation, ResourcePtr> m_loadedResources;
 
         // Resource statistics
@@ -279,5 +296,8 @@ namespace enigma::resource
         // Performance tracking
         std::chrono::steady_clock::time_point m_frameStartTime;
         PerformanceStats                      m_perfStats;
+
+        // Atlas management
+        std::unique_ptr<class AtlasManager> m_atlasManager;
     };
 }
