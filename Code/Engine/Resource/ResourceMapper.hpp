@@ -131,13 +131,6 @@ namespace enigma::resource
          */
         size_t GetMappingCount() const;
 
-        // Static instance for global access (Forge-style)
-        static ResourceMapper& GetInstance()
-        {
-            static ResourceMapper instance;
-            return instance;
-        }
-
     private:
         /**
          * @brief Create default resource mapping for an object
