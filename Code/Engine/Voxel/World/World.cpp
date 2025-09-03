@@ -2,7 +2,6 @@
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Registry/Block/BlockProperties.hpp"
 
 using namespace enigma::voxel::world;
 
