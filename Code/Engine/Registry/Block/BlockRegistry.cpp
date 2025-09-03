@@ -3,6 +3,7 @@
 #include "../../Core/FileUtils.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Resource/ResourceSubsystem.hpp"
 #include <filesystem>
 
 namespace enigma::registry::block
@@ -93,9 +94,13 @@ namespace enigma::registry::block
             // Generate BlockStateDefinition using BlockStateBuilder
             auto blockStateDefinition = GenerateBlockStateDefinition(block);
 
-            // Create resource mapping using ResourceMapper
-            auto& resourceMapper = enigma::resource::ResourceMapper::GetInstance();
-            resourceMapper.MapObject(block.get(), "blocks");
+            // Create resource mapping using ResourceMapper from ResourceSubsystem
+            auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+            if (resourceSubsystem)
+            {
+                auto& resourceMapper = resourceSubsystem->GetResourceMapper();
+                resourceMapper.MapObject(block.get(), "blocks");
+            }
 
             // Register the block
             registry->Register(name, block);
@@ -116,9 +121,13 @@ namespace enigma::registry::block
             // Generate BlockStateDefinition using BlockStateBuilder
             auto blockStateDefinition = GenerateBlockStateDefinition(block);
 
-            // Create resource mapping using ResourceMapper
-            auto& resourceMapper = enigma::resource::ResourceMapper::GetInstance();
-            resourceMapper.MapObject(block.get(), "blocks");
+            // Create resource mapping using ResourceMapper from ResourceSubsystem
+            auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+            if (resourceSubsystem)
+            {
+                auto& resourceMapper = resourceSubsystem->GetResourceMapper();
+                resourceMapper.MapObject(block.get(), "blocks");
+            }
 
             // Register the block
             registry->Register(namespaceName, name, block);
@@ -166,7 +175,16 @@ namespace enigma::registry::block
 
     enigma::resource::ResourceMapper& BlockRegistry::GetResourceMapper()
     {
-        return enigma::resource::ResourceMapper::GetInstance();
+        auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+        if (resourceSubsystem)
+        {
+            return resourceSubsystem->GetResourceMapper();
+        }
+
+        // Fallback - this should not happen in normal operation
+        static enigma::resource::ResourceMapper fallbackMapper;
+        LogError("registry", "ResourceSubsystem not found! Using fallback ResourceMapper.");
+        return fallbackMapper;
     }
 
     const enigma::resource::ResourceMapper::ResourceMapping* BlockRegistry::GetBlockResourceMapping(const std::string& name)
