@@ -55,7 +55,7 @@ namespace enigma::registry::block
 
     public:
         explicit Block(const std::string& registryName, const std::string& namespaceName = "");
-        virtual  ~Block();
+        ~Block() override;
 
         // IRegistrable interface
         const std::string& GetRegistryName() const override { return m_registryName; }
