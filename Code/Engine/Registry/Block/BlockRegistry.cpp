@@ -10,6 +10,255 @@ namespace enigma::registry::block
     using namespace enigma::core;
     using namespace enigma::voxel::property;
 
+    Registry<Block>* BlockRegistry::GetOrCreateRegistry()
+    {
+        if (!s_registry)
+        {
+            auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
+            if (registerSubsystem)
+            {
+                s_registry = registerSubsystem->CreateRegistry<Block>("blocks");
+                LogInfo("registry", "Block registry initialized successfully");
+            }
+            else
+            {
+                LogError("registry", "Failed to initialize block registry: RegisterSubsystem not found in engine");
+            }
+        }
+        return s_registry;
+    }
+
+    std::shared_ptr<BlockStateDefinition> BlockRegistry::GenerateBlockStateDefinition(std::shared_ptr<Block> block)
+    {
+        if (!block)
+            return nullptr;
+
+        // Create resource location for the block
+        ResourceLocation location(block->GetNamespace(), "blockstates/" + block->GetRegistryName());
+
+        // Get the blockstate path from the block (if set)
+        std::string blockstatePath = block->GetBlockstatePath();
+        std::string baseModelPath  = block->GetNamespace() + ":block/" + block->GetRegistryName();
+
+        // Use BlockStateBuilder to create the definition
+        BlockStateBuilder builder(location);
+
+        // Check if block has properties - if so, auto-generate variants
+        if (!block->GetProperties().empty())
+        {
+            // Auto-generate all possible variants based on block properties
+            builder.AutoGenerateVariants(
+                block.get(),
+                baseModelPath,
+                [&](const PropertyMap& properties) -> std::string
+                {
+                    UNUSED(properties)
+                    // Custom model path mapping based on properties
+                    // This can be overridden per-block if needed
+                    return baseModelPath;
+                }
+            );
+        }
+        else
+        {
+            // Simple single variant for blocks without properties
+            builder.DefaultVariant(BlockStateBuilder::VariantBuilder(baseModelPath));
+        }
+
+        auto definition = builder.Build();
+
+        // Store the definition for later retrieval
+        std::string fullName              = block->GetNamespace() + ":" + block->GetRegistryName();
+        s_blockStateDefinitions[fullName] = definition;
+
+        LogDebug("registry", ("Generated BlockStateDefinition for block: " + fullName).c_str());
+
+        return definition;
+    }
+
+    void BlockRegistry::RegisterBlock(const std::string& name, std::shared_ptr<Block> block)
+    {
+        auto* registry = GetOrCreateRegistry();
+        if (registry && block)
+        {
+            // Set namespace if not already set
+            if (block->GetNamespace().empty())
+            {
+                // Use default namespace from block constructor or "engine"
+            }
+
+            // Generate all block states before registering
+            block->GenerateBlockStates();
+
+            // Generate BlockStateDefinition using BlockStateBuilder
+            auto blockStateDefinition = GenerateBlockStateDefinition(block);
+
+            // Create resource mapping using ResourceMapper
+            auto& resourceMapper = enigma::resource::ResourceMapper::GetInstance();
+            resourceMapper.MapObject(block.get(), "blocks");
+
+            // Register the block
+            registry->Register(name, block);
+
+            LogInfo("registry", ("Registered block: " + name + " with " +
+                        std::to_string(block->GetStateCount()) + " states and resource mappings").c_str());
+        }
+    }
+
+    void BlockRegistry::RegisterBlock(const std::string& namespaceName, const std::string& name, std::shared_ptr<Block> block)
+    {
+        auto* registry = GetOrCreateRegistry();
+        if (registry && block)
+        {
+            // Generate all block states before registering
+            block->GenerateBlockStates();
+
+            // Generate BlockStateDefinition using BlockStateBuilder
+            auto blockStateDefinition = GenerateBlockStateDefinition(block);
+
+            // Create resource mapping using ResourceMapper
+            auto& resourceMapper = enigma::resource::ResourceMapper::GetInstance();
+            resourceMapper.MapObject(block.get(), "blocks");
+
+            // Register the block
+            registry->Register(namespaceName, name, block);
+
+            std::string fullName = namespaceName + ":" + name;
+            LogInfo("registry", ("Registered block: " + fullName + " with " +
+                        std::to_string(block->GetStateCount()) + " states and resource mappings").c_str());
+        }
+    }
+
+    std::shared_ptr<Block> BlockRegistry::GetBlock(const std::string& name)
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->Get(name) : nullptr;
+    }
+
+    std::shared_ptr<Block> BlockRegistry::GetBlock(const std::string& namespaceName, const std::string& name)
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->Get(namespaceName, name) : nullptr;
+    }
+
+    std::vector<std::shared_ptr<Block>> BlockRegistry::GetAllBlocks()
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->GetAll() : std::vector<std::shared_ptr<Block>>{};
+    }
+
+    std::shared_ptr<BlockStateDefinition> BlockRegistry::GetBlockStateDefinition(const std::string& name)
+    {
+        auto it = s_blockStateDefinitions.find(name);
+        return it != s_blockStateDefinitions.end() ? it->second : nullptr;
+    }
+
+    std::shared_ptr<BlockStateDefinition> BlockRegistry::GetBlockStateDefinition(const std::string& namespaceName, const std::string& name)
+    {
+        std::string fullName = namespaceName + ":" + name;
+        return GetBlockStateDefinition(fullName);
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<BlockStateDefinition>> BlockRegistry::GetAllBlockStateDefinitions()
+    {
+        return s_blockStateDefinitions;
+    }
+
+    enigma::resource::ResourceMapper& BlockRegistry::GetResourceMapper()
+    {
+        return enigma::resource::ResourceMapper::GetInstance();
+    }
+
+    const enigma::resource::ResourceMapper::ResourceMapping* BlockRegistry::GetBlockResourceMapping(const std::string& name)
+    {
+        auto& mapper = GetResourceMapper();
+        return mapper.GetMapping(name);
+    }
+
+    const enigma::resource::ResourceMapper::ResourceMapping* BlockRegistry::GetBlockResourceMapping(const std::string& namespaceName, const std::string& name)
+    {
+        auto& mapper = GetResourceMapper();
+        return mapper.GetMapping(namespaceName, name);
+    }
+
+    enigma::resource::ResourceLocation BlockRegistry::GetBlockModelLocation(const std::string& name)
+    {
+        auto& mapper = GetResourceMapper();
+        return mapper.GetModelLocation(name);
+    }
+
+    enigma::resource::ResourceLocation BlockRegistry::GetBlockModelLocation(const std::string& namespaceName, const std::string& name)
+    {
+        std::string fullName = namespaceName + ":" + name;
+        return GetBlockModelLocation(fullName);
+    }
+
+    std::vector<std::shared_ptr<Block>> BlockRegistry::GetBlocksByNamespace(const std::string& namespaceName)
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->GetByNamespace(namespaceName) : std::vector<std::shared_ptr<Block>>{};
+    }
+
+    bool BlockRegistry::IsBlockRegistered(const std::string& name)
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->HasRegistration(RegistrationKey(name)) : false;
+    }
+
+    bool BlockRegistry::IsBlockRegistered(const std::string& namespaceName, const std::string& name)
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->HasRegistration(RegistrationKey(namespaceName, name)) : false;
+    }
+
+    size_t BlockRegistry::GetBlockCount()
+    {
+        auto* registry = GetOrCreateRegistry();
+        return registry ? registry->GetRegistrationCount() : 0;
+    }
+
+    void BlockRegistry::Clear()
+    {
+        auto* registry = GetOrCreateRegistry();
+        if (registry)
+        {
+            registry->Clear();
+        }
+    }
+
+    Registry<Block>* BlockRegistry::GetRegistry()
+    {
+        return GetOrCreateRegistry();
+    }
+
+    void BlockRegistry::RegisterBlocks(const std::string& namespaceName, const std::vector<std::pair<std::string, std::shared_ptr<Block>>>& blocks)
+    {
+        for (const auto& [name, block] : blocks)
+        {
+            RegisterBlock(namespaceName, name, block);
+        }
+    }
+
+    std::vector<std::string> BlockRegistry::GetBlockNames(const std::string& namespaceName)
+    {
+        auto* registry = GetOrCreateRegistry();
+        if (!registry) return {};
+
+        auto                     keys = registry->GetAllKeys();
+        std::vector<std::string> names;
+
+        for (const auto& key : keys)
+        {
+            if (namespaceName.empty() || key.namespaceName == namespaceName)
+            {
+                names.push_back(key.name);
+            }
+        }
+
+        return names;
+    }
+
+
     bool BlockRegistry::RegisterBlockFromYaml(const std::string& filePath)
     {
         try
