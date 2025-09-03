@@ -2,6 +2,7 @@
 #include "ResourceCommon.hpp"
 #include "Provider/ResourceProvider.hpp"
 #include "ResourceLoader.hpp"
+#include "ResourceMapper.hpp"
 #include "../Core/SubsystemManager.hpp"
 #include <mutex>
 #include <shared_mutex>
@@ -227,6 +228,10 @@ namespace enigma::resource
 
         PerformanceStats GetPerformanceStats() const { return m_perfStats; }
 
+        /// Resource Mapping
+        ResourceMapper&       GetResourceMapper() { return m_resourceMapper; }
+        const ResourceMapper& GetResourceMapper() const { return m_resourceMapper; }
+
     private:
         /// Internal Methods
         void                               InitializeDefaultLoaders();
@@ -299,5 +304,8 @@ namespace enigma::resource
 
         // Atlas management
         std::unique_ptr<class AtlasManager> m_atlasManager;
+
+        // Resource mapping
+        ResourceMapper m_resourceMapper;
     };
 }
