@@ -240,7 +240,6 @@
         <ClCompile Include="Network\NetworkCommon.cpp" />
         <ClCompile Include="Network\NetworkSubsystem.cpp" />
         <ClCompile Include="Registry\Block\Block.cpp" />
-        <ClCompile Include="Registry\Block\BlockProperties.cpp" />
         <ClCompile Include="Registry\Block\BlockRegistry.cpp" />
         <ClCompile Include="Registry\Core\RegisterSubsystem.cpp"/>
         <ClCompile Include="Registry\Entity\EntityRegistry.cpp" />
@@ -284,6 +283,7 @@
         <ClCompile Include="Renderer\SpriteSheet.cpp" />
         <ClCompile Include="Renderer\Texture.cpp" />
         <ClCompile Include="Renderer\VertexBuffer.cpp" />
+        <ClCompile Include="Resource\BlockState\BlockStateBuilder.cpp"/>
         <ClCompile Include="Resource\BlockState\BlockStateDefinition.cpp" />
         <ClCompile Include="Resource\BlockState\BlockStateLoader.cpp" />
         <ClCompile Include="Resource\Model\ModelFormat.cpp" />
@@ -291,6 +291,7 @@
         <ClCompile Include="Resource\Model\ModelResource.cpp" />
         <ClCompile Include="Resource\Provider\ResourceProvider.cpp" />
         <ClCompile Include="Resource\ResourceLoader.cpp"/>
+        <ClCompile Include="Resource\ResourceMapper.cpp"/>
         <ClCompile Include="Resource\ResourceMetadata.cpp" />
         <ClCompile Include="Resource\ResourceCommon.cpp" />
         <ClCompile Include="Resource\ResourceSubsystem.cpp" />
@@ -401,7 +402,6 @@
         <ClInclude Include="Network\NetworkCommon.hpp" />
         <ClInclude Include="Network\NetworkSubsystem.hpp" />
         <ClInclude Include="Registry\Block\Block.hpp" />
-        <ClInclude Include="Registry\Block\BlockProperties.hpp" />
         <ClInclude Include="Registry\Block\BlockRegistry.hpp" />
         <ClInclude Include="Registry\Core\IRegistrable.hpp" />
         <ClInclude Include="Registry\Core\IRegistry.hpp" />
@@ -450,6 +450,7 @@
         <ClInclude Include="Renderer\SpriteSheet.hpp" />
         <ClInclude Include="Renderer\Texture.hpp" />
         <ClInclude Include="Renderer\VertexBuffer.hpp" />
+        <ClInclude Include="Resource\BlockState\BlockStateBuilder.hpp"/>
         <ClInclude Include="Resource\BlockState\BlockStateDefinition.hpp" />
         <ClInclude Include="Resource\BlockState\BlockStateLoader.hpp" />
         <ClInclude Include="Resource\Model\ModelFormat.hpp" />
@@ -457,6 +458,7 @@
         <ClInclude Include="Resource\Model\ModelResource.hpp" />
         <ClInclude Include="Resource\Provider\ResourceProvider.hpp" />
         <ClInclude Include="Resource\ResourceLoader.hpp" />
+        <ClInclude Include="Resource\ResourceMapper.hpp"/>
         <ClInclude Include="Resource\ResourceMetadata.hpp" />
         <ClInclude Include="Resource\ResourceCommon.hpp" />
         <ClInclude Include="Resource\ResourceSubsystem.hpp" />
