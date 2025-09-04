@@ -272,6 +272,7 @@
         <ClCompile Include="Renderer\IndexBuffer.cpp" />
         <ClCompile Include="Renderer\IRenderer.cpp" />
         <ClCompile Include="Renderer\Light\Light.cpp" />
+        <ClCompile Include="Renderer\Model\BlockRenderMesh.cpp"/>
         <ClCompile Include="Renderer\Model\ModelCompiler.cpp" />
         <ClCompile Include="Renderer\Model\RenderMesh.cpp" />
         <ClCompile Include="Renderer\Renderer.cpp" />
@@ -439,6 +440,7 @@
         <ClInclude Include="Renderer\IndexBuffer.hpp" />
         <ClInclude Include="Renderer\IRenderer.hpp" />
         <ClInclude Include="Renderer\Light\Light.hpp" />
+        <ClInclude Include="Renderer\Model\BlockRenderMesh.hpp"/>
         <ClInclude Include="Renderer\Model\ModelCompiler.hpp" />
         <ClInclude Include="Renderer\Model\RenderMesh.hpp" />
         <ClInclude Include="Renderer\Renderer.hpp" />
