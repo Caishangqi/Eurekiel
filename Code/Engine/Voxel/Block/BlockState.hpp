@@ -11,7 +11,7 @@ namespace enigma::registry::block
 
 namespace enigma::renderer::model
 {
-    struct RenderMesh;
+    class RenderMesh;
 }
 
 namespace enigma::voxel::world
