@@ -57,7 +57,7 @@ namespace enigma::registry::block
 
         // Get the blockstate path from the block (if set)
         std::string blockstatePath = block->GetBlockstatePath();
-        std::string baseModelPath  = block->GetNamespace() + ":block/" + block->GetRegistryName();
+        std::string baseModelPath  = block->GetNamespace() + ":models/block/" + block->GetRegistryName();
 
         // Use BlockStateBuilder to create the definition
         BlockStateBuilder builder(location);
