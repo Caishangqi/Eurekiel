@@ -11,22 +11,40 @@ namespace enigma::registry::block
     using namespace enigma::core;
     using namespace enigma::voxel::property;
 
-    Registry<Block>* BlockRegistry::GetOrCreateRegistry()
+    Registry<Block>* BlockRegistry::GetTypedRegistry()
     {
-        if (!s_registry)
+        auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
+        if (!registerSubsystem)
         {
-            auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
-            if (registerSubsystem)
+            LogError("registry", "RegisterSubsystem not found in engine");
+            return nullptr;
+        }
+
+        // Get or create the registry for Block type
+        auto* registry = registerSubsystem->GetRegistry<Block>();
+        if (!registry)
+        {
+            registry = registerSubsystem->CreateRegistry<Block>("blocks");
+            if (registry)
             {
-                s_registry = registerSubsystem->CreateRegistry<Block>("blocks");
-                LogInfo("registry", "Block registry initialized successfully");
-            }
-            else
-            {
-                LogError("registry", "Failed to initialize block registry: RegisterSubsystem not found in engine");
+                LogInfo("registry", "Block registry created successfully");
             }
         }
-        return s_registry;
+
+        return registry;
+    }
+
+    IRegistry* BlockRegistry::GetIRegistry()
+    {
+        auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
+        if (!registerSubsystem)
+        {
+            LogError("registry", "RegisterSubsystem not found in engine");
+            return nullptr;
+        }
+
+        // Get type-erased registry pointer
+        return registerSubsystem->GetRegistry("blocks");
     }
 
     std::shared_ptr<BlockStateDefinition> BlockRegistry::GenerateBlockStateDefinition(std::shared_ptr<Block> block)
@@ -79,7 +97,7 @@ namespace enigma::registry::block
 
     void BlockRegistry::RegisterBlock(const std::string& name, std::shared_ptr<Block> block)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         if (registry && block)
         {
             // Set namespace if not already set
@@ -112,7 +130,7 @@ namespace enigma::registry::block
 
     void BlockRegistry::RegisterBlock(const std::string& namespaceName, const std::string& name, std::shared_ptr<Block> block)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         if (registry && block)
         {
             // Generate all block states before registering
@@ -140,19 +158,19 @@ namespace enigma::registry::block
 
     std::shared_ptr<Block> BlockRegistry::GetBlock(const std::string& name)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->Get(name) : nullptr;
     }
 
     std::shared_ptr<Block> BlockRegistry::GetBlock(const std::string& namespaceName, const std::string& name)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->Get(namespaceName, name) : nullptr;
     }
 
     std::vector<std::shared_ptr<Block>> BlockRegistry::GetAllBlocks()
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->GetAll() : std::vector<std::shared_ptr<Block>>{};
     }
 
@@ -213,40 +231,36 @@ namespace enigma::registry::block
 
     std::vector<std::shared_ptr<Block>> BlockRegistry::GetBlocksByNamespace(const std::string& namespaceName)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->GetByNamespace(namespaceName) : std::vector<std::shared_ptr<Block>>{};
     }
 
     bool BlockRegistry::IsBlockRegistered(const std::string& name)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->HasRegistration(RegistrationKey(name)) : false;
     }
 
     bool BlockRegistry::IsBlockRegistered(const std::string& namespaceName, const std::string& name)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->HasRegistration(RegistrationKey(namespaceName, name)) : false;
     }
 
     size_t BlockRegistry::GetBlockCount()
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         return registry ? registry->GetRegistrationCount() : 0;
     }
 
     void BlockRegistry::Clear()
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetIRegistry();
         if (registry)
         {
             registry->Clear();
+            s_blockStateDefinitions.clear();
         }
-    }
-
-    Registry<Block>* BlockRegistry::GetRegistry()
-    {
-        return GetOrCreateRegistry();
     }
 
     void BlockRegistry::RegisterBlocks(const std::string& namespaceName, const std::vector<std::pair<std::string, std::shared_ptr<Block>>>& blocks)
@@ -257,9 +271,38 @@ namespace enigma::registry::block
         }
     }
 
+    Registry<Block>* BlockRegistry::GetRegistry()
+    {
+        return GetTypedRegistry();
+    }
+
+    // Type-erased registry access methods
+    std::string BlockRegistry::GetRegistryType()
+    {
+        return "blocks";
+    }
+
+    size_t BlockRegistry::GetRegistrationCount()
+    {
+        auto* registry = GetIRegistry();
+        return registry ? registry->GetRegistrationCount() : 0;
+    }
+
+    bool BlockRegistry::HasRegistration(const RegistrationKey& key)
+    {
+        auto* registry = GetIRegistry();
+        return registry ? registry->HasRegistration(key) : false;
+    }
+
+    std::vector<RegistrationKey> BlockRegistry::GetAllKeys()
+    {
+        auto* registry = GetIRegistry();
+        return registry ? registry->GetAllKeys() : std::vector<RegistrationKey>{};
+    }
+
     std::vector<std::string> BlockRegistry::GetBlockNames(const std::string& namespaceName)
     {
-        auto* registry = GetOrCreateRegistry();
+        auto* registry = GetTypedRegistry();
         if (!registry) return {};
 
         auto                     keys = registry->GetAllKeys();

@@ -19,17 +19,21 @@ namespace enigma::registry::block
     /**
      * @brief Specialized registry for Block types
      * 
+     * Uses the engine's RegisterSubsystem to manage Block registrations.
      * Provides convenient methods for registering and accessing blocks.
      * Automatically handles block state generation and BlockStateDefinition creation.
      */
     class BlockRegistry
     {
     private:
-        static inline Registry<Block>*                                                       s_registry = nullptr;
         static inline std::unordered_map<std::string, std::shared_ptr<BlockStateDefinition>> s_blockStateDefinitions;
 
-        // Ensure registry is initialized
-        static Registry<Block>* GetOrCreateRegistry();
+        // Get the underlying typed registry from RegisterSubsystem
+        static Registry<Block>* GetTypedRegistry();
+
+        // Get IRegistry pointer for type-erased operations
+        static IRegistry* GetIRegistry();
+
 
         /**
          * @brief Generate BlockStateDefinition for a block using BlockStateBuilder
@@ -133,6 +137,28 @@ namespace enigma::registry::block
          * @brief Get the underlying registry (for advanced usage)
          */
         static Registry<Block>* GetRegistry();
+
+        // Type-erased registry access methods
+
+        /**
+         * @brief Get registry type name
+         */
+        static std::string GetRegistryType();
+
+        /**
+         * @brief Get registration count
+         */
+        static size_t GetRegistrationCount();
+
+        /**
+         * @brief Check if a key is registered (type-erased)
+         */
+        static bool HasRegistration(const RegistrationKey& key);
+
+        /**
+         * @brief Get all registration keys (type-erased)
+         */
+        static std::vector<RegistrationKey> GetAllKeys();
 
         // Convenience methods for common operations
 
