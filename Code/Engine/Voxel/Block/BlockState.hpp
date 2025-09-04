@@ -96,6 +96,16 @@ namespace enigma::voxel::block
         std::shared_ptr<enigma::renderer::model::RenderMesh> GetRenderMesh() const;
 
         /**
+         * @brief Set the cached render mesh for this block state
+         * Called by BlockModelCompiler after compiling the model
+         */
+        void SetRenderMesh(std::shared_ptr<enigma::renderer::model::RenderMesh> mesh) const
+        {
+            m_cachedMesh     = mesh;
+            m_meshCacheValid = true;
+        }
+
+        /**
          * @brief Invalidate cached rendering data
          * Call when model resources change
          */

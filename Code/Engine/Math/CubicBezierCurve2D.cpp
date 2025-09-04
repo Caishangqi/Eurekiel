@@ -2,7 +2,7 @@
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 
-CubicBezierCurve2D::CubicBezierCurve2D(Vec2 startPos, Vec2 guidePos1, Vec2 guidePos2, Vec2 endPos): m_startPos(startPos), m_guidePos1(guidePos1), m_guidePos2(guidePos2), m_endPos(endPos)
+CubicBezierCurve2D::CubicBezierCurve2D(Vec2 startPos, Vec2 guidePos1, Vec2 guidePos2, Vec2 endPos) : m_startPos(startPos), m_guidePos1(guidePos1), m_guidePos2(guidePos2), m_endPos(endPos)
 {
 }
 
@@ -90,7 +90,7 @@ std::vector<Vec2> CubicBezierCurve2D::GetPoints() const
 }
 
 
-CubicHermiteCurve2D::CubicHermiteCurve2D(Vec2 startPos, Vec2 velocityU, Vec2 velocityV, Vec2 endPos): m_startPos(startPos), m_velocityU(velocityU), m_velocityV(velocityV), m_endPos(endPos)
+CubicHermiteCurve2D::CubicHermiteCurve2D(Vec2 startPos, Vec2 velocityU, Vec2 velocityV, Vec2 endPos) : m_startPos(startPos), m_velocityU(velocityU), m_velocityV(velocityV), m_endPos(endPos)
 {
 }
 

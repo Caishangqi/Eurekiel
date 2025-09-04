@@ -17,20 +17,22 @@ namespace enigma::core
      * Similar to Minecraft Neoforge's Registry class, this provides type-safe
      * registration and retrieval of objects.
      */
-    template<typename T>
+    template <typename T>
     class Registry : public IRegistry
     {
         static_assert(std::is_base_of_v<IRegistrable, T>, "T must inherit from IRegistrable");
-        
+
     public:
         explicit Registry(const std::string& typeName, bool threadSafe = true)
-            : m_typeName(typeName), m_threadSafe(threadSafe) {}
-        
+            : m_typeName(typeName), m_threadSafe(threadSafe)
+        {
+        }
+
         virtual ~Registry() = default;
 
         // IRegistry interface
         const std::string& GetRegistryType() const override { return m_typeName; }
-        
+
         size_t GetRegistrationCount() const override
         {
             if (m_threadSafe)
@@ -43,7 +45,7 @@ namespace enigma::core
                 return m_registrations.size();
             }
         }
-        
+
         void Clear() override
         {
             if (m_threadSafe)
@@ -56,7 +58,7 @@ namespace enigma::core
                 m_registrations.clear();
             }
         }
-        
+
         std::vector<RegistrationKey> GetAllKeys() const override
         {
             std::vector<RegistrationKey> keys;
@@ -79,7 +81,7 @@ namespace enigma::core
             }
             return keys;
         }
-        
+
         bool HasRegistration(const RegistrationKey& key) const override
         {
             if (m_threadSafe)
@@ -98,7 +100,7 @@ namespace enigma::core
         {
             if (!key.IsValid() || !item)
                 return;
-                
+
             if (m_threadSafe)
             {
                 std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -109,17 +111,17 @@ namespace enigma::core
                 m_registrations[key] = item;
             }
         }
-        
+
         void Register(const std::string& name, std::shared_ptr<T> item)
         {
             Register(RegistrationKey(name), item);
         }
-        
+
         void Register(const std::string& namespaceName, const std::string& name, std::shared_ptr<T> item)
         {
             Register(RegistrationKey(namespaceName, name), item);
         }
-        
+
         // Unregistration
         void Unregister(const RegistrationKey& key)
         {
@@ -133,24 +135,24 @@ namespace enigma::core
                 m_registrations.erase(key);
             }
         }
-        
+
         void Unregister(const std::string& name)
         {
             Unregister(RegistrationKey(name));
         }
-        
+
         void Unregister(const std::string& namespaceName, const std::string& name)
         {
             Unregister(RegistrationKey(namespaceName, name));
         }
-        
+
         // Retrieval methods
         std::shared_ptr<T> Get(const RegistrationKey& key) const
         {
             if (m_threadSafe)
             {
                 std::shared_lock<std::shared_mutex> lock(m_mutex);
-                auto it = m_registrations.find(key);
+                auto                                it = m_registrations.find(key);
                 return it != m_registrations.end() ? it->second : nullptr;
             }
             else
@@ -159,17 +161,17 @@ namespace enigma::core
                 return it != m_registrations.end() ? it->second : nullptr;
             }
         }
-        
+
         std::shared_ptr<T> Get(const std::string& name) const
         {
             return Get(RegistrationKey(name));
         }
-        
+
         std::shared_ptr<T> Get(const std::string& namespaceName, const std::string& name) const
         {
             return Get(RegistrationKey(namespaceName, name));
         }
-        
+
         // Bulk operations
         std::vector<std::shared_ptr<T>> GetAll() const
         {
@@ -193,7 +195,7 @@ namespace enigma::core
             }
             return items;
         }
-        
+
         std::vector<std::shared_ptr<T>> GetByNamespace(const std::string& namespaceName) const
         {
             std::vector<std::shared_ptr<T>> items;
@@ -234,7 +236,7 @@ namespace enigma::core
                 return m_registrations.begin();
             }
         }
-        
+
         auto end() const
         {
             if (m_threadSafe)
@@ -249,9 +251,9 @@ namespace enigma::core
         }
 
     private:
-        std::string m_typeName;
-        bool m_threadSafe;
-        mutable std::shared_mutex m_mutex;
+        std::string                                             m_typeName;
+        bool                                                    m_threadSafe;
+        mutable std::shared_mutex                               m_mutex;
         std::unordered_map<RegistrationKey, std::shared_ptr<T>> m_registrations;
     };
 }

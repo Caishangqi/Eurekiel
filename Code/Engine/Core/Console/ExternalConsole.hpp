@@ -4,10 +4,11 @@
 #include "Platform/WindowsConsole.hpp"
 #include "Engine/Core/Rgba8.hpp"
 
-namespace enigma::core {
-
+namespace enigma::core
+{
     // Cross-platform external console wrapper
-    class ExternalConsole {
+    class ExternalConsole
+    {
     public:
         ExternalConsole(const ConsoleConfig& config);
         ~ExternalConsole();
@@ -27,7 +28,7 @@ namespace enigma::core {
         void WriteColored(const std::string& text, const Rgba8& color);
         void WriteLine(const std::string& text);
         void Clear();
-        
+
         // Direct input processing (for when InputSystem can't reach us)
         void ProcessConsoleInput();
         bool HasPendingInput() const;
@@ -48,9 +49,8 @@ namespace enigma::core {
 
     private:
         ConsoleConfig m_config;
-        
+
         // Platform-specific implementation
         std::unique_ptr<WindowsConsole> m_platformConsole;
     };
-
 } // namespace enigma::core

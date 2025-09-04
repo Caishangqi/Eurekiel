@@ -5,7 +5,7 @@ FloatRange FloatRange::ZERO        = FloatRange(0, 0);
 FloatRange FloatRange::ZERO_TO_ONE = FloatRange(0, 1);
 
 
-FloatRange::FloatRange(float min, float max): m_min(min), m_max(max)
+FloatRange::FloatRange(float min, float max) : m_min(min), m_max(max)
 {
 }
 

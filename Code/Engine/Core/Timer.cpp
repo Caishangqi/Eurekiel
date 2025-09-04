@@ -9,7 +9,7 @@ Timer::Timer()
         m_clock = &Clock::GetSystemClock();
 }
 
-Timer::Timer(float period, const Clock* clock): m_clock(clock), m_period(period)
+Timer::Timer(float period, const Clock* clock) : m_clock(clock), m_period(period)
 {
     if (m_clock == nullptr)
         m_clock = &Clock::GetSystemClock();

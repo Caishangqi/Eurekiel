@@ -8,10 +8,11 @@
 #include "../ConsoleConfig.hpp"
 #include "Engine/Core/Rgba8.hpp"
 
-namespace enigma::core {
-
+namespace enigma::core
+{
     // Windows-specific console implementation
-    class WindowsConsole {
+    class WindowsConsole
+    {
     public:
         WindowsConsole(const ConsoleConfig& config);
         ~WindowsConsole();
@@ -58,34 +59,33 @@ namespace enigma::core {
         void ConfigureConsoleMode();
         bool SetupConsoleCloseHandler();
         void ConfigureStdioRedirection();
-        
+
         // Input handling (removed - using InputSystem instead)
 
         // Windows console close handler
-        static BOOL WINAPI ConsoleCloseHandler(DWORD dwCtrlType);
-        static WindowsConsole* s_instance;  // For static callback
+        static BOOL WINAPI     ConsoleCloseHandler(DWORD dwCtrlType);
+        static WindowsConsole* s_instance; // For static callback
 
         // Handle management
-        HANDLE m_consoleInput = INVALID_HANDLE_VALUE;
+        HANDLE m_consoleInput  = INVALID_HANDLE_VALUE;
         HANDLE m_consoleOutput = INVALID_HANDLE_VALUE;
-        HWND m_consoleWindow = nullptr;
+        HWND   m_consoleWindow = nullptr;
 
         // State
-        ConsoleConfig m_config;
-        bool m_initialized = false;
-        bool m_isVisible = false;
-        bool m_supportsAnsi = false;
-        bool m_ownedConsole = false;
+        ConsoleConfig     m_config;
+        bool              m_initialized  = false;
+        bool              m_isVisible    = false;
+        bool              m_supportsAnsi = false;
+        bool              m_ownedConsole = false;
         std::atomic<bool> m_closeRequested{false};
 
         // Display state
         int m_currentLine = 0;
-        int m_maxLines = 30;
+        int m_maxLines    = 30;
 
         // Original console state (for restoration)
-        DWORD m_originalInputMode = 0;
+        DWORD m_originalInputMode  = 0;
         DWORD m_originalOutputMode = 0;
-        bool m_hadConsole = false;
+        bool  m_hadConsole         = false;
     };
-
 } // namespace enigma::core

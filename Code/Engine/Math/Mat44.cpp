@@ -19,7 +19,7 @@ Mat44::Mat44()
     m_values[Tw] = 1.f;
 }
 
-Mat44::Mat44(const Vec2& iBasis2D, const Vec2& jBasis2D, const Vec2& translation2D): Mat44()
+Mat44::Mat44(const Vec2& iBasis2D, const Vec2& jBasis2D, const Vec2& translation2D) : Mat44()
 {
     m_values[Ix] = iBasis2D.x;
     m_values[Iy] = iBasis2D.y;
@@ -29,7 +29,7 @@ Mat44::Mat44(const Vec2& iBasis2D, const Vec2& jBasis2D, const Vec2& translation
     m_values[Ty] = translation2D.y;
 }
 
-Mat44::Mat44(const Vec3& iBasis3D, const Vec3& jBasis3D, const Vec3& kBasis3D, const Vec3& translation3D): Mat44()
+Mat44::Mat44(const Vec3& iBasis3D, const Vec3& jBasis3D, const Vec3& kBasis3D, const Vec3& translation3D) : Mat44()
 {
     m_values[Ix] = iBasis3D.x;
     m_values[Iy] = iBasis3D.y;
@@ -45,7 +45,7 @@ Mat44::Mat44(const Vec3& iBasis3D, const Vec3& jBasis3D, const Vec3& kBasis3D, c
     m_values[Tz] = translation3D.z;
 }
 
-Mat44::Mat44(const Vec4& iBasis4D, const Vec4& jBasis4D, const Vec4& kBasis4D, const Vec4& translation4D): Mat44()
+Mat44::Mat44(const Vec4& iBasis4D, const Vec4& jBasis4D, const Vec4& kBasis4D, const Vec4& translation4D) : Mat44()
 {
     m_values[Ix] = iBasis4D.x;
     m_values[Iy] = iBasis4D.y;

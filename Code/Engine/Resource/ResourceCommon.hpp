@@ -22,14 +22,14 @@ namespace enigma::resource
         TEXTURE,
         MODEL,
         SHADER,
-        SOUND,           // Added for audio resources (like Neoforge)
+        SOUND, // Added for audio resources (like Neoforge)
         FONT,
         JSON,
         TEXT,
         BINARY,
-        BLOCKSTATE,      // Neoforge compatibility
-        RECIPE,          // Neoforge compatibility
-        LANG,            // Language files
+        BLOCKSTATE, // Neoforge compatibility
+        RECIPE, // Neoforge compatibility
+        LANG, // Language files
         UNKNOWN
     };
 
@@ -57,10 +57,10 @@ namespace enigma::resource
     public:
         // Default constructor creates an invalid ResourceLocation
         ResourceLocation() = default;
-        
+
         // Main constructor with validation
         ResourceLocation(std::string_view namespaceId, std::string_view path);
-        
+
         // Parse from string format "namespace:path"
         explicit ResourceLocation(std::string_view fullLocation);
 
@@ -68,10 +68,10 @@ namespace enigma::resource
         static ResourceLocation Of(std::string_view namespaceId, std::string_view path);
         static ResourceLocation Parse(std::string_view location);
         static ResourceLocation FromNamespaceAndPath(std::string_view namespaceId, std::string_view path);
-        
+
         // Tryparse version that returns optional instead of throwing
         static std::optional<ResourceLocation> TryParse(std::string_view location);
-        
+
         // Create with default namespace
         static ResourceLocation WithDefaultNamespace(std::string_view path);
 
@@ -81,14 +81,14 @@ namespace enigma::resource
 
         // Utility methods
         std::string ToString() const;
-        
+
         ResourceLocation WithPrefix(std::string_view prefix) const;
         ResourceLocation WithSuffix(std::string_view suffix) const;
         ResourceLocation WithPath(std::string_view newPath) const;
         ResourceLocation WithNamespace(std::string_view newNamespace) const;
 
         // Validation
-        bool IsValid() const;
+        bool        IsValid() const;
         static bool IsValidNamespace(std::string_view namespaceId);
         static bool IsValidPath(std::string_view path);
 
@@ -96,7 +96,7 @@ namespace enigma::resource
         bool operator==(const ResourceLocation& other) const;
         bool operator!=(const ResourceLocation& other) const;
         bool operator<(const ResourceLocation& other) const;
-        
+
         // Comparison with string (Neoforge convenience)
         bool operator==(std::string_view str) const;
         bool operator!=(std::string_view str) const;
@@ -110,7 +110,7 @@ namespace enigma::resource
 
         // Default namespace following Neoforge convention (but adapted for our engine)
         static constexpr std::string_view DEFAULT_NAMESPACE = "engine";
-        
+
         // Validate and normalize the components
         void validateAndNormalize();
     };

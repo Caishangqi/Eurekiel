@@ -6,7 +6,7 @@ Capsule2::Capsule2()
 {
 }
 
-Capsule2::Capsule2(const Vec2& start, const Vec2& end, float radius): m_start(start), m_end(end), m_radius(radius)
+Capsule2::Capsule2(const Vec2& start, const Vec2& end, float radius) : m_start(start), m_end(end), m_radius(radius)
 {
 }
 

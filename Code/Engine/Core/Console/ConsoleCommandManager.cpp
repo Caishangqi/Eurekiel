@@ -4,6 +4,7 @@
 // This file is intentionally minimal to avoid build errors
 // All command processing is handled by DevConsole
 
-namespace enigma::core {
+namespace enigma::core
+{
     // Empty namespace to satisfy linker
 }

@@ -130,7 +130,7 @@ ZCylinder::ZCylinder(const ZCylinder& copyFrom)
     m_radius = copyFrom.m_radius;
 }
 
-ZCylinder::ZCylinder(const Vec3& center, float radius, float height): m_center(center), m_height(height), m_radius(radius)
+ZCylinder::ZCylinder(const Vec3& center, float radius, float height) : m_center(center), m_height(height), m_radius(radius)
 {
 }
 

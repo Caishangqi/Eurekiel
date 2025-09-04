@@ -1,6 +1,11 @@
 #include "Block.hpp"
 #include "../../Voxel/Block/BlockState.hpp"
+#include "../../Model/ModelSubsystem.hpp"
+#include "../../Resource/Atlas/AtlasManager.hpp"
 #include <algorithm>
+
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::registry::block
 {
@@ -111,6 +116,54 @@ namespace enigma::registry::block
         std::string path = m_namespace.empty() ? "minecraft" : m_namespace;
         path += ":block/" + m_registryName;
         return path;
+    }
+
+    void Block::CompileModels(enigma::model::ModelSubsystem*        modelSubsystem,
+                              const enigma::resource::AtlasManager* atlasManager) const
+    {
+        if (!modelSubsystem || !atlasManager)
+        {
+            LogError("Block", "Cannot compile models: missing ModelSubsystem or AtlasManager");
+            return;
+        }
+
+        LogInfo("Block", "Compiling models for block: %s (states: %zu)",
+                GetRegistryName().c_str(), m_impl->allStates.size());
+
+        int compiledCount = 0;
+        int failedCount   = 0;
+
+        for (const auto& state : m_impl->allStates)
+        {
+            // Get model path for this state
+            std::string modelPath = GetModelPath(state.get());
+
+            if (modelPath.empty())
+            {
+                LogWarn("Block", "No model path for block state: %s", state->ToString().c_str());
+                failedCount++;
+                continue;
+            }
+
+            // Compile the model using ModelSubsystem
+            resource::ResourceLocation modelLocation(modelPath);
+            auto                       compiledMesh = modelSubsystem->CompileModel(modelLocation);
+
+            if (compiledMesh)
+            {
+                // Set the mesh on the block state
+                state->SetRenderMesh(compiledMesh);
+                compiledCount++;
+            }
+            else
+            {
+                LogWarn("Block", "Failed to compile model for state: %s", state->ToString().c_str());
+                failedCount++;
+            }
+        }
+
+        LogInfo("Block", "Model compilation complete for %s: compiled=%d, failed=%d",
+                GetRegistryName().c_str(), compiledCount, failedCount);
     }
 
     void Block::GenerateStatesRecursive(size_t propertyIndex, PropertyMap& currentMap, std::vector<PropertyMap>& allCombinations)

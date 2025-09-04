@@ -3,11 +3,17 @@
 #include "../../Voxel/Property/Property.hpp"
 #include "../../Voxel/Property/PropertyMap.hpp"
 #include "../ResourceCommon.hpp"
+#include "../../Core/Engine.hpp"
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
 #include <functional>
+
+namespace enigma::model
+{
+    class ModelSubsystem;
+}
 
 namespace enigma::registry::block
 {
@@ -212,5 +218,11 @@ namespace enigma::resource::blockstate
     private:
         std::string MapPropertiesToString(const PropertyMap& properties) const;
         void        GeneratePropertyCombinations(enigma::registry::block::Block* block, std::vector<PropertyMap>& combinations) const;
+
+        /**
+         * @brief Compile a variant's model using ModelSubsystem
+         * This triggers the model compilation pipeline for each block variant
+         */
+        void CompileVariantModel(BlockStateVariant& variant, enigma::model::ModelSubsystem* modelSubsystem) const;
     };
 }

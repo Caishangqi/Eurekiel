@@ -1,6 +1,10 @@
 #include "BlockStateBuilder.hpp"
 #include "../../Registry/Block/Block.hpp"
 #include "../../Core/StringUtils.hpp"
+#include "../../Model/ModelSubsystem.hpp"
+#include "../../Model/Compiler/BlockModelCompiler.hpp"
+#include "../../Resource/Atlas/AtlasManager.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
 #include <sstream>
 #include <algorithm>
 
@@ -209,17 +213,48 @@ std::shared_ptr<BlockStateDefinition> BlockStateBuilder::Build()
 {
     auto definition = std::make_shared<BlockStateDefinition>(m_location);
 
+    // Get ModelSubsystem for model compilation
+    auto* modelSubsystem = GEngine->GetSubsystem<enigma::model::ModelSubsystem>();
+    if (!modelSubsystem)
+    {
+        LogWarn("BlockStateBuilder", "ModelSubsystem not found - models will not be compiled");
+    }
+
     if (m_isMultipart)
     {
         // Build multipart definition
         definition->m_isMultipart = true;
         definition->m_multipart   = m_multipartCases;
+
+        // Compile models for multipart cases
+        if (modelSubsystem)
+        {
+            for (auto& multipartCase : definition->m_multipart)
+            {
+                for (auto& variant : multipartCase.apply)
+                {
+                    CompileVariantModel(variant, modelSubsystem);
+                }
+            }
+        }
     }
     else
     {
         // Build variants definition
         definition->m_isMultipart = false;
         definition->m_variants    = m_variants;
+
+        // Compile models for variants
+        if (modelSubsystem)
+        {
+            for (auto& [propertyString, variantList] : definition->m_variants)
+            {
+                for (auto& variant : variantList)
+                {
+                    CompileVariantModel(variant, modelSubsystem);
+                }
+            }
+        }
     }
 
     definition->m_metadata.location = m_location;
@@ -309,4 +344,39 @@ void BlockStateBuilder::GeneratePropertyCombinations(
     };
 
     generateRecursive(0, PropertyMap());
+}
+
+void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::model::ModelSubsystem* modelSubsystem) const
+{
+    if (!modelSubsystem)
+    {
+        return;
+    }
+
+    try
+    {
+        // Use ModelSubsystem to compile the block model
+        // This will trigger the BlockModelCompiler compilation pipeline
+        auto compiledMesh = modelSubsystem->CompileBlockModel(variant.model);
+
+        if (compiledMesh)
+        {
+            LogInfo("BlockStateBuilder", "Successfully compiled model: %s",
+                    variant.model.ToString().c_str());
+
+            // Store the compiled mesh in the variant for later use
+            // Note: BlockStateVariant might need to be extended to store the compiled mesh
+            // For now, the mesh is cached in ModelSubsystem
+        }
+        else
+        {
+            LogWarn("BlockStateBuilder", "Failed to compile model: %s",
+                    variant.model.ToString().c_str());
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LogError("BlockStateBuilder", "Exception while compiling model %s: %s",
+                 variant.model.ToString().c_str(), e.what());
+    }
 }

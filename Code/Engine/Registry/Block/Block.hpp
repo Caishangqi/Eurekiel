@@ -9,6 +9,16 @@
 
 #include "Engine/Core/EngineCommon.hpp"
 
+namespace enigma::model
+{
+    class ModelSubsystem;
+}
+
+namespace enigma::resource
+{
+    class AtlasManager;
+}
+
 namespace enigma::voxel::block
 {
     class BlockState;
@@ -142,6 +152,19 @@ namespace enigma::registry::block
             UNUSED(state);
             UNUSED(neighborBlock);
         }
+
+        /**
+         * @brief Compile models for all block states
+         * 
+         * Should be called after GenerateBlockStates() and after ModelRegistry
+         * and AtlasManager are initialized. This compiles the model for each
+         * BlockState and caches the result.
+         * 
+         * @param modelRegistry Registry for loading models
+         * @param atlasManager Manager for texture atlas access  
+         */
+        void CompileModels(enigma::model::ModelSubsystem*        modelSubsystem,
+                           const enigma::resource::AtlasManager* atlasManager) const;
 
         /**
          * @brief Get the model path for a specific state

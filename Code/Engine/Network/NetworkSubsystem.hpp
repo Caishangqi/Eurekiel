@@ -112,4 +112,3 @@ private:
     bool IsMessageSafe(const std::string& message) const;
     bool IsQueueSizeOk(const std::deque<uint8_t>& queue) const;
 };
-

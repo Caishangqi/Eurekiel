@@ -36,7 +36,7 @@ bool IsDebuggerAvailable()
     static BOOL isDebuggerAvailable = isDebuggerPresentFunc();
     return (isDebuggerAvailable == TRUE);
 #else
-	return false;
+    return false;
 #endif
 }
 

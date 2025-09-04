@@ -20,10 +20,10 @@ namespace enigma::resource
         virtual ~ImageLoader() override = default;
 
         // IResourceLoader interface implementation
-        ResourcePtr Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) override;
+        ResourcePtr           Load(const ResourceMetadata& metadata, const std::vector<uint8_t>& data) override;
         std::set<std::string> GetSupportedExtensions() const override;
-        std::string GetLoaderName() const override;
-        int GetPriority() const override;
+        std::string           GetLoaderName() const override;
+        int                   GetPriority() const override;
 
         // Additional validation
         bool CanLoad(const ResourceMetadata& metadata) const override;
@@ -31,9 +31,9 @@ namespace enigma::resource
     private:
         // Supported image formats
         std::set<std::string> m_supportedExtensions;
-        
+
         // Helper methods
-        bool IsImageFormat(const std::string& extension) const;
+        bool                   IsImageFormat(const std::string& extension) const;
         std::unique_ptr<Image> LoadImageFromData(const std::vector<uint8_t>& data, const std::string& debugName) const;
     };
 }

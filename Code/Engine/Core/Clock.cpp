@@ -7,7 +7,7 @@ Clock::Clock()
 {
 }
 
-Clock::Clock(Clock& parent): m_parent(&parent)
+Clock::Clock(Clock& parent) : m_parent(&parent)
 {
     if (m_parent)
         m_parent->AddChild(this);

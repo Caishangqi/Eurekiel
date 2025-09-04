@@ -20,10 +20,11 @@ namespace enigma::core
         // Subsystem access (non-template version)
         EngineSubsystem* GetSubsystem(const std::string& name) const;
         EngineSubsystem* GetSubsystem(const std::type_index& typeId) const;
-        
+
         // Template convenience methods (inline)
         template <typename T>
-        T* GetSubsystem() const {
+        T* GetSubsystem() const
+        {
             auto* subsystem = GetSubsystem(std::type_index(typeid(T)));
             return static_cast<T*>(subsystem);
         }
@@ -41,7 +42,7 @@ namespace enigma::core
         void EndFrame();
 
         // Convenience accessors for commonly used subsystems
-        LoggerSubsystem* GetLogger() const;
+        LoggerSubsystem*  GetLogger() const;
         ConsoleSubsystem* GetConsole() const;
 
     private:

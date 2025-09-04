@@ -984,4 +984,3 @@ void NetworkSubsystem::BroadcastStringToClients(const std::string& message)
     }
     m_stats.totalMessagesSent += m_connections.size();
 }
-

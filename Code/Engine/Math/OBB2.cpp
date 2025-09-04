@@ -6,8 +6,8 @@ OBB2::OBB2()
 {
 }
 
-OBB2::OBB2(const Vec2& center, const Vec2& iBasisNormal, const Vec2& halfDimensions): m_center(center),
-                                                                                      m_iBasisNormal(iBasisNormal), m_halfDimensions(halfDimensions)
+OBB2::OBB2(const Vec2& center, const Vec2& iBasisNormal, const Vec2& halfDimensions) : m_center(center),
+                                                                                       m_iBasisNormal(iBasisNormal), m_halfDimensions(halfDimensions)
 {
 }
 

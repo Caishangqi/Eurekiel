@@ -23,7 +23,7 @@ IntVec2::IntVec2(const IntVec2& copyFrom)
     y = copyFrom.y;
 }
 
-IntVec2::IntVec2(int initialX, int initialY): x(initialX), y(initialY)
+IntVec2::IntVec2(int initialX, int initialY) : x(initialX), y(initialY)
 {
 }
 

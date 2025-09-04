@@ -6,12 +6,12 @@ LineSegment2::LineSegment2()
 {
 }
 
-LineSegment2::LineSegment2(const Vec2& start, const Vec2& end): m_start(start), m_end(end)
+LineSegment2::LineSegment2(const Vec2& start, const Vec2& end) : m_start(start), m_end(end)
 {
 }
 
-LineSegment2::LineSegment2(const Vec2& start, const Vec2& end, float thickness): m_start(start), m_end(end),
-                                                                                 m_thickness(thickness)
+LineSegment2::LineSegment2(const Vec2& start, const Vec2& end, float thickness) : m_start(start), m_end(end),
+                                                                                  m_thickness(thickness)
 {
 }
 

@@ -302,10 +302,10 @@ AABB3::AABB3(const AABB3& copyFrom)
     m_maxs = copyFrom.m_maxs;
 }
 
-AABB3::AABB3(float minX, float minY, float minZ, float maxX, float maxY, float maxZ): m_mins(Vec3(minX, minY, minZ)), m_maxs(Vec3(maxX, maxY, maxZ))
+AABB3::AABB3(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) : m_mins(Vec3(minX, minY, minZ)), m_maxs(Vec3(maxX, maxY, maxZ))
 {
 }
 
-AABB3::AABB3(const Vec3& mins, const Vec3& maxs): m_mins(mins), m_maxs(maxs)
+AABB3::AABB3(const Vec3& mins, const Vec3& maxs) : m_mins(mins), m_maxs(maxs)
 {
 }

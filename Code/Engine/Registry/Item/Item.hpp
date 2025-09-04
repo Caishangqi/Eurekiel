@@ -3,5 +3,4 @@
 class Item
 {
 public:
-    
 };

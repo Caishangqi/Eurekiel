@@ -25,13 +25,13 @@ namespace enigma::resource
 {
     TextureAtlas::TextureAtlas(const AtlasConfig& config)
         : m_config(config)
-        , m_metadata(ResourceLocation("engine", "atlas/" + config.name), std::filesystem::path("atlas/" + config.name))
-        , m_location("engine", "atlas/" + config.name)
-        , m_atlasImage(nullptr)
-        , m_atlasDimensions(IntVec2::ZERO)
-        , m_isBuilt(false)
-        , m_gridResolution(config.requiredResolution)
-        , m_atlasTexture(nullptr)
+          , m_metadata(ResourceLocation("engine", "atlas/" + config.name), std::filesystem::path("atlas/" + config.name))
+          , m_location("engine", "atlas/" + config.name)
+          , m_atlasImage(nullptr)
+          , m_atlasDimensions(IntVec2::ZERO)
+          , m_isBuilt(false)
+          , m_gridResolution(config.requiredResolution)
+          , m_atlasTexture(nullptr)
     {
         m_metadata.type = ResourceType::TEXTURE;
         m_stats.Reset();
@@ -107,9 +107,9 @@ namespace enigma::resource
         CalculateAllUVCoordinates();
 
         // Update statistics
-        m_stats.totalSprites = static_cast<int>(m_sprites.size());
-        m_stats.atlasWidth = m_atlasDimensions.x;
-        m_stats.atlasHeight = m_atlasDimensions.y;
+        m_stats.totalSprites   = static_cast<int>(m_sprites.size());
+        m_stats.atlasWidth     = m_atlasDimensions.x;
+        m_stats.atlasHeight    = m_atlasDimensions.y;
         m_stats.atlasSizeBytes = m_atlasDimensions.x * m_atlasDimensions.y * 4; // RGBA
 
         // Calculate packing efficiency
@@ -128,7 +128,7 @@ namespace enigma::resource
         m_packingGrid.clear();
         m_atlasDimensions = IntVec2::ZERO;
         m_stats.Reset();
-        m_isBuilt = false;
+        m_isBuilt      = false;
         m_atlasTexture = nullptr;
     }
 
@@ -195,12 +195,12 @@ namespace enigma::resource
         }
 
         // Convert Rgba8 data to unsigned char array for stb_image_write
-        const Rgba8* rgbaData = static_cast<const Rgba8*>(rawData);
-        int totalPixels = m_atlasDimensions.x * m_atlasDimensions.y;
-        
+        const Rgba8* rgbaData    = static_cast<const Rgba8*>(rawData);
+        int          totalPixels = m_atlasDimensions.x * m_atlasDimensions.y;
+
         std::vector<unsigned char> pngData;
         pngData.reserve(totalPixels * 4);
-        
+
         for (int i = 0; i < totalPixels; ++i)
         {
             pngData.push_back(rgbaData[i].r);
@@ -237,16 +237,16 @@ namespace enigma::resource
 
     std::string TextureAtlas::GetDebugString() const
     {
-        return Stringf("Atlas[%s] %dx%d with %d sprites (%.1f%% efficiency)", 
-                      m_config.name.c_str(), 
-                      m_atlasDimensions.x, m_atlasDimensions.y, 
-                      m_stats.totalSprites, m_stats.packingEfficiency);
+        return Stringf("Atlas[%s] %dx%d with %d sprites (%.1f%% efficiency)",
+                       m_config.name.c_str(),
+                       m_atlasDimensions.x, m_atlasDimensions.y,
+                       m_stats.totalSprites, m_stats.packingEfficiency);
     }
 
     bool TextureAtlas::ValidateImages(const std::vector<std::shared_ptr<ImageResource>>& images)
     {
         m_stats.rejectedSprites = 0;
-        m_stats.scaledSprites = 0;
+        m_stats.scaledSprites   = 0;
 
         for (const auto& imageRes : images)
         {
@@ -287,7 +287,7 @@ namespace enigma::resource
         {
             if (!imageRes || !imageRes->IsLoaded() || !imageRes->IsValidForAtlas())
                 continue;
-                
+
             int resolution = imageRes->GetResolution();
             if (resolution != m_config.requiredResolution)
             {
@@ -304,10 +304,10 @@ namespace enigma::resource
 
         // Calculate optimal atlas size
         m_atlasDimensions = FindBestAtlasSize(validSprites, m_config.requiredResolution);
-        
+
         // Create atlas image
         m_atlasImage = std::make_unique<Image>(m_atlasDimensions, Rgba8(0, 0, 0, 0)); // Transparent background
-        
+
         // Initialize packing grid
         InitializePackingGrid(m_atlasDimensions, m_config.requiredResolution);
 
@@ -327,7 +327,7 @@ namespace enigma::resource
             // Find position for this sprite
             IntVec2 spriteSize(m_config.requiredResolution, m_config.requiredResolution);
             IntVec2 position;
-            
+
             if (!TryPackSprite(spriteSize, position))
             {
                 // Atlas is full, could implement multiple atlas support here
@@ -361,7 +361,7 @@ namespace enigma::resource
     {
         IntVec2 sourceSize = source.GetDimensions();
         IntVec2 destSize(targetResolution, targetResolution);
-        
+
         // Simple nearest-neighbor scaling
         for (int y = 0; y < destSize.y; ++y)
         {
@@ -370,11 +370,11 @@ namespace enigma::resource
                 // Map destination coordinates to source coordinates
                 int srcX = (x * sourceSize.x) / destSize.x;
                 int srcY = (y * sourceSize.y) / destSize.y;
-                
+
                 // Clamp to source bounds
                 srcX = std::min(srcX, sourceSize.x - 1);
                 srcY = std::min(srcY, sourceSize.y - 1);
-                
+
                 Rgba8 color = source.GetTexelColor(IntVec2(srcX, srcY));
                 destination.SetTexelColor(IntVec2(x, y), color);
             }
@@ -384,14 +384,14 @@ namespace enigma::resource
     void TextureAtlas::CopyImageToAtlas(const Image& source, const IntVec2& position)
     {
         IntVec2 sourceSize = source.GetDimensions();
-        
+
         for (int y = 0; y < sourceSize.y; ++y)
         {
             for (int x = 0; x < sourceSize.x; ++x)
             {
                 IntVec2 sourcePos(x, y);
                 IntVec2 atlasPos = position + sourcePos;
-                
+
                 // Bounds check
                 if (atlasPos.x >= 0 && atlasPos.x < m_atlasDimensions.x &&
                     atlasPos.y >= 0 && atlasPos.y < m_atlasDimensions.y)
@@ -415,19 +415,19 @@ namespace enigma::resource
     {
         // Calculate minimum area needed
         int totalArea = totalSprites * spriteResolution * spriteResolution;
-        int minSize = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(totalArea))));
-        
+        int minSize   = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(totalArea))));
+
         // Round up to next power of 2 for GPU efficiency
         int size = 1;
         while (size < minSize)
         {
             size *= 2;
         }
-        
+
         // Ensure we don't exceed maximum atlas size
         size = std::min(size, m_config.maxAtlasSize.x);
         size = std::min(size, m_config.maxAtlasSize.y);
-        
+
         return IntVec2(size, size);
     }
 
@@ -435,17 +435,17 @@ namespace enigma::resource
     {
         int gridCols = m_atlasDimensions.x / m_gridResolution;
         int gridRows = m_atlasDimensions.y / m_gridResolution;
-        
+
         // Simple linear search for free space (can be optimized with better algorithms)
         for (int row = 0; row <= gridRows - (spriteSize.y / m_gridResolution); ++row)
         {
             for (int col = 0; col <= gridCols - (spriteSize.x / m_gridResolution); ++col)
             {
                 // Check if this position is free
-                bool canPlace = true;
-                int spriteCols = spriteSize.x / m_gridResolution;
-                int spriteRows = spriteSize.y / m_gridResolution;
-                
+                bool canPlace   = true;
+                int  spriteCols = spriteSize.x / m_gridResolution;
+                int  spriteRows = spriteSize.y / m_gridResolution;
+
                 for (int sr = 0; sr < spriteRows && canPlace; ++sr)
                 {
                     for (int sc = 0; sc < spriteCols && canPlace; ++sc)
@@ -456,7 +456,7 @@ namespace enigma::resource
                         }
                     }
                 }
-                
+
                 if (canPlace)
                 {
                     // Mark this area as occupied
@@ -467,13 +467,13 @@ namespace enigma::resource
                             m_packingGrid[row + sr][col + sc] = true;
                         }
                     }
-                    
+
                     outPosition = IntVec2(col * m_gridResolution, row * m_gridResolution);
                     return true;
                 }
             }
         }
-        
+
         return false; // No space found
     }
 
@@ -481,7 +481,7 @@ namespace enigma::resource
     {
         int gridCols = atlasDimensions.x / spriteSize;
         int gridRows = atlasDimensions.y / spriteSize;
-        
+
         m_packingGrid.clear();
         m_packingGrid.resize(gridRows, std::vector<bool>(gridCols, false));
     }

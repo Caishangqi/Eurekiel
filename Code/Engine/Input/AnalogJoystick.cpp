@@ -3,8 +3,8 @@
 #include <cmath>
 #include "Engine/Math/MathUtils.hpp"
 
-AnalogJoystick::AnalogJoystick(): m_rawPosition(Vec2()), m_correctedPosition(Vec2()), m_innerDeadZoneFraction(0.3f),
-                                  m_outerDeadZoneFraction(0.95f)
+AnalogJoystick::AnalogJoystick() : m_rawPosition(Vec2()), m_correctedPosition(Vec2()), m_innerDeadZoneFraction(0.3f),
+                                   m_outerDeadZoneFraction(0.95f)
 {
 }
 

@@ -73,7 +73,7 @@ void AudioSubsystem::Initialize()
         if (resourceSubsystem)
         {
             m_resourceSubsystem = resourceSubsystem;
-            auto soundLoader = std::make_shared<enigma::resource::SoundLoader>(this);
+            auto soundLoader    = std::make_shared<enigma::resource::SoundLoader>(this);
             m_resourceSubsystem->RegisterLoader(soundLoader);
         }
         else

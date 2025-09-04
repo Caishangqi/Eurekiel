@@ -16,7 +16,7 @@ namespace enigma::resource
 
     AtlasManager::AtlasManager(ResourceSubsystem* resourceSubsystem)
         : m_resourceSubsystem(resourceSubsystem)
-        , m_lookupCacheValid(false)
+          , m_lookupCacheValid(false)
     {
         GUARANTEE_OR_DIE(m_resourceSubsystem != nullptr, "AtlasManager: ResourceSubsystem cannot be null");
     }
@@ -34,7 +34,7 @@ namespace enigma::resource
         }
 
         m_atlasConfigs[config.name] = config;
-        m_lookupCacheValid = false;
+        m_lookupCacheValid          = false;
     }
 
     bool AtlasManager::BuildAtlas(const std::string& atlasName)
@@ -49,7 +49,7 @@ namespace enigma::resource
 
         // Collect textures for this atlas
         std::vector<std::shared_ptr<ImageResource>> images = CollectTexturesForAtlas(config);
-        
+
         if (images.empty())
         {
             printf("AtlasManager: No textures found for atlas '%s'\n", atlasName.c_str());
@@ -71,12 +71,12 @@ namespace enigma::resource
 
         // Build the atlas
         bool success = m_atlases[atlasName]->BuildAtlas(images);
-        
+
         if (success)
         {
             m_lookupCacheValid = false;
             printf("AtlasManager: Successfully built atlas '%s'\n", atlasName.c_str());
-            
+
             // Export to PNG if configured
             if (config.exportPNG)
             {
@@ -96,7 +96,7 @@ namespace enigma::resource
     bool AtlasManager::BuildAllAtlases()
     {
         bool allSuccess = true;
-        
+
         for (const auto& configPair : m_atlasConfigs)
         {
             if (!BuildAtlas(configPair.first))
@@ -104,12 +104,12 @@ namespace enigma::resource
                 allSuccess = false;
             }
         }
-        
+
         if (allSuccess)
         {
             RebuildSpriteLookupCache();
         }
-        
+
         return allSuccess;
     }
 
@@ -147,12 +147,12 @@ namespace enigma::resource
     {
         std::vector<std::string> names;
         names.reserve(m_atlases.size());
-        
+
         for (const auto& atlasPair : m_atlases)
         {
             names.push_back(atlasPair.first);
         }
-        
+
         return names;
     }
 
@@ -190,15 +190,15 @@ namespace enigma::resource
         {
             switch (source.type)
             {
-                case AtlasSourceType::DIRECTORY:
-                    CollectTexturesFromDirectory(source, images);
-                    break;
-                case AtlasSourceType::SINGLE:
-                    CollectTexturesFromSingle(source, images);
-                    break;
-                case AtlasSourceType::FILTER:
-                    CollectTexturesFromFilter(source, images);
-                    break;
+            case AtlasSourceType::DIRECTORY:
+                CollectTexturesFromDirectory(source, images);
+                break;
+            case AtlasSourceType::SINGLE:
+                CollectTexturesFromSingle(source, images);
+                break;
+            case AtlasSourceType::FILTER:
+                CollectTexturesFromFilter(source, images);
+                break;
             }
         }
 
@@ -208,10 +208,10 @@ namespace enigma::resource
     std::vector<ResourceLocation> AtlasManager::FindTexturesByPattern(const std::string& pattern, const std::vector<std::string>& namespaces)
     {
         std::vector<ResourceLocation> matches;
-        
+
         // Get all texture resources from the resource subsystem
         std::vector<ResourceLocation> allTextures = m_resourceSubsystem->ListResources("", ResourceType::TEXTURE);
-        
+
         for (const ResourceLocation& location : allTextures)
         {
             // Check namespace filter
@@ -219,14 +219,14 @@ namespace enigma::resource
             {
                 continue;
             }
-            
+
             // Check pattern match
             if (MatchesPattern(location.GetPath(), pattern))
             {
                 matches.push_back(location);
             }
         }
-        
+
         return matches;
     }
 
@@ -237,25 +237,25 @@ namespace enigma::resource
         {
             return false;
         }
-        
+
         return atlas->ExportToPNG(filepath);
     }
 
     bool AtlasManager::ExportAllAtlasesToPNG(const std::string& directory)
     {
         bool allSuccess = true;
-        
+
         for (const auto& atlasPair : m_atlases)
         {
             std::string filename = "atlas_" + atlasPair.first + ".png";
             std::string fullPath = directory + filename;
-            
+
             if (!ExportAtlasToPNG(atlasPair.first, fullPath))
             {
                 allSuccess = false;
             }
         }
-        
+
         return allSuccess;
     }
 
@@ -265,7 +265,7 @@ namespace enigma::resource
         printf("Total Atlases: %zu\n", m_atlases.size());
         printf("Total Sprites: %zu\n", GetTotalSpriteCount());
         printf("Total Memory: %.2f KB\n", GetTotalAtlasMemoryUsage() / 1024.0f);
-        
+
         for (const auto& atlasPair : m_atlases)
         {
             atlasPair.second->PrintAtlasInfo();
@@ -313,7 +313,7 @@ namespace enigma::resource
     {
         // Get all texture resources matching the directory pattern
         std::vector<ResourceLocation> textureLocations = FindTexturesByPattern(source.source + "*", source.namespaces);
-        
+
         for (const ResourceLocation& location : textureLocations)
         {
             ResourcePtr resource = m_resourceSubsystem->GetResource(location);
@@ -327,7 +327,7 @@ namespace enigma::resource
                 }
             }
         }
-        
+
         return !outImages.empty();
     }
 
@@ -344,7 +344,7 @@ namespace enigma::resource
             // Assume default namespace
             location = ResourceLocation("engine", source.source);
         }
-        
+
         ResourcePtr resource = m_resourceSubsystem->GetResource(location);
         if (resource)
         {
@@ -355,18 +355,18 @@ namespace enigma::resource
                 return true;
             }
         }
-        
+
         return false;
     }
 
     bool AtlasManager::CollectTexturesFromFilter(const AtlasSourceEntry& source, std::vector<std::shared_ptr<ImageResource>>& outImages)
     {
         std::vector<ResourceLocation> allTextures = m_resourceSubsystem->ListResources("", ResourceType::TEXTURE);
-        
+
         for (const ResourceLocation& location : allTextures)
         {
             bool shouldInclude = false;
-            
+
             // Check include patterns
             if (source.includePatterns.empty())
             {
@@ -383,7 +383,7 @@ namespace enigma::resource
                     }
                 }
             }
-            
+
             // Check exclude patterns
             if (shouldInclude)
             {
@@ -396,13 +396,13 @@ namespace enigma::resource
                     }
                 }
             }
-            
+
             // Check namespace filter
             if (shouldInclude && !MatchesNamespaceFilter(location, source.namespaces))
             {
                 shouldInclude = false;
             }
-            
+
             if (shouldInclude)
             {
                 ResourcePtr resource = m_resourceSubsystem->GetResource(location);
@@ -416,7 +416,7 @@ namespace enigma::resource
                 }
             }
         }
-        
+
         return !outImages.empty();
     }
 
@@ -426,7 +426,7 @@ namespace enigma::resource
         {
             return true;
         }
-        
+
         return std::find(namespaces.begin(), namespaces.end(), location.GetNamespace()) != namespaces.end();
     }
 
@@ -437,18 +437,18 @@ namespace enigma::resource
         {
             return true;
         }
-        
+
         if (pattern.find('*') == std::string::npos)
         {
             // No wildcards, exact match
             return str == pattern;
         }
-        
+
         // Convert wildcard pattern to regex
         std::string regexPattern = pattern;
         std::replace(regexPattern.begin(), regexPattern.end(), '*', '.');
         regexPattern = std::regex_replace(regexPattern, std::regex("\\."), ".*");
-        
+
         try
         {
             std::regex regex(regexPattern);
@@ -476,18 +476,18 @@ namespace enigma::resource
     void AtlasManager::RebuildSpriteLookupCache()
     {
         m_spriteToAtlasMap.clear();
-        
+
         for (const auto& atlasPair : m_atlases)
         {
-            const std::string& atlasName = atlasPair.first;
-            const TextureAtlas* atlas = atlasPair.second.get();
-            
+            const std::string&  atlasName = atlasPair.first;
+            const TextureAtlas* atlas     = atlasPair.second.get();
+
             for (const AtlasSprite& sprite : atlas->GetAllSprites())
             {
                 m_spriteToAtlasMap[sprite.location] = atlasName;
             }
         }
-        
+
         m_lookupCacheValid = true;
     }
 
@@ -528,10 +528,10 @@ namespace enigma::resource
         return config;
     }
 
-    AtlasConfig AtlasManagerFactory::CreateCustomAtlasConfig(const std::string& name, 
-                                                           const std::string& textureDirectory,
-                                                           const std::vector<std::string>& namespaces,
-                                                           int resolution)
+    AtlasConfig AtlasManagerFactory::CreateCustomAtlasConfig(const std::string&              name,
+                                                             const std::string&              textureDirectory,
+                                                             const std::vector<std::string>& namespaces,
+                                                             int                             resolution)
     {
         AtlasConfig config(name);
         config.requiredResolution = resolution;

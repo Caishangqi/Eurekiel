@@ -40,22 +40,22 @@ namespace enigma::core
 
     void SubsystemManager::RegisterSubsystem(std::unique_ptr<EngineSubsystem> subsystem)
     {
-        const char* name = subsystem->GetSubsystemName();
-        auto entry = std::make_unique<SubsystemEntry>();
-        
+        const char* name  = subsystem->GetSubsystemName();
+        auto        entry = std::make_unique<SubsystemEntry>();
+
         // Store type info for type-based lookup
-        std::type_index typeId = std::type_index(typeid(*subsystem));
+        std::type_index typeId     = std::type_index(typeid(*subsystem));
         m_subsystemsByType[typeId] = subsystem.get();
-        
-        entry->subsystem = std::move(subsystem);
-        entry->dependencies = GetSubsystemDependencies(name);
+
+        entry->subsystem         = std::move(subsystem);
+        entry->dependencies      = GetSubsystemDependencies(name);
         m_subsystemsByName[name] = std::move(entry);
     }
 
     void SubsystemManager::InitializeAllSubsystems()
     {
         CreateStartupOrder();
-        
+
         // Phase 1: Initialize subsystems that require early setup (e.g., AudioSubsystem needs to register loaders)
         for (auto* subsystem : m_startupOrder)
         {
@@ -71,9 +71,9 @@ namespace enigma::core
         // Phase 2: Main startup after all Initialize phases
         for (auto* subsystem : m_startupOrder)
         {
-            const char* name = subsystem->GetSubsystemName();
-            auto& entry = m_subsystemsByName[name];
-            
+            const char* name  = subsystem->GetSubsystemName();
+            auto&       entry = m_subsystemsByName[name];
+
             if (!entry->isStarted)
             {
                 subsystem->Startup();
@@ -97,10 +97,10 @@ namespace enigma::core
         // Shutdown in reverse order
         for (auto it = m_startupOrder.rbegin(); it != m_startupOrder.rend(); ++it)
         {
-            auto* subsystem = *it;
-            const char* name = subsystem->GetSubsystemName();
-            auto& entry = m_subsystemsByName[name];
-            
+            auto*       subsystem = *it;
+            const char* name      = subsystem->GetSubsystemName();
+            auto&       entry     = m_subsystemsByName[name];
+
             if (entry->isStarted)
             {
                 subsystem->Shutdown();
@@ -142,10 +142,10 @@ namespace enigma::core
         }
 
         std::sort(subsystems.begin(), subsystems.end(),
-            [](const EngineSubsystem* a, const EngineSubsystem* b)
-            {
-                return a->GetPriority() < b->GetPriority();
-            });
+                  [](const EngineSubsystem* a, const EngineSubsystem* b)
+                  {
+                      return a->GetPriority() < b->GetPriority();
+                  });
 
         m_startupOrder = std::move(subsystems);
     }
@@ -155,7 +155,7 @@ namespace enigma::core
         for (const auto& pair : m_subsystemsByName)
         {
             const std::string& subsystemName = pair.first;
-            const auto& dependencies = pair.second->dependencies;
+            const auto&        dependencies  = pair.second->dependencies;
 
             for (const std::string& dependency : dependencies)
             {
@@ -170,7 +170,7 @@ namespace enigma::core
     void SubsystemManager::CreateStartupOrder()
     {
         ValidateDependencies();
-        
+
         // Simple priority-based ordering for now
         // Future enhancement: Implement proper topological sort for dependencies
         SortSubsystemsByPriority();
@@ -189,8 +189,8 @@ namespace enigma::core
     std::vector<std::string> SubsystemManager::GetSubsystemDependencies(const std::string& subsystemName) const
     {
         std::vector<std::string> dependencies;
-        std::string path = "moduleConfig." + subsystemName + ".dependencies";
-        
+        std::string              path = "moduleConfig." + subsystemName + ".dependencies";
+
         if (m_moduleConfig.Contains(path))
         {
             dependencies = m_moduleConfig.GetStringList(path);

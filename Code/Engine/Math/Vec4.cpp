@@ -2,8 +2,8 @@
 
 #include "Engine/Core/StringUtils.hpp"
 
-Vec4::Vec4(float initialX, float initialY, float initialZ, float initialW): x(initialX), y(initialY), z(initialZ),
-                                                                            w(initialW)
+Vec4::Vec4(float initialX, float initialY, float initialZ, float initialW) : x(initialX), y(initialY), z(initialZ),
+                                                                             w(initialW)
 {
 }
 

@@ -2,7 +2,7 @@
 
 #include "Engine/Math/MathUtils.hpp"
 
-CubicHermiteSpline::CubicHermiteSpline(std::vector<Vec2> points): m_points(points)
+CubicHermiteSpline::CubicHermiteSpline(std::vector<Vec2> points) : m_points(points)
 {
     if (points.size() < 2)return;
 

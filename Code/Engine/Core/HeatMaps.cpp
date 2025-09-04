@@ -8,8 +8,8 @@
 #include "Engine/Math/FloatRange.hpp"
 #include "Engine/Math/MathUtils.hpp"
 
-HeatMaps::HeatMaps(const IntVec2& dimensions): m_dimensions(dimensions),
-                                               m_values(dimensions.x * dimensions.y, 0.0f)
+HeatMaps::HeatMaps(const IntVec2& dimensions) : m_dimensions(dimensions),
+                                                m_values(dimensions.x * dimensions.y, 0.0f)
 {
 }
 

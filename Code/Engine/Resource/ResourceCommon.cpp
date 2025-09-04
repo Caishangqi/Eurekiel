@@ -21,7 +21,7 @@ std::string GetFileExtension(const std::string& filePath)
 }
 
 // Main constructor with validation
-ResourceLocation::ResourceLocation(std::string_view namespaceId, std::string_view path) 
+ResourceLocation::ResourceLocation(std::string_view namespaceId, std::string_view path)
     : m_namespace(namespaceId), m_path(path)
 {
     validateAndNormalize();
@@ -56,29 +56,29 @@ ResourceLocation ResourceLocation::FromNamespaceAndPath(std::string_view namespa
 std::optional<ResourceLocation> ResourceLocation::TryParse(std::string_view location)
 {
     if (location.empty()) return std::nullopt;
-    
+
     size_t colonPos = location.find(':');
     if (colonPos == std::string_view::npos)
     {
         // No namespace specified, use default
         if (!IsValidPath(location))
             return std::nullopt;
-        
+
         ResourceLocation result;
         result.m_namespace = DEFAULT_NAMESPACE;
-        result.m_path = location;
+        result.m_path      = location;
         return result;
     }
 
     std::string_view namespaceId = location.substr(0, colonPos);
-    std::string_view path = location.substr(colonPos + 1);
+    std::string_view path        = location.substr(colonPos + 1);
 
     if (!IsValidNamespace(namespaceId) || !IsValidPath(path))
         return std::nullopt;
 
     ResourceLocation result;
     result.m_namespace = namespaceId;
-    result.m_path = path;
+    result.m_path      = path;
     return result;
 }
 
@@ -117,14 +117,14 @@ ResourceLocation ResourceLocation::WithNamespace(std::string_view newNamespace) 
 // Validation
 bool ResourceLocation::IsValid() const
 {
-    return !m_namespace.empty() && !m_path.empty() && 
-           IsValidNamespace(m_namespace) && IsValidPath(m_path);
+    return !m_namespace.empty() && !m_path.empty() &&
+        IsValidNamespace(m_namespace) && IsValidPath(m_path);
 }
 
 bool ResourceLocation::IsValidNamespace(std::string_view namespaceId)
 {
     if (namespaceId.empty()) return false;
-    
+
     // Neoforge standard: namespace can contain a-z, 0-9, _, ., -
     for (char c : namespaceId)
     {
@@ -137,25 +137,25 @@ bool ResourceLocation::IsValidNamespace(std::string_view namespaceId)
 bool ResourceLocation::IsValidPath(std::string_view path)
 {
     if (path.empty()) return false;
-    
+
     // Neoforge standard: path can contain a-z, 0-9, _, ., -, /
     for (char c : path)
     {
         if (!std::islower(c) && !std::isdigit(c) && c != '_' && c != '.' && c != '-' && c != '/')
             return false;
     }
-    
+
     // Path cannot start or end with '/', and cannot have consecutive '/'
     if (path.front() == '/' || path.back() == '/')
         return false;
-        
+
     // Check for consecutive slashes
     for (size_t i = 0; i < path.length() - 1; ++i)
     {
         if (path[i] == '/' && path[i + 1] == '/')
             return false;
     }
-    
+
     return true;
 }
 
@@ -194,7 +194,7 @@ void ResourceLocation::validateAndNormalize()
     // Convert to lowercase (Neoforge requirement)
     std::transform(m_namespace.begin(), m_namespace.end(), m_namespace.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     std::transform(m_path.begin(), m_path.end(), m_path.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    
+
     if (!IsValidNamespace(m_namespace))
         throw std::invalid_argument("Invalid namespace: " + m_namespace);
     if (!IsValidPath(m_path))

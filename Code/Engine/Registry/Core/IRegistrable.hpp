@@ -14,21 +14,21 @@ namespace enigma::core
     {
     public:
         virtual ~IRegistrable() = default;
-        
+
         /**
          * @brief Get the registry name for this object
          * @return The unique name used for registration
          */
         virtual const std::string& GetRegistryName() const = 0;
-        
+
         /**
          * @brief Get the namespace for this object (optional)
          * @return The namespace string, empty if no namespace
          */
-        virtual const std::string& GetNamespace() const 
-        { 
-            static std::string empty; 
-            return empty; 
+        virtual const std::string& GetNamespace() const
+        {
+            static std::string empty;
+            return empty;
         }
     };
 }

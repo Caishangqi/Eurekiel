@@ -340,7 +340,7 @@ bool DevConsole::Command_EcoArgs(EventArgs& args)
     return true;
 }
 
-DevConsole::DevConsole(const DevConsoleConfig& config): m_config(config)
+DevConsole::DevConsole(const DevConsoleConfig& config) : m_config(config)
 {
 }
 
@@ -451,7 +451,7 @@ void DevConsole::AddLine(const Rgba8& color, const std::string& text)
         devConsoleLine.m_frameNumberPrinted = m_frameNumber;
         // TODO: Add m_timePrinted
         m_lines.push_back(devConsoleLine);
-        
+
         // Fire event for External Console to receive DevConsole output
         EventArgs args;
         args.SetValue("Text", line);

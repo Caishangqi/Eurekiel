@@ -32,11 +32,11 @@ namespace enigma::resource
         const SoundResource::SoundConfig& GetDefaultConfig() const { return m_defaultConfig; }
 
         // AudioSubsystem management
-        void         SetAudioSystem(AudioSubsystem* audioSystem) { m_audioSystem = audioSystem; }
+        void            SetAudioSystem(AudioSubsystem* audioSystem) { m_audioSystem = audioSystem; }
         AudioSubsystem* GetAudioSystem() const { return m_audioSystem; }
 
     private:
-        AudioSubsystem*               m_audioSystem;
+        AudioSubsystem*            m_audioSystem;
         SoundResource::SoundConfig m_defaultConfig;
 
         // Helper methods

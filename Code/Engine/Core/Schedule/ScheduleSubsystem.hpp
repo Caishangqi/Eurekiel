@@ -3,5 +3,4 @@
 class ScheduleSubsystem
 {
 public:
-    
 };

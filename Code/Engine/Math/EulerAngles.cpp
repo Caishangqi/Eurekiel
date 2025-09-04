@@ -4,11 +4,11 @@
 #include "Vec3.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 
-EulerAngles::EulerAngles(float yawDegrees, float pitchDegrees, float rollDegrees): m_yawDegrees(yawDegrees), m_pitchDegrees(pitchDegrees), m_rollDegrees(rollDegrees)
+EulerAngles::EulerAngles(float yawDegrees, float pitchDegrees, float rollDegrees) : m_yawDegrees(yawDegrees), m_pitchDegrees(pitchDegrees), m_rollDegrees(rollDegrees)
 {
 }
 
-EulerAngles::EulerAngles(const Vec3& vec3): m_yawDegrees(vec3.x), m_pitchDegrees(vec3.y), m_rollDegrees(vec3.z)
+EulerAngles::EulerAngles(const Vec3& vec3) : m_yawDegrees(vec3.x), m_pitchDegrees(vec3.y), m_rollDegrees(vec3.z)
 {
 }
 

@@ -6,8 +6,8 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 
-OBB3::OBB3(Vec3& center, Vec3 halfDimensions, Vec3& iBases, Vec3& jBases, Vec3& kBases): m_center(center), m_halfDimensions(halfDimensions), m_iBasisNormal(iBases), m_jBasisNormal(jBases),
-                                                                                         m_kBasisNormal(kBases)
+OBB3::OBB3(Vec3& center, Vec3 halfDimensions, Vec3& iBases, Vec3& jBases, Vec3& kBases) : m_center(center), m_halfDimensions(halfDimensions), m_iBasisNormal(iBases), m_jBasisNormal(jBases),
+                                                                                          m_kBasisNormal(kBases)
 {
 }
 

@@ -50,7 +50,7 @@ namespace enigma::resource
 
         // Find files that actually exist (try different extensions)
         std::optional<std::filesystem::path> findResourceFile(const std::filesystem::path& basePath) const;
-        
+
         // Find resource by path (supports both with and without extension)
         std::optional<ResourceLocation> findResourceByPath(const ResourceLocation& location) const;
 

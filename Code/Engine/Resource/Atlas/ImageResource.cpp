@@ -5,8 +5,8 @@ namespace enigma::resource
 {
     ImageResource::ImageResource(const ResourceMetadata& metadata, std::unique_ptr<Image> image)
         : m_metadata(metadata)
-        , m_image(std::move(image))
-        , m_isLoaded(m_image != nullptr)
+          , m_image(std::move(image))
+          , m_isLoaded(m_image != nullptr)
     {
         GUARANTEE_OR_DIE(m_image != nullptr, "ImageResource: Cannot create resource with null image");
     }
@@ -42,7 +42,7 @@ namespace enigma::resource
     {
         if (!IsLoaded())
             return 0;
-        
+
         IntVec2 dimensions = m_image->GetDimensions();
         return dimensions.x * dimensions.y * 4; // RGBA = 4 bytes per pixel
     }
@@ -82,9 +82,9 @@ namespace enigma::resource
     {
         if (!IsLoaded())
             return false;
-        
+
         IntVec2 dimensions = GetDimensions();
-        
+
         // Check for valid dimensions (must be positive and power-of-2 friendly)
         return dimensions.x > 0 && dimensions.y > 0;
     }
@@ -93,9 +93,9 @@ namespace enigma::resource
     {
         if (!IsLoaded())
             return 0;
-        
+
         IntVec2 dimensions = GetDimensions();
-        
+
         // Return width (assuming square textures following Minecraft pattern)
         return dimensions.x;
     }

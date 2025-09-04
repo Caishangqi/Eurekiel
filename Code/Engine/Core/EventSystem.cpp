@@ -5,7 +5,7 @@
 #include "Rgba8.hpp"
 EventSystem* g_theEventSystem = nullptr;
 
-EventSystem::EventSystem(const EventSystemConfig& config): m_config(config)
+EventSystem::EventSystem(const EventSystemConfig& config) : m_config(config)
 {
 }
 

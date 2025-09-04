@@ -4,7 +4,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/VertexUtils.hpp"
 
-Plane3::Plane3(const Vec3& normal, float distToPlaneAlongNormalFromOrigin): m_normal(normal), m_distToPlaneAlongNormalFromOrigin(distToPlaneAlongNormalFromOrigin)
+Plane3::Plane3(const Vec3& normal, float distToPlaneAlongNormalFromOrigin) : m_normal(normal), m_distToPlaneAlongNormalFromOrigin(distToPlaneAlongNormalFromOrigin)
 {
 }
 
