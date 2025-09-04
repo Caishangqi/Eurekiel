@@ -19,7 +19,7 @@ public:
     /// DirectX
 
     // SetOrthographicView and SetPerspectiveView set the camera mode appropriately and store the parameter values.
-    void SetOrthographicView(const Vec2& bottomLeft, const Vec2& topRight, float near  = 0.0f, float far  = 1.0f);
+    void SetOrthographicView(const Vec2& bottomLeft, const Vec2& topRight, float near = 0.0f, float far = 1.0f);
     void SetPerspectiveView(float aspect, float fov, float near, float far);
 
     void SetPositionAndOrientation(const Vec3& position, const EulerAngles& orientation);

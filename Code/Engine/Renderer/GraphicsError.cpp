@@ -6,6 +6,6 @@
 
 CheckerToken chk;
 
-HResultGrabber::HResultGrabber(unsigned int hr) noexcept: hr(hr)
+HResultGrabber::HResultGrabber(unsigned int hr) noexcept : hr(hr)
 {
 }

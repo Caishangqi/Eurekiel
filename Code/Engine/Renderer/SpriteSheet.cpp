@@ -5,8 +5,8 @@
 #include "Engine/Math/AABB2.hpp"
 
 // The initialize list assign variable first
-SpriteSheet::SpriteSheet(Texture& texture, const IntVec2& simpleGridLayout): m_simpleGridLayout(simpleGridLayout),
-                                                                             m_texture(texture)
+SpriteSheet::SpriteSheet(Texture& texture, const IntVec2& simpleGridLayout) : m_simpleGridLayout(simpleGridLayout),
+                                                                              m_texture(texture)
 {
     // Below is the second time variable assign
     IntVec2 dimension = texture.GetDimensions();

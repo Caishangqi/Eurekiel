@@ -4,7 +4,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
-SpriteAnimDefinition::SpriteAnimDefinition(const SpriteSheet& sheet, int startSpriteIndex, int endSpriteIndex, float framesPerSecond, SpriteAnimPlaybackType playbackType): m_spriteSheet(sheet),
+SpriteAnimDefinition::SpriteAnimDefinition(const SpriteSheet& sheet, int startSpriteIndex, int endSpriteIndex, float framesPerSecond, SpriteAnimPlaybackType playbackType) : m_spriteSheet(sheet),
     m_startSpriteIndex(startSpriteIndex), m_endSpriteIndex(endSpriteIndex), m_framesPerSecond(framesPerSecond), m_playbackType(playbackType)
 {
 }

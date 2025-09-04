@@ -38,7 +38,7 @@ void DX11Renderer::Startup()
         ERROR_AND_DIE("Could not load dxgidebug.dll.")
     }
 
-    using GetDebugModuleCB = HRESULT(WINAPI *)(REFIID, void**);
+    using GetDebugModuleCB = HRESULT(WINAPI*)(REFIID, void**);
     ((GetDebugModuleCB)GetProcAddress(static_cast<HMODULE>(m_dxgiDebugModule), "DXGIGetDebugInterface"))(__uuidof(IDXGIDebug), &m_dxgiDebug);
     if (m_dxgiDebug == nullptr)
     {

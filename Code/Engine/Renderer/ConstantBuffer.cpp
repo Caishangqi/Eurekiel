@@ -4,7 +4,7 @@
 
 #include "Renderer.hpp"
 
-ConstantBuffer::ConstantBuffer(size_t size): m_size(size)
+ConstantBuffer::ConstantBuffer(size_t size) : m_size(size)
 {
 }
 

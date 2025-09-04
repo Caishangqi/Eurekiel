@@ -1,7 +1,7 @@
 ﻿#include "Shader.hpp"
 #include "Renderer.hpp"
 
-Shader::Shader(ShaderConfig& config): m_config(config)
+Shader::Shader(ShaderConfig& config) : m_config(config)
 {
 }
 

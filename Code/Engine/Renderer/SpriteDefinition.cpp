@@ -7,13 +7,13 @@
 
 
 SpriteDefinition::SpriteDefinition(const SpriteSheet* spriteSheet, int spriteIndex, const Vec2& uvAtMin,
-                                   const Vec2&        uvAtMax): m_spriteSheet(spriteSheet), m_spriteIndex(spriteIndex),
-                                                         m_uvAtMins(uvAtMin), m_uvAtMaxs(uvAtMax)
+                                   const Vec2&        uvAtMax) : m_spriteSheet(spriteSheet), m_spriteIndex(spriteIndex),
+                                                          m_uvAtMins(uvAtMin), m_uvAtMaxs(uvAtMax)
 {
 }
 
-SpriteDefinition::SpriteDefinition(): m_spriteSheet(nullptr), m_spriteIndex(0),
-                                      m_uvAtMins(Vec2::ZERO), m_uvAtMaxs(Vec2::ONE)
+SpriteDefinition::SpriteDefinition() : m_spriteSheet(nullptr), m_spriteIndex(0),
+                                       m_uvAtMins(Vec2::ZERO), m_uvAtMaxs(Vec2::ONE)
 {
 }
 

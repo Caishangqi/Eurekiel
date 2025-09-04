@@ -22,7 +22,7 @@ enum class DebugRenderMode
 
 struct DebugRenderConfig
 {
-    IRenderer*   m_renderer = nullptr;
+    IRenderer*  m_renderer = nullptr;
     std::string m_fontPath = ".enigma/data/Fonts/";
     std::string m_fontName = "SquirrelFixedFont";
 };
