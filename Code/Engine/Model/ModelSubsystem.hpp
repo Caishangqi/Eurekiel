@@ -22,6 +22,7 @@ namespace enigma::resource::model
 namespace enigma::model
 {
     using namespace enigma::resource;
+    using namespace enigma::resource::model;
     using namespace enigma::renderer::model;
 
     /**
@@ -60,7 +61,7 @@ namespace enigma::model
          * @brief Get a model resource by location
          * First checks builtins, then loads from file via ResourceSubsystem
          */
-        std::shared_ptr<resource::model::ModelResource> GetModel(const ResourceLocation& location);
+        std::shared_ptr<ModelResource> GetModel(const ResourceLocation& location);
 
         /**
          * @brief Compile a model resource into a renderable mesh

@@ -56,7 +56,7 @@ void ModelSubsystem::InitializeBuiltinModels()
     LogInfo("ModelSubsystem", "Builtin model initialization complete. Total: %zu models", m_builtinModels.size());
 }
 
-std::shared_ptr<model::ModelResource> ModelSubsystem::GetModel(const ResourceLocation& location)
+std::shared_ptr<ModelResource> ModelSubsystem::GetModel(const ResourceLocation& location)
 {
     // First check builtin models
     std::string builtinKey = GetBuiltinKey(location);
@@ -75,9 +75,7 @@ std::shared_ptr<RenderMesh> ModelSubsystem::CompileModel(const ResourceLocation&
     return CompileBlockModel(modelPath, {});
 }
 
-std::shared_ptr<RenderMesh> ModelSubsystem::CompileBlockModel(
-    const ResourceLocation&                             modelPath,
-    const std::unordered_map<std::string, std::string>& properties)
+std::shared_ptr<RenderMesh> ModelSubsystem::CompileBlockModel(const ResourceLocation& modelPath, const std::unordered_map<std::string, std::string>& properties)
 {
     // Create cache key
     std::string cacheKey = CreateCacheKey(modelPath, properties);
@@ -101,6 +99,7 @@ std::shared_ptr<RenderMesh> ModelSubsystem::CompileBlockModel(
     }
 
     // TODO: Implement model compilation here
+
     // For now, create a placeholder mesh
     auto compiledMesh = std::make_shared<RenderMesh>();
 
@@ -162,14 +161,14 @@ std::string ModelSubsystem::CreateCacheKey(const ResourceLocation&              
     return oss.str();
 }
 
-std::shared_ptr<model::ModelResource> ModelSubsystem::CreateBuiltinCubeModel()
+std::shared_ptr<ModelResource> ModelSubsystem::CreateBuiltinCubeModel()
 {
     LogInfo("ModelSubsystem", "Creating builtin block/cube model");
 
     // Create basic cube model structure
     // Note: This is a simplified placeholder - the full implementation
     // would create the actual 6-face cube geometry
-    auto model = std::make_shared<resource::model::ModelResource>(ResourceLocation("minecraft", "block/cube"));
+    auto model = std::make_shared<ModelResource>(ResourceLocation("minecraft", "block/cube"));
 
     // The builtin cube model will be used as a template by the compiler
     // The actual geometry creation will be handled by the model compiler
@@ -177,7 +176,7 @@ std::shared_ptr<model::ModelResource> ModelSubsystem::CreateBuiltinCubeModel()
     return model;
 }
 
-std::shared_ptr<model::ModelResource> ModelSubsystem::LoadModelFromFile(const ResourceLocation& location)
+std::shared_ptr<ModelResource> ModelSubsystem::LoadModelFromFile(const ResourceLocation& location)
 {
     if (!m_resourceSubsystem)
     {
@@ -189,10 +188,9 @@ std::shared_ptr<model::ModelResource> ModelSubsystem::LoadModelFromFile(const Re
     // Use ResourceSubsystem to load the model file
     // TODO: Implement proper model loading via ResourceSubsystem
     LogInfo("ModelSubsystem", "Loading model from file: %s", location.ToString().c_str());
-
-    // For now, return nullptr to indicate file not found
-    // This will be implemented when we have proper ResourceSubsystem integration
-    return nullptr;
+    ResourcePtr      resourcePtr = m_resourceSubsystem->GetResource(location);
+    ModelResourcePtr model       = std::static_pointer_cast<ModelResource>(m_resourceSubsystem->GetResource(location));
+    return model;
 }
 
 std::string ModelSubsystem::GetBuiltinKey(const ResourceLocation& location) const
