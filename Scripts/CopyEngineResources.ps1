@@ -3,27 +3,38 @@
 # Usage: CopyEngineResources.ps1 <EngineEnigmaPath> <AppEnigmaPath>
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$EngineEnigmaPath,
 
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$AppEnigmaPath
 )
 
-function Write-BuildLog {
+function Write-BuildLog
+{
     param([string]$Message, [string]$Level = "INFO")
     $timestamp = Get-Date -Format "HH:mm:ss"
     Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $(
-    switch($Level) {
-        "INFO" { "White" }
-        "SUCCESS" { "Green" }
-        "WARNING" { "Yellow" }
-        "ERROR" { "Red" }
+    switch ($Level)
+    {
+        "INFO" {
+            "White"
+        }
+        "SUCCESS" {
+            "Green"
+        }
+        "WARNING" {
+            "Yellow"
+        }
+        "ERROR" {
+            "Red"
+        }
     }
     )
 }
 
-function Copy-EngineResources {
+function Copy-EngineResources
+{
     param(
         [string]$SourcePath,
         [string]$DestinationPath
@@ -32,7 +43,8 @@ function Copy-EngineResources {
     Write-BuildLog "Starting Engine resource copy process..."
 
     # Check if the source path exists
-    if (-not (Test-Path $SourcePath)) {
+    if (-not (Test-Path $SourcePath))
+    {
         Write-BuildLog "Engine .enigma folder not found at: $SourcePath" "WARNING"
         Write-BuildLog "Skipping Engine resource copy." "WARNING"
         return
@@ -41,7 +53,8 @@ function Copy-EngineResources {
     Write-BuildLog "Found Engine resources at: $SourcePath" "SUCCESS"
 
     # Ensure that the destination directory exists
-    if (-not (Test-Path $DestinationPath)) {
+    if (-not (Test-Path $DestinationPath))
+    {
         New-Item -ItemType Directory -Path $DestinationPath -Force | Out-Null
         Write-BuildLog "Created App .enigma directory: $DestinationPath" "INFO"
     }
@@ -51,43 +64,55 @@ function Copy-EngineResources {
     $copiedCount = 0
     $skippedCount = 0
 
-    foreach ($item in $engineItems) {
+    foreach ($item in $engineItems)
+    {
         # Calculate relative paths
         $relativePath = $item.FullName.Substring($SourcePath.Length + 1)
         $destinationItem = Join-Path $DestinationPath $relativePath
 
-        if ($item.PSIsContainer) {
+        if ($item.PSIsContainer)
+        {
             # Processing catalogs
-            if (-not (Test-Path $destinationItem)) {
+            if (-not (Test-Path $destinationItem))
+            {
                 New-Item -ItemType Directory -Path $destinationItem -Force | Out-Null
-                Write-BuildLog "Created directory: assets/$($relativePath.Replace('\', '/'))" "INFO"
+                Write-BuildLog "Created directory: assets/$($relativePath.Replace('\', '/') )" "INFO"
             }
-        } else {
+        }
+        else
+        {
             # Processing documents
             $destinationDir = Split-Path $destinationItem -Parent
-            if (-not (Test-Path $destinationDir)) {
+            if (-not (Test-Path $destinationDir))
+            {
                 New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
             }
 
             # Check if the file already exists (to avoid overwriting the app's custom resources)
-            if (Test-Path $destinationItem) {
+            if (Test-Path $destinationItem)
+            {
                 # 检查是否为引擎特定文件（可以安全覆盖）
                 $isEngineSpecific = $relativePath -match "^assets[\\\/]engine[\\\/]" -or
                         $relativePath -match "^data[\\\/]" -or
                         $relativePath -match "^config[\\\/]engine"
 
-                if ($isEngineSpecific) {
+                if ($isEngineSpecific)
+                {
                     Copy-Item $item.FullName $destinationItem -Force
-                    Write-BuildLog "Updated engine file: assets/$($relativePath.Replace('\', '/'))" "INFO"
+                    Write-BuildLog "Updated engine file: assets/$($relativePath.Replace('\', '/') )" "INFO"
                     $copiedCount++
-                } else {
-                    Write-BuildLog "Skipped existing app file: assets/$($relativePath.Replace('\', '/'))" "WARNING"
+                }
+                else
+                {
+                    Write-BuildLog "Skipped existing app file: assets/$($relativePath.Replace('\', '/') )" "WARNING"
                     $skippedCount++
                 }
-            } else {
+            }
+            else
+            {
                 # New file, direct copy
                 Copy-Item $item.FullName $destinationItem -Force
-                Write-BuildLog "Copied: assets/$($relativePath.Replace('\', '/'))" "SUCCESS"
+                Write-BuildLog "Copied: assets/$($relativePath.Replace('\', '/') )" "SUCCESS"
                 $copiedCount++
             }
         }
@@ -100,7 +125,8 @@ function Copy-EngineResources {
     Generate-ResourceManifest -AppEnigmaPath $DestinationPath
 }
 
-function Generate-ResourceManifest {
+function Generate-ResourceManifest
+{
     param([string]$AppEnigmaPath)
 
     Write-BuildLog "Generating resource manifest..." "INFO"
@@ -115,20 +141,25 @@ function Generate-ResourceManifest {
 
     # Scanning all resources
     $assetsPath = Join-Path $AppEnigmaPath "assets"
-    if (Test-Path $assetsPath) {
+    if (Test-Path $assetsPath)
+    {
         $namespaces = Get-ChildItem -Path $assetsPath -Directory | ForEach-Object { $_.Name }
         $manifest.namespaces = $namespaces
 
-        foreach ($namespace in $namespaces) {
+        foreach ($namespace in $namespaces)
+        {
             $namespacePath = Join-Path $assetsPath $namespace
             $resources = Get-ChildItem -Path $namespacePath -Recurse -File | ForEach-Object {
                 $relativePath = $_.FullName.Substring($namespacePath.Length + 1)
-                "${namespace}:$($relativePath.Replace('\', '/'))"
+                "${namespace}:$($relativePath.Replace('\', '/') )"
             }
 
-            if ($namespace -eq "engine") {
+            if ($namespace -eq "engine")
+            {
                 $manifest.engine_resources += $resources
-            } else {
+            }
+            else
+            {
                 $manifest.app_resources += $resources
             }
         }
@@ -140,7 +171,8 @@ function Generate-ResourceManifest {
 }
 
 # Main execution logic
-try {
+try
+{
     Write-BuildLog "=== Engine Resource Copy Process ===" "INFO"
     Write-BuildLog "Source: $EngineEnigmaPath" "INFO"
     Write-BuildLog "Destination: $AppEnigmaPath" "INFO"
@@ -149,7 +181,8 @@ try {
 
     Write-BuildLog "=== Process Completed Successfully ===" "SUCCESS"
 }
-catch {
-    Write-BuildLog "Error during resource copy: $($_.Exception.Message)" "ERROR"
+catch
+{
+    Write-BuildLog "Error during resource copy: $( $_.Exception.Message )" "ERROR"
     exit 1
 }
