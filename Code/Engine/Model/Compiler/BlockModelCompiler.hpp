@@ -1,139 +1,62 @@
 #pragma once
-#include "../../Resource/Model/ModelResource.hpp"
+#include "GenericModelCompiler.hpp"
 #include "../../Renderer/Model/BlockRenderMesh.hpp"
 #include "../../Resource/Atlas/TextureAtlas.hpp"
-#include "../../Resource/Atlas/AtlasManager.hpp"
-#include <memory>
-#include <string>
-#include <map>
-#include <set>
-#include <optional>
-
-// Forward declaration
-namespace enigma::model
-{
-    class ModelSubsystem;
-}
+#include "../../Math/Vec2.hpp"
 
 namespace enigma::renderer::model
 {
-    using namespace enigma::resource::model;
-    using namespace enigma::resource;
-
     /**
-     * @brief Specialized compiler for block models, uses ModelCompiler as base
+     * @brief Specialized compiler for block models (parent: block/cube)
      * 
-     * Handles:
-     * - Parent model inheritance (e.g., grass.json inherits from block/cube)
-     * - Texture variable resolution (#down ¡ú simpleminer:block/aether_dirt)  
-     * - UV coordinate mapping using TextureAtlas
-     * - Block-specific cube geometry generation
-     * - Integration with ModelSubsystem for builtin models
+     * Handles standard Minecraft block cube models:
+     * - 6-face cube geometry
+     * - Texture variable resolution
+     * - UV coordinate conversion (16x16 -> 0-1)
+     * - Atlas sprite mapping
      */
-    class BlockModelCompiler
+    class BlockModelCompiler : public GenericModelCompiler
     {
     public:
-        /**
-         * @brief Compiler context for caching and resource access
-         */
-        struct CompilerContext
-        {
-            enigma::model::ModelSubsystem* modelSubsystem = nullptr; // For getting parent models
-            const AtlasManager*            atlasManager   = nullptr; // For texture UV lookup
-            const TextureAtlas*            blockAtlas     = nullptr; // Specific block texture atlas
-            bool                           enableLogging  = false; // Debug logging
-
-            CompilerContext(enigma::model::ModelSubsystem* subsystem, const AtlasManager* atlas, bool logging = false)
-                : modelSubsystem(subsystem), atlasManager(atlas), enableLogging(logging)
-            {
-                // Get the blocks atlas specifically
-                if (atlasManager)
-                {
-                    blockAtlas = atlasManager->GetAtlas("blocks");
-                }
-            }
-        };
-
-        /**
-         * @brief Compile a block model into a BlockRenderMesh
-         * 
-         * @param model The model to compile (e.g., grass.json)
-         * @param context Compiler context with registries and atlases
-         * @return Compiled block mesh or nullptr on failure
-         */
-        static std::shared_ptr<BlockRenderMesh> CompileBlockModel(
-            const std::shared_ptr<ModelResource>& model,
-            const CompilerContext&                context);
-
-        /**
-         * @brief Create a cache key for the compiled model
-         * 
-         * Combines model location with texture assignments to create unique cache key.
-         * 
-         * @param model The model resource
-         * @return Cache key string
-         */
-        static std::string CreateCacheKey(const std::shared_ptr<ModelResource>& model);
+        std::shared_ptr<RenderMesh> Compile(std::shared_ptr<resource::model::ModelResource> model, const CompilerContext& context) override;
 
     private:
         /**
-         * @brief Resolve texture variables in model (e.g., #down ¡ú actual texture location)
-         * 
-         * @param model Model to resolve textures for
-         * @param context Compiler context
-         * @return Map of resolved textures (variable name ¡ú ResourceLocation)
+         * @brief Compile a ModelElement into render faces
+         * @param element Model element to compile
+         * @param resolvedTextures Resolved texture mappings
+         * @param blockMesh Target mesh to add faces to
          */
-        static std::map<std::string, ResourceLocation> ResolveTextureVariables(
-            const std::shared_ptr<ModelResource>& model,
-            const CompilerContext&                context);
+        void CompileElementToFaces(const resource::model::ModelElement&                     element,
+                                   const std::map<std::string, resource::ResourceLocation>& resolvedTextures,
+                                   std::shared_ptr<BlockRenderMesh>                         blockMesh);
 
         /**
-         * @brief Compile built-in cube model geometry using BlockRenderMesh
-         * 
-         * Creates the standard 6-face cube with resolved textures.
-         * Uses BlockRenderMesh's CreateCube method for block-specific geometry.
-         * 
-         * @param resolvedTextures Map of face names to texture locations
-         * @param context Compiler context
-         * @return Compiled block mesh
+         * @brief Create a render face from element and face data
+         * @param direction Face direction
+         * @param element Model element containing geometry
+         * @param modelFace Face definition with UV and properties
+         * @param uvMin Atlas UV minimum coordinates
+         * @param uvMax Atlas UV maximum coordinates
+         * @return Generated render face
          */
-        static std::shared_ptr<BlockRenderMesh> CompileCubeModel(
-            const std::map<std::string, ResourceLocation>& resolvedTextures,
-            const CompilerContext&                         context);
+        RenderFace CreateElementFace(voxel::property::Direction           direction,
+                                     const resource::model::ModelElement& element,
+                                     const resource::model::ModelFace&    modelFace,
+                                     const Vec2&                          uvMin, const Vec2& uvMax) const;
 
         /**
-         * @brief Get UV coordinates for a texture from atlas
-         * 
-         * @param textureLocation Resource location of texture
-         * @param context Compiler context
-         * @return UV coordinates as Vec4 (minX, minY, maxX, maxY)
+         * @brief Get UV coordinates for a face from atlas
+         * @param textureLocation Texture resource location
+         * @return UV min/max in 0-1 coordinates
          */
-        static Vec4 GetTextureUV(const ResourceLocation& textureLocation, const CompilerContext& context);
+        std::pair<Vec2, Vec2> GetAtlasUV(const resource::ResourceLocation& textureLocation) const;
 
         /**
-         * @brief Resolve a single texture variable
-         * 
-         * Handles recursive texture variable resolution (e.g., #side ¡ú #all ¡ú actual texture)
-         * 
-         * @param variable Variable to resolve (e.g., "#down")
-         * @param textureMap Map of texture variable assignments
-         * @param visited Set of visited variables (for cycle detection)
-         * @return Resolved texture location, or empty optional if unresolved
+         * @brief Create a face with proper UV mapping and colors
          */
-        static std::optional<ResourceLocation> ResolveTextureVariable(
-            const std::string&                             variable,
-            const std::map<std::string, ResourceLocation>& textureMap,
-            std::set<std::string>&                         visited);
-
-        /**
-         * @brief Get parent model recursively using ModelSubsystem
-         * 
-         * @param model Current model
-         * @param context Compiler context
-         * @return Parent model or nullptr if no parent
-         */
-        static std::shared_ptr<ModelResource> GetParentModel(
-            const std::shared_ptr<ModelResource>& model,
-            const CompilerContext&                context);
+        RenderFace CreateBlockFace(voxel::property::Direction        direction,
+                                   const resource::ResourceLocation& texture,
+                                   const Vec2&                       uvMin, const Vec2& uvMax) const;
     };
 }

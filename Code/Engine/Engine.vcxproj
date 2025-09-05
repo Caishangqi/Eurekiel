@@ -237,6 +237,9 @@
         <ClCompile Include="Math\Vec3.cpp"/>
         <ClCompile Include="Math\Vec4.cpp"/>
         <ClCompile Include="Math\ZCylinder.cpp"/>
+        <ClCompile Include="Model\Builtin\ModelBuiltin.cpp"/>
+        <ClCompile Include="Model\Compiler\GenericModelCompiler.cpp"/>
+        <ClCompile Include="Model\Compiler\IModelCompiler.cpp"/>
         <ClCompile Include="Model\ModelSubsystem.cpp"/>
         <ClCompile Include="Network\NetworkCommon.cpp"/>
         <ClCompile Include="Network\NetworkSubsystem.cpp"/>
@@ -275,7 +278,6 @@
         <ClCompile Include="Renderer\Light\Light.cpp"/>
         <ClCompile Include="Model\Compiler\BlockModelCompiler.cpp"/>
         <ClCompile Include="Renderer\Model\BlockRenderMesh.cpp"/>
-        <ClCompile Include="Model\Compiler\ModelCompiler.cpp"/>
         <ClCompile Include="Renderer\Model\RenderMesh.cpp"/>
         <ClCompile Include="Renderer\Renderer.cpp"/>
         <ClCompile Include="Renderer\RenderTarget.cpp"/>
@@ -402,6 +404,9 @@
         <ClInclude Include="Math\Vec3.hpp"/>
         <ClInclude Include="Math\Vec4.hpp"/>
         <ClInclude Include="Math\ZCylinder.hpp"/>
+        <ClInclude Include="Model\Builtin\ModelBuiltin.hpp"/>
+        <ClInclude Include="Model\Compiler\GenericModelCompiler.hpp"/>
+        <ClInclude Include="Model\Compiler\IModelCompiler.hpp"/>
         <ClInclude Include="Model\ModelSubsystem.hpp"/>
         <ClInclude Include="Network\NetworkCommon.hpp"/>
         <ClInclude Include="Network\NetworkSubsystem.hpp"/>
@@ -445,7 +450,6 @@
         <ClInclude Include="Renderer\Light\Light.hpp"/>
         <ClInclude Include="Model\Compiler\BlockModelCompiler.hpp"/>
         <ClInclude Include="Renderer\Model\BlockRenderMesh.hpp"/>
-        <ClInclude Include="Model\Compiler\ModelCompiler.hpp"/>
         <ClInclude Include="Renderer\Model\RenderMesh.hpp"/>
         <ClInclude Include="Renderer\Renderer.hpp"/>
         <ClInclude Include="Renderer\RenderTarget.hpp"/>
@@ -507,8 +511,6 @@
     </ItemGroup>
     <ItemGroup>
         <Folder Include="Core\Logger\Appender\"/>
-        <Folder Include="Model\Builtin\"/>
-        <Folder Include="Model\Compiler\"/>
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">

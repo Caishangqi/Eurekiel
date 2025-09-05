@@ -1,260 +1,263 @@
 #include "BlockModelCompiler.hpp"
-#include "../../Model/ModelSubsystem.hpp"
-#include <set>
+#include "../../Resource/Model/ModelResource.hpp"
+#include "../../Renderer/Model/BlockRenderMesh.hpp"
+#include "../../Resource/Atlas/AtlasManager.hpp"
+#include "../../Resource/Atlas/TextureAtlas.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Math/Vec3.hpp"
+#include "../../Core/Rgba8.hpp"
+#include <array>
 
-#include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Renderer/Model/BlockRenderMesh.hpp"
+using namespace enigma::resource;
+using namespace enigma::voxel::property;
+using namespace enigma::core;
 
-using namespace enigma::renderer::model;
-using namespace enigma::model;
-
-std::shared_ptr<BlockRenderMesh> BlockModelCompiler::CompileBlockModel(
-    const std::shared_ptr<ModelResource>& model,
-    const CompilerContext&                context)
+namespace enigma::renderer::model
 {
-    if (!model || !context.modelSubsystem)
+    std::shared_ptr<RenderMesh> BlockModelCompiler::Compile(std::shared_ptr<resource::model::ModelResource> model, const CompilerContext& context)
     {
-        LogError("BlockModelCompiler", "Invalid model or context");
-        return nullptr;
-    }
+        if (!model)
+        {
+            LogError("BlockModelCompiler", "Cannot compile null model");
+            return nullptr;
+        }
 
-    if (context.enableLogging)
-    {
-        LogInfo("BlockModelCompiler", "Compiling block model: %s",
-                model->GetMetadata().location.ToString().c_str());
-    }
+        SetCompilerContext(context);
 
-    // Check if model has parent and needs inheritance
-    auto parentModel = GetParentModel(model, context);
-    if (parentModel)
-    {
+        // Get resolved textures and elements (with parent inheritance)
+        auto resolvedTextures = model->GetResolvedTextures();
+        auto resolvedElements = model->GetResolvedElements();
+
         if (context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Model has parent: %s",
-                    model->GetParent()->ToString().c_str());
+            LogInfo("BlockModelCompiler", "Compiling block model with %zu textures and %zu elements",
+                    resolvedTextures.size(), resolvedElements.size());
         }
-    }
 
-    // Resolve texture variables
-    auto resolvedTextures = ResolveTextureVariables(model, context);
+        // Create block render mesh
+        auto blockMesh = std::make_shared<BlockRenderMesh>();
 
-    if (resolvedTextures.empty())
-    {
-        LogWarn("BlockModelCompiler", "No textures resolved for model: %s",
-                model->GetMetadata().location.ToString().c_str());
-    }
-
-    // For Assignment 1, we only handle cube models
-    // Check if this model (or its parent) is the built-in cube
-    bool isCubeModel = false;
-    if (parentModel && context.modelSubsystem->IsBuiltinModel(ResourceLocation("minecraft", "block/cube")))
-    {
-        isCubeModel = true;
-    }
-    else if (context.modelSubsystem->IsBuiltinModel(model->GetMetadata().location))
-    {
-        isCubeModel = true;
-    }
-
-    if (!isCubeModel)
-    {
-        LogWarn("BlockModelCompiler", "Non-cube models not supported in Assignment 1: %s",
-                model->GetMetadata().location.ToString().c_str());
-        return nullptr;
-    }
-
-    // Compile cube model using BlockRenderMesh
-    auto compiledMesh = CompileCubeModel(resolvedTextures, context);
-
-    if (context.enableLogging && compiledMesh)
-    {
-        LogInfo("BlockModelCompiler", "Successfully compiled block model: %s (vertices: %zu, triangles: %zu)",
-                model->GetMetadata().location.ToString().c_str(),
-                compiledMesh->GetVertexCount(), compiledMesh->GetTriangleCount());
-    }
-
-    return compiledMesh;
-}
-
-std::string BlockModelCompiler::CreateCacheKey(const std::shared_ptr<ModelResource>& model)
-{
-    if (!model)
-    {
-        return "";
-    }
-
-    // Simple cache key: model location + texture hash
-    std::string key = model->GetMetadata().location.ToString();
-
-    // Add texture information to make cache key unique
-    const auto& textures = model->GetTextures();
-    for (const auto& texture : textures)
-    {
-        key += "_" + texture.first + "=" + texture.second.ToString();
-    }
-
-    return key;
-}
-
-std::map<std::string, ResourceLocation> BlockModelCompiler::ResolveTextureVariables(
-    const std::shared_ptr<ModelResource>& model,
-    const CompilerContext&                context)
-{
-    std::map<std::string, ResourceLocation> resolved;
-
-    if (!model)
-    {
-        return resolved;
-    }
-
-    // Start with the model's own texture assignments
-    auto textureMap = model->GetTextures();
-
-    // If model has parent, inherit parent's textures first
-    auto parentModel = GetParentModel(model, context);
-    if (parentModel)
-    {
-        auto parentTextures = parentModel->GetTextures();
-        // Parent textures are base, child overrides
-        for (const auto& parentTexture : parentTextures)
+        // BlockModelCompiler is pure - it only compiles existing ModelElements
+        if (resolvedElements.empty())
         {
-            textureMap[parentTexture.first] = parentTexture.second;
+            LogError("BlockModelCompiler", "No elements to compile! ModelResource should contain geometry.");
+            return blockMesh; // Return empty mesh
         }
-        // Apply child textures over parent
-        const auto& childTextures = model->GetTextures();
-        for (const auto& childTexture : childTextures)
+
+        // Compile all elements into faces
+        for (const auto& element : resolvedElements)
         {
-            textureMap[childTexture.first] = childTexture.second;
+            CompileElementToFaces(element, resolvedTextures, blockMesh);
         }
+
+        if (context.enableLogging)
+        {
+            LogInfo("BlockModelCompiler", "Generated block mesh with %zu faces", blockMesh->faces.size());
+        }
+
+        return blockMesh;
     }
 
-    // Resolve variables for standard cube faces
-    std::vector<std::string> faceNames = {"down", "up", "north", "south", "west", "east"};
-
-    for (const std::string& faceName : faceNames)
+    void BlockModelCompiler::CompileElementToFaces(const resource::model::ModelElement&                     element,
+                                                   const std::map<std::string, resource::ResourceLocation>& resolvedTextures,
+                                                   std::shared_ptr<BlockRenderMesh>                         blockMesh)
     {
-        std::set<std::string> visited;
-        auto                  resolvedTexture = ResolveTextureVariable("#" + faceName, textureMap, visited);
-
-        if (resolvedTexture.has_value())
+        if (m_context.enableLogging)
         {
-            resolved[faceName] = resolvedTexture.value();
+            LogInfo("BlockModelCompiler", "Compiling element with %zu faces (from: %.1f,%.1f,%.1f, to: %.1f,%.1f,%.1f)",
+                    element.faces.size(),
+                    element.from.x, element.from.y, element.from.z,
+                    element.to.x, element.to.y, element.to.z);
+        }
 
-            if (context.enableLogging)
+        // Assignment 1 face colors (from requirements)
+        const std::map<std::string, Rgba8> faceColors = {
+            {"down", Rgba8::WHITE}, // down - white
+            {"up", Rgba8::WHITE}, // up - white  
+            {"north", Rgba8(200, 200, 200)}, // north - darker grey
+            {"south", Rgba8(200, 200, 200)}, // south - darker grey
+            {"west", Rgba8(230, 230, 230)}, // west - light grey
+            {"east", Rgba8(230, 230, 230)} // east - light grey
+        };
+
+        // Compile each face of the element
+        for (const auto& [faceDirection, modelFace] : element.faces)
+        {
+            // Resolve texture reference (e.g., "#down" -> actual texture location)
+            ResourceLocation textureLocation;
+            std::string      textureRef = modelFace.texture;
+
+            if (textureRef.find("#") == 0) // C++17 compatible check for starts_with("#")
             {
-                LogInfo("BlockModelCompiler", "Resolved texture %s ¡ú %s",
-                        faceName.c_str(), resolvedTexture->ToString().c_str());
+                // Texture variable reference
+                std::string varName = textureRef.substr(1);
+                auto        it      = resolvedTextures.find(varName);
+                if (it != resolvedTextures.end())
+                {
+                    textureLocation = it->second;
+                }
+                else
+                {
+                    LogWarn("BlockModelCompiler", "Unresolved texture variable: %s", textureRef.c_str());
+                    textureLocation = ResourceLocation("engine", "missingno");
+                }
             }
+            else
+            {
+                // Direct texture reference
+                textureLocation = ResourceLocation::Parse(textureRef);
+            }
+
+            // Get UV coordinates from atlas
+            auto [uvMin, uvMax] = GetAtlasUV(textureLocation);
+
+            // Convert face direction string to Direction enum
+            Direction direction = StringToDirection(faceDirection);
+
+            // Create render face using element dimensions
+            RenderFace face = CreateElementFace(direction, element, modelFace, uvMin, uvMax);
+
+            // Apply Assignment 1 face colors
+            auto  colorIt   = faceColors.find(faceDirection);
+            Rgba8 faceColor = (colorIt != faceColors.end()) ? colorIt->second : Rgba8::WHITE;
+
+            for (auto& vertex : face.vertices)
+            {
+                vertex.m_color = faceColor;
+            }
+
+            blockMesh->AddFace(face);
         }
-        else
+    }
+
+    RenderFace BlockModelCompiler::CreateElementFace(voxel::property::Direction                         direction,
+                                                     const resource::model::ModelElement&               element,
+                                                     [[maybe_unused]] const resource::model::ModelFace& modelFace,
+                                                     const Vec2&                                        uvMin, const Vec2& uvMax) const
+    {
+        RenderFace face(direction);
+
+        // Convert from Minecraft coordinates (0-16) to normalized coordinates (0-1)
+        Vec3 from = element.from / 16.0f;
+        Vec3 to   = element.to / 16.0f;
+
+        // Create quad vertices based on direction and element bounds
+        switch (direction)
         {
-            // Fallback to missing texture
-            resolved[faceName] = ResourceLocation("minecraft", "missingno");
-            LogWarn("BlockModelCompiler", "Failed to resolve texture for face: %s", faceName.c_str());
+        case Direction::DOWN: // Bottom face
+            face.vertices = {
+                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
+            };
+            break;
+
+        case Direction::UP: // Top face
+            face.vertices = {
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+            };
+            break;
+
+        case Direction::NORTH: // North face
+            face.vertices = {
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+            };
+            break;
+
+        case Direction::SOUTH: // South face
+            face.vertices = {
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+            };
+            break;
+
+        case Direction::WEST: // West face
+            face.vertices = {
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+            };
+            break;
+
+        case Direction::EAST: // East face
+            face.vertices = {
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+            };
+            break;
         }
+
+        // Create indices for two triangles (quad)
+        face.indices = {0, 1, 2, 0, 2, 3};
+
+        // Set face properties
+        face.cullDirection = direction;
+        face.isOpaque      = true;
+
+        return face;
     }
 
-    return resolved;
-}
-
-std::shared_ptr<BlockRenderMesh> BlockModelCompiler::CompileCubeModel(
-    const std::map<std::string, ResourceLocation>& resolvedTextures,
-    const CompilerContext&                         context)
-{
-    auto mesh = std::make_shared<BlockRenderMesh>();
-
-    // Get UV coordinates for each face
-    std::array<Vec4, 6>      faceUVs;
-    std::vector<std::string> faceNames = {"down", "up", "north", "south", "west", "east"};
-
-    for (size_t i = 0; i < 6; ++i)
+    std::pair<Vec2, Vec2> BlockModelCompiler::GetAtlasUV(const resource::ResourceLocation& textureLocation) const
     {
-        auto textureIt = resolvedTextures.find(faceNames[i]);
-        if (textureIt != resolvedTextures.end())
+        if (!m_atlas)
         {
-            faceUVs[i] = GetTextureUV(textureIt->second, context);
+            LogWarn("BlockModelCompiler", "No atlas available for texture: %s", textureLocation.ToString().c_str());
+            return {Vec2(0, 0), Vec2(1, 1)};
         }
-        else
+
+        // Convert model texture reference to actual texture path
+        // "simpleminer:block/stone" -> "simpleminer:textures/block/stone"
+        ResourceLocation actualTextureLocation = textureLocation;
+        std::string      path                  = textureLocation.GetPath();
+        if (path.find("textures/") != 0) // Check if path doesn't start with "textures/"
         {
-            // Default UV coordinates (full texture)
-            faceUVs[i] = Vec4(0.0f, 0.0f, 1.0f, 1.0f);
+            actualTextureLocation = ResourceLocation(textureLocation.GetNamespace(), "textures/" + path);
         }
+
+        // Debug: Print atlas info
+        if (m_context.enableLogging)
+        {
+            LogInfo("BlockModelCompiler", "Looking for texture: %s -> %s in atlas with %zu sprites",
+                    textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str(), m_atlas->GetAllSprites().size());
+        }
+
+        // Find sprite in atlas using the resolved path
+        const auto* sprite = m_atlas->FindSprite(actualTextureLocation);
+        if (!sprite)
+        {
+            if (m_context.enableLogging)
+            {
+                LogWarn("BlockModelCompiler", "Texture not found in atlas: %s (resolved to %s)",
+                        textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
+
+                // List all sprites in atlas for debugging
+                const auto& allSprites = m_atlas->GetAllSprites();
+                for (const auto& spriteInfo : allSprites)
+                {
+                    LogInfo("BlockModelCompiler", "  Atlas contains sprite: %s", spriteInfo.location.ToString().c_str());
+                }
+            }
+            return {Vec2(0, 0), Vec2(1, 1)};
+        }
+
+        if (m_context.enableLogging)
+        {
+            LogInfo("BlockModelCompiler", "Found texture: %s -> %s",
+                    textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
+        }
+
+        return {sprite->uvMin, sprite->uvMax};
     }
-
-    // Create cube with resolved UVs
-    mesh->CreateCube(faceUVs);
-
-    return mesh;
-}
-
-Vec4 BlockModelCompiler::GetTextureUV(const ResourceLocation& textureLocation, const CompilerContext& context)
-{
-    if (!context.blockAtlas)
-    {
-        LogWarn("BlockModelCompiler", "No block atlas available for UV lookup");
-        return Vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    }
-
-    // Find sprite in atlas
-    const AtlasSprite* sprite = context.blockAtlas->FindSprite(textureLocation);
-    if (!sprite)
-    {
-        LogWarn("BlockModelCompiler", "Texture not found in atlas: %s",
-                textureLocation.ToString().c_str());
-        return Vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    }
-
-    // Return UV coordinates as Vec4 (minX, minY, maxX, maxY)
-    return Vec4(sprite->uvMin.x, sprite->uvMin.y, sprite->uvMax.x, sprite->uvMax.y);
-}
-
-std::optional<ResourceLocation> BlockModelCompiler::ResolveTextureVariable(
-    const std::string&                             variable,
-    const std::map<std::string, ResourceLocation>& textureMap,
-    std::set<std::string>&                         visited)
-{
-    // Prevent infinite recursion
-    if (visited.find(variable) != visited.end())
-    {
-        LogWarn("BlockModelCompiler", "Circular texture reference detected: %s", variable.c_str());
-        return std::nullopt;
-    }
-    visited.insert(variable);
-
-    // Remove # prefix for lookup
-    std::string lookupKey = variable;
-    if (!lookupKey.empty() && lookupKey[0] == '#')
-    {
-        lookupKey = lookupKey.substr(1);
-    }
-
-    auto it = textureMap.find(lookupKey);
-    if (it == textureMap.end())
-    {
-        return std::nullopt;
-    }
-
-    const ResourceLocation& value = it->second;
-
-    // Check if value is another variable (starts with #)
-    const std::string& valuePath = value.GetPath();
-    if (!valuePath.empty() && valuePath[0] == '#')
-    {
-        return ResolveTextureVariable(value.GetPath(), textureMap, visited);
-    }
-
-    // Direct texture reference
-    return value;
-}
-
-std::shared_ptr<ModelResource> BlockModelCompiler::GetParentModel(
-    const std::shared_ptr<ModelResource>& model,
-    const CompilerContext&                context)
-{
-    if (!model || !model->HasParent() || !context.modelSubsystem)
-    {
-        return nullptr;
-    }
-
-    return context.modelSubsystem->GetModel(model->GetParent().value());
 }

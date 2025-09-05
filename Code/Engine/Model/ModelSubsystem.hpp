@@ -7,6 +7,15 @@
 #include <string>
 #include <unordered_map>
 
+namespace enigma::renderer::model
+{
+    class IModelCompiler;
+}
+
+namespace enigma::renderer::model
+{
+}
+
 // Forward declarations
 namespace enigma::resource
 {
@@ -58,39 +67,22 @@ namespace enigma::model
         void InitializeBuiltinModels();
 
         /**
-         * @brief Get a model resource by location
-         * First checks builtins, then loads from file via ResourceSubsystem
-         */
-        std::shared_ptr<ModelResource> GetModel(const ResourceLocation& location);
-
-        /**
          * @brief Compile a model resource into a renderable mesh
          * Uses caching to avoid recompilation of identical models
          */
         std::shared_ptr<RenderMesh> CompileModel(const ResourceLocation& modelPath);
 
         /**
-         * @brief Compile a model with specific properties (for BlockStates)
-         */
-        std::shared_ptr<RenderMesh> CompileBlockModel(
-            const ResourceLocation&                             modelPath,
-            const std::unordered_map<std::string, std::string>& properties = {}
-        );
-
-        /**
          * @brief Get cached compiled mesh by key
          */
         std::shared_ptr<RenderMesh> GetCompiledMesh(const std::string& cacheKey);
+
+        std::shared_ptr<IModelCompiler> RegisterCompiler(const std::string& templateName, std::shared_ptr<IModelCompiler> compiler);
 
         /**
          * @brief Clear all cached meshes (for resource reload)
          */
         void ClearCompiledCache();
-
-        /**
-         * @brief Check if a model is builtin (hardcoded)
-         */
-        bool IsBuiltinModel(const ResourceLocation& location) const;
 
         /**
          * @brief Get statistics for debugging
@@ -115,11 +107,11 @@ namespace enigma::model
         // Dependencies on other subsystems
         ResourceSubsystem* m_resourceSubsystem = nullptr;
 
-        // Builtin model templates (hardcoded, like block/cube)
-        std::unordered_map<std::string, std::shared_ptr<resource::model::ModelResource>> m_builtinModels;
-
         // Compiled mesh cache (key = model location + properties hash)
         std::unordered_map<std::string, std::shared_ptr<RenderMesh>> m_compiledMeshCache;
+
+        // Compilers for different model templates
+        std::unordered_map<std::string, std::shared_ptr<IModelCompiler>> m_compilers;
 
         // Statistics tracking
         mutable Statistics m_statistics;
@@ -130,10 +122,9 @@ namespace enigma::model
         std::string CreateCacheKey(const ResourceLocation&                             modelPath,
                                    const std::unordered_map<std::string, std::string>& properties) const;
 
-        /**
-         * @brief Create the builtin block/cube model template
-         */
-        std::shared_ptr<resource::model::ModelResource> CreateBuiltinCubeModel();
+        void RegisterCompilers();
+
+        std::shared_ptr<IModelCompiler> GetCompiler(const std::string& identifier);
 
         /**
          * @brief Load model from file via ResourceSubsystem

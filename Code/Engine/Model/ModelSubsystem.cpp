@@ -5,6 +5,9 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include <sstream>
 
+#include "Builtin/ModelBuiltin.hpp"
+#include "Compiler/BlockModelCompiler.hpp"
+#include "Compiler/GenericModelCompiler.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 using namespace enigma::model;
@@ -18,6 +21,8 @@ void ModelSubsystem::Startup()
     // Get dependencies on other subsystems
     m_resourceSubsystem = GEngine->GetSubsystem<ResourceSubsystem>();
 
+    RegisterCompilers();
+
     // Initialize builtin models
     InitializeBuiltinModels();
 
@@ -29,7 +34,6 @@ void ModelSubsystem::Shutdown()
     LogInfo("ModelSubsystem", "Shutting down ModelSubsystem...");
 
     ClearCompiledCache();
-    m_builtinModels.clear();
 
     m_statistics = Statistics(); // Reset statistics
 
@@ -40,75 +44,29 @@ void ModelSubsystem::InitializeBuiltinModels()
 {
     LogInfo("ModelSubsystem", "Initializing builtin models...");
 
-    // Create builtin block/cube model
-    auto cubeModel = CreateBuiltinCubeModel();
-    if (cubeModel)
-    {
-        m_builtinModels["block/cube"] = cubeModel;
-        m_statistics.builtinModelsCount++;
-        LogInfo("ModelSubsystem", "Registered builtin model: block/cube");
-    }
-    else
-    {
-        LogError("ModelSubsystem", "Failed to create builtin block/cube model");
-    }
-
-    LogInfo("ModelSubsystem", "Builtin model initialization complete. Total: %zu models", m_builtinModels.size());
+    ModelResourcePtr blockCube = ModelBuiltin::CreateBlockCube();
+    m_resourceSubsystem->LoadResource(ResourceLocation("block/cube"), blockCube);
 }
 
-std::shared_ptr<ModelResource> ModelSubsystem::GetModel(const ResourceLocation& location)
-{
-    // First check builtin models
-    std::string builtinKey = GetBuiltinKey(location);
-    auto        builtinIt  = m_builtinModels.find(builtinKey);
-    if (builtinIt != m_builtinModels.end())
-    {
-        return builtinIt->second;
-    }
-
-    // Try to load from file via ResourceSubsystem
-    return LoadModelFromFile(location);
-}
 
 std::shared_ptr<RenderMesh> ModelSubsystem::CompileModel(const ResourceLocation& modelPath)
 {
-    return CompileBlockModel(modelPath, {});
-}
-
-std::shared_ptr<RenderMesh> ModelSubsystem::CompileBlockModel(const ResourceLocation& modelPath, const std::unordered_map<std::string, std::string>& properties)
-{
-    // Create cache key
-    std::string cacheKey = CreateCacheKey(modelPath, properties);
-
-    // Check cache first
-    auto cachedMesh = GetCompiledMesh(cacheKey);
-    if (cachedMesh)
-    {
-        m_statistics.cacheHits++;
-        return cachedMesh;
-    }
-
-    m_statistics.cacheMisses++;
-
-    // Get the model resource
-    auto modelResource = GetModel(modelPath);
+    ModelResourcePtr modelResource = std::dynamic_pointer_cast<ModelResource>(m_resourceSubsystem->GetResource(modelPath));
     if (!modelResource)
     {
         LogWarn("ModelSubsystem", "Failed to get model resource: %s", modelPath.ToString().c_str());
         return nullptr;
     }
+    // TODO: Right now we assume we only compile block, so we use block atlas.
+    CompilerContext context;
+    context.atlasManager   = m_resourceSubsystem->GetAtlasManager();
+    context.blockAtlas     = m_resourceSubsystem->GetAtlas("blocks");
+    context.modelSubsystem = this;
+    context.enableLogging  = true; // Enable logging to debug atlas contents
 
-    // TODO: Implement model compilation here
-
-    // For now, create a placeholder mesh
-    auto compiledMesh = std::make_shared<RenderMesh>();
-
-    // Cache the result
-    m_compiledMeshCache[cacheKey]  = compiledMesh;
-    m_statistics.cachedMeshesCount = m_compiledMeshCache.size();
-
-    LogInfo("ModelSubsystem", "Compiled model: %s (cache size: %zu)",
-            modelPath.ToString().c_str(), m_statistics.cachedMeshesCount);
+    std::string                     identifier   = modelResource->GetParent()->GetPath();
+    std::shared_ptr<IModelCompiler> compiler     = GetCompiler(identifier);
+    std::shared_ptr<RenderMesh>     compiledMesh = compiler->Compile(modelResource, context);
 
     return compiledMesh;
 }
@@ -119,17 +77,18 @@ std::shared_ptr<RenderMesh> ModelSubsystem::GetCompiledMesh(const std::string& c
     return (it != m_compiledMeshCache.end()) ? it->second : nullptr;
 }
 
+std::shared_ptr<IModelCompiler> ModelSubsystem::RegisterCompiler(const std::string& templateName, std::shared_ptr<IModelCompiler> compiler)
+{
+    m_compilers.emplace(templateName, compiler);
+    LogInfo("ModelSubsystem", "Registered model compiler: %s", templateName.c_str());
+    return compiler;
+}
+
 void ModelSubsystem::ClearCompiledCache()
 {
     m_compiledMeshCache.clear();
     m_statistics.cachedMeshesCount = 0;
     LogInfo("ModelSubsystem", "Compiled mesh cache cleared");
-}
-
-bool ModelSubsystem::IsBuiltinModel(const ResourceLocation& location) const
-{
-    std::string builtinKey = GetBuiltinKey(location);
-    return m_builtinModels.find(builtinKey) != m_builtinModels.end();
 }
 
 void ModelSubsystem::OnResourceReload()
@@ -161,19 +120,27 @@ std::string ModelSubsystem::CreateCacheKey(const ResourceLocation&              
     return oss.str();
 }
 
-std::shared_ptr<ModelResource> ModelSubsystem::CreateBuiltinCubeModel()
+void ModelSubsystem::RegisterCompilers()
 {
-    LogInfo("ModelSubsystem", "Creating builtin block/cube model");
+    RegisterCompiler("null/empty", std::make_unique<GenericModelCompiler>());
+    RegisterCompiler("block/cube", std::make_unique<BlockModelCompiler>());
+}
 
-    // Create basic cube model structure
-    // Note: This is a simplified placeholder - the full implementation
-    // would create the actual 6-face cube geometry
-    auto model = std::make_shared<ModelResource>(ResourceLocation("minecraft", "block/cube"));
-
-    // The builtin cube model will be used as a template by the compiler
-    // The actual geometry creation will be handled by the model compiler
-
-    return model;
+/**
+ * Retrieves a shared pointer to an IModelCompiler based on the given identifier.
+ *
+ * This method searches for the specified compiler identifier in the collection of compilers.
+ * If the identifier is found, it returns the associated IModelCompiler. If the identifier
+ * is not found, a default "null/empty" compiler is returned.
+ *
+ * @param identifier The unique string identifier for the desired compiler.
+ * @return A shared pointer to the IModelCompiler corresponding to the given identifier,
+ *         or a shared pointer to a default "null/empty" compiler if the identifier is not found.
+ */
+std::shared_ptr<IModelCompiler> ModelSubsystem::GetCompiler(const std::string& identifier)
+{
+    auto it = m_compilers.find(identifier);
+    return (it != m_compilers.end()) ? it->second : m_compilers["null/empty"];
 }
 
 std::shared_ptr<ModelResource> ModelSubsystem::LoadModelFromFile(const ResourceLocation& location)
