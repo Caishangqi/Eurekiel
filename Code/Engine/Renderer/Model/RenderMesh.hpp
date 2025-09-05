@@ -22,9 +22,9 @@ namespace enigma::renderer::model
     {
         std::vector<Vertex_PCU> vertices; // Usually 4 vertices for a quad
         std::vector<uint32_t>   indices; // Triangle indices (usually 6 for 2 triangles)
-        Direction               cullDirection; // Direction this face can be culled against
-        bool                    isOpaque     = true; // Whether this face is opaque
-        int                     textureIndex = 0; // Index in texture atlas
+        Direction               cullDirection = Direction::NORTH; // Direction this face can be culled against
+        bool                    isOpaque      = true; // Whether this face is opaque
+        int                     textureIndex  = 0; // Index in texture atlas
 
         RenderFace() = default;
 
