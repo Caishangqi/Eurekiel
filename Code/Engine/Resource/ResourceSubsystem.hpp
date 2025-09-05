@@ -202,6 +202,9 @@ namespace enigma::resource
         void ScanResources(std::function<void(const std::string& current, size_t scanned)> callback = nullptr);
         void ScanNamespace(const std::string& namespaceName);
 
+        /// Resource Direct Load (Use in builtin resource loading)
+        [[maybe_unused]] ResourcePtr LoadResource(ResourceLocation resourceLocation, ResourcePtr resource);
+
         /// Hot Reload
         size_t CheckAndReloadModifiedResources();
 

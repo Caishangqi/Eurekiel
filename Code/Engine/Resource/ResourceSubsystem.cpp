@@ -383,6 +383,36 @@ void ResourceSubsystem::ScanNamespace(const std::string& namespaceName)
     }
 }
 
+/**
+ * Loads a resource and adds it to the list of loaded resources if it is not
+ * already present. Ensures thread-safe access to the resource collection.
+ * Also updates the file modification time of the resource for hot reload
+ * support if the resource file exists in the filesystem.
+ *
+ * @param resourceLocation The location of the resource to be loaded.
+ * @param resource A shared pointer to the resource object to be loaded.
+ * @return The loaded resource as a shared pointer.
+ */
+ResourcePtr ResourceSubsystem::LoadResource(ResourceLocation resourceLocation, ResourcePtr resource)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(m_resourceMutex);
+        if (m_loadedResources.find(resourceLocation) == m_loadedResources.end())
+        {
+            m_loadedResources[resourceLocation] = resource;
+            m_totalLoaded.fetch_add(1);
+        }
+    }
+
+    // Update file modification time for hot reload
+    if (std::filesystem::exists(resourceLocation.GetPath()))
+    {
+        m_fileModificationTimes[resourceLocation] = std::filesystem::last_write_time(resourceLocation.GetPath());
+    }
+
+    return resource;
+}
+
 size_t ResourceSubsystem::CheckAndReloadModifiedResources()
 {
     size_t                        reloadedCount = 0;
