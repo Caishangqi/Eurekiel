@@ -105,11 +105,6 @@ namespace enigma::resource::model
         ResourceType            GetType() const override { return ResourceType::MODEL; }
         bool                    IsLoaded() const override { return !m_elements.empty() || m_parent.has_value(); }
 
-        // Resource loading interface
-        bool LoadFromFile(const std::filesystem::path& filePath);
-        void Unload();
-
-
         // JSON loading
         bool LoadFromJson(const JsonObject& json);
 
@@ -132,6 +127,30 @@ namespace enigma::resource::model
         bool HasParent() const { return m_parent.has_value(); }
         bool HasElements() const { return !m_elements.empty(); }
         bool HasDisplay(const std::string& context) const { return m_display.find(context) != m_display.end(); }
+
+        // Builtin model construction methods
+        void SetParent(const ResourceLocation& parentLocation)
+        {
+            m_parent   = parentLocation;
+            m_resolved = false;
+        }
+
+        void SetTexture(const std::string& variable, const ResourceLocation& texture)
+        {
+            m_textures[variable] = texture;
+            m_resolved           = false;
+        }
+
+        void AddElement(const ModelElement& element)
+        {
+            m_elements.push_back(element);
+            m_resolved = false;
+        }
+
+        void SetAmbientOcclusion(bool ao) { m_ambientOcclusion = ao; }
+
+        // Mutable metadata access for builtin models
+        ResourceMetadata& GetMutableMetadata() { return m_metadata; }
 
         const ModelDisplay* GetDisplay(const std::string& context) const;
 
