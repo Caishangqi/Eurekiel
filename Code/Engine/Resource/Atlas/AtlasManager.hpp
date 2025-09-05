@@ -48,6 +48,9 @@ namespace enigma::resource
         std::vector<std::shared_ptr<ImageResource>> CollectTexturesForAtlas(const AtlasConfig& config);
         std::vector<ResourceLocation>               FindTexturesByPattern(const std::string& pattern, const std::vector<std::string>& namespaces = {});
 
+        // Namespace discovery
+        std::vector<std::string> DiscoverAvailableNamespaces() const;
+
         // Atlas export and debugging
         bool ExportAtlasToPNG(const std::string& atlasName, const std::string& filepath);
         bool ExportAllAtlasesToPNG(const std::string& directory = "debug/");
@@ -103,6 +106,10 @@ namespace enigma::resource
         static AtlasConfig CreateItemsAtlasConfig(int resolution = 16);
         static AtlasConfig CreateParticlesAtlasConfig(int resolution = 16);
         static AtlasConfig CreateUIAtlasConfig(int resolution = 16);
+
+        // Create configurations with auto-discovered namespaces
+        static AtlasConfig CreateBlocksAtlasConfig(const std::vector<std::string>& namespaces, int resolution = 16);
+        static AtlasConfig CreateItemsAtlasConfig(const std::vector<std::string>& namespaces, int resolution = 16);
 
         // Create custom atlas configuration
         static AtlasConfig CreateCustomAtlasConfig(const std::string&              name,

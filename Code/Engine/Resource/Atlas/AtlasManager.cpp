@@ -7,11 +7,14 @@
 #include <filesystem>
 #include <regex>
 
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+using namespace enigma::core;
+
 namespace enigma::resource
 {
     // Default namespaces for atlas collection
     const std::vector<std::string> AtlasManager::DEFAULT_NAMESPACES = {
-        "engine", "minecraft", "testmod"
+        "engine", "minecraft", "simpleminer"
     };
 
     AtlasManager::AtlasManager(ResourceSubsystem* resourceSubsystem)
@@ -52,11 +55,11 @@ namespace enigma::resource
 
         if (images.empty())
         {
-            printf("AtlasManager: No textures found for atlas '%s'\n", atlasName.c_str());
+            LogWarn("AtlasManager", "No textures found for atlas '%s'", atlasName.c_str());
             return false;
         }
 
-        printf("AtlasManager: Building atlas '%s' with %zu textures\n", atlasName.c_str(), images.size());
+        LogInfo("AtlasManager", "Building atlas '%s' with %zu textures", atlasName.c_str(), images.size());
 
         // Create or get existing atlas
         auto atlasIt = m_atlases.find(atlasName);
@@ -75,7 +78,7 @@ namespace enigma::resource
         if (success)
         {
             m_lookupCacheValid = false;
-            printf("AtlasManager: Successfully built atlas '%s'\n", atlasName.c_str());
+            LogInfo("AtlasManager", "Atlas '%s' built successfully", atlasName.c_str());
 
             // Export to PNG if configured
             if (config.exportPNG)
@@ -86,7 +89,7 @@ namespace enigma::resource
         }
         else
         {
-            printf("AtlasManager: Failed to build atlas '%s'\n", atlasName.c_str());
+            LogInfo("AtlasManager", "Atlas '%s' failed to build\n", atlasName.c_str());
             m_atlases.erase(atlasName);
         }
 
@@ -299,9 +302,12 @@ namespace enigma::resource
 
     void AtlasManager::SetDefaultAtlasConfigs()
     {
-        AddAtlasConfig(AtlasManagerFactory::CreateBlocksAtlasConfig(16));
-        AddAtlasConfig(AtlasManagerFactory::CreateItemsAtlasConfig(16));
-        AddAtlasConfig(AtlasManagerFactory::CreateParticlesAtlasConfig(16));
+        // Discover available namespaces and use them for atlas creation
+        std::vector<std::string> discoveredNamespaces = DiscoverAvailableNamespaces();
+
+        AddAtlasConfig(AtlasManagerFactory::CreateBlocksAtlasConfig(discoveredNamespaces, 16));
+        AddAtlasConfig(AtlasManagerFactory::CreateItemsAtlasConfig(discoveredNamespaces, 16));
+        AddAtlasConfig(AtlasManagerFactory::CreateParticlesAtlasConfig(16)); // Particles still use engine only
     }
 
     AtlasConfig AtlasManager::CreateMinecraftStyleConfig(const std::string& atlasName, const std::string& textureDirectory)
@@ -491,12 +497,63 @@ namespace enigma::resource
         m_lookupCacheValid = true;
     }
 
+    std::vector<std::string> AtlasManager::DiscoverAvailableNamespaces() const
+    {
+        std::vector<std::string> namespaces;
+
+        // Get base assets path from resource subsystem
+        std::filesystem::path basePath = m_resourceSubsystem->GetConfig().baseAssetPath;
+
+        try
+        {
+            if (std::filesystem::exists(basePath) && std::filesystem::is_directory(basePath))
+            {
+                for (const auto& entry : std::filesystem::directory_iterator(basePath))
+                {
+                    if (entry.is_directory())
+                    {
+                        std::string namespaceName = entry.path().filename().string();
+                        // Filter out hidden/system directories
+                        if (!namespaceName.empty() && namespaceName[0] != '.')
+                        {
+                            namespaces.push_back(namespaceName);
+                        }
+                    }
+                }
+            }
+        }
+        catch (const std::filesystem::filesystem_error& e)
+        {
+            core::LogError("AtlasManager: Failed to discover available namespaces: %s", e.what());
+            // Log error but don't fail - fallback to defaults
+            // TODO: Add proper logging here
+        }
+
+        // If no namespaces found, use defaults
+        if (namespaces.empty())
+        {
+            namespaces = DEFAULT_NAMESPACES;
+        }
+
+        return namespaces;
+    }
+
     // AtlasManagerFactory implementation
     AtlasConfig AtlasManagerFactory::CreateBlocksAtlasConfig(int resolution)
     {
         AtlasConfig config("blocks");
         config.requiredResolution = resolution;
-        config.AddDirectorySource("textures/block/", {"minecraft", "testmod"});
+        // Keep hardcoded for backward compatibility - use overload for auto-discovery
+        config.AddDirectorySource("textures/block/", {"minecraft", "testmod", "simpleminer"});
+        config.exportPNG = true;
+        return config;
+    }
+
+    AtlasConfig AtlasManagerFactory::CreateBlocksAtlasConfig(const std::vector<std::string>& namespaces, int resolution)
+    {
+        AtlasConfig config("blocks");
+        config.requiredResolution = resolution;
+        config.AddDirectorySource("textures/block/", namespaces);
         config.exportPNG = true;
         return config;
     }
@@ -505,7 +562,17 @@ namespace enigma::resource
     {
         AtlasConfig config("items");
         config.requiredResolution = resolution;
-        config.AddDirectorySource("textures/item/", {"minecraft", "testmod"});
+        // Keep hardcoded for backward compatibility - use overload for auto-discovery
+        config.AddDirectorySource("textures/item/", {"minecraft", "testmod", "simpleminer"});
+        config.exportPNG = true;
+        return config;
+    }
+
+    AtlasConfig AtlasManagerFactory::CreateItemsAtlasConfig(const std::vector<std::string>& namespaces, int resolution)
+    {
+        AtlasConfig config("items");
+        config.requiredResolution = resolution;
+        config.AddDirectorySource("textures/item/", namespaces);
         config.exportPNG = true;
         return config;
     }
@@ -542,8 +609,11 @@ namespace enigma::resource
 
     void AtlasManagerFactory::SetupDefaultAtlases(AtlasManager& manager)
     {
-        manager.AddAtlasConfig(CreateBlocksAtlasConfig(16));
-        manager.AddAtlasConfig(CreateItemsAtlasConfig(16));
+        // Use auto-discovered namespaces for dynamic atlas setup
+        std::vector<std::string> discoveredNamespaces = manager.DiscoverAvailableNamespaces();
+
+        manager.AddAtlasConfig(CreateBlocksAtlasConfig(discoveredNamespaces, 16));
+        manager.AddAtlasConfig(CreateItemsAtlasConfig(discoveredNamespaces, 16));
         manager.AddAtlasConfig(CreateParticlesAtlasConfig(16));
     }
 }
