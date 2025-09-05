@@ -357,7 +357,7 @@ void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::
     {
         // Use ModelSubsystem to compile the block model
         // This will trigger the BlockModelCompiler compilation pipeline
-        auto compiledMesh = modelSubsystem->CompileBlockModel(variant.model);
+        auto compiledMesh = modelSubsystem->CompileModel(variant.model);
 
         if (compiledMesh)
         {
