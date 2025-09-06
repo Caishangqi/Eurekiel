@@ -1,6 +1,10 @@
 #include "BlockState.hpp"
 #include "../../Registry/Block/Block.hpp"
 #include "../../Renderer/Model/BlockRenderMesh.hpp"
+#include "../../Model/ModelSubsystem.hpp"
+#include "../../Core/EngineCommon.hpp"
+#include "../../Registry/Block/BlockRegistry.hpp"
+#include "../../Resource/BlockState/BlockStateDefinition.hpp"
 
 namespace enigma::voxel::block
 {
@@ -43,8 +47,41 @@ namespace enigma::voxel::block
     {
         if (!m_meshCacheValid || !m_cachedMesh)
         {
-            // TODO: Load and compile the mesh from the model resource
-            // This will be implemented when we have the ModelCompiler
+            // Get the BlockStateDefinition from the registry to access compiled mesh
+            if (m_blockType)
+            {
+                std::string blockName            = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
+                auto        blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
+
+                if (blockStateDefinition)
+                {
+                    // Convert our property map to string for variant lookup
+                    std::string propertyString = "";
+                    if (!m_properties.Empty())
+                    {
+                        std::string fullString = m_properties.ToString();
+                        // Remove braces {} from the string
+                        if (fullString.size() >= 2 && fullString.front() == '{' && fullString.back() == '}')
+                        {
+                            propertyString = fullString.substr(1, fullString.size() - 2);
+                        }
+                        else
+                        {
+                            propertyString = fullString;
+                        }
+                    }
+
+                    // Get the variants for this property combination
+                    const auto* variants = blockStateDefinition->GetVariants(propertyString);
+                    if (variants && !variants->empty())
+                    {
+                        // Use the first variant (in the future, we might support weighted random selection)
+                        const auto& variant = variants->front();
+                        m_cachedMesh        = variant.compiledMesh;
+                    }
+                }
+            }
+
             m_meshCacheValid = true;
         }
 
