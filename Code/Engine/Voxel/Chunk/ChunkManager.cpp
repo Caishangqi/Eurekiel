@@ -1,8 +1,44 @@
 ﻿#include "ChunkManager.hpp"
+#include "Engine/Resource/ResourceSubsystem.hpp"
+#include "Engine/Resource/Atlas/TextureAtlas.hpp"
+#include "Engine/Core/Engine.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Renderer/IRenderer.hpp"
+#include "Engine/Renderer/Texture.hpp" // Add explicit include for Texture class
 using namespace enigma::voxel::chunk;
 
 ChunkManager::ChunkManager()
 {
+}
+
+void ChunkManager::Initialize()
+{
+    // Cache the blocks atlas texture once during initialization (NeoForge pattern)
+    auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+    if (resourceSubsystem)
+    {
+        const auto* blocksAtlas = resourceSubsystem->GetAtlas("blocks");
+        if (blocksAtlas)
+        {
+            m_cachedBlocksAtlasTexture = blocksAtlas->GetAtlasTexture();
+            if (m_cachedBlocksAtlasTexture)
+            {
+                core::LogInfo("chunk", "ChunkManager: Cached blocks atlas texture successfully");
+            }
+            else
+            {
+                core::LogWarn("chunk", "ChunkManager: Blocks atlas texture is null, will render without texture");
+            }
+        }
+        else
+        {
+            core::LogWarn("chunk", "ChunkManager: No 'blocks' atlas found");
+        }
+    }
+    else
+    {
+        core::LogError("chunk", "ChunkManager: ResourceSubsystem not available during initialization");
+    }
 }
 
 ChunkManager::~ChunkManager()
@@ -55,11 +91,23 @@ void ChunkManager::Update(float deltaTime)
 
 void ChunkManager::Render(IRenderer* renderer)
 {
+    // Bind the cached blocks atlas texture once for all chunks (NeoForge pattern)
+    if (m_cachedBlocksAtlasTexture)
+    {
+        renderer->BindTexture(m_cachedBlocksAtlasTexture);
+    }
+
     for (const std::pair<const long long, std::unique_ptr<Chunk>>& loaded_chunk : m_loadedChunks)
     {
         if (m_enableChunkDebug)
+        {
+            renderer->BindTexture(nullptr);
             loaded_chunk.second->DebugDraw(renderer);
-        loaded_chunk.second->GetMesh()->RenderAll(renderer);
+        }
+        // Call the chunk's Render method which handles coordinate transformation
+        // Note: Texture binding is now handled by ChunkManager, so we can optimize Chunk::Render
+        renderer->BindTexture(m_cachedBlocksAtlasTexture);
+        loaded_chunk.second->Render(renderer);
     }
 }
 

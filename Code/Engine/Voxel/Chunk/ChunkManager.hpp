@@ -8,6 +8,8 @@
 #include <mutex>
 #include <condition_variable>
 
+#include "Engine/Renderer/Texture.hpp"
+
 namespace enigma::voxel::chunk
 {
     /**
@@ -93,6 +95,8 @@ namespace enigma::voxel::chunk
         ChunkManager();
         ~ChunkManager();
 
+        void Initialize();
+
         // Chunk Access:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
         void   LoadChunk(int32_t chunkX, int32_t chunkY); // Immediate load
@@ -108,8 +112,14 @@ namespace enigma::voxel::chunk
         void Render(IRenderer* renderer); // Render all loadedChunks
         bool SetEnableChunkDebug(bool enable = true);
 
+        // Resource management
+        ::Texture* GetBlocksAtlasTexture() const { return m_cachedBlocksAtlasTexture; }
+
     private:
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
         bool                                                m_enableChunkDebug = false; // Enable debug drawing for chunks
+
+        // Cached rendering resources (following NeoForge pattern)
+        ::Texture* m_cachedBlocksAtlasTexture = nullptr; // Cached blocks atlas texture
     };
 }
