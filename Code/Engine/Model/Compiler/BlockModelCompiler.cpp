@@ -142,59 +142,61 @@ namespace enigma::renderer::model
         Vec3 to   = element.to / 16.0f;
 
         // Create quad vertices based on direction and element bounds
+        // World coordinate system: +X=East, +Y=North, +Z=Up
+        // Note: Vertices ordered counter-clockwise for front face
         switch (direction)
         {
-        case Direction::DOWN: // Bottom face
+        case Direction::DOWN: // Bottom face (-Z, world bottom) - looking up at it
             face.vertices = {
                 Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
-                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y))
+            };
+            break;
+
+        case Direction::UP: // Top face (+Z, world top) - looking down at it
+            face.vertices = {
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
                 Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
-                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
             };
             break;
 
-        case Direction::UP: // Top face
+        case Direction::NORTH: // North face (+Y, north)
             face.vertices = {
-                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
-                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
-                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
-                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
-            };
-            break;
-
-        case Direction::NORTH: // North face
-            face.vertices = {
-                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
                 Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
-                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
-                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
             };
             break;
 
-        case Direction::SOUTH: // South face
+        case Direction::SOUTH: // South face (-Y, south)  
             face.vertices = {
-                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
-                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
                 Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
-                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
             };
             break;
 
-        case Direction::WEST: // West face
+        case Direction::WEST: // West face (-X, west)
             face.vertices = {
-                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
-                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
-                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
-                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+                Vertex_PCU(Vec3(from.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(from.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
+                Vertex_PCU(Vec3(from.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
             };
             break;
 
-        case Direction::EAST: // East face
+        case Direction::EAST: // East face (+X, east)
             face.vertices = {
-                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y)),
-                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
-                Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
-                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y))
+                Vertex_PCU(Vec3(to.x, to.y, from.z), Rgba8::WHITE, Vec2(uvMax.x, uvMin.y)),
+                Vertex_PCU(Vec3(to.x, to.y, to.z), Rgba8::WHITE, Vec2(uvMax.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, to.z), Rgba8::WHITE, Vec2(uvMin.x, uvMax.y)),
+                Vertex_PCU(Vec3(to.x, from.y, from.z), Rgba8::WHITE, Vec2(uvMin.x, uvMin.y))
             };
             break;
         }
