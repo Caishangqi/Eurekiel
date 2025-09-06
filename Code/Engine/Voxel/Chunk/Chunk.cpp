@@ -1,21 +1,56 @@
 ﻿#include "Chunk.hpp"
+#include "ChunkMeshBuilder.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Renderer/IRenderer.hpp"
+#include "Engine/Registry/Block/BlockRegistry.hpp"
+#include "Engine/Math/Mat44.hpp"
+#include "Engine/Renderer/Model/RenderMesh.hpp"
+#include "Engine/Resource/ResourceSubsystem.hpp"
+#include "Engine/Resource/Atlas/TextureAtlas.hpp"
+#include "Engine/Core/Engine.hpp"
 #include "Game/GameCommon.hpp"
+
 using namespace enigma::voxel::chunk;
 
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
     core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
-    m_blocks.reserve(BLOCKS_PER_CHUNK);
+
+    // Get grass block from registry for testing
+    auto grassBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "grass");
+    if (!grassBlock)
+    {
+        core::LogError("chunk", "Failed to get grass block from registry - chunk will be empty");
+    }
+    else
+    {
+        auto* grassBlockState = grassBlock->GetDefaultState();
+        if (!grassBlockState)
+        {
+            core::LogError("chunk", "Failed to get grass default state - chunk will be empty");
+        }
+        else
+        {
+            // Initialize blocks storage and fill with grass blocks for testing
+            m_blocks.reserve(BLOCKS_PER_CHUNK);
+            for (size_t i = 0; i < BLOCKS_PER_CHUNK; ++i)
+            {
+                m_blocks.push_back(*grassBlockState);
+            }
+            core::LogInfo("chunk", "Filled chunk with grass blocks");
+        }
+    }
 
     /// Calculate chunk bound aabb3
     BlockPos chunkBottomPos = GetWorldPos();
     m_chunkBounding.m_mins  = Vec3((float)chunkBottomPos.x, (float)chunkBottomPos.y, (float)chunkBottomPos.z);
     m_chunkBounding.m_maxs  = m_chunkBounding.m_mins + Vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_HEIGHT);
+
+    // Always rebuild mesh, even if chunk is empty
+    RebuildMesh();
 }
 
 Chunk::~Chunk()
@@ -24,12 +59,46 @@ Chunk::~Chunk()
 
 BlockState Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
 {
-    return m_blocks[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_HEIGHT];
+    // Boundary check
+    if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE || z < 0 || z >= CHUNK_HEIGHT)
+    {
+        core::LogError("chunk", "GetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
+        // Return first block as fallback (should be replaced with Air block later)
+        return m_blocks.empty() ? BlockState(nullptr, {}, 0) : m_blocks[0];
+    }
+
+    // Correct 3D to 1D index calculation: [x][y][z] -> x + y*CHUNK_SIZE + z*CHUNK_SIZE*CHUNK_SIZE
+    size_t index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
+
+    if (index >= m_blocks.size())
+    {
+        core::LogError("chunk", "GetBlock calculated index %zu out of range (size: %zu)", index, m_blocks.size());
+        // Return first block as fallback
+        return m_blocks.empty() ? BlockState(nullptr, {}, 0) : m_blocks[0];
+    }
+
+    return m_blocks[index];
 }
 
 void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState state)
 {
-    m_blocks[x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_HEIGHT] = state;
+    // Boundary check
+    if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE || z < 0 || z >= CHUNK_HEIGHT)
+    {
+        core::LogError("chunk", "SetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
+        return;
+    }
+
+    // Correct 3D to 1D index calculation: [x][y][z] -> x + y*CHUNK_SIZE + z*CHUNK_SIZE*CHUNK_SIZE
+    size_t index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
+
+    if (index >= m_blocks.size())
+    {
+        core::LogError("chunk", "SetBlock calculated index %zu out of range (size: %zu)", index, m_blocks.size());
+        return;
+    }
+
+    m_blocks[index] = state;
 }
 
 void Chunk::MarkDirty()
@@ -39,7 +108,40 @@ void Chunk::MarkDirty()
 
 void Chunk::RebuildMesh()
 {
-    ERROR_RECOVERABLE("Chunk::RebuildMesh is not implemented")
+    // Use ChunkMeshBuilder to create optimized mesh (Assignment01 approach)
+    ChunkMeshBuilder builder;
+    auto             newMesh = builder.BuildMesh(this);
+
+    if (newMesh)
+    {
+        // Compile the new mesh to GPU
+        newMesh->CompileToGPU();
+
+        // Replace the old mesh with new one
+        m_mesh    = std::move(newMesh);
+        m_isDirty = false;
+
+        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshBuilder");
+    }
+    else
+    {
+        core::LogError("chunk", "ChunkMeshBuilder failed to create mesh");
+
+        // Fallback: create an empty mesh
+        if (!m_mesh)
+        {
+            m_mesh = std::make_unique<ChunkMesh>();
+        }
+        m_mesh->Clear();
+        m_mesh->CompileToGPU();
+        m_isDirty = false;
+    }
+}
+
+void Chunk::SetMesh(std::unique_ptr<ChunkMesh> mesh)
+{
+    m_mesh    = std::move(mesh);
+    m_isDirty = false;
 }
 
 ChunkMesh* Chunk::GetMesh() const
@@ -182,10 +284,43 @@ void Chunk::Update(float deltaTime)
     UNUSED(deltaTime)
 }
 
+void Chunk::Render(IRenderer* renderer) const
+{
+    if (!m_mesh || m_mesh->IsEmpty())
+    {
+        ERROR_RECOVERABLE("Chunk::Render No mesh to render")
+        // No mesh to render
+        return;
+    }
+
+    // Get chunk world position (bottom corner)
+    BlockPos chunkWorldPos = GetWorldPos();
+
+    // Create model-to-world transform matrix 
+    // Chunk coordinates are in block space, so we need to translate to world position
+    Mat44 modelToWorldTransform = Mat44::MakeTranslation3D(
+        Vec3((float)chunkWorldPos.x, (float)chunkWorldPos.y, (float)chunkWorldPos.z)
+    );
+
+    // Set model constants (similar to Prop.cpp:23)
+    // Using white color for now - could be made configurable
+    renderer->SetModelConstants(modelToWorldTransform, Rgba8::WHITE);
+
+    // Set rendering state
+    renderer->SetBlendMode(BlendMode::OPAQUE);
+
+    // Note: Texture binding is now handled by ChunkManager to avoid per-chunk queries
+    // ChunkManager binds the blocks atlas texture once for all chunks (NeoForge pattern)
+
+    // Render the chunk mesh
+    m_mesh->RenderAll(renderer);
+}
+
 void Chunk::DebugDraw(IRenderer* renderer)
 {
     std::vector<Vertex_PCU> outVertices;
     AddVertsForCube3DWireFrame(outVertices, m_chunkBounding, Rgba8::WHITE, 0.06f);
+    renderer->SetModelConstants(Mat44());
     renderer->DrawVertexArray(outVertices);
 }
 
@@ -213,7 +348,7 @@ void Chunk::Clear()
 BlockPos Chunk::GetWorldPos() const
 {
     int32_t worldX = m_chunkCoords.x * CHUNK_SIZE; // The world start X coordinate of chunk
-    int32_t worldY = m_chunkCoords.y * CHUNK_SIZE; // The world start Z coordinate of chunk
+    int32_t worldY = m_chunkCoords.y * CHUNK_SIZE; // The world start Y coordinate of chunk
     int32_t worldZ = 0; // Start at the bottom of the world
 
     return BlockPos(worldX, worldY, worldZ);
