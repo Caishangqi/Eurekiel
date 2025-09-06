@@ -112,9 +112,9 @@ namespace enigma::registry::block
             return m_blockstatePath;
         }
 
-        // Default implementation: namespace:block/registryname
+        // Default implementation: namespace:models/block/registryname
         std::string path = m_namespace.empty() ? "minecraft" : m_namespace;
-        path += ":block/" + m_registryName;
+        path += ":models/block/" + m_registryName;
         return path;
     }
 
@@ -132,9 +132,19 @@ namespace enigma::registry::block
 
         int compiledCount = 0;
         int failedCount   = 0;
+        int skippedCount  = 0;
 
         for (const auto& state : m_impl->allStates)
         {
+            // Check if this state already has a compiled RenderMesh
+            if (state->GetRenderMesh() != nullptr)
+            {
+                LogDebug("Block", "Skipping already compiled state: %s", state->ToString().c_str());
+                compiledCount++; // Count as successful
+                skippedCount++;
+                continue;
+            }
+
             // Get model path for this state
             std::string modelPath = GetModelPath(state.get());
 
@@ -162,8 +172,8 @@ namespace enigma::registry::block
             }
         }
 
-        LogInfo("Block", "Model compilation complete for %s: compiled=%d, failed=%d",
-                GetRegistryName().c_str(), compiledCount, failedCount);
+        LogInfo("Block", "Model compilation complete for %s: compiled=%d, failed=%d, skipped=%d",
+                GetRegistryName().c_str(), compiledCount, failedCount, skippedCount);
     }
 
     void Block::GenerateStatesRecursive(size_t propertyIndex, PropertyMap& currentMap, std::vector<PropertyMap>& allCombinations)
