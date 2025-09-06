@@ -3,12 +3,14 @@
 #include "Engine/Resource/Model/ModelResource.hpp"
 #include "Engine/Resource/Atlas/AtlasManager.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Registry/Block/BlockRegistry.hpp"
 #include <sstream>
 
 #include "Builtin/ModelBuiltin.hpp"
 #include "Compiler/BlockModelCompiler.hpp"
 #include "Compiler/GenericModelCompiler.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Voxel/Block/BlockState.hpp"
 
 using namespace enigma::model;
 using namespace enigma::core;
@@ -172,4 +174,64 @@ std::string ModelSubsystem::GetBuiltinKey(const ResourceLocation& location) cons
     }
 
     return location.ToString();
+}
+
+void ModelSubsystem::CompileAllBlockModels()
+{
+    LogInfo("ModelSubsystem", "Starting automatic block model compilation...");
+
+    // Get all registered blocks
+    auto allBlocks = enigma::registry::block::BlockRegistry::GetAllBlocks();
+
+    if (allBlocks.empty())
+    {
+        LogWarn("ModelSubsystem", "No blocks registered for model compilation");
+        return;
+    }
+
+    // Get AtlasManager from ResourceSubsystem
+    auto* atlasManager = m_resourceSubsystem ? m_resourceSubsystem->GetAtlasManager() : nullptr;
+    if (!atlasManager)
+    {
+        LogError("ModelSubsystem", "AtlasManager not available - cannot compile block models");
+        return;
+    }
+
+    LogInfo("ModelSubsystem", "Compiling models for %zu registered blocks...", allBlocks.size());
+
+    int totalCompiled = 0;
+    int totalFailed   = 0;
+
+    // Compile models for each registered block
+    for (auto& block : allBlocks)
+    {
+        if (block)
+        {
+            LogDebug("ModelSubsystem", "Compiling models for block: %s:%s",
+                     block->GetNamespace().c_str(), block->GetRegistryName().c_str());
+
+            // Use Block's CompileModels method which handles all states
+            block->CompileModels(this, atlasManager);
+
+            // Count successful/failed compilations
+            auto allStates = block->GetAllStates();
+            for (auto* state : allStates)
+            {
+                if (state && state->GetRenderMesh())
+                {
+                    totalCompiled++;
+                }
+                else
+                {
+                    totalFailed++;
+                }
+            }
+        }
+    }
+
+    LogInfo("ModelSubsystem", "Block model compilation complete: compiled=%d, failed=%d",
+            totalCompiled, totalFailed);
+
+    // Update statistics
+    m_statistics.cachedMeshesCount = totalCompiled;
 }

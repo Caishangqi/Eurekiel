@@ -103,6 +103,15 @@ namespace enigma::model
          */
         void OnResourceReload();
 
+        /**
+         * @brief Compile models for all registered blocks
+         * 
+         * This method should be called after all blocks are registered to compile
+         * the models for all block states. Follows the Minecraft Forge pattern where
+         * model compilation happens automatically in the engine after registration.
+         */
+        void CompileAllBlockModels();
+
     private:
         // Dependencies on other subsystems
         ResourceSubsystem* m_resourceSubsystem = nullptr;
