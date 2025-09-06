@@ -5,6 +5,7 @@
 #include "../../Model/Compiler/BlockModelCompiler.hpp"
 #include "../../Resource/Atlas/AtlasManager.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Renderer/Model/RenderMesh.hpp"
 #include <sstream>
 #include <algorithm>
 
@@ -364,9 +365,8 @@ void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::
             LogInfo("BlockStateBuilder", "Successfully compiled model: %s",
                     variant.model.ToString().c_str());
 
-            // Store the compiled mesh in the variant for later use
-            // Note: BlockStateVariant might need to be extended to store the compiled mesh
-            // For now, the mesh is cached in ModelSubsystem
+            // Store the compiled mesh in the variant for BlockState to access
+            variant.compiledMesh = compiledMesh;
         }
         else
         {

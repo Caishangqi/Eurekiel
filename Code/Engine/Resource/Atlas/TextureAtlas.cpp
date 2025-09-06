@@ -2,6 +2,7 @@
 #include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Core/StringUtils.hpp"
 #include "../../Core/FileUtils.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -18,6 +19,7 @@
 #pragma warning(push)
 #pragma warning(disable: 4996) // Disable 'sprintf' unsafe warning
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "Engine/Renderer/IRenderer.hpp"
 #include "ThirdParty/stb/stb_image_write.h"
 #pragma warning(pop)
 
@@ -169,6 +171,29 @@ namespace enigma::resource
 
     Texture* TextureAtlas::GetAtlasTexture() const
     {
+        // Create texture on-demand if not already created
+        if (!m_atlasTexture && m_atlasImage && IsLoaded())
+        {
+            // Get renderer from global context
+            extern IRenderer* g_theRenderer;
+            if (g_theRenderer && m_atlasImage)
+            {
+                // Create GPU texture from atlas image
+                m_atlasTexture = g_theRenderer->CreateTextureFromImage(*m_atlasImage);
+                if (m_atlasTexture)
+                {
+                    core::LogInfo("atlas", "Created GPU texture for atlas: %s (%dx%d)",
+                                  m_location.ToString().c_str(),
+                                  m_atlasDimensions.x, m_atlasDimensions.y);
+                }
+                else
+                {
+                    core::LogError("atlas", "Failed to create GPU texture for atlas: %s",
+                                   m_location.ToString().c_str());
+                }
+            }
+        }
+
         return m_atlasTexture;
     }
 

@@ -7,6 +7,12 @@
 #include <map>
 #include <memory>
 
+// Forward declaration for RenderMesh
+namespace enigma::renderer::model
+{
+    class RenderMesh;
+}
+
 namespace enigma::resource::blockstate
 {
     using namespace enigma::resource;
@@ -23,6 +29,9 @@ namespace enigma::resource::blockstate
         bool             uvlock = false; // UV lock for rotations
         int              weight = 1; // Weight for random selection
 
+        // Compiled render mesh - populated by BlockStateBuilder during model compilation
+        mutable std::shared_ptr<enigma::renderer::model::RenderMesh> compiledMesh;
+
         BlockStateVariant() = default;
 
         BlockStateVariant(const ResourceLocation& modelPath) : model(modelPath)
@@ -34,6 +43,17 @@ namespace enigma::resource::blockstate
         }
 
         bool LoadFromJson(const JsonObject& json);
+
+        /**
+         * @brief Get the compiled render mesh for this variant
+         */
+        std::shared_ptr<enigma::renderer::model::RenderMesh> GetRenderMesh() const { return compiledMesh; }
+
+        /**
+         * @brief Set the compiled render mesh for this variant
+         * Called by BlockStateBuilder after model compilation
+         */
+        void SetRenderMesh(std::shared_ptr<enigma::renderer::model::RenderMesh> mesh) const { compiledMesh = mesh; }
     };
 
     /**
