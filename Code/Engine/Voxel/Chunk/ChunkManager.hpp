@@ -102,8 +102,9 @@ namespace enigma::voxel::chunk
         void   LoadChunk(int32_t chunkX, int32_t chunkY); // Immediate load
 
         // Utility:
-        static int64_t PackCoordinates(int32_t x, int32_t y); // Pack coords into single key
-        static void    UnpackCoordinates(int64_t packed, int32_t& x, int32_t& y);
+        static int64_t                                       PackCoordinates(int32_t x, int32_t y); // Pack coords into single key
+        static void                                          UnpackCoordinates(int64_t packed, int32_t& x, int32_t& y);
+        std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks() { return m_loadedChunks; }
 
         // Update Loop:
         void Update(float deltaTime); // Called each frame

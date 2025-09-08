@@ -7,9 +7,6 @@
 #include "Engine/Renderer/Texture.hpp" // Add explicit include for Texture class
 using namespace enigma::voxel::chunk;
 
-ChunkManager::ChunkManager()
-{
-}
 
 void ChunkManager::Initialize()
 {
@@ -39,6 +36,10 @@ void ChunkManager::Initialize()
     {
         core::LogError("chunk", "ChunkManager: ResourceSubsystem not available during initialization");
     }
+}
+
+ChunkManager::ChunkManager()
+{
 }
 
 ChunkManager::~ChunkManager()
