@@ -16,6 +16,22 @@
 
 using namespace enigma::voxel::chunk;
 
+// Optimized bit-shift coordinate to index conversion
+// Formula: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
+inline size_t Chunk::CoordsToIndex(int32_t x, int32_t y, int32_t z)
+{
+    return static_cast<size_t>(x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y)));
+}
+
+// Optimized bit-shift index to coordinates conversion  
+// Inverse of the above formula using bit masking
+inline void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z)
+{
+    x = static_cast<int32_t>(index & CHUNK_MASK_X);
+    y = static_cast<int32_t>((index >> CHUNK_BITS_X) & CHUNK_MASK_Y);
+    z = static_cast<int32_t>(index >> (CHUNK_BITS_X + CHUNK_BITS_Y));
+}
+
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
     core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
@@ -63,26 +79,27 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
     }
 
     // Generate terrain using Assignment01 formula
-    for (int32_t localX = 0; localX < CHUNK_SIZE; ++localX)
+    for (int32_t localX = 0; localX < CHUNK_SIZE_X; ++localX)
     {
-        for (int32_t localZ = 0; localZ < CHUNK_SIZE; ++localZ)
+        for (int32_t localZ = 0; localZ < CHUNK_SIZE_Y; ++localZ)
         {
             // Convert local coordinates to global coordinates
-            int32_t globalX = m_chunkCoords.x * CHUNK_SIZE + localX;
-            int32_t globalY = m_chunkCoords.y * CHUNK_SIZE + localZ;
+            int32_t globalX = ChunkCoordsToWorld(m_chunkCoords.x) + localX;
+            int32_t globalY = ChunkCoordsToWorld(m_chunkCoords.y) + localZ;
 
             // Calculate terrain height using the formula:
             // terrainHeightZ ( globalX, globalY ) = 50 + (globalX/3) + (globalY/5) + random(0 or 1)
             int32_t terrainHeightZ = 50 + (globalX / 3) + (globalY / 5) + (g_rng->RollRandomIntInRange(0, 2));
 
             // Clamp terrain height to valid range
-            if (terrainHeightZ >= CHUNK_HEIGHT) terrainHeightZ = CHUNK_HEIGHT - 1;
+            if (terrainHeightZ >= CHUNK_SIZE_Z) terrainHeightZ = CHUNK_SIZE_Z - 1;
             if (terrainHeightZ < 0) terrainHeightZ = 0;
 
             // Generate column from bottom to top
-            for (int32_t localY = 0; localY < CHUNK_HEIGHT; ++localY)
+            for (int32_t localY = 0; localY < CHUNK_SIZE_Z; ++localY)
             {
-                size_t blockIndex = localX + localZ * CHUNK_SIZE + localY * CHUNK_SIZE * CHUNK_SIZE;
+                // Optimized bit-shift index calculation
+                size_t blockIndex = CoordsToIndex(localX, localZ, localY);
 
                 if (localY == terrainHeightZ)
                 {
@@ -92,7 +109,7 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
                 else if (localY > terrainHeightZ)
                 {
                     // Above surface - air or water
-                    if (localY <= CHUNK_HEIGHT / 2)
+                    if (localY <= CHUNK_SIZE_Z / 2)
                     {
                         // Water level - any air below chunk height / 2 becomes water
                         m_blocks[blockIndex] = *waterState;
@@ -153,7 +170,7 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
     /// Calculate chunk bound aabb3
     BlockPos chunkBottomPos = GetWorldPos();
     m_chunkBounding.m_mins  = Vec3((float)chunkBottomPos.x, (float)chunkBottomPos.y, (float)chunkBottomPos.z);
-    m_chunkBounding.m_maxs  = m_chunkBounding.m_mins + Vec3(CHUNK_SIZE, CHUNK_SIZE, CHUNK_HEIGHT);
+    m_chunkBounding.m_maxs  = m_chunkBounding.m_mins + Vec3(CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
 
     // Always rebuild mesh, even if chunk is empty
     RebuildMesh();
@@ -166,15 +183,15 @@ Chunk::~Chunk()
 BlockState Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
 {
     // Boundary check
-    if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE || z < 0 || z >= CHUNK_HEIGHT)
+    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z)
     {
         core::LogError("chunk", "GetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
         // Return first block as fallback (should be replaced with Air block later)
         return m_blocks.empty() ? BlockState(nullptr, {}, 0) : m_blocks[0];
     }
 
-    // Correct 3D to 1D index calculation: [x][y][z] -> x + y*CHUNK_SIZE + z*CHUNK_SIZE*CHUNK_SIZE
-    size_t index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
+    // Optimized bit-shift index calculation: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
+    size_t index = CoordsToIndex(x, y, z);
 
     if (index >= m_blocks.size())
     {
@@ -189,14 +206,14 @@ BlockState Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
 void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState state)
 {
     // Boundary check
-    if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_SIZE || z < 0 || z >= CHUNK_HEIGHT)
+    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z)
     {
         core::LogError("chunk", "SetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
         return;
     }
 
-    // Correct 3D to 1D index calculation: [x][y][z] -> x + y*CHUNK_SIZE + z*CHUNK_SIZE*CHUNK_SIZE
-    size_t index = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
+    // Optimized bit-shift index calculation: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
+    size_t index = CoordsToIndex(x, y, z);
 
     if (index >= m_blocks.size())
     {
@@ -315,9 +332,9 @@ void Chunk::SetBlockWorld(const BlockPos& worldPos, BlockState state)
  */
 BlockPos Chunk::LocalToWorld(int32_t x, int32_t y, int32_t z)
 {
-    int32_t worldX = m_chunkCoords.x * CHUNK_SIZE + x; // chunk world X * 16 + local X
+    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x) + x; // chunk world X << 4 + local X
     int32_t worldY = y; // The Y coordinate remains unchanged
-    int32_t worldZ = m_chunkCoords.y * CHUNK_SIZE + z; // chunk world Z * 16 + local Z
+    int32_t worldZ = ChunkCoordsToWorld(m_chunkCoords.y) + z; // chunk world Z << 4 + local Z
 
     return BlockPos(worldX, worldY, worldZ);
 }
@@ -341,12 +358,12 @@ BlockPos Chunk::LocalToWorld(int32_t x, int32_t y, int32_t z)
 bool Chunk::WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32_t& z)
 {
     // Calculate the chunk coordinates corresponding to the world coordinates (integer division will automatically round down)
-    int32_t chunkX = worldPos.x / CHUNK_SIZE;
-    int32_t chunkZ = worldPos.z / CHUNK_SIZE;
+    int32_t chunkX = worldPos.x / CHUNK_SIZE_X;
+    int32_t chunkZ = worldPos.z / CHUNK_SIZE_Y;
 
     // Handle the special case of negative number coordinates
-    if (worldPos.x < 0 && worldPos.x % CHUNK_SIZE != 0) chunkX--;
-    if (worldPos.z < 0 && worldPos.z % CHUNK_SIZE != 0) chunkZ--;
+    if (worldPos.x < 0 && worldPos.x % CHUNK_SIZE_X != 0) chunkX--;
+    if (worldPos.z < 0 && worldPos.z % CHUNK_SIZE_Y != 0) chunkZ--;
 
     // Check whether it belongs to the current chunk
     if (chunkX != m_chunkCoords.x || chunkZ != m_chunkCoords.y)
@@ -355,12 +372,12 @@ bool Chunk::WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32
     }
 
     // Calculate local coordinates (world coordinates - chunk starting world coordinates)
-    x = worldPos.x - (m_chunkCoords.x * CHUNK_SIZE); // Local X = World X - chunk Start X
+    x = worldPos.x - ChunkCoordsToWorld(m_chunkCoords.x); // Local X = World X - chunk Start X
     y = worldPos.y; // The Y coordinate remains unchanged
-    z = worldPos.z - (m_chunkCoords.y * CHUNK_SIZE); // Local Z = World Z - chunk Start Z
+    z = worldPos.z - ChunkCoordsToWorld(m_chunkCoords.y); // Local Z = World Z - chunk Start Z
 
-    // Verify that local coordinates are in the valid range [0, CHUNK_SIZE) and [0, CHUNK_HEIGHT)
-    if (x < 0 || x >= CHUNK_SIZE || y < 0 || y >= CHUNK_HEIGHT || z < 0 || z >= CHUNK_SIZE)
+    // Verify that local coordinates are in the valid range [0, CHUNK_SIZE_X/Y) and [0, CHUNK_SIZE_Z)
+    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Z || z < 0 || z >= CHUNK_SIZE_Y)
     {
         return false; // The coordinates are outside the chunk range
     }
@@ -453,8 +470,8 @@ void Chunk::Clear()
  */
 BlockPos Chunk::GetWorldPos() const
 {
-    int32_t worldX = m_chunkCoords.x * CHUNK_SIZE; // The world start X coordinate of chunk
-    int32_t worldY = m_chunkCoords.y * CHUNK_SIZE; // The world start Y coordinate of chunk
+    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x); // The world start X coordinate of chunk
+    int32_t worldY = ChunkCoordsToWorld(m_chunkCoords.y); // The world start Y coordinate of chunk
     int32_t worldZ = 0; // Start at the bottom of the world
 
     return BlockPos(worldX, worldY, worldZ);

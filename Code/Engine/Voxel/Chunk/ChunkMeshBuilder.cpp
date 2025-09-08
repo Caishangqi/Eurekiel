@@ -22,11 +22,11 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
     core::LogInfo("ChunkMeshBuilder", "Building mesh for chunk...");
 
     // Iterate through all blocks in the chunk
-    for (int x = 0; x < Chunk::CHUNK_SIZE; ++x)
+    for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
-        for (int y = 0; y < Chunk::CHUNK_SIZE; ++y)
+        for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
         {
-            for (int z = 0; z < Chunk::CHUNK_HEIGHT; ++z)
+            for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
                 BlockState blockState = chunk->GetBlock(x, y, z);
 
