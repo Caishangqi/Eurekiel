@@ -54,7 +54,6 @@ namespace enigma::core
         {
             m_node          = YAML::Clone(other.m_node);
             m_pathSeparator = other.m_pathSeparator;
-            // 修复：对于拷贝操作，需要复制 defaults 而不是移动
             if (other.m_defaults)
             {
                 m_defaults = std::make_unique<YamlConfiguration>(*other.m_defaults);
@@ -202,7 +201,8 @@ namespace enigma::core
         try
         {
             YAML::Node node = GetNodeByPath(path);
-            return node && !node.IsNull();
+            // 关键修复：使用 IsDefined() 而不是 operator bool()
+            return node.IsDefined();
         }
         catch (...)
         {
@@ -244,11 +244,20 @@ namespace enigma::core
 
         for (const auto& part : pathParts)
         {
-            if (!current || current.IsNull() || !current.IsMap())
+            // 关键修复：正确的节点状态检查
+            if (!current.IsDefined() || !current.IsMap())
             {
-                return YAML::Node();
+                return YAML::Node(); // 返回未定义的节点
             }
-            current = current[part];
+            
+            // 关键修复：检查子节点是否存在
+            YAML::Node next = current[part];
+            if (!next.IsDefined())
+            {
+                return YAML::Node(); // 返回未定义的节点
+            }
+            
+            current = next;
         }
 
         return current;
