@@ -11,6 +11,7 @@
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/TextureAtlas.hpp"
 #include "Engine/Core/Engine.hpp"
+#include "Engine/Math/RandomNumberGenerator.hpp"
 #include "Game/GameCommon.hpp"
 
 using namespace enigma::voxel::chunk;
@@ -19,30 +20,135 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
     core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
 
-    // Get grass block from registry for testing
-    auto grassBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "grass");
-    if (!grassBlock)
+    // Get required block types from registry
+    auto airBlock     = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "air");
+    auto grassBlock   = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "grass");
+    auto dirtBlock    = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "dirt");
+    auto stoneBlock   = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "stone");
+    auto waterBlock   = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "water");
+    auto coalBlock    = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "coal_ore");
+    auto ironBlock    = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "iron_ore");
+    auto goldBlock    = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "gold_ore");
+    auto diamondBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "diamond_ore");
+
+    if (!airBlock || !grassBlock || !dirtBlock || !stoneBlock || !waterBlock ||
+        !coalBlock || !ironBlock || !goldBlock || !diamondBlock)
     {
-        core::LogError("chunk", "Failed to get grass block from registry - chunk will be empty");
+        core::LogError("chunk", "Failed to get required blocks from registry - chunk generation failed");
+        return;
     }
-    else
+
+    auto* airState     = airBlock->GetDefaultState();
+    auto* grassState   = grassBlock->GetDefaultState();
+    auto* dirtState    = dirtBlock->GetDefaultState();
+    auto* stoneState   = stoneBlock->GetDefaultState();
+    auto* waterState   = waterBlock->GetDefaultState();
+    auto* coalState    = coalBlock->GetDefaultState();
+    auto* ironState    = ironBlock->GetDefaultState();
+    auto* goldState    = goldBlock->GetDefaultState();
+    auto* diamondState = diamondBlock->GetDefaultState();
+
+    if (!airState || !grassState || !dirtState || !stoneState || !waterState ||
+        !coalState || !ironState || !goldState || !diamondState)
     {
-        auto* grassBlockState = grassBlock->GetDefaultState();
-        if (!grassBlockState)
+        core::LogError("chunk", "Failed to get block states - chunk generation failed");
+        return;
+    }
+
+    // Initialize blocks storage with air blocks
+    m_blocks.reserve(BLOCKS_PER_CHUNK);
+    for (size_t i = 0; i < BLOCKS_PER_CHUNK; ++i)
+    {
+        m_blocks.push_back(*airState);
+    }
+
+    // Generate terrain using Assignment01 formula
+    for (int32_t localX = 0; localX < CHUNK_SIZE; ++localX)
+    {
+        for (int32_t localZ = 0; localZ < CHUNK_SIZE; ++localZ)
         {
-            core::LogError("chunk", "Failed to get grass default state - chunk will be empty");
-        }
-        else
-        {
-            // Initialize blocks storage and fill with grass blocks for testing
-            m_blocks.reserve(BLOCKS_PER_CHUNK);
-            for (size_t i = 0; i < BLOCKS_PER_CHUNK; ++i)
+            // Convert local coordinates to global coordinates
+            int32_t globalX = m_chunkCoords.x * CHUNK_SIZE + localX;
+            int32_t globalY = m_chunkCoords.y * CHUNK_SIZE + localZ;
+
+            // Calculate terrain height using the formula:
+            // terrainHeightZ ( globalX, globalY ) = 50 + (globalX/3) + (globalY/5) + random(0 or 1)
+            int32_t terrainHeightZ = 50 + (globalX / 3) + (globalY / 5) + (g_rng->RollRandomIntInRange(0, 2));
+
+            // Clamp terrain height to valid range
+            if (terrainHeightZ >= CHUNK_HEIGHT) terrainHeightZ = CHUNK_HEIGHT - 1;
+            if (terrainHeightZ < 0) terrainHeightZ = 0;
+
+            // Generate column from bottom to top
+            for (int32_t localY = 0; localY < CHUNK_HEIGHT; ++localY)
             {
-                m_blocks.push_back(*grassBlockState);
+                size_t blockIndex = localX + localZ * CHUNK_SIZE + localY * CHUNK_SIZE * CHUNK_SIZE;
+
+                if (localY == terrainHeightZ)
+                {
+                    // Surface block - grass
+                    m_blocks[blockIndex] = *grassState;
+                }
+                else if (localY > terrainHeightZ)
+                {
+                    // Above surface - air or water
+                    if (localY <= CHUNK_HEIGHT / 2)
+                    {
+                        // Water level - any air below chunk height / 2 becomes water
+                        m_blocks[blockIndex] = *waterState;
+                    }
+                    else
+                    {
+                        // Above water level - air
+                        m_blocks[blockIndex] = *airState;
+                    }
+                }
+                else
+                {
+                    // Below surface - determine dirt or stone layers
+                    int32_t depthBelowSurface  = terrainHeightZ - localY;
+                    int32_t dirtLayerThickness = g_rng->RollRandomIntInRange(3, 5);
+
+                    if (depthBelowSurface <= dirtLayerThickness)
+                    {
+                        // Dirt layer
+                        m_blocks[blockIndex] = *dirtState;
+                    }
+                    else
+                    {
+                        // Stone layer with ore chances
+                        // 5% chance to become "coal"; if not, 2% chance to become "iron"; 
+                        // if not, 0.5% chance to become "gold"; if not, 0.1% chance to become "diamond"
+                        int32_t oreRoll = g_rng->RollRandomIntInRange(1, 10000); // Use 10000 for precise percentages
+
+                        if (oreRoll <= 500) // 5% = 500/10000
+                        {
+                            m_blocks[blockIndex] = *coalState;
+                        }
+                        else if (oreRoll <= 700) // 2% = 200/10000, cumulative 700
+                        {
+                            m_blocks[blockIndex] = *ironState;
+                        }
+                        else if (oreRoll <= 750) // 0.5% = 50/10000, cumulative 750
+                        {
+                            m_blocks[blockIndex] = *goldState;
+                        }
+                        else if (oreRoll <= 760) // 0.1% = 10/10000, cumulative 760
+                        {
+                            m_blocks[blockIndex] = *diamondState;
+                        }
+                        else
+                        {
+                            // Regular stone
+                            m_blocks[blockIndex] = *stoneState;
+                        }
+                    }
+                }
             }
-            core::LogInfo("chunk", "Filled chunk with grass blocks");
         }
     }
+
+    core::LogInfo("chunk", "Generated terrain for chunk (%d, %d) using Assignment01 formula", m_chunkCoords.x, m_chunkCoords.y);
 
     /// Calculate chunk bound aabb3
     BlockPos chunkBottomPos = GetWorldPos();
