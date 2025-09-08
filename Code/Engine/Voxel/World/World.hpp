@@ -94,6 +94,9 @@ namespace enigma::voxel::world
         void Render(IRenderer* renderer); // Render world
         bool SetEnableChunkDebug(bool enable = true);
 
+        // Utility
+        std::unique_ptr<ChunkManager>& GetChunkManager();
+
     private:
         std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
         int32_t                       m_worldHeight = 128; // World height in blocks

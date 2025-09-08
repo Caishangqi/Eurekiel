@@ -94,3 +94,8 @@ bool World::SetEnableChunkDebug(bool enable)
 {
     return m_chunkManager->SetEnableChunkDebug(enable);
 }
+
+std::unique_ptr<ChunkManager>& World::GetChunkManager()
+{
+    return m_chunkManager;
+}
