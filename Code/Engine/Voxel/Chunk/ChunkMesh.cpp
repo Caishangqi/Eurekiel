@@ -46,6 +46,11 @@ size_t ChunkMesh::GetOpaqueVertexCount() const
     return m_opaqueVertices.size();
 }
 
+size_t ChunkMesh::GetOpaqueIndexCount() const
+{
+    return m_opaqueIndices.size();
+}
+
 size_t ChunkMesh::GetOpaqueTriangleCount() const
 {
     return m_opaqueIndices.size() / 3;
@@ -54,6 +59,11 @@ size_t ChunkMesh::GetOpaqueTriangleCount() const
 size_t ChunkMesh::GetTransparentVertexCount() const
 {
     return m_transparentVertices.size();
+}
+
+size_t ChunkMesh::GetTransparentIndexCount() const
+{
+    return m_transparentIndices.size();
 }
 
 size_t ChunkMesh::GetTransparentTriangleCount() const

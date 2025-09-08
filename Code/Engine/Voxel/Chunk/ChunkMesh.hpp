@@ -110,8 +110,10 @@ namespace enigma::voxel::chunk
 
         // Statistics:
         size_t GetOpaqueVertexCount() const;
+        size_t GetOpaqueIndexCount() const;
         size_t GetOpaqueTriangleCount() const;
         size_t GetTransparentVertexCount() const;
+        size_t GetTransparentIndexCount() const;
         size_t GetTransparentTriangleCount() const;
         bool   IsEmpty() const;
         bool   HasOpaqueGeometry() const;
