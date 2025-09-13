@@ -37,7 +37,9 @@ namespace enigma::core
 
     bool DevConsoleAppender::IsEnabled() const
     {
-        // Disable DevConsoleAppender when debugger is present to avoid duplicate output
+        
+        return false;
+        /*// Disable DevConsoleAppender when debugger is present to avoid duplicate output
         // (ConsoleAppender will handle IDE Console output directly)
 #ifdef _WIN32
         if (IsDebuggerPresent())
@@ -46,7 +48,7 @@ namespace enigma::core
         }
 #endif
         // Only enabled if base is enabled AND DevConsole is available
-        return ILogAppender::IsEnabled() && GetDevConsole() != nullptr;
+        return ILogAppender::IsEnabled() && GetDevConsole() != nullptr;*/
     }
 
     std::string DevConsoleAppender::FormatLogMessage(const LogMessage& message) const
