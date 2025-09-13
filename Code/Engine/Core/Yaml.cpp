@@ -244,19 +244,18 @@ namespace enigma::core
 
         for (const auto& part : pathParts)
         {
-            // 关键修复：正确的节点状态检查
             if (!current.IsDefined() || !current.IsMap())
             {
-                return YAML::Node(); // 返回未定义的节点
+                return YAML::Node(); // Return an undefined node
             }
-            
-            // 关键修复：检查子节点是否存在
+
+            // Check whether the child node exists
             YAML::Node next = current[part];
             if (!next.IsDefined())
             {
-                return YAML::Node(); // 返回未定义的节点
+                return YAML::Node(); // Return an undefined node
             }
-            
+
             current = next;
         }
 
