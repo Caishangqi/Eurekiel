@@ -1,0 +1,450 @@
+/**
+ * @file RendererSubsystem.hpp
+ * @brief Enigma引擎渲染子系统 - DirectX 12延迟渲染管线管理器
+ * 
+ * 教学重点:
+ * 1. 理解Iris渲染管线的10阶段执行顺序
+ * 2. 学习DirectX 12的现代化资源管理
+ * 3. 掌握引擎子系统的生命周期管理
+ * 4. 理解延迟渲染与前向渲染的区别
+ */
+
+#pragma once
+
+#include <memory>
+#include <string>
+#include <vector>
+#include <array>
+
+#include "Engine/Core/SubsystemManager.hpp"
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <wrl/client.h>
+
+// 使用Enigma核心命名空间中的EngineSubsystem
+using namespace enigma::core;
+
+namespace enigma::graphic {
+
+// 前向声明 - 避免循环包含
+class EnigmaRenderer;
+class BindlessResourceManager;
+class ShaderPackManager;
+
+/**
+ * @brief DirectX 12渲染子系统管理器
+ * @details 
+ * 这个类是整个延迟渲染系统的入口点和生命周期管理器。它继承自EngineSubsystem，
+ * 与Enigma引擎的其他子系统协同工作。
+ * 
+ * 教学要点:
+ * - 子系统模式的设计模式应用
+ * - Iris渲染管线的生命周期管理  
+ * - DirectX 12设备和命令队列的初始化
+ * - 智能指针在资源管理中的应用
+ * 
+ * DirectX 12特性:
+ * - 显式的GPU资源管理
+ * - Command List和Command Queue的分离
+ * - Bindless描述符堆的使用
+ * - 多线程渲染支持的基础架构
+ * 
+ * @note 这是教学项目，重点在于理解渲染管线概念而非极限性能
+ */
+class RendererSubsystem final : public EngineSubsystem {
+public:
+    /**
+     * @brief 渲染子系统配置
+     * @details 包含初始化渲染器所需的所有参数
+     */
+    struct Configuration {
+        uint32_t renderWidth = 1920;           ///< 渲染分辨率宽度
+        uint32_t renderHeight = 1080;          ///< 渲染分辨率高度
+        uint32_t maxFramesInFlight = 3;        ///< 最大飞行帧数
+        bool enableDebugLayer = false;         ///< DirectX 12调试层
+        bool enableGPUValidation = false;      ///< GPU验证层
+        bool enableBindlessResources = true;   ///< 启用Bindless资源
+        std::string defaultShaderPackPath;     ///< 默认Shader Pack路径
+        
+        /**
+         * @brief 默认构造函数
+         * @details 设置适合教学和开发的默认参数
+         */
+        Configuration() = default;
+    };
+
+    /**
+     * @brief 渲染统计信息
+     * @details 用于性能分析和调试的统计数据
+     */
+    struct RenderStatistics {
+        uint64_t frameIndex = 0;              ///< 当前帧索引
+        float frameTime = 0.0f;               ///< 帧时间(毫秒)
+        float gpuTime = 0.0f;                 ///< GPU时间(毫秒)
+        uint32_t drawCalls = 0;               ///< 绘制调用数量
+        uint32_t trianglesRendered = 0;       ///< 渲染三角形数量
+        uint32_t activeShaderPrograms = 0;    ///< 活跃着色器程序数量
+        size_t gpuMemoryUsed = 0;             ///< GPU内存使用量(字节)
+        
+        /**
+         * @brief 重置统计信息
+         */
+        void Reset() {
+            drawCalls = 0;
+            trianglesRendered = 0;
+            activeShaderPrograms = 0;
+        }
+    };
+
+public:
+    /**
+     * @brief 构造函数
+     * @details 初始化基本成员，但不进行重型初始化工作
+     */
+    explicit RendererSubsystem();
+    
+    /**
+     * @brief 析构函数
+     * @details 确保所有资源正确释放，遵循RAII原则
+     */
+    ~RendererSubsystem() override;
+
+    // 禁用拷贝构造和赋值 - 子系统应该是唯一的
+    RendererSubsystem(const RendererSubsystem&) = delete;
+    RendererSubsystem& operator=(const RendererSubsystem&) = delete;
+    
+    // 启用移动构造和赋值 - 支持高效的资源转移
+    RendererSubsystem(RendererSubsystem&&) noexcept = default;
+    RendererSubsystem& operator=(RendererSubsystem&&) noexcept = default;
+
+    // ==================== EngineSubsystem接口实现 ====================
+    
+    /**
+     * @brief 子系统名称
+     * @return 返回"RendererSubsystem"
+     */
+    const char* GetSubsystemName() const override { return "RendererSubsystem"; }
+    
+    /**
+     * @brief 获取子系统优先级
+     * @return -100 (高优先级，其他子系统可能依赖渲染)
+     * @details 渲染子系统需要较早启动，因为其他子系统(如UI、调试绘制)可能依赖它
+     */
+    int GetPriority() const override { return -100; }
+    
+    /**
+     * @brief 是否需要游戏循环
+     * @return true - 渲染需要每帧执行
+     */
+    bool RequiresGameLoop() const override { return true; }
+    
+    /**
+     * @brief 是否需要早期初始化
+     * @return true - 需要在其他子系统之前初始化DirectX设备
+     */
+    bool RequiresInitialize() const override { return true; }
+
+    /**
+     * @brief 早期初始化阶段
+     * @details 
+     * 在所有子系统的Startup之前调用，用于：
+     * - 初始化DirectX 12设备和命令队列
+     * - 创建交换链
+     * - 设置调试层
+     * 
+     * 教学要点: 理解为什么图形设备需要最早初始化
+     */
+    void Initialize() override;
+    
+    /**
+     * @brief 主要启动阶段
+     * @details
+     * 在Initialize阶段之后调用，用于：
+     * - 创建EnigmaRenderer实例
+     * - 初始化Bindless资源管理器
+     * - 加载默认Shader Pack
+     * - 创建默认渲染资源
+     */
+    void Startup() override;
+    
+    /**
+     * @brief 关闭子系统
+     * @details
+     * 释放所有资源，确保无内存泄漏：
+     * - 等待GPU完成所有工作
+     * - 释放所有D3D12资源
+     * - 关闭调试层
+     * 
+     * @note 析构函数会调用此方法，但显式调用更安全
+     */
+    void Shutdown() override;
+
+    // ==================== 游戏循环接口 - 对应Iris管线生命周期 ====================
+    
+    /**
+     * @brief 帧开始处理
+     * @details
+     * 对应Iris管线的setup和begin阶段：
+     * - setup1-99: GPU状态初始化、SSBO设置
+     * - begin1-99: 每帧参数更新、摄像机矩阵计算
+     * 
+     * 教学要点:
+     * - 理解为什么每帧开始需要更新全局参数
+     * - 学习GPU状态管理的重要性
+     * - 掌握Command List的开始记录
+     */
+    void BeginFrame() override;
+    
+    /**
+     * @brief 主要更新和渲染
+     * @param deltaTime 帧时间间隔(秒)
+     * @details
+     * 对应Iris管线的主要渲染阶段：
+     * - shadow: 阴影贴图生成
+     * - shadowcomp1-99: 阴影后处理
+     * - prepare1-99: SSAO等预处理
+     * - gbuffers(opaque): 不透明几何体G-Buffer填充
+     * - deferred1-99: 延迟光照计算
+     * - gbuffers(translucent): 半透明几何体前向渲染
+     * - composite1-99: 后处理效果链
+     * 
+     * 教学要点:
+     * - 理解延迟渲染的核心概念
+     * - 学习G-Buffer的数据组织
+     * - 掌握后处理效果的实现原理
+     */
+    void Update(float deltaTime) override;
+    
+    /**
+     * @brief 帧结束处理
+     * @details
+     * 对应Iris管线的final阶段：
+     * - final: 最终输出处理
+     * - Present: 交换链呈现
+     * - 性能统计收集
+     * - Command List提交和同步
+     * 
+     * 教学要点:
+     * - 理解双缓冲和垂直同步
+     * - 学习GPU/CPU同步的重要性
+     */
+    void EndFrame() override;
+
+    // ==================== 渲染器管理接口 ====================
+    
+    /**
+     * @brief 获取主渲染器实例
+     * @return EnigmaRenderer指针，如果未初始化返回nullptr
+     * @details 提供对核心渲染器的访问，其他子系统可以通过此接口进行渲染
+     */
+    EnigmaRenderer* GetRenderer() const noexcept { return m_renderer.get(); }
+    
+    /**
+     * @brief 获取Bindless资源管理器
+     * @return 资源管理器指针
+     * @details 用于创建和管理Bindless描述符
+     */
+    BindlessResourceManager* GetResourceManager() const noexcept { 
+        return m_resourceManager.get(); 
+    }
+    
+    /**
+     * @brief 获取Shader Pack管理器
+     * @return Shader Pack管理器指针
+     * @details 用于加载、管理和切换不同的着色器包
+     */
+    ShaderPackManager* GetShaderPackManager() const noexcept {
+        return m_shaderPackManager.get();
+    }
+
+    // ==================== 配置和状态查询 ====================
+    
+    /**
+     * @brief 更新渲染配置
+     * @param config 新的配置参数
+     * @details 某些配置更改可能需要重新创建资源
+     */
+    void UpdateConfiguration(const Configuration& config);
+    
+    /**
+     * @brief 获取当前配置
+     * @return 当前的配置参数
+     */
+    const Configuration& GetConfiguration() const noexcept { return m_configuration; }
+    
+    /**
+     * @brief 调整渲染分辨率
+     * @param width 新宽度
+     * @param height 新高度
+     * @details 处理窗口大小变化，重新创建相关资源
+     */
+    void ResizeRenderTargets(uint32_t width, uint32_t height);
+    
+    /**
+     * @brief 获取渲染统计信息
+     * @return 当前帧的渲染统计
+     * @details 用于性能分析和调试
+     */
+    const RenderStatistics& GetRenderStatistics() const noexcept { 
+        return m_renderStatistics; 
+    }
+    
+    /**
+     * @brief 检查子系统是否已准备好渲染
+     * @return true表示可以进行渲染
+     */
+    bool IsReadyForRendering() const noexcept;
+
+    // ==================== Shader Pack管理接口 ====================
+    
+    /**
+     * @brief 加载Shader Pack
+     * @param packPath Shader Pack文件路径
+     * @return true表示加载成功
+     * @details 
+     * 支持运行时Shader Pack切换，用于：
+     * - 不同视觉风格的切换
+     * - Shader开发和调试
+     * - 性能测试
+     */
+    bool LoadShaderPack(const std::string& packPath);
+    
+    /**
+     * @brief 卸载当前Shader Pack
+     * @details 回退到默认渲染管线
+     */
+    void UnloadShaderPack();
+    
+    /**
+     * @brief 重新加载当前Shader Pack
+     * @return true表示重新加载成功
+     * @details 用于Shader开发期间的热重载
+     */
+    bool ReloadShaderPack();
+    
+    /**
+     * @brief 启用/禁用Shader Pack热重载
+     * @param enable true表示启用文件监控
+     * @details 开发模式下自动检测Shader文件变化并重新加载
+     */
+    void EnableShaderHotReload(bool enable);
+
+    // ==================== 调试和开发支持 ====================
+    
+    /**
+     * @brief 启用/禁用调试渲染
+     * @param enable true表示启用调试输出
+     * @details 包括线框模式、法线可视化等调试功能
+     */
+    void EnableDebugRendering(bool enable);
+    
+    /**
+     * @brief 获取DirectX 12设备
+     * @return D3D12设备指针
+     * @details 仅供调试和高级用户使用
+     * @warning 直接操作设备可能导致状态不一致
+     */
+    ID3D12Device* GetD3D12Device() const noexcept { return m_device.Get(); }
+    
+    /**
+     * @brief 获取主命令队列
+     * @return 命令队列指针
+     * @details 仅供调试和高级用户使用
+     */
+    ID3D12CommandQueue* GetCommandQueue() const noexcept { return m_commandQueue.Get(); }
+
+private:
+    // ==================== 内部初始化方法 ====================
+    
+    /**
+     * @brief 初始化DirectX 12设备
+     * @details 创建设备、工厂、适配器等核心对象
+     */
+    void InitializeD3D12Device();
+    
+    /**
+     * @brief 初始化命令队列和命令列表
+     * @details 创建图形命令队列和相关的命令分配器
+     */
+    void InitializeCommandObjects();
+    
+    /**
+     * @brief 初始化交换链
+     * @param windowHandle 窗口句柄
+     * @details 创建与窗口关联的交换链
+     */
+    void InitializeSwapChain(HWND windowHandle);
+    
+    /**
+     * @brief 启用DirectX 12调试层
+     * @details 开发模式下启用详细的调试信息
+     */
+    void EnableDebugLayer();
+    
+    /**
+     * @brief 等待GPU完成所有工作
+     * @details 在关闭或重新创建资源前确保GPU空闲
+     */
+    void WaitForGPU();
+    
+    /**
+     * @brief 更新渲染统计信息
+     * @details 收集性能数据用于分析
+     */
+    void UpdateRenderStatistics();
+
+private:
+    // ==================== DirectX 12核心对象 ====================
+    
+    /// DirectX 12设备 - 所有资源创建的核心
+    Microsoft::WRL::ComPtr<ID3D12Device> m_device;
+    
+    /// DXGI工厂 - 用于枚举适配器和创建交换链
+    Microsoft::WRL::ComPtr<IDXGIFactory6> m_dxgiFactory;
+    
+    /// 图形命令队列 - 执行渲染命令
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_commandQueue;
+    
+    /// 交换链 - 双缓冲显示
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
+    
+    /// 围栏对象 - CPU/GPU同步
+    Microsoft::WRL::ComPtr<ID3D12Fence> m_fence;
+    uint64_t m_fenceValue = 0;
+    HANDLE m_fenceEvent = nullptr;
+
+    // ==================== 渲染系统组件 ====================
+    
+    /// 主渲染器 - 核心渲染逻辑实现
+    std::unique_ptr<EnigmaRenderer> m_renderer;
+    
+    /// Bindless资源管理器 - 现代化资源绑定
+    std::unique_ptr<BindlessResourceManager> m_resourceManager;
+    
+    /// Shader Pack管理器 - 着色器包系统
+    std::unique_ptr<ShaderPackManager> m_shaderPackManager;
+
+    // ==================== 配置和状态 ====================
+    
+    /// 子系统配置
+    Configuration m_configuration;
+    
+    /// 渲染统计信息
+    mutable RenderStatistics m_renderStatistics;
+    
+    /// 初始化状态标志
+    bool m_isInitialized = false;
+    bool m_isStarted = false;
+    bool m_isShutdown = false;
+    
+    /// 调试状态
+    bool m_debugLayerEnabled = false;
+    bool m_debugRenderingEnabled = false;
+
+    // ==================== 宏定义用于子系统注册 ====================
+    
+    /// 使用引擎提供的宏来简化子系统注册
+    DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", -100);
+};
+
+} // namespace enigma::graphic
