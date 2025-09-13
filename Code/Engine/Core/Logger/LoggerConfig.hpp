@@ -26,11 +26,11 @@ namespace enigma::core
         size_t                maxLogFiles       = 10; // Keep up to 10 historical log files
 
         // Console logging configuration
-        bool enableConsoleLogging = true;
+        bool enableConsoleLogging = false;
         bool enableConsoleColors  = true;
 
         // DevConsole logging configuration  
-        bool enableDevConsoleLogging = true;
+        bool enableDevConsoleLogging = false;
 
         // Log format configuration
         bool includeTimestamp   = true;
@@ -44,7 +44,7 @@ namespace enigma::core
         size_t logBufferSize      = 1024 * 1024; // 1MB buffer for async logging
 
         // Debug configuration
-        bool logToStdout             = true; // Also log to stdout for debugging
+        bool logToStdout             = false; // Also log to stdout for debugging
         bool enableLogLevelFiltering = true;
 
         // Constructor with defaults matching module.yml
