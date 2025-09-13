@@ -3,10 +3,10 @@
  * @brief Enigma引擎渲染子系统 - DirectX 12延迟渲染管线管理器
  * 
  * 教学重点:
- * 1. 理解Iris渲染管线的10阶段执行顺序
+ * 1. 理解Iris真实的管线管理架构（PipelineManager模式）
  * 2. 学习DirectX 12的现代化资源管理
  * 3. 掌握引擎子系统的生命周期管理
- * 4. 理解延迟渲染与前向渲染的区别
+ * 4. 理解按维度分离的管线设计理念
  */
 
 #pragma once
@@ -27,7 +27,7 @@ using namespace enigma::core;
 namespace enigma::graphic {
 
 // 前向声明 - 避免循环包含
-class EnigmaRenderer;
+class PipelineManager;
 class BindlessResourceManager;
 class ShaderPackManager;
 
@@ -160,10 +160,10 @@ public:
      * @brief 主要启动阶段
      * @details
      * 在Initialize阶段之后调用，用于：
-     * - 创建EnigmaRenderer实例
+     * - 创建PipelineManager实例
      * - 初始化Bindless资源管理器
      * - 加载默认Shader Pack
-     * - 创建默认渲染资源
+     * - 准备初始渲染管线（主世界维度）
      */
     void Startup() override;
     
@@ -230,14 +230,26 @@ public:
      */
     void EndFrame() override;
 
-    // ==================== 渲染器管理接口 ====================
+    // ==================== 管线管理接口 - 基于Iris PipelineManager ====================
     
     /**
-     * @brief 获取主渲染器实例
-     * @return EnigmaRenderer指针，如果未初始化返回nullptr
-     * @details 提供对核心渲染器的访问，其他子系统可以通过此接口进行渲染
+     * @brief 获取管线管理器实例
+     * @return PipelineManager指针，如果未初始化返回nullptr
+     * @details 
+     * 对应Iris中的getPipelineManager()方法
+     * 提供对核心管线管理器的访问，支持按维度管理不同的渲染管线
      */
-    EnigmaRenderer* GetRenderer() const noexcept { return m_renderer.get(); }
+    PipelineManager* GetPipelineManager() const noexcept { return m_pipelineManager.get(); }
+    
+    /**
+     * @brief 准备指定维度的渲染管线
+     * @param dimensionId 维度标识符
+     * @return 渲染管线指针
+     * @details 
+     * 对应Iris的preparePipeline(NamespacedId currentDimension)方法
+     * 支持多维度管线缓存和动态切换
+     */
+    class IWorldRenderingPipeline* PreparePipeline(const class NamespacedId& dimensionId);
     
     /**
      * @brief 获取Bindless资源管理器
@@ -388,10 +400,14 @@ private:
     void WaitForGPU();
     
     /**
-     * @brief 更新渲染统计信息
-     * @details 收集性能数据用于分析
+     * @brief 创建管线工厂函数
+     * @param dimensionId 维度ID
+     * @return 创建的渲染管线实例
+     * @details 
+     * 对应Iris中的createPipeline(NamespacedId dimensionId)方法
+     * 根据当前着色器包状态决定创建VanillaRenderingPipeline或EnigmaRenderingPipeline
      */
-    void UpdateRenderStatistics();
+    std::unique_ptr<class IWorldRenderingPipeline> CreatePipeline(const class NamespacedId& dimensionId);
 
 private:
     // ==================== DirectX 12核心对象 ====================
@@ -413,10 +429,10 @@ private:
     uint64_t m_fenceValue = 0;
     HANDLE m_fenceEvent = nullptr;
 
-    // ==================== 渲染系统组件 ====================
+    // ==================== 渲染系统组件 - 基于Iris架构 ====================
     
-    /// 主渲染器 - 核心渲染逻辑实现
-    std::unique_ptr<EnigmaRenderer> m_renderer;
+    /// 管线管理器 - 对应Iris PipelineManager，核心架构组件
+    std::unique_ptr<PipelineManager> m_pipelineManager;
     
     /// Bindless资源管理器 - 现代化资源绑定
     std::unique_ptr<BindlessResourceManager> m_resourceManager;
