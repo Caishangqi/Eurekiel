@@ -361,16 +361,31 @@
         <ClInclude Include="Core\Vertex_PCU.hpp" />
         <ClInclude Include="Core\XmlUtils.hpp" />
         <ClInclude Include="Core\Yaml.hpp" />
-        <ClInclude Include="Graphic\BindlessResourceManager.hpp" />
-        <ClInclude Include="Graphic\CommandListManager.hpp" />
-        <ClInclude Include="Graphic\EnigmaRenderer.hpp" />
-        <ClInclude Include="Graphic\GBuffer.hpp" />
-        <ClInclude Include="Graphic\LightingPass.hpp" />
-        <ClInclude Include="Graphic\RendererSubsystem.hpp" />
-        <ClInclude Include="Graphic\Resource\D12Buffer.hpp" />
+        <!-- Graphic System - New Iris-Compatible Architecture -->
+        <!-- Pipeline Layer -->
+        <ClInclude Include="Graphic\Core\Pipeline\IWorldRenderingPipeline.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\IShaderRenderingPipeline.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\VanillaRenderingPipeline.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\PipelineManager.hpp" />
+        
+        <!-- Renderer Layer -->
+        <ClInclude Include="Graphic\Core\Renderer\CompositeRenderer.hpp" />
+        <ClInclude Include="Graphic\Core\Renderer\ShadowRenderer.hpp" />
+        
+        <!-- Shader System -->
+        <ClInclude Include="Graphic\Core\Shader\ShaderPackManager.hpp" />
+        
+        <!-- Integration Layer -->
+        <ClInclude Include="Graphic\Integration\RendererSubsystem.hpp" />
+        
+        <!-- Resource Management -->
+        <ClInclude Include="Graphic\Resource\BindlessResourceManager.hpp" />
+        <ClInclude Include="Graphic\Resource\CommandListManager.hpp" />
+        <ClInclude Include="Graphic\Resource\Buffer\D12Buffer.hpp" />
         <ClInclude Include="Graphic\Resource\D12Resources.hpp" />
-        <ClInclude Include="Graphic\Resource\D12Texture.hpp" />
-        <ClInclude Include="Graphic\ShaderPackManager.hpp" />
+        <ClInclude Include="Graphic\Resource\Texture\D12Texture.hpp" />
         <ClInclude Include="Input\AnalogJoystick.hpp" />
         <ClInclude Include="Input\InputSystem.hpp" />
         <ClInclude Include="Input\KeyButtonState.hpp" />
