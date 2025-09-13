@@ -90,7 +90,7 @@
         <ClCompile>
             <WarningLevel>Level4</WarningLevel>
             <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
             <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
@@ -111,7 +111,7 @@
             <FunctionLevelLinking>true</FunctionLevelLinking>
             <IntrinsicFunctions>true</IntrinsicFunctions>
             <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
             <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
@@ -132,7 +132,7 @@
         <ClCompile>
             <WarningLevel>Level4</WarningLevel>
             <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
             <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
@@ -153,7 +153,7 @@
             <FunctionLevelLinking>true</FunctionLevelLinking>
             <IntrinsicFunctions>true</IntrinsicFunctions>
             <SDLCheck>true</SDLCheck>
-            <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+            <PreprocessorDefinitions>NDEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
             <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
@@ -292,197 +292,209 @@
         <ClCompile Include="Resource\Atlas\AtlasManager.cpp"/>
         <ClCompile Include="Resource\Sound\SoundLoader.cpp"/>
         <ClCompile Include="Resource\Sound\SoundResource.cpp"/>
-        <ClCompile Include="Voxel\Block\BlockPos.cpp"/>
-        <ClCompile Include="Voxel\Block\BlockState.cpp"/>
-        <ClCompile Include="Voxel\Chunk\Chunk.cpp"/>
-        <ClCompile Include="Voxel\Chunk\ChunkManager.cpp"/>
-        <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp"/>
-        <ClCompile Include="Voxel\Chunk\ChunkMeshBuilder.cpp"/>
-        <ClCompile Include="Voxel\Property\Property.cpp"/>
-        <ClCompile Include="Voxel\Property\PropertyRegistry.cpp"/>
-        <ClCompile Include="Voxel\Property\PropertyTypes.cpp"/>
-        <ClCompile Include="Voxel\World\World.cpp"/>
-        <ClCompile Include="Window\Window.cpp"/>
+        <!-- Graphic - Bindless Rendering System -->
+        <ClCompile Include="Voxel\Block\BlockPos.cpp" />
+        <ClCompile Include="Voxel\Block\BlockState.cpp" />
+        <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
+        <ClCompile Include="Voxel\Chunk\ChunkManager.cpp" />
+        <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
+        <ClCompile Include="Voxel\Chunk\ChunkMeshBuilder.cpp" />
+        <ClCompile Include="Voxel\Property\Property.cpp" />
+        <ClCompile Include="Voxel\Property\PropertyRegistry.cpp" />
+        <ClCompile Include="Voxel\Property\PropertyTypes.cpp" />
+        <ClCompile Include="Voxel\World\World.cpp" />
+        <ClCompile Include="Window\Window.cpp" />
     </ItemGroup>
     <ItemGroup>
-        <ClInclude Include="..\ThirdParty\d3dx12\d3dx12.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod.hpp"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_codec.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_common.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp_effects.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_errors.h"/>
-        <ClInclude Include="..\ThirdParty\fmod\fmod_output.h"/>
-        <ClInclude Include="..\ThirdParty\json\json.hpp"/>
-        <ClInclude Include="..\ThirdParty\stb\stb_image.h"/>
-        <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h"/>
-        <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h"/>
-        <ClInclude Include="..\ThirdParty\yaml-cpp\yaml.h"/>
-        <ClInclude Include="Audio\AudioSubsystem.hpp"/>
-        <ClInclude Include="Core\Clock.hpp"/>
-        <ClInclude Include="Core\Console\DevConsole.hpp"/>
-        <ClInclude Include="Core\CubicHermiteSpline.hpp"/>
-        <ClInclude Include="Core\Engine.hpp"/>
-        <ClInclude Include="Core\EngineCommon.hpp"/>
-        <ClInclude Include="Core\ErrorWarningAssert.hpp"/>
-        <ClInclude Include="Core\EventSystem.hpp"/>
-        <ClInclude Include="Core\FileUtils.hpp"/>
-        <ClInclude Include="Core\HeatMaps.hpp"/>
-        <ClInclude Include="Core\Image.hpp"/>
-        <ClInclude Include="Core\Json.hpp"/>
-        <ClInclude Include="Core\NamedStrings.hpp"/>
-        <ClInclude Include="Core\Rgba8.hpp"/>
-        <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp"/>
-        <ClInclude Include="Core\StringUtils.hpp"/>
-        <ClInclude Include="Core\SubsystemManager.hpp"/>
-        <ClInclude Include="Core\Time.hpp"/>
-        <ClInclude Include="Core\Timer.hpp"/>
-        <ClInclude Include="Core\VertexUtils.hpp"/>
-        <ClInclude Include="Core\Logger\Logger.hpp"/>
-        <ClInclude Include="Core\Logger\LoggerAPI.hpp"/>
-        <ClInclude Include="Core\Logger\LogLevel.hpp"/>
-        <ClInclude Include="Core\Logger\LogMessage.hpp"/>
-        <ClInclude Include="Core\Logger\LoggerSubsystem.hpp"/>
-        <ClInclude Include="Core\Logger\LoggerConfig.hpp"/>
-        <ClInclude Include="Core\Logger\LogFileManager.hpp"/>
-        <ClInclude Include="Core\Logger\Appender\ILogAppender.hpp"/>
-        <ClInclude Include="Core\Logger\Appender\ConsoleAppender.hpp"/>
-        <ClInclude Include="Core\Logger\Appender\DevConsoleAppender.hpp"/>
-        <ClInclude Include="Core\Logger\Appender\FileAppender.hpp"/>
-        <ClInclude Include="Core\Console\ConsoleMessage.hpp"/>
-        <ClInclude Include="Core\Console\ConsoleConfig.hpp"/>
-        <ClInclude Include="Core\Console\ConsoleSubsystem.hpp"/>
-        <ClInclude Include="Core\Console\ExternalConsole.hpp"/>
-        <ClInclude Include="Core\Console\AnsiColorManager.hpp"/>
-        <ClInclude Include="Core\Console\ConsoleCommandManager.hpp"/>
-        <ClInclude Include="Core\Console\Platform\WindowsConsole.hpp"/>
-        <ClInclude Include="Core\Vertex_PCU.hpp"/>
-        <ClInclude Include="Core\XmlUtils.hpp"/>
-        <ClInclude Include="Core\Yaml.hpp"/>
-        <ClInclude Include="Input\AnalogJoystick.hpp"/>
-        <ClInclude Include="Input\InputSystem.hpp"/>
-        <ClInclude Include="Input\KeyButtonState.hpp"/>
-        <ClInclude Include="Input\XboxButtonID.hpp"/>
-        <ClInclude Include="Input\XboxController.hpp"/>
-        <ClInclude Include="Math\AABB2.hpp"/>
-        <ClInclude Include="Math\AABB3.hpp"/>
-        <ClInclude Include="Math\Bezier.hpp"/>
-        <ClInclude Include="Math\Capsule2.hpp"/>
-        <ClInclude Include="Math\CubicBezierCurve2D.hpp"/>
-        <ClInclude Include="Math\Disc2.hpp"/>
-        <ClInclude Include="Math\Easing.hpp"/>
-        <ClInclude Include="Math\EulerAngles.hpp"/>
-        <ClInclude Include="Math\FloatRange.hpp"/>
-        <ClInclude Include="Math\IntRange.hpp"/>
-        <ClInclude Include="Math\IntVec2.hpp"/>
-        <ClInclude Include="Math\LineSegment2.hpp"/>
-        <ClInclude Include="Math\Mat44.hpp"/>
-        <ClInclude Include="Math\MathUtils.hpp"/>
-        <ClInclude Include="Math\OBB2.hpp"/>
-        <ClInclude Include="Math\OBB3.hpp"/>
-        <ClInclude Include="Math\Plane3.hpp"/>
-        <ClInclude Include="Math\RandomNumberGenerator.hpp"/>
-        <ClInclude Include="Math\RaycastUtils.hpp"/>
-        <ClInclude Include="Math\Sphere.hpp"/>
-        <ClInclude Include="Math\Triangle2.hpp"/>
-        <ClInclude Include="Math\Vec2.hpp"/>
-        <ClInclude Include="Math\Vec3.hpp"/>
-        <ClInclude Include="Math\Vec4.hpp"/>
-        <ClInclude Include="Math\ZCylinder.hpp"/>
-        <ClInclude Include="Model\Builtin\ModelBuiltin.hpp"/>
-        <ClInclude Include="Model\Compiler\GenericModelCompiler.hpp"/>
-        <ClInclude Include="Model\Compiler\IModelCompiler.hpp"/>
-        <ClInclude Include="Model\ModelSubsystem.hpp"/>
-        <ClInclude Include="Network\NetworkCommon.hpp"/>
-        <ClInclude Include="Network\NetworkSubsystem.hpp"/>
-        <ClInclude Include="Registry\Block\Block.hpp"/>
-        <ClInclude Include="Registry\Block\BlockRegistry.hpp"/>
-        <ClInclude Include="Registry\Core\IRegistrable.hpp"/>
-        <ClInclude Include="Registry\Core\IRegistry.hpp"/>
-        <ClInclude Include="Registry\Core\RegisterSubsystem.hpp"/>
-        <ClInclude Include="Registry\Core\RegistrationKey.hpp"/>
-        <ClInclude Include="Registry\Core\Registry.hpp"/>
-        <ClInclude Include="Registry\Entity\EntityRegistry.hpp"/>
-        <ClInclude Include="Registry\Entity\EntityType.hpp"/>
-        <ClInclude Include="Registry\Item\Item.hpp"/>
-        <ClInclude Include="Registry\Item\ItemRegistry.hpp"/>
-        <ClInclude Include="Renderer\API\DirectX12\DescriptorAllocator.hpp"/>
-        <ClInclude Include="Renderer\API\DX11Renderer.hpp"/>
-        <ClInclude Include="Renderer\API\DX12Renderer.hpp"/>
-        <ClInclude Include="Renderer\API\GLRenderer.hpp"/>
-        <ClInclude Include="Renderer\BitmapFont.hpp"/>
-        <ClInclude Include="Renderer\Camera.hpp"/>
-        <ClInclude Include="Renderer\ConstantBuffer.hpp"/>
-        <ClInclude Include="Renderer\DebugRenderSystem.hpp"/>
-        <ClInclude Include="Renderer\DefaultShader.hpp"/>
-        <ClInclude Include="Renderer\GraphicsError.hpp"/>
-        <ClInclude Include="Renderer\IndexBuffer.hpp"/>
-        <ClInclude Include="Renderer\IRenderer.hpp"/>
-        <ClInclude Include="Renderer\Light\Light.hpp"/>
-        <ClInclude Include="Model\Compiler\BlockModelCompiler.hpp"/>
-        <ClInclude Include="Renderer\Model\BlockRenderMesh.hpp"/>
-        <ClInclude Include="Renderer\Model\RenderMesh.hpp"/>
-        <ClInclude Include="Renderer\Renderer.hpp"/>
-        <ClInclude Include="Renderer\RenderTarget.hpp"/>
-        <ClInclude Include="Renderer\Shader.hpp"/>
-        <ClInclude Include="Renderer\SimpleTriangleFont.hpp"/>
-        <ClInclude Include="Renderer\SpriteAnimDefinition.hpp"/>
-        <ClInclude Include="Renderer\SpriteDefinition.hpp"/>
-        <ClInclude Include="Renderer\SpriteSheet.hpp"/>
-        <ClInclude Include="Renderer\Texture.hpp"/>
-        <ClInclude Include="Renderer\VertexBuffer.hpp"/>
-        <ClInclude Include="Resource\BlockState\BlockStateBuilder.hpp"/>
-        <ClInclude Include="Resource\BlockState\BlockStateDefinition.hpp"/>
-        <ClInclude Include="Resource\BlockState\BlockStateLoader.hpp"/>
-        <ClInclude Include="Resource\Model\ModelFormat.hpp"/>
-        <ClInclude Include="Resource\Model\ModelLoader.hpp"/>
-        <ClInclude Include="Resource\Model\ModelResource.hpp"/>
-        <ClInclude Include="Resource\Provider\ResourceProvider.hpp"/>
-        <ClInclude Include="Resource\ResourceLoader.hpp"/>
-        <ClInclude Include="Resource\ResourceMapper.hpp"/>
-        <ClInclude Include="Resource\ResourceMetadata.hpp"/>
-        <ClInclude Include="Resource\ResourceCommon.hpp"/>
-        <ClInclude Include="Resource\ResourceSubsystem.hpp"/>
-        <ClInclude Include="Resource\Atlas\AtlasConfig.hpp"/>
-        <ClInclude Include="Resource\Atlas\ImageResource.hpp"/>
-        <ClInclude Include="Resource\Atlas\ImageLoader.hpp"/>
-        <ClInclude Include="Resource\Atlas\TextureAtlas.hpp"/>
-        <ClInclude Include="Resource\Atlas\AtlasManager.hpp"/>
-        <ClInclude Include="Resource\Sound\SoundLoader.hpp"/>
-        <ClInclude Include="Resource\Sound\SoundResource.hpp"/>
-        <ClInclude Include="Voxel\Block\BlockPos.hpp"/>
-        <ClInclude Include="Voxel\Block\BlockState.hpp"/>
-        <ClInclude Include="Voxel\Chunk\Chunk.hpp"/>
-        <ClInclude Include="Voxel\Chunk\ChunkManager.hpp"/>
-        <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp"/>
-        <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp"/>
-        <ClInclude Include="Voxel\Property\Property.hpp"/>
-        <ClInclude Include="Voxel\Property\PropertyRegistry.hpp"/>
-        <ClInclude Include="Voxel\Property\PropertyTypes.hpp"/>
-        <ClInclude Include="Voxel\World\World.hpp"/>
-        <ClInclude Include="Window\Window.hpp"/>
+        <ClInclude Include="..\ThirdParty\d3dx12\d3dx12.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod.hpp" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_codec.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_common.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_dsp_effects.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_errors.h" />
+        <ClInclude Include="..\ThirdParty\fmod\fmod_output.h" />
+        <ClInclude Include="..\ThirdParty\json\json.hpp" />
+        <ClInclude Include="..\ThirdParty\stb\stb_image.h" />
+        <ClInclude Include="..\ThirdParty\TineyXML2\tinyxml2.h" />
+        <ClInclude Include="..\ThirdParty\tinygltf\tiny_gltf.h" />
+        <ClInclude Include="..\ThirdParty\yaml-cpp\yaml.h" />
+        <ClInclude Include="Audio\AudioSubsystem.hpp" />
+        <ClInclude Include="Core\Clock.hpp" />
+        <ClInclude Include="Core\Console\DevConsole.hpp" />
+        <ClInclude Include="Core\CubicHermiteSpline.hpp" />
+        <ClInclude Include="Core\Engine.hpp" />
+        <ClInclude Include="Core\EngineCommon.hpp" />
+        <ClInclude Include="Core\ErrorWarningAssert.hpp" />
+        <ClInclude Include="Core\EventSystem.hpp" />
+        <ClInclude Include="Core\FileUtils.hpp" />
+        <ClInclude Include="Core\HeatMaps.hpp" />
+        <ClInclude Include="Core\Image.hpp" />
+        <ClInclude Include="Core\Json.hpp" />
+        <ClInclude Include="Core\NamedStrings.hpp" />
+        <ClInclude Include="Core\Rgba8.hpp" />
+        <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp" />
+        <ClInclude Include="Core\StringUtils.hpp" />
+        <ClInclude Include="Core\SubsystemManager.hpp" />
+        <ClInclude Include="Core\Time.hpp" />
+        <ClInclude Include="Core\Timer.hpp" />
+        <ClInclude Include="Core\VertexUtils.hpp" />
+        <ClInclude Include="Core\Logger\Logger.hpp" />
+        <ClInclude Include="Core\Logger\LoggerAPI.hpp" />
+        <ClInclude Include="Core\Logger\LogLevel.hpp" />
+        <ClInclude Include="Core\Logger\LogMessage.hpp" />
+        <ClInclude Include="Core\Logger\LoggerSubsystem.hpp" />
+        <ClInclude Include="Core\Logger\LoggerConfig.hpp" />
+        <ClInclude Include="Core\Logger\LogFileManager.hpp" />
+        <ClInclude Include="Core\Logger\Appender\ILogAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appender\ConsoleAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appender\DevConsoleAppender.hpp" />
+        <ClInclude Include="Core\Logger\Appender\FileAppender.hpp" />
+        <ClInclude Include="Core\Console\ConsoleMessage.hpp" />
+        <ClInclude Include="Core\Console\ConsoleConfig.hpp" />
+        <ClInclude Include="Core\Console\ConsoleSubsystem.hpp" />
+        <ClInclude Include="Core\Console\ExternalConsole.hpp" />
+        <ClInclude Include="Core\Console\AnsiColorManager.hpp" />
+        <ClInclude Include="Core\Console\ConsoleCommandManager.hpp" />
+        <ClInclude Include="Core\Console\Platform\WindowsConsole.hpp" />
+        <ClInclude Include="Core\Vertex_PCU.hpp" />
+        <ClInclude Include="Core\XmlUtils.hpp" />
+        <ClInclude Include="Core\Yaml.hpp" />
+        <ClInclude Include="Graphic\BindlessResourceManager.hpp" />
+        <ClInclude Include="Graphic\CommandListManager.hpp" />
+        <ClInclude Include="Graphic\EnigmaRenderer.hpp" />
+        <ClInclude Include="Graphic\GBuffer.hpp" />
+        <ClInclude Include="Graphic\LightingPass.hpp" />
+        <ClInclude Include="Graphic\RendererSubsystem.hpp" />
+        <ClInclude Include="Graphic\Resource\D12Buffer.hpp" />
+        <ClInclude Include="Graphic\Resource\D12Resources.hpp" />
+        <ClInclude Include="Graphic\Resource\D12Texture.hpp" />
+        <ClInclude Include="Graphic\ShaderPackManager.hpp" />
+        <ClInclude Include="Input\AnalogJoystick.hpp" />
+        <ClInclude Include="Input\InputSystem.hpp" />
+        <ClInclude Include="Input\KeyButtonState.hpp" />
+        <ClInclude Include="Input\XboxButtonID.hpp" />
+        <ClInclude Include="Input\XboxController.hpp" />
+        <ClInclude Include="Math\AABB2.hpp" />
+        <ClInclude Include="Math\AABB3.hpp" />
+        <ClInclude Include="Math\Bezier.hpp" />
+        <ClInclude Include="Math\Capsule2.hpp" />
+        <ClInclude Include="Math\CubicBezierCurve2D.hpp" />
+        <ClInclude Include="Math\Disc2.hpp" />
+        <ClInclude Include="Math\Easing.hpp" />
+        <ClInclude Include="Math\EulerAngles.hpp" />
+        <ClInclude Include="Math\FloatRange.hpp" />
+        <ClInclude Include="Math\IntRange.hpp" />
+        <ClInclude Include="Math\IntVec2.hpp" />
+        <ClInclude Include="Math\LineSegment2.hpp" />
+        <ClInclude Include="Math\Mat44.hpp" />
+        <ClInclude Include="Math\MathUtils.hpp" />
+        <ClInclude Include="Math\OBB2.hpp" />
+        <ClInclude Include="Math\OBB3.hpp" />
+        <ClInclude Include="Math\Plane3.hpp" />
+        <ClInclude Include="Math\RandomNumberGenerator.hpp" />
+        <ClInclude Include="Math\RaycastUtils.hpp" />
+        <ClInclude Include="Math\Sphere.hpp" />
+        <ClInclude Include="Math\Triangle2.hpp" />
+        <ClInclude Include="Math\Vec2.hpp" />
+        <ClInclude Include="Math\Vec3.hpp" />
+        <ClInclude Include="Math\Vec4.hpp" />
+        <ClInclude Include="Math\ZCylinder.hpp" />
+        <ClInclude Include="Model\Builtin\ModelBuiltin.hpp" />
+        <ClInclude Include="Model\Compiler\GenericModelCompiler.hpp" />
+        <ClInclude Include="Model\Compiler\IModelCompiler.hpp" />
+        <ClInclude Include="Model\ModelSubsystem.hpp" />
+        <ClInclude Include="Network\NetworkCommon.hpp" />
+        <ClInclude Include="Network\NetworkSubsystem.hpp" />
+        <ClInclude Include="Registry\Block\Block.hpp" />
+        <ClInclude Include="Registry\Block\BlockRegistry.hpp" />
+        <ClInclude Include="Registry\Core\IRegistrable.hpp" />
+        <ClInclude Include="Registry\Core\IRegistry.hpp" />
+        <ClInclude Include="Registry\Core\RegisterSubsystem.hpp" />
+        <ClInclude Include="Registry\Core\RegistrationKey.hpp" />
+        <ClInclude Include="Registry\Core\Registry.hpp" />
+        <ClInclude Include="Registry\Entity\EntityRegistry.hpp" />
+        <ClInclude Include="Registry\Entity\EntityType.hpp" />
+        <ClInclude Include="Registry\Item\Item.hpp" />
+        <ClInclude Include="Registry\Item\ItemRegistry.hpp" />
+        <ClInclude Include="Renderer\API\DirectX12\DescriptorAllocator.hpp" />
+        <ClInclude Include="Renderer\API\DX11Renderer.hpp" />
+        <ClInclude Include="Renderer\API\DX12Renderer.hpp" />
+        <ClInclude Include="Renderer\API\GLRenderer.hpp" />
+        <ClInclude Include="Renderer\BitmapFont.hpp" />
+        <ClInclude Include="Renderer\Camera.hpp" />
+        <ClInclude Include="Renderer\ConstantBuffer.hpp" />
+        <ClInclude Include="Renderer\DebugRenderSystem.hpp" />
+        <ClInclude Include="Renderer\DefaultShader.hpp" />
+        <ClInclude Include="Renderer\GraphicsError.hpp" />
+        <ClInclude Include="Renderer\IndexBuffer.hpp" />
+        <ClInclude Include="Renderer\IRenderer.hpp" />
+        <ClInclude Include="Renderer\Light\Light.hpp" />
+        <ClInclude Include="Model\Compiler\BlockModelCompiler.hpp" />
+        <ClInclude Include="Renderer\Model\BlockRenderMesh.hpp" />
+        <ClInclude Include="Renderer\Model\RenderMesh.hpp" />
+        <ClInclude Include="Renderer\Renderer.hpp" />
+        <ClInclude Include="Renderer\RenderTarget.hpp" />
+        <ClInclude Include="Renderer\Shader.hpp" />
+        <ClInclude Include="Renderer\SimpleTriangleFont.hpp" />
+        <ClInclude Include="Renderer\SpriteAnimDefinition.hpp" />
+        <ClInclude Include="Renderer\SpriteDefinition.hpp" />
+        <ClInclude Include="Renderer\SpriteSheet.hpp" />
+        <ClInclude Include="Renderer\Texture.hpp" />
+        <ClInclude Include="Renderer\VertexBuffer.hpp" />
+        <ClInclude Include="Resource\BlockState\BlockStateBuilder.hpp" />
+        <ClInclude Include="Resource\BlockState\BlockStateDefinition.hpp" />
+        <ClInclude Include="Resource\BlockState\BlockStateLoader.hpp" />
+        <ClInclude Include="Resource\Model\ModelFormat.hpp" />
+        <ClInclude Include="Resource\Model\ModelLoader.hpp" />
+        <ClInclude Include="Resource\Model\ModelResource.hpp" />
+        <ClInclude Include="Resource\Provider\ResourceProvider.hpp" />
+        <ClInclude Include="Resource\ResourceLoader.hpp" />
+        <ClInclude Include="Resource\ResourceMapper.hpp" />
+        <ClInclude Include="Resource\ResourceMetadata.hpp" />
+        <ClInclude Include="Resource\ResourceCommon.hpp" />
+        <ClInclude Include="Resource\ResourceSubsystem.hpp" />
+        <ClInclude Include="Resource\Atlas\AtlasConfig.hpp" />
+        <ClInclude Include="Resource\Atlas\ImageResource.hpp" />
+        <ClInclude Include="Resource\Atlas\ImageLoader.hpp" />
+        <ClInclude Include="Resource\Atlas\TextureAtlas.hpp" />
+        <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
+        <ClInclude Include="Resource\Sound\SoundLoader.hpp" />
+        <ClInclude Include="Resource\Sound\SoundResource.hpp" />
+        <!-- Graphic - Bindless Rendering System Headers -->
+        <ClInclude Include="Voxel\Block\BlockPos.hpp" />
+        <ClInclude Include="Voxel\Block\BlockState.hpp" />
+        <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
+        <ClInclude Include="Voxel\Chunk\ChunkManager.hpp" />
+        <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
+        <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp" />
+        <ClInclude Include="Voxel\Property\Property.hpp" />
+        <ClInclude Include="Voxel\Property\PropertyRegistry.hpp" />
+        <ClInclude Include="Voxel\Property\PropertyTypes.hpp" />
+        <ClInclude Include="Voxel\World\World.hpp" />
+        <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
     <ItemGroup>
-        <Content Include="..\..\.enigma\assets\engine\resource_type_category"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii-1920_1.png"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii_opaque.png"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\gui\cat.png"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\gui\pot_gui.png"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\module"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png"/>
-        <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png"/>
-        <Content Include="..\..\.enigma\config\engine\config.yml"/>
-        <Content Include="..\..\.enigma\config\engine\module.yml"/>
-        <Content Include="..\..\.gitignore"/>
-        <Content Include="..\..\Readme.md"/>
-        <Content Include="..\..\Scripts\CopyEngineResources.bat"/>
-        <Content Include="..\..\Scripts\CopyEngineResources.ps1"/>
-        <Content Include="..\ThirdParty\fmod\fmod64_vc.lib"/>
-        <Content Include="..\ThirdParty\fmod\fmod_vc.lib"/>
+        <Content Include="..\..\.enigma\assets\engine\resource_type_category" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii-1920_1.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii_opaque.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\cat.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\gui\pot_gui.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\module" />
+        <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png" />
+        <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png" />
+        <Content Include="..\..\.enigma\config\engine\config.yml" />
+        <Content Include="..\..\.enigma\config\engine\module.yml" />
+        <Content Include="..\..\.gitignore" />
+        <Content Include="..\..\Readme.md" />
+        <Content Include="..\..\Scripts\CopyEngineResources.bat" />
+        <Content Include="..\..\Scripts\CopyEngineResources.ps1" />
+        <Content Include="..\ThirdParty\fmod\fmod64_vc.lib" />
+        <Content Include="..\ThirdParty\fmod\fmod_vc.lib" />
     </ItemGroup>
     <ItemGroup>
-        <Folder Include="Core\Logger\Appender\"/>
+        <Folder Include="Core\Logger\Appender\" />
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
