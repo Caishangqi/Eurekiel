@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "D12Resources.hpp"
+#include "../D12Resources.hpp"
 
 namespace enigma::graphic
 {
