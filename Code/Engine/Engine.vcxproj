@@ -389,7 +389,13 @@
         
         <!-- Integration Layer -->
         <ClInclude Include="Graphic\Integration\RendererSubsystem.hpp" />
-        
+
+        <!-- Immediate Mode Rendering System -->
+        <ClInclude Include="Graphic\Immediate\RenderCommand.hpp"/>
+        <ClInclude Include="Graphic\Immediate\RenderCommandQueue.hpp"/>
+        <ClInclude Include="Graphic\Immediate\Commands\DrawCommands.hpp"/>
+        <ClInclude Include="Graphic\Immediate\Detection\PhaseDetector.hpp"/>
+
         <!-- Resource Management -->
         <ClInclude Include="Graphic\Resource\BindlessResourceManager.hpp" />
         <ClInclude Include="Graphic\Resource\CommandListManager.hpp" />
