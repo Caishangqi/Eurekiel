@@ -362,6 +362,10 @@
         <ClInclude Include="Core\XmlUtils.hpp" />
         <ClInclude Include="Core\Yaml.hpp" />
         <!-- Graphic System - New Iris-Compatible Architecture -->
+
+        <!-- Core DirectX 12 API Layer (Static封装，对应Iris的IrisRenderSystem) -->
+        <ClInclude Include="Graphic\Core\DX12\D3D12RenderSystem.hpp"/>
+
         <!-- Pipeline Layer -->
         <ClInclude Include="Graphic\Core\Pipeline\IWorldRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\IShaderRenderingPipeline.hpp" />
@@ -369,13 +373,19 @@
         <ClInclude Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\PipelineManager.hpp" />
-        
-        <!-- Renderer Layer -->
-        <ClInclude Include="Graphic\Core\Renderer\CompositeRenderer.hpp" />
-        <ClInclude Include="Graphic\Core\Renderer\ShadowRenderer.hpp" />
+
+        <!-- Renderer Layer (在Pipeline中) -->
+        <ClInclude Include="Graphic\Core\Pipeline\CompositeRenderer.hpp"/>
+        <ClInclude Include="Graphic\Core\Pipeline\ShadowRenderer.hpp"/>
         
         <!-- Shader System -->
-        <ClInclude Include="Graphic\ShaderPackManager.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
+
+        <!-- Support Layer (基于Iris源码验证) -->
+        <ClInclude Include="Graphic\Support\FeatureFlags.hpp"/>
+        <ClInclude Include="Graphic\Support\CommonUniforms.hpp"/>
+        <ClInclude Include="Graphic\Support\CameraUniforms.hpp"/>
+        <ClInclude Include="Graphic\Support\MatrixUniforms.hpp"/>
         
         <!-- Integration Layer -->
         <ClInclude Include="Graphic\Integration\RendererSubsystem.hpp" />
