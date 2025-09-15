@@ -1,31 +1,33 @@
 #pragma once
 
-#include "../WorldRenderingPhase.hpp"
+#include "WorldRenderingPhase.hpp"
 #include <memory>
-#include <vector>
 #include <array>
 
 // Forward declarations
-namespace Engine::Graphic::Resource {
+namespace enigma::graphic
+{
     class D12RenderTargets;
     class CommandListManager;
     class D12Texture;
     class D12Buffer;
 }
 
-namespace Engine::Math {
+namespace Engine::Math
+{
     struct Matrix4f;
     struct Vector3f;
     struct Frustum;
 }
 
-namespace enigma::graphic {
+namespace enigma::graphic
+{
     class ShaderPackManager;
     class UniformManager;
 }
 
-namespace enigma::graphic {
-
+namespace enigma::graphic
+{
     /**
      * @brief Iris兼容的阴影渲染器
      * 
@@ -49,26 +51,28 @@ namespace enigma::graphic {
      * - 动态阴影距离调整
      * - 阴影采样优化
      */
-    class ShadowRenderer final {
+    class ShadowRenderer final
+    {
     public:
         /**
          * @brief 阴影级联配置
          * 
          * 定义单个阴影级联的参数
          */
-        struct ShadowCascade {
+        struct ShadowCascade
+        {
             /// 级联索引 (0-3)
             uint32_t index = 0;
-            
+
             /// 近裁剪面距离
             float nearPlane = 0.1f;
-            
+
             /// 远裁剪面距离
             float farPlane = 100.0f;
-            
+
             /// 阴影贴图分辨率
             uint32_t resolution = 1024;
-            
+
             /// 是否启用此级联
             bool enabled = true;
         };
@@ -79,11 +83,11 @@ namespace enigma::graphic {
         // ===========================================
 
         /// 命令列表管理器
-        std::shared_ptr<Engine::Graphic::Resource::CommandListManager> m_commandManager;
-        
+        std::shared_ptr<CommandListManager> m_commandManager;
+
         /// 着色器包管理器
         std::shared_ptr<ShaderPackManager> m_shaderManager;
-        
+
         /// Uniform变量管理器
         std::shared_ptr<UniformManager> m_uniformManager;
 
@@ -92,13 +96,13 @@ namespace enigma::graphic {
         // ===========================================
 
         /// 阴影深度纹理
-        std::unique_ptr<Engine::Graphic::Resource::D12Texture> m_shadowDepthTexture;
-        
+        std::unique_ptr<D12Texture> m_shadowDepthTexture;
+
         /// 阴影颜色纹理（某些效果需要）
-        std::unique_ptr<Engine::Graphic::Resource::D12Texture> m_shadowColorTexture;
-        
+        std::unique_ptr<D12Texture> m_shadowColorTexture;
+
         /// 级联阴影贴图数组
-        std::array<std::unique_ptr<Engine::Graphic::Resource::D12Texture>, 4> m_cascadeShadowMaps;
+        std::array<std::unique_ptr<D12Texture>, 4> m_cascadeShadowMaps;
 
         // ===========================================
         // 阴影配置
@@ -106,16 +110,16 @@ namespace enigma::graphic {
 
         /// 阴影级联配置数组
         std::array<ShadowCascade, 4> m_shadowCascades;
-        
+
         /// 当前激活的级联数量
         uint32_t m_activeCascadeCount = 3;
-        
+
         /// 阴影贴图分辨率
         uint32_t m_shadowMapResolution = 2048;
-        
+
         /// 阴影距离
         float m_shadowDistance = 128.0f;
-        
+
         /// 是否启用阴影
         bool m_shadowsEnabled = true;
 
@@ -125,13 +129,13 @@ namespace enigma::graphic {
 
         /// 光源方向（通常是太阳方向）
         Engine::Math::Vector3f m_lightDirection;
-        
+
         /// 阴影视图矩阵数组（每个级联一个）
         std::array<Engine::Math::Matrix4f, 4> m_shadowViewMatrices;
-        
+
         /// 阴影投影矩阵数组（每个级联一个）
         std::array<Engine::Math::Matrix4f, 4> m_shadowProjectionMatrices;
-        
+
         /// 光源视图投影矩阵
         Engine::Math::Matrix4f m_lightViewProjectionMatrix;
 
@@ -141,10 +145,10 @@ namespace enigma::graphic {
 
         /// 是否已初始化
         bool m_isInitialized = false;
-        
+
         /// 当前渲染的级联索引
         int32_t m_currentCascadeIndex = -1;
-        
+
         /// 调试模式
         bool m_debugMode = false;
 
@@ -157,9 +161,9 @@ namespace enigma::graphic {
          * @param uniformManager Uniform变量管理器
          */
         ShadowRenderer(
-            std::shared_ptr<Engine::Graphic::Resource::CommandListManager> commandManager,
-            std::shared_ptr<ShaderPackManager> shaderManager,
-            std::shared_ptr<UniformManager> uniformManager);
+            std::shared_ptr<CommandListManager> commandManager,
+            std::shared_ptr<ShaderPackManager>  shaderManager,
+            std::shared_ptr<UniformManager>     uniformManager);
 
         /**
          * @brief 析构函数
@@ -167,10 +171,10 @@ namespace enigma::graphic {
         ~ShadowRenderer();
 
         // 禁用拷贝和移动
-        ShadowRenderer(const ShadowRenderer&) = delete;
+        ShadowRenderer(const ShadowRenderer&)            = delete;
         ShadowRenderer& operator=(const ShadowRenderer&) = delete;
-        ShadowRenderer(ShadowRenderer&&) = delete;
-        ShadowRenderer& operator=(ShadowRenderer&&) = delete;
+        ShadowRenderer(ShadowRenderer&&)                 = delete;
+        ShadowRenderer& operator=(ShadowRenderer&&)      = delete;
 
         // ===========================================
         // 初始化和配置
@@ -258,8 +262,8 @@ namespace enigma::graphic {
          * @param cameraFov 相机视野角度
          */
         void UpdateLightMatrices(const Engine::Math::Vector3f& cameraPosition,
-                               const Engine::Math::Vector3f& cameraDirection,
-                               float cameraFov);
+                                 const Engine::Math::Vector3f& cameraDirection,
+                                 float                         cameraFov);
 
         // ===========================================
         // 资源访问
@@ -270,7 +274,7 @@ namespace enigma::graphic {
          * 
          * @return 阴影深度纹理指针
          */
-        Engine::Graphic::Resource::D12Texture* GetShadowDepthTexture() const;
+        D12Texture* GetShadowDepthTexture() const;
 
         /**
          * @brief 获取指定级联的阴影贴图
@@ -278,7 +282,7 @@ namespace enigma::graphic {
          * @param cascadeIndex 级联索引
          * @return 级联阴影贴图指针
          */
-        Engine::Graphic::Resource::D12Texture* GetCascadeShadowMap(uint32_t cascadeIndex) const;
+        D12Texture* GetCascadeShadowMap(uint32_t cascadeIndex) const;
 
         /**
          * @brief 获取光源视图投影矩阵
@@ -378,10 +382,10 @@ namespace enigma::graphic {
          * @param cameraDirection 相机方向
          * @param cameraFov 相机视野角度
          */
-        void CalculateCascadeBounds(uint32_t cascadeIndex,
-                                  const Engine::Math::Vector3f& cameraPosition,
-                                  const Engine::Math::Vector3f& cameraDirection,
-                                  float cameraFov);
+        void CalculateCascadeBounds(uint32_t                      cascadeIndex,
+                                    const Engine::Math::Vector3f& cameraPosition,
+                                    const Engine::Math::Vector3f& cameraDirection,
+                                    float                         cameraFov);
 
         /**
          * @brief 设置阴影渲染状态
@@ -402,5 +406,4 @@ namespace enigma::graphic {
          */
         void CleanupShadowRenderState();
     };
-
 } // namespace enigma::graphic
