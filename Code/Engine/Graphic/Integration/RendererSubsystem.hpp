@@ -18,6 +18,8 @@
 
 #include "Engine/Core/SubsystemManager.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "../Immediate/RenderCommand.hpp"
+#include "../Immediate/RenderCommandQueue.hpp"
 
 // 使用Enigma核心命名空间中的EngineSubsystem
 using namespace enigma::core;
@@ -28,6 +30,8 @@ namespace enigma::graphic
     class PipelineManager;
     class BindlessResourceManager;
     class ShaderPackManager;
+    class RenderCommandQueue;
+    class IRenderCommandFactory;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -66,6 +70,12 @@ namespace enigma::graphic
             bool        enableBindlessResources = true; ///< 启用Bindless资源
             std::string defaultShaderPackPath; ///< 默认Shader Pack路径
 
+            // ==================== Immediate模式配置 ====================
+            bool   enableImmediateMode    = true; ///< 启用immediate模式渲染
+            size_t maxCommandsPerPhase    = 10000; ///< 每个阶段最大指令数量
+            bool   enablePhaseDetection   = true; ///< 启用自动阶段检测
+            bool   enableCommandProfiling = false; ///< 启用指令性能分析
+
             /**
              * @brief 默认构造函数
              * @details 设置适合教学和开发的默认参数
@@ -87,6 +97,13 @@ namespace enigma::graphic
             uint32_t activeShaderPrograms = 0; ///< 活跃着色器程序数量
             size_t   gpuMemoryUsed        = 0; ///< GPU内存使用量(字节)
 
+            // ==================== Immediate模式统计 ====================
+            std::map<WorldRenderingPhase, uint64_t> commandsPerPhase; ///< 每个阶段的指令数量
+            uint64_t                                totalCommandsSubmitted = 0; ///< 提交的总指令数量
+            uint64_t                                totalCommandsExecuted  = 0; ///< 已执行的总指令数量
+            float                                   averageCommandTime     = 0.0f; ///< 平均指令执行时间(微秒)
+            WorldRenderingPhase                     currentPhase           = WorldRenderingPhase::NONE; ///< 当前渲染阶段
+
             /**
              * @brief 重置统计信息
              */
@@ -95,6 +112,13 @@ namespace enigma::graphic
                 drawCalls            = 0;
                 trianglesRendered    = 0;
                 activeShaderPrograms = 0;
+
+                // 重置immediate模式统计
+                commandsPerPhase.clear();
+                totalCommandsSubmitted = 0;
+                totalCommandsExecuted  = 0;
+                averageCommandTime     = 0.0f;
+                currentPhase           = WorldRenderingPhase::NONE;
             }
         };
 
@@ -207,6 +231,152 @@ namespace enigma::graphic
          * - 学习GPU/CPU同步的重要性
          */
         void EndFrame() override;
+
+        // ==================== Immediate模式渲染接口 - 用户友好API ====================
+
+        /**
+         * @brief 获取渲染指令队列
+         * @return RenderCommandQueue指针，如果未初始化返回nullptr
+         * @details 
+         * 提供对immediate模式渲染指令队列的访问
+         * 用户可以通过此接口提交自定义渲染指令
+         */
+        RenderCommandQueue* GetRenderCommandQueue() const noexcept
+        {
+            return m_renderCommandQueue.get();
+        }
+
+        /**
+         * @brief 获取渲染指令工厂
+         * @return IRenderCommandFactory指针
+         * @details 
+         * 用于创建绘制类型的渲染指令
+         */
+        IRenderCommandFactory* GetCommandFactory() const noexcept;
+
+        /**
+         * @brief 提交绘制指令到指定阶段
+         * @param command 要执行的绘制指令
+         * @param phase 目标渲染阶段
+         * @param debugTag 调试标签，用于性能分析
+         * @return 成功返回true
+         * @details 
+         * immediate模式的核心接口，支持按阶段分类存储
+         */
+        bool SubmitRenderCommand(
+            RenderCommandPtr    command,
+            WorldRenderingPhase phase,
+            const std::string&  debugTag = ""
+        );
+
+        /**
+         * @brief 提交绘制指令（自动检测阶段）
+         * @param command 要执行的绘制指令
+         * @param debugTag 调试标签
+         * @return 成功返回true
+         * @details 使用PhaseDetector自动判断指令应该归属的阶段
+         */
+        bool SubmitRenderCommand(
+            RenderCommandPtr   command,
+            const std::string& debugTag = ""
+        );
+
+        /**
+         * @brief 立即执行队列中的所有指令
+         * @details 
+         * 强制同步执行，主要用于：
+         * - 帧结束时确保所有指令完成
+         * - 调试时的即时执行
+         * - 需要同步的特殊情况
+         */
+        void FlushRenderQueue();
+
+        /**
+         * @brief 执行指定阶段的所有指令
+         * @param phase 要执行的渲染阶段
+         * @details 按阶段执行存储的绘制指令
+         */
+        void ExecutePhase(WorldRenderingPhase phase);
+
+        /**
+         * @brief 按顺序执行所有阶段的指令
+         * @details 按Iris标准顺序执行所有有指令的阶段
+         */
+        void ExecuteAllPhases();
+
+        /**
+         * @brief 设置当前渲染阶段
+         * @param phase Iris渲染阶段
+         * @details 
+         * 用于自动Phase检测和状态管理
+         * 影响指令验证和性能分析
+         */
+        void SetCurrentRenderPhase(WorldRenderingPhase phase);
+
+        /**
+         * @brief 获取当前渲染阶段
+         * @return 当前的Iris渲染阶段
+         */
+        WorldRenderingPhase GetCurrentRenderPhase() const;
+
+        /**
+         * @brief 获取指定阶段的指令数量
+         * @param phase 渲染阶段
+         * @return 指令数量
+         */
+        size_t GetCommandCount(WorldRenderingPhase phase) const;
+
+        /**
+         * @brief immediate模式便捷绘制接口 - DrawIndexed
+         * @param indexCount 索引数量
+         * @param phase 渲染阶段
+         * @param startIndexLocation 起始索引位置
+         * @param baseVertexLocation 基础顶点位置
+         * @return 成功返回true
+         * @details 直接创建并提交DrawIndexed指令的便捷方法
+         */
+        bool DrawIndexed(
+            uint32_t            indexCount,
+            WorldRenderingPhase phase,
+            uint32_t            startIndexLocation = 0,
+            int32_t             baseVertexLocation = 0
+        );
+
+        /**
+         * @brief immediate模式便捷绘制接口 - DrawInstanced
+         * @param vertexCountPerInstance 每实例顶点数
+         * @param instanceCount 实例数量
+         * @param phase 渲染阶段
+         * @param startVertexLocation 起始顶点位置
+         * @param startInstanceLocation 起始实例位置
+         * @return 成功返回true
+         */
+        bool DrawInstanced(
+            uint32_t            vertexCountPerInstance,
+            uint32_t            instanceCount,
+            WorldRenderingPhase phase,
+            uint32_t            startVertexLocation   = 0,
+            uint32_t            startInstanceLocation = 0
+        );
+
+        /**
+         * @brief immediate模式便捷绘制接口 - DrawIndexedInstanced
+         * @param indexCountPerInstance 每实例索引数
+         * @param instanceCount 实例数量
+         * @param phase 渲染阶段
+         * @param startIndexLocation 起始索引位置
+         * @param baseVertexLocation 基础顶点位置
+         * @param startInstanceLocation 起始实例位置
+         * @return 成功返回true
+         */
+        bool DrawIndexedInstanced(
+            uint32_t            indexCountPerInstance,
+            uint32_t            instanceCount,
+            WorldRenderingPhase phase,
+            uint32_t            startIndexLocation    = 0,
+            int32_t             baseVertexLocation    = 0,
+            uint32_t            startInstanceLocation = 0
+        );
 
         // ==================== 管线管理接口 - 基于Iris PipelineManager ====================
 
@@ -389,6 +559,14 @@ namespace enigma::graphic
 
         /// Shader Pack管理器 - 着色器包系统
         std::unique_ptr<ShaderPackManager> m_shaderPackManager;
+
+        // ==================== Immediate模式渲染组件 ====================
+
+        /// 渲染指令队列 - immediate模式核心
+        std::unique_ptr<RenderCommandQueue> m_renderCommandQueue;
+
+        /// 渲染指令工厂 - 创建各种类型的渲染指令
+        std::unique_ptr<IRenderCommandFactory> m_commandFactory;
 
         // ==================== 配置和状态 ====================
 
