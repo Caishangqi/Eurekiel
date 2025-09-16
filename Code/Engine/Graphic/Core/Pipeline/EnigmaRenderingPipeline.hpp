@@ -10,21 +10,23 @@
 #include <unordered_map>
 
 // Forward declarations
-namespace Engine::Graphic::Resource {
+namespace Engine::Graphic::Resource
+{
     class D12RenderTargets;
     class BufferFlipper;
     class CommandListManager;
 }
 
-namespace enigma::graphic {
+namespace enigma::graphic
+{
     class CompositeRenderer;
     class ShadowRenderer;
     class ShaderPackManager;
     class UniformManager;
 }
 
-namespace enigma::graphic {
-
+namespace enigma::graphic
+{
     /**
      * @brief Iris兼容的Enigma着色器渲染管线
      * 
@@ -55,7 +57,8 @@ namespace enigma::graphic {
      * - CompositeRenderer compositeRenderer (处理后处理)
      * - ShadowRenderer shadowRenderer       (处理阴影渲染)
      */
-    class EnigmaRenderingPipeline final : public IShaderRenderingPipeline {
+    class EnigmaRenderingPipeline final : public IShaderRenderingPipeline
+    {
     private:
         // ===========================================
         // 多子渲染器架构 - 对应Iris源码结构
@@ -63,17 +66,17 @@ namespace enigma::graphic {
 
         /// Begin阶段合成渲染器 - 对应Iris beginRenderer
         std::unique_ptr<CompositeRenderer> m_beginRenderer;
-        
+
         /// Prepare阶段合成渲染器 - 对应Iris prepareRenderer
         std::unique_ptr<CompositeRenderer> m_prepareRenderer;
-        
+
         /// 延迟光照合成渲染器 - 对应Iris deferredRenderer
         /// 关键发现：延迟光照在Iris中是通过CompositeRenderer实现的！
         std::unique_ptr<CompositeRenderer> m_deferredRenderer;
-        
+
         /// 后处理合成渲染器 - 对应Iris compositeRenderer
         std::unique_ptr<CompositeRenderer> m_compositeRenderer;
-        
+
         /// 阴影渲染器 - 对应Iris shadowRenderer
         std::unique_ptr<ShadowRenderer> m_shadowRenderer;
 
@@ -83,16 +86,16 @@ namespace enigma::graphic {
 
         /// 渲染目标管理器 - 统一管理所有colortex0-15
         std::shared_ptr<Engine::Graphic::Resource::D12RenderTargets> m_renderTargets;
-        
+
         /// 缓冲区翻转器 - 全局乒乓缓冲管理
         std::shared_ptr<Engine::Graphic::Resource::BufferFlipper> m_bufferFlipper;
-        
+
         /// 命令列表管理器
         std::shared_ptr<Engine::Graphic::Resource::CommandListManager> m_commandManager;
-        
+
         /// 着色器包管理器
         std::shared_ptr<ShaderPackManager> m_shaderPackManager;
-        
+
         /// Uniform变量管理器
         std::shared_ptr<UniformManager> m_uniformManager;
 
@@ -102,13 +105,13 @@ namespace enigma::graphic {
 
         /// 当前渲染阶段
         WorldRenderingPhase m_currentPhase = WorldRenderingPhase::NONE;
-        
+
         /// 管线是否处于激活状态
         std::atomic<bool> m_isActive{false};
-        
+
         /// 管线是否已初始化
         bool m_isInitialized = false;
-        
+
         /// 是否启用调试模式
         bool m_debugMode = false;
 
@@ -118,16 +121,16 @@ namespace enigma::graphic {
 
         /// 当前着色器包名称
         std::string m_currentShaderPackName;
-        
+
         /// 着色器包是否已启用
         bool m_shaderPackEnabled = false;
-        
+
         /// 着色器渲染距离（-1表示默认）
         float m_shaderRenderDistance = -1.0f;
-        
+
         /// 是否禁用原版雾效
         bool m_disableVanillaFog = false;
-        
+
         /// 是否禁用原版定向阴影
         bool m_disableDirectionalShading = false;
 
@@ -137,7 +140,7 @@ namespace enigma::graphic {
 
         /// 帧更新监听器列表
         std::vector<std::pair<size_t, std::function<void()>>> m_frameUpdateListeners;
-        
+
         /// 下一个回调ID
         std::atomic<size_t> m_nextCallbackId{1};
 
@@ -152,12 +155,13 @@ namespace enigma::graphic {
         // 性能统计
         // ===========================================
 
-        struct PipelineStats {
-            uint32_t framesRendered = 0;
-            uint32_t phaseSwitches = 0;
-            uint32_t bufferFlips = 0;
-            float totalFrameTime = 0.0f;
-            float averageFrameTime = 0.0f;
+        struct PipelineStats
+        {
+            uint32_t framesRendered   = 0;
+            uint32_t phaseSwitches    = 0;
+            uint32_t bufferFlips      = 0;
+            float    totalFrameTime   = 0.0f;
+            float    averageFrameTime = 0.0f;
         } m_stats;
 
     public:
@@ -182,10 +186,10 @@ namespace enigma::graphic {
         ~EnigmaRenderingPipeline() override;
 
         // 禁用拷贝和移动，确保管线的唯一性
-        EnigmaRenderingPipeline(const EnigmaRenderingPipeline&) = delete;
+        EnigmaRenderingPipeline(const EnigmaRenderingPipeline&)            = delete;
         EnigmaRenderingPipeline& operator=(const EnigmaRenderingPipeline&) = delete;
-        EnigmaRenderingPipeline(EnigmaRenderingPipeline&&) = delete;
-        EnigmaRenderingPipeline& operator=(EnigmaRenderingPipeline&&) = delete;
+        EnigmaRenderingPipeline(EnigmaRenderingPipeline&&)                 = delete;
+        EnigmaRenderingPipeline& operator=(EnigmaRenderingPipeline&&)      = delete;
 
         // ===========================================
         // IWorldRenderingPipeline接口实现
@@ -225,41 +229,41 @@ namespace enigma::graphic {
          */
         void SetPhase(WorldRenderingPhase phase) override;
 
-        void BeginPass(uint32_t passIndex = 0) override;
-        void EndPass() override;
-        void BeginLevelRendering() override;
-        void RenderShadows() override;
-        void EndLevelRendering() override;
-        bool ShouldDisableVanillaFog() const override;
-        bool ShouldDisableDirectionalShading() const override;
-        float GetShaderRenderDistance() const override;
+        void                BeginPass(uint32_t passIndex = 0) override;
+        void                EndPass() override;
+        void                BeginLevelRendering() override;
+        void                RenderShadows() override;
+        void                EndLevelRendering() override;
+        bool                ShouldDisableVanillaFog() const override;
+        bool                ShouldDisableDirectionalShading() const override;
+        float               GetShaderRenderDistance() const override;
         WorldRenderingPhase GetCurrentPhase() const override;
-        bool IsActive() const override;
-        void OnFrameUpdate() override;
-        void Reload() override;
-        void Destroy() override;
+        bool                IsActive() const override;
+        void                OnFrameUpdate() override;
+        void                Reload() override;
+        void                Destroy() override;
 
         // ===========================================
         // IShaderRenderingPipeline接口实现
         // ===========================================
 
         std::shared_ptr<ShaderPackManager> GetShaderPackManager() const override;
-        std::shared_ptr<UniformManager> GetUniformManager() const override;
-        bool UseProgram(const std::string& programName) override;
-        bool HasProgram(const std::string& programName) const override;
-        bool ReloadShaders() override;
-        void AddFrameUpdateListener(std::function<void()> callback) override;
-        void RemoveFrameUpdateListener(size_t callbackId) override;
-        void* GetColorTexture(uint32_t index) const override;
-        void* GetDepthTexture() const override;
-        void FlipBuffers() override;
-        std::string GetCurrentShaderPackName() const override;
-        bool IsShaderPackEnabled() const override;
-        std::string GetShaderPackVersion() const override;
-        bool SetShaderPackOption(const std::string& optionName, const std::string& value) override;
-        std::string GetShaderPackOption(const std::string& optionName) const override;
-        void SetDebugMode(bool enable) override;
-        std::string GetRenderingStats() const override;
+        std::shared_ptr<UniformManager>    GetUniformManager() const override;
+        bool                               UseProgram(const std::string& programName) override;
+        bool                               HasProgram(const std::string& programName) const override;
+        bool                               ReloadShaders() override;
+        void                               AddFrameUpdateListener(std::function<void()> callback) override;
+        void                               RemoveFrameUpdateListener(size_t callbackId) override;
+        void*                              GetColorTexture(uint32_t index) const override;
+        void*                              GetDepthTexture() const override;
+        void                               FlipBuffers() override;
+        std::string                        GetCurrentShaderPackName() const override;
+        bool                               IsShaderPackEnabled() const override;
+        std::string                        GetShaderPackVersion() const override;
+        bool                               SetShaderPackOption(const std::string& optionName, const std::string& value) override;
+        std::string                        GetShaderPackOption(const std::string& optionName) const override;
+        void                               SetDebugMode(bool enable) override;
+        std::string                        GetRenderingStats() const override;
 
         // ===========================================
         // Enigma特有的高级功能
@@ -356,31 +360,31 @@ namespace enigma::graphic {
 
         /// 执行Setup阶段 - 对应Iris setup1-99
         void ExecuteSetupStage();
-        
+
         /// 执行Begin阶段 - 对应Iris begin1-99，使用beginRenderer
         void ExecuteBeginStage();
-        
+
         /// 执行Shadow阶段 - 使用shadowRenderer
         void ExecuteShadowStage();
-        
+
         /// 执行ShadowComp阶段 - 对应Iris shadowcomp1-99
         void ExecuteShadowCompStage();
-        
+
         /// 执行Prepare阶段 - 对应Iris prepare1-99，使用prepareRenderer
         void ExecutePrepareStage();
-        
+
         /// 执行GBuffer不透明阶段 - 填充G-Buffer
         void ExecuteGBufferOpaqueStage();
-        
+
         /// 执行延迟光照阶段 - 使用deferredRenderer处理deferred1-99
         void ExecuteDeferredStage();
-        
+
         /// 执行GBuffer半透明阶段
         void ExecuteGBufferTranslucentStage();
-        
+
         /// 执行Composite阶段 - 使用compositeRenderer处理composite1-99
         void ExecuteCompositeStage();
-        
+
         /// 执行Final阶段 - 最终输出
         void ExecuteFinalStage();
 
@@ -436,5 +440,4 @@ namespace enigma::graphic {
          */
         void CleanupTemporaryResources();
     };
-
 } // namespace enigma::graphic
