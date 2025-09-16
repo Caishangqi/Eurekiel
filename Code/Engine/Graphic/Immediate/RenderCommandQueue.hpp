@@ -1,6 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "RenderCommand.hpp"
+#include "Detection/PhaseDetector.hpp"
+#include "../Resource/CommandListManager.hpp"
 #include <map>
 #include <vector>
 #include <mutex>
@@ -8,6 +10,8 @@
 #include <memory>
 #include <functional>
 #include <chrono>
+#include <d3d12.h>
+#include <wrl/client.h>
 
 namespace enigma::graphic
 {
