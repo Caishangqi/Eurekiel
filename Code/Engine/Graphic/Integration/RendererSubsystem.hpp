@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file RendererSubsystem.hpp
  * @brief Enigma引擎渲染子系统 - DirectX 12延迟渲染管线管理器
  * 
@@ -17,7 +17,11 @@
 #include <array>
 
 #include "Engine/Core/SubsystemManager.hpp"
+#include "Engine/Resource/ResourceCommon.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
+#include "../Core/Pipeline/ShaderPackManager.hpp"
+#include "../Resource/BindlessResourceManager.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 
@@ -27,11 +31,9 @@ using namespace enigma::core;
 namespace enigma::graphic
 {
     // 前向声明 - 避免循环包含
-    class PipelineManager;
     class BindlessResourceManager;
     class ShaderPackManager;
     class RenderCommandQueue;
-    class IRenderCommandFactory;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -127,7 +129,7 @@ namespace enigma::graphic
          * @brief 构造函数
          * @details 初始化基本成员，但不进行重型初始化工作
          */
-        explicit RendererSubsystem();
+        explicit RendererSubsystem(Configuration& config);
 
         /**
          * @brief 析构函数
@@ -135,18 +137,10 @@ namespace enigma::graphic
          */
         ~RendererSubsystem() override;
 
-        // 禁用拷贝构造和赋值 - 子系统应该是唯一的
-        RendererSubsystem(const RendererSubsystem&)            = delete;
-        RendererSubsystem& operator=(const RendererSubsystem&) = delete;
-
-        // 启用移动构造和赋值 - 支持高效的资源转移
-        RendererSubsystem(RendererSubsystem&&) noexcept            = default;
-        RendererSubsystem& operator=(RendererSubsystem&&) noexcept = default;
-
         // ==================== EngineSubsystem接口实现 ====================
 
         /// 使用引擎提供的宏来简化子系统注册
-        DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", -100);
+        DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", -100)
 
         /**
          * @brief 早期初始化阶段
@@ -245,14 +239,6 @@ namespace enigma::graphic
         {
             return m_renderCommandQueue.get();
         }
-
-        /**
-         * @brief 获取渲染指令工厂
-         * @return IRenderCommandFactory指针
-         * @details 
-         * 用于创建绘制类型的渲染指令
-         */
-        IRenderCommandFactory* GetCommandFactory() const noexcept;
 
         /**
          * @brief 提交绘制指令到指定阶段
@@ -381,23 +367,14 @@ namespace enigma::graphic
         // ==================== 管线管理接口 - 基于Iris PipelineManager ====================
 
         /**
-         * @brief 获取管线管理器实例
-         * @return PipelineManager指针，如果未初始化返回nullptr
-         * @details 
-         * 对应Iris中的getPipelineManager()方法
-         * 提供对核心管线管理器的访问，支持按维度管理不同的渲染管线
-         */
-        PipelineManager* GetPipelineManager() const noexcept { return m_pipelineManager.get(); }
-
-        /**
          * @brief 准备指定维度的渲染管线
          * @param dimensionId 维度标识符
          * @return 渲染管线指针
          * @details 
-         * 对应Iris的preparePipeline(NamespacedId currentDimension)方法
+         * 对应Iris的preparePipeline(ResourceLocation currentDimension)方法
          * 支持多维度管线缓存和动态切换
          */
-        class IWorldRenderingPipeline* PreparePipeline(const class NamespacedId& dimensionId);
+        class IWorldRenderingPipeline* PreparePipeline(const enigma::resource::ResourceLocation& dimensionId);
 
         /**
          * @brief 获取Bindless资源管理器
@@ -538,10 +515,10 @@ namespace enigma::graphic
          * @param dimensionId 维度ID
          * @return 创建的渲染管线实例
          * @details 
-         * 对应Iris中的createPipeline(NamespacedId dimensionId)方法
+         * 对应Iris中的createPipeline(ResourceLocation dimensionId)方法
          * 根据当前着色器包状态决定创建VanillaRenderingPipeline或EnigmaRenderingPipeline
          */
-        std::unique_ptr<class IWorldRenderingPipeline> CreatePipeline(const class NamespacedId& dimensionId);
+        std::unique_ptr<class IWorldRenderingPipeline> CreatePipeline(const enigma::resource::ResourceLocation& dimensionId);
 
     private:
         // ==================== 子系统特定对象 (非DirectX核心对象) ====================
@@ -551,8 +528,8 @@ namespace enigma::graphic
 
         // ==================== 渲染系统组件 - 基于Iris架构 ====================
 
-        /// 管线管理器 - 对应Iris PipelineManager，核心架构组件
-        std::unique_ptr<PipelineManager> m_pipelineManager;
+        // TODO: 重新启用PipelineManager（需要修复编码问题）
+        // std::unique_ptr<PipelineManager> m_pipelineManager;
 
         /// Bindless资源管理器 - 现代化资源绑定
         std::unique_ptr<BindlessResourceManager> m_resourceManager;
@@ -564,9 +541,6 @@ namespace enigma::graphic
 
         /// 渲染指令队列 - immediate模式核心
         std::unique_ptr<RenderCommandQueue> m_renderCommandQueue;
-
-        /// 渲染指令工厂 - 创建各种类型的渲染指令
-        std::unique_ptr<IRenderCommandFactory> m_commandFactory;
 
         // ==================== 配置和状态 ====================
 
