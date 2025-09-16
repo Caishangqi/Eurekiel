@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <functional>
 
-namespace enigma::graphic {
-
+namespace enigma::graphic
+{
     // Forward declaration
     enum class WorldRenderingPhase : uint32_t;
 
@@ -24,14 +24,15 @@ namespace enigma::graphic {
      * Java: public interface WorldRenderingPipeline
      * C++:  class IWorldRenderingPipeline (抽象基类)
      */
-    class IWorldRenderingPipeline {
+    class IWorldRenderingPipeline
+    {
     public:
         virtual ~IWorldRenderingPipeline() = default;
 
         // ===========================================
         // 核心生命周期方法 - 对应Iris接口设计
         // ===========================================
-        
+
         /**
          * @brief 开始世界渲染
          * 对应Iris: beginWorldRendering()
@@ -209,5 +210,4 @@ namespace enigma::graphic {
          */
         virtual void Destroy() = 0;
     };
-
 } // namespace enigma::graphic

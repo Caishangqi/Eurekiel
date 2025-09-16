@@ -5,11 +5,11 @@
 #include <memory>
 #include <functional>
 
-namespace enigma::graphic {
-
-// Forward declarations
-class ShaderPackManager;
-class UniformManager;
+namespace enigma::graphic
+{
+    // Forward declarations
+    class ShaderPackManager;
+    class UniformManager;
 
     /**
      * @brief Iris兼容的着色器渲染管线扩展接口
@@ -27,7 +27,8 @@ class UniformManager;
      * Java: public interface ShaderRenderingPipeline extends WorldRenderingPipeline
      * C++:  class IShaderRenderingPipeline : public IWorldRenderingPipeline
      */
-    class IShaderRenderingPipeline : public IWorldRenderingPipeline {
+    class IShaderRenderingPipeline : public IWorldRenderingPipeline
+    {
     public:
         virtual ~IShaderRenderingPipeline() = default;
 
@@ -224,8 +225,8 @@ class UniformManager;
          * 
          * 教学价值：配置系统在图形管线中的设计
          */
-        virtual bool SetShaderPackOption(const std::string& optionName, 
-                                       const std::string& value) = 0;
+        virtual bool SetShaderPackOption(const std::string& optionName,
+                                         const std::string& value) = 0;
 
         /**
          * @brief 获取着色器包配置选项
@@ -264,5 +265,4 @@ class UniformManager;
          */
         virtual std::string GetRenderingStats() const = 0;
     };
-
 } // namespace enigma::graphic
