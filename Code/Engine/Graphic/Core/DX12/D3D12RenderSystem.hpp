@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // 基于 Iris 源码: net.irisshaders.iris.gl.IrisRenderSystem (引用)
 // 文档验证: 2025-09-15 通过本地源码分析确认存在
@@ -21,7 +21,6 @@
 
 // 包含现有的Enigma资源封装类
 #include "../../Resource/CommandListManager.hpp"
-#include "../../Resource/D12Resources.hpp"
 
 namespace enigma::graphic
 {
