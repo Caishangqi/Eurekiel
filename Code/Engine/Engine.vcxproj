@@ -208,6 +208,12 @@
         <ClCompile Include="Core\Vertex_PCU.cpp"/>
         <ClCompile Include="Core\XmlUtils.cpp"/>
         <ClCompile Include="Core\Yaml.cpp"/>
+        <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp"/>
+        <ClCompile Include="Graphic\Core\Pipeline\ShaderPackManager.cpp"/>
+        <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
+        <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp"/>
+        <ClCompile Include="Graphic\Resource\BindlessResourceManager.cpp"/>
+        <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>
         <ClCompile Include="Input\KeyButtonState.cpp"/>
@@ -373,6 +379,7 @@
         <ClInclude Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\PipelineManager.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\RenderTargets.hpp"/>
 
         <!-- Renderer Layer (在Pipeline中) -->
         <ClInclude Include="Graphic\Core\Pipeline\CompositeRenderer.hpp"/>
@@ -380,6 +387,7 @@
         
         <!-- Shader System -->
         <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
+        <ClInclude Include="Graphic\Resource\CompiledShader.hpp"/>
 
         <!-- Support Layer (基于Iris源码验证) -->
         <ClInclude Include="Graphic\Support\FeatureFlags.hpp"/>
