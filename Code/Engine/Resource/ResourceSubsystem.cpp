@@ -555,9 +555,10 @@ void ResourceSubsystem::WorkerThreadFunc()
 
 ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& location)
 {
-    // Debug logging to track namespace corruption
-    DebuggerPrintf("[RESOURCE DEBUG] LoadResourceInternal called with namespace='%s', path='%s', toString='%s'\n",
-                   location.GetNamespace().c_str(), location.GetPath().c_str(), location.ToString().c_str());
+    if (m_config.logResourceLoads)
+        // Debug logging to track namespace corruption
+        DebuggerPrintf("[RESOURCE DEBUG] LoadResourceInternal called with namespace='%s', path='%s', toString='%s'\n",
+                       location.GetNamespace().c_str(), location.GetPath().c_str(), location.ToString().c_str());
 
     // Find provider
     auto provider = FindProviderForResource(location);
