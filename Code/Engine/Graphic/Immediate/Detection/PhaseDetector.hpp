@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../RenderCommand.hpp"
 #include "../../Core/Pipeline/WorldRenderingPhase.hpp"
@@ -113,8 +113,15 @@ namespace enigma::graphic
             totalTime += phaseTime;
             commandCount++;
             averageTime = totalTime / commandCount;
-            minTime     = min(minTime, phaseTime);
-            maxTime     = max(maxTime, phaseTime);
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
+            minTime = std::min(minTime, phaseTime);
+            maxTime = std::max(maxTime, phaseTime);
 
             for (auto cmdType : commands)
             {
