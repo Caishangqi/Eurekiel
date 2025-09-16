@@ -6,13 +6,14 @@
 #include <atomic>
 
 // Forward declarations
-namespace Engine::Graphic::Resource {
+namespace Engine::Graphic::Resource
+{
     class D12RenderTargets;
     class CommandListManager;
 }
 
-namespace enigma::graphic {
-
+namespace enigma::graphic
+{
     /**
      * @brief Iris兼容的原版Minecraft渲染管线实现
      * 
@@ -36,41 +37,42 @@ namespace enigma::graphic {
      * - 最小的GPU资源占用
      * - 快速的渲染路径
      */
-    class VanillaRenderingPipeline final : public IWorldRenderingPipeline {
+    class VanillaRenderingPipeline final : public IWorldRenderingPipeline
+    {
     private:
         // ===========================================
         // 核心状态管理
         // ===========================================
-        
+
         /// 当前渲染阶段状态
         WorldRenderingPhase m_currentPhase = WorldRenderingPhase::NONE;
-        
+
         /// 管线是否处于激活状态
         std::atomic<bool> m_isActive{false};
-        
+
         /// 管线是否已初始化
         bool m_isInitialized = false;
 
         // ===========================================
         // DirectX 12核心资源
         // ===========================================
-        
+
         /// 渲染目标管理器 - 管理颜色缓冲区和深度缓冲区
         std::unique_ptr<Engine::Graphic::Resource::D12RenderTargets> m_renderTargets;
-        
+
         /// 命令列表管理器 - 管理GPU命令提交
         std::shared_ptr<Engine::Graphic::Resource::CommandListManager> m_commandManager;
 
         // ===========================================
         // 渲染配置参数
         // ===========================================
-        
+
         /// 着色器渲染距离（原版管线使用-1表示默认距离）
         float m_renderDistance = -1.0f;
-        
+
         /// 是否禁用原版雾效（原版管线始终为false）
         bool m_disableVanillaFog = false;
-        
+
         /// 是否禁用定向阴影（原版管线始终为false）
         bool m_disableDirectionalShading = false;
 
@@ -97,10 +99,10 @@ namespace enigma::graphic {
         ~VanillaRenderingPipeline() override;
 
         // 禁用拷贝和移动，确保管线的唯一性
-        VanillaRenderingPipeline(const VanillaRenderingPipeline&) = delete;
+        VanillaRenderingPipeline(const VanillaRenderingPipeline&)            = delete;
         VanillaRenderingPipeline& operator=(const VanillaRenderingPipeline&) = delete;
-        VanillaRenderingPipeline(VanillaRenderingPipeline&&) = delete;
-        VanillaRenderingPipeline& operator=(VanillaRenderingPipeline&&) = delete;
+        VanillaRenderingPipeline(VanillaRenderingPipeline&&)                 = delete;
+        VanillaRenderingPipeline& operator=(VanillaRenderingPipeline&&)      = delete;
 
         // ===========================================
         // IWorldRenderingPipeline接口实现
@@ -342,5 +344,4 @@ namespace enigma::graphic {
          */
         bool ValidatePipelineState() const;
     };
-
 } // namespace enigma::graphic

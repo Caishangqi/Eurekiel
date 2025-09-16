@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <string>
 
-namespace enigma::graphic {
-
+namespace enigma::graphic
+{
     /**
      * @brief Iris兼容的世界渲染阶段枚举
      * 
@@ -27,7 +27,8 @@ namespace enigma::graphic {
      * Java: public enum WorldRenderingPhase
      * C++:  enum class WorldRenderingPhase : uint32_t
      */
-    enum class WorldRenderingPhase : uint32_t {
+    enum class WorldRenderingPhase : uint32_t
+    {
         /**
          * @brief 无效或未初始化状态
          * 管线的默认状态，表示当前没有进行任何渲染操作
@@ -85,7 +86,7 @@ namespace enigma::graphic {
          * 在Minecraft的虚空维度中使用的特殊渲染
          * 通常是纯黑或自定义的虚空效果
          */
-        VOID,
+        VOID_ENV,
 
         // ===========================================
         // 地形渲染阶段 (Terrain Rendering Phases)
@@ -299,5 +300,4 @@ namespace enigma::graphic {
      * @return 建议的深度测试模式字符串
      */
     const char* GetDefaultDepthMode(WorldRenderingPhase phase);
-
 } // namespace enigma::graphic
