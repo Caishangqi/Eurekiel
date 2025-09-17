@@ -10,6 +10,11 @@
 
 #include "Engine/Renderer/Texture.hpp"
 
+namespace enigma::voxel::generation
+{
+    class Generator;
+}
+
 namespace enigma::voxel::chunk
 {
     /**
@@ -116,11 +121,18 @@ namespace enigma::voxel::chunk
         // Resource management
         ::Texture* GetBlocksAtlasTexture() const { return m_cachedBlocksAtlasTexture; }
 
+        // Generator management
+        void                                  SetGenerator(enigma::voxel::generation::Generator* generator);
+        enigma::voxel::generation::Generator* GetGenerator() const { return m_generator; }
+
     private:
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
         bool                                                m_enableChunkDebug = false; // Enable debug drawing for chunks
 
         // Cached rendering resources (following NeoForge pattern)
         ::Texture* m_cachedBlocksAtlasTexture = nullptr; // Cached blocks atlas texture
+
+        // World generation
+        enigma::voxel::generation::Generator* m_generator = nullptr; // World generator
     };
 }

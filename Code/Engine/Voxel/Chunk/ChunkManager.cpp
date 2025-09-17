@@ -1,4 +1,5 @@
 ﻿#include "ChunkManager.hpp"
+#include "../Generation/Generator.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/TextureAtlas.hpp"
 #include "Engine/Core/Engine.hpp"
@@ -58,7 +59,23 @@ void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
     int64_t chunkPackID = PackCoordinates(chunkX, chunkY);
     if (m_loadedChunks.find(chunkPackID) == m_loadedChunks.end())
     {
-        m_loadedChunks[chunkPackID] = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+        // Create new chunk
+        auto newChunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+
+        // Generate terrain using the assigned generator
+        if (m_generator)
+        {
+            uint32_t worldSeed = 0; // TODO: Get world seed from World class
+            m_generator->GenerateChunk(newChunk.get(), chunkX, chunkY, worldSeed);
+            core::LogInfo("chunk", "Generated chunk (%d, %d) using generator: %s",
+                          chunkX, chunkY, m_generator->GetDisplayName().c_str());
+        }
+        else
+        {
+            core::LogWarn("chunk", "No generator assigned, chunk (%d, %d) will be empty", chunkX, chunkY);
+        }
+
+        m_loadedChunks[chunkPackID] = std::move(newChunk);
     }
 }
 
@@ -116,4 +133,17 @@ bool ChunkManager::SetEnableChunkDebug(bool enable)
 {
     m_enableChunkDebug = enable;
     return m_enableChunkDebug;
+}
+
+void ChunkManager::SetGenerator(enigma::voxel::generation::Generator* generator)
+{
+    m_generator = generator;
+    if (generator)
+    {
+        core::LogInfo("chunk", "ChunkManager: Generator set to %s", generator->GetDisplayName().c_str());
+    }
+    else
+    {
+        core::LogInfo("chunk", "ChunkManager: Generator cleared");
+    }
 }
