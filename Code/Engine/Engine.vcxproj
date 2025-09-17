@@ -388,6 +388,9 @@
         <!-- Shader System -->
         <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
         <ClInclude Include="Graphic\Resource\CompiledShader.hpp"/>
+        <ClInclude Include="Graphic\Resource\DepthTexture\D12DepthTexture.hpp"/>
+        <ClInclude Include="Graphic\Resource\FrameBuffer\D12Framebuffer.hpp"/>
+        <ClInclude Include="Graphic\Resource\RenderTarget\D12RenderTarget.hpp"/>
 
         <!-- Support Layer (基于Iris源码验证) -->
         <ClInclude Include="Graphic\Support\FeatureFlags.hpp"/>
