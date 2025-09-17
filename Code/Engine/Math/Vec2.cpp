@@ -1,6 +1,7 @@
 #include <valarray>
 
 #include "IntVec2.hpp"
+#include "IntVec3.hpp"
 #include "MathUtils.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
@@ -34,6 +35,13 @@ Vec2::Vec2(const IntVec2& copyFrom)
 {
     this->x = static_cast<float>(copyFrom.x);
     this->y = static_cast<float>(copyFrom.y);
+}
+
+Vec2::Vec2(const IntVec3& intVec3)
+{
+    this->x = static_cast<float>(intVec3.x);
+    this->y = static_cast<float>(intVec3.y);
+    // z component is dropped
 }
 
 

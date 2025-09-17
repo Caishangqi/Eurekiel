@@ -3,6 +3,7 @@
 #include <string>
 
 struct IntVec2;
+struct IntVec3;
 struct Vec3;
 
 //-----------------------------------------------------------------------------------------------
@@ -18,7 +19,8 @@ struct Vec2
     ~Vec2(); // destructor (do nothing)
     Vec2(); // default constructor (do nothing)
     Vec2(const Vec2& copyFrom); // copy constructor (from another vec2)
-    Vec2(const IntVec2& copyFrom); // copy constructor (from another vec2)
+    Vec2(const IntVec2& copyFrom); // copy constructor (from IntVec2)
+    Vec2(const IntVec3& intVec3); // copy constructor (from IntVec3, drops z)
     explicit Vec2(float initialX, float initialY); // explicit constructor (from x, y)
 
     // Static methods (e.g. creation functions)
