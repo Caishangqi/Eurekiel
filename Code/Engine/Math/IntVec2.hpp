@@ -1,6 +1,9 @@
 ﻿#pragma once
 #include <string>
 
+// Forward declaration
+struct IntVec3;
+
 
 struct IntVec2
 {
@@ -16,6 +19,7 @@ struct IntVec2
 
     IntVec2(const IntVec2& copyFrom);
     explicit IntVec2(int initialX, int initialY);
+    explicit IntVec2(const IntVec3& intVec3); // Convert from IntVec3 (drops z)
 
     // Accessors
     float         GetLength() const;

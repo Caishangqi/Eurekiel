@@ -3,6 +3,7 @@
 #include <corecrt_math.h>
 
 #include "MathUtils.hpp"
+#include "IntVec3.hpp"
 #include "Engine/Core/StringUtils.hpp"
 
 IntVec2 IntVec2::ZERO    = IntVec2(0, 0);
@@ -24,6 +25,10 @@ IntVec2::IntVec2(const IntVec2& copyFrom)
 }
 
 IntVec2::IntVec2(int initialX, int initialY) : x(initialX), y(initialY)
+{
+}
+
+IntVec2::IntVec2(const IntVec3& intVec3) : x(intVec3.x), y(intVec3.y)
 {
 }
 
