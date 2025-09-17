@@ -94,19 +94,19 @@ namespace enigma::voxel::chunk
         // TODO: Implement according to comments above
     public:
         // Chunk dimensions and bit operations for performance optimization
-        static constexpr int32_t CHUNK_BITS_X     = 4;   // 2^4 = 16
-        static constexpr int32_t CHUNK_BITS_Y     = 4;   // 2^4 = 16  
-        static constexpr int32_t CHUNK_BITS_Z     = 7;   // 2^7 = 128
-        
+        static constexpr int32_t CHUNK_BITS_X = 4; // 2^4 = 16
+        static constexpr int32_t CHUNK_BITS_Y = 4; // 2^4 = 16  
+        static constexpr int32_t CHUNK_BITS_Z = 7; // 2^7 = 128
+
         static constexpr int32_t CHUNK_SIZE_X     = 1 << CHUNK_BITS_X; // 16
         static constexpr int32_t CHUNK_SIZE_Y     = 1 << CHUNK_BITS_Y; // 16
         static constexpr int32_t CHUNK_SIZE_Z     = 1 << CHUNK_BITS_Z; // 128
         static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
-        
+
         // Bit masks for coordinate extraction
-        static constexpr int32_t CHUNK_MASK_X     = CHUNK_SIZE_X - 1; // 15 (0x0F)
-        static constexpr int32_t CHUNK_MASK_Y     = CHUNK_SIZE_Y - 1; // 15 (0x0F)
-        static constexpr int32_t CHUNK_MASK_Z     = CHUNK_SIZE_Z - 1; // 127 (0x7F)
+        static constexpr int32_t CHUNK_MASK_X = CHUNK_SIZE_X - 1; // 15 (0x0F)
+        static constexpr int32_t CHUNK_MASK_Y = CHUNK_SIZE_Y - 1; // 15 (0x0F)
+        static constexpr int32_t CHUNK_MASK_Z = CHUNK_SIZE_Z - 1; // 127 (0x7F)
 
         Chunk(IntVec2 chunkCoords);
         ~Chunk();
@@ -118,11 +118,11 @@ namespace enigma::voxel::chunk
         void       SetBlockWorld(const BlockPos& worldPos, BlockState state);
 
         // Optimized coordinate to index conversion using bit operations
-        static inline size_t CoordsToIndex(int32_t x, int32_t y, int32_t z);
-        static inline void IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z);
-        
+        static size_t CoordsToIndex(int32_t x, int32_t y, int32_t z);
+        static void   IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z);
+
         // Optimized chunk coordinate to world coordinate conversion
-        static inline int32_t ChunkCoordsToWorld(int32_t chunkCoord) { return chunkCoord << CHUNK_BITS_X; }
+        static int32_t ChunkCoordsToWorld(int32_t chunkCoord);
 
         // Coordinate Conversion - PUBLIC for World class
         BlockPos LocalToWorld(int32_t x, int32_t y, int32_t z);
