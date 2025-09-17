@@ -24,18 +24,19 @@
 #include <string>
 #include <functional>
 
-#include "../../Resource/Texture/D12Texture.hpp"
+#include "../../Resource/RenderTarget/D12RenderTarget.hpp"
+#include "../../Resource/DepthTexture/D12DepthTexture.hpp"
 #include "../DX12/D3D12RenderSystem.hpp"
 #include "WorldRenderingPhase.hpp"
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <wrl/client.h>
 
 namespace enigma::graphic
 {
     // 前向声明
     class D12Texture;
+    class D12Framebuffer;
     struct PackRenderTargetDirectives;
     struct PackDirectives;
 
@@ -69,77 +70,6 @@ namespace enigma::graphic
         }
     };
 
-    /**
-     * @brief 深度纹理包装器
-     * @details 对应Iris中的DepthTexture类
-     */
-    class DepthTexture
-    {
-    private:
-        std::unique_ptr<D12Texture> m_texture; ///< 底层纹理对象
-        std::string                 m_name; ///< 纹理名称
-        uint32_t                    m_width; ///< 宽度
-        uint32_t                    m_height; ///< 高度
-        DXGI_FORMAT                 m_format; ///< 深度格式
-
-    public:
-        /**
-         * @brief 构造函数
-         * @param name 纹理名称
-         * @param width 宽度
-         * @param height 高度
-         * @param format 深度格式
-         */
-        DepthTexture(const std::string& name, uint32_t width, uint32_t height, DXGI_FORMAT format);
-
-        /**
-         * @brief 析构函数
-         */
-        ~DepthTexture();
-
-        /**
-         * @brief 调整大小
-         * @param width 新宽度
-         * @param height 新高度
-         * @param format 新格式
-         */
-        void Resize(uint32_t width, uint32_t height, DXGI_FORMAT format);
-
-        /**
-         * @brief 销毁资源
-         */
-        void Destroy();
-
-        /**
-         * @brief 获取纹理ID
-         * @return 纹理资源指针
-         */
-        ID3D12Resource* GetTextureResource() const;
-
-        /**
-         * @brief 获取深度模板视图
-         * @return DSV句柄
-         */
-        D3D12_CPU_DESCRIPTOR_HANDLE GetDSV() const;
-
-        /**
-         * @brief 获取着色器资源视图
-         * @return SRV句柄
-         */
-        D3D12_CPU_DESCRIPTOR_HANDLE GetSRV() const;
-
-        /**
-         * @brief 获取纹理名称
-         */
-        const std::string& GetName() const { return m_name; }
-
-        /**
-         * @brief 获取当前尺寸
-         */
-        uint32_t    GetWidth() const { return m_width; }
-        uint32_t    GetHeight() const { return m_height; }
-        DXGI_FORMAT GetFormat() const { return m_format; }
-    };
 
     /**
      * @brief 渲染目标管理器 - 对应Iris RenderTargets.java
@@ -248,21 +178,21 @@ namespace enigma::graphic
          * @brief 获取指定索引的渲染目标
          * @param index 渲染目标索引
          * @return 渲染目标指针，如果不存在返回nullptr
-         * @details 
+         * @details
          * 对应Iris方法：public RenderTarget get(int index)
          * 返回已存在的渲染目标，不会创建新的
          */
-        D12Texture* Get(uint32_t index) const;
+        D12RenderTarget* Get(uint32_t index) const;
 
         /**
          * @brief 获取或创建指定索引的渲染目标
          * @param index 渲染目标索引
          * @return 渲染目标指针
-         * @details 
+         * @details
          * 对应Iris方法：public RenderTarget getOrCreate(int index)
          * 如果渲染目标不存在，会根据设置自动创建
          */
-        D12Texture* GetOrCreate(uint32_t index);
+        D12RenderTarget* GetOrCreate(uint32_t index);
 
         /**
          * @brief 获取主深度纹理资源
@@ -276,14 +206,14 @@ namespace enigma::graphic
          * @return 深度纹理对象
          * @details 对应Iris方法：public DepthTexture getDepthTextureNoTranslucents()
          */
-        DepthTexture* GetDepthTextureNoTranslucents() const { return m_noTranslucents.get(); }
+        D12DepthTexture* GetDepthTextureNoTranslucents() const { return m_noTranslucents.get(); }
 
         /**
          * @brief 获取无手部渲染的深度纹理
          * @return 深度纹理对象
          * @details 对应Iris方法：public DepthTexture getDepthTextureNoHand()
          */
-        DepthTexture* GetDepthTextureNoHand() const { return m_noHand.get(); }
+        D12DepthTexture* GetDepthTextureNoHand() const { return m_noHand.get(); }
 
         // ==================== 动态管理接口 ====================
 
@@ -338,7 +268,7 @@ namespace enigma::graphic
          * 
          * 教学要点：在DirectX 12中，帧缓冲区概念由渲染目标视图(RTV)和深度模板视图(DSV)组合实现
          */
-        Microsoft::WRL::ComPtr<ID3D12Resource> CreateFramebufferWritingToMain(const uint32_t* drawBuffers, uint32_t bufferCount);
+        std::unique_ptr<D12Framebuffer> CreateFramebufferWritingToMain(const uint32_t* drawBuffers, uint32_t bufferCount);
 
         /**
          * @brief 创建写入备用纹理的帧缓冲区
@@ -347,7 +277,7 @@ namespace enigma::graphic
          * @return 创建的帧缓冲区对象
          * @details 对应Iris方法：public GlFramebuffer createFramebufferWritingToAlt(int[] drawBuffers)
          */
-        Microsoft::WRL::ComPtr<ID3D12Resource> CreateFramebufferWritingToAlt(const uint32_t* drawBuffers, uint32_t bufferCount);
+        std::unique_ptr<D12Framebuffer> CreateFramebufferWritingToAlt(const uint32_t* drawBuffers, uint32_t bufferCount);
 
         /**
          * @brief 创建G-Buffer帧缓冲区
@@ -360,7 +290,7 @@ namespace enigma::graphic
          * 
          * 用于G-Buffer阶段的多渲染目标设置
          */
-        Microsoft::WRL::ComPtr<ID3D12Resource> CreateGbufferFramebuffer(
+        std::unique_ptr<D12Framebuffer> CreateGbufferFramebuffer(
             const std::vector<uint32_t>& stageWritesToAlt,
             const uint32_t*              drawBuffers, uint32_t bufferCount);
 
@@ -463,13 +393,13 @@ namespace enigma::graphic
         // ==================== 核心成员变量 ====================
 
         /// 渲染目标数组 - 对应Iris的targets[]
-        std::vector<std::unique_ptr<D12Texture>> m_targets;
+        std::vector<std::unique_ptr<D12RenderTarget>> m_targets;
 
         /// 无半透明物体深度纹理 - 对应Iris的noTranslucents
-        std::unique_ptr<DepthTexture> m_noTranslucents;
+        std::unique_ptr<D12DepthTexture> m_noTranslucents;
 
         /// 无手部渲染深度纹理 - 对应Iris的noHand
-        std::unique_ptr<DepthTexture> m_noHand;
+        std::unique_ptr<D12DepthTexture> m_noHand;
 
         /// 渲染目标设置映射 - 对应Iris的targetSettingsMap
         std::unordered_map<uint32_t, RenderTargetSettings> m_targetSettingsMap;
