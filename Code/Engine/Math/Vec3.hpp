@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Vec2.hpp"
 struct EulerAngles;
+struct IntVec3;
 
 struct Vec3
 {
@@ -17,6 +18,7 @@ struct Vec3
     Vec3(const Vec3& copyFrom); // copy constructor (from another Vec3)
     explicit Vec3(float initialX, float initialY, float initialZ);
     explicit Vec3(const EulerAngles& angles);
+    explicit Vec3(const IntVec3& intVec3); // convert from IntVec3
     explicit Vec3(float length);
 
     // Accessors (const methods)

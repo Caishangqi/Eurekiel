@@ -3,6 +3,7 @@
 #include "EulerAngles.hpp"
 #include "Mat44.hpp"
 #include "MathUtils.hpp"
+#include "IntVec3.hpp"
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Math/Vec3.hpp"
 #include "Engine/Core/EngineCommon.hpp"
@@ -28,6 +29,13 @@ Vec3::Vec3(const EulerAngles& angles)
     x = angles.m_yawDegrees;
     y = angles.m_pitchDegrees;
     z = angles.m_rollDegrees;
+}
+
+Vec3::Vec3(const IntVec3& intVec3)
+{
+    x = static_cast<float>(intVec3.x);
+    y = static_cast<float>(intVec3.y);
+    z = static_cast<float>(intVec3.z);
 }
 
 Vec3::Vec3(const char* stringVec)
