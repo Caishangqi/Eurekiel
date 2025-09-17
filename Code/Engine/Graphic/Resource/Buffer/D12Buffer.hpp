@@ -59,18 +59,23 @@ namespace enigma::graphic
 
         /**
          * @brief 创建缓冲区
-         * @param device DX12设备
          * @param type 缓冲区类型
          * @param elementCount 元素数量
          * @param elementSize 单个元素大小 (字节)
          * @param initialData 初始数据 (可为nullptr)
          * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 根据类型自动选择合适的堆类型和资源标志
+         *
+         * 教学要点:
+         * - 根据类型自动选择合适的堆类型和资源标志
+         * - 通过D3D12RenderSystem获取设备，遵循架构封装原则
+         *
+         * 架构设计:
+         * - 内部调用D3D12RenderSystem::GetDevice()获取设备
+         * - 避免直接暴露DirectX设备依赖
+         * - 符合SOLID原则的依赖倒置
          */
-        bool Create(ID3D12Device* device, Type           type,
-                    uint32_t      elementCount, uint32_t elementSize,
-                    const void*   initialData = nullptr);
+        bool Create(Type        type, uint32_t elementCount, uint32_t elementSize,
+                    const void* initialData = nullptr);
 
         /**
          * @brief 上传数据到缓冲区
@@ -118,9 +123,16 @@ namespace enigma::graphic
     private:
         /**
          * @brief 创建描述符视图
-         * @param device DX12设备
+         *
+         * 教学要点:
+         * - 根据缓冲区类型创建对应的描述符视图
+         * - 通过D3D12RenderSystem获取设备，避免外部依赖
+         *
+         * 架构设计:
+         * - 内部调用D3D12RenderSystem::GetDevice()
+         * - 符合封装原则，隐藏设备依赖
          */
-        void CreateDescriptorViews(ID3D12Device* device);
+        void CreateDescriptorViews();
 
         /**
          * @brief 根据类型确定堆类型
