@@ -65,7 +65,6 @@ namespace enigma::graphic
 
         /**
          * @brief 创建2D纹理
-         * @param device DX12设备
          * @param width 纹理宽度
          * @param height 纹理高度
          * @param format 像素格式
@@ -74,18 +73,22 @@ namespace enigma::graphic
          * @param sampleCount 多重采样数量
          * @param clearValue 清除值 (用于RT和DSV优化)
          * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 
+         *
+         * 教学要点:
          * 1. 根据用途自动设置资源标志和初始状态
          * 2. 创建对应的描述符视图
          * 3. 支持多重采样抗锯齿 (MSAA)
+         *
+         * 架构设计:
+         * - 通过D3D12RenderSystem::GetDevice()获取设备
+         * - 避免直接设备依赖，符合封装原则
          */
-        bool Create2D(ID3D12Device*            device,
-                      uint32_t                 width, uint32_t height,
-                      DXGI_FORMAT              format, Usage   usage,
-                      uint32_t                 mipLevels   = 1,
-                      uint32_t                 sampleCount = 1,
-                      const D3D12_CLEAR_VALUE* clearValue  = nullptr);
+        bool Create2D(
+            uint32_t                 width, uint32_t height,
+            DXGI_FORMAT              format, Usage   usage,
+            uint32_t                 mipLevels   = 1,
+            uint32_t                 sampleCount = 1,
+            const D3D12_CLEAR_VALUE* clearValue  = nullptr);
 
         /**
          * @brief 创建G-Buffer专用RT
@@ -98,9 +101,9 @@ namespace enigma::graphic
          * 
          * 教学要点: G-Buffer RT的特殊优化，包括清除值和格式选择
          */
-        bool CreateAsGBufferRT(ID3D12Device* device,
-                               uint32_t      width, uint32_t  height,
-                               DXGI_FORMAT   format, uint32_t rtIndex);
+        bool CreateAsGBufferRT(
+            uint32_t    width, uint32_t  height,
+            DXGI_FORMAT format, uint32_t rtIndex);
 
         /**
          * @brief 创建Shadow Map
@@ -111,7 +114,7 @@ namespace enigma::graphic
          * 
          * 教学要点: Shadow Map的特殊需求，深度格式和比较采样
          */
-        bool CreateAsShadowMap(ID3D12Device* device, uint32_t size, uint32_t cascadeCount = 1);
+        bool CreateAsShadowMap(uint32_t size, uint32_t cascadeCount = 1);
 
         // ========================================================================
         // 属性访问接口
@@ -140,7 +143,7 @@ namespace enigma::graphic
          * @param device DX12设备
          * @param usage 纹理用途
          */
-        void CreateDescriptorViews(ID3D12Device* device, Usage usage);
+        void CreateDescriptorViews(Usage usage);
 
         /**
          * @brief 根据用途确定资源标志
