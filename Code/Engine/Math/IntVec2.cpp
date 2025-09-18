@@ -137,6 +137,16 @@ bool IntVec2::operator!=(const IntVec2& compare) const
     return x != compare.x || y != compare.y;
 }
 
+bool IntVec2::operator<(const IntVec2& compare) const
+{
+    // Lexicographic comparison: first by x, then by y
+    if (x != compare.x)
+    {
+        return x < compare.x;
+    }
+    return y < compare.y;
+}
+
 const IntVec2 IntVec2::operator+(const IntVec2& vecToAdd) const
 {
     return IntVec2(x + vecToAdd.x, y + vecToAdd.y);

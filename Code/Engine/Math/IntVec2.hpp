@@ -44,6 +44,7 @@ struct IntVec2
     // Operators (const)
     bool          operator==(const IntVec2& compare) const; // vec2 == vec2
     bool          operator!=(const IntVec2& compare) const; // vec2 != vec2
+    bool          operator<(const IntVec2& compare) const; // vec2 < vec2 (for sorting)
     const IntVec2 operator+(const IntVec2& vecToAdd) const; // vec2 + vec2
     const IntVec2 operator-(const IntVec2& vecToSubtract) const; // vec2 - vec2
     const IntVec2 operator-() const; // -vec2, i.e. "unary negation"
@@ -58,3 +59,21 @@ struct IntVec2
     void        SetFromText(const char* text);
     std::string toString() const;
 };
+
+// Hash function for IntVec2 (required for unordered containers)
+#include <functional>
+
+namespace std
+{
+    template <>
+    struct hash<IntVec2>
+    {
+        size_t operator()(const IntVec2& pos) const
+        {
+            // Use a simple but effective hash combining x and y
+            uint64_t ux = static_cast<uint64_t>(static_cast<uint32_t>(pos.x));
+            uint64_t uy = static_cast<uint64_t>(static_cast<uint32_t>(pos.y));
+            return static_cast<size_t>((uy << 32) | ux);
+        }
+    };
+}
