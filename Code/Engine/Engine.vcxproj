@@ -520,6 +520,7 @@
         <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp" />
         <ClInclude Include="Voxel\Generation\Generator.hpp"/>
         <ClInclude Include="Voxel\Property\Property.hpp" />
+        <ClInclude Include="Voxel\Property\PropertyMap.hpp"/>
         <ClInclude Include="Voxel\Property\PropertyRegistry.hpp" />
         <ClInclude Include="Voxel\Property\PropertyTypes.hpp" />
         <ClInclude Include="Voxel\World\World.hpp" />
