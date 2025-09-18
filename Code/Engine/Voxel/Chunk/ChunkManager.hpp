@@ -1,5 +1,7 @@
-#pragma once
+﻿#pragma once
 #include "Chunk.hpp"
+#include "IChunkGenerationCallback.hpp"
+#include "ChunkSerializationInterfaces.hpp"
 #include "../../Math/Vec3.hpp"
 #include <unordered_map>
 #include <memory>
@@ -7,6 +9,7 @@
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <vector>
 
 #include "Engine/Renderer/Texture.hpp"
 
@@ -14,101 +17,50 @@ namespace enigma::voxel::chunk
 {
     /**
      * @brief Manages loading, unloading, and lifecycle of world chunks
-     * 
-     * TODO: This class needs to be implemented with the following functionality:
-     * 
-     * CORE RESPONSIBILITIES:
-     * - Chunk storage and retrieval
-     * - Dynamic loading/unloading based on player position
-     * - Thread management for async chunk generation
-     * - Memory management to prevent unbounded chunk growth
-     * 
-     * REQUIRED MEMBER VARIABLES:
-     * - std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks;  // Loaded chunks by packed coordinates
-     * - Vec3 m_playerPosition;                             // Current player position
-     * - int32_t m_loadDistance = 8;                        // Chunks to keep loaded around player
-     * - int32_t m_unloadDistance = 12;                     // Distance to start unloading chunks
-     * 
-     * Threading for Async Operations:
-     * - std::thread m_generationThread;                    // Background thread for generation
-     * - std::queue<std::pair<int32_t, int32_t>> m_generationQueue;  // Chunks waiting to be generated
-     * - std::mutex m_queueMutex;                           // Protect generation queue
-     * - std::condition_variable m_queueCondition;          // Signal new work
-     * - std::atomic<bool> m_shouldStop{false};             // Signal thread shutdown
-     * 
-     * REQUIRED METHODS:
-     * 
-     * Chunk Access:
-     * - Chunk* GetChunk(int32_t chunkX, int32_t chunkZ)
-     * - bool IsChunkLoaded(int32_t chunkX, int32_t chunkZ)
-     * - void LoadChunk(int32_t chunkX, int32_t chunkZ)     // Immediate load
-     * - void LoadChunkAsync(int32_t chunkX, int32_t chunkZ) // Queue for async load
-     * - void UnloadChunk(int32_t chunkX, int32_t chunkZ)
-     * 
-     * Player Position Management:
-     * - void SetPlayerPosition(const Vec3& position)
-     * - void UpdateChunksAroundPlayer()                    // Load/unload based on distance
-     * - std::vector<std::pair<int32_t, int32_t>> GetChunksInRadius(int32_t radius)
-     * 
-     * Threading Management:
-     * - void StartGenerationThread()
-     * - void StopGenerationThread()
-     * - void GenerationThreadMain()                       // Main loop for generation thread
-     * - void QueueChunkGeneration(int32_t chunkX, int32_t chunkZ)
-     * 
-     * Memory Management:
-     * - void SetLoadDistance(int32_t chunks)
-     * - void SetUnloadDistance(int32_t chunks)
-     * - void UnloadDistantChunks()                        // Unload chunks beyond unload distance
-     * - size_t GetLoadedChunkCount() const
-     * - void ForceUnloadAll()                             // Emergency unload all chunks
-     * 
-     * Utility:
-     * - static int64_t PackCoordinates(int32_t x, int32_t z)  // Pack coords into single key
-     * - static void UnpackCoordinates(int64_t packed, int32_t& x, int32_t& z)
-     * - float GetDistanceToPlayer(int32_t chunkX, int32_t chunkZ)
-     * 
-     * Update Loop:
-     * - void Update(float deltaTime)                      // Called each frame
-     * - void ProcessPendingOperations()                  // Handle completed async operations
-     * 
-     * INTEGRATION WITH WORLD GENERATION:
-     * - Should call world generator for new chunks
-     * - Handle chunk population (structures, decorations)
-     * - Manage dependencies between chunks (lighting, structures)
-     * 
-     * PERFORMANCE CONSIDERATIONS:
-     * - Use spatial data structures for efficient distance queries
-     * - Batch chunk operations to reduce threading overhead
-     * - Consider priority queues for loading (closer chunks first)
-     * - Implement chunk caching to disk for faster reloading
-     * 
-     * MEMORY SAFETY:
-     * - Ensure thread-safe access to chunk data
-     * - Prevent access to chunks during unloading
-     * - Handle edge cases (player teleportation, world borders)
+     *
+     * 重构后的ChunkManager职责：
+     * - 区块的存储、生命周期和内存管理
+     * - 基于距离的自动区块管理
+     * - 区块内存池和缓存管理
+     * - 异步区块操作的调度
+     * - 区块状态查询和统计
+     * - 可选的区块序列化和持久化支持
      */
     class ChunkManager
     {
         friend class enigma::voxel::world::World;
         // TODO: Implement according to comments above
     public:
-        ChunkManager();
+        // 新的构造函数：接受回调接口
+        explicit ChunkManager(IChunkGenerationCallback* callback = nullptr);
         ~ChunkManager();
 
         void Initialize();
 
-        // Chunk Access:
+        // Chunk Access and Management:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
+        bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY) const;
         void   LoadChunk(int32_t chunkX, int32_t chunkY); // Immediate load
         void   UnloadChunk(int32_t chunkX, int32_t chunkY); // Unload chunk
-        bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY) const;
+
+        // 新增：批量区块管理
+        void EnsureChunksLoaded(const std::vector<std::pair<int32_t, int32_t>>& chunks);
+        void UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistance);
+
+        // 设置生成回调接口
+        void SetGenerationCallback(IChunkGenerationCallback* callback) { m_generationCallback = callback; }
 
         // Player position and distance-based management
         void SetPlayerPosition(const Vec3& playerPosition);
         void SetActivationRange(int32_t chunkDistance); // Distance in chunks
         void SetDeactivationRange(int32_t chunkDistance); // Distance in chunks
         void UpdateChunkActivation(); // Called each frame to manage chunks
+
+        // 预留：序列化组件设置（可选功能）
+        void                   SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer);
+        void                   SetChunkStorage(std::unique_ptr<IChunkStorage> storage);
+        bool                   SaveChunkToDisk(const Chunk* chunk); // 暂时返回false
+        std::unique_ptr<Chunk> LoadChunkFromDisk(int32_t chunkX, int32_t chunkY); // 暂时返回nullptr
 
         // Utility:
         static int64_t                                       PackCoordinates(int32_t x, int32_t y); // Pack coords into single key
@@ -137,7 +89,12 @@ namespace enigma::voxel::chunk
         int32_t m_activationRange   = 12; // Activation range in chunks (from renderDistance)
         int32_t m_deactivationRange = 14; // Deactivation range in chunks
 
-        world::World* m_ownerWorld = nullptr;
+        // 回调接口（取代m_ownerWorld）
+        IChunkGenerationCallback* m_generationCallback = nullptr;
+
+        // 预留：序列化组件（可选，暂时为nullptr）
+        std::unique_ptr<IChunkSerializer> m_chunkSerializer;
+        std::unique_ptr<IChunkStorage>    m_chunkStorage;
 
         // Frame-limited operations tracking
         enum class ChunkOperationType
