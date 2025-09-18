@@ -9,20 +9,21 @@ World::World(std::string worldName, uint64_t worldSeed, std::unique_ptr<ChunkMan
     m_worldName(worldName), m_worldSeed(worldSeed), m_chunkManager(std::move(chunkManager))
 {
     core::LogInfo("world", "World created: %s", m_worldName.c_str());
+    m_chunkManager->m_ownerWorld = this;
 }
 
 World::~World()
 {
 }
 
-BlockState World::GetBlockState(const BlockPos& pos)
+BlockState* World::GetBlockState(const BlockPos& pos)
 {
     Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
     if (chunk)
     {
-        return chunk->GetBlockWorld(pos);
+        return chunk->GetBlock(pos);
     }
-    return BlockState(nullptr, PropertyMap(), 0);
+    return nullptr;
 }
 
 void World::SetBlockState(const BlockPos& pos, BlockState* state) const
@@ -30,7 +31,7 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
     Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
     if (chunk)
     {
-        return chunk->SetBlockWorld(pos, *state);
+        return chunk->SetBlockWorld(pos, state);
     }
 }
 
@@ -68,8 +69,18 @@ bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
 
 void World::LoadChunk(int32_t chunkX, int32_t chunkY)
 {
-    core::LogInfo("chunk", "Try Loading chunk: %d, %d", chunkX, chunkY);
+    core::LogInfo("chunk", "Loading chunk: %d, %d", chunkX, chunkY);
+
+    // Load the chunk through ChunkManager
     m_chunkManager->LoadChunk(chunkX, chunkY);
+
+    // Generate chunk content if it's newly loaded and we have a generator
+    Chunk* chunk = m_chunkManager->GetChunk(chunkX, chunkY);
+    if (chunk && m_worldGenerator && !chunk->IsGenerated())
+    {
+        core::LogDebug("world", "Generating content for chunk (%d, %d)", chunkX, chunkY);
+        m_worldGenerator->GenerateChunk(chunk, chunkX, chunkY, static_cast<uint32_t>(m_worldSeed));
+    }
 }
 
 void World::UnloadChunk(int32_t chunkX, int32_t chunkY)
@@ -98,4 +109,36 @@ bool World::SetEnableChunkDebug(bool enable)
 std::unique_ptr<ChunkManager>& World::GetChunkManager()
 {
     return m_chunkManager;
+}
+
+void World::SetPlayerPosition(const Vec3& position)
+{
+    m_playerPosition = position;
+    // Sync player position to ChunkManager for distance-based chunk loading
+    if (m_chunkManager)
+    {
+        m_chunkManager->SetPlayerPosition(position);
+    }
+}
+
+void World::SetChunkActivationRange(int chunkDistance)
+{
+    m_chunkActivationRange = chunkDistance;
+    // Sync activation range to ChunkManager
+    if (m_chunkManager)
+    {
+        m_chunkManager->SetActivationRange(chunkDistance);
+    }
+    core::LogInfo("world", "Set chunk activation range to %d chunks", chunkDistance);
+}
+
+void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generator> generator)
+{
+    m_worldGenerator = std::move(generator);
+    if (m_worldGenerator)
+    {
+        // Initialize the generator with world seed
+        m_worldGenerator->Initialize(static_cast<uint32_t>(m_worldSeed));
+        core::LogInfo("world", "World generator set and initialized for world '%s'", m_worldName.c_str());
+    }
 }

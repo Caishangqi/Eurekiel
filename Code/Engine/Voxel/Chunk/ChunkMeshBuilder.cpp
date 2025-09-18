@@ -5,8 +5,14 @@
 #include "Engine/Renderer/Model/BlockRenderMesh.hpp"
 #include "Engine/Math/Mat44.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
+#include "Engine/Registry/Block/BlockRegistry.hpp"
 
 using namespace enigma::voxel::chunk;
+
+ChunkMeshBuilder::ChunkMeshBuilder()
+{
+    air = registry::block::BlockRegistry::GetBlock("simpleminer", "air");
+}
 
 std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
 {
@@ -21,19 +27,63 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
 
     core::LogInfo("ChunkMeshBuilder", "Building mesh for chunk...");
 
-    // Iterate through all blocks in the chunk
+    // Assignment 2: Two-pass optimization
+    // First pass: Count visible faces to pre-allocate memory
+    size_t opaqueQuadCount      = 0;
+    size_t transparentQuadCount = 0;
+
+    // First pass: Count quads needed
     for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
         {
             for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
-                BlockState blockState = chunk->GetBlock(x, y, z);
+                BlockState* blockState = chunk->GetBlock(x, y, z);
 
-                if (ShouldRenderBlock(&blockState))
+                if (ShouldRenderBlock(blockState))
                 {
-                    Vec3 blockPos = GetBlockPosition(x, y, z);
-                    AddBlockToMesh(chunkMesh.get(), &blockState, blockPos);
+                    BlockPos blockPos = GetBlockPosition(x, y, z);
+
+                    // Count visible faces for this block
+                    static const std::vector<enigma::voxel::property::Direction> allDirections = {
+                        enigma::voxel::property::Direction::NORTH,
+                        enigma::voxel::property::Direction::SOUTH,
+                        enigma::voxel::property::Direction::EAST,
+                        enigma::voxel::property::Direction::WEST,
+                        enigma::voxel::property::Direction::UP,
+                        enigma::voxel::property::Direction::DOWN
+                    };
+
+                    for (const auto& direction : allDirections)
+                    {
+                        if (ShouldRenderFace(chunk, blockPos, direction))
+                        {
+                            // For now, treat all as opaque (can be refined later for transparent blocks)
+                            opaqueQuadCount++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Pre-allocate memory based on count
+    chunkMesh->Reserve(opaqueQuadCount, transparentQuadCount);
+
+    // Second pass: Actually build the mesh
+    for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
+    {
+        for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* blockState = chunk->GetBlock(x, y, z);
+
+                if (ShouldRenderBlock(blockState))
+                {
+                    BlockPos blockPos = GetBlockPosition(x, y, z);
+                    AddBlockToMesh(chunkMesh.get(), blockState, blockPos, chunk);
                     blockCount++;
                 }
             }
@@ -69,7 +119,7 @@ void ChunkMeshBuilder::RebuildMesh(Chunk* chunk)
     }
 }
 
-void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const Vec3& blockPos)
+void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, Chunk* chunk)
 {
     if (!chunkMesh || !blockState)
     {
@@ -86,7 +136,7 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
     }
 
     // All 6 directions for face iteration
-    const std::vector<enigma::voxel::property::Direction> allDirections = {
+    static const std::vector<enigma::voxel::property::Direction> allDirections = {
         enigma::voxel::property::Direction::NORTH,
         enigma::voxel::property::Direction::SOUTH,
         enigma::voxel::property::Direction::EAST,
@@ -96,11 +146,18 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
     };
 
     // Create transformation matrix from block space to chunk space
-    Mat44 blockToChunkTransform = Mat44::MakeTranslation3D(blockPos);
+    Vec3  blockPosVec3(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
+    Mat44 blockToChunkTransform = Mat44::MakeTranslation3D(blockPosVec3);
 
     // Iterate through all faces of the block render mesh
     for (const auto& direction : allDirections)
     {
+        // Assignment 2: Face culling - skip faces that are not visible
+        if (!ShouldRenderFace(chunk, blockPos, direction))
+        {
+            continue; // Skip this face as it's occluded
+        }
+
         const auto* renderFace = blockRenderMesh->GetFace(direction);
         if (!renderFace || renderFace->vertices.empty())
         {
@@ -108,16 +165,22 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
         }
 
         // Transform vertices from block space to chunk space
-        std::vector<Vertex_PCU> transformedVertices;
-        transformedVertices.reserve(renderFace->vertices.size());
+        std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
 
-        for (const auto& vertex : renderFace->vertices)
+        for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
+        {
+            Vertex_PCU transformedVertex = renderFace->vertices[i];
+            // Transform position from block space (0,0,0)-(1,1,1) to chunk space
+            transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
+            transformedVertices[i]       = transformedVertex;
+        }
+        /*for (const auto& vertex : renderFace->vertices)
         {
             Vertex_PCU transformedVertex = vertex;
             // Transform position from block space (0,0,0)-(1,1,1) to chunk space
             transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(vertex.m_position);
             transformedVertices.push_back(transformedVertex);
-        }
+        }*/
 
         // Convert vertices to quads and add to chunk mesh
         // Assuming each face has 4 vertices arranged as a quad
@@ -136,8 +199,7 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
         }
         else if (transformedVertices.size() > 0)
         {
-            core::LogWarn("ChunkMeshBuilder", "Face has %zu vertices, expected 4 for quad conversion",
-                          transformedVertices.size());
+            core::LogWarn("ChunkMeshBuilder", "Face has %zu vertices, expected 4 for quad conversion", transformedVertices.size());
         }
     }
 }
@@ -157,11 +219,16 @@ bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
         return false; // No block type (air)
     }
 
+    /*if (!blockState || blockState->GetBlock() == airBlock.get())
+    {
+        return false;
+    }*/
+
     // Get block registry name to check for air
-    std::string blockName = blockState->GetBlock()->GetRegistryName();
+    //std::string blockName = blockState->GetBlock()->GetRegistryName();
 
     // Don't render air blocks
-    if (blockName == "air" || blockName == "minecraft:air" || blockName.empty())
+    if (blockState->GetBlock() == air.get())
     {
         return false;
     }
@@ -169,9 +236,50 @@ bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
     return true;
 }
 
-Vec3 ChunkMeshBuilder::GetBlockPosition(int x, int y, int z) const
+bool ChunkMeshBuilder::ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, Direction direction) const
 {
-    // Convert chunk-local coordinates (0-15) to world position
-    // Each block is 1 unit in size
-    return Vec3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+    // Assignment 2: Face culling implementation
+    // A face should be rendered if the adjacent block in that direction is:
+    // 1. Air (empty)
+    // 2. Transparent
+    // 3. Outside chunk bounds (edge faces are always visible)
+
+    BlockPos neighborPos = GetNeighborPosition(blockPos, direction);
+
+    // Check if neighbor is outside chunk bounds - render edge faces
+    if (neighborPos.x < 0 || neighborPos.x >= Chunk::CHUNK_SIZE_X ||
+        neighborPos.y < 0 || neighborPos.y >= Chunk::CHUNK_SIZE_Y ||
+        neighborPos.z < 0 || neighborPos.z >= Chunk::CHUNK_SIZE_Z)
+    {
+        return true; // Edge face, always render
+    }
+
+    // If we have chunk reference, check the neighbor block
+    if (chunk)
+    {
+        BlockState* neighborBlock = chunk->GetBlock(neighborPos.x, neighborPos.y, neighborPos.z);
+
+        // Render face if neighbor is air
+        if (!ShouldRenderBlock(neighborBlock))
+        {
+            return true; // Neighbor is air, render this face
+        }
+
+        // TODO: Add transparent block check here
+        // For now, assume all non-air blocks are opaque
+        return false; // Neighbor is solid, cull this face
+    }
+
+    // No chunk reference - render by default (fallback)
+    return true;
+}
+
+BlockPos ChunkMeshBuilder::GetNeighborPosition(const BlockPos& blockPos, Direction direction) const
+{
+    return blockPos.GetRelative(direction);
+}
+
+BlockPos ChunkMeshBuilder::GetBlockPosition(int x, int y, int z) const
+{
+    return BlockPos(x, y, z);
 }

@@ -112,10 +112,10 @@ namespace enigma::voxel::chunk
         ~Chunk();
 
         // Block Access - PUBLIC for World class access
-        BlockState GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
-        void       SetBlock(int32_t x, int32_t y, int32_t z, BlockState state);
-        BlockState GetBlockWorld(const BlockPos& worldPos); // World coordinates
-        void       SetBlockWorld(const BlockPos& worldPos, BlockState state);
+        BlockState* GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
+        void        SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state);
+        BlockState* GetBlock(const BlockPos& worldPos); // World coordinates
+        void        SetBlockWorld(const BlockPos& worldPos, BlockState* state);
 
         // Optimized coordinate to index conversion using bit operations
         static size_t CoordsToIndex(int32_t x, int32_t y, int32_t z);
@@ -158,7 +158,7 @@ namespace enigma::voxel::chunk
 
     private:
         IntVec2                    m_chunkCoords = IntVec2(0, 0);
-        std::vector<BlockState>    m_blocks; // Block storage  
+        std::vector<BlockState*>   m_blocks; // Block storage  
         std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering
         bool                       m_isDirty     = true; // Needs mesh rebuild
         bool                       m_isGenerated = false; // Has been world-generated

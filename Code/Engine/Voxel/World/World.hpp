@@ -2,6 +2,8 @@
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
 #include "../Chunk/ChunkManager.hpp"
+#include "../Generation/Generator.hpp"
+#include "../../Math/Vec3.hpp"
 #include <memory>
 #include <unordered_map>
 
@@ -73,10 +75,10 @@ namespace enigma::voxel::world
         ~World();
 
         // Block Operations:
-        BlockState GetBlockState(const BlockPos& pos);
-        void       SetBlockState(const BlockPos& pos, BlockState* state) const;
-        bool       IsValidPosition(const BlockPos& pos);
-        bool       IsBlockLoaded(const BlockPos& pos);
+        BlockState* GetBlockState(const BlockPos& pos);
+        void        SetBlockState(const BlockPos& pos, BlockState* state) const;
+        bool        IsValidPosition(const BlockPos& pos);
+        bool        IsBlockLoaded(const BlockPos& pos);
 
         // Chunk Operations:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
@@ -87,8 +89,8 @@ namespace enigma::voxel::world
 
         // Update and Management:
         void Update(float deltaTime); // Update world systems
-        // void SetLoadDistance(int32_t chunks); // How many chunks to keep loaded around player
-        // void SetPlayerPosition(const Vec3& pos); // Update player position for chunk loading
+        void SetPlayerPosition(const Vec3& position); // Update player position for chunk loading
+        void SetChunkActivationRange(int chunkDistance); // Set activation range in chunks
 
         // Rendering:
         void Render(IRenderer* renderer); // Render world
@@ -97,6 +99,9 @@ namespace enigma::voxel::world
         // Utility
         std::unique_ptr<ChunkManager>& GetChunkManager();
 
+        // World generation integration
+        void SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generator> generator);
+
     private:
         std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
         int32_t                       m_worldHeight = 128; // World height in blocks
@@ -104,5 +109,12 @@ namespace enigma::voxel::world
         int32_t                       m_maxY        = 320; // Maximum Y coordinate
         std::string                   m_worldName; // World identifier
         uint64_t                      m_worldSeed = 0; // World generation seed
+
+        // Player position and chunk management
+        Vec3    m_playerPosition{0.0f, 0.0f, 128.0f}; // Current player position
+        int32_t m_chunkActivationRange = 12; // Activation range in chunks (from settings.yml)
+
+        // World generation
+        std::unique_ptr<enigma::voxel::generation::Generator> m_worldGenerator;
     };
 }

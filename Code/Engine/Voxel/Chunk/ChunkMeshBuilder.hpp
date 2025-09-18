@@ -21,7 +21,7 @@ namespace enigma::voxel::chunk
     class ChunkMeshBuilder
     {
     public:
-        ChunkMeshBuilder()  = default;
+        ChunkMeshBuilder();
         ~ChunkMeshBuilder() = default;
 
         /**
@@ -48,29 +48,54 @@ namespace enigma::voxel::chunk
     private:
         /**
          * @brief Add a single block's mesh to the chunk mesh
-         * 
+         *
          * @param chunkMesh Target chunk mesh
          * @param blockState Block state to render
          * @param blockPos Position of the block within the chunk (0-15 range)
+         * @param chunk Source chunk for face culling
          */
-        void AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const Vec3& blockPos);
+        void AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, Chunk* chunk);
 
         /**
          * @brief Check if a block should be rendered
-         * 
+         *
          * Assignment 1: Simply check if block is not air
-         * 
+         *
          * @param blockState Block state to check
          * @return True if block should be rendered
          */
         bool ShouldRenderBlock(BlockState* blockState) const;
 
         /**
-         * @brief Get block position in chunk coordinates
-         * 
-         * @param x, y, z Block coordinates within chunk (0-15)
-         * @return Vec3 position for mesh transformation
+         * @brief Check if a block face should be rendered (face culling)
+         *
+         * Assignment 2: Face culling implementation
+         *
+         * @param chunk Source chunk
+         * @param blockPos Position of the block within chunk (0-15 range)
+         * @param direction Direction of the face to check
+         * @return True if face should be rendered
          */
-        Vec3 GetBlockPosition(int x, int y, int z) const;
+        bool ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, Direction direction) const;
+
+        /**
+         * @brief Get neighbor block position in given direction
+         *
+         * @param blockPos Current block position
+         * @param direction Direction to get neighbor
+         * @return Neighbor position
+         */
+        BlockPos GetNeighborPosition(const BlockPos& blockPos, Direction direction) const;
+
+        /**
+         * @brief Get block position in chunk coordinates
+         *
+         * @param x, y, z Block coordinates within chunk (0-15)
+         * @return BlockPos position for mesh transformation
+         */
+        BlockPos GetBlockPosition(int x, int y, int z) const;
+
+    private:
+        std::shared_ptr<registry::block::Block> air = nullptr;
     };
 }

@@ -90,6 +90,7 @@ namespace enigma::voxel::chunk
      */
     class ChunkManager
     {
+        friend class enigma::voxel::world::World;
         // TODO: Implement according to comments above
     public:
         ChunkManager();
@@ -100,6 +101,14 @@ namespace enigma::voxel::chunk
         // Chunk Access:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
         void   LoadChunk(int32_t chunkX, int32_t chunkY); // Immediate load
+        void   UnloadChunk(int32_t chunkX, int32_t chunkY); // Unload chunk
+        bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY) const;
+
+        // Player position and distance-based management
+        void SetPlayerPosition(const Vec3& playerPosition);
+        void SetActivationRange(int32_t chunkDistance); // Distance in chunks
+        void SetDeactivationRange(int32_t chunkDistance); // Distance in chunks
+        void UpdateChunkActivation(); // Called each frame to manage chunks
 
         // Utility:
         static int64_t                                       PackCoordinates(int32_t x, int32_t y); // Pack coords into single key
@@ -116,11 +125,39 @@ namespace enigma::voxel::chunk
         // Resource management
         ::Texture* GetBlocksAtlasTexture() const { return m_cachedBlocksAtlasTexture; }
 
+        // Statistics and debugging
+        size_t GetLoadedChunkCount() const { return m_loadedChunks.size(); }
+
     private:
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
         bool                                                m_enableChunkDebug = false; // Enable debug drawing for chunks
 
+        // Player position and chunk management (using BlockPos for consistency)
+        Vec3    m_playerPosition{0.0f, 0.0f, 128.0f}; // Current player position
+        int32_t m_activationRange   = 12; // Activation range in chunks (from renderDistance)
+        int32_t m_deactivationRange = 14; // Deactivation range in chunks
+
+        world::World* m_ownerWorld = nullptr;
+
+        // Frame-limited operations tracking
+        enum class ChunkOperationType
+        {
+            None,
+            CheckDirtyChunks,
+            ActivateChunk,
+            DeactivateChunk
+        };
+
+        ChunkOperationType m_lastFrameOperation = ChunkOperationType::None;
+
         // Cached rendering resources (following NeoForge pattern)
         ::Texture* m_cachedBlocksAtlasTexture = nullptr; // Cached blocks atlas texture
+
+        // Helper methods for distance-based management
+        float                                    GetChunkDistanceToPlayer(int32_t chunkX, int32_t chunkY) const;
+        std::vector<std::pair<int32_t, int32_t>> GetChunksInActivationRange() const;
+        std::pair<int32_t, int32_t>              FindFarthestChunk() const;
+        std::pair<int32_t, int32_t>              FindNearestMissingChunk() const;
+        Chunk*                                   FindNearestDirtyChunk() const;
     };
 }
