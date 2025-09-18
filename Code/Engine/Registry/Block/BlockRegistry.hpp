@@ -63,6 +63,43 @@ namespace enigma::registry::block
          */
         static std::shared_ptr<Block> GetBlock(const std::string& namespaceName, const std::string& name);
 
+        // High-performance numeric ID access methods
+
+        /**
+         * @brief Get a block by numeric ID (O(1) performance)
+         */
+        static std::shared_ptr<Block> GetBlockById(int id);
+
+        /**
+         * @brief Get multiple blocks by numeric IDs (batch operation)
+         */
+        static std::vector<std::shared_ptr<Block>> GetBlocksByIds(const std::vector<int>& ids);
+
+        /**
+         * @brief Get numeric ID for a block by name
+         */
+        static int GetBlockId(const std::string& name);
+
+        /**
+         * @brief Get numeric ID for a block by namespace and name
+         */
+        static int GetBlockId(const std::string& namespaceName, const std::string& name);
+
+        /**
+         * @brief Get RegistrationKey for a block ID
+         */
+        static RegistrationKey GetBlockKey(int id);
+
+        /**
+         * @brief Check if a numeric ID exists
+         */
+        static bool HasBlockId(int id);
+
+        /**
+         * @brief Get all valid block IDs
+         */
+        static std::vector<int> GetAllBlockIds();
+
         /**
          * @brief Get all registered blocks
          */

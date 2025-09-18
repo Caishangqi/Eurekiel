@@ -168,6 +168,50 @@ namespace enigma::registry::block
         return registry ? registry->Get(namespaceName, name) : nullptr;
     }
 
+    // High-performance numeric ID access methods
+
+    std::shared_ptr<Block> BlockRegistry::GetBlockById(int id)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetById(id) : nullptr;
+    }
+
+    std::vector<std::shared_ptr<Block>> BlockRegistry::GetBlocksByIds(const std::vector<int>& ids)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetByIds(ids) : std::vector<std::shared_ptr<Block>>{};
+    }
+
+    int BlockRegistry::GetBlockId(const std::string& name)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetId(RegistrationKey(name)) : -1;
+    }
+
+    int BlockRegistry::GetBlockId(const std::string& namespaceName, const std::string& name)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetId(RegistrationKey(namespaceName, name)) : -1;
+    }
+
+    RegistrationKey BlockRegistry::GetBlockKey(int id)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetKey(id) : RegistrationKey();
+    }
+
+    bool BlockRegistry::HasBlockId(int id)
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->HasId(id) : false;
+    }
+
+    std::vector<int> BlockRegistry::GetAllBlockIds()
+    {
+        auto* registry = GetTypedRegistry();
+        return registry ? registry->GetAllIds() : std::vector<int>{};
+    }
+
     std::vector<std::shared_ptr<Block>> BlockRegistry::GetAllBlocks()
     {
         auto* registry = GetTypedRegistry();
