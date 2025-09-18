@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
 #include "ChunkMesh.hpp"
+#include "ChunkSerializationInterfaces.hpp"
 #include <array>
 #include <memory>
 #include <atomic>
@@ -156,14 +157,21 @@ namespace enigma::voxel::chunk
         int32_t  GetChunkZ() const { return m_chunkCoords.y; }
         BlockPos GetWorldPos() const; // Bottom corner world position
 
+        // 预留：扩展数据接口（类似NeoForge Attachments）
+        ChunkAttachmentHolder&       GetAttachmentHolder() { return m_attachmentHolder; }
+        const ChunkAttachmentHolder& GetAttachmentHolder() const { return m_attachmentHolder; }
+
     private:
         IntVec2                    m_chunkCoords = IntVec2(0, 0);
-        std::vector<BlockState*>   m_blocks; // Block storage  
+        std::vector<BlockState*>   m_blocks; // Block storage
         std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering
         bool                       m_isDirty     = true; // Needs mesh rebuild
         bool                       m_isGenerated = false; // Has been world-generated
         bool                       m_isPopulated = false; // Has decorations/structures
         std::atomic<bool>          m_isLoading{false}; // Currently being loaded/generated
+
+        // 预留：扩展数据持有者（暂时空实现）
+        mutable ChunkAttachmentHolder m_attachmentHolder;
 
         /// Debug Drawing
         AABB3 m_chunkBounding; // Need generated based on chunk coords
