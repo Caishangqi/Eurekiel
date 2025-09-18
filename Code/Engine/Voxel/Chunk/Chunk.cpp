@@ -18,21 +18,19 @@ using namespace enigma::voxel::chunk;
 
 // Optimized bit-shift coordinate to index conversion
 // Formula: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
-size_t Chunk::CoordsToIndex(int32_t x, int32_t y, int32_t z)
+inline size_t Chunk::CoordsToIndex(int32_t x, int32_t y, int32_t z)
 {
     return static_cast<size_t>(x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y)));
 }
 
 // Optimized bit-shift index to coordinates conversion  
 // Inverse of the above formula using bit masking
-void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z)
+inline void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z)
 {
     x = static_cast<int32_t>(index & CHUNK_MASK_X);
     y = static_cast<int32_t>((index >> CHUNK_BITS_X) & CHUNK_MASK_Y);
     z = static_cast<int32_t>(index >> (CHUNK_BITS_X + CHUNK_BITS_Y));
 }
-
-int32_t Chunk::ChunkCoordsToWorld(int32_t chunkCoord) { return chunkCoord << CHUNK_BITS_X; }
 
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {

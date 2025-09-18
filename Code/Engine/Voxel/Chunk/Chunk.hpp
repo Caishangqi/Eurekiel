@@ -122,7 +122,7 @@ namespace enigma::voxel::chunk
         static void   IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z);
 
         // Optimized chunk coordinate to world coordinate conversion
-        static int32_t ChunkCoordsToWorld(int32_t chunkCoord);
+        static inline int32_t ChunkCoordsToWorld(int32_t chunkCoord) { return chunkCoord << CHUNK_BITS_X; }
 
         // Coordinate Conversion - PUBLIC for World class
         BlockPos LocalToWorld(int32_t x, int32_t y, int32_t z);
