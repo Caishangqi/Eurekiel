@@ -20,12 +20,12 @@ inline size_t Chunk::CoordsToIndex(int32_t x, int32_t y, int32_t z)
     return static_cast<size_t>(x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y)));
 }
 
-// Optimized bit-shift index to coordinates conversion  
+// Optimized bit-shift index to coordinates conversion
 // Inverse of the above formula using bit masking
 inline void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& z)
 {
-    x = static_cast<int32_t>(index & CHUNK_MASK_X);
-    y = static_cast<int32_t>((index >> CHUNK_BITS_X) & CHUNK_MASK_Y);
+    x = static_cast<int32_t>(index & CHUNK_MAX_X);
+    y = static_cast<int32_t>((index >> CHUNK_BITS_X) & CHUNK_MAX_Y);
     z = static_cast<int32_t>(index >> (CHUNK_BITS_X + CHUNK_BITS_Y));
 }
 
@@ -191,9 +191,9 @@ void Chunk::SetBlockWorld(const BlockPos& worldPos, BlockState* state)
  */
 BlockPos Chunk::LocalToWorld(int32_t x, int32_t y, int32_t z)
 {
-    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x) + x; // chunk world X << 4 + local X
-    int32_t worldY = y; // The Y coordinate remains unchanged
-    int32_t worldZ = ChunkCoordsToWorld(m_chunkCoords.y) + z; // chunk world Z << 4 + local Z
+    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x) + x; // chunk world X << 4 + local X (forward)
+    int32_t worldY = ChunkCoordsToWorld(m_chunkCoords.y) + y; // chunk world Y << 4 + local Y (left)
+    int32_t worldZ = z; // Z coordinate is height, no chunk offset needed
 
     return BlockPos(worldX, worldY, worldZ);
 }
@@ -217,26 +217,26 @@ BlockPos Chunk::LocalToWorld(int32_t x, int32_t y, int32_t z)
 bool Chunk::WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32_t& z)
 {
     // Calculate the chunk coordinates corresponding to the world coordinates (integer division will automatically round down)
-    int32_t chunkX = worldPos.x / CHUNK_SIZE_X;
-    int32_t chunkZ = worldPos.z / CHUNK_SIZE_Y;
+    int32_t chunkX = worldPos.x / CHUNK_SIZE_X; // X is forward direction
+    int32_t chunkY = worldPos.y / CHUNK_SIZE_Y; // Y is left direction
 
     // Handle the special case of negative number coordinates
     if (worldPos.x < 0 && worldPos.x % CHUNK_SIZE_X != 0) chunkX--;
-    if (worldPos.z < 0 && worldPos.z % CHUNK_SIZE_Y != 0) chunkZ--;
+    if (worldPos.y < 0 && worldPos.y % CHUNK_SIZE_Y != 0) chunkY--;
 
     // Check whether it belongs to the current chunk
-    if (chunkX != m_chunkCoords.x || chunkZ != m_chunkCoords.y)
+    if (chunkX != m_chunkCoords.x || chunkY != m_chunkCoords.y)
     {
         return false; // Not part of the current chunk
     }
 
     // Calculate local coordinates (world coordinates - chunk starting world coordinates)
-    x = worldPos.x - ChunkCoordsToWorld(m_chunkCoords.x); // Local X = World X - chunk Start X
-    y = worldPos.y; // The Y coordinate remains unchanged
-    z = worldPos.z - ChunkCoordsToWorld(m_chunkCoords.y); // Local Z = World Z - chunk Start Z
+    x = worldPos.x - ChunkCoordsToWorld(m_chunkCoords.x); // Local X = World X - chunk Start X (forward)
+    y = worldPos.y - ChunkCoordsToWorld(m_chunkCoords.y); // Local Y = World Y - chunk Start Y (left)
+    z = worldPos.z; // Z coordinate is height, remains unchanged
 
-    // Verify that local coordinates are in the valid range [0, CHUNK_SIZE_X/Y) and [0, CHUNK_SIZE_Z)
-    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Z || z < 0 || z >= CHUNK_SIZE_Y)
+    // Verify that local coordinates are in the valid range [0, CHUNK_SIZE_X) and [0, CHUNK_SIZE_Y) and [0, CHUNK_SIZE_Z)
+    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z)
     {
         return false; // The coordinates are outside the chunk range
     }
@@ -329,9 +329,9 @@ void Chunk::Clear()
  */
 BlockPos Chunk::GetWorldPos() const
 {
-    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x); // The world start X coordinate of chunk
-    int32_t worldY = ChunkCoordsToWorld(m_chunkCoords.y); // The world start Y coordinate of chunk
-    int32_t worldZ = 0; // Start at the bottom of the world
+    int32_t worldX = ChunkCoordsToWorld(m_chunkCoords.x); // The world start X coordinate of chunk (forward)
+    int32_t worldY = ChunkCoordsToWorld(m_chunkCoords.y); // The world start Y coordinate of chunk (left)
+    int32_t worldZ = 0; // Start at the bottom of the world (Z is height, starts at 0)
 
     return BlockPos(worldX, worldY, worldZ);
 }

@@ -94,20 +94,23 @@ namespace enigma::voxel::chunk
     {
         // TODO: Implement according to comments above
     public:
-        // Chunk dimensions and bit operations for performance optimization
+        // Chunk dimensions and bit operations for performance optimization (Assignment 02 specification)
         static constexpr int32_t CHUNK_BITS_X = 4; // 2^4 = 16
-        static constexpr int32_t CHUNK_BITS_Y = 4; // 2^4 = 16  
+        static constexpr int32_t CHUNK_BITS_Y = 4; // 2^4 = 16
         static constexpr int32_t CHUNK_BITS_Z = 7; // 2^7 = 128
 
         static constexpr int32_t CHUNK_SIZE_X     = 1 << CHUNK_BITS_X; // 16
         static constexpr int32_t CHUNK_SIZE_Y     = 1 << CHUNK_BITS_Y; // 16
         static constexpr int32_t CHUNK_SIZE_Z     = 1 << CHUNK_BITS_Z; // 128
+        static constexpr int32_t CHUNK_MAX_X      = CHUNK_SIZE_X - 1;
+        static constexpr int32_t CHUNK_MAX_Y      = CHUNK_SIZE_Y - 1;
+        static constexpr int32_t CHUNK_MAX_Z      = CHUNK_SIZE_Z - 1;
         static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 
-        // Bit masks for coordinate extraction
-        static constexpr int32_t CHUNK_MASK_X = CHUNK_SIZE_X - 1; // 15 (0x0F)
-        static constexpr int32_t CHUNK_MASK_Y = CHUNK_SIZE_Y - 1; // 15 (0x0F)
-        static constexpr int32_t CHUNK_MASK_Z = CHUNK_SIZE_Z - 1; // 127 (0x7F)
+        // Bit masks for coordinate extraction (Assignment 02 specification)
+        static constexpr int32_t CHUNK_MASK_X = CHUNK_MAX_X;
+        static constexpr int32_t CHUNK_MASK_Y = CHUNK_MAX_Y << CHUNK_BITS_X;
+        static constexpr int32_t CHUNK_MASK_Z = CHUNK_MAX_Z << (CHUNK_BITS_X + CHUNK_BITS_Y);
 
         Chunk(IntVec2 chunkCoords);
         ~Chunk();
