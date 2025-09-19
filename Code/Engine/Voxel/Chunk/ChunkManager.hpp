@@ -89,10 +89,10 @@ namespace enigma::voxel::chunk
         int32_t m_activationRange   = 12; // Activation range in chunks (from renderDistance)
         int32_t m_deactivationRange = 14; // Deactivation range in chunks
 
-        // 回调接口（取代m_ownerWorld）
+        // Callback interface (replace m_ownerWorld)
         IChunkGenerationCallback* m_generationCallback = nullptr;
 
-        // 预留：序列化组件（可选，暂时为nullptr）
+        // Reserved: Serialized component (optional, temporarily nullptr)
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
         std::unique_ptr<IChunkStorage>    m_chunkStorage;
 

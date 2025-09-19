@@ -62,7 +62,7 @@ void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
     {
         m_loadedChunks[chunkPackID] = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
 
-        // 使用回调接口生成区块内容
+        // Use the callback interface to generate block content
         if (m_generationCallback)
         {
             m_generationCallback->GenerateChunk(m_loadedChunks[chunkPackID].get(), chunkX, chunkY);
@@ -121,7 +121,8 @@ void ChunkManager::Render(IRenderer* renderer)
         // Call the chunk's Render method which handles coordinate transformation
         // Note: Texture binding is now handled by ChunkManager, so we can optimize Chunk::Render
         renderer->BindTexture(m_cachedBlocksAtlasTexture);
-        loaded_chunk.second->Render(renderer);
+        if (loaded_chunk.second)
+            loaded_chunk.second->Render(renderer);
     }
 }
 
@@ -138,7 +139,6 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
     if (it != m_loadedChunks.end())
     {
         core::LogInfo("chunk", "Unloading chunk: %d, %d", chunkX, chunkY);
-        m_loadedChunks[chunkPackID].release();
         m_loadedChunks[chunkPackID] = nullptr;
         // TODO: Save chunk if modified (m_needsSaving)
         // TODO: Cleanup VBO resources to prevent GPU leaks
@@ -338,25 +338,25 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
 {
     std::vector<int64_t> chunksToUnload;
 
-    // 计算玩家位置的区块坐标
+    // Calculate the block coordinates of the player's position
     int32_t playerChunkX = static_cast<int32_t>(std::floor(playerPos.x / Chunk::CHUNK_SIZE_X));
-    int32_t playerChunkY = static_cast<int32_t>(std::floor(playerPos.z / Chunk::CHUNK_SIZE_Y)); // 注意：使用Z坐标
+    int32_t playerChunkY = static_cast<int32_t>(std::floor(playerPos.z / Chunk::CHUNK_SIZE_Y));
 
-    // 检查所有已加载的区块
+    // Check all loaded blocks
     for (const auto& [packedCoords, chunk] : m_loadedChunks)
     {
         int32_t chunkX, chunkY;
         UnpackCoordinates(packedCoords, chunkX, chunkY);
 
-        // 计算距离
+        // Calculate distance
         float deltaX   = static_cast<float>(chunkX - playerChunkX);
         float deltaY   = static_cast<float>(chunkY - playerChunkY);
         float distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
 
-        // 如果距离超过最大距离，标记为需要卸载
+        // If the distance exceeds the maximum distance, it is marked as unloading
         if (distance > static_cast<float>(maxDistance))
         {
-            // 如果有回调接口，检查是否应该卸载
+            // If there is a callback interface, check whether it should be uninstalled
             bool shouldUnload = true;
             if (m_generationCallback)
             {
@@ -370,7 +370,7 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
         }
     }
 
-    // 执行卸载
+    // Perform uninstall
     for (int64_t packedCoords : chunksToUnload)
     {
         int32_t chunkX, chunkY;
@@ -384,7 +384,7 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
     }
 }
 
-// 预留：序列化组件设置方法（空实现）
+// Reserved: Serialization component setting method (empty implementation)
 void ChunkManager::SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer)
 {
     m_chunkSerializer = std::move(serializer);
@@ -399,15 +399,15 @@ void ChunkManager::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
 
 bool ChunkManager::SaveChunkToDisk(const Chunk* chunk)
 {
-    // 预留接口：当前返回false，未来将实现实际保存逻辑
-    UNUSED(chunk);
+    // Reserved interface: currently returns false, and the actual saving logic will be implemented in the future
+    UNUSED(chunk)
     return false;
 }
 
 std::unique_ptr<Chunk> ChunkManager::LoadChunkFromDisk(int32_t chunkX, int32_t chunkY)
 {
-    // 预留接口：当前返回nullptr，未来将实现实际加载逻辑
-    UNUSED(chunkX);
-    UNUSED(chunkY);
+    // Reserved interface: currently returns nullptr, and the actual loading logic will be implemented in the future
+    UNUSED(chunkX)
+    UNUSED(chunkY)
     return nullptr;
 }
