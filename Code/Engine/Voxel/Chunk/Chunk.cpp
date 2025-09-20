@@ -10,6 +10,7 @@
 #include "Engine/Renderer/Model/RenderMesh.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/TextureAtlas.hpp"
+#include "Engine/Voxel/Builtin/DefaultBlock.hpp"
 
 using namespace enigma::voxel::chunk;
 
@@ -161,6 +162,27 @@ BlockState* Chunk::GetBlock(const BlockPos& worldPos)
     return GetBlock(localX, localY, localZ); // If within range, call GetBlock to return BlockState
 }
 
+BlockState* Chunk::GetTopBlock(const BlockPos& worldPos)
+{
+    int32_t localX, localY, localZ;
+    if (!WorldToLocal(worldPos, localX, localY, localZ)) // Convert world coordinates to local coordinates in chunk
+    {
+        // The coordinates are not within this chunk range, and return the default air block state
+        // TODO: Here, an AIR BlockState should be returned, and the default constructed state should be returned.
+        // return BlockState{};
+        return nullptr; // Return nullptr for now
+    }
+    for (int z = worldPos.z; z < 0; --z)
+    {
+        BlockState* block = GetBlock(localX, localY, z);
+        if (block || block != AIR->GetDefaultState())
+        {
+            return block;
+        }
+    }
+    return nullptr;
+}
+
 void Chunk::SetBlockWorld(const BlockPos& worldPos, BlockState* state)
 {
     int32_t localX, localY, localZ;
@@ -173,6 +195,28 @@ void Chunk::SetBlockWorld(const BlockPos& worldPos, BlockState* state)
 
     SetBlock(localX, localY, localZ, state);
     MarkDirty(); // Marking chunk requires regenerating mesh
+}
+
+int Chunk::GetTopBlockZ(const BlockPos& worldPos)
+{
+    int32_t localX, localY, localZ;
+    if (!WorldToLocal(worldPos, localX, localY, localZ)) // Convert world coordinates to local coordinates in chunk
+    {
+        // The coordinates are not within this chunk range, and return the default air block state
+        // TODO: Here, an AIR BlockState should be returned, and the default constructed state should be returned.
+        // return BlockState{};
+        return -1; // Return nullptr for now
+    }
+
+    for (int z = localZ; z >= 0; --z)
+    {
+        BlockState* block = GetBlock(localX, localY, z);
+        if (block && block != AIR->GetDefaultState())
+        {
+            return z;
+        }
+    }
+    return -1;
 }
 
 /**

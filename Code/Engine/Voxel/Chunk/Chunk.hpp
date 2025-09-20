@@ -119,7 +119,9 @@ namespace enigma::voxel::chunk
         BlockState* GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
         void        SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state);
         BlockState* GetBlock(const BlockPos& worldPos); // World coordinates
+        BlockState* GetTopBlock(const BlockPos& worldPos);
         void        SetBlockWorld(const BlockPos& worldPos, BlockState* state);
+        int         GetTopBlockZ(const BlockPos& worldPos);
 
         // Optimized coordinate to index conversion using bit operations
         static size_t CoordsToIndex(int32_t x, int32_t y, int32_t z);
