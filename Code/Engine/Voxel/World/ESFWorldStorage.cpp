@@ -1,4 +1,4 @@
-#include "ESFWorldStorage.hpp"
+﻿#include "ESFWorldStorage.hpp"
 #include "../Chunk/Chunk.hpp"
 #include "../Chunk/ESFRegionFile.hpp"
 #include "Engine/Core/StringUtils.hpp"
@@ -62,8 +62,7 @@ namespace enigma::voxel::world
                           chunkX, chunkY, stateMappingSize, m_stateMapping.GetStateCount());
 
             // Create combined data: [Magic(4 bytes)][StateMappingSize(4 bytes)][StateMapping][BlockData]
-            const uint32_t       ESF_V2_MAGIC = 0x45534632; // "ESF2" - ESF format version 2 with StateMapping
-            size_t               totalSize    = sizeof(uint32_t) + sizeof(uint32_t) + stateMappingSize + blockData.size() * sizeof(uint32_t);
+            size_t               totalSize = sizeof(uint32_t) + sizeof(uint32_t) + stateMappingSize + blockData.size() * sizeof(uint32_t);
             std::vector<uint8_t> combinedData(totalSize);
 
             size_t offset = 0;
@@ -208,8 +207,7 @@ namespace enigma::voxel::world
             }
 
             // Detect file format and handle backward compatibility
-            const uint32_t ESF_V2_MAGIC          = 0x45534632; // "ESF2" - ESF format version 2 with StateMapping
-            size_t         expectedBlockDataSize = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t);
+            size_t expectedBlockDataSize = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t);
 
             // Format detection: check for magic number in first 4 bytes
             bool isNewFormat = false;
