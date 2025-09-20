@@ -305,6 +305,7 @@
         <ClCompile Include="Voxel\Block\BlockPos.cpp" />
         <ClCompile Include="Voxel\Block\BlockState.cpp" />
         <ClCompile Include="Voxel\Builtin\BlockAir.cpp" />
+        <ClCompile Include="Voxel\Builtin\DefaultBlock.cpp"/>
         <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkManager.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
@@ -516,6 +517,7 @@
         <ClInclude Include="Voxel\Block\BlockPos.hpp" />
         <ClInclude Include="Voxel\Block\BlockState.hpp" />
         <ClInclude Include="Voxel\Builtin\BlockAir.hpp" />
+        <ClInclude Include="Voxel\Builtin\DefaultBlock.hpp"/>
         <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkManager.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
