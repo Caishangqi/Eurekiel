@@ -47,9 +47,42 @@ namespace enigma::voxel::world
                 return false;
             }
 
-            // Convert to byte array for storage
-            const uint8_t* chunkBytes = reinterpret_cast<const uint8_t*>(blockData.data());
-            size_t         dataSize   = blockData.size() * sizeof(uint32_t);
+            // Serialize StateMapping data
+            const size_t         MAX_STATE_MAPPING_SIZE = 64 * 1024; // 64KB should be enough for state mapping
+            std::vector<uint8_t> stateMappingBuffer(MAX_STATE_MAPPING_SIZE);
+            size_t               stateMappingSize = m_stateMapping.SerializeStates(stateMappingBuffer.data(), stateMappingBuffer.size());
+
+            if (stateMappingSize == 0)
+            {
+                core::LogError("world_storage", "Failed to serialize StateMapping for chunk (%d, %d)", chunkX, chunkY);
+                return false;
+            }
+
+            core::LogInfo("world_storage", "Serialized StateMapping for chunk (%d, %d): %zu bytes, %zu states",
+                          chunkX, chunkY, stateMappingSize, m_stateMapping.GetStateCount());
+
+            // Create combined data: [Magic(4 bytes)][StateMappingSize(4 bytes)][StateMapping][BlockData]
+            const uint32_t       ESF_V2_MAGIC = 0x45534632; // "ESF2" - ESF format version 2 with StateMapping
+            size_t               totalSize    = sizeof(uint32_t) + sizeof(uint32_t) + stateMappingSize + blockData.size() * sizeof(uint32_t);
+            std::vector<uint8_t> combinedData(totalSize);
+
+            size_t offset = 0;
+
+            // Write format magic number
+            std::memcpy(combinedData.data() + offset, &ESF_V2_MAGIC, sizeof(uint32_t));
+            offset += sizeof(uint32_t);
+
+            // Write StateMapping size
+            uint32_t mappingSize32 = static_cast<uint32_t>(stateMappingSize);
+            std::memcpy(combinedData.data() + offset, &mappingSize32, sizeof(uint32_t));
+            offset += sizeof(uint32_t);
+
+            // Write StateMapping data
+            std::memcpy(combinedData.data() + offset, stateMappingBuffer.data(), stateMappingSize);
+            offset += stateMappingSize;
+
+            // Write block data
+            std::memcpy(combinedData.data() + offset, blockData.data(), blockData.size() * sizeof(uint32_t));
 
             // Save using ESF region files
             ESFError error = ESFError::None;
@@ -71,7 +104,7 @@ namespace enigma::voxel::world
                 {
                     int32_t localX, localY;
                     ESFLayout::WorldChunkToLocal(chunkX, chunkY, regionX, regionY, localX, localY);
-                    error = regionFile.WriteChunk(localX, localY, chunkBytes, dataSize);
+                    error = regionFile.WriteChunk(localX, localY, combinedData.data(), combinedData.size());
                     if (error == ESFError::None)
                     {
                         error = regionFile.Flush();
@@ -118,8 +151,12 @@ namespace enigma::voxel::world
 
         try
         {
+            core::LogDebug("world_storage", "Attempting to load chunk (%d, %d) from ESF storage", chunkX, chunkY);
+
             // Load chunk data using ESF region files
-            std::vector<uint8_t> chunkBytes(Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t));
+            // Use larger buffer to accommodate StateMapping + BlockData
+            const size_t         MAX_CHUNK_DATA_SIZE = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t) + 64 * 1024; // Block data + 64KB for StateMapping
+            std::vector<uint8_t> chunkBytes(MAX_CHUNK_DATA_SIZE);
             size_t               bytesRead = 0;
             ESFError             error     = ESFError::None;
 
@@ -127,10 +164,14 @@ namespace enigma::voxel::world
             {
                 int32_t regionX, regionY;
                 ESFLayout::WorldChunkToRegion(chunkX, chunkY, regionX, regionY);
+                core::LogDebug("world_storage", "Chunk (%d, %d) maps to region (%d, %d)", chunkX, chunkY, regionX, regionY);
 
                 std::string regionPath = GetWorldSavePath() + "/" + ESFLayout::GenerateRegionFileName(regionX, regionY);
+                core::LogDebug("world_storage", "Looking for region file: %s", regionPath.c_str());
+
                 if (!std::filesystem::exists(regionPath))
                 {
+                    core::LogDebug("world_storage", "Region file does not exist: %s", regionPath.c_str());
                     error = ESFError::ChunkNotFound;
                 }
                 else
@@ -166,28 +207,135 @@ namespace enigma::voxel::world
                 return false;
             }
 
-            // Convert byte data back to uint32_t array
-            if (bytesRead % sizeof(uint32_t) != 0)
+            // Detect file format and handle backward compatibility
+            const uint32_t ESF_V2_MAGIC          = 0x45534632; // "ESF2" - ESF format version 2 with StateMapping
+            size_t         expectedBlockDataSize = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t);
+
+            // Format detection: check for magic number in first 4 bytes
+            bool isNewFormat = false;
+            if (bytesRead >= sizeof(uint32_t))
             {
-                core::LogError("world_storage", "Invalid chunk data size for chunk (%d, %d): %zu bytes", chunkX, chunkY, bytesRead);
-                return false;
+                uint32_t magic;
+                std::memcpy(&magic, chunkBytes.data(), sizeof(uint32_t));
+                isNewFormat = (magic == ESF_V2_MAGIC);
             }
 
-            std::vector<uint32_t> blockData(bytesRead / sizeof(uint32_t));
-            std::memcpy(blockData.data(), chunkBytes.data(), bytesRead);
-
-            // Deserialize blocks into chunk
-            bool success = DeserializeChunkBlocks(chunk, blockData);
-            if (success)
+            if (!isNewFormat)
             {
-                core::LogDebug("world_storage", "Chunk (%d, %d) loaded successfully", chunkX, chunkY);
+                // Old format detection: check if data size matches old format (only block data)
+                bool isOldFormat = (bytesRead == expectedBlockDataSize);
+
+                if (isOldFormat)
+                {
+                    core::LogInfo("world_storage", "Loading chunk (%d, %d) using old format (no StateMapping): %zu bytes",
+                                  chunkX, chunkY, bytesRead);
+
+                    // Old format: [BlockData] only - no StateMapping
+                    std::vector<uint32_t> blockData(bytesRead / sizeof(uint32_t));
+                    std::memcpy(blockData.data(), chunkBytes.data(), bytesRead);
+
+                    // Clear StateMapping for old format (blocks will be resolved on-the-fly)
+                    m_stateMapping.Clear();
+
+                    // For old format, we need to rebuild StateMapping during deserialization
+                    // This is a fallback mode - blocks might not be perfectly preserved
+                    core::LogWarn("world_storage", "Loading old format file for chunk (%d, %d) - StateMapping will be rebuilt",
+                                  chunkX, chunkY);
+
+                    // Deserialize blocks into chunk (this will rebuild StateMapping)
+                    bool success = DeserializeChunkBlocks(chunk, blockData);
+                    if (success)
+                    {
+                        core::LogInfo("world_storage", "Chunk (%d, %d) loaded successfully from old format ESF storage", chunkX, chunkY);
+                    }
+                    else
+                    {
+                        core::LogError("world_storage", "Failed to deserialize old format chunk (%d, %d)", chunkX, chunkY);
+                    }
+
+                    return success;
+                }
+                else
+                {
+                    core::LogError("world_storage", "Unknown file format for chunk (%d, %d): %zu bytes (expected %zu for old format)",
+                                   chunkX, chunkY, bytesRead, expectedBlockDataSize);
+                    return false;
+                }
             }
             else
             {
-                core::LogError("world_storage", "Failed to deserialize chunk (%d, %d)", chunkX, chunkY);
-            }
+                // New format: [Magic(4 bytes)][StateMappingSize(4 bytes)][StateMapping][BlockData]
+                if (bytesRead < sizeof(uint32_t) * 2)
+                {
+                    core::LogError("world_storage", "New format chunk data too small for chunk (%d, %d): %zu bytes", chunkX, chunkY, bytesRead);
+                    return false;
+                }
 
-            return success;
+                size_t offset = sizeof(uint32_t); // Skip magic number
+
+                // Read StateMapping size
+                uint32_t stateMappingSize;
+                std::memcpy(&stateMappingSize, chunkBytes.data() + offset, sizeof(uint32_t));
+                offset += sizeof(uint32_t);
+
+                core::LogInfo("world_storage", "Loading chunk (%d, %d) using new format (ESF2): StateMapping size=%u, total data=%zu",
+                              chunkX, chunkY, stateMappingSize, bytesRead);
+
+                // Sanity check for StateMapping size (should be reasonable)
+                if (stateMappingSize > 64 * 1024) // More than 64KB seems excessive
+                {
+                    core::LogError("world_storage", "StateMapping size too large for chunk (%d, %d): %u bytes - possibly corrupted file",
+                                   chunkX, chunkY, stateMappingSize);
+                    return false;
+                }
+
+                // Check if we have enough data for StateMapping + BlockData
+                if (offset + stateMappingSize + expectedBlockDataSize > bytesRead)
+                {
+                    core::LogError("world_storage", "New format chunk data corruption for chunk (%d, %d): expected %zu bytes, got %zu",
+                                   chunkX, chunkY, offset + stateMappingSize + expectedBlockDataSize, bytesRead);
+                    return false;
+                }
+
+                // Clear existing StateMapping and deserialize
+                m_stateMapping.Clear();
+                bool stateMappingSuccess = m_stateMapping.DeserializeStates(chunkBytes.data() + offset, stateMappingSize);
+                offset += stateMappingSize;
+
+                if (!stateMappingSuccess)
+                {
+                    core::LogError("world_storage", "Failed to deserialize StateMapping for chunk (%d, %d)", chunkX, chunkY);
+                    return false;
+                }
+
+                core::LogInfo("world_storage", "Successfully deserialized StateMapping for chunk (%d, %d): %zu states",
+                              chunkX, chunkY, m_stateMapping.GetStateCount());
+
+                // Parse block data
+                size_t blockDataSize = bytesRead - offset;
+                if (blockDataSize != expectedBlockDataSize)
+                {
+                    core::LogError("world_storage", "Invalid block data size for chunk (%d, %d): expected %zu, got %zu",
+                                   chunkX, chunkY, expectedBlockDataSize, blockDataSize);
+                    return false;
+                }
+
+                std::vector<uint32_t> blockData(blockDataSize / sizeof(uint32_t));
+                std::memcpy(blockData.data(), chunkBytes.data() + offset, blockDataSize);
+
+                // Deserialize blocks into chunk
+                bool success = DeserializeChunkBlocks(chunk, blockData);
+                if (success)
+                {
+                    core::LogInfo("world_storage", "Chunk (%d, %d) loaded successfully from new format ESF storage", chunkX, chunkY);
+                }
+                else
+                {
+                    core::LogError("world_storage", "Failed to deserialize new format chunk (%d, %d)", chunkX, chunkY);
+                }
+
+                return success;
+            }
         }
         catch (const std::exception& e)
         {
@@ -258,6 +406,7 @@ namespace enigma::voxel::world
         blockData.reserve(Chunk::BLOCKS_PER_CHUNK);
 
         // Convert chunk blocks to state IDs
+        size_t nonAirBlocksFound = 0;
         for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
         {
             for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
@@ -266,23 +415,39 @@ namespace enigma::voxel::world
                 {
                     BlockState* state   = chunk->GetBlock(x, y, z);
                     uint32_t    stateID = m_stateMapping.GetStateID(state);
+
+                    // Debug: Log first few non-air blocks during serialization
+                    if (state != nullptr && nonAirBlocksFound < 5)
+                    {
+                        core::LogInfo("world_storage", "Serializing non-air block at (%d,%d,%d): state=%p, stateID=%u", x, y, z, (void*)state, stateID);
+                        if (stateID == 0xFFFFFFFF || stateID == 0x80000000)
+                        {
+                            core::LogError("world_storage", "GetStateID returned invalid ID %u for state %p", stateID, (void*)state);
+                        }
+                        nonAirBlocksFound++;
+                    }
+
                     blockData.push_back(stateID);
                 }
             }
         }
 
+        core::LogInfo("world_storage", "Serialization complete: %zu non-air blocks found", nonAirBlocksFound);
         return blockData;
     }
 
     bool ESFChunkStorage::DeserializeChunkBlocks(Chunk* chunk, const std::vector<uint32_t>& blockData)
     {
+        core::LogInfo("world_storage", "Starting deserialization: blockData size=%zu, expected=%d", blockData.size(), Chunk::BLOCKS_PER_CHUNK);
+
         if (blockData.size() != Chunk::BLOCKS_PER_CHUNK)
         {
             core::LogError("world_storage", "Invalid block data size: %zu, expected: %d", blockData.size(), Chunk::BLOCKS_PER_CHUNK);
             return false;
         }
 
-        size_t index = 0;
+        size_t index        = 0;
+        size_t nonAirBlocks = 0;
         for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
         {
             for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
@@ -291,10 +456,24 @@ namespace enigma::voxel::world
                 {
                     uint32_t    stateID = blockData[index++];
                     BlockState* state   = m_stateMapping.GetState(stateID);
+
+                    // Debug: Log first few non-air blocks to verify data
+                    if (stateID != 0 && nonAirBlocks < 5)
+                    {
+                        core::LogInfo("world_storage", "Found non-air block at (%d,%d,%d): stateID=%u, state=%p", x, y, z, stateID, (void*)state);
+                        if (state == nullptr)
+                        {
+                            core::LogError("world_storage", "StateMapping returned null for stateID=%u", stateID);
+                        }
+                        nonAirBlocks++;
+                    }
+
                     chunk->SetBlock(x, y, z, state);
                 }
             }
         }
+
+        core::LogInfo("world_storage", "Deserialization complete: %zu non-air blocks found", nonAirBlocks);
 
         return true;
     }
