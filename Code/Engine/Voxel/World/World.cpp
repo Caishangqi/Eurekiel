@@ -23,7 +23,7 @@ World::~World()
 
 BlockState* World::GetBlockState(const BlockPos& pos)
 {
-    Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
+    Chunk* chunk = GetChunkAt(pos);
     if (chunk)
     {
         return chunk->GetBlock(pos);
@@ -33,7 +33,7 @@ BlockState* World::GetBlockState(const BlockPos& pos)
 
 void World::SetBlockState(const BlockPos& pos, BlockState* state) const
 {
-    Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
+    Chunk* chunk = GetChunkAt(pos);
     if (chunk)
     {
         return chunk->SetBlockWorld(pos, state);
@@ -54,14 +54,42 @@ bool World::IsBlockLoaded(const BlockPos& pos)
     return false;
 }
 
+BlockState* World::GetTopBlock(const BlockPos& pos)
+{
+    Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
+    if (chunk)
+    {
+        return chunk->GetTopBlock(pos);
+    }
+    return nullptr;
+}
+
+BlockState* World::GetTopBlock(int32_t x, int32_t y)
+{
+    UNUSED(x)
+    UNUSED(y)
+    ERROR_RECOVERABLE("World::GetTopBlock is not implemented")
+    return nullptr;
+}
+
+int World::GetTopBlockZ(const BlockPos& pos)
+{
+    Chunk* chunk = GetChunkAt(pos);
+    if (chunk)
+    {
+        return chunk->GetTopBlockZ(pos);
+    }
+    return -1;
+}
+
 Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY)
 {
     return m_chunkManager->GetChunk(chunkX, chunkY);
 }
 
-Chunk* World::GetChunkAt(const BlockPos& pos)
+Chunk* World::GetChunkAt(const BlockPos& pos) const
 {
-    return m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
+    return m_chunkManager->GetChunk(pos.GetChunkX(), pos.GetChunkY());
 }
 
 bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)

@@ -39,10 +39,13 @@ namespace enigma::voxel::world
         void        SetBlockState(const BlockPos& pos, BlockState* state) const;
         bool        IsValidPosition(const BlockPos& pos);
         bool        IsBlockLoaded(const BlockPos& pos);
+        BlockState* GetTopBlock(const BlockPos& pos);
+        BlockState* GetTopBlock(int32_t x, int32_t y);
+        int         GetTopBlockZ(const BlockPos& pos);
 
         // Chunk Operations:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
-        Chunk* GetChunkAt(const BlockPos& pos);
+        Chunk* GetChunkAt(const BlockPos& pos) const;
         bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
 
         // 新的区块管理方法（取代LoadChunk/UnloadChunk）
