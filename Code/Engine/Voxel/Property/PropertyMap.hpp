@@ -71,6 +71,19 @@ namespace enigma::voxel::property
         }
 
         /**
+         * @brief Get a property value as std::any (less type-safe but more flexible)
+         */
+        std::any GetAny(std::shared_ptr<IProperty> property) const
+        {
+            auto it = m_values.find(property);
+            if (it != m_values.end())
+            {
+                return it->second;
+            }
+            return std::any{};
+        }
+
+        /**
          * @brief Create a new PropertyMap with one value changed
          */
         template <typename T>
