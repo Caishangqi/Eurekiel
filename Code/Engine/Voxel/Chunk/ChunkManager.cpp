@@ -75,7 +75,16 @@ void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
         std::unique_ptr<Chunk> chunk = nullptr;
         if (m_chunkStorage && m_chunkSerializer)
         {
+            core::LogDebug("chunk", "Attempting to load chunk (%d, %d) from disk", chunkX, chunkY);
             chunk = LoadChunkFromDisk(chunkX, chunkY);
+            if (chunk)
+            {
+                core::LogInfo("chunk", "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
+            }
+            else
+            {
+                core::LogDebug("chunk", "Failed to load chunk (%d, %d) from disk, will generate new", chunkX, chunkY);
+            }
         }
 
         // If not loaded from disk, create new chunk and generate content
