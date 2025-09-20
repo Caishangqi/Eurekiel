@@ -1,4 +1,4 @@
-#include "ESFFormat.hpp"
+﻿#include "ESFFormat.hpp"
 #include "Chunk.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/StringUtils.hpp"
@@ -42,54 +42,70 @@ namespace enigma::voxel::chunk
     // ESFChunkDataHeader implementation
     bool ESFChunkDataHeader::IsValid() const
     {
-        const size_t MIN_BLOCK_DATA_SIZE    = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t);
-        const size_t MAX_STATE_MAPPING_SIZE = 64 * 1024; // 64KB for StateMapping
-        const size_t MAX_FORMAT_OVERHEAD    = 2 * sizeof(uint32_t); // Magic + StateMapping size
-        const size_t MAX_TOTAL_SIZE         = MIN_BLOCK_DATA_SIZE + MAX_STATE_MAPPING_SIZE + MAX_FORMAT_OVERHEAD;
+        using namespace enigma::core;
 
-        return uncompressedSize > 0 &&
-            uncompressedSize <= MAX_TOTAL_SIZE && // Allow for new format with StateMapping
+        // Basic validation checks
+        bool isValid = uncompressedSize > 0 &&
             compressedSize > 0 &&
             (compressionType == 0 || compressionType == 255); // RLE or no compression
+
+        if (!isValid)
+        {
+            LogError("chunk_header", "ESFChunkDataHeader validation failed: uncompressedSize=%u, compressedSize=%u, compressionType=%u",
+                     uncompressedSize, compressedSize, compressionType);
+            ERROR_AND_DIE(Stringf("ESFChunkDataHeader validation failed: uncompressedSize=%u, compressedSize=%u, compressionType=%u",
+                uncompressedSize, compressedSize, compressionType))
+        }
+
+        // Use configuration-based reasonable size limit for backward compatibility
+        // This handles different ESF configurations and worst-case scenarios
+        if (uncompressedSize > ESF_MAX_REASONABLE_CHUNK_SIZE)
+        {
+            LogError("chunk_header", "ESFChunkDataHeader uncompressedSize too large: %u > %zu (ESF_MAX_REASONABLE_CHUNK_SIZE)",
+                     uncompressedSize, ESF_MAX_REASONABLE_CHUNK_SIZE);
+            ERROR_AND_DIE(Stringf("ESFChunkDataHeader uncompressedSize too large: %u > %zu (ESF_MAX_REASONABLE_CHUNK_SIZE)", uncompressedSize, ESF_MAX_REASONABLE_CHUNK_SIZE))
+        }
+
+        return true;
     }
 
     // ESFLayout implementation
     void ESFLayout::WorldChunkToRegion(int32_t chunkX, int32_t chunkY, int32_t& regionX, int32_t& regionY)
     {
         // Convert world chunk coordinates to region coordinates
-        // Each region contains 16x16 chunks
+        // Each area contains ESF_REGION_SIZE × ESF_REGION_SIZE blocks
 
-        // For positive coordinates: chunkX / 16
-        // For negative coordinates: (chunkX + 1) / 16 - 1 to ensure proper floor division
+        // Positive coordinates: chunkX / ESF_REGION_SIZE
+        // Negative coordinates: (chunkX + 1) / ESF_REGION_SIZE - 1 Ensure correct downward rounding
         if (chunkX >= 0)
         {
-            regionX = chunkX >> 4; // chunkX / 16
+            regionX = chunkX >> ESF_REGION_SHIFT; // Equivalent to chunkX / ESF_REGION_SIZE
         }
         else
         {
-            regionX = (chunkX + 1) / 16 - 1;
+            regionX = (chunkX + 1) / static_cast<int32_t>(ESF_REGION_SIZE) - 1;
         }
 
         if (chunkY >= 0)
         {
-            regionY = chunkY >> 4; // chunkY / 16
+            regionY = chunkY >> ESF_REGION_SHIFT; // Equivalent to chunkY / ESF_REGION_SIZE
         }
         else
         {
-            regionY = (chunkY + 1) / 16 - 1;
+            regionY = (chunkY + 1) / static_cast<int32_t>(ESF_REGION_SIZE) - 1;
         }
     }
 
     void ESFLayout::RegionToWorldChunk(int32_t regionX, int32_t regionY, int32_t& startChunkX, int32_t& startChunkY)
     {
-        // Convert region coordinates to the starting chunk coordinates of that region
-        startChunkX = regionX << 4; // regionX * 16
-        startChunkY = regionY << 4; // regionY * 16
+        // Convert region coordinates to the region's starting chunk coordinates
+        startChunkX = regionX << ESF_REGION_SHIFT; // Equivalent to regionX * ESF_REGION_SIZE
+        startChunkY = regionY << ESF_REGION_SHIFT; // Equivalent to regionY * ESF_REGION_SIZE
     }
 
     size_t ESFLayout::ChunkToIndex(int32_t localChunkX, int32_t localChunkY)
     {
-        // Convert local chunk coordinates (0-15) to array index (0-255)
+        // Convert the local chunk coordinates (0 to ESF_REGION_SIZE-1) to the array index (0 to ESF_MAX_CHUNKS-1)
         ASSERT_OR_DIE(localChunkX >= 0 && localChunkX < ESF_REGION_SIZE, "localChunkX out of range");
         ASSERT_OR_DIE(localChunkY >= 0 && localChunkY < ESF_REGION_SIZE, "localChunkY out of range");
 
@@ -98,8 +114,8 @@ namespace enigma::voxel::chunk
 
     void ESFLayout::IndexToChunk(size_t index, int32_t& localChunkX, int32_t& localChunkY)
     {
-        // Convert array index (0-255) to local chunk coordinates (0-15)
-        ASSERT_OR_DIE(index < ESF_MAX_CHUNKS, "Index out of range");
+        // Convert array index (0 to ESF_MAX_CHUNKS-1) to local chunk coordinates (0 to ESF_REGION_SIZE-1)
+        ASSERT_OR_DIE(index < ESF_MAX_CHUNKS, "Index out of range")
 
         localChunkX = static_cast<int32_t>(index % ESF_REGION_SIZE);
         localChunkY = static_cast<int32_t>(index / ESF_REGION_SIZE);
@@ -108,23 +124,23 @@ namespace enigma::voxel::chunk
     void ESFLayout::WorldChunkToLocal(int32_t  chunkX, int32_t  chunkY, int32_t regionX, int32_t regionY,
                                       int32_t& localX, int32_t& localY)
     {
-        // Convert world chunk coordinates to local coordinates within region
+        // Convert world chunk coordinates to local coordinates within the region
         int32_t regionStartX, regionStartY;
         RegionToWorldChunk(regionX, regionY, regionStartX, regionStartY);
 
         localX = chunkX - regionStartX;
         localY = chunkY - regionStartY;
 
-        // Debug output for coordinate conversion issues
+        // Debugging output for coordinate conversion problems
         if (localX < 0 || localX >= ESF_REGION_SIZE || localY < 0 || localY >= ESF_REGION_SIZE)
         {
             core::LogError("chunk", Stringf("Coordinate conversion error: chunkX=%d, chunkY=%d, regionX=%d, regionY=%d, regionStartX=%d, regionStartY=%d, localX=%d, localY=%d",
                                             chunkX, chunkY, regionX, regionY, regionStartX, regionStartY, localX, localY));
         }
 
-        // Validate local coordinates are within region bounds
-        ASSERT_OR_DIE(localX >= 0 && localX < ESF_REGION_SIZE, "localX out of region bounds");
-        ASSERT_OR_DIE(localY >= 0 && localY < ESF_REGION_SIZE, "localY out of region bounds");
+        // Verify that the local coordinates are within the region boundary
+        ASSERT_OR_DIE(localX >= 0 && localX < ESF_REGION_SIZE, "localX out of region bounds")
+        ASSERT_OR_DIE(localY >= 0 && localY < ESF_REGION_SIZE, "localY out of region bounds")
     }
 
     std::string ESFLayout::GenerateRegionFileName(int32_t regionX, int32_t regionY)

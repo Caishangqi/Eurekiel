@@ -1,6 +1,6 @@
 #pragma once
 #include "Engine/Core/EngineCommon.hpp"
-#include <cstdint>
+#include "ESFConfig.hpp"// Unified ESF configuration management
 #include <array>
 #include <string>
 
@@ -9,21 +9,14 @@ namespace enigma::voxel::chunk
     /**
      * @brief ESF (Enigma Save File) Format Specification
      *
-     * Region file format that stores 16x16 chunks (256 chunks total) in a single .esf file.
-     * Designed for main thread synchronous I/O with Assignment 2 compatibility.
+     * Regional file format, each .esf file stores NxN blocks (configured).
+     * Designed for main thread synchronization I/O, compatible with Assignment 2 specification.
      *
-     * File Structure:
+     * Configuration parameters are centrally managed in ESFConfig.hpp.
+     *
+     * File structure:
      * [Header] [ChunkIndex] [ChunkData1] [ChunkData2] ... [ChunkDataN]
      */
-
-    // File format constants
-    static constexpr uint32_t ESF_FORMAT_VERSION   = 1;
-    static constexpr uint32_t ESF_MAGIC_NUMBER     = 0x45534631; // "ESF1" in hex
-    static constexpr size_t   ESF_REGION_SIZE      = 16; // 16x16 chunks per region
-    static constexpr size_t   ESF_MAX_CHUNKS       = ESF_REGION_SIZE * ESF_REGION_SIZE; // 256 chunks
-    static constexpr size_t   ESF_HEADER_SIZE      = 64; // Fixed header size
-    static constexpr size_t   ESF_INDEX_ENTRY_SIZE = 8; // 4 bytes offset + 4 bytes size
-    static constexpr size_t   ESF_INDEX_SIZE       = ESF_MAX_CHUNKS * ESF_INDEX_ENTRY_SIZE; // 2048 bytes
 
     /**
      * @brief ESF File Header (64 bytes)
@@ -51,14 +44,14 @@ namespace enigma::voxel::chunk
     static_assert(sizeof(ESFHeader) == ESF_HEADER_SIZE, "ESFHeader must be exactly 64 bytes");
 
     /**
-     * @brief Chunk Index Entry (8 bytes)
+     * @brief Block index entry (8 bytes)
      *
-     * Points to the location and size of chunk data within the file.
+     * Point to the location and size of the block data in the file.
      */
     struct ESFChunkIndexEntry
     {
-        uint32_t offset = 0; // Byte offset from start of file (0 = chunk not present)
-        uint32_t size   = 0; // Compressed chunk data size in bytes
+        uint32_t offset = 0; // Byte offset from the file (0 = block does not exist)
+        uint32_t size   = 0; // Compressed block data size (bytes)
 
         bool IsEmpty() const { return offset == 0 && size == 0; }
 
@@ -69,16 +62,16 @@ namespace enigma::voxel::chunk
         }
     };
 
-    static_assert(sizeof(ESFChunkIndexEntry) == ESF_INDEX_ENTRY_SIZE, "ESFChunkIndexEntry must be exactly 8 bytes");
+    static_assert(sizeof(ESFChunkIndexEntry) == ESF_INDEX_ENTRY_SIZE, "ESFChunkIndexEntry size must match config");
 
     /**
-     * @brief Chunk Index Table (2048 bytes)
+     * @brief block index table (size configuration)
      *
-     * Array of 256 index entries (16x16 region).
-     * Entry [i] corresponds to chunk at position (i % 16, i / 16) within the region.
+     * Array of ESF_MAX_CHUNKS index entries (ESF_REGION_SIZE × ESF_REGION_SIZE).
+     * Blocks of the entry [i] corresponding to the locations in the area (i %ESF_REGION_SIZE, i / ESF_REGION_SIZE).
      */
     using ESFChunkIndex = std::array<ESFChunkIndexEntry, ESF_MAX_CHUNKS>;
-    static_assert(sizeof(ESFChunkIndex) == ESF_INDEX_SIZE, "ESFChunkIndex must be exactly 2048 bytes");
+    static_assert(sizeof(ESFChunkIndex) == ESF_INDEX_SIZE, "ESFChunkIndex size must match config");
 
     /**
      * @brief Chunk Data Header (20 bytes)
