@@ -103,6 +103,16 @@ namespace enigma::voxel::chunk
             return false;
         }
 
+        virtual void Flush()
+        {
+            // Default implementation: do nothing
+        }
+
+        virtual void Close()
+        {
+            // Default implementation: do nothing
+        }
+
         virtual bool ChunkExists(int32_t chunkX, int32_t chunkY) const
         {
             UNUSED(chunkX)
