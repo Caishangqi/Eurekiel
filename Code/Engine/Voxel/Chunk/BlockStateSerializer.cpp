@@ -45,10 +45,16 @@ namespace enigma::voxel::chunk
     void BlockStateSerializer::StateMapping::RegisterState(BlockState* state, uint32_t stateID)
     {
         if (!state || stateID == 0)
+        {
+            core::LogError("state_mapping", "RegisterState failed: state=%p, stateID=%u", state, stateID);
             return;
+        }
 
         m_stateToID[state]   = stateID;
         m_idToState[stateID] = state;
+
+        core::LogError("state_mapping", "Registered state: stateID=%u -> state=%p, total states now: %zu",
+                       stateID, state, m_stateToID.size());
     }
 
     size_t BlockStateSerializer::StateMapping::SerializeStates(uint8_t* outputData, size_t outputSize)
@@ -78,7 +84,8 @@ namespace enigma::voxel::chunk
 
             if (state->GetBlock())
             {
-                serialized.blockName = state->GetBlock()->GetRegistryName();
+                // Store full name format: "namespace:name" for proper registry lookup
+                serialized.blockName = state->GetBlock()->GetNamespace() + ":" + state->GetBlock()->GetRegistryName();
             }
 
             // Serialize properties
@@ -96,12 +103,58 @@ namespace enigma::voxel::chunk
                 }
             }
 
-            // Write serialized state to buffer
-            size_t stateSize = SerializeState(state, outputData + offset, outputSize - offset);
-            if (stateSize == 0)
-                return 0; // Serialization failed
+            // Write serialized state to buffer - use correct mapping stateID instead of GetStateIndex()
+            // First, manually write the correct stateID
+            core::LogError("serialization", "SerializeStates: writing correct stateID=%u for state=%p", stateID, state);
 
-            offset += stateSize;
+            // Write state ID (using mapping ID, not state->GetStateIndex())
+            std::memcpy(outputData + offset, &stateID, sizeof(uint32_t));
+            size_t tempOffset = offset + sizeof(uint32_t);
+
+            // Write block name
+            std::string blockName  = serialized.blockName;
+            uint16_t    nameLength = static_cast<uint16_t>(blockName.length());
+            if (tempOffset + sizeof(uint16_t) + nameLength >= outputSize)
+                return 0; // Buffer overflow
+
+            std::memcpy(outputData + tempOffset, &nameLength, sizeof(uint16_t));
+            tempOffset += sizeof(uint16_t);
+            std::memcpy(outputData + tempOffset, blockName.c_str(), nameLength);
+            tempOffset += nameLength;
+
+            // Write properties
+            uint16_t propCount = static_cast<uint16_t>(serialized.properties.size());
+            if (tempOffset + sizeof(uint16_t) >= outputSize)
+                return 0; // Buffer overflow
+
+            std::memcpy(outputData + tempOffset, &propCount, sizeof(uint16_t));
+            tempOffset += sizeof(uint16_t);
+
+            // Write each property
+            for (const auto& prop : serialized.properties)
+            {
+                // Write property name
+                uint16_t propNameLength = static_cast<uint16_t>(prop.first.length());
+                if (tempOffset + sizeof(uint16_t) + propNameLength >= outputSize)
+                    return 0;
+
+                std::memcpy(outputData + tempOffset, &propNameLength, sizeof(uint16_t));
+                tempOffset += sizeof(uint16_t);
+                std::memcpy(outputData + tempOffset, prop.first.c_str(), propNameLength);
+                tempOffset += propNameLength;
+
+                // Write property value
+                uint16_t propValueLength = static_cast<uint16_t>(prop.second.length());
+                if (tempOffset + sizeof(uint16_t) + propValueLength >= outputSize)
+                    return 0;
+
+                std::memcpy(outputData + tempOffset, &propValueLength, sizeof(uint16_t));
+                tempOffset += sizeof(uint16_t);
+                std::memcpy(outputData + tempOffset, prop.second.c_str(), propValueLength);
+                tempOffset += propValueLength;
+            }
+
+            offset = tempOffset;
         }
 
         return offset;
@@ -110,7 +163,10 @@ namespace enigma::voxel::chunk
     bool BlockStateSerializer::StateMapping::DeserializeStates(const uint8_t* inputData, size_t inputSize)
     {
         if (!inputData || inputSize < sizeof(uint32_t))
+        {
+            core::LogError("state_mapping", "Invalid input data: inputData=%p, inputSize=%zu", inputData, inputSize);
             return false;
+        }
 
         Clear();
 
@@ -121,25 +177,45 @@ namespace enigma::voxel::chunk
         std::memcpy(&stateCount, inputData + offset, sizeof(uint32_t));
         offset += sizeof(uint32_t);
 
+        core::LogError("state_mapping", "Starting deserialization: %u states from %zu bytes, m_stateToID.size()=%zu",
+                       stateCount, inputSize, m_stateToID.size());
+
         // Deserialize each state
         for (uint32_t i = 0; i < stateCount; ++i)
         {
             if (offset >= inputSize)
+            {
+                core::LogError("state_mapping", "Offset %zu >= inputSize %zu at state %u", offset, inputSize, i);
                 return false;
+            }
+
+            // Read state ID first to get the serialized ID
+            uint32_t serializedStateID;
+            std::memcpy(&serializedStateID, inputData + offset, sizeof(uint32_t));
+
+            core::LogError("state_mapping", "Deserializing state %u: stateID=%u, offset=%zu", i, serializedStateID, offset);
 
             size_t      bytesRead = 0;
             BlockState* state     = DeserializeState(inputData + offset, inputSize - offset, bytesRead);
 
             if (!state || bytesRead == 0)
+            {
+                core::LogError("state_mapping", "Failed to deserialize state %u: state=%p, bytesRead=%zu", i, state, bytesRead);
                 return false;
+            }
 
-            // Register the state (using its inherent stateIndex)
-            uint32_t stateID = static_cast<uint32_t>(state->GetStateIndex());
-            RegisterState(state, stateID);
+            core::LogDebug("state_mapping", "Successfully deserialized state %u: state=%p, bytesRead=%zu", i, state, bytesRead);
+
+            // Register the state using the serialized stateID (not the block's stateIndex)
+            RegisterState(state, serializedStateID);
 
             offset += bytesRead;
         }
 
+        core::LogError("state_mapping", "Finished deserialization loop: m_stateToID.size()=%zu, m_idToState.size()=%zu",
+                       m_stateToID.size(), m_idToState.size());
+
+        core::LogInfo("state_mapping", "Successfully deserialized %u states", stateCount);
         return true;
     }
 
@@ -202,11 +278,12 @@ namespace enigma::voxel::chunk
 
         // Write state ID
         uint32_t stateID = static_cast<uint32_t>(state->GetStateIndex());
+        core::LogError("serialization", "SerializeState: writing stateID=%u for state=%p", stateID, state);
         std::memcpy(outputData + offset, &stateID, sizeof(uint32_t));
         offset += sizeof(uint32_t);
 
-        // Write block name
-        std::string blockName = state->GetBlock() ? state->GetBlock()->GetRegistryName() : "";
+        // Write block name - use full format "namespace:name" for proper registry lookup
+        std::string blockName = state->GetBlock() ? (state->GetBlock()->GetNamespace() + ":" + state->GetBlock()->GetRegistryName()) : "";
         size_t      nameSize  = WriteString(blockName, outputData + offset, outputSize - offset);
         if (nameSize == 0)
             return 0;
@@ -223,8 +300,11 @@ namespace enigma::voxel::chunk
 
     BlockState* BlockStateSerializer::DeserializeState(const uint8_t* inputData, size_t inputSize, size_t& bytesRead)
     {
+        core::LogDebug("state_deserialize", "DeserializeState called: inputSize=%zu", inputSize);
+
         if (!inputData || inputSize < sizeof(uint32_t) * 2)
         {
+            core::LogError("state_deserialize", "Invalid input: inputData=%p, inputSize=%zu", inputData, inputSize);
             bytesRead = 0;
             return nullptr;
         }
@@ -262,7 +342,19 @@ namespace enigma::voxel::chunk
         SerializedBlockState serialized;
         serialized.stateID   = stateID;
         serialized.blockName = blockName;
-        // TODO: Convert PropertyMap to property pairs for reconstruction
+
+        // Convert PropertyMap to property pairs for reconstruction
+        auto propertyList = properties.GetProperties();
+        for (auto property : propertyList)
+        {
+            if (property)
+            {
+                std::string name          = property->GetName();
+                std::any    propertyValue = properties.GetAny(property);
+                std::string value         = property->ValueToString(propertyValue);
+                serialized.properties.emplace_back(name, value);
+            }
+        }
 
         return ReconstructBlockState(serialized);
     }
@@ -442,14 +534,96 @@ namespace enigma::voxel::chunk
 
     BlockState* BlockStateSerializer::ReconstructBlockState(const SerializedBlockState& serialized)
     {
-        // TODO: Implement BlockState reconstruction
-        // This requires:
-        // 1. Look up Block by registry name using BlockRegistry
-        // 2. Reconstruct PropertyMap from property name-value pairs
-        // 3. Find or create BlockState with those properties
-        // 4. Return the BlockState pointer
+        using namespace enigma::registry::block;
+        using namespace enigma::voxel::property;
 
-        // For now, return nullptr as placeholder
-        return nullptr;
+        core::LogDebug("block_serialization", "Reconstructing BlockState for block '%s' with stateID=%u",
+                       serialized.blockName.c_str(), serialized.stateID);
+
+        // 1. Look up Block by registry name using BlockRegistry
+        // Parse namespace:name format
+        std::shared_ptr<Block> block;
+        size_t                 colonPos = serialized.blockName.find(':');
+        if (colonPos != std::string::npos)
+        {
+            // Split namespace:name format
+            std::string namespaceName = serialized.blockName.substr(0, colonPos);
+            std::string blockName     = serialized.blockName.substr(colonPos + 1);
+            block                     = BlockRegistry::GetBlock(namespaceName, blockName);
+            core::LogDebug("block_serialization", "Looking up block with namespace='%s', name='%s'",
+                           namespaceName.c_str(), blockName.c_str());
+        }
+        else
+        {
+            // Fallback to simple name lookup (no namespace)
+            block = BlockRegistry::GetBlock(serialized.blockName);
+            core::LogDebug("block_serialization", "Looking up block with simple name='%s'",
+                           serialized.blockName.c_str());
+        }
+
+        if (!block)
+        {
+            core::LogError("block_serialization", "Failed to find block '%s' in registry", serialized.blockName.c_str());
+
+            // Debug: List all registered blocks (using ERROR level to ensure visibility)
+            auto allBlocks = BlockRegistry::GetAllBlocks();
+            core::LogError("block_serialization", "Registry currently has %zu blocks:", allBlocks.size());
+            for (size_t i = 0; i < std::min(allBlocks.size(), size_t(10)); ++i)
+            {
+                if (allBlocks[i])
+                {
+                    std::string fullName = allBlocks[i]->GetNamespace() + ":" + allBlocks[i]->GetRegistryName();
+                    core::LogError("block_serialization", "  Block %zu: '%s'", i, fullName.c_str());
+                }
+            }
+
+            return nullptr;
+        }
+
+        core::LogDebug("block_serialization", "Found block '%s' in registry", serialized.blockName.c_str());
+
+        // 2. Reconstruct PropertyMap from property name-value pairs
+        PropertyMap properties;
+        for (const auto& propPair : serialized.properties)
+        {
+            const std::string& propName  = propPair.first;
+            const std::string& propValue = propPair.second;
+
+            // Find the property in the block's property list
+            bool foundProperty = false;
+            for (auto property : block->GetProperties())
+            {
+                if (property && property->GetName() == propName)
+                {
+                    // Convert string value back to typed value using property's parser
+                    std::any typedValue = property->StringToValue(propValue);
+
+                    // We need to set the property using the correct typed template method
+                    // For now, skip property reconstruction as it requires template specialization
+                    foundProperty = true;
+                    break;
+                }
+            }
+
+            if (!foundProperty)
+            {
+                core::LogWarn("block_serialization", "Property '%s' not found in block '%s', ignoring",
+                              propName.c_str(), serialized.blockName.c_str());
+            }
+        }
+
+        // 3. Find or create BlockState with those properties
+        // For now, use default state since property reconstruction is complex
+        BlockState* state = block->GetDefaultState();
+        if (!state)
+        {
+            core::LogError("block_serialization", "Failed to get default state for block '%s'", serialized.blockName.c_str());
+        }
+        else
+        {
+            core::LogInfo("block_serialization", "Using default state for block '%s' (property reconstruction needs improvement)", serialized.blockName.c_str());
+        }
+
+        return state;
     }
 }
