@@ -310,7 +310,12 @@
         <ClCompile Include="Voxel\Chunk\ChunkManager.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkMeshBuilder.cpp" />
+        <ClCompile Include="Voxel\Chunk\ESFFormat.cpp"/>
+        <ClCompile Include="Voxel\Chunk\ESFRegionFile.cpp"/>
+        <ClCompile Include="Voxel\Chunk\RLECompressor.cpp"/>
+        <ClCompile Include="Voxel\Chunk\BlockStateSerializer.cpp"/>
         <ClCompile Include="Voxel\Generation\Generator.cpp"/>
+        <ClCompile Include="Voxel\World\ESFWorldStorage.cpp"/>
         <ClCompile Include="Voxel\Property\Property.cpp" />
         <ClCompile Include="Voxel\Property\PropertyRegistry.cpp" />
         <ClCompile Include="Voxel\Property\PropertyTypes.cpp" />
@@ -523,12 +528,17 @@
         <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkSerializationInterfaces.hpp"/>
+        <ClInclude Include="Voxel\Chunk\ESFFormat.hpp"/>
+        <ClInclude Include="Voxel\Chunk\ESFRegionFile.hpp"/>
+        <ClInclude Include="Voxel\Chunk\RLECompressor.hpp"/>
+        <ClInclude Include="Voxel\Chunk\BlockStateSerializer.hpp"/>
         <ClInclude Include="Voxel\Chunk\IChunkGenerationCallback.hpp"/>
         <ClInclude Include="Voxel\Generation\Generator.hpp"/>
         <ClInclude Include="Voxel\Property\Property.hpp" />
         <ClInclude Include="Voxel\Property\PropertyMap.hpp"/>
         <ClInclude Include="Voxel\Property\PropertyRegistry.hpp" />
         <ClInclude Include="Voxel\Property\PropertyTypes.hpp" />
+        <ClInclude Include="Voxel\World\ESFWorldStorage.hpp"/>
         <ClInclude Include="Voxel\World\World.hpp" />
         <ClInclude Include="Window\Window.hpp" />
     </ItemGroup>
