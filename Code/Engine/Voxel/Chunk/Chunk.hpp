@@ -117,10 +117,12 @@ namespace enigma::voxel::chunk
 
         // Block Access - PUBLIC for World class access
         BlockState* GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
-        void        SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state);
+        void        SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state); // World generation (no modify flag)
+        void        SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state); // Player action (sets modify flag)
         BlockState* GetBlock(const BlockPos& worldPos); // World coordinates
         BlockState* GetTopBlock(const BlockPos& worldPos);
-        void        SetBlockWorld(const BlockPos& worldPos, BlockState* state);
+        void        SetBlockWorld(const BlockPos& worldPos, BlockState* state); // World generation (no modify flag)
+        void        SetBlockWorldByPlayer(const BlockPos& worldPos, BlockState* state); // Player action (sets modify flag)
         int         GetTopBlockZ(const BlockPos& worldPos);
 
         // Optimized coordinate to index conversion using bit operations

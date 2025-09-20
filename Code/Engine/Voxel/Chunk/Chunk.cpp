@@ -82,7 +82,17 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
     }*/
     m_blocks[index] = state;
 
-    // Mark chunk as modified for saving and needing mesh rebuild
+    // Mark chunk as dirty for mesh rebuild only (world generation, no save needed)
+    m_isDirty = true;
+}
+
+void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
+{
+    // Same boundary checks and index calculation as SetBlock
+    size_t index    = CoordsToIndex(x, y, z);
+    m_blocks[index] = state;
+
+    // Mark chunk as both modified for saving AND dirty for mesh rebuild (player action)
     m_isModified = true;
     m_isDirty    = true;
 }
@@ -198,7 +208,20 @@ void Chunk::SetBlockWorld(const BlockPos& worldPos, BlockState* state)
     }
 
     SetBlock(localX, localY, localZ, state);
-    MarkDirty(); // Marking chunk requires regenerating mesh
+    // Note: SetBlock already marks chunk as dirty for mesh rebuild (world generation, no save needed)
+}
+
+void Chunk::SetBlockWorldByPlayer(const BlockPos& worldPos, BlockState* state)
+{
+    int32_t localX, localY, localZ;
+    if (!WorldToLocal(worldPos, localX, localY, localZ))
+    {
+        // The coordinates are not within this chunk range and cannot be set. Return directly
+        return;
+    }
+
+    SetBlockByPlayer(localX, localY, localZ, state);
+    // Note: SetBlockByPlayer already marks chunk as both modified and dirty (player action)
 }
 
 int Chunk::GetTopBlockZ(const BlockPos& worldPos)
