@@ -24,8 +24,21 @@ namespace enigma::core
         }
 
         RegistrationKey(const std::string& n)
-            : namespaceName(""), name(n)
         {
+            // Check whether the namespace delimiter is included ':'
+            size_t colonPos = n.find(':');
+            if (colonPos != std::string::npos)
+            {
+                // Split namespace:name format
+                namespaceName = n.substr(0, colonPos);
+                name          = n.substr(colonPos + 1);
+            }
+            else
+            {
+                // No namespace, use enigma namespace
+                namespaceName = "enigma";
+                name          = n;
+            }
         }
 
         bool operator==(const RegistrationKey& other) const
