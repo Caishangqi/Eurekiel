@@ -42,8 +42,13 @@ namespace enigma::voxel::chunk
     // ESFChunkDataHeader implementation
     bool ESFChunkDataHeader::IsValid() const
     {
+        const size_t MIN_BLOCK_DATA_SIZE    = Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t);
+        const size_t MAX_STATE_MAPPING_SIZE = 64 * 1024; // 64KB for StateMapping
+        const size_t MAX_FORMAT_OVERHEAD    = 2 * sizeof(uint32_t); // Magic + StateMapping size
+        const size_t MAX_TOTAL_SIZE         = MIN_BLOCK_DATA_SIZE + MAX_STATE_MAPPING_SIZE + MAX_FORMAT_OVERHEAD;
+
         return uncompressedSize > 0 &&
-            uncompressedSize <= (Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t)) && // Reasonable size limit
+            uncompressedSize <= MAX_TOTAL_SIZE && // Allow for new format with StateMapping
             compressedSize > 0 &&
             (compressionType == 0 || compressionType == 255); // RLE or no compression
     }
