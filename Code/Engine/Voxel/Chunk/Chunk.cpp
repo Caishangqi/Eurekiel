@@ -81,6 +81,10 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
         return;
     }*/
     m_blocks[index] = state;
+
+    // Mark chunk as modified for saving and needing mesh rebuild
+    m_isModified = true;
+    m_isDirty    = true;
 }
 
 void Chunk::MarkDirty()

@@ -149,6 +149,9 @@ namespace enigma::voxel::chunk
         void SetPopulated(bool populated) { m_isPopulated = populated; }
         bool IsLoading() const { return m_isLoading.load(); }
         void SetLoading(bool loading) { m_isLoading.store(loading); }
+        bool IsModified() const { return m_isModified; }
+        void SetModified(bool modified) { m_isModified = modified; }
+        void MarkModified() { m_isModified = true; }
 
         //Update and Management:
         void Update(float deltaTime); // Update chunk
@@ -171,6 +174,7 @@ namespace enigma::voxel::chunk
         std::vector<BlockState*>   m_blocks; // Block storage
         std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering
         bool                       m_isDirty     = true; // Needs mesh rebuild
+        bool                       m_isModified  = false; // Needs to be saved to disk
         bool                       m_isGenerated = false; // Has been world-generated
         bool                       m_isPopulated = false; // Has decorations/structures
         std::atomic<bool>          m_isLoading{false}; // Currently being loaded/generated
