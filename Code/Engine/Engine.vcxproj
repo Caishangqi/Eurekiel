@@ -528,6 +528,7 @@
         <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkSerializationInterfaces.hpp"/>
+        <ClInclude Include="Voxel\Chunk\ESFConfig.hpp"/>
         <ClInclude Include="Voxel\Chunk\ESFFormat.hpp"/>
         <ClInclude Include="Voxel\Chunk\ESFRegionFile.hpp"/>
         <ClInclude Include="Voxel\Chunk\RLECompressor.hpp"/>
