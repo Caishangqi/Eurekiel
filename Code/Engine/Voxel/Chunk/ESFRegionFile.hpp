@@ -10,8 +10,7 @@ namespace enigma::voxel::chunk
     /**
      * @brief ESF Region File I/O Manager for chunk serialization
      *
-     * Handles reading and writing of .esf region files containing 16x16 chunks.
-     * Implements Assignment 2 ESF file format specification.
+     * Handle read and write operations of .esf area files, including a configured number of blocks.
      */
     class ESFRegionFile
     {
