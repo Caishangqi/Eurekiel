@@ -1,4 +1,5 @@
 ﻿#include "World.hpp"
+#include "ESFWorldStorage.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -216,14 +217,15 @@ void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generat
     }
 }
 
-// Reserved: Serialized configuration interface (empty implementation)
+// 序列化配置接口 - 现在真正使用ESF系统
 void World::SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer)
 {
     m_chunkSerializer = std::move(serializer);
     if (m_chunkManager && m_chunkSerializer)
     {
-        // Create a new serializer instance for ChunkManager (just an example here, you actually need a cloning mechanism)
-        // TODO: Implementing the cloning or sharing mechanism of the serializer
+        // 将序列化器传递给ChunkManager
+        std::unique_ptr<IChunkSerializer> serializerCopy = std::make_unique<ESFChunkSerializer>();
+        m_chunkManager->SetChunkSerializer(std::move(serializerCopy));
         core::LogInfo("world", "Chunk serializer passed to ChunkManager for world '%s'", m_worldName.c_str());
     }
     core::LogInfo("world", "Chunk serializer configured for world '%s'", m_worldName.c_str());
@@ -234,9 +236,132 @@ void World::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
     m_chunkStorage = std::move(storage);
     if (m_chunkManager && m_chunkStorage)
     {
-        // Create a new storage instance for ChunkManager (just an example here, you actually need a cloning mechanism)
-        // TODO: Implement storage cloning or sharing mechanism
+        // 将存储器传递给ChunkManager
+        std::unique_ptr<IChunkStorage> storageCopy = std::make_unique<ESFChunkStorage>(m_worldPath);
+        m_chunkManager->SetChunkStorage(std::move(storageCopy));
         core::LogInfo("world", "Chunk storage passed to ChunkManager for world '%s'", m_worldName.c_str());
     }
     core::LogInfo("world", "Chunk storage configured for world '%s'", m_worldName.c_str());
+}
+
+// 世界文件管理接口实现
+bool World::InitializeWorldStorage(const std::string& savesPath)
+{
+    // 构建世界路径
+    m_worldPath = savesPath + "/" + m_worldName;
+
+    // 创建世界管理器
+    m_worldManager = std::make_unique<ESFWorldManager>(m_worldPath);
+
+    // 如果世界不存在，创建新世界
+    if (!m_worldManager->WorldExists())
+    {
+        ESFWorldManager::WorldInfo worldInfo;
+        worldInfo.worldName = m_worldName;
+        worldInfo.worldSeed = m_worldSeed;
+        worldInfo.spawnX    = 0;
+        worldInfo.spawnY    = 0;
+        worldInfo.spawnZ    = 128;
+
+        if (!m_worldManager->CreateWorld(worldInfo))
+        {
+            core::LogError("world", "Failed to create world '%s' at path '%s'", m_worldName.c_str(), m_worldPath.c_str());
+            return false;
+        }
+
+        core::LogInfo("world", "Created new world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
+    }
+    else
+    {
+        core::LogInfo("world", "Found existing world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
+    }
+
+    // 自动设置ESF存储系统
+    auto esfStorage    = std::make_unique<ESFChunkStorage>(m_worldPath);
+    auto esfSerializer = std::make_unique<ESFChunkSerializer>();
+
+    SetChunkStorage(std::move(esfStorage));
+    SetChunkSerializer(std::move(esfSerializer));
+
+    core::LogInfo("world", "World storage initialized for '%s'", m_worldName.c_str());
+    return true;
+}
+
+bool World::SaveWorld()
+{
+    if (!m_worldManager)
+    {
+        core::LogError("world", "Cannot save world '%s' - world manager not initialized", m_worldName.c_str());
+        return false;
+    }
+
+    // 保存世界信息
+    ESFWorldManager::WorldInfo worldInfo;
+    worldInfo.worldName = m_worldName;
+    worldInfo.worldSeed = m_worldSeed;
+    worldInfo.spawnX    = static_cast<int32_t>(m_playerPosition.x);
+    worldInfo.spawnY    = static_cast<int32_t>(m_playerPosition.y);
+    worldInfo.spawnZ    = static_cast<int32_t>(m_playerPosition.z);
+
+    if (!m_worldManager->SaveWorldInfo(worldInfo))
+    {
+        core::LogError("world", "Failed to save world info for '%s'", m_worldName.c_str());
+        return false;
+    }
+
+    // 强制保存所有区块数据
+    if (m_chunkManager)
+    {
+        size_t savedChunks = m_chunkManager->SaveAllModifiedChunks();
+        core::LogInfo("world", "Saved %zu modified chunks for world '%s'", savedChunks, m_worldName.c_str());
+        m_chunkManager->FlushStorage();
+    }
+
+    core::LogInfo("world", "World '%s' saved successfully", m_worldName.c_str());
+    return true;
+}
+
+bool World::LoadWorld()
+{
+    if (!m_worldManager)
+    {
+        core::LogError("world", "Cannot load world '%s' - world manager not initialized", m_worldName.c_str());
+        return false;
+    }
+
+    // 加载世界信息
+    ESFWorldManager::WorldInfo worldInfo;
+    if (!m_worldManager->LoadWorldInfo(worldInfo))
+    {
+        core::LogError("world", "Failed to load world info for '%s'", m_worldName.c_str());
+        return false;
+    }
+
+    // 更新世界参数
+    m_worldSeed        = worldInfo.worldSeed;
+    m_playerPosition.x = static_cast<float>(worldInfo.spawnX);
+    m_playerPosition.y = static_cast<float>(worldInfo.spawnY);
+    m_playerPosition.z = static_cast<float>(worldInfo.spawnZ);
+
+    core::LogInfo("world", "World '%s' loaded successfully (seed: %llu, spawn: %d,%d,%d)",
+                  m_worldName.c_str(), m_worldSeed, worldInfo.spawnX, worldInfo.spawnY, worldInfo.spawnZ);
+    return true;
+}
+
+void World::CloseWorld()
+{
+    // 保存世界数据
+    SaveWorld();
+
+    // 关闭存储系统
+    if (m_chunkStorage)
+    {
+        m_chunkStorage->Close();
+        core::LogInfo("world", "Chunk storage closed for world '%s'", m_worldName.c_str());
+    }
+
+    // 重置管理器
+    m_worldManager.reset();
+
+    core::LogInfo("world", "World '%s' closed", m_worldName.c_str());
 }
