@@ -119,7 +119,7 @@ namespace enigma::voxel::block
             return std::abs(x - other.x) + std::abs(y - other.y) + std::abs(z - other.z);
         }
 
-        // Chunk coordinates (assuming 16x16 chunks)
+        // Block coordinates (based on the standard block size of 16x16 blocks)
         int32_t GetChunkX() const { return x >> 4; }
         int32_t GetChunkY() const { return y >> 4; }
 
