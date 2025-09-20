@@ -37,7 +37,7 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
     Chunk* chunk = GetChunkAt(pos);
     if (chunk)
     {
-        return chunk->SetBlockWorld(pos, state);
+        return chunk->SetBlockWorldByPlayer(pos, state);
     }
 }
 
