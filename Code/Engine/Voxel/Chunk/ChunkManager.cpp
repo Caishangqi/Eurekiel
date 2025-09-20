@@ -46,6 +46,17 @@ ChunkManager::ChunkManager(IChunkGenerationCallback* callback) :
 
 ChunkManager::~ChunkManager()
 {
+    // Save all modified chunks before destruction
+    if (m_chunkStorage && m_chunkSerializer)
+    {
+        size_t savedCount = SaveAllModifiedChunks();
+        if (savedCount > 0)
+        {
+            core::LogInfo("chunk", "ChunkManager: Saved %zu modified chunks during shutdown", savedCount);
+        }
+        FlushStorage();
+    }
+
     m_loadedChunks.clear();
 }
 
@@ -60,15 +71,32 @@ void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
     int64_t chunkPackID = PackCoordinates(chunkX, chunkY);
     if (m_loadedChunks.find(chunkPackID) == m_loadedChunks.end())
     {
-        m_loadedChunks[chunkPackID] = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
-
-        // Use the callback interface to generate block content
-        if (m_generationCallback)
+        // First try to load from disk if storage is configured
+        std::unique_ptr<Chunk> chunk = nullptr;
+        if (m_chunkStorage && m_chunkSerializer)
         {
-            m_generationCallback->GenerateChunk(m_loadedChunks[chunkPackID].get(), chunkX, chunkY);
+            chunk = LoadChunkFromDisk(chunkX, chunkY);
         }
 
-        core::LogDebug("chunk", "Loaded chunk (%d, %d)", chunkX, chunkY);
+        // If not loaded from disk, create new chunk and generate content
+        if (!chunk)
+        {
+            chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+
+            // Use the callback interface to generate block content
+            if (m_generationCallback)
+            {
+                m_generationCallback->GenerateChunk(chunk.get(), chunkX, chunkY);
+            }
+
+            core::LogDebug("chunk", "Generated new chunk (%d, %d)", chunkX, chunkY);
+        }
+        else
+        {
+            core::LogDebug("chunk", "Loaded chunk (%d, %d) from disk", chunkX, chunkY);
+        }
+
+        m_loadedChunks[chunkPackID] = std::move(chunk);
     }
 }
 
@@ -138,10 +166,29 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
     auto    it          = m_loadedChunks.find(chunkPackID);
     if (it != m_loadedChunks.end())
     {
+        Chunk* chunk = it->second.get();
+
+        // Save chunk if modified and storage is configured
+        if (chunk && chunk->NeedsMeshRebuild() && m_chunkStorage && m_chunkSerializer)
+        {
+            if (SaveChunkToDisk(chunk))
+            {
+                core::LogDebug("chunk", "Saved modified chunk (%d, %d) to disk", chunkX, chunkY);
+            }
+            else
+            {
+                core::LogWarn("chunk", "Failed to save modified chunk (%d, %d)", chunkX, chunkY);
+            }
+        }
+
+        // Cleanup VBO resources to prevent GPU leaks
+        if (chunk && chunk->GetMesh())
+        {
+            // Simply clear the mesh pointer, let the unique_ptr handle cleanup
+            chunk->SetMesh(nullptr);
+        }
+
         core::LogInfo("chunk", "Unloading chunk: %d, %d", chunkX, chunkY);
-        m_loadedChunks[chunkPackID] = nullptr;
-        // TODO: Save chunk if modified (m_needsSaving)
-        // TODO: Cleanup VBO resources to prevent GPU leaks
         m_loadedChunks.erase(it);
     }
 }
@@ -399,15 +446,103 @@ void ChunkManager::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
 
 bool ChunkManager::SaveChunkToDisk(const Chunk* chunk)
 {
-    // Reserved interface: currently returns false, and the actual saving logic will be implemented in the future
-    UNUSED(chunk)
-    return false;
+    if (!chunk || !m_chunkStorage || !m_chunkSerializer)
+    {
+        core::LogWarn("chunk", "SaveChunkToDisk: Storage or serializer not configured");
+        return false;
+    }
+
+    try
+    {
+        // Use GetChunkX() and GetChunkZ() instead of GetPosition()
+        int32_t chunkX = chunk->GetChunkX();
+        int32_t chunkZ = chunk->GetChunkZ();
+        return m_chunkStorage->SaveChunk(chunkX, chunkZ, chunk);
+    }
+    catch (const std::exception& e)
+    {
+        core::LogError("chunk", "SaveChunkToDisk failed: %s", e.what());
+        return false;
+    }
 }
 
 std::unique_ptr<Chunk> ChunkManager::LoadChunkFromDisk(int32_t chunkX, int32_t chunkY)
 {
-    // Reserved interface: currently returns nullptr, and the actual loading logic will be implemented in the future
-    UNUSED(chunkX)
-    UNUSED(chunkY)
-    return nullptr;
+    if (!m_chunkStorage || !m_chunkSerializer)
+    {
+        core::LogWarn("chunk", "LoadChunkFromDisk: Storage or serializer not configured");
+        return nullptr;
+    }
+
+    if (!m_chunkStorage->ChunkExists(chunkX, chunkY))
+    {
+        return nullptr; // Chunk doesn't exist on disk
+    }
+
+    try
+    {
+        auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+        if (m_chunkStorage->LoadChunk(chunkX, chunkY, chunk.get()))
+        {
+            core::LogDebug("chunk", "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
+            return chunk;
+        }
+        else
+        {
+            core::LogWarn("chunk", "Failed to load chunk (%d, %d) from disk", chunkX, chunkY);
+            return nullptr;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        core::LogError("chunk", "LoadChunkFromDisk failed: %s", e.what());
+        return nullptr;
+    }
+}
+
+size_t ChunkManager::SaveAllModifiedChunks()
+{
+    if (!m_chunkStorage || !m_chunkSerializer)
+    {
+        return 0;
+    }
+
+    size_t savedCount = 0;
+    for (auto& [packedId, chunk] : m_loadedChunks)
+    {
+        if (chunk && chunk->IsModified())
+        {
+            if (SaveChunkToDisk(chunk.get()))
+            {
+                chunk->SetModified(false); // Clear modified flag after successful save
+                savedCount++;
+                int32_t chunkX, chunkY;
+                UnpackCoordinates(packedId, chunkX, chunkY);
+                core::LogDebug("chunk", "Saved modified chunk (%d, %d)", chunkX, chunkY);
+            }
+        }
+    }
+
+    if (savedCount > 0)
+    {
+        core::LogInfo("chunk", "Saved %zu modified chunks to disk", savedCount);
+    }
+
+    return savedCount;
+}
+
+void ChunkManager::FlushStorage()
+{
+    if (m_chunkStorage)
+    {
+        try
+        {
+            m_chunkStorage->Flush();
+            core::LogDebug("chunk", "Storage flushed successfully");
+        }
+        catch (const std::exception& e)
+        {
+            core::LogError("chunk", "Failed to flush storage: %s", e.what());
+        }
+    }
 }
