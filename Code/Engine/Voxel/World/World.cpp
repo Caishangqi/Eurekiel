@@ -6,20 +6,29 @@
 
 using namespace enigma::voxel::world;
 
-World::World(std::string worldName, uint64_t worldSeed, std::unique_ptr<ChunkManager> chunkManager) :
-    m_worldName(worldName), m_worldSeed(worldSeed), m_chunkManager(std::move(chunkManager))
-{
-    // Set the callback interface of ChunkManager to the current World instance
-    if (m_chunkManager)
-    {
-        m_chunkManager->SetGenerationCallback(this);
-    }
-
-    core::LogInfo("world", "World created: %s", m_worldName.c_str());
-}
-
 World::~World()
 {
+}
+
+World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::generation::Generator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
+{
+    using namespace enigma::voxel::chunk;
+
+    // Create and initialize ChunkManager (follow NeoForge mode)
+    m_chunkManager = std::make_unique<ChunkManager>(this);
+    m_chunkManager->Initialize();
+
+    // Initialize the ESF storage system
+    if (!InitializeWorldStorage(WORLD_SAVE_PATH))
+    {
+        core::LogError("world", "Failed to initialize world storage system");
+        ERROR_AND_DIE("Failed to initialize world storage system")
+    }
+    core::LogInfo("world", "World storage system initialized in: %s", WORLD_SAVE_PATH);
+
+    // Set up the world generator
+    SetWorldGenerator(std::move(generator));
+    core::LogInfo("world", "World fully initialized with name: %s", m_worldName.c_str());
 }
 
 BlockState* World::GetBlockState(const BlockPos& pos)
@@ -101,7 +110,7 @@ bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
     return false;
 }
 
-// IChunkGenerationCallback 实现
+// IChunkGenerationCallback implementation
 void World::GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY)
 {
     if (chunk && m_worldGenerator && !chunk->IsGenerated())
@@ -217,13 +226,21 @@ void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generat
     }
 }
 
-// 序列化配置接口 - 现在真正使用ESF系统
+/**
+ * Sets the chunk serializer for the world. This serializer is responsible for
+ * handling the serialization and deserialization of chunks. If both the chunk
+ * manager and the provided serializer are valid, the serializer is passed to
+ * the chunk manager as well.
+ *
+ * @param serializer A unique pointer to the chunk serializer to be configured
+ *                   for the world.
+ */
 void World::SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer)
 {
     m_chunkSerializer = std::move(serializer);
     if (m_chunkManager && m_chunkSerializer)
     {
-        // 将序列化器传递给ChunkManager
+        // Pass the serializer to ChunkManager
         std::unique_ptr<IChunkSerializer> serializerCopy = std::make_unique<ESFChunkSerializer>();
         m_chunkManager->SetChunkSerializer(std::move(serializerCopy));
         core::LogInfo("world", "Chunk serializer passed to ChunkManager for world '%s'", m_worldName.c_str());
@@ -236,7 +253,7 @@ void World::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
     m_chunkStorage = std::move(storage);
     if (m_chunkManager && m_chunkStorage)
     {
-        // 将存储器传递给ChunkManager
+        // Pass memory to ChunkManager
         std::unique_ptr<IChunkStorage> storageCopy = std::make_unique<ESFChunkStorage>(m_worldPath);
         m_chunkManager->SetChunkStorage(std::move(storageCopy));
         core::LogInfo("world", "Chunk storage passed to ChunkManager for world '%s'", m_worldName.c_str());
@@ -244,16 +261,25 @@ void World::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
     core::LogInfo("world", "Chunk storage configured for world '%s'", m_worldName.c_str());
 }
 
-// 世界文件管理接口实现
+/**
+ * Initializes the world storage system by either creating a new world or
+ * loading an existing one. This involves setting up the world path, configuring
+ * the world manager, and initializing the chunk storage and serializer.
+ *
+ * @param savesPath The base directory where world data should be saved or
+ *                  accessed.
+ * @return True if the world storage initialization was successful, false
+ *         otherwise.
+ */
 bool World::InitializeWorldStorage(const std::string& savesPath)
 {
-    // 构建世界路径
+    // Build the world path
     m_worldPath = savesPath + "/" + m_worldName;
 
-    // 创建世界管理器
+    // Create a world manager
     m_worldManager = std::make_unique<ESFWorldManager>(m_worldPath);
 
-    // 如果世界不存在，创建新世界
+    // If the world does not exist, create a new world
     if (!m_worldManager->WorldExists())
     {
         ESFWorldManager::WorldInfo worldInfo;
@@ -276,7 +302,7 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
         core::LogInfo("world", "Found existing world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
     }
 
-    // 自动设置ESF存储系统
+    // Automatically set up the ESF storage system
     auto esfStorage    = std::make_unique<ESFChunkStorage>(m_worldPath);
     auto esfSerializer = std::make_unique<ESFChunkSerializer>();
 
@@ -295,7 +321,7 @@ bool World::SaveWorld()
         return false;
     }
 
-    // 保存世界信息
+    // Save world information
     ESFWorldManager::WorldInfo worldInfo;
     worldInfo.worldName = m_worldName;
     worldInfo.worldSeed = m_worldSeed;
@@ -309,7 +335,7 @@ bool World::SaveWorld()
         return false;
     }
 
-    // 强制保存所有区块数据
+    // Force save all block data
     if (m_chunkManager)
     {
         size_t savedChunks = m_chunkManager->SaveAllModifiedChunks();
@@ -329,7 +355,7 @@ bool World::LoadWorld()
         return false;
     }
 
-    // 加载世界信息
+    // Load world information
     ESFWorldManager::WorldInfo worldInfo;
     if (!m_worldManager->LoadWorldInfo(worldInfo))
     {
@@ -337,7 +363,7 @@ bool World::LoadWorld()
         return false;
     }
 
-    // 更新世界参数
+    // Update world parameters
     m_worldSeed        = worldInfo.worldSeed;
     m_playerPosition.x = static_cast<float>(worldInfo.spawnX);
     m_playerPosition.y = static_cast<float>(worldInfo.spawnY);
@@ -350,17 +376,17 @@ bool World::LoadWorld()
 
 void World::CloseWorld()
 {
-    // 保存世界数据
+    // Save world data
     SaveWorld();
 
-    // 关闭存储系统
+    // Turn off the storage system
     if (m_chunkStorage)
     {
         m_chunkStorage->Close();
         core::LogInfo("world", "Chunk storage closed for world '%s'", m_worldName.c_str());
     }
 
-    // 重置管理器
+    // Reset the manager
     m_worldManager.reset();
 
     core::LogInfo("world", "World '%s' closed", m_worldName.c_str());

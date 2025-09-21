@@ -13,6 +13,11 @@
 
 namespace enigma::voxel::world
 {
+    // ========================================================================
+    // Core Configuration
+    // ========================================================================
+    constexpr char WORLD_SAVE_PATH[] = ".enigma/saves";
+
     using namespace enigma::voxel::block;
     using namespace enigma::voxel::chunk;
 
@@ -29,11 +34,11 @@ namespace enigma::voxel::world
          */
     class World : public IChunkGenerationCallback
     {
-        // TODO: Implement according to comments above
     public:
-        explicit World(std::string worldName, uint64_t worldSeed, std::unique_ptr<ChunkManager> chunkManager);
+        World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::generation::Generator> generator);
+
         World() = default;
-        ~World();
+        ~World() override;
 
         // Block Operations:
         BlockState* GetBlockState(const BlockPos& pos);
@@ -49,9 +54,8 @@ namespace enigma::voxel::world
         Chunk* GetChunkAt(const BlockPos& pos) const;
         bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
 
-        // 新的区块管理方法（取代LoadChunk/UnloadChunk）
-        void                                     UpdateNearbyChunks(); // 根据玩家位置更新附近区块
-        std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // 计算需要的区块
+        void                                     UpdateNearbyChunks(); // Update nearby blocks according to player location
+        std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // Calculate the required blocks
 
         // IChunkGenerationCallback 实现
         void GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY) override;
@@ -72,26 +76,23 @@ namespace enigma::voxel::world
         // World generation integration
         void SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generator> generator);
 
-        // 预留：序列化配置接口
+        // Serialize the configuration interface
         void SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer);
         void SetChunkStorage(std::unique_ptr<IChunkStorage> storage);
 
-        // 世界文件管理接口
+        // World file management interface
         bool InitializeWorldStorage(const std::string& savesPath);
         bool SaveWorld();
         bool LoadWorld();
         void CloseWorld();
 
-        // 获取世界信息
+        // Get world information
         const std::string& GetWorldName() const { return m_worldName; }
         uint64_t           GetWorldSeed() const { return m_worldSeed; }
         const std::string& GetWorldPath() const { return m_worldPath; }
 
     private:
         std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
-        int32_t                       m_worldHeight = 128; // World height in blocks
-        int32_t                       m_minY        = -64; // Minimum Y coordinate
-        int32_t                       m_maxY        = 320; // Maximum Y coordinate
         std::string                   m_worldName; // World identifier
         std::string                   m_worldPath; // World storage path
         uint64_t                      m_worldSeed = 0; // World generation seed
@@ -103,11 +104,11 @@ namespace enigma::voxel::world
         // World generation
         std::unique_ptr<enigma::voxel::generation::Generator> m_worldGenerator;
 
-        // 预留：序列化组件（可选，暂时为nullptr）
+        // Serialize components
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
         std::unique_ptr<IChunkStorage>    m_chunkStorage;
 
-        // 世界文件管理器
+        // World File Manager
         std::unique_ptr<ESFWorldManager> m_worldManager;
     };
 }
