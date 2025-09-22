@@ -61,18 +61,18 @@ namespace enigma::graphic
 
     private:
         /**
-         * @brief 命令列表包装器
-         * 
-         * 教学要点: 将DX12的原生对象包装为更易用的C++对象，使用智能指针确保RAII
+         * @brief command list wrapper
+         *
+         * Teaching points: Package the native objects of DX12 into easier-to-use C++ objects, and use smart pointers to ensure RAII
          */
         struct CommandListWrapper
         {
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList; // 命令列表 (智能指针)
-            Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    commandAllocator; // 命令分配器 (智能指针)
-            State                                             state; // 当前状态
-            uint64_t                                          fenceValue; // 关联的围栏值
-            Type                                              type; // 命令列表类型
-            std::string                                       debugName; // 调试名称
+            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList; // Command List (Smart Pointer)
+            Microsoft::WRL::ComPtr<ID3D12CommandAllocator>    commandAllocator; // Command allocator (smart pointer)
+            State                                             state      = State::Closed; // Current status
+            uint64_t                                          fenceValue = 0; // Associated fence value
+            Type                                              type       = Type::Copy; // Command list type
+            std::string                                       debugName; // Debug name
 
             CommandListWrapper();
             ~CommandListWrapper();
@@ -86,56 +86,56 @@ namespace enigma::graphic
             CommandListWrapper& operator=(CommandListWrapper&& other) noexcept;
         };
 
-        // 命令队列 (从D3D12RenderSystem获取设备，本地管理队列)
-        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_graphicsQueue; // 图形命令队列 (智能指针)
-        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_computeQueue; // 计算命令队列 (智能指针)
-        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyQueue; // 复制命令队列 (智能指针)
+        // Command queue (get the device from D3D12RenderSystem, manage the queue locally)
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_graphicsQueue; // Graphics Command Queue (Smart Pointer)
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_computeQueue; // Compute command queue (smart pointer)
+        Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyQueue; // Copy command queue (smart pointer)
 
-        // 同步对象 (本类负责围栏管理)
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_fence; // 围栏对象 (智能指针)
-        uint64_t                            m_currentFenceValue; // 当前围栏值
-        HANDLE                              m_fenceEvent; // 围栏事件句柄
+        // Synchronize objects (this class is responsible for fence management)
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_fence             = nullptr; // Fence object (smart pointer)
+        uint64_t                            m_currentFenceValue = 0; // Current fence value
+        HANDLE                              m_fenceEvent        = nullptr; // Fence event handler
 
-        // 命令列表池 - 按类型分组
+        // Command List Pool - Grouped by Type
         std::vector<std::unique_ptr<CommandListWrapper>> m_graphicsCommandLists;
         std::vector<std::unique_ptr<CommandListWrapper>> m_computeCommandLists;
         std::vector<std::unique_ptr<CommandListWrapper>> m_copyCommandLists;
 
-        // 空闲命令列表队列
+        // Idle command list queue
         std::queue<CommandListWrapper*> m_availableGraphicsLists;
         std::queue<CommandListWrapper*> m_availableComputeLists;
         std::queue<CommandListWrapper*> m_availableCopyLists;
 
-        // 执行中的命令列表 - 用于同步管理
+        // List of commands in execution - for synchronous management
         std::vector<CommandListWrapper*> m_executingLists;
 
-        // 线程安全
-        std::mutex m_mutex; // 互斥锁
-        bool       m_initialized; // 初始化标记
+        // Thread safety
+        std::mutex m_mutex; // Mutex
+        bool       m_initialized = false; // Initialize the tag
 
-        // 配置参数
-        static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = 4; // 默认图形命令列表数量
-        static constexpr uint32_t DEFAULT_COMPUTE_LIST_COUNT  = 2; // 默认计算命令列表数量
-        static constexpr uint32_t DEFAULT_COPY_LIST_COUNT     = 2; // 默认复制命令列表数量
+        //Configuration parameters
+        static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = 4; // Number of default graphical command lists
+        static constexpr uint32_t DEFAULT_COMPUTE_LIST_COUNT  = 2; // The default count of command list
+        static constexpr uint32_t DEFAULT_COPY_LIST_COUNT     = 2; // Default number of copy command lists
 
     public:
         /**
-         * @brief 构造函数
-         * 
-         * 教学要点: 构造函数只做基本初始化，实际资源创建在Initialize中
+         * @brief constructor
+         *
+         * Teaching points: The constructor only performs basic initialization, and the actual resource is created in Initialize
          */
         CommandListManager();
 
         /**
-         * @brief 析构函数
-         * 
-         * 教学要点: 确保所有GPU操作完成后再释放资源
-         */
+          * @brief destructor
+          *
+          * Teaching points: Make sure all GPU operations are completed before releasing resources
+          */
         ~CommandListManager();
 
-        // ========================================================================
-        // 生命周期管理
-        // ========================================================================
+        // =====================================================================================================
+        // Lifecycle management
+        // =====================================================================================================
 
         /**
          * @brief 初始化命令列表管理器
