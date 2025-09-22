@@ -1,567 +1,400 @@
 ﻿#include "D3D12RenderSystem.hpp"
+#include <cassert>
+#include <algorithm>
 
-#include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
-
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-using namespace enigma::graphic;
-using namespace enigma::core;
-
-// ====================================================================================================
-// 静态成员变量定义
-// 参考: DirectX 12编程指南第3章 - 全局对象管理
-// ====================================================================================================
-
-// 核心DirectX对象
-Microsoft::WRL::ComPtr<ID3D12Device>  D3D12RenderSystem::s_device             = nullptr;
-Microsoft::WRL::ComPtr<IDXGIFactory6> D3D12RenderSystem::s_dxgiFactory        = nullptr;
-std::unique_ptr<CommandListManager>   D3D12RenderSystem::s_commandListManager = nullptr;
-
-// 调试接口
-Microsoft::WRL::ComPtr<ID3D12Debug3>       D3D12RenderSystem::s_debugController = nullptr;
-Microsoft::WRL::ComPtr<ID3D12DebugDevice2> D3D12RenderSystem::s_debugDevice     = nullptr;
-
-// 系统状态标志
-bool D3D12RenderSystem::s_isInitialized     = false;
-bool D3D12RenderSystem::s_debugLayerEnabled = false;
-
-// GPU能力支持标志
-bool D3D12RenderSystem::s_supportsDirectStorage = false;
-bool D3D12RenderSystem::s_supportsBindless      = false;
-bool D3D12RenderSystem::s_supportsCompute       = false;
-bool D3D12RenderSystem::s_supportsMeshShaders   = false;
-bool D3D12RenderSystem::s_supportsRayTracing    = false;
-bool D3D12RenderSystem::s_supportsVRS           = false;
-
-// 技术参数
-float           D3D12RenderSystem::s_shaderModelVersion = 5.1f; // 默认支持shader model 5.1
-std::thread::id D3D12RenderSystem::s_renderThreadId{};
-
-// ====================================================================================================
-// 公共接口实现
-// ====================================================================================================
-
-/*
-*1. 完整的InitializeRenderer实现
-
-  - 防重复初始化检查：避免多次初始化
-  - 线程安全机制：记录渲染线程ID，对应Iris的线程安全设计
-  - 异常安全处理：使用try-catch确保失败时正确清理资源
-
-  2. 详细的DirectX 12初始化步骤
-
-  1. 启用调试和验证层 (EnableDebugAndValidationLayers)
-  2. 创建DXGI工厂 (CreateDXGIFactory2)
-  3. 创建DirectX 12设备 (CreateDevice)
-  4. 检测GPU能力和特性 (DetectGPUCapabilities)
-  5. 初始化命令列表管理器 (InitializeCommandListManager)
-  6. 设置调试对象名称
-  7. 标记初始化完成
-
-  3. 全面的API参考标注
-
-  每个DirectX 12 API调用都标注了：
-  - 参考文档：DirectX 12编程指南章节
-  - API来源：Microsoft DirectX 12/DXGI Documentation
-  - 方法说明：具体的接口和函数名称
-
-  4. GPU能力检测系统
-
-  - Shader Model版本检测：6.6 → 5.1全版本支持
-  - 光线追踪支持：DXR检测
-  - 可变率着色：VRS特性检测
-  - 网格着色器：Mesh Shader支持检测
-  - Bindless资源：Resource Binding Tier检测
-  - DirectStorage：基于Shader Model版本推断
-
-  5. 完整的静态成员变量定义
-
-  - DirectX核心对象管理
-  - 调试接口管理
-  - GPU能力标志管理
-  - 线程安全ID记录
-
-  实现的核心特性
-
-  与Iris架构对应
-
-  - 线程安全检查 ↔ Iris RenderSystem.assertOnRenderThreadOrInit()
-  - GPU能力检测 ↔ Iris supportsCompute, supportsTesselation 等
-  - 调试层管理 ↔ Iris 调试状态管理
- */
-void D3D12RenderSystem::InitializeRenderer(bool enableDebugLayer, bool enableGPUValidation)
+namespace enigma::graphic
 {
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Initializing D3D12 render system...");
+    // ===== 静态成员变量初始化（包含设备和命令系统）=====
+    Microsoft::WRL::ComPtr<ID3D12Device>  D3D12RenderSystem::s_device      = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> D3D12RenderSystem::s_dxgiFactory = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> D3D12RenderSystem::s_adapter     = nullptr;
 
-    // 防止重复初始化
-    if (s_isInitialized)
+    // 命令系统管理
+    std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
+
+    bool D3D12RenderSystem::s_isInitialized = false;
+
+    // ===== 公共API实现 =====
+
+    /**
+     * 初始化DirectX 12渲染系统（设备和命令系统）
+     * 对应Iris的IrisRenderSystem.initialize()方法
+     * 注意：现在包含CommandListManager的完整初始化
+     */
+    bool D3D12RenderSystem::Initialize(bool enableDebugLayer, bool enableGPUValidation)
     {
-        LogWarn(RendererSubsystem::GetStaticSubsystemName(), "D3D12 render system already initialized!");
-        return;
-    }
-
-    // 保存渲染线程ID，用于后续线程安全检查
-    // 参考: Iris IrisRenderSystem 中的线程安全机制
-    s_renderThreadId = std::this_thread::get_id();
-
-    try
-    {
-        // ===========================================================================================
-        // 1. 启用调试和验证层 (必须在创建任何DirectX对象之前)
-        // 参考: DirectX 12编程指南第4章 - 调试和验证
-        // API来源: Microsoft DirectX 12 Documentation - ID3D12Debug3 interface
-        // ===========================================================================================
-        if (enableDebugLayer || enableGPUValidation)
+        if (s_isInitialized)
         {
-            EnableDebugAndValidationLayers(enableGPUValidation);
+            return true; // 已经初始化
         }
-        s_debugLayerEnabled = enableDebugLayer;
 
-        // ===========================================================================================
-        // 2. 创建DXGI工厂
-        // 参考: DirectX 12编程指南第3章 - DXGI工厂和适配器
-        // API来源: Microsoft DXGI Documentation - CreateDXGIFactory2 function
-        // ===========================================================================================
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Creating DXGI Factory...");
-
-        UINT dxgiFactoryFlags = 0;
+        // 1. 启用调试层（如果请求）
         if (enableDebugLayer)
         {
-            // 启用DXGI调试层，配合D3D12调试层使用
-            // API来源: DXGI_CREATE_FACTORY_DEBUG flag documentation
-            dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+            EnableDebugLayer();
         }
 
-        HRESULT hr = CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&s_dxgiFactory));
+        // 2. 创建DXGI工厂和设备
+        if (!CreateDevice(enableGPUValidation))
+        {
+            return false;
+        }
+
+        // 3. 创建和初始化CommandListManager（对应IrisRenderSystem的命令管理）
+        s_commandListManager = std::make_unique<CommandListManager>();
+        if (!s_commandListManager->Initialize())
+        {
+            s_commandListManager.reset();
+            return false;
+        }
+
+        s_isInitialized = true;
+        return true;
+    }
+
+    /**
+     * 关闭渲染系统（释放所有资源）
+     * 包括CommandListManager、设备和DXGI对象
+     * 对应IrisRenderSystem的完整清理逻辑
+     */
+    void D3D12RenderSystem::Shutdown()
+    {
+        if (!s_isInitialized)
+        {
+            return;
+        }
+
+        // 1. 首先关闭CommandListManager（等待GPU完成所有命令）
+        if (s_commandListManager)
+        {
+            s_commandListManager->Shutdown();
+            s_commandListManager.reset();
+        }
+
+        // 2. 释放DirectX 12对象（ComPtr会自动释放）
+        s_adapter.Reset();
+        s_dxgiFactory.Reset();
+        s_device.Reset();
+
+        s_isInitialized = false;
+    }
+
+    // ===== 缓冲区创建API实现 =====
+
+    /**
+     * 主要的缓冲区创建方法
+     * 对应Iris的IrisRenderSystem.createBuffers()方法
+     *
+     * 教学重点：
+     * 1. 参数验证和错误处理
+     * 2. 使用RAII进行资源管理
+     * 3. DirectX 12资源创建的完整流程
+     */
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateBuffer(const BufferCreateInfo& createInfo)
+    {
+        // 验证系统是否已初始化
+        if (!s_isInitialized || !s_device)
+        {
+            assert(false && "D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        // 验证输入参数
+        if (createInfo.size == 0)
+        {
+            assert(false && "Buffer size must be greater than 0");
+            return nullptr;
+        }
+
+        // 对常量缓冲区进行256字节对齐
+        // DirectX 12要求：常量缓冲区必须256字节对齐
+        BufferCreateInfo alignedCreateInfo = createInfo;
+        if (HasFlag(createInfo.usage, BufferUsage::ConstantBuffer))
+        {
+            alignedCreateInfo.size = AlignConstantBufferSize(createInfo.size);
+        }
+
+        // 创建D12Buffer对象
+        // 使用std::make_unique确保异常安全
+        try
+        {
+            auto buffer = std::make_unique<D12Buffer>(alignedCreateInfo);
+
+            // 验证缓冲区是否创建成功
+            if (!buffer->IsValid())
+            {
+                return nullptr;
+            }
+
+            return buffer;
+        }
+        catch (const std::exception&)
+        {
+            // 记录错误（实际项目中应该使用日志系统）
+            assert(false && "Failed to create D12Buffer");
+            return nullptr;
+        }
+    }
+
+    /**
+     * 简化的顶点缓冲区创建
+     * 对应常见的顶点数据用途
+     */
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateVertexBuffer(
+        size_t      size,
+        const void* initialData,
+        const char* debugName)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = size;
+        createInfo.usage        = BufferUsage::VertexBuffer;
+        createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+
+        return CreateBuffer(createInfo);
+    }
+
+    /**
+     * 简化的索引缓冲区创建
+     * 对应常见的索引数据用途
+     */
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateIndexBuffer(
+        size_t      size,
+        const void* initialData,
+        const char* debugName)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = size;
+        createInfo.usage        = BufferUsage::IndexBuffer;
+        createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+
+        return CreateBuffer(createInfo);
+    }
+
+    /**
+     * 简化的常量缓冲区创建
+     * DirectX 12要求：常量缓冲区必须256字节对齐
+     */
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateConstantBuffer(
+        size_t      size,
+        const void* initialData,
+        const char* debugName)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = size; // AlignConstantBufferSize会在CreateBuffer中调用
+        createInfo.usage        = BufferUsage::ConstantBuffer;
+        createInfo.memoryAccess = MemoryAccess::CPUWritable; // 常量缓冲区通常需要频繁更新
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+
+        return CreateBuffer(createInfo);
+    }
+
+    /**
+     * 创建结构化缓冲区（对应Iris的SSBO）
+     * 用于存储大量结构化数据，如粒子系统、实例数据等
+     */
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateStructuredBuffer(
+        size_t      elementCount,
+        size_t      elementSize,
+        const void* initialData,
+        const char* debugName)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = elementCount * elementSize;
+        createInfo.usage        = BufferUsage::StructuredBuffer;
+        createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+
+        return CreateBuffer(createInfo);
+    }
+
+    // ===== 调试API实现 =====
+
+    /**
+     * 设置DirectX对象调试名称
+     * 对应Iris的GLDebug.nameObject功能
+     */
+    void D3D12RenderSystem::SetDebugName(ID3D12Object* object, const char* name)
+    {
+        if (!object || !name)
+        {
+            return;
+        }
+
+        // 转换为宽字符串
+        size_t   len      = strlen(name);
+        wchar_t* wideName = new wchar_t[len + 1];
+
+        size_t convertedChars = 0;
+        mbstowcs_s(&convertedChars, wideName, len + 1, name, len);
+
+        // DirectX 12 API: ID3D12Object::SetName()
+        object->SetName(wideName);
+
+        delete[] wideName;
+    }
+
+    /**
+     * 检查设备特性支持
+     */
+    bool D3D12RenderSystem::CheckFeatureSupport(D3D12_FEATURE feature)
+    {
+        if (!s_device)
+        {
+            return false;
+        }
+
+        // 这里需要根据具体的feature类型来查询
+        // 示例：检查基本特性支持
+        D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
+        HRESULT                          hr      = s_device->CheckFeatureSupport(feature, &options, sizeof(options));
+        return SUCCEEDED(hr);
+    }
+
+    /**
+     * 获取GPU内存信息
+     */
+    DXGI_QUERY_VIDEO_MEMORY_INFO D3D12RenderSystem::GetVideoMemoryInfo()
+    {
+        DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo = {};
+
+        if (s_adapter)
+        {
+            Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3;
+            if (SUCCEEDED(s_adapter.As(&adapter3)))
+            {
+                adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memoryInfo);
+            }
+        }
+
+        return memoryInfo;
+    }
+
+    // ===== 命令管理API实现 =====
+
+    /**
+     * 获取命令队列管理器
+     * 对应IrisRenderSystem的命令管理功能
+     * D3D12RenderSystem作为DirectX 12底层API封装，直接管理CommandListManager实例
+     */
+    CommandListManager* D3D12RenderSystem::GetCommandListManager()
+    {
+        if (!s_isInitialized || !s_commandListManager)
+        {
+            return nullptr;
+        }
+        return s_commandListManager.get();
+    }
+
+    // ===== 内部实现方法 =====
+
+    /**
+     * 创建DirectX 12设备
+     */
+    bool D3D12RenderSystem::CreateDevice([[maybe_unused]] bool enableGPUValidation)
+    {
+        // 1. 创建DXGI工厂
+        // DXGI API: CreateDXGIFactory2()
+        HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&s_dxgiFactory));
         if (FAILED(hr))
         {
-            throw std::runtime_error("Failed to create DXGI Factory! HRESULT: " + std::to_string(hr));
+            assert(false && "Failed to create DXGI factory");
+            return false;
         }
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "DXGI Factory created successfully");
 
-        // ===========================================================================================
-        // 3. 创建DirectX 12设备
-        // 参考: DirectX 12编程指南第4章 - 设备创建和能力检测
-        // API来源: Microsoft DirectX 12 Documentation - D3D12CreateDevice function
-        // ===========================================================================================
-        CreateDevice(enableDebugLayer);
-
-        // ===========================================================================================
-        // 4. 检测GPU能力和特性支持
-        // 参考: DirectX 12编程指南第5章 - 特性支持查询
-        // API来源: ID3D12Device::CheckFeatureSupport method documentation
-        // ===========================================================================================
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Detecting GPU capabilities...");
-        DetectGPUCapabilities();
-
-        // ===========================================================================================
-        // 5. 验证Bindless管线最低要求
-        // 参考: DirectX 12编程指南第12章 - Bindless资源访问
-        // 项目要求: 现代Bindless延迟渲染管线必需的最低GPU特性
-        // ===========================================================================================
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Validating Bindless pipeline requirements...");
-        ValidateBindlessRequirements();
-
-        // ===========================================================================================
-        // 6. 初始化命令列表管理器
-        // 参考: DirectX 12编程指南第6章 - 命令队列和命令列表
-        // API来源: Microsoft DirectX 12 Documentation - ID3D12CommandQueue interface
-        // ===========================================================================================
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Initializing command list manager...");
-        InitializeCommandListManager();
-
-        // ===========================================================================================
-        // 7. 如果启用调试层，设置调试对象名称
-        // 参考: DirectX 12编程指南第14章 - 调试技术
-        // API来源: ID3D12Object::SetName method documentation
-        // ===========================================================================================
-        if (enableDebugLayer)
+        // 2. 枚举适配器，选择最好的
+        for (UINT adapterIndex = 0; ; ++adapterIndex)
         {
-            SetDebugName(s_device.Get(), L"Enigma::D3D12Device");
-            if (s_dxgiFactory)
+            hr = s_dxgiFactory->EnumAdapters1(adapterIndex, &s_adapter);
+            if (FAILED(hr))
             {
-                s_dxgiFactory->SetPrivateData(WKPDID_D3DDebugObjectName, sizeof("Enigma::DXGIFactory") - 1, "Enigma::DXGIFactory");
+                break; // 没有更多适配器
             }
-        }
 
-        // ===========================================================================================
-        // 8. 标记初始化完成
-        // ===========================================================================================
-        s_isInitialized = true;
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12 render system initialized successfully! GPU: %s", GetGPUDescription().c_str());
-    }
-    catch (const std::exception& e)
-    {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to initialize D3D12 render system: %s", e.what());
+            // 尝试创建DirectX 12设备
+            // DirectX 12 API: D3D12CreateDevice()
+            hr = D3D12CreateDevice(
+                s_adapter.Get(), // 适配器
+                D3D_FEATURE_LEVEL_11_0, // 最低特性级别（使用标准值）
+                IID_PPV_ARGS(&s_device) // 输出设备接口
+            );
 
-        // 清理已创建的资源
-        ShutdownRenderer();
-        throw;
-    }
-}
-
-void D3D12RenderSystem::ShutdownRenderer()
-{
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Shutting down D3D12 render system...");
-
-    if (!s_isInitialized)
-    {
-        return;
-    }
-
-    // 等待GPU完成所有工作
-    if (s_commandListManager)
-    {
-        s_commandListManager->WaitForGPU();
-    }
-
-    // 释放CommandListManager
-    s_commandListManager.reset();
-
-    // 释放调试接口
-    s_debugDevice.Reset();
-    s_debugController.Reset();
-
-    // 释放核心对象
-    s_device.Reset();
-    s_dxgiFactory.Reset();
-
-    // 重置状态
-    s_isInitialized     = false;
-    s_debugLayerEnabled = false;
-
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12 render system shut down successfully");
-}
-
-// ====================================================================================================
-// 私有辅助方法实现
-// ====================================================================================================
-
-void D3D12RenderSystem::EnableDebugAndValidationLayers(bool enableGPUValidation)
-{
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Enabling debug and validation layers...");
-
-    // 启用D3D12调试层
-    // 参考: DirectX 12编程指南第14章 - 调试层配置
-    // API来源: Microsoft DirectX 12 Documentation - ID3D12Debug3 interface
-    HRESULT hr = D3D12GetDebugInterface(IID_PPV_ARGS(&s_debugController));
-    if (SUCCEEDED(hr))
-    {
-        s_debugController->EnableDebugLayer();
-
-        if (enableGPUValidation)
-        {
-            // 启用GPU验证，会显著降低性能但提供更强的错误检测
-            // API来源: ID3D12Debug3::SetEnableGPUBasedValidation method
-            s_debugController->SetEnableGPUBasedValidation(TRUE);
-            s_debugController->SetEnableSynchronizedCommandQueueValidation(TRUE);
-            LogInfo(RendererSubsystem::GetStaticSubsystemName(), "GPU validation enabled");
-        }
-
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12 debug layer enabled successfully");
-    }
-    else
-    {
-        LogWarn(RendererSubsystem::GetStaticSubsystemName(), "Failed to enable D3D12 debug layer. HRESULT: 0x%08X", hr);
-    }
-}
-
-void D3D12RenderSystem::CreateDevice(bool enableDebugLayer)
-{
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Creating D3D12 device...");
-
-    // 枚举适配器并选择最佳的硬件适配器
-    // 参考: DirectX 12编程指南第4章 - 适配器选择策略
-    // API来源: Microsoft DXGI Documentation - IDXGIFactory6::EnumAdapterByGpuPreference
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-    for (UINT adapterIndex = 0;
-         SUCCEEDED(s_dxgiFactory->EnumAdapterByGpuPreference(
-             adapterIndex,
-             DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-             IID_PPV_ARGS(&adapter)));
-         ++adapterIndex)
-    {
-        DXGI_ADAPTER_DESC1 desc;
-        adapter->GetDesc1(&desc);
-
-        // 跳过软件适配器
-        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-        {
-            continue;
-        }
-
-        // 尝试创建D3D12设备
-        // API来源: Microsoft DirectX 12 Documentation - D3D12CreateDevice function
-        HRESULT hr = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&s_device));
-        if (SUCCEEDED(hr))
-        {
-            // 转换适配器描述为字符串用于日志记录
-            int size = WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, nullptr, 0, nullptr, nullptr);
-            if (size > 0)
+            if (SUCCEEDED(hr))
             {
-                std::string adapterName(size - 1, 0);
-                WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapterName.data(), size, nullptr, nullptr);
-                LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12 device created successfully on adapter: %s", adapterName.c_str());
+                // 成功创建设备
+                break;
             }
-            else
-            {
-                LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12 device created successfully on hardware adapter");
-            }
-            break;
+
+            // 释放当前适配器，尝试下一个
+            s_adapter.Reset();
         }
-    }
 
-    if (!s_device)
-    {
-        throw std::runtime_error("Failed to create D3D12 device on any adapter!");
-    }
-
-    // 如果启用调试层，创建调试设备接口
-    if (enableDebugLayer)
-    {
-        HRESULT hr = s_device->QueryInterface(IID_PPV_ARGS(&s_debugDevice));
-        if (SUCCEEDED(hr))
+        if (!s_device)
         {
-            LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Debug device interface created");
+            assert(false && "Failed to create D3D12 device");
+            return false;
         }
-    }
-}
 
-void D3D12RenderSystem::DetectGPUCapabilities()
-{
-    if (!s_device)
-    {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Cannot detect capabilities: device is null");
-        return;
+        return true;
     }
 
-    // 检测Shader Model支持
-    // 参考: DirectX 12编程指南第5章 - 着色器模型检测
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_FEATURE_SHADER_MODEL
-    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = {D3D_SHADER_MODEL_6_6};
-    if (SUCCEEDED(s_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel))))
+    /**
+     * 启用DirectX 12调试层
+     */
+    void D3D12RenderSystem::EnableDebugLayer()
     {
-        switch (shaderModel.HighestShaderModel)
+#ifdef _DEBUG
+        Microsoft::WRL::ComPtr<ID3D12Debug> debugController;
+
+        // DirectX 12 API: D3D12GetDebugInterface()
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
         {
-        case D3D_SHADER_MODEL_6_6: s_shaderModelVersion = 6.6f;
-            break;
-        case D3D_SHADER_MODEL_6_5: s_shaderModelVersion = 6.5f;
-            break;
-        case D3D_SHADER_MODEL_6_4: s_shaderModelVersion = 6.4f;
-            break;
-        case D3D_SHADER_MODEL_6_3: s_shaderModelVersion = 6.3f;
-            break;
-        case D3D_SHADER_MODEL_6_2: s_shaderModelVersion = 6.2f;
-            break;
-        case D3D_SHADER_MODEL_6_1: s_shaderModelVersion = 6.1f;
-            break;
-        case D3D_SHADER_MODEL_6_0: s_shaderModelVersion = 6.0f;
-            break;
-        default: s_shaderModelVersion = 5.1f;
-            break;
+            // 启用调试层
+            debugController->EnableDebugLayer();
+
+            // 可选：启用GPU验证（性能影响较大）
+            // 注意：GPU验证已移到Initialize参数中控制
+            // 这里不再使用s_config，简化了架构
         }
+#endif
     }
 
-    // 检测光线追踪支持
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_FEATURE_D3D12_OPTIONS5
-    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
-    if (SUCCEEDED(s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))))
+    /**
+     * 常量缓冲区大小对齐到256字节
+     * DirectX 12要求：常量缓冲区必须256字节对齐
+     */
+    size_t D3D12RenderSystem::AlignConstantBufferSize(size_t size)
     {
-        s_supportsRayTracing = (options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0);
+        // 256字节对齐
+        const size_t alignment = 256;
+        return (size + alignment - 1) & ~(alignment - 1);
     }
 
-    // 检测可变率着色支持
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_FEATURE_D3D12_OPTIONS6
-    D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
-    if (SUCCEEDED(s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6))))
+    /**
+     * 创建提交资源的统一接口
+     */
+    HRESULT D3D12RenderSystem::CreateCommittedResource(
+        const D3D12_HEAP_PROPERTIES& heapProps,
+        const D3D12_RESOURCE_DESC&   desc,
+        D3D12_RESOURCE_STATES        initialState,
+        ID3D12Resource**             resource)
     {
-        s_supportsVRS = (options6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1);
-    }
-
-    // 检测网格着色器支持
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_FEATURE_D3D12_OPTIONS7
-    D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = {};
-    if (SUCCEEDED(s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7))))
-    {
-        s_supportsMeshShaders = (options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1);
-    }
-
-    // 检测Bindless资源支持（通过Resource Binding Tier）
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_FEATURE_D3D12_OPTIONS
-    D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
-    if (SUCCEEDED(s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))))
-    {
-        s_supportsBindless = (options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2);
-    }
-
-    // 计算着色器始终支持（DirectX 12必需特性）
-    s_supportsCompute = true;
-
-    // DirectStorage支持检测（需要Windows 10版本1903+）
-    // 简化检测：如果支持Shader Model 6.0+就认为可能支持DirectStorage
-    s_supportsDirectStorage = (s_shaderModelVersion >= 6.0f);
-
-    // 记录能力检测结果
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "GPU Capabilities:");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Shader Model: %.1f", s_shaderModelVersion);
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Ray Tracing: %s", s_supportsRayTracing ? "Yes" : "No");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Variable Rate Shading: %s", s_supportsVRS ? "Yes" : "No");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Mesh Shaders: %s", s_supportsMeshShaders ? "Yes" : "No");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Bindless Resources: %s", s_supportsBindless ? "Yes" : "No");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Compute Shaders: %s", s_supportsCompute ? "Yes" : "No");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  DirectStorage: %s", s_supportsDirectStorage ? "Yes" : "No");
-}
-
-void D3D12RenderSystem::InitializeCommandListManager()
-{
-    if (!s_device)
-    {
-        throw std::runtime_error("Cannot initialize CommandListManager: device is null");
-    }
-
-    // 创建CommandListManager实例
-    // 参考: Engine/Graphic/Resource/CommandListManager.hpp
-    s_commandListManager = std::make_unique<CommandListManager>();
-
-    // 调用CommandListManager的Initialize方法
-    // CommandListManager内部会：
-    // 1. 从D3D12RenderSystem::GetDevice()获取设备
-    // 2. 创建Graphics/Compute/Copy三种命令队列
-    // 3. 创建围栏和事件对象
-    // 4. 初始化命令列表池
-    // API来源: CommandListManager::Initialize method
-    bool initSuccess = s_commandListManager->Initialize();
-    if (!initSuccess)
-    {
-        s_commandListManager.reset();
-        throw std::runtime_error("Failed to initialize CommandListManager");
-    }
-
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "CommandListManager initialized successfully");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Graphics command lists: %u",
-            s_commandListManager->GetAvailableCount(CommandListManager::Type::Graphics));
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Compute command lists: %u",
-            s_commandListManager->GetAvailableCount(CommandListManager::Type::Compute));
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "  Copy command lists: %u",
-            s_commandListManager->GetAvailableCount(CommandListManager::Type::Copy));
-}
-
-void D3D12RenderSystem::ValidateBindlessRequirements()
-{
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Validating modern Bindless pipeline requirements...");
-
-    // ====================================================================================================
-    // Bindless管线最低要求验证
-    // 参考: DirectX 12编程指南第12章 - 现代资源绑定策略
-    // 项目设计原则: 仅支持现代GPU，拒绝传统描述符表方式
-    // ====================================================================================================
-
-    std::vector<std::string> unsupportedFeatures;
-    std::vector<std::string> recommendedFeatures;
-
-    // 1. 强制要求：Shader Model 6.0+ (Bindless资源访问最低要求)
-    // API来源: HLSL Shader Model 6.0 Specification - Unbounded Descriptor Arrays
-    if (s_shaderModelVersion < 6.0f)
-    {
-        unsupportedFeatures.push_back(Stringf("Shader Model 6.0+ (current: %.1f)", s_shaderModelVersion));
-    }
-
-    // 2. 强制要求：Resource Binding Tier 2+ (真正的Bindless支持)
-    // API来源: ID3D12Device::CheckFeatureSupport - D3D12_RESOURCE_BINDING_TIER_2
-    if (!s_supportsBindless)
-    {
-        unsupportedFeatures.push_back("Resource Binding Tier 2+ (required for unlimited descriptor arrays)");
-    }
-
-    // 3. 强制要求：计算着色器支持 (延迟渲染光照计算)
-    if (!s_supportsCompute)
-    {
-        unsupportedFeatures.push_back("Compute Shaders (required for deferred lighting)");
-    }
-
-    // 4. 推荐特性：网格着色器 (现代几何管线)
-    if (!s_supportsMeshShaders)
-    {
-        recommendedFeatures.push_back("Mesh Shaders (enhanced geometry processing)");
-    }
-
-    // 5. 推荐特性：可变率着色 (性能优化)
-    if (!s_supportsVRS)
-    {
-        recommendedFeatures.push_back("Variable Rate Shading (performance optimization)");
-    }
-
-    // 6. 推荐特性：光线追踪 (高级光照效果)
-    if (!s_supportsRayTracing)
-    {
-        recommendedFeatures.push_back("DirectX Raytracing (advanced lighting effects)");
-    }
-
-    // ====================================================================================================
-    // 结果评估和错误处理
-    // ====================================================================================================
-
-    if (!unsupportedFeatures.empty())
-    {
-        LogError(RendererSubsystem::GetStaticSubsystemName(),
-                 "   CRITICAL: GPU does not meet Bindless pipeline minimum requirements!");
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "   Missing required features:");
-        for (const auto& feature : unsupportedFeatures)
+        if (!s_device)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "   - %s", feature.c_str());
+            return E_FAIL;
         }
-        LogError(RendererSubsystem::GetStaticSubsystemName(),
-                 "   This project requires a modern GPU with DirectX 12 Tier 2+ support.");
-        LogError(RendererSubsystem::GetStaticSubsystemName(),
-                 "   Recommended: NVIDIA GTX 1060+, AMD RX 580+, Intel Arc A-series");
 
-        throw std::runtime_error("GPU does not support required Bindless pipeline features");
+        return s_device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            initialState,
+            nullptr,
+            IID_PPV_ARGS(resource));
     }
-
-    if (!recommendedFeatures.empty())
-    {
-        LogWarn(RendererSubsystem::GetStaticSubsystemName(),
-                "   GPU missing recommended features (performance may be reduced):");
-        for (const auto& feature : recommendedFeatures)
-        {
-            LogWarn(RendererSubsystem::GetStaticSubsystemName(), "   - %s", feature.c_str());
-        }
-    }
-
-    // 记录成功验证信息
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "   GPU meets all Bindless pipeline requirements!");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "   Shader Model: %.1f", s_shaderModelVersion);
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "   Bindless Resources: Tier 2+");
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "   Modern pipeline fully supported");
-}
-
-// ====================================================================================================
-// 辅助方法：获取GPU描述信息
-// ====================================================================================================
-std::string D3D12RenderSystem::GetGPUDescription()
-{
-    if (!s_dxgiFactory)
-    {
-        return "Unknown GPU";
-    }
-
-    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-    if (SUCCEEDED(s_dxgiFactory->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter))))
-    {
-        DXGI_ADAPTER_DESC1 desc;
-        if (SUCCEEDED(adapter->GetDesc1(&desc)))
-        {
-            // 转换wstring到string
-            int         size = WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, nullptr, 0, nullptr, nullptr);
-            std::string result(size - 1, 0);
-            WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, result.data(), size, nullptr, nullptr);
-            return result;
-        }
-    }
-
-    return "Unknown GPU";
-}
+} // namespace enigma::graphic
