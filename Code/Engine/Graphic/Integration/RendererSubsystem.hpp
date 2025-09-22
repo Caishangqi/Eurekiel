@@ -59,28 +59,28 @@ namespace enigma::graphic
     {
     public:
         /**
-         * @brief 渲染子系统配置
-         * @details 包含初始化渲染器所需的所有参数
-         */
+          * @brief Rendering Subsystem Configuration
+          * @details contains all parameters required to initialize the renderer
+          */
         struct Configuration
         {
-            uint32_t    renderWidth             = 1920; ///< 渲染分辨率宽度
-            uint32_t    renderHeight            = 1080; ///< 渲染分辨率高度
-            uint32_t    maxFramesInFlight       = 3; ///< 最大飞行帧数
-            bool        enableDebugLayer        = false; ///< DirectX 12调试层
-            bool        enableGPUValidation     = false; ///< GPU验证层
-            bool        enableBindlessResources = true; ///< 启用Bindless资源
-            std::string defaultShaderPackPath; ///< 默认Shader Pack路径
+            uint32_t    renderWidth             = 1920; ///< render resolution width
+            uint32_t    renderHeight            = 1080; ///< Render resolution height
+            uint32_t    maxFramesInFlight       = 3; ///< Maximum number of flight frames
+            bool        enableDebugLayer        = true; ///< DirectX 12 debug layer
+            bool        enableGPUValidation     = true; ///< GPU verification layer
+            bool        enableBindlessResources = true; ///< Enable Bindless resources
+            std::string defaultShaderPackPath; ///< Default Shader Pack Path
 
-            // ==================== Immediate模式配置 ====================
-            bool   enableImmediateMode    = true; ///< 启用immediate模式渲染
-            size_t maxCommandsPerPhase    = 10000; ///< 每个阶段最大指令数量
-            bool   enablePhaseDetection   = true; ///< 启用自动阶段检测
-            bool   enableCommandProfiling = false; ///< 启用指令性能分析
+            // ========================== Immediate mode configuration =========================
+            bool   enableImmediateMode    = true; ///< Enable immediate mode rendering
+            size_t maxCommandsPerPhase    = 10000; ///< Maximum number of instructions per stage
+            bool   enablePhaseDetection   = true; ///< Enable automatic phase detection
+            bool   enableCommandProfiling = false; ///< Enable directive performance analysis
 
             /**
-             * @brief 默认构造函数
-             * @details 设置适合教学和开发的默认参数
+             * @brief default constructor
+             * @details Set default parameters suitable for teaching and development
              */
             Configuration() = default;
         };
@@ -249,11 +249,7 @@ namespace enigma::graphic
          * @details 
          * immediate模式的核心接口，支持按阶段分类存储
          */
-        bool SubmitRenderCommand(
-            RenderCommandPtr    command,
-            WorldRenderingPhase phase,
-            const std::string&  debugTag = ""
-        );
+        bool SubmitRenderCommand(RenderCommandPtr command, WorldRenderingPhase phase, const std::string& debugTag = "");
 
         /**
          * @brief 提交绘制指令（自动检测阶段）
@@ -262,10 +258,7 @@ namespace enigma::graphic
          * @return 成功返回true
          * @details 使用PhaseDetector自动判断指令应该归属的阶段
          */
-        bool SubmitRenderCommand(
-            RenderCommandPtr   command,
-            const std::string& debugTag = ""
-        );
+        bool SubmitRenderCommand(RenderCommandPtr command, const std::string& debugTag = "");
 
         /**
          * @brief 立即执行队列中的所有指令

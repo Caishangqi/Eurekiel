@@ -213,6 +213,9 @@
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
         <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp"/>
         <ClCompile Include="Graphic\Resource\BindlessResourceManager.cpp"/>
+        <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
+        <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
+        <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>

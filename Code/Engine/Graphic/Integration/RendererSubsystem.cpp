@@ -14,7 +14,7 @@ RendererSubsystem::~RendererSubsystem()
 
 void RendererSubsystem::Initialize()
 {
-    D3D12RenderSystem::InitializeRenderer(m_debugRenderingEnabled, m_configuration.enableGPUValidation);
+    D3D12RenderSystem::Initialize(m_debugRenderingEnabled, m_configuration.enableGPUValidation);
 }
 
 void RendererSubsystem::Startup()
@@ -25,7 +25,7 @@ void RendererSubsystem::Startup()
 void RendererSubsystem::Shutdown()
 {
     LogInfo(GetStaticSubsystemName(), "Shutting down...");
-    D3D12RenderSystem::ShutdownRenderer();
+    D3D12RenderSystem::Shutdown();
 }
 
 void RendererSubsystem::BeginFrame()
