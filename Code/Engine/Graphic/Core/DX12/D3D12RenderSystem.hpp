@@ -47,7 +47,7 @@ namespace enigma::graphic
     class D3D12RenderSystem final
     {
     private:
-        // 禁止实例化 - 静态工具类，对应Iris的设计
+        // Instantiation prohibited - Static tool class
         D3D12RenderSystem()                                    = delete;
         ~D3D12RenderSystem()                                   = delete;
         D3D12RenderSystem(const D3D12RenderSystem&)            = delete;
@@ -219,64 +219,64 @@ namespace enigma::graphic
             D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
 
         /**
-         * @brief 创建帧缓冲区 (对应Iris的createFramebuffer)
-         * @return 新创建的帧缓冲区对象
-         * 
-         * TODO: 实现DirectX 12的等效操作
-         * 在DirectX 12中可能对应创建RTV和DSV描述符
+         * @brief Create framebuffer (corresponding to Iris' createFramebuffer)
+         * @return Newly created framebuffer object
+         *
+         * TODO: Implement DirectX 12 equivalent operations
+         * In DirectX 12, RTV and DSV descriptors may be created correspondingly
          */
         // static FramebufferHandle CreateFramebuffer();
 
-        // ========================================================================
-        // 同步和内存管理 (委托给CommandListManager)
-        // ========================================================================
+        // ====================================================================================================
+        // Synchronization and memory management (delegated to CommandListManager)
+        // ====================================================================================================
 
         /**
-         * @brief 等待GPU完成所有工作 (委托给CommandListManager)
-         * 
-         * TODO: 委托给CommandListManager::WaitForGPU()
-         * 避免在D3D12RenderSystem中重复围栏管理逻辑
+         * @brief Wait for the GPU to complete all work (delegated to CommandListManager)
+         *
+         * TODO: Delegated to CommandListManager::WaitForGPU()
+         * Avoid repeated fence management logic in D3D12RenderSystem
          */
         static void WaitForGPU();
 
         /**
-         * @brief 获取GPU视频内存使用情况 (对应Iris的getVRAM)
-         * @return 当前可用视频内存大小（字节）
-         * 
-         * TODO: 实现VRAM查询，通过：
-         * - DXGI适配器查询
-         * - DirectX 12内存预算API
-         */
+          * @brief Get GPU video memory usage (corresponding to Iris' getVRAM)
+          * @return Current available video memory size (bytes)
+          *
+          * TODO: Implement VRAM query, through:
+          * - DXGI adapter query
+          * - DirectX 12 Memory Budget API
+          */
         static uint64_t GetAvailableVRAM();
 
         /**
-         * @brief 获取GPU内存预算信息
-         * @return GPU内存预算（字节）
-         */
+          * @brief Get GPU memory budget information
+          * @return GPU memory budget (bytes)
+          */
         static uint64_t GetVRAMBudget();
 
-        // ========================================================================
-        // 调试和验证 (对应Iris的调试功能)
-        // ========================================================================
+        // ====================================================================================================
+        // Debugging and verification (corresponding to Iris' debugging function)
+        // ====================================================================================================
 
         /**
-         * @brief 启用/禁用调试层
-         * @param enable true表示启用调试信息
-         * @details 对应Iris中的调试状态管理
+         * @brief Enable/disable debug layer
+         * @param enable true means enable debug information
+         * @details corresponds to debug state management in Iris
          */
         static void EnableDebugLayer(bool enable);
 
         /**
-         * @brief 检查是否启用了调试层
-         * @return true表示调试层已启用
+         * @brief Check whether the debug layer is enabled
+         * @return true means that the debug layer is enabled
          */
         static bool IsDebugLayerEnabled() noexcept { return s_debugLayerEnabled; }
 
         /**
-         * @brief 设置调试对象名称
-         * @param object DirectX对象指针
-         * @param name 调试名称
-         * @details 用于调试工具中的对象识别
+         * @brief Set the debug object name
+         * @param object DirectX object pointer
+         * @param name Debug name
+         * @details for object recognition in debugging tools
          */
         template <typename T>
         static void SetDebugName(T* object, const std::wstring& name)
@@ -288,76 +288,106 @@ namespace enigma::graphic
         }
 
         /**
-         * @brief 验证设备状态
-         * @return true表示设备状态正常
-         * @details 检查设备移除等错误状态
-         */
+          * @brief Verify device status
+          * @return true means the device is in normal state
+          * @details Check device removal and other error status
+          */
         static bool ValidateDeviceState();
 
-        // ========================================================================
-        // 线程安全检查 (对应Iris的RenderSystem.assertOnRenderThreadOrInit)
-        // ========================================================================
+        // ====================================================================================================
+        // Thread safety check (corresponding to Iris' RenderSystem.assertOnRenderThreadOrInit)
+        // ====================================================================================================
 
         /**
-         * @brief 断言当前在渲染线程
-         * @details 
-         * 对应Iris中的RenderSystem.assertOnRenderThreadOrInit()
-         * 确保DirectX调用在正确的线程上执行
+         * @brief asserts that the rendering thread is currently in
+         * @details
+         * Corresponding to RenderSystem.assertOnRenderThreadOrInit() in Iris
+         * Make sure DirectX calls are executed on the correct thread
          */
         static void AssertOnRenderThread();
 
         /**
-         * @brief 检查是否在渲染线程
-         * @return true表示在渲染线程
+         * @brief Check whether the rendering thread is
+         * @return true means rendering thread
          */
         static bool IsOnRenderThread() noexcept;
 
     private:
-        // ========================================================================
-        // 内部初始化方法
-        // ========================================================================
+        // ====================================================================================================
+        // Internal initialization method
+        // ====================================================================================================
 
         /**
-         * @brief 创建DirectX 12设备
-         * @param enableDebugLayer 是否启用调试层
+         * @brief Create DirectX 12 devices
+         * @param enableDebugLayer Whether to enable debug layer
          */
         static void CreateDevice(bool enableDebugLayer);
 
         /**
-         * @brief 创建命令队列 (初始化CommandListManager时调用)
-         * @details 创建图形、计算、拷贝三个队列，并传递给CommandListManager
-         */
-        static void CreateCommandQueues();
-
-        /**
-         * @brief 初始化CommandListManager
-         * @details 使用创建的设备和命令队列初始化全局CommandListManager
+         * @brief Initialize CommandListManager
+         * @details Initialize the global CommandListManager with the created device
+         *
+         * 教学要点：
+         * CommandListManager负责：
+         * 1. 创建Graphics/Compute/Copy三种命令队列
+         * 2. 创建围栏对象和事件句柄
+         * 3. 初始化命令列表池
+         * 4. 管理命令列表的生命周期
+         *
+         * D3D12RenderSystem只需要：
+         * 1. 提供Device给CommandListManager
+         * 2. 调用Initialize方法
+         * 3. 避免职责重叠
          */
         static void InitializeCommandListManager();
 
         /**
-         * @brief 检测GPU能力
-         * @details 查询设备支持的各种特性
+         * @brief Detection of GPU capabilities
+         * @details Query various features supported by the device
          */
         static void DetectGPUCapabilities();
 
         /**
-         * @brief 启用调试和验证层
+         * @brief 验证Bindless管线最低要求
+         * @details 检查GPU是否支持现代Bindless资源访问和Shader Model 6.0+
+         * @throws std::runtime_error 如果GPU不满足最低要求
+         *
+         * 强制要求:
+         * - Shader Model 6.0+ (Bindless资源访问)
+         * - Resource Binding Tier 2+ (无限制描述符数组)
+         * - Compute Shaders (延迟渲染光照计算)
+         *
+         * 推荐特性:
+         * - Mesh Shaders (现代几何管线)
+         * - Variable Rate Shading (性能优化)
+         * - DirectX Raytracing (高级光照效果)
          */
+        static void ValidateBindlessRequirements();
+
+        /**
+          * @brief Enable debugging and verification layers
+          */
         static void EnableDebugAndValidationLayers(bool enableGPUValidation);
+
+        /**
+         * @brief 获取GPU描述信息
+         * @return GPU设备描述字符串
+         * @details 用于日志记录和调试信息显示
+         */
+        static std::string GetGPUDescription();
 
     private:
         // ========================================================================
-        // 静态成员变量 - 只管理核心设备对象，避免与CommandListManager重复
+        // Static member variables - manage only core device objects to avoid duplication with CommandListManager
         // ========================================================================
 
-        /// DirectX 12设备 - 所有资源创建的核心
+        /// DirectX 12 device - the core of all resource creation
         static Microsoft::WRL::ComPtr<ID3D12Device> s_device;
 
-        /// DXGI工厂 - 用于枚举适配器和创建交换链
+        /// DXGI Factory - for enumerating adapters and creating swap chains
         static Microsoft::WRL::ComPtr<IDXGIFactory6> s_dxgiFactory;
 
-        /// CommandListManager - 负责所有命令队列、围栏和命令列表管理
+        /// CommandListManager - Responsible for all command queues, fences and command list management
         static std::unique_ptr<CommandListManager> s_commandListManager;
 
         /// 调试接口
