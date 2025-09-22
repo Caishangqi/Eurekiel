@@ -117,13 +117,14 @@ namespace enigma::graphic
          */
         virtual void ReleaseResource();
 
+    protected:
+        // 支持移动语义（派生类需要访问）
+        D12Resource(D12Resource&&)            = default;
+        D12Resource& operator=(D12Resource&&) = default;
+
     private:
         // 禁用拷贝构造和赋值
         D12Resource(const D12Resource&)            = delete;
         D12Resource& operator=(const D12Resource&) = delete;
-
-        // 支持移动语义
-        D12Resource(D12Resource&&)            = default;
-        D12Resource& operator=(D12Resource&&) = default;
     };
 } // namespace enigma::graphic
