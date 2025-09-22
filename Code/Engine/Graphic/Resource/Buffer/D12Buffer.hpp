@@ -1,151 +1,204 @@
 ﻿#pragma once
+
 #include "../D12Resources.hpp"
+#include <d3d12.h>
+#include <wrl/client.h>
+#include <memory>
+#include <cstdint>
 
 namespace enigma::graphic
 {
     /**
- * @brief D12Buffer类 - 专用于延迟渲染的缓冲区封装
- * 
- * 教学要点:
- * 1. 支持顶点缓冲、索引缓冲、常量缓冲、结构化缓冲等
- * 2. 优化的Bindless绑定支持
- * 3. 支持GPU上传和回读操作
- * 4. 集成描述符创建
- */
+     * 教学目标：了解DirectX 12缓冲区管理的现代方法
+     *
+     * D12Buffer类设计说明：
+     * - 对应Iris的ShaderStorageBuffer.java的DirectX 12实现
+     * - 管理GPU缓冲区资源，包括顶点缓冲区、索引缓冲区、常量缓冲区等
+     * - 使用RAII管理资源生命周期
+     * - 支持CPU可见和GPU专用的不同用途缓冲区
+     *
+     * DirectX 12 API参考：
+     * - ID3D12Resource: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12resource
+     * - D3D12_RESOURCE_DESC: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc
+     * - D3D12_HEAP_PROPERTIES: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_heap_properties
+     */
+
+    /**
+     * 缓冲区使用标志枚举
+     * 对应DirectX 12的D3D12_RESOURCE_USAGE和D3D12_RESOURCE_FLAGS
+     */
+    enum class BufferUsage : uint32_t
+    {
+        VertexBuffer = 0x1, // 顶点缓冲区
+        IndexBuffer = 0x2, // 索引缓冲区
+        ConstantBuffer = 0x4, // 常量缓冲区 (对应Iris的Uniform Buffer)
+        StructuredBuffer = 0x8, // 结构化缓冲区 (对应Iris的SSBO)
+        StorageBuffer = 0x10, // 可读写存储缓冲区
+        IndirectBuffer = 0x20, // 间接绘制参数缓冲区
+
+        // 组合标志
+        Default = VertexBuffer | IndexBuffer,
+        AllBufferTypes = VertexBuffer | IndexBuffer | ConstantBuffer | StructuredBuffer | StorageBuffer | IndirectBuffer
+    };
+
+    /**
+     * 内存访问模式枚举
+     * 决定缓冲区在GPU/CPU间的访问模式
+     */
+    enum class MemoryAccess
+    {
+        GPUOnly, // GPU专用，最高性能 (DEFAULT heap)
+        CPUToGPU, // CPU写入，GPU读取 (UPLOAD heap)
+        GPUToCPU, // GPU写入，CPU读取 (READBACK heap)
+        CPUWritable // CPU可频繁写入 (对应Iris的dynamic buffer)
+    };
+
+    /**
+     * 缓冲区创建信息结构
+     * 对应Iris的BuiltShaderStorageInfo，但适配DirectX 12
+     */
+    struct BufferCreateInfo
+    {
+        size_t       size; // 缓冲区大小（字节）
+        BufferUsage  usage; // 使用标志
+        MemoryAccess memoryAccess; // 内存访问模式
+        const void*  initialData; // 初始数据指针（可为nullptr）
+        const char*  debugName; // 调试名称（对应Iris的GLDebug.nameObject）
+
+        // 默认构造
+        BufferCreateInfo()
+            : size(0)
+              , usage(BufferUsage::Default)
+              , memoryAccess(MemoryAccess::GPUOnly)
+              , initialData(nullptr)
+              , debugName(nullptr)
+        {
+        }
+    };
+
+    /**
+     * D12Buffer类：DirectX 12缓冲区的封装，继承D12Resource
+     * 设计理念：对应Iris的ShaderStorageBuffer，但适配DirectX 12的资源模型
+     */
     class D12Buffer : public D12Resource
     {
     public:
         /**
-         * @brief 缓冲区类型枚举
+         * 构造函数：根据创建信息初始化缓冲区
+         * @param createInfo 缓冲区创建参数
          */
-        enum class Type
-        {
-            Vertex, // 顶点缓冲
-            Index, // 索引缓冲
-            Constant, // 常量缓冲 (Uniform Buffer)
-            Structured, // 结构化缓冲 (SSBO)
-            Upload, // 上传缓冲 (CPU -> GPU)
-            Readback // 回读缓冲 (GPU -> CPU)
-        };
+        explicit D12Buffer(const BufferCreateInfo& createInfo);
+
+        /**
+         * 析构函数：自动释放DirectX 12资源
+         */
+        ~D12Buffer();
+
+        // 禁用拷贝构造和赋值（RAII原则）F:\p4\Personal\SD\Engine\Code\Engine\Graphic
+        D12Buffer(const D12Buffer&)            = delete;
+        D12Buffer& operator=(const D12Buffer&) = delete;
+
+        // 支持移动语义
+        D12Buffer(D12Buffer&& other) noexcept;
+        D12Buffer& operator=(D12Buffer&& other) noexcept;
+
+        /**
+         * 获取DirectX 12资源接口（继承自D12Resource）
+         * @return ID3D12Resource指针，用于绑定到渲染管线
+         */
+        // GetResource() 已在基类D12Resource中定义
+
+        /**
+         * 获取缓冲区大小（继承自D12Resource）
+         * @return 缓冲区字节大小
+         */
+        // GetSize() 已在基类D12Resource中定义
+
+        /**
+         * 获取缓冲区使用标志
+         * @return BufferUsage枚举值
+         */
+        BufferUsage GetUsage() const { return m_usage; }
+
+        /**
+         * 获取GPU虚拟地址（继承自D12Resource）
+         * DirectX 12 API: ID3D12Resource::GetGPUVirtualAddress()
+         * @return 用于bindless资源绑定的GPU地址
+         */
+        // GetGPUVirtualAddress() 已在基类D12Resource中定义
+
+        /**
+         * 映射CPU内存（仅适用于CPU可访问的缓冲区）
+         * DirectX 12 API: ID3D12Resource::Map()
+         * @param readRange 读取范围（可为nullptr）
+         * @return 映射的CPU内存指针
+         */
+        void* Map(const D3D12_RANGE* readRange = nullptr);
+
+        /**
+         * 取消映射CPU内存
+         * DirectX 12 API: ID3D12Resource::Unmap()
+         * @param writtenRange 写入范围（可为nullptr）
+         */
+        void Unmap(const D3D12_RANGE* writtenRange = nullptr);
+
+        /**
+         * 检查缓冲区是否有效（继承自D12Resource）
+         * @return true表示资源已创建且有效
+         */
+        // IsValid() 已在基类D12Resource中定义
+
+        /**
+         * 获取调试名称（继承自D12Resource）
+         * @return 调试名称字符串
+         */
+        // GetDebugName() 已在基类D12Resource中定义
 
     private:
-        Type     m_type; // 缓冲区类型
-        uint32_t m_elementCount; // 元素数量
-        uint32_t m_elementSize; // 单个元素大小
-        uint32_t m_stride; // 步长 (用于结构化缓冲)
+        // ==================== D12Buffer特有成员变量 ====================
+        // 注意：m_resource, m_size, m_debugName, m_currentState 等已在基类D12Resource中定义
 
-        // 描述符句柄
-        D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle; // Shader Resource View
-        D3D12_CPU_DESCRIPTOR_HANDLE m_uavHandle; // Unordered Access View
-        D3D12_CPU_DESCRIPTOR_HANDLE m_cbvHandle; // Constant Buffer View
-
-        bool m_hasSRV;
-        bool m_hasUAV;
-        bool m_hasCBV;
-
-        // CPU映射指针 (用于Upload和Readback缓冲)
-        void* m_mappedData;
-
-    public:
-        /**
-         * @brief 构造函数
-         */
-        D12Buffer();
+        BufferUsage  m_usage; // 缓冲区使用类型
+        MemoryAccess m_memoryAccess; // 内存访问模式
+        void*        m_mappedData; // 映射的CPU内存指针
 
         /**
-         * @brief 析构函数
+         * 内部方法：创建DirectX 12资源
+         * @param createInfo 创建参数
+         * @return 是否创建成功
          */
-        virtual ~D12Buffer();
+        bool CreateD3D12Resource(const BufferCreateInfo& createInfo);
+
+        // 注意：SetDebugName() 已在基类D12Resource中定义
 
         /**
-         * @brief 创建缓冲区
-         * @param type 缓冲区类型
-         * @param elementCount 元素数量
-         * @param elementSize 单个元素大小 (字节)
-         * @param initialData 初始数据 (可为nullptr)
-         * @return 成功返回true，失败返回false
-         *
-         * 教学要点:
-         * - 根据类型自动选择合适的堆类型和资源标志
-         * - 通过D3D12RenderSystem获取设备，遵循架构封装原则
-         *
-         * 架构设计:
-         * - 内部调用D3D12RenderSystem::GetDevice()获取设备
-         * - 避免直接暴露DirectX设备依赖
-         * - 符合SOLID原则的依赖倒置
+         * 内部方法：获取堆属性
+         * @param access 内存访问模式
+         * @return 对应的D3D12_HEAP_PROPERTIES
          */
-        bool Create(Type        type, uint32_t elementCount, uint32_t elementSize,
-                    const void* initialData = nullptr);
+        static D3D12_HEAP_PROPERTIES GetHeapProperties(MemoryAccess access);
 
         /**
-         * @brief 上传数据到缓冲区
-         * @param data 源数据指针
-         * @param size 数据大小 (字节)
-         * @param offset 偏移量 (字节)
-         * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 支持部分更新和完整更新
+         * 内部方法：获取资源标志
+         * @param usage 缓冲区用途
+         * @return 对应的D3D12_RESOURCE_FLAGS
          */
-        bool UploadData(const void* data, size_t size, size_t offset = 0);
-
-        /**
-         * @brief 从缓冲区读取数据 (仅用于Readback缓冲)
-         * @param data 目标数据指针
-         * @param size 读取大小 (字节)
-         * @param offset 偏移量 (字节)
-         * @return 成功返回true，失败返回false
-         */
-        bool ReadData(void* data, size_t size, size_t offset = 0);
-
-        // ========================================================================
-        // 属性访问接口
-        // ========================================================================
-
-        Type     GetType() const { return m_type; }
-        uint32_t GetElementCount() const { return m_elementCount; }
-        uint32_t GetElementSize() const { return m_elementSize; }
-        uint32_t GetStride() const { return m_stride; }
-
-        // 专用视图访问 (用于绑定到管线)
-        D3D12_VERTEX_BUFFER_VIEW        GetVertexBufferView() const;
-        D3D12_INDEX_BUFFER_VIEW         GetIndexBufferView() const;
-        D3D12_CONSTANT_BUFFER_VIEW_DESC GetConstantBufferViewDesc() const;
-
-        // 描述符句柄访问
-        D3D12_CPU_DESCRIPTOR_HANDLE GetSRVHandle() const { return m_srvHandle; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetUAVHandle() const { return m_uavHandle; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetCBVHandle() const { return m_cbvHandle; }
-
-        bool HasSRV() const { return m_hasSRV; }
-        bool HasUAV() const { return m_hasUAV; }
-        bool HasCBV() const { return m_hasCBV; }
-
-    private:
-        /**
-         * @brief 创建描述符视图
-         *
-         * 教学要点:
-         * - 根据缓冲区类型创建对应的描述符视图
-         * - 通过D3D12RenderSystem获取设备，避免外部依赖
-         *
-         * 架构设计:
-         * - 内部调用D3D12RenderSystem::GetDevice()
-         * - 符合封装原则，隐藏设备依赖
-         */
-        void CreateDescriptorViews();
-
-        /**
-         * @brief 根据类型确定堆类型
-         * @param type 缓冲区类型
-         * @return 堆类型
-         */
-        static D3D12_HEAP_TYPE GetHeapType(Type type);
-
-        /**
-         * @brief 根据类型确定资源标志
-         * @param type 缓冲区类型
-         * @return 资源标志
-         */
-        static D3D12_RESOURCE_FLAGS GetResourceFlags(Type type);
+        static D3D12_RESOURCE_FLAGS GetResourceFlags(BufferUsage usage);
     };
-}
+
+    // 位运算操作符重载（支持BufferUsage组合）
+    inline BufferUsage operator|(BufferUsage a, BufferUsage b)
+    {
+        return static_cast<BufferUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+    }
+
+    inline BufferUsage operator&(BufferUsage a, BufferUsage b)
+    {
+        return static_cast<BufferUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+    }
+
+    inline bool HasFlag(BufferUsage value, BufferUsage flag)
+    {
+        return (value & flag) == flag;
+    }
+} // namespace enigma::graphic
