@@ -14,7 +14,7 @@ RendererSubsystem::~RendererSubsystem()
 
 void RendererSubsystem::Initialize()
 {
-    D3D12RenderSystem::InitializeRenderer();
+    D3D12RenderSystem::InitializeRenderer(m_debugRenderingEnabled, m_configuration.enableGPUValidation);
 }
 
 void RendererSubsystem::Startup()
