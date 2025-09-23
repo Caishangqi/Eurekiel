@@ -1,162 +1,409 @@
-﻿#pragma once
+﻿/**
+ * @file D12Texture.hpp
+ * @brief DirectX 12纹理资源封装 - 通用纹理资源管理
+ *
+ * 教学重点:
+ * 1. 通用纹理资源的封装和管理
+ * 2. DirectX 12纹理创建和视图管理
+ * 3. Bindless纹理绑定架构支持
+ * 4. 与D12DepthTexture和D12RenderTarget的职责分离
+ *
+ * 架构设计:
+ * - 继承D12Resource，提供统一的资源管理
+ * - 专门用于非深度、非渲染目标纹理（着色器资源、计算纹理等）
+ * - 支持Bindless资源绑定架构
+ * - 对应Iris中通用纹理的概念
+ *
+ * 职责分离:
+ * - D12Texture: 通用纹理资源（SRV、UAV）
+ * - D12DepthTexture: 深度纹理资源（DSV、可选SRV）
+ * - D12RenderTarget: 渲染目标纹理（RTV、SRV）
+ */
+
+#pragma once
+
 #include "../D12Resources.hpp"
+#include <memory>
+#include <string>
+#include <dxgi1_6.h>
 
 namespace enigma::graphic
 {
+    // 前向声明
+    class BindlessResourceManager;
     /**
- * @brief D12Texture类 - 专用于延迟渲染的纹理封装
- * 
- * 教学要点:
- * 1. 专门为G-Buffer、Shadow Map、后处理RT设计
- * 2. 支持多种纹理格式和用途 (Render Target, Shader Resource, UAV)
- * 3. 集成描述符创建，简化Bindless绑定
- * 4. 支持Mipmap生成和多重采样
- * 
- * 延迟渲染特性:
- * - 支持MRT (Multiple Render Targets)
- * - 优化的G-Buffer格式支持
- * - 高效的RT切换和状态管理
- */
+     * @brief 纹理使用标志枚举
+     * @details 决定纹理的用途和创建的视图类型
+     *
+     * 教学要点: 专注于通用纹理用途，不包含深度和渲染目标
+     */
+    enum class TextureUsage : uint32_t
+    {
+        ShaderResource = 0x1, ///< 着色器资源 (SRV) - 最常用
+        UnorderedAccess = 0x2, ///< 无序访问 (UAV) - 用于Compute Shader
+        CopySource = 0x4, ///< 复制源
+        CopyDestination = 0x8, ///< 复制目标
+
+        // 组合标志
+        Default = ShaderResource,
+        Compute = ShaderResource | UnorderedAccess,
+        AllUsages = ShaderResource | UnorderedAccess | CopySource | CopyDestination
+    };
+
+    /**
+     * @brief 纹理类型枚举
+     * @details 支持不同维度的纹理类型
+     */
+    enum class TextureType
+    {
+        Texture1D, ///< 1D纹理
+        Texture2D, ///< 2D纹理 (最常用)
+        Texture3D, ///< 3D纹理
+        TextureCube, ///< 立方体纹理
+        Texture1DArray, ///< 1D纹理数组
+        Texture2DArray ///< 2D纹理数组
+    };
+
+    /**
+     * @brief 纹理创建信息结构
+     * @details 对应Iris纹理创建参数，但适配DirectX 12
+     */
+    struct TextureCreateInfo
+    {
+        // 基础属性
+        TextureType type; ///< 纹理类型
+        uint32_t    width; ///< 宽度
+        uint32_t    height; ///< 高度 (1D纹理忽略)
+        uint32_t    depth; ///< 深度 (3D纹理使用，其他忽略)
+        uint32_t    mipLevels; ///< Mip层级数 (0表示自动生成)
+        uint32_t    arraySize; ///< 数组大小 (非数组纹理为1)
+        DXGI_FORMAT format; ///< 纹理格式
+
+        // 使用属性
+        TextureUsage usage; ///< 使用标志
+
+        // 数据属性
+        const void* initialData; ///< 初始数据指针 (可为nullptr)
+        size_t      dataSize; ///< 数据大小
+        uint32_t    rowPitch; ///< 行间距 (字节)
+        uint32_t    slicePitch; ///< 切片间距 (字节)
+
+        // 调试属性
+        const char* debugName; ///< 调试名称
+
+        // 默认构造
+        TextureCreateInfo()
+            : type(TextureType::Texture2D)
+              , width(0), height(0), depth(1)
+              , mipLevels(1), arraySize(1)
+              , format(DXGI_FORMAT_R8G8B8A8_UNORM)
+              , usage(TextureUsage::Default)
+              , initialData(nullptr), dataSize(0)
+              , rowPitch(0), slicePitch(0)
+              , debugName(nullptr)
+        {
+        }
+    };
+
+    /**
+     * @brief DirectX 12纹理封装类
+     * @details 专门用于通用纹理资源管理，与D12DepthTexture和D12RenderTarget分离
+     *
+     * 核心特性:
+     * - 支持1D/2D/3D/Cube纹理
+     * - 自动创建SRV和UAV视图
+     * - Bindless资源绑定支持
+     * - 高效的资源状态管理
+     *
+     * 职责边界:
+     * - 着色器资源纹理 (SRV)
+     * - 计算着色器纹理 (UAV)
+     * 不处理
+     * - 深度纹理 (由D12DepthTexture处理)
+     * - 渲染目标 (由D12RenderTarget处理)
+     */
     class D12Texture : public D12Resource
     {
-    private:
-        uint32_t             m_width; // 纹理宽度
-        uint32_t             m_height; // 纹理高度
-        uint32_t             m_mipLevels; // Mip层级数
-        DXGI_FORMAT          m_format; // 像素格式
-        D3D12_RESOURCE_FLAGS m_flags; // 资源标志
-
-        // 描述符句柄 (用于Bindless绑定)
-        D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle; // Shader Resource View
-        D3D12_CPU_DESCRIPTOR_HANDLE m_rtvHandle; // Render Target View  
-        D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle; // Depth Stencil View
-        D3D12_CPU_DESCRIPTOR_HANDLE m_uavHandle; // Unordered Access View
-
-        bool m_hasSRV; // 是否创建了SRV
-        bool m_hasRTV; // 是否创建了RTV
-        bool m_hasDSV; // 是否创建了DSV
-        bool m_hasUAV; // 是否创建了UAV
-
     public:
         /**
-         * @brief 纹理用途枚举
-         * 
-         * 教学要点: 明确纹理的用途，用于优化创建参数
-         */
-        enum class Usage
-        {
-            RenderTarget, // 渲染目标 (G-Buffer RT)
-            DepthStencil, // 深度模板缓冲
-            ShaderResource, // 着色器资源 (采样纹理)
-            UnorderedAccess, // 无序访问 (Compute Shader读写)
-            RenderTargetAndShaderResource, // 既是RT又是SRV (常用于后处理)
-            DepthStencilAndShaderResource // 既是DSV又是SRV (Shadow Map)
-        };
-
-        /**
          * @brief 构造函数
+         * @param createInfo 纹理创建参数
          */
-        D12Texture();
+        explicit D12Texture(const TextureCreateInfo& createInfo);
 
         /**
          * @brief 析构函数
+         * @details 自动清理纹理资源和描述符
          */
         virtual ~D12Texture();
 
-        /**
-         * @brief 创建2D纹理
-         * @param width 纹理宽度
-         * @param height 纹理高度
-         * @param format 像素格式
-         * @param usage 纹理用途
-         * @param mipLevels Mip层级数 (0表示自动生成完整Mip链)
-         * @param sampleCount 多重采样数量
-         * @param clearValue 清除值 (用于RT和DSV优化)
-         * @return 成功返回true，失败返回false
-         *
-         * 教学要点:
-         * 1. 根据用途自动设置资源标志和初始状态
-         * 2. 创建对应的描述符视图
-         * 3. 支持多重采样抗锯齿 (MSAA)
-         *
-         * 架构设计:
-         * - 通过D3D12RenderSystem::GetDevice()获取设备
-         * - 避免直接设备依赖，符合封装原则
-         */
-        bool Create2D(
-            uint32_t                 width, uint32_t height,
-            DXGI_FORMAT              format, Usage   usage,
-            uint32_t                 mipLevels   = 1,
-            uint32_t                 sampleCount = 1,
-            const D3D12_CLEAR_VALUE* clearValue  = nullptr);
+        // 禁用拷贝构造和赋值（RAII原则）
+        D12Texture(const D12Texture&)            = delete;
+        D12Texture& operator=(const D12Texture&) = delete;
+
+        // 支持移动语义
+        D12Texture(D12Texture&& other) noexcept;
+        D12Texture& operator=(D12Texture&& other) noexcept;
+
+        // ==================== 纹理属性访问 ====================
 
         /**
-         * @brief 创建G-Buffer专用RT
-         * @param device DX12设备
-         * @param width RT宽度
-         * @param height RT高度
-         * @param format RT格式 (RGBA8, RGBA16F等)
-         * @param rtIndex G-Buffer索引 (0-3为主G-Buffer, 4-9为临时缓冲)
-         * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: G-Buffer RT的特殊优化，包括清除值和格式选择
+         * @brief 获取纹理类型
+         * @return 纹理类型枚举
          */
-        bool CreateAsGBufferRT(
-            uint32_t    width, uint32_t  height,
-            DXGI_FORMAT format, uint32_t rtIndex);
+        TextureType GetTextureType() const { return m_textureType; }
 
         /**
-         * @brief 创建Shadow Map
-         * @param device DX12设备
-         * @param size Shadow Map尺寸 (正方形)
-         * @param cascadeCount 级联阴影层数
-         * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: Shadow Map的特殊需求，深度格式和比较采样
+         * @brief 获取纹理宽度
+         * @return 宽度像素数
          */
-        bool CreateAsShadowMap(uint32_t size, uint32_t cascadeCount = 1);
+        uint32_t GetWidth() const { return m_width; }
 
-        // ========================================================================
-        // 属性访问接口
-        // ========================================================================
+        /**
+         * @brief 获取纹理高度
+         * @return 高度像素数
+         */
+        uint32_t GetHeight() const { return m_height; }
 
-        uint32_t    GetWidth() const { return m_width; }
-        uint32_t    GetHeight() const { return m_height; }
-        uint32_t    GetMipLevels() const { return m_mipLevels; }
+        /**
+         * @brief 获取纹理深度
+         * @return 深度层数 (3D纹理)
+         */
+        uint32_t GetDepth() const { return m_depth; }
+
+        /**
+         * @brief 获取Mip层级数
+         * @return Mip层级数
+         */
+        uint32_t GetMipLevels() const { return m_mipLevels; }
+
+        /**
+         * @brief 获取数组大小
+         * @return 数组元素数量
+         */
+        uint32_t GetArraySize() const { return m_arraySize; }
+
+        /**
+         * @brief 获取纹理格式
+         * @return DXGI格式
+         */
         DXGI_FORMAT GetFormat() const { return m_format; }
 
-        // 描述符句柄访问
-        D3D12_CPU_DESCRIPTOR_HANDLE GetSRVHandle() const { return m_srvHandle; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle() const { return m_rtvHandle; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const { return m_dsvHandle; }
-        D3D12_CPU_DESCRIPTOR_HANDLE GetUAVHandle() const { return m_uavHandle; }
+        /**
+         * @brief 获取使用标志
+         * @return 纹理使用标志
+         */
+        TextureUsage GetUsage() const { return m_usage; }
 
-        // 描述符可用性检查
-        bool HasSRV() const { return m_hasSRV; }
-        bool HasRTV() const { return m_hasRTV; }
-        bool HasDSV() const { return m_hasDSV; }
-        bool HasUAV() const { return m_hasUAV; }
+        // ==================== 描述符访问接口 ====================
+
+        /**
+         * @brief 获取着色器资源视图句柄
+         * @return SRV句柄，用于着色器读取
+         *
+         * DirectX 12 API: ID3D12Device::CreateShaderResourceView()
+         * 参考: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createshaderresourceview
+         */
+        D3D12_CPU_DESCRIPTOR_HANDLE GetSRVHandle() const;
+
+        /**
+         * @brief 获取无序访问视图句柄
+         * @return UAV句柄，用于Compute Shader读写
+         *
+         * DirectX 12 API: ID3D12Device::CreateUnorderedAccessView()
+         * 参考: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createunorderedaccessview
+         */
+        D3D12_CPU_DESCRIPTOR_HANDLE GetUAVHandle() const;
+
+        /**
+         * @brief 检查是否有着色器资源视图
+         * @return 是否可以作为着色器资源
+         */
+        bool HasShaderResourceView() const { return m_hasSRV; }
+
+        /**
+         * @brief 检查是否有无序访问视图
+         * @return 是否可以作为UAV
+         */
+        bool HasUnorderedAccessView() const { return m_hasUAV; }
+
+        // ==================== Bindless支持接口 ====================
+
+        /**
+         * @brief 注册到Bindless资源管理器
+         * @param manager Bindless资源管理器指针
+         * @return 全局资源索引，失败返回UINT32_MAX
+         *
+         * 教学要点: Bindless架构中纹理通过全局索引访问
+         * 对应Iris中的纹理绑定机制
+         */
+        uint32_t RegisterToBindlessManager(class BindlessResourceManager* manager);
+
+        /**
+         * @brief 从Bindless资源管理器注销
+         * @param manager Bindless资源管理器指针
+         * @return 是否成功注销
+         */
+        bool UnregisterFromBindlessManager(class BindlessResourceManager* manager);
+
+        /**
+         * @brief 获取Bindless资源索引
+         * @return 全局资源索引，未注册返回UINT32_MAX
+         */
+        uint32_t GetBindlessIndex() const { return m_bindlessIndex; }
+
+        // ==================== 纹理操作接口 ====================
+
+        /**
+         * @brief 更新纹理数据
+         * @param cmdList 命令列表
+         * @param data 新数据指针
+         * @param dataSize 数据大小
+         * @param mipLevel 要更新的Mip层级
+         * @param arraySlice 要更新的数组切片
+         * @return 是否成功更新
+         *
+         *  // TODO: Use CommandListManager
+         * DirectX 12 API: ID3D12GraphicsCommandList::CopyTextureRegion()
+         * 参考: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-copytextureregion
+         */
+        bool UpdateTextureData(
+            ID3D12GraphicsCommandList* cmdList,
+            const void*                data,
+            size_t                     dataSize,
+            uint32_t                   mipLevel   = 0,
+            uint32_t                   arraySlice = 0
+        );
+
+        /**
+         * @brief 生成Mip贴图
+         * @param cmdList 命令列表
+         * @return 是否成功生成
+         *
+         * 教学要点: Mip贴图提升纹理采样性能和质量
+         * 通过Compute Shader实现Mip生成
+         */
+        bool GenerateMips(ID3D12GraphicsCommandList* cmdList);
+
+        // ==================== 调试支持 ====================
+
+        /**
+         * @brief 获取调试信息
+         * @return 包含尺寸、格式、类型的调试字符串
+         */
+        std::string GetDebugInfo() const;
+
+        // ==================== 静态辅助方法 ====================
+
+        /**
+         * @brief 计算纹理大小
+         * @param width 宽度
+         * @param height 高度
+         * @param format 格式
+         * @return 所需字节数
+         */
+        static size_t CalculateTextureSize(uint32_t width, uint32_t height, DXGI_FORMAT format);
+
+        /**
+         * @brief 获取格式的字节数
+         * @param format DXGI格式
+         * @return 每像素字节数
+         */
+        static uint32_t GetFormatBytesPerPixel(DXGI_FORMAT format);
+
+        /**
+         * @brief 检查格式是否支持UAV
+         * @param format DXGI格式
+         * @return 是否支持UAV
+         */
+        static bool IsUAVCompatibleFormat(DXGI_FORMAT format);
 
     private:
-        /**
-         * @brief 创建描述符视图
-         * @param device DX12设备
-         * @param usage 纹理用途
-         */
-        void CreateDescriptorViews(Usage usage);
+        // ==================== 纹理属性 ====================
+        TextureType  m_textureType; ///< 纹理类型
+        uint32_t     m_width; ///< 宽度
+        uint32_t     m_height; ///< 高度
+        uint32_t     m_depth; ///< 深度
+        uint32_t     m_mipLevels; ///< Mip层级数
+        uint32_t     m_arraySize; ///< 数组大小
+        DXGI_FORMAT  m_format; ///< 纹理格式
+        TextureUsage m_usage; ///< 使用标志
+
+        // ==================== 描述符管理 ====================
+        D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle; ///< 着色器资源视图句柄
+        D3D12_CPU_DESCRIPTOR_HANDLE m_uavHandle; ///< 无序访问视图句柄
+        bool                        m_hasSRV; ///< 是否有SRV
+        bool                        m_hasUAV; ///< 是否有UAV
+
+        // ==================== Bindless支持 ====================
+        uint32_t m_bindlessIndex; ///< Bindless资源索引
+
+        // ==================== 内部辅助方法 ====================
 
         /**
-         * @brief 根据用途确定资源标志
-         * @param usage 纹理用途
-         * @return 资源标志
+         * @brief 创建DirectX 12纹理资源
+         * @param createInfo 创建参数
+         * @return 是否创建成功
+         *
+         * 教学要点: 使用D3D12RenderSystem统一API，遵循分层架构
          */
-        static D3D12_RESOURCE_FLAGS GetResourceFlags(Usage usage);
+        bool CreateD3D12Resource(const TextureCreateInfo& createInfo);
 
         /**
-         * @brief 根据用途确定初始资源状态
-         * @param usage 纹理用途
+         * @brief 创建着色器资源视图
+         * @return 是否创建成功
+         *
+         * DirectX 12 API: ID3D12Device::CreateShaderResourceView()
+         */
+        bool CreateShaderResourceView();
+
+        /**
+         * @brief 创建无序访问视图
+         * @return 是否创建成功
+         *
+         * DirectX 12 API: ID3D12Device::CreateUnorderedAccessView()
+         */
+        bool CreateUnorderedAccessView();
+
+        /**
+         * @brief 获取资源描述
+         * @param createInfo 创建信息
+         * @return DirectX 12资源描述
+         */
+        static D3D12_RESOURCE_DESC GetResourceDesc(const TextureCreateInfo& createInfo);
+
+        /**
+         * @brief 获取资源标志
+         * @param usage 使用标志
+         * @return DirectX 12资源标志
+         */
+        static D3D12_RESOURCE_FLAGS GetResourceFlags(TextureUsage usage);
+
+        /**
+         * @brief 获取初始资源状态
+         * @param usage 使用标志
          * @return 初始资源状态
          */
-        static D3D12_RESOURCE_STATES GetInitialState(Usage usage);
+        static D3D12_RESOURCE_STATES GetInitialState(TextureUsage usage);
     };
-}
+
+    // ==================== 位运算操作符重载 ====================
+
+    inline TextureUsage operator|(TextureUsage a, TextureUsage b)
+    {
+        return static_cast<TextureUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+    }
+
+    inline TextureUsage operator&(TextureUsage a, TextureUsage b)
+    {
+        return static_cast<TextureUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+    }
+
+    inline bool HasFlag(TextureUsage value, TextureUsage flag)
+    {
+        return (value & flag) == flag;
+    }
+
+    // ==================== 类型别名 ====================
+    using TexturePtr = std::unique_ptr<D12Texture>;
+} // namespace enigma::graphic
