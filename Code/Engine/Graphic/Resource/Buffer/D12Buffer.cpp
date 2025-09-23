@@ -36,8 +36,7 @@ namespace enigma::graphic
 
         // 如果提供了初始数据且缓冲区支持CPU写入，则进行数据拷贝
         // 对应Iris的ShaderStorageBuffer中content的处理
-        if (createInfo.initialData &&
-            (m_memoryAccess == MemoryAccess::CPUToGPU || m_memoryAccess == MemoryAccess::CPUWritable))
+        if (createInfo.initialData && (m_memoryAccess == MemoryAccess::CPUToGPU || m_memoryAccess == MemoryAccess::CPUWritable))
         {
             void* mappedPtr = Map();
             if (mappedPtr)
@@ -162,13 +161,6 @@ namespace enigma::graphic
      */
     bool D12Buffer::CreateD3D12Resource(const BufferCreateInfo& createInfo)
     {
-        ID3D12Device* device = D3D12RenderSystem::GetDevice();
-        if (!device)
-        {
-            assert(false && "D3D12RenderSystem not initialized");
-            return false;
-        }
-
         // 1. 设置堆属性（决定内存类型和CPU/GPU访问性）
         // DirectX 12 API: D3D12_HEAP_PROPERTIES
         D3D12_HEAP_PROPERTIES heapProps = GetHeapProperties(m_memoryAccess);
@@ -208,16 +200,14 @@ namespace enigma::graphic
         }
 
         // 4. 创建提交资源
-        // DirectX 12 API: ID3D12Device::CreateCommittedResource()
-        // 创建一个资源并同时分配对应的堆内存
+        // 使用D3D12RenderSystem统一接口创建资源
+        // 符合分层架构原则：资源层通过API封装层访问DirectX
         ID3D12Resource* resource = nullptr;
-        HRESULT         hr       = device->CreateCommittedResource(
-            &heapProps, // 堆属性
-            D3D12_HEAP_FLAG_NONE, // 堆标志
-            &resourceDesc, // 资源描述
+        HRESULT         hr       = D3D12RenderSystem::CreateCommittedResource(
+            heapProps, // 堆属性
+            resourceDesc, // 资源描述
             initialState, // 初始状态
-            nullptr, // 清除值（缓冲区不需要）
-            IID_PPV_ARGS(&resource) // 输出接口
+            &resource // 输出接口
         );
 
         if (FAILED(hr))

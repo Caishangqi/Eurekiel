@@ -2,76 +2,70 @@
 
 #include "../D12Resources.hpp"
 #include <d3d12.h>
-#include <wrl/client.h>
 #include <memory>
 #include <cstdint>
 
 namespace enigma::graphic
 {
     /**
-     * 教学目标：了解DirectX 12缓冲区管理的现代方法
+     * Teaching Objective: Understand the Modern Methods of DirectX 12 Buffer Management
      *
-     * D12Buffer类设计说明：
-     * - 对应Iris的ShaderStorageBuffer.java的DirectX 12实现
-     * - 管理GPU缓冲区资源，包括顶点缓冲区、索引缓冲区、常量缓冲区等
-     * - 使用RAII管理资源生命周期
-     * - 支持CPU可见和GPU专用的不同用途缓冲区
+     * D12Buffer class design description:
+     * - DirectX 12 implementation corresponding to Iris' ShaderStorageBuffer.java
+     * - Manage GPU buffer resources, including vertex buffers, index buffers, constant buffers, etc.
+     * - Manage resource life cycles with RAII
+     * - Supports different purpose buffers that are visible to CPU and GPU-specific
      *
-     * DirectX 12 API参考：
+     * DirectX 12 API Reference:
      * - ID3D12Resource: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12resource
      * - D3D12_RESOURCE_DESC: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc
      * - D3D12_HEAP_PROPERTIES: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_heap_properties
      */
 
     /**
-     * 缓冲区使用标志枚举
-     * 对应DirectX 12的D3D12_RESOURCE_USAGE和D3D12_RESOURCE_FLAGS
+     * Buffer usage flag enumeration
+     * D3D12_RESOURCE_USAGE and D3D12_RESOURCE_FLAGS corresponding to DirectX 12
      */
     enum class BufferUsage : uint32_t
     {
-        VertexBuffer = 0x1, // 顶点缓冲区
-        IndexBuffer = 0x2, // 索引缓冲区
-        ConstantBuffer = 0x4, // 常量缓冲区 (对应Iris的Uniform Buffer)
-        StructuredBuffer = 0x8, // 结构化缓冲区 (对应Iris的SSBO)
-        StorageBuffer = 0x10, // 可读写存储缓冲区
-        IndirectBuffer = 0x20, // 间接绘制参数缓冲区
+        VertexBuffer = 0x1, // Vertex Buffer
+        IndexBuffer = 0x2, // Index buffer
+        ConstantBuffer = 0x4, // Constant buffer (corresponding to Iris' Uniform Buffer)
+        StructuredBuffer = 0x8, // Structured Buffer (corresponding to Iris' SSBO)
+        StorageBuffer = 0x10, // Read and write storage buffer
+        IndirectBuffer = 0x20, // Indirectly draw the parameter buffer
 
-        // 组合标志
+        // Combination flag
         Default = VertexBuffer | IndexBuffer,
         AllBufferTypes = VertexBuffer | IndexBuffer | ConstantBuffer | StructuredBuffer | StorageBuffer | IndirectBuffer
     };
 
     /**
-     * 内存访问模式枚举
-     * 决定缓冲区在GPU/CPU间的访问模式
+     * Memory access mode enumeration
+     * Determines the access mode of the buffer between GPU/CPU
      */
     enum class MemoryAccess
     {
-        GPUOnly, // GPU专用，最高性能 (DEFAULT heap)
-        CPUToGPU, // CPU写入，GPU读取 (UPLOAD heap)
-        GPUToCPU, // GPU写入，CPU读取 (READBACK heap)
-        CPUWritable // CPU可频繁写入 (对应Iris的dynamic buffer)
+        GPUOnly, // GPU-specific, highest performance (DEFAULT heap)
+        CPUToGPU, // CPU write, GPU read (UPLOAD heap)
+        GPUToCPU, // GPU write, CPU read (READBACK heap)
+        CPUWritable // The CPU can write frequently (corresponding to Iris' dynamic buffer)
     };
 
     /**
-     * 缓冲区创建信息结构
-     * 对应Iris的BuiltShaderStorageInfo，但适配DirectX 12
+     * Buffer creation information structure
+     * Corresponding to Iris' BuiltShaderStorageInfo, but adapts to DirectX 12
      */
     struct BufferCreateInfo
     {
-        size_t       size; // 缓冲区大小（字节）
-        BufferUsage  usage; // 使用标志
-        MemoryAccess memoryAccess; // 内存访问模式
-        const void*  initialData; // 初始数据指针（可为nullptr）
-        const char*  debugName; // 调试名称（对应Iris的GLDebug.nameObject）
+        size_t       size; // Buffer size (bytes)
+        BufferUsage  usage; // Use flag
+        MemoryAccess memoryAccess; // Memory access mode
+        const void*  initialData; // Initial data pointer (can be nullptr)
+        const char*  debugName; // Debug name (corresponding to Iris' GLDebug.nameObject)
 
         // 默认构造
-        BufferCreateInfo()
-            : size(0)
-              , usage(BufferUsage::Default)
-              , memoryAccess(MemoryAccess::GPUOnly)
-              , initialData(nullptr)
-              , debugName(nullptr)
+        BufferCreateInfo() : size(0), usage(BufferUsage::Default), memoryAccess(MemoryAccess::GPUOnly), initialData(nullptr), debugName(nullptr)
         {
         }
     };
