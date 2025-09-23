@@ -1,6 +1,7 @@
 ﻿#include "BindlessResourceManager.hpp"
 
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::graphic
@@ -54,6 +55,21 @@ namespace enigma::graphic
     void BindlessResourceManager::Shutdown()
     {
         // 桩实现
+    }
+
+    uint32_t BindlessResourceManager::RegisterTexture2D(const std::shared_ptr<D12Texture>& texture, const std::string& debugName)
+    {
+        ERROR_RECOVERABLE("BindlessResourceManager::RegisterTexture2D not implemented")
+        UNUSED(texture)
+        UNUSED(debugName)
+        return 0;
+    }
+
+    bool BindlessResourceManager::UnregisterResource(uint32_t index)
+    {
+        ERROR_RECOVERABLE("BindlessResourceManager::UnregisterResource not implemented")
+        UNUSED(index)
+        return false;
     }
 
     // TODO: 其他方法的完整实现由您来完成
