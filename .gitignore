@@ -8,3 +8,7 @@ Temporary
 /.vs/
 *.user
 *.filter
+
+# Claude Code 文档文件 - 仅本地使用
+CLAUDE.md
+Updated_Architecture_Summary.md
