@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file D12DepthTexture.hpp
  * @brief DirectX 12深度纹理封装 - 独立的深度纹理资源管理
  *
@@ -19,7 +19,6 @@
 
 #include "../D12Resources.hpp"
 #include "../Texture/D12Texture.hpp"
-#include "../../Core/DX12/D3D12RenderSystem.hpp"
 #include <memory>
 #include <string>
 #include <dxgi1_6.h>
