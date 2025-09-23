@@ -9,8 +9,10 @@
 
 namespace enigma::graphic
 {
-    // 前向声明RendererSubsystem的Configuration
     class RendererSubsystem;
+    class D12Texture;
+    struct TextureCreateInfo;
+    enum class TextureUsage : uint32_t;
 
     /**
      * 教学目标：了解现代图形API封装层的设计模式
@@ -125,6 +127,51 @@ namespace enigma::graphic
             const void* initialData = nullptr,
             const char* debugName   = "StructuredBuffer");
 
+        // ===== 纹理创建API =====
+
+        /**
+         * 创建纹理（主要方法）
+         * 对应Iris的IrisRenderSystem.createTexture()，支持Bindless纹理架构
+         *
+         * DirectX 12 API调用链：
+         * 1. ID3D12Device::CreateCommittedResource() - 创建纹理资源
+         * 2. ID3D12Device::CreateShaderResourceView() - 创建SRV
+         * 3. ID3D12Device::CreateUnorderedAccessView() - 创建UAV (如果需要)
+         * 4. ID3D12Resource::SetName() - 设置调试名称
+         *
+         * @param createInfo 纹理创建信息
+         * @return 创建的D12Texture智能指针，失败返回nullptr
+         */
+        static std::unique_ptr<D12Texture> CreateTexture(const TextureCreateInfo& createInfo);
+
+        /**
+         * 简化的创建2D纹理方法
+         * @param width 纹理宽度
+         * @param height 纹理高度
+         * @param format 纹理格式
+         * @param usage 使用标志
+         * @param initialData 初始数据（可为nullptr）
+         * @param debugName 调试名称
+         * @return 2D纹理指针
+         */
+        static std::unique_ptr<D12Texture> CreateTexture2D(
+            uint32_t     width,
+            uint32_t     height,
+            DXGI_FORMAT  format,
+            TextureUsage usage,
+            const void*  initialData = nullptr,
+            const char*  debugName   = "Texture2D");
+
+        /**
+         * 重载版本：使用默认TextureUsage::ShaderResource
+         */
+        static std::unique_ptr<D12Texture> CreateTexture2D(
+            uint32_t    width,
+            uint32_t    height,
+            DXGI_FORMAT format,
+            const void* initialData = nullptr,
+            const char* debugName   = "Texture2D");
+
         // ===== 设备访问API =====
 
         /**
@@ -181,6 +228,24 @@ namespace enigma::graphic
          */
         static DXGI_QUERY_VIDEO_MEMORY_INFO GetVideoMemoryInfo();
 
+        // ===== 资源创建API =====
+
+        /**
+         * 创建提交资源的统一接口
+         * DirectX 12 API: ID3D12Device::CreateCommittedResource()
+         * 为所有资源类型提供统一的资源创建入口
+         * @param heapProps 堆属性
+         * @param desc 资源描述
+         * @param initialState 初始资源状态
+         * @param resource 输出的资源指针
+         * @return 创建结果HRESULT
+         */
+        static HRESULT CreateCommittedResource(
+            const D3D12_HEAP_PROPERTIES& heapProps,
+            const D3D12_RESOURCE_DESC&   desc,
+            D3D12_RESOURCE_STATES        initialState,
+            ID3D12Resource**             resource);
+
     private:
         // 禁用实例化（纯静态类）
         D3D12RenderSystem()                                    = delete;
@@ -204,11 +269,6 @@ namespace enigma::graphic
         static void EnableDebugLayer();
 
         // ===== 内部辅助方法 =====
-        static size_t  AlignConstantBufferSize(size_t size); // 常量缓冲区大小对齐
-        static HRESULT CreateCommittedResource( // 创建提交资源的统一接口
-            const D3D12_HEAP_PROPERTIES& heapProps,
-            const D3D12_RESOURCE_DESC&   desc,
-            D3D12_RESOURCE_STATES        initialState,
-            ID3D12Resource**             resource);
+        static size_t AlignConstantBufferSize(size_t size); // 常量缓冲区大小对齐
     };
 } // namespace enigma::graphic

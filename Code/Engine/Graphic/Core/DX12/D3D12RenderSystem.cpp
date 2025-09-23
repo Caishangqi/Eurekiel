@@ -2,45 +2,49 @@
 #include <cassert>
 #include <algorithm>
 
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+
 namespace enigma::graphic
 {
-    // ===== 静态成员变量初始化（包含设备和命令系统）=====
+    // ===== Static member variable initialization (including device and command system) =====
     Microsoft::WRL::ComPtr<ID3D12Device>  D3D12RenderSystem::s_device      = nullptr;
     Microsoft::WRL::ComPtr<IDXGIFactory4> D3D12RenderSystem::s_dxgiFactory = nullptr;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> D3D12RenderSystem::s_adapter     = nullptr;
 
-    // 命令系统管理
+    // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
 
     bool D3D12RenderSystem::s_isInitialized = false;
 
-    // ===== 公共API实现 =====
+    // ===== Public API implementation =====
 
     /**
-     * 初始化DirectX 12渲染系统（设备和命令系统）
-     * 对应Iris的IrisRenderSystem.initialize()方法
-     * 注意：现在包含CommandListManager的完整初始化
+     * Initialize DirectX 12 rendering system (device and command system)
+     * The IrisRenderSystem.initialize() method corresponding to Iris
+     * Note: The complete initialization of CommandListManager is now included
      */
     bool D3D12RenderSystem::Initialize(bool enableDebugLayer, bool enableGPUValidation)
     {
         if (s_isInitialized)
         {
-            return true; // 已经初始化
+            return true; // has been initialized
         }
 
-        // 1. 启用调试层（如果请求）
+        // 1. Enable debug layer (if requested)
         if (enableDebugLayer)
         {
             EnableDebugLayer();
         }
 
-        // 2. 创建DXGI工厂和设备
+        // 2. Create DXGI factories and equipment
         if (!CreateDevice(enableGPUValidation))
         {
             return false;
         }
 
-        // 3. 创建和初始化CommandListManager（对应IrisRenderSystem的命令管理）
+        // 3. Create and initialize CommandListManager (command command management corresponding to IrisRenderSystem)
         s_commandListManager = std::make_unique<CommandListManager>();
         if (!s_commandListManager->Initialize())
         {
@@ -53,9 +57,9 @@ namespace enigma::graphic
     }
 
     /**
-     * 关闭渲染系统（释放所有资源）
-     * 包括CommandListManager、设备和DXGI对象
-     * 对应IrisRenderSystem的完整清理逻辑
+     * Turn off the rendering system (release all resources)
+     * Includes CommandListManager, Devices and DXGI Objects
+     * Complete cleaning logic corresponding to IrisRenderSystem
      */
     void D3D12RenderSystem::Shutdown()
     {
@@ -64,14 +68,14 @@ namespace enigma::graphic
             return;
         }
 
-        // 1. 首先关闭CommandListManager（等待GPU完成所有命令）
+        // 1. First close CommandListManager (wait for the GPU to complete all commands)
         if (s_commandListManager)
         {
             s_commandListManager->Shutdown();
             s_commandListManager.reset();
         }
 
-        // 2. 释放DirectX 12对象（ComPtr会自动释放）
+        // 2. Release DirectX 12 object (ComPtr will be automatically released)
         s_adapter.Reset();
         s_dxgiFactory.Reset();
         s_device.Reset();
@@ -79,48 +83,49 @@ namespace enigma::graphic
         s_isInitialized = false;
     }
 
-    // ===== 缓冲区创建API实现 =====
+    // ===== Buffer creation API implementation =====
 
     /**
-     * 主要的缓冲区创建方法
-     * 对应Iris的IrisRenderSystem.createBuffers()方法
+     * Main buffer creation method
+     * The IrisRenderSystem.createBuffers() method corresponding to Iris
      *
-     * 教学重点：
-     * 1. 参数验证和错误处理
-     * 2. 使用RAII进行资源管理
-     * 3. DirectX 12资源创建的完整流程
+     * Teaching focus:
+     * 1. Parameter verification and error handling
+     * 2. Use RAII for resource management
+     * 3. The complete process of DirectX 12 resource creation
      */
     std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateBuffer(const BufferCreateInfo& createInfo)
     {
-        // 验证系统是否已初始化
+        // Verify that the system has been initialized
         if (!s_isInitialized || !s_device)
         {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
             assert(false && "D3D12RenderSystem not initialized");
             return nullptr;
         }
 
-        // 验证输入参数
+        // Verify input parameters
         if (createInfo.size == 0)
         {
             assert(false && "Buffer size must be greater than 0");
             return nullptr;
         }
 
-        // 对常量缓冲区进行256字节对齐
-        // DirectX 12要求：常量缓冲区必须256字节对齐
+        // 256 byte alignment of the constant buffer
+        // DirectX 12 requirements: Constant buffers must be aligned 256 bytes
         BufferCreateInfo alignedCreateInfo = createInfo;
         if (HasFlag(createInfo.usage, BufferUsage::ConstantBuffer))
         {
             alignedCreateInfo.size = AlignConstantBufferSize(createInfo.size);
         }
 
-        // 创建D12Buffer对象
-        // 使用std::make_unique确保异常安全
+        // Create a D12Buffer object
+        // Use std::make_unique to ensure exception security
         try
         {
             auto buffer = std::make_unique<D12Buffer>(alignedCreateInfo);
 
-            // 验证缓冲区是否创建成功
+            // Verify that the buffer is created successfully
             if (!buffer->IsValid())
             {
                 return nullptr;
@@ -130,20 +135,18 @@ namespace enigma::graphic
         }
         catch (const std::exception&)
         {
-            // 记录错误（实际项目中应该使用日志系统）
+            // Log Error
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create D12Buffer");
             assert(false && "Failed to create D12Buffer");
             return nullptr;
         }
     }
 
     /**
-     * 简化的顶点缓冲区创建
-     * 对应常见的顶点数据用途
+     * Simplified vertex buffer creation
+     * Corresponding to common vertex data usage
      */
-    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateVertexBuffer(
-        size_t      size,
-        const void* initialData,
-        const char* debugName)
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateVertexBuffer(size_t size, const void* initialData, const char* debugName)
     {
         BufferCreateInfo createInfo;
         createInfo.size         = size;
@@ -156,13 +159,10 @@ namespace enigma::graphic
     }
 
     /**
-     * 简化的索引缓冲区创建
-     * 对应常见的索引数据用途
+     * Simplified index buffer creation
+     * Corresponding to common index data uses
      */
-    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateIndexBuffer(
-        size_t      size,
-        const void* initialData,
-        const char* debugName)
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateIndexBuffer(size_t size, const void* initialData, const char* debugName)
     {
         BufferCreateInfo createInfo;
         createInfo.size         = size;
@@ -175,9 +175,9 @@ namespace enigma::graphic
     }
 
     /**
-     * 简化的常量缓冲区创建
-     * DirectX 12要求：常量缓冲区必须256字节对齐
-     */
+      * Simplified constant buffer creation
+      * DirectX 12 requirements: Constant buffers must be aligned 256 bytes
+      */
     std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateConstantBuffer(
         size_t      size,
         const void* initialData,
@@ -186,7 +186,7 @@ namespace enigma::graphic
         BufferCreateInfo createInfo;
         createInfo.size         = size; // AlignConstantBufferSize会在CreateBuffer中调用
         createInfo.usage        = BufferUsage::ConstantBuffer;
-        createInfo.memoryAccess = MemoryAccess::CPUWritable; // 常量缓冲区通常需要频繁更新
+        createInfo.memoryAccess = MemoryAccess::CPUWritable; // Constant buffers usually need to be updated frequently
         createInfo.initialData  = initialData;
         createInfo.debugName    = debugName;
 
@@ -194,14 +194,10 @@ namespace enigma::graphic
     }
 
     /**
-     * 创建结构化缓冲区（对应Iris的SSBO）
-     * 用于存储大量结构化数据，如粒子系统、实例数据等
+     * Create a structured buffer (corresponding to Iris' SSBO)
+     * Used to store a large amount of structured data, such as particle system, instance data, etc.
      */
-    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateStructuredBuffer(
-        size_t      elementCount,
-        size_t      elementSize,
-        const void* initialData,
-        const char* debugName)
+    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateStructuredBuffer(size_t elementCount, size_t elementSize, const void* initialData, const char* debugName)
     {
         BufferCreateInfo createInfo;
         createInfo.size         = elementCount * elementSize;
@@ -213,11 +209,138 @@ namespace enigma::graphic
         return CreateBuffer(createInfo);
     }
 
-    // ===== 调试API实现 =====
+    // ===== Texture creation API implementation =====
 
     /**
-     * 设置DirectX对象调试名称
-     * 对应Iris的GLDebug.nameObject功能
+     * 主要纹理创建方法
+     * 对应Iris的IrisRenderSystem.createTexture()，支持Bindless纹理架构
+     *
+     * 教学重点:
+     * 1. 参数验证和错误处理
+     * 2. 使用RAII进行资源管理
+     * 3. DirectX 12纹理创建的完整流程
+     *
+     * DirectX 12 API调用链：
+     * 1. ID3D12Device::CreateCommittedResource() - 创建纹理资源
+     * 2. ID3D12Device::CreateShaderResourceView() - 创建SRV
+     * 3. ID3D12Device::CreateUnorderedAccessView() - 创建UAV (如果需要)
+     * 4. ID3D12Resource::SetName() - 设置调试名称
+     */
+    std::unique_ptr<D12Texture> D3D12RenderSystem::CreateTexture(const TextureCreateInfo& createInfo)
+    {
+        // 验证系统已初始化
+        if (!s_isInitialized || !s_device)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
+            assert(false && "D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        // 验证输入参数
+        if (createInfo.width == 0 || createInfo.height == 0)
+        {
+            assert(false && "Texture dimensions must be greater than 0");
+            return nullptr;
+        }
+
+        // 验证纹理格式
+        if (createInfo.format == DXGI_FORMAT_UNKNOWN)
+        {
+            assert(false && "Texture format cannot be UNKNOWN");
+            return nullptr;
+        }
+
+        // 验证使用标志
+        if (createInfo.usage == static_cast<TextureUsage>(0))
+        {
+            assert(false && "Texture usage must be specified");
+            return nullptr;
+        }
+
+        // 创建D12Texture对象
+        // 使用std::make_unique确保异常安全
+        try
+        {
+            auto texture = std::make_unique<D12Texture>(createInfo);
+
+            // 验证纹理创建成功
+            if (!texture->IsValid())
+            {
+                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to create D12Texture resource");
+                return nullptr;
+            }
+
+            return texture;
+        }
+        catch (const std::exception& e)
+        {
+            // 记录错误
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Exception during D12Texture creation: %s", e.what());
+            assert(false && "Failed to create D12Texture");
+            return nullptr;
+        }
+    }
+
+    /**
+     * 简化的创建2D纹理方法
+     * 对应常见的2D纹理使用场景
+     *
+     * 教学重点:
+     * - 默认参数的合理选择
+     * - 常见纹理用法的封装
+     * - 简化API的设计思路
+     */
+    std::unique_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(
+        uint32_t     width,
+        uint32_t     height,
+        DXGI_FORMAT  format,
+        TextureUsage usage,
+        const void*  initialData,
+        const char*  debugName)
+    {
+        TextureCreateInfo createInfo;
+        createInfo.type        = TextureType::Texture2D;
+        createInfo.width       = width;
+        createInfo.height      = height;
+        createInfo.depth       = 1;
+        createInfo.mipLevels   = 1; // 默认单层Mip
+        createInfo.arraySize   = 1; // 非数组纹理
+        createInfo.format      = format;
+        createInfo.usage       = usage;
+        createInfo.initialData = initialData;
+        createInfo.debugName   = debugName;
+
+        // 计算数据大小和间距（如果提供了初始数据）
+        if (initialData)
+        {
+            uint32_t bytesPerPixel = D12Texture::GetFormatBytesPerPixel(format);
+            createInfo.rowPitch    = width * bytesPerPixel;
+            createInfo.slicePitch  = createInfo.rowPitch * height;
+            createInfo.dataSize    = createInfo.slicePitch;
+        }
+
+        return CreateTexture(createInfo);
+    }
+
+    /**
+     * 重载版本：提供默认TextureUsage参数
+     */
+    std::unique_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(
+        uint32_t    width,
+        uint32_t    height,
+        DXGI_FORMAT format,
+        const void* initialData,
+        const char* debugName)
+    {
+        return CreateTexture2D(width, height, format, TextureUsage::ShaderResource, initialData, debugName);
+    }
+
+    // ===== Debug API implementation =====
+
+    /**
+     * Set DirectX object debug name
+     * Corresponding to Iris' GLDebug.nameObject function
      */
     void D3D12RenderSystem::SetDebugName(ID3D12Object* object, const char* name)
     {
@@ -226,21 +349,21 @@ namespace enigma::graphic
             return;
         }
 
-        // 转换为宽字符串
+        // Convert to wide string
         size_t   len      = strlen(name);
         wchar_t* wideName = new wchar_t[len + 1];
 
         size_t convertedChars = 0;
-        mbstowcs_s(&convertedChars, wideName, len + 1, name, len);
+        auto   error          = mbstowcs_s(&convertedChars, wideName, len + 1, name, len);
+        assert(error == 0 && "Failed to convert string to wide string");
 
         // DirectX 12 API: ID3D12Object::SetName()
         object->SetName(wideName);
-
         delete[] wideName;
     }
 
     /**
-     * 检查设备特性支持
+     * Check the device characteristics support
      */
     bool D3D12RenderSystem::CheckFeatureSupport(D3D12_FEATURE feature)
     {
@@ -249,15 +372,15 @@ namespace enigma::graphic
             return false;
         }
 
-        // 这里需要根据具体的feature类型来查询
-        // 示例：检查基本特性支持
+        // Here you need to query according to the specific feature type
+        // Example: Check basic feature support
         D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
         HRESULT                          hr      = s_device->CheckFeatureSupport(feature, &options, sizeof(options));
         return SUCCEEDED(hr);
     }
 
     /**
-     * 获取GPU内存信息
+     * Get GPU memory information
      */
     DXGI_QUERY_VIDEO_MEMORY_INFO D3D12RenderSystem::GetVideoMemoryInfo()
     {
@@ -275,12 +398,12 @@ namespace enigma::graphic
         return memoryInfo;
     }
 
-    // ===== 命令管理API实现 =====
+    // ===== Command Management API implementation =====
 
     /**
-     * 获取命令队列管理器
-     * 对应IrisRenderSystem的命令管理功能
-     * D3D12RenderSystem作为DirectX 12底层API封装，直接管理CommandListManager实例
+     * Get command queue manager
+     * Command management function corresponding to IrisRenderSystem
+     * D3D12RenderSystem is a DirectX 12 underlying API encapsulation to directly manage CommandListManager instances
      */
     CommandListManager* D3D12RenderSystem::GetCommandListManager()
     {
@@ -291,14 +414,14 @@ namespace enigma::graphic
         return s_commandListManager.get();
     }
 
-    // ===== 内部实现方法 =====
+    // ===== Internal implementation method =====
 
     /**
-     * 创建DirectX 12设备
+     * Create DirectX 12 devices
      */
     bool D3D12RenderSystem::CreateDevice([[maybe_unused]] bool enableGPUValidation)
     {
-        // 1. 创建DXGI工厂
+        // 1. Create a DXGI factory
         // DXGI API: CreateDXGIFactory2()
         HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&s_dxgiFactory));
         if (FAILED(hr))
@@ -307,44 +430,45 @@ namespace enigma::graphic
             return false;
         }
 
-        // 2. 枚举适配器，选择最好的
+        // 2. Enumerate the adapter and select the best one
         for (UINT adapterIndex = 0; ; ++adapterIndex)
         {
             hr = s_dxgiFactory->EnumAdapters1(adapterIndex, &s_adapter);
             if (FAILED(hr))
             {
-                break; // 没有更多适配器
+                break; // No more adapters
             }
 
-            // 尝试创建DirectX 12设备
+            // Try to create a DirectX 12 device
             // DirectX 12 API: D3D12CreateDevice()
             hr = D3D12CreateDevice(
-                s_adapter.Get(), // 适配器
-                D3D_FEATURE_LEVEL_11_0, // 最低特性级别（使用标准值）
-                IID_PPV_ARGS(&s_device) // 输出设备接口
+                s_adapter.Get(), // Adapter
+                D3D_FEATURE_LEVEL_11_0, // Minimum feature level (using standard value)
+                IID_PPV_ARGS(&s_device) // Output device interface
             );
 
             if (SUCCEEDED(hr))
             {
-                // 成功创建设备
+                // Successfully created the device
                 break;
             }
 
-            // 释放当前适配器，尝试下一个
+            // Release the current adapter and try the next one
             s_adapter.Reset();
         }
 
         if (!s_device)
         {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to create D3D12 device");
             assert(false && "Failed to create D3D12 device");
-            return false;
+            ERROR_AND_DIE("Failed to create D3D12 device")
         }
 
         return true;
     }
 
     /**
-     * 启用DirectX 12调试层
+     * Enable DirectX 12 debug layer
      */
     void D3D12RenderSystem::EnableDebugLayer()
     {
@@ -354,35 +478,31 @@ namespace enigma::graphic
         // DirectX 12 API: D3D12GetDebugInterface()
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
         {
-            // 启用调试层
+            // Enable debug layer
             debugController->EnableDebugLayer();
 
-            // 可选：启用GPU验证（性能影响较大）
-            // 注意：GPU验证已移到Initialize参数中控制
-            // 这里不再使用s_config，简化了架构
+            // Optional: Enable GPU verification (performance impact is greater)
+            // Note: GPU verification has been moved to the Initialize parameter to control
+            // s_config is no longer used here, simplifying the architecture
         }
 #endif
     }
 
     /**
-     * 常量缓冲区大小对齐到256字节
-     * DirectX 12要求：常量缓冲区必须256字节对齐
+     * Constant buffer size aligned to 256 bytes
+     * DirectX 12 requirements: Constant buffers must be aligned 256 bytes
      */
     size_t D3D12RenderSystem::AlignConstantBufferSize(size_t size)
     {
-        // 256字节对齐
+        // 256 bytes aligned
         const size_t alignment = 256;
         return (size + alignment - 1) & ~(alignment - 1);
     }
 
     /**
-     * 创建提交资源的统一接口
+     * Create a unified interface for submitting resources
      */
-    HRESULT D3D12RenderSystem::CreateCommittedResource(
-        const D3D12_HEAP_PROPERTIES& heapProps,
-        const D3D12_RESOURCE_DESC&   desc,
-        D3D12_RESOURCE_STATES        initialState,
-        ID3D12Resource**             resource)
+    HRESULT D3D12RenderSystem::CreateCommittedResource(const D3D12_HEAP_PROPERTIES& heapProps, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES initialState, ID3D12Resource** resource)
     {
         if (!s_device)
         {
