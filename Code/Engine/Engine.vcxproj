@@ -217,6 +217,10 @@
         <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
         <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
+        <ClCompile Include="Graphic\Resource\DepthTexture\D12DepthTexture.cpp"/>
+        <ClCompile Include="Graphic\Resource\FrameBuffer\D12Framebuffer.cpp"/>
+        <ClCompile Include="Graphic\Resource\RenderTarget\D12RenderTarget.cpp"/>
+        <ClCompile Include="Graphic\Resource\Texture\D12Texture.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>
         <ClCompile Include="Input\KeyButtonState.cpp"/>

@@ -140,7 +140,7 @@ namespace enigma::graphic
         // ==================== EngineSubsystem接口实现 ====================
 
         /// 使用引擎提供的宏来简化子系统注册
-        DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", -100)
+        DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", 80)
 
         /**
          * @brief 早期初始化阶段
