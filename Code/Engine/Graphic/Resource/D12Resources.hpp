@@ -90,16 +90,31 @@ namespace enigma::graphic
         bool IsValid() const { return m_isValid && m_resource != nullptr; }
 
         /**
-         * @brief 设置调试名称 (用于PIX调试)
+         * @brief 设置调试名称 (用于PIX调试) - 虚函数支持子类自定义行为
          * @param name 调试名称
+         *
+         * 教学要点: 虚函数允许子类重写调试名称设置逻辑
+         * 例如，纹理类可以在设置名称时同时更新纹理视图的名称
          */
-        void SetDebugName(const std::string& name);
+        virtual void SetDebugName(const std::string& name);
 
         /**
-         * @brief 获取调试名称
+         * @brief 获取调试名称 - 虚函数支持子类自定义格式
          * @return 调试名称字符串
+         *
+         * 教学要点: 虚函数允许子类返回格式化的调试信息
+         * 例如，缓冲区类可以在名称中包含大小信息
          */
-        const std::string& GetDebugName() const { return m_debugName; }
+        virtual const std::string& GetDebugName() const { return m_debugName; }
+
+        /**
+         * @brief 获取详细调试信息 - 纯虚函数要求子类必须实现
+         * @return 详细调试信息字符串
+         *
+         * 教学要点: 纯虚函数强制所有子类提供具体的调试信息实现
+         * 这遵循了接口隔离原则，每个资源类型都有其特定的调试信息
+         */
+        virtual std::string GetDebugInfo() const = 0;
 
     protected:
         /**
