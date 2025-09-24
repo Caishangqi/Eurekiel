@@ -9,9 +9,11 @@
 
 namespace enigma::graphic
 {
+    class D12DepthTexture;
     class RendererSubsystem;
     class D12Texture;
     struct TextureCreateInfo;
+    struct DepthTextureCreateInfo;
     enum class TextureUsage : uint32_t;
 
     /**
@@ -142,7 +144,8 @@ namespace enigma::graphic
          * @param createInfo 纹理创建信息
          * @return 创建的D12Texture智能指针，失败返回nullptr
          */
-        static std::unique_ptr<D12Texture> CreateTexture(const TextureCreateInfo& createInfo);
+        static std::unique_ptr<D12Texture>      CreateTexture(const TextureCreateInfo& createInfo);
+        static std::unique_ptr<D12DepthTexture> CreateDepthTexture(const DepthTextureCreateInfo& createInfo);
 
         /**
          * 简化的创建2D纹理方法
@@ -163,7 +166,7 @@ namespace enigma::graphic
             const char*  debugName   = "Texture2D");
 
         /**
-         * 重载版本：使用默认TextureUsage::ShaderResource
+         * 使用默认TextureUsage::ShaderResource
          */
         static std::unique_ptr<D12Texture> CreateTexture2D(
             uint32_t    width,
@@ -171,6 +174,7 @@ namespace enigma::graphic
             DXGI_FORMAT format,
             const void* initialData = nullptr,
             const char* debugName   = "Texture2D");
+
 
         // ===== 设备访问API =====
 

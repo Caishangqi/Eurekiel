@@ -5,6 +5,7 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+#include "Engine/Graphic/Resource/DepthTexture/D12DepthTexture.hpp"
 
 namespace enigma::graphic
 {
@@ -336,6 +337,88 @@ namespace enigma::graphic
         return CreateTexture2D(width, height, format, TextureUsage::ShaderResource, initialData, debugName);
     }
 
+    /**
+     * 创建深度纹理（主要方法）
+     * 对应Iris的深度纹理管理功能，支持depthtex1/depthtex2
+     *
+     * 教学重点:
+     * 1. 深度纹理格式选择和验证
+     * 2. DSV/SRV双视图管理
+     * 3. 深度采样和阴影贴图支持
+     * 4. RAII资源管理和异常安全
+     *
+     * DirectX 12 API调用链：
+     * 1. 参数验证和格式检查
+     * 2. D12DepthTexture构造函数内部调用CreateCommittedResource
+     * 3. 自动创建DSV和SRV描述符（如果支持采样）
+     * 4. 设置调试名称
+     */
+    std::unique_ptr<D12DepthTexture> D3D12RenderSystem::CreateDepthTexture(const DepthTextureCreateInfo& createInfo)
+    {
+        // 验证系统已初始化
+        if (!s_isInitialized || !s_device)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
+            assert(false && "D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        // 验证输入参数
+        if (createInfo.width == 0 || createInfo.height == 0)
+        {
+            assert(false && "Depth texture dimensions must be greater than 0");
+            return nullptr;
+        }
+
+        // 验证深度纹理名称
+        if (createInfo.name.empty())
+        {
+            assert(false && "Depth texture name cannot be empty");
+            return nullptr;
+        }
+
+        // 验证清除值范围
+        if (createInfo.clearDepth < 0.0f || createInfo.clearDepth > 1.0f)
+        {
+            assert(false && "Clear depth value must be between 0.0 and 1.0");
+            return nullptr;
+        }
+
+        // 创建D12DepthTexture对象
+        // 使用std::make_unique确保异常安全
+        try
+        {
+            auto depthTexture = std::make_unique<D12DepthTexture>(createInfo);
+
+            // 验证深度纹理创建成功
+            if (!depthTexture->IsValid())
+            {
+                core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "Failed to create D12DepthTexture resource: %s", createInfo.name.c_str());
+                return nullptr;
+            }
+
+            // 记录成功创建的日志（调试用）
+            core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "Created D12DepthTexture: %s (%dx%d, Type: %d)",
+                          createInfo.name.c_str(),
+                          createInfo.width,
+                          createInfo.height,
+                          static_cast<int>(createInfo.depthType));
+
+            return depthTexture;
+        }
+        catch (const std::exception& e)
+        {
+            // 记录错误
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Exception during D12DepthTexture creation (%s): %s",
+                           createInfo.name.c_str(), e.what());
+            assert(false && "Failed to create D12DepthTexture");
+            return nullptr;
+        }
+    }
+
     // ===== Debug API implementation =====
 
     /**
@@ -356,6 +439,7 @@ namespace enigma::graphic
         size_t convertedChars = 0;
         auto   error          = mbstowcs_s(&convertedChars, wideName, len + 1, name, len);
         assert(error == 0 && "Failed to convert string to wide string");
+        UNUSED(error)
 
         // DirectX 12 API: ID3D12Object::SetName()
         object->SetName(wideName);
