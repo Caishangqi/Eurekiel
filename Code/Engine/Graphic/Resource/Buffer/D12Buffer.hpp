@@ -86,7 +86,7 @@ namespace enigma::graphic
         /**
          * 析构函数：自动释放DirectX 12资源
          */
-        ~D12Buffer();
+        ~D12Buffer() override;
 
         // 禁用拷贝构造和赋值（RAII原则）F:\p4\Personal\SD\Engine\Code\Engine\Graphic
         D12Buffer(const D12Buffer&)            = delete;
@@ -137,16 +137,31 @@ namespace enigma::graphic
         void Unmap(const D3D12_RANGE* writtenRange = nullptr);
 
         /**
-         * 检查缓冲区是否有效（继承自D12Resource）
-         * @return true表示资源已创建且有效
+         * @brief 重写虚函数：设置调试名称并添加缓冲区特定逻辑
+         * @param name 调试名称
+         *
+         * 教学要点: 重写基类虚函数，添加缓冲区特定的调试信息设置
+         * 可以在设置名称的同时更新缓冲区相关的调试标记
          */
-        // IsValid() 已在基类D12Resource中定义
+        void SetDebugName(const std::string& name) override;
 
         /**
-         * 获取调试名称（继承自D12Resource）
-         * @return 调试名称字符串
+         * @brief 重写虚函数：获取包含缓冲区大小信息的调试名称
+         * @return 格式化的调试名称字符串
+         *
+         * 教学要点: 重写基类虚函数，返回包含缓冲区特定信息的名称
+         * 格式: "BufferName (Size: XXX bytes, Usage: YYY)"
          */
-        // GetDebugName() 已在基类D12Resource中定义
+        const std::string& GetDebugName() const override;
+
+        /**
+         * @brief 重写虚函数：获取缓冲区的详细调试信息
+         * @return 详细调试信息字符串
+         *
+         * 教学要点: 提供缓冲区特定的调试信息，包括大小、用途、内存访问模式等
+         * 对应Iris的调试信息输出模式
+         */
+        std::string GetDebugInfo() const override;
 
     private:
         // ==================== D12Buffer特有成员变量 ====================
@@ -155,6 +170,7 @@ namespace enigma::graphic
         BufferUsage  m_usage; // 缓冲区使用类型
         MemoryAccess m_memoryAccess; // 内存访问模式
         void*        m_mappedData; // 映射的CPU内存指针
+        mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
 
         /**
          * 内部方法：创建DirectX 12资源

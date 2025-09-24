@@ -17,6 +17,7 @@ namespace enigma::graphic
           , m_usage(createInfo.usage)
           , m_memoryAccess(createInfo.memoryAccess)
           , m_mappedData(nullptr)
+          , m_formattedDebugName() // 初始化格式化调试名称
     {
         // 教学注释：验证输入参数的有效性
         assert(createInfo.size > 0 && "Buffer size must be greater than 0");
@@ -71,6 +72,7 @@ namespace enigma::graphic
           , m_usage(other.m_usage)
           , m_memoryAccess(other.m_memoryAccess)
           , m_mappedData(other.m_mappedData)
+          , m_formattedDebugName(std::move(other.m_formattedDebugName))
     {
         // 清空源对象
         other.m_mappedData = nullptr;
@@ -96,6 +98,7 @@ namespace enigma::graphic
             m_usage        = other.m_usage;
             m_memoryAccess = other.m_memoryAccess;
             m_mappedData   = other.m_mappedData;
+            m_formattedDebugName = std::move(other.m_formattedDebugName);
 
             // 清空源对象
             other.m_mappedData = nullptr;
@@ -153,6 +156,106 @@ namespace enigma::graphic
         // writtenRange: 指定CPU修改的内存范围（可为nullptr表示整个范围）
         resource->Unmap(0, writtenRange);
         m_mappedData = nullptr;
+    }
+
+    /**
+     * @brief 重写虚函数：设置调试名称并添加缓冲区特定逻辑
+     *
+     * 教学要点: 重写基类虚函数，在设置名称时同时更新格式化名称
+     * 这样GetDebugName()可以返回包含缓冲区详细信息的名称
+     */
+    void D12Buffer::SetDebugName(const std::string& name)
+    {
+        // 调用基类实现设置基本调试名称
+        D12Resource::SetDebugName(name);
+
+        // 清空格式化名称，让GetDebugName()重新生成
+        m_formattedDebugName.clear();
+    }
+
+    /**
+     * @brief 重写虚函数：获取包含缓冲区大小信息的调试名称
+     *
+     * 教学要点: 重写基类虚函数，返回格式化的缓冲区调试信息
+     * 格式: "BufferName (Size: XXX bytes, Usage: YYY)"
+     */
+    const std::string& D12Buffer::GetDebugName() const
+    {
+        // 如果格式化名称为空，重新生成
+        if (m_formattedDebugName.empty())
+        {
+            const std::string& baseName = D12Resource::GetDebugName();
+            if (baseName.empty())
+            {
+                m_formattedDebugName = "[Unnamed Buffer]";
+            }
+            else
+            {
+                m_formattedDebugName = baseName;
+            }
+
+            // 添加缓冲区大小信息
+            m_formattedDebugName += " (Size: " + std::to_string(GetSize()) + " bytes";
+
+            // 添加用途信息
+            if (HasFlag(m_usage, BufferUsage::VertexBuffer))
+                m_formattedDebugName += ", Vertex";
+            if (HasFlag(m_usage, BufferUsage::IndexBuffer))
+                m_formattedDebugName += ", Index";
+            if (HasFlag(m_usage, BufferUsage::ConstantBuffer))
+                m_formattedDebugName += ", Constant";
+            if (HasFlag(m_usage, BufferUsage::StructuredBuffer))
+                m_formattedDebugName += ", Structured";
+            if (HasFlag(m_usage, BufferUsage::StorageBuffer))
+                m_formattedDebugName += ", Storage";
+            if (HasFlag(m_usage, BufferUsage::IndirectBuffer))
+                m_formattedDebugName += ", Indirect";
+
+            m_formattedDebugName += ")";
+        }
+
+        return m_formattedDebugName;
+    }
+
+    /**
+     * @brief 重写虚函数：获取缓冲区的详细调试信息
+     *
+     * 教学要点: 提供缓冲区特定的详细调试信息
+     * 包括大小、用途、内存访问模式、映射状态等信息
+     */
+    std::string D12Buffer::GetDebugInfo() const
+    {
+        std::string info = "D12Buffer Debug Info:\n";
+        info += "  Name: " + GetDebugName() + "\n";
+        info += "  Size: " + std::to_string(GetSize()) + " bytes\n";
+        info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
+
+        // 内存访问模式
+        info += "  Memory Access: ";
+        switch (m_memoryAccess)
+        {
+        case MemoryAccess::GPUOnly:
+            info += "GPU Only (DEFAULT heap)\n";
+            break;
+        case MemoryAccess::CPUToGPU:
+            info += "CPU to GPU (UPLOAD heap)\n";
+            break;
+        case MemoryAccess::GPUToCPU:
+            info += "GPU to CPU (READBACK heap)\n";
+            break;
+        case MemoryAccess::CPUWritable:
+            info += "CPU Writable (UPLOAD heap)\n";
+            break;
+        }
+
+        // 映射状态
+        info += "  Mapped: " + std::string(m_mappedData ? "Yes" : "No") + "\n";
+
+        // 资源状态
+        info += "  Current State: " + std::to_string(static_cast<int>(GetCurrentState())) + "\n";
+        info += "  Valid: " + std::string(IsValid() ? "Yes" : "No");
+
+        return info;
     }
 
     /**
