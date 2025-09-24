@@ -256,7 +256,6 @@ namespace enigma::graphic
 
         /**
          * @brief 更新纹理数据
-         * @param cmdList 命令列表
          * @param data 新数据指针
          * @param dataSize 数据大小
          * @param mipLevel 要更新的Mip层级
@@ -268,30 +267,48 @@ namespace enigma::graphic
          * 参考: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-copytextureregion
          */
         bool UpdateTextureData(
-            ID3D12GraphicsCommandList* cmdList,
-            const void*                data,
-            size_t                     dataSize,
-            uint32_t                   mipLevel   = 0,
-            uint32_t                   arraySlice = 0
+            const void* data,
+            size_t      dataSize,
+            uint32_t    mipLevel   = 0,
+            uint32_t    arraySlice = 0
         );
 
         /**
          * @brief 生成Mip贴图
-         * @param cmdList 命令列表
          * @return 是否成功生成
          *
          * 教学要点: Mip贴图提升纹理采样性能和质量
          * 通过Compute Shader实现Mip生成
          */
-        bool GenerateMips(ID3D12GraphicsCommandList* cmdList);
+        bool GenerateMips();
 
         // ==================== 调试支持 ====================
 
         /**
-         * @brief 获取调试信息
-         * @return 包含尺寸、格式、类型的调试字符串
+         * @brief 重写虚函数：设置调试名称并添加纹理特定逻辑
+         * @param name 调试名称
+         *
+         * 教学要点: 重写基类虚函数，在设置纹理名称时同时更新SRV和UAV的调试名称
          */
-        std::string GetDebugInfo() const;
+        void SetDebugName(const std::string& name) override;
+
+        /**
+         * @brief 重写虚函数：获取包含纹理尺寸信息的调试名称
+         * @return 格式化的调试名称字符串
+         *
+         * 教学要点: 重写基类虚函数，返回包含纹理特定信息的名称
+         * 格式: "TextureName (2048x1024, RGBA8, Mip:4)"
+         */
+        const std::string& GetDebugName() const override;
+
+        /**
+         * @brief 重写虚函数：获取纹理的详细调试信息
+         * @return 包含尺寸、格式、类型的调试字符串
+         *
+         * 教学要点: 提供纹理特定的详细调试信息
+         * 包括尺寸、格式、Mip层级、使用标志、Bindless索引等信息
+         */
+        std::string GetDebugInfo() const override;
 
         // ==================== 静态辅助方法 ====================
 
@@ -337,6 +354,7 @@ namespace enigma::graphic
 
         // ==================== Bindless支持 ====================
         uint32_t m_bindlessIndex; ///< Bindless资源索引
+        mutable std::string m_formattedDebugName; ///< 格式化的调试名称（用于GetDebugName重写）
 
         // ==================== 内部辅助方法 ====================
 
@@ -386,7 +404,6 @@ namespace enigma::graphic
          */
         static D3D12_RESOURCE_STATES GetInitialState(TextureUsage usage);
     };
-
     // ==================== 位运算操作符重载 ====================
 
     inline TextureUsage operator|(TextureUsage a, TextureUsage b)

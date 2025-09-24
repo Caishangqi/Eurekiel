@@ -30,6 +30,7 @@ namespace enigma::graphic
           , m_hasSRV(false)
           , m_hasUAV(false)
           , m_bindlessIndex(UINT32_MAX)
+          , m_formattedDebugName() // 初始化格式化调试名称
     {
         // 教学注释：验证输入参数的有效性
         assert(createInfo.width > 0 && "Texture width must be greater than 0");
@@ -93,6 +94,7 @@ namespace enigma::graphic
           , m_hasSRV(other.m_hasSRV)
           , m_hasUAV(other.m_hasUAV)
           , m_bindlessIndex(other.m_bindlessIndex)
+          , m_formattedDebugName(std::move(other.m_formattedDebugName))
     {
         // 清空源对象
         other.m_srvHandle     = {0};
@@ -127,6 +129,7 @@ namespace enigma::graphic
             m_hasSRV        = other.m_hasSRV;
             m_hasUAV        = other.m_hasUAV;
             m_bindlessIndex = other.m_bindlessIndex;
+            m_formattedDebugName = std::move(other.m_formattedDebugName);
 
             // 清空源对象
             other.m_srvHandle     = {0};
@@ -206,22 +209,20 @@ namespace enigma::graphic
      * 更新纹理数据
      */
     bool D12Texture::UpdateTextureData(
-        ID3D12GraphicsCommandList* cmdList,
-        const void*                data,
-        size_t                     dataSize,
-        uint32_t                   mipLevel,
-        uint32_t                   arraySlice
+        const void* data,
+        size_t      dataSize,
+        uint32_t    mipLevel,
+        uint32_t    arraySlice
     )
     {
         UNUSED(dataSize)
         UNUSED(mipLevel)
         UNUSED(arraySlice)
-        if (!cmdList || !data || !IsValid())
+        auto graphicCommandQueue = D3D12RenderSystem::GetCommandListManager()->GetCommandQueue(CommandListManager::Type::Graphics);
+        if (!graphicCommandQueue || !data || !IsValid())
         {
             return false;
         }
-
-        // TODO: 实现纹理数据更新逻辑,使用CommandListManager的ID3D12GraphicsCommandList并且清除参数。
         // 需要创建上传缓冲区并使用CopyTextureRegion
         return true;
     }
@@ -229,14 +230,13 @@ namespace enigma::graphic
     /**
      * 生成Mip贴图
      */
-    bool D12Texture::GenerateMips(ID3D12GraphicsCommandList* cmdList)
+    bool D12Texture::GenerateMips()
     {
-        if (!cmdList || !IsValid() || m_mipLevels <= 1)
+        auto graphicCommandQueue = D3D12RenderSystem::GetCommandListManager()->GetCommandQueue(CommandListManager::Type::Graphics);
+        if (!graphicCommandQueue || !IsValid() || m_mipLevels <= 1)
         {
             return false;
         }
-
-        // TODO: 实现Mip生成逻辑,使用CommandListManager的ID3D12GraphicsCommandList并且清除参数。
         // 通过Compute Shader实现
         return true;
     }
@@ -244,22 +244,173 @@ namespace enigma::graphic
     // ==================== 调试支持 ====================
 
     /**
-     * 获取调试信息
+     * @brief 重写虚函数：设置调试名称并添加纹理特定逻辑
+     *
+     * 教学要点: 重写基类虚函数，在设置纹理名称时同时更新SRV和UAV的调试名称
+     * 这样PIX调试时可以看到更详细的纹理视图信息
+     */
+    void D12Texture::SetDebugName(const std::string& name)
+    {
+        // 调用基类实现设置基本调试名称
+        D12Resource::SetDebugName(name);
+
+        // 清空格式化名称，让GetDebugName()重新生成
+        m_formattedDebugName.clear();
+
+        // TODO: 设置SRV和UAV描述符的调试名称
+        // 这需要等待描述符管理器实现后添加
+        // if (m_hasSRV) { /* 设置SRV调试名称 */ }
+        // if (m_hasUAV) { /* 设置UAV调试名称 */ }
+    }
+
+    /**
+     * @brief 重写虚函数：获取包含纹理尺寸信息的调试名称
+     *
+     * 教学要点: 重写基类虚函数，返回格式化的纹理调试信息
+     * 格式: "TextureName (2048x1024, RGBA8, Mip:4)"
+     */
+    const std::string& D12Texture::GetDebugName() const
+    {
+        // 如果格式化名称为空，重新生成
+        if (m_formattedDebugName.empty())
+        {
+            const std::string& baseName = D12Resource::GetDebugName();
+            if (baseName.empty())
+            {
+                m_formattedDebugName = "[Unnamed Texture]";
+            }
+            else
+            {
+                m_formattedDebugName = baseName;
+            }
+
+            // 添加纹理尺寸信息
+            m_formattedDebugName += " (";
+            m_formattedDebugName += std::to_string(m_width) + "x" + std::to_string(m_height);
+            if (m_depth > 1)
+            {
+                m_formattedDebugName += "x" + std::to_string(m_depth);
+            }
+
+            // 添加格式信息 (简化)
+            switch (m_format)
+            {
+            case DXGI_FORMAT_R8G8B8A8_UNORM:
+                m_formattedDebugName += ", RGBA8";
+                break;
+            case DXGI_FORMAT_R16G16B16A16_FLOAT:
+                m_formattedDebugName += ", RGBA16F";
+                break;
+            case DXGI_FORMAT_R32G32B32A32_FLOAT:
+                m_formattedDebugName += ", RGBA32F";
+                break;
+            case DXGI_FORMAT_D24_UNORM_S8_UINT:
+                m_formattedDebugName += ", D24S8";
+                break;
+            case DXGI_FORMAT_D32_FLOAT:
+                m_formattedDebugName += ", D32F";
+                break;
+            default:
+                m_formattedDebugName += ", Format:" + std::to_string(static_cast<int>(m_format));
+                break;
+            }
+
+            // 添加Mip层级信息
+            if (m_mipLevels > 1)
+            {
+                m_formattedDebugName += ", Mip:" + std::to_string(m_mipLevels);
+            }
+
+            // 添加数组信息
+            if (m_arraySize > 1)
+            {
+                m_formattedDebugName += ", Array:" + std::to_string(m_arraySize);
+            }
+
+            m_formattedDebugName += ")";
+        }
+
+        return m_formattedDebugName;
+    }
+
+    /**
+     * @brief 重写虚函数：获取纹理的详细调试信息
+     *
+     * 教学要点: 提供纹理特定的详细调试信息
+     * 包括尺寸、格式、Mip层级、使用标志、Bindless索引等信息
      */
     std::string D12Texture::GetDebugInfo() const
     {
-        std::ostringstream oss;
-        oss << "D12Texture[" << GetDebugName() << "] ";
-        oss << "Type: " << static_cast<int>(m_textureType) << ", ";
-        oss << "Size: " << m_width << "x" << m_height;
-        if (m_depth > 1) oss << "x" << m_depth;
-        oss << ", Format: " << m_format;
-        oss << ", Mips: " << m_mipLevels;
-        oss << ", Array: " << m_arraySize;
-        oss << ", SRV: " << (m_hasSRV ? "Yes" : "No");
-        oss << ", UAV: " << (m_hasUAV ? "Yes" : "No");
-        oss << ", Bindless: " << (m_bindlessIndex != UINT32_MAX ? std::to_string(m_bindlessIndex) : "None");
-        return oss.str();
+        std::string info = "D12Texture Debug Info:\n";
+        info += "  Name: " + GetDebugName() + "\n";
+        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
+        if (m_depth > 1)
+            info += "x" + std::to_string(m_depth);
+        info += "\n";
+        info += "  Format: " + std::to_string(static_cast<int>(m_format)) + "\n";
+        info += "  Mip Levels: " + std::to_string(m_mipLevels) + "\n";
+        info += "  Array Size: " + std::to_string(m_arraySize) + "\n";
+        info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
+
+        // 纹理类型
+        info += "  Type: ";
+        switch (m_textureType)
+        {
+        case TextureType::Texture1D:
+            info += "1D Texture\n";
+            break;
+        case TextureType::Texture2D:
+            info += "2D Texture\n";
+            break;
+        case TextureType::Texture3D:
+            info += "3D Texture\n";
+            break;
+        case TextureType::TextureCube:
+            info += "Cube Texture\n";
+            break;
+        case TextureType::Texture1DArray:
+            info += "1D Texture Array\n";
+            break;
+        case TextureType::Texture2DArray:
+            info += "2D Texture Array\n";
+            break;
+        default:
+            info += "Unknown\n";
+            break;
+        }
+
+        // 使用标志
+        info += "  Usage: ";
+        if (HasFlag(m_usage, TextureUsage::ShaderResource))
+            info += "SRV ";
+        if (HasFlag(m_usage, TextureUsage::UnorderedAccess))
+            info += "UAV ";
+        if (HasFlag(m_usage, TextureUsage::CopySource))
+            info += "CopySrc ";
+        if (HasFlag(m_usage, TextureUsage::CopyDestination))
+            info += "CopyDst ";
+        info += "\n";
+
+        // 视图状态
+        info += "  Has SRV: " + std::string(m_hasSRV ? "Yes" : "No") + "\n";
+        info += "  Has UAV: " + std::string(m_hasUAV ? "Yes" : "No") + "\n";
+
+        // Bindless状态
+        info += "  Bindless Index: ";
+        if (m_bindlessIndex == UINT32_MAX)
+        {
+            info += "Not Registered\n";
+        }
+        else
+        {
+            info += std::to_string(m_bindlessIndex) + "\n";
+        }
+
+        // 资源状态
+        info += "  Current State: " + std::to_string(static_cast<int>(GetCurrentState())) + "\n";
+        info += "  Valid: " + std::string(IsValid() ? "Yes" : "No");
+
+        return info;
     }
 
     // ==================== 静态辅助方法 ====================
