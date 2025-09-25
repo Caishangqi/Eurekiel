@@ -44,3 +44,9 @@ uint32_t CommandListManager::GetAvailableCount(Type type) const
     UNUSED(type)
     return 0;
 }
+
+ID3D12CommandQueue* CommandListManager::GetCommandQueue(Type type) const
+{
+    UNUSED(type)
+    ERROR_AND_DIE("CommandListManager::GetCommandQueue is not implemented")
+}
