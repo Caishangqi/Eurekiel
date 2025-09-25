@@ -216,10 +216,13 @@
         <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
         <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
         <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
+        <ClCompile Include="Graphic\Resource\DescriptorHandle.cpp"/>
+        <ClCompile Include="Graphic\Resource\DescriptorHeapManager.cpp"/>
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
         <ClCompile Include="Graphic\Resource\DepthTexture\D12DepthTexture.cpp"/>
         <ClCompile Include="Graphic\Resource\FrameBuffer\D12Framebuffer.cpp"/>
         <ClCompile Include="Graphic\Resource\RenderTarget\D12RenderTarget.cpp"/>
+        <ClCompile Include="Graphic\Resource\ShaderResourceBinder.cpp"/>
         <ClCompile Include="Graphic\Resource\Texture\D12Texture.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>
@@ -407,8 +410,12 @@
         <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
         <ClInclude Include="Graphic\Resource\CompiledShader.hpp"/>
         <ClInclude Include="Graphic\Resource\DepthTexture\D12DepthTexture.hpp"/>
+        <ClInclude Include="Graphic\Resource\DescriptorHandle.hpp"/>
+        <ClInclude Include="Graphic\Resource\DescriptorHeapManager.hpp"/>
         <ClInclude Include="Graphic\Resource\FrameBuffer\D12Framebuffer.hpp"/>
         <ClInclude Include="Graphic\Resource\RenderTarget\D12RenderTarget.hpp"/>
+        <ClInclude Include="Graphic\Resource\ResourceBindingTraits.hpp"/>
+        <ClInclude Include="Graphic\Resource\ShaderResourceBinder.hpp"/>
 
         <!-- Support Layer (基于Iris源码验证) -->
         <ClInclude Include="Graphic\Support\FeatureFlags.hpp"/>
