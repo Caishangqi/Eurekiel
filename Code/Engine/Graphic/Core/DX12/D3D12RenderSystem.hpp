@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "../../Resource/Buffer/D12Buffer.hpp"
+#include "../../Resource/BindlessResourceTypes.hpp"
 #include "../../Resource/CommandListManager.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -12,6 +13,8 @@ namespace enigma::graphic
     class D12DepthTexture;
     class RendererSubsystem;
     class D12Texture;
+    class BindlessResourceManager;
+    class ShaderResourceBinder;
     struct TextureCreateInfo;
     struct DepthTextureCreateInfo;
     enum class TextureUsage : uint32_t;
@@ -250,6 +253,41 @@ namespace enigma::graphic
             D3D12_RESOURCE_STATES        initialState,
             ID3D12Resource**             resource);
 
+        // ===== Bindless资源管理API (Milestone 2.3新增) =====
+
+        /**
+         * 获取Bindless资源管理器
+         * @return BindlessResourceManager指针，用于底层资源注册
+         * @note 遵循分层架构：D3D12RenderSystem管理BindlessResourceManager
+         */
+        static std::unique_ptr<BindlessResourceManager>& GetBindlessResourceManager();
+
+        /**
+         * 获取着色器资源绑定器
+         * @return ShaderResourceBinder指针，用于现代化语义资源绑定
+         * @note 遵循分层架构：ShaderResourceBinder包含BindlessResourceManager
+         */
+        static std::unique_ptr<ShaderResourceBinder>& GetShaderResourceBinder();
+
+        /**
+         * 统一资源注册接口 - 为D12Resource提供的便捷方法
+         * @param resource 要注册的资源
+         * @param resourceType 资源类型
+         * @return 成功返回bindless索引，失败返回nullopt
+         *
+         * 教学要点：
+         * - 这是D12Resource RegisterToBindlessManager的底层实现
+         * - 遵循分层原则：D12Resource → D3D12RenderSystem → BindlessResourceManager
+         */
+        static std::optional<uint32_t> RegisterResourceToBindless(std::shared_ptr<class D12Resource> resource, BindlessResourceType resourceType);
+
+        /**
+         * 统一资源注销接口 - 为D12Resource提供的便捷方法
+         * @param resource 要注销的资源
+         * @return 成功返回true
+         */
+        static bool UnregisterResourceFromBindless(std::shared_ptr<class D12Resource> resource);
+
     private:
         // 禁用实例化（纯静态类）
         D3D12RenderSystem()                                    = delete;
@@ -264,6 +302,10 @@ namespace enigma::graphic
 
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器
+
+        // Bindless资源管理系统（Milestone 2.3新增）
+        static std::unique_ptr<BindlessResourceManager> s_bindlessResourceManager; // Bindless资源管理器
+        static std::unique_ptr<ShaderResourceBinder>    s_shaderResourceBinder; // 现代化资源绑定器
 
         // 系统状态（移除重复的配置结构）
         static bool s_isInitialized; // 初始化状态

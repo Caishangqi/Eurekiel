@@ -6,6 +6,8 @@
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Resource/DepthTexture/D12DepthTexture.hpp"
+#include "Engine/Graphic/Resource/BindlessResourceManager.hpp"
+#include "Engine/Graphic/Resource/ShaderResourceBinder.hpp"
 
 namespace enigma::graphic
 {
@@ -16,6 +18,9 @@ namespace enigma::graphic
 
     // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
+    // Bindless resource management system
+    std::unique_ptr<BindlessResourceManager> D3D12RenderSystem::s_bindlessResourceManager = nullptr;
+    std::unique_ptr<ShaderResourceBinder>    D3D12RenderSystem::s_shaderResourceBinder    = nullptr;
 
     bool D3D12RenderSystem::s_isInitialized = false;
 
@@ -600,5 +605,15 @@ namespace enigma::graphic
             initialState,
             nullptr,
             IID_PPV_ARGS(resource));
+    }
+
+    std::unique_ptr<BindlessResourceManager>& D3D12RenderSystem::GetBindlessResourceManager()
+    {
+        return s_bindlessResourceManager;
+    }
+
+    std::unique_ptr<ShaderResourceBinder>& D3D12RenderSystem::GetShaderResourceBinder()
+    {
+        return s_shaderResourceBinder;
     }
 } // namespace enigma::graphic
