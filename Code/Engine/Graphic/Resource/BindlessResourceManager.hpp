@@ -6,128 +6,77 @@
 #include <queue>
 #include <mutex>
 #include <string>
+#include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
+
+// 新的描述符管理类
+#include "DescriptorHeapManager.hpp"
+#include "DescriptorHandle.hpp"
+#include "BindlessResourceTypes.hpp"
 
 namespace enigma::graphic
 {
     // 前向声明
+    class D12Resource;
     class D12Texture;
     class D12Buffer;
 
     /**
+     * @brief 描述符堆类型
+     *
+     * 重构说明: 此枚举已不再使用，现在使用DescriptorHeapManager::HeapType
+     * 保留用于向后兼容，未来版本可能删除
+     */
+    enum class HeapType
+    {
+        CBV_SRV_UAV, // 常量缓冲区、着色器资源、无序访问视图
+        Sampler // 采样器堆 (暂不使用，为未来扩展预留)
+    };
+
+    /**
      * @brief BindlessResourceManager类 - DirectX 12 Bindless资源绑定管理器
-     * 
+     *
      * 教学要点:
      * 1. Bindless渲染是现代GPU的重要特性，突破传统描述符表的限制
      * 2. 传统方式：每次Draw Call前需要绑定描述符表，限制同时可见的资源数量
      * 3. Bindless方式：创建巨大的描述符堆，着色器通过索引直接访问资源
      * 4. 性能优势：减少状态切换，支持GPU-Driven渲染，提升批处理效率
-     * 
+     *
      * DirectX 12特性:
      * - 支持百万级别的描述符 (受硬件Tier限制)
      * - GPU可见的描述符堆 (DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
      * - 动态描述符索引 (Dynamic Indexing)
      * - 资源状态自动管理
-     * 
+     *
      * 延迟渲染应用:
      * - G-Buffer阶段：大量材质纹理的高效访问
      * - 光照计算：动态光源和阴影贴图的批量绑定
      * - 后处理：临时RT的快速切换，无需重新绑定描述符表
      * - Compute Shader：SSAO、Bloom等后处理的资源访问
-     * 
-     * @note 这是为Enigma延迟渲染器专门设计的Bindless资源管理系统
+     *
+     * 🔥 重构变更说明 (Milestone 2):
+     * 1. **分离描述符管理职责**: 原内嵌DescriptorHeap结构体已抽取为独立的DescriptorHeapManager类
+     * 2. **RAII资源管理**: 引入DescriptorHandle类实现自动描述符生命周期管理
+     * 3. **遵循单一职责原则**: BindlessResourceManager专注于资源索引分配和视图创建
+     * 4. **简化架构复杂性**: 描述符堆的创建、分配、回收全部委托给专用管理器
+     * 5. **现代C++实践**: 智能指针、RAII、移动语义的深度应用
+     *
+     * @note 这是为Enigma延迟渲染器专门设计的Bindless资源管理系统，已重构为使用独立的描述符管理架构
      */
     class BindlessResourceManager final
     {
-    public:
-        /**
-         * @brief 资源类型枚举
-         * 
-         * 教学要点: 不同类型的资源需要不同的描述符视图和绑定方式
-         */
-        enum class ResourceType
-        {
-            Texture2D, // 2D纹理资源 (SRV)
-            Texture3D, // 3D纹理资源 (SRV)
-            TextureCube, // 立方体纹理 (SRV)
-            Buffer, // 结构化缓冲区 (SRV)
-            ConstantBuffer, // 常量缓冲区 (CBV)
-            RWTexture2D, // 可读写2D纹理 (UAV)
-            RWBuffer // 可读写缓冲区 (UAV)
-        };
-
-        /**
-         * @brief 描述符堆类型
-         */
-        enum class HeapType
-        {
-            CBV_SRV_UAV, // 常量缓冲区、着色器资源、无序访问视图
-            Sampler // 采样器堆 (暂不使用，为未来扩展预留)
-        };
-
     private:
-        /**
-         * @brief 资源句柄结构
-         * 
-         * 教学要点: 封装资源的元数据，便于管理和调试
-         */
-        struct ResourceHandle
-        {
-            uint32_t                    index; // 全局唯一索引
-            ResourceType                type; // 资源类型
-            ID3D12Resource*             resource; // DX12资源指针
-            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle; // CPU描述符句柄
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle; // GPU描述符句柄 (着色器可见)
-            std::string                 debugName; // 调试名称
-            bool                        isValid; // 有效性标记
-
-            ResourceHandle();
-
-            // 重置句柄为无效状态
-            void Reset();
-        };
-
-        /**
-         * @brief 描述符堆包装器
-         */
-        struct DescriptorHeap
-        {
-            ID3D12DescriptorHeap*       heap; // DX12描述符堆
-            HeapType                    type; // 堆类型
-            uint32_t                    capacity; // 总容量
-            uint32_t                    used; // 已使用数量
-            uint32_t                    descriptorSize; // 单个描述符大小
-            D3D12_CPU_DESCRIPTOR_HANDLE cpuStart; // CPU起始句柄
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuStart; // GPU起始句柄
-
-            DescriptorHeap();
-            ~DescriptorHeap();
-
-            // 获取指定索引的CPU句柄
-            D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandle(uint32_t index) const;
-
-            // 获取指定索引的GPU句柄
-            D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint32_t index) const;
-
-            // 检查是否还有空间
-            bool HasSpace() const { return used < capacity; }
-
-            // 禁用拷贝
-            DescriptorHeap(const DescriptorHeap&)            = delete;
-            DescriptorHeap& operator=(const DescriptorHeap&) = delete;
-        };
-
         // 核心资源 - 设备从D3D12RenderSystem::GetDevice()获取，不在此重复存储
 
-        // 描述符堆管理
-        std::unique_ptr<DescriptorHeap> m_mainHeap; // 主描述符堆 (CBV/SRV/UAV)
-        std::unique_ptr<DescriptorHeap> m_samplerHeap; // 采样器堆 (未来使用)
+        // 描述符堆管理 - 重构为使用新的独立管理类
+        std::shared_ptr<DescriptorHeapManager> m_heapManager; // 描述符堆管理器
 
-        // 资源管理
-        std::vector<std::unique_ptr<ResourceHandle>>  m_resources; // 所有已注册资源
+        // 🔥 简化的资源管理 (移除ResourceHandle)
+        std::vector<std::shared_ptr<D12Resource>>     m_registeredResources; // 已注册资源数组 (按索引访问)
         std::queue<uint32_t>                          m_freeIndices; // 空闲索引队列
         std::unordered_map<ID3D12Resource*, uint32_t> m_resourceToIndex; // 资源到索引映射
+        std::unordered_map<uint32_t, BindlessResourceType>    m_indexToType; // 索引到资源类型映射 (用于调试)
 
         // 动态扩容参数
         uint32_t m_initialCapacity; // 初始容量
@@ -173,13 +122,36 @@ namespace enigma::graphic
          * @param maxCapacity 最大描述符容量
          * @param growthFactor 扩容因子 (新容量 = 旧容量 * 因子)
          * @return 成功返回true，失败返回false
-         * 
+         *
          * 教学要点:
          * 1. 从D3D12RenderSystem::GetDevice()获取设备，避免重复存储
          * 2. 创建GPU可见的描述符堆 (SHADER_VISIBLE标志)
          * 3. 查询硬件支持的最大描述符数量
          * 4. 预分配资源句柄数组，避免频繁重分配
          * 5. 初始化索引分配器
+         *
+         * 重构实现指导:
+         * ```cpp
+         * // 1. 创建并初始化DescriptorHeapManager
+         * m_descriptorHeapManager = std::make_shared<DescriptorHeapManager>();
+         * if (!m_descriptorHeapManager->Initialize(initialCapacity, 2048)) { // CBV/SRV/UAV容量, Sampler容量
+         *     return false;
+         * }
+         *
+         * // 2. 预分配资源数组 (简化为共享指针数组)
+         * m_registeredResources.resize(initialCapacity);
+         *
+         * // 3. 初始化空闲索引队列
+         * for (uint32_t i = 0; i < initialCapacity; ++i) {
+         *     m_freeIndices.push(i);
+         * }
+         *
+         * // 4. 设置参数和标记
+         * m_initialCapacity = initialCapacity;
+         * m_maxCapacity = maxCapacity;
+         * m_growthFactor = growthFactor;
+         * m_initialized = true;
+         * ```
          */
         bool Initialize(uint32_t initialCapacity = DEFAULT_INITIAL_CAPACITY,
                         uint32_t maxCapacity     = DEFAULT_MAX_CAPACITY,
@@ -193,247 +165,287 @@ namespace enigma::graphic
         void Shutdown();
 
         // ========================================================================
-        // 资源注册接口
+        // 资源注册接口 (🔥 新简化架构 - 移除ResourceHandle)
         // ========================================================================
 
         /**
-         * @brief 注册2D纹理资源
-         * @param texture 纹理对象指针
-         * @param debugName 调试名称
-         * @return 全局资源索引，失败返回UINT32_MAX
-         * 
-         * 教学要点:
-         * 1. 创建Shader Resource View (SRV)
-         * 2. 分配全局唯一索引
-         * 3. 在着色器中可以通过索引直接访问: Texture2D textures[] : register(t0, space0);
+         * @brief 注册纹理到Bindless系统
+         * @param texture 纹理资源
+         * @param type 资源类型
+         * @return 成功返回全局索引，失败返回nullopt
+         *
+         * 实现指导:
+         * 1. 检查纹理是否已启用Bindless支持，未启用则自动启用
+         * 2. 从描述符堆分配CBV/SRV/UAV描述符
+         * 3. 创建纹理的SRV到分配的描述符位置
+         * 4. 将纹理存储到已注册资源列表
+         * 5. 更新索引映射和统计信息
+         * 6. 调用texture->SetBindlessBinding设置绑定信息
          */
-        uint32_t RegisterTexture2D(const std::shared_ptr<D12Texture>& texture, const std::string& debugName = "");
+        std::optional<uint32_t> RegisterTexture2D(std::shared_ptr<D12Texture> texture, BindlessResourceType type = BindlessResourceType::Texture2D);
 
         /**
-         * @brief 注册结构化缓冲区
-         * @param buffer 缓冲区对象指针
-         * @param debugName 调试名称
-         * @return 全局资源索引，失败返回UINT32_MAX
-         * 
-         * 教学要点: 结构化缓冲区用于存储复杂数据结构，如顶点、光源等
+         * @brief 注册缓冲区到Bindless系统
+         * @param buffer 缓冲区资源
+         * @param type 资源类型
+         * @return 成功返回全局索引，失败返回nullopt
+         *
+         * 实现指导:
+         * 1. 检查缓冲区是否已启用Bindless支持，未启用则自动启用
+         * 2. 根据类型创建对应的视图 (CBV for ConstantBuffer, SRV for StructuredBuffer)
+         * 3. 从描述符堆分配描述符
+         * 4. 存储到已注册资源列表并更新映射
+         * 5. 调用buffer->SetBindlessBinding设置绑定信息
          */
-        uint32_t RegisterStructuredBuffer(const std::shared_ptr<D12Buffer>& buffer, const std::string& debugName = "");
+        std::optional<uint32_t> RegisterBuffer(std::shared_ptr<D12Buffer> buffer, BindlessResourceType type);
 
         /**
-         * @brief 注册常量缓冲区
-         * @param buffer 常量缓冲区指针
-         * @param debugName 调试名称
-         * @return 全局资源索引，失败返回UINT32_MAX
-         * 
-         * 教学要点: 常量缓冲区存储Uniform数据，如变换矩阵、光照参数等
-         */
-        uint32_t RegisterConstantBuffer(const std::shared_ptr<D12Buffer>& buffer, const std::string& debugName = "");
-
-        /**
-         * @brief 注册可读写纹理 (用于Compute Shader)
-         * @param texture 纹理对象指针
-         * @param debugName 调试名称
-         * @return 全局资源索引，失败返回UINT32_MAX
-         * 
-         * 教学要点: UAV允许Compute Shader读写纹理，用于后处理效果
-         */
-        uint32_t RegisterRWTexture2D(const std::shared_ptr<D12Texture>& texture, const std::string& debugName = "");
-
-        /**
-         * @brief 注册可读写缓冲区
-         * @param buffer 缓冲区对象指针
-         * @param debugName 调试名称
-         * @return 全局资源索引，失败返回UINT32_MAX
-         */
-        uint32_t RegisterRWBuffer(const std::shared_ptr<D12Buffer>& buffer, const std::string& debugName = "");
-
-        // ========================================================================
-        // 资源管理接口
-        // ========================================================================
-
-        /**
-         * @brief 注销资源 (释放索引供复用)
-         * @param index 要注销的资源索引
+         * @brief 从Bindless系统注销资源
+         * @param resource 要注销的资源
          * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 
-         * 1. 将索引加入空闲队列供复用
-         * 2. 清理描述符视图
-         * 3. 移除资源映射关系
+         *
+         * 实现指导:
+         * 1. 检查资源是否已注册到Bindless系统
+         * 2. 获取资源的Bindless索引
+         * 3. 从已注册资源列表中获取资源的DescriptorHandle
+         * 4. 通过DescriptorHandle释放描述符堆中的描述符
+         * 5. 从已注册资源列表和索引映射中移除
+         * 6. 调用resource->ClearBindlessBinding清除绑定信息
+         * 7. 更新统计信息
          */
-        bool UnregisterResource(uint32_t index);
+        bool UnregisterResource(std::shared_ptr<D12Resource> resource);
 
         /**
-         * @brief 更新已注册资源的内容
-         * @param index 资源索引
-         * @param newResource 新的资源对象
-         * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 支持动态更新资源，无需重新分配索引
+         * @brief 获取资源的GPU描述符句柄
+         * @param resource 资源对象
+         * @return 如果资源已注册返回GPU句柄，否则返回nullopt
+         *
+         * 实现指导:
+         * 1. 检查资源是否已注册到Bindless系统
+         * 2. 从资源的ResourceBindingTraits获取DescriptorHandle
+         * 3. 通过DescriptorHandle获取GPU描述符句柄
+         * 4. 返回GPU描述符句柄用于着色器绑定表设置
          */
-        bool UpdateResource(uint32_t index, const std::shared_ptr<D12Texture>& newResource);
-        bool UpdateResource(uint32_t index, const std::shared_ptr<D12Buffer>& newResource);
+        std::optional<D3D12_GPU_DESCRIPTOR_HANDLE> GetGPUHandle(std::shared_ptr<D12Resource> resource) const;
 
         /**
-         * @brief 批量注册资源 (提升性能)
-         * @param textures 纹理数组
-         * @param startIndex 起始索引输出
-         * @return 成功注册的数量
-         * 
-         * 教学要点: 批量操作减少锁竞争，提升多线程性能
+         * @brief 根据全局索引获取GPU描述符句柄
+         * @param globalIndex 全局索引
+         * @return 如果索引有效返回GPU句柄，否则返回nullopt
+         *
+         * 实现指导:
+         * 1. 验证索引范围 (0 <= globalIndex < m_registeredResources.size())
+         * 2. 从已注册资源列表获取资源
+         * 3. 检查资源是否仍然有效
+         * 4. 获取资源的GPU描述符句柄并返回
          */
-        uint32_t BatchRegisterTextures(const std::vector<std::shared_ptr<D12Texture>>& textures, uint32_t& startIndex);
+        std::optional<D3D12_GPU_DESCRIPTOR_HANDLE> GetGPUHandleByIndex(uint32_t globalIndex) const;
+
+        /**
+         * @brief 批量更新描述符表到着色器绑定
+         * @param commandList 命令列表
+         * @param rootParameterIndex 根参数索引
+         * @param startIndex 起始索引
+         * @param count 描述符数量
+         *
+         * 实现指导:
+         * 1. 验证索引范围和命令列表有效性
+         * 2. 获取起始GPU描述符句柄
+         * 3. 调用ID3D12GraphicsCommandList::SetGraphicsRootDescriptorTable
+         * 4. 支持计算着色器的SetComputeRootDescriptorTable
+         */
+        void SetDescriptorTable(ID3D12GraphicsCommandList* commandList, uint32_t rootParameterIndex, uint32_t startIndex, uint32_t count);
+
+        /**
+         * @brief 刷新所有已注册资源的描述符
+         *
+         * 实现指导:
+         * 1. 遍历所有已注册资源
+         * 2. 获取每个资源的DescriptorHandle
+         * 3. 重新创建描述符视图到相同的描述符位置
+         * 4. 更新GPU可见堆中的描述符
+         *
+         * 使用场景:
+         * - 纹理内容更新后需要刷新SRV
+         * - 缓冲区大小改变后需要刷新CBV/SRV
+         */
+        void RefreshAllDescriptors();
 
         // ========================================================================
-        // 描述符堆访问接口
+        // 描述符堆访问接口 (🔥 更新为DescriptorHeapManager架构)
         // ========================================================================
 
         /**
          * @brief 获取主描述符堆 (用于根签名绑定)
          * @return 描述符堆指针
-         * 
-         * 教学要点: 着色器需要通过根签名绑定这个堆才能访问资源
+         *
+         * 实现指导:
+         * ```cpp
+         * return m_descriptorHeapManager ? m_descriptorHeapManager->GetCbvSrvUavHeap() : nullptr;
+         * ```
          */
         ID3D12DescriptorHeap* GetMainDescriptorHeap() const;
 
         /**
          * @brief 获取采样器描述符堆
          * @return 采样器堆指针 (当前未使用)
+         *
+         * 实现指导:
+         * ```cpp
+         * return m_descriptorHeapManager ? m_descriptorHeapManager->GetSamplerHeap() : nullptr;
+         * ```
          */
         ID3D12DescriptorHeap* GetSamplerDescriptorHeap() const;
 
         /**
-         * @brief 获取资源的GPU描述符句柄
-         * @param index 资源索引
-         * @return GPU描述符句柄
-         * 
-         * 教学要点: GPU句柄用于着色器内的资源访问
-         */
-        D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(uint32_t index) const;
-
-        /**
          * @brief 设置到命令列表 (绑定描述符堆)
          * @param commandList 命令列表指针
-         * 
-         * 教学要点: 每个命令列表录制前需要绑定描述符堆
+         *
+         * 实现指导:
+         * ```cpp
+         * if (m_descriptorHeapManager && commandList) {
+         *     m_descriptorHeapManager->SetDescriptorHeaps(commandList);
+         * }
+         * ```
          */
         void SetDescriptorHeaps(ID3D12GraphicsCommandList* commandList) const;
 
         // ========================================================================
-        // 查询和统计接口
+        // 查询和统计接口 (🔥 简化架构)
         // ========================================================================
 
         /**
-         * @brief 检查资源索引是否有效
-         * @param index 要检查的索引
-         * @return 有效返回true，否则返回false
-         */
-        bool IsValidIndex(uint32_t index) const;
-
-        /**
-         * @brief 获取资源类型
-         * @param index 资源索引
-         * @return 资源类型，无效索引返回最大值
-         */
-        ResourceType GetResourceType(uint32_t index) const;
-
-        /**
-         * @brief 获取资源调试名称
-         * @param index 资源索引
-         * @return 调试名称字符串
-         */
-        std::string GetResourceDebugName(uint32_t index) const;
-
-        /**
-         * @brief 获取当前使用的资源数量
-         * @return 已使用的资源数量
-         */
-        uint32_t GetUsedResourceCount() const { return m_currentUsed; }
-
-        /**
-         * @brief 获取峰值使用资源数量
-         * @return 峰值使用数量
-         */
-        uint32_t GetPeakResourceCount() const { return m_peakUsed; }
-
-        /**
-         * @brief 获取总分配数量 (包括已释放的)
-         * @return 总分配数量
-         */
-        uint32_t GetTotalAllocatedCount() const { return m_totalAllocated; }
-
-        /**
-         * @brief 获取当前描述符堆容量
-         * @return 堆容量
-         */
-        uint32_t GetHeapCapacity() const;
-
-        /**
-         * @brief 获取描述符堆使用率
-         * @return 使用率 (0.0 - 1.0)
-         */
-        float GetHeapUsageRatio() const;
-
-        /**
-         * @brief 检查管理器是否已初始化
-         * @return 已初始化返回true，否则返回false
+         * @brief 检查是否已初始化
          */
         bool IsInitialized() const { return m_initialized; }
 
+        /**
+         * @brief 获取已注册资源数量
+         */
+        uint32_t GetRegisteredResourceCount() const { return static_cast<uint32_t>(m_registeredResources.size()); }
+
+        /**
+         * @brief 获取指定类型的已注册资源数量
+         * @param type 资源类型
+         *
+         * 实现指导:
+         * 1. 遍历m_indexToType映射
+         * 2. 统计指定类型的资源数量
+         */
+        uint32_t GetResourceCountByType(BindlessResourceType type) const;
+
+        /**
+         * @brief 获取描述符堆使用情况
+         * @return {已使用数量, 总容量}
+         *
+         * 实现指导:
+         * 委托给m_descriptorHeapManager->GetDescriptorHeapUsage()
+         */
+        std::pair<uint32_t, uint32_t> GetDescriptorHeapUsage() const;
+
+        /**
+         * @brief 获取调试信息字符串
+         *
+         * 实现指导:
+         * 1. 包含已注册资源总数
+         * 2. 按类型统计资源数量
+         * 3. 描述符堆使用情况
+         * 4. 每个资源的详细信息 (名称、索引、类型)
+         */
+        std::string GetDebugInfo() const;
+
     private:
         // ========================================================================
-        // 私有辅助方法
+        // 私有辅助方法 (🔥 简化架构 - 移除ResourceHandle相关方法)
         // ========================================================================
-
-        /**
-         * @brief 创建描述符堆
-         * @param type 堆类型
-         * @param capacity 容量
-         * @return 创建的堆对象
-         */
-        std::unique_ptr<DescriptorHeap> CreateDescriptorHeap(HeapType type, uint32_t capacity);
-
-        /**
-         * @brief 扩容描述符堆
-         * @param newCapacity 新容量
-         * @return 成功返回true，失败返回false
-         * 
-         * 教学要点: 扩容需要重新创建堆并复制现有描述符
-         */
-        bool GrowDescriptorHeap(uint32_t newCapacity);
 
         /**
          * @brief 分配新的资源索引
-         * @return 分配的索引，失败返回UINT32_MAX
+         * @return 分配的索引，失败返回nullopt
+         *
+         * 实现指导:
+         * ```cpp
+         * std::lock_guard<std::mutex> lock(m_mutex);
+         * if (m_freeIndices.empty()) {
+         *     // 需要扩容资源数组
+         *     uint32_t newSize = std::min(m_registeredResources.size() * m_growthFactor, m_maxCapacity);
+         *     if (newSize <= m_registeredResources.size()) return std::nullopt;
+         *
+         *     // 扩容资源数组并添加新索引到空闲队列
+         *     uint32_t oldSize = m_registeredResources.size();
+         *     m_registeredResources.resize(newSize);
+         *     for (uint32_t i = oldSize; i < newSize; ++i) {
+         *         m_freeIndices.push(i);
+         *     }
+         * }
+         *
+         * uint32_t index = m_freeIndices.front();
+         * m_freeIndices.pop();
+         * m_currentUsed++;
+         * m_peakUsed = std::max(m_peakUsed, m_currentUsed);
+         * return index;
+         * ```
          */
-        uint32_t AllocateIndex();
+        std::optional<uint32_t> AllocateIndex();
 
         /**
          * @brief 释放资源索引
          * @param index 要释放的索引
+         *
+         * 实现指导:
+         * ```cpp
+         * std::lock_guard<std::mutex> lock(m_mutex);
+         * if (index < m_registeredResources.size() && m_registeredResources[index]) {
+         *     // 从资源映射中移除
+         *     auto resource = m_registeredResources[index];
+         *     if (resource && resource->GetResource()) {
+         *         m_resourceToIndex.erase(resource->GetResource());
+         *     }
+         *     m_indexToType.erase(index);
+         *
+         *     // 清空资源槽位并回收索引
+         *     m_registeredResources[index].reset();
+         *     m_freeIndices.push(index);
+         *     m_currentUsed--;
+         * }
+         * ```
          */
         void FreeIndex(uint32_t index);
 
         /**
          * @brief 创建资源的描述符视图
-         * @param handle 资源句柄
-         * @param resource DX12资源指针
+         * @param resource D12资源对象
+         * @param descriptorHandle 目标描述符句柄
          * @param type 资源类型
+         *
+         * 实现指导:
+         * 1. 根据资源类型创建对应的描述符视图 (SRV, CBV, UAV)
+         * 2. 使用descriptorHandle.GetCpuHandle()作为目标位置
+         * 3. 调用D3D12RenderSystem::GetDevice()获取设备
+         * 4. 使用设备的Create*View方法创建描述符
          */
-        void CreateDescriptorView(ResourceHandle* handle, ID3D12Resource* resource, ResourceType type);
+        void CreateDescriptorView(std::shared_ptr<D12Resource> resource,
+                                  const DescriptorHandle&      descriptorHandle,
+                                  BindlessResourceType        type);
 
         /**
          * @brief 获取资源类型的字符串名称 (调试用)
          * @param type 资源类型
          * @return 类型名称
          */
-        static const char* GetResourceTypeName(ResourceType type);
+        static const char* GetResourceTypeName(BindlessResourceType type);
 
         /**
-         * @brief 查询硬件支持的最大描述符数量
-         * @return 最大支持数量
+         * @brief 验证资源索引是否有效
+         * @param index 要验证的索引
+         * @return 有效返回true，否则返回false
+         *
+         * 实现指导:
+         * ```cpp
+         * return index < m_registeredResources.size() && m_registeredResources[index] != nullptr;
+         * ```
          */
-        uint32_t QueryMaxDescriptorCount() const;
+        bool IsValidIndex(uint32_t index) const;
 
         // 禁用拷贝构造和赋值操作
         BindlessResourceManager(const BindlessResourceManager&)            = delete;

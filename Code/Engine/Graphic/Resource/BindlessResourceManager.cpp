@@ -7,30 +7,6 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // DescriptorHeap 实现
-    // ========================================================================
-
-    BindlessResourceManager::DescriptorHeap::DescriptorHeap()
-        : heap(nullptr)
-          , type(HeapType::CBV_SRV_UAV)
-          , capacity(0)
-          , used(0)
-          , descriptorSize(0)
-          , cpuStart{}
-          , gpuStart{}
-    {
-    }
-
-    BindlessResourceManager::DescriptorHeap::~DescriptorHeap()
-    {
-        if (heap)
-        {
-            heap->Release();
-            heap = nullptr;
-        }
-    }
-
-    // ========================================================================
     // BindlessResourceManager 主要实现
     // ========================================================================
 
@@ -54,23 +30,9 @@ namespace enigma::graphic
 
     void BindlessResourceManager::Shutdown()
     {
-        // 桩实现
+        ERROR_AND_DIE("BindlessResourceManager::Shutdown not implemented")
     }
 
-    uint32_t BindlessResourceManager::RegisterTexture2D(const std::shared_ptr<D12Texture>& texture, const std::string& debugName)
-    {
-        ERROR_RECOVERABLE("BindlessResourceManager::RegisterTexture2D not implemented")
-        UNUSED(texture)
-        UNUSED(debugName)
-        return 0;
-    }
-
-    bool BindlessResourceManager::UnregisterResource(uint32_t index)
-    {
-        ERROR_RECOVERABLE("BindlessResourceManager::UnregisterResource not implemented")
-        UNUSED(index)
-        return false;
-    }
 
     // TODO: 其他方法的完整实现由您来完成
 }
