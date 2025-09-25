@@ -21,7 +21,6 @@
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
 #include "../Core/Pipeline/ShaderPackManager.hpp"
-#include "../Resource/BindlessResourceManager.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 
@@ -31,7 +30,6 @@ using namespace enigma::core;
 namespace enigma::graphic
 {
     // 前向声明 - 避免循环包含
-    class BindlessResourceManager;
     class ShaderPackManager;
     class RenderCommandQueue;
 
@@ -370,16 +368,6 @@ namespace enigma::graphic
         class IWorldRenderingPipeline* PreparePipeline(const enigma::resource::ResourceLocation& dimensionId);
 
         /**
-         * @brief 获取Bindless资源管理器
-         * @return 资源管理器指针
-         * @details 用于创建和管理Bindless描述符
-         */
-        BindlessResourceManager* GetResourceManager() const noexcept
-        {
-            return m_resourceManager.get();
-        }
-
-        /**
          * @brief 获取Shader Pack管理器
          * @return Shader Pack管理器指针
          * @details 用于加载、管理和切换不同的着色器包
@@ -523,9 +511,6 @@ namespace enigma::graphic
 
         // TODO: 重新启用PipelineManager（需要修复编码问题）
         // std::unique_ptr<PipelineManager> m_pipelineManager;
-
-        /// Bindless资源管理器 - 现代化资源绑定
-        std::unique_ptr<BindlessResourceManager> m_resourceManager;
 
         /// Shader Pack管理器 - 着色器包系统
         std::unique_ptr<ShaderPackManager> m_shaderPackManager;
