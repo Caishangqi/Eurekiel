@@ -1,9 +1,12 @@
 ﻿#pragma once
 
 #include "../D12Resources.hpp"
+#include "../BindlessResourceTypes.hpp"
 #include <d3d12.h>
 #include <memory>
 #include <cstdint>
+
+#include "Engine/Graphic/Resource/BindlessResourceManager.hpp"
 
 namespace enigma::graphic
 {
@@ -162,6 +165,18 @@ namespace enigma::graphic
          * 对应Iris的调试信息输出模式
          */
         std::string GetDebugInfo() const override;
+
+    protected:
+        /**
+         * @brief 获取缓冲区的默认Bindless资源类型
+         * @return 根据BufferUsage确定的BindlessResourceType
+         *
+         * 实现指导:
+         * - ConstantBuffer用途返回BindlessResourceType::ConstantBuffer
+         * - StructuredBuffer用途返回BindlessResourceType::Buffer
+         * - 其他类型根据实际情况返回合适的BindlessResourceType
+         */
+        BindlessResourceType GetDefaultBindlessResourceType() const override;
 
     private:
         // ==================== D12Buffer特有成员变量 ====================

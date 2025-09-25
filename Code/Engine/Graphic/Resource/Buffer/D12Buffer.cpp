@@ -385,4 +385,11 @@ namespace enigma::graphic
 
         return flags;
     }
+
+    BindlessResourceType D12Buffer::GetDefaultBindlessResourceType() const
+    {
+        // TODO: 稍后完成完整实现 - 根据BufferUsage返回对应的BindlessResourceType
+        // 暂时返回Buffer作为默认值
+        return BindlessResourceType::Buffer;
+    }
 } // namespace enigma::graphic
