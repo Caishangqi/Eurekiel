@@ -323,6 +323,16 @@ namespace enigma::graphic
          */
         std::string GetDebugInfo() const override;
 
+    protected:
+        /**
+         * @brief 获取深度纹理的默认Bindless资源类型
+         * @return 深度纹理通常返回BindlessResourceType::Texture2D用于着色器采样
+         *
+         * 教学要点: 深度纹理作为可读取的资源，其Bindless类型是Texture2D
+         * 这允许着色器在延迟渲染中采样深度缓冲进行后处理
+         */
+        BindlessResourceType GetDefaultBindlessResourceType() const override;
+
         // ==================== 静态辅助方法 ====================
 
         /**

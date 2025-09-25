@@ -393,6 +393,14 @@ namespace enigma::graphic
         return info;
     }
 
+    BindlessResourceType D12DepthTexture::GetDefaultBindlessResourceType() const
+    {
+        // 深度纹理作为可采样资源使用Texture2D类型
+        // 这允许在延迟渲染管线中采样深度缓冲进行后处理
+        // 对应Iris中深度纹理绑定为GL_TEXTURE_2D用于着色器访问
+        return BindlessResourceType::Texture2D;
+    }
+
     // ==================== 静态辅助方法 ====================
 
     /**
