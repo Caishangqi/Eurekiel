@@ -23,9 +23,12 @@
 #pragma once
 
 #include "../D12Resources.hpp"
+#include "../BindlessResourceTypes.hpp"
 #include <memory>
 #include <string>
 #include <dxgi1_6.h>
+
+#include "Engine/Resource/ResourceCommon.hpp"
 
 namespace enigma::graphic
 {
@@ -227,30 +230,23 @@ namespace enigma::graphic
          */
         bool HasUnorderedAccessView() const { return m_hasUAV; }
 
-        // ==================== Bindless支持接口 ====================
+        // ==================== 🔥 Bindless支持说明 (Milestone 2.3更新) ====================
+        //
+        // Bindless注册功能已统一到D12Resource基类中：
+        // - RegisterToBindlessManager() - 统一的便捷注册方法
+        // - UnregisterFromBindlessManager() - 统一的注销方法
+        //
+        // 使用方式：
+        //   auto texture = std::make_shared<D12Texture>(...);
+        //   auto index = texture->RegisterToBindlessManager(manager);
+        //
+        // 这样设计的优势：
+        // 1. DRY原则 - 避免在每个资源类型重复实现
+        // 2. 一致性 - 所有资源类型使用相同接口
+        // 3. 类型安全 - 基类自动进行类型检测和转换
+        //
+        // ==================== Texture特定接口 ====================
 
-        /**
-         * @brief 注册到Bindless资源管理器
-         * @param manager Bindless资源管理器指针
-         * @return 全局资源索引，失败返回UINT32_MAX
-         *
-         * 教学要点: Bindless架构中纹理通过全局索引访问
-         * 对应Iris中的纹理绑定机制
-         */
-        uint32_t RegisterToBindlessManager(class BindlessResourceManager* manager);
-
-        /**
-         * @brief 从Bindless资源管理器注销
-         * @param manager Bindless资源管理器指针
-         * @return 是否成功注销
-         */
-        bool UnregisterFromBindlessManager(class BindlessResourceManager* manager);
-
-        /**
-         * @brief 获取Bindless资源索引
-         * @return 全局资源索引，未注册返回UINT32_MAX
-         */
-        uint32_t GetBindlessIndex() const { return m_bindlessIndex; }
 
         // ==================== 纹理操作接口 ====================
 
@@ -310,7 +306,25 @@ namespace enigma::graphic
          */
         std::string GetDebugInfo() const override;
 
-        // ==================== 静态辅助方法 ====================
+        // ==================== 静态辅助方法 (公共访问) ====================
+
+        /**
+         * @brief 获取格式的字节数
+         * @param format DXGI格式
+         * @return 每像素字节数
+         */
+        static uint32_t GetFormatBytesPerPixel(DXGI_FORMAT format);
+
+    protected:
+        /**
+         * @brief 获取纹理的默认Bindless资源类型
+         * @return BindlessResourceType::Texture2D
+         *
+         * 实现指导: 纹理默认注册为Texture2D类型
+         */
+        BindlessResourceType GetDefaultBindlessResourceType() const override;
+
+        // ==================== 静态辅助方法 (受保护访问) ====================
 
         /**
          * @brief 计算纹理大小
@@ -320,13 +334,6 @@ namespace enigma::graphic
          * @return 所需字节数
          */
         static size_t CalculateTextureSize(uint32_t width, uint32_t height, DXGI_FORMAT format);
-
-        /**
-         * @brief 获取格式的字节数
-         * @param format DXGI格式
-         * @return 每像素字节数
-         */
-        static uint32_t GetFormatBytesPerPixel(DXGI_FORMAT format);
 
         /**
          * @brief 检查格式是否支持UAV
@@ -351,9 +358,7 @@ namespace enigma::graphic
         D3D12_CPU_DESCRIPTOR_HANDLE m_uavHandle; ///< 无序访问视图句柄
         bool                        m_hasSRV; ///< 是否有SRV
         bool                        m_hasUAV; ///< 是否有UAV
-
-        // ==================== Bindless支持 ====================
-        uint32_t m_bindlessIndex; ///< Bindless资源索引
+        
         mutable std::string m_formattedDebugName; ///< 格式化的调试名称（用于GetDebugName重写）
 
         // ==================== 内部辅助方法 ====================

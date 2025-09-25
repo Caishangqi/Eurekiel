@@ -29,7 +29,6 @@ namespace enigma::graphic
           , m_uavHandle{0}
           , m_hasSRV(false)
           , m_hasUAV(false)
-          , m_bindlessIndex(UINT32_MAX)
           , m_formattedDebugName() // 初始化格式化调试名称
     {
         // 教学注释：验证输入参数的有效性
@@ -93,7 +92,6 @@ namespace enigma::graphic
           , m_uavHandle(other.m_uavHandle)
           , m_hasSRV(other.m_hasSRV)
           , m_hasUAV(other.m_hasUAV)
-          , m_bindlessIndex(other.m_bindlessIndex)
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
     {
         // 清空源对象
@@ -101,7 +99,6 @@ namespace enigma::graphic
         other.m_uavHandle     = {0};
         other.m_hasSRV        = false;
         other.m_hasUAV        = false;
-        other.m_bindlessIndex = UINT32_MAX;
         // 基类移动构造函数会处理资源和有效状态的转移
     }
 
@@ -116,19 +113,18 @@ namespace enigma::graphic
             D12Resource::operator=(std::move(other));
 
             // 移动D12Texture特有成员
-            m_textureType   = other.m_textureType;
-            m_width         = other.m_width;
-            m_height        = other.m_height;
-            m_depth         = other.m_depth;
-            m_mipLevels     = other.m_mipLevels;
-            m_arraySize     = other.m_arraySize;
-            m_format        = other.m_format;
-            m_usage         = other.m_usage;
-            m_srvHandle     = other.m_srvHandle;
-            m_uavHandle     = other.m_uavHandle;
-            m_hasSRV        = other.m_hasSRV;
-            m_hasUAV        = other.m_hasUAV;
-            m_bindlessIndex = other.m_bindlessIndex;
+            m_textureType        = other.m_textureType;
+            m_width              = other.m_width;
+            m_height             = other.m_height;
+            m_depth              = other.m_depth;
+            m_mipLevels          = other.m_mipLevels;
+            m_arraySize          = other.m_arraySize;
+            m_format             = other.m_format;
+            m_usage              = other.m_usage;
+            m_srvHandle          = other.m_srvHandle;
+            m_uavHandle          = other.m_uavHandle;
+            m_hasSRV             = other.m_hasSRV;
+            m_hasUAV             = other.m_hasUAV;
             m_formattedDebugName = std::move(other.m_formattedDebugName);
 
             // 清空源对象
@@ -136,7 +132,6 @@ namespace enigma::graphic
             other.m_uavHandle     = {0};
             other.m_hasSRV        = false;
             other.m_hasUAV        = false;
-            other.m_bindlessIndex = UINT32_MAX;
             // 基类移动赋值运算符会处理资源和有效状态的转移
         }
         return *this;
@@ -162,46 +157,13 @@ namespace enigma::graphic
         return m_uavHandle;
     }
 
-    // ==================== Bindless支持接口 ====================
-
-    /**
-     * 注册到Bindless资源管理器
-     */
-    uint32_t D12Texture::RegisterToBindlessManager(BindlessResourceManager* manager)
-    {
-        if (!manager || !m_hasSRV)
-        {
-            return UINT32_MAX;
-        }
-
-        // 注册为2D纹理资源
-        // TODO: 根据纹理类型注册不同的资源类型
-        std::shared_ptr<D12Texture> sharedThis(this, [](D12Texture*)
-        {
-        }); // 不删除，仅用于共享
-        m_bindlessIndex = manager->RegisterTexture2D(sharedThis, GetDebugName());
-
-        return m_bindlessIndex;
-    }
-
-    /**
-     * 从Bindless资源管理器注销
-     */
-    bool D12Texture::UnregisterFromBindlessManager(BindlessResourceManager* manager)
-    {
-        if (!manager || m_bindlessIndex == UINT32_MAX)
-        {
-            return false;
-        }
-
-        bool result = manager->UnregisterResource(m_bindlessIndex);
-        if (result)
-        {
-            m_bindlessIndex = UINT32_MAX;
-        }
-
-        return result;
-    }
+    // ==================== 🔥 Bindless支持说明 (Milestone 2.3更新) ====================
+    //
+    // Bindless注册功能已移至D12Resource基类，此处删除冗余实现
+    // 统一的RegisterToBindlessManager/UnregisterFromBindlessManager方法
+    // 现在由基类提供，确保所有资源类型的一致性
+    //
+    // ==================== 资源索引访问接口 ====================
 
     // ==================== 纹理操作接口 ====================
 
@@ -397,13 +359,14 @@ namespace enigma::graphic
 
         // Bindless状态
         info += "  Bindless Index: ";
-        if (m_bindlessIndex == UINT32_MAX)
+
+        if (!IsBindlessRegistered())
         {
             info += "Not Registered\n";
         }
         else
         {
-            info += std::to_string(m_bindlessIndex) + "\n";
+            info += std::to_string(GetBindlessIndex().value()) + "\n";
         }
 
         // 资源状态
@@ -699,5 +662,12 @@ namespace enigma::graphic
         default:
             return false;
         }
+    }
+
+    BindlessResourceType D12Texture::GetDefaultBindlessResourceType() const
+    {
+        // TODO: 稍后完成完整实现 - 根据纹理类型和用途返回对应的BindlessResourceType
+        // 暂时返回Texture2D作为默认值
+        return BindlessResourceType::Texture2D;
     }
 } // namespace enigma::graphic
