@@ -60,7 +60,7 @@ namespace enigma::graphic
 
         // ==================== 状态管理 ====================
         bool        m_isDirty; // 是否需要重新配置
-        std::string m_debugName; // 调试名称
+        mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
 
     public:
         /**
@@ -247,10 +247,46 @@ namespace enigma::graphic
          */
         uint32_t GetColorAttachmentCount() const { return static_cast<uint32_t>(m_colorAttachments.size()); }
 
+        // ========================================================================
+        // 虚函数重写 - 调试支持 (继承自D12Resource)
+        // ========================================================================
+
         /**
-         * @brief 获取调试名称
+         * @brief 重写虚函数：设置调试名称并添加Framebuffer特定逻辑
+         * @param name 调试名称
+         *
+         * 教学要点: 重写基类虚函数，在设置名称时同时更新framebuffer的调试信息
+         * 对应Iris中的GLDebug.nameObject()功能
          */
-        const std::string& GetDebugName() const { return m_debugName; }
+        void SetDebugName(const std::string& name) override;
+
+        /**
+         * @brief 重写虚函数：获取包含Framebuffer信息的调试名称
+         * @return 格式化的调试名称字符串
+         *
+         * 教学要点: 重写基类虚函数，返回包含framebuffer特定信息的名称
+         * 格式: "FramebufferName (ColorAttachments: X, HasDepth: Yes/No)"
+         */
+        const std::string& GetDebugName() const override;
+
+        /**
+         * @brief 重写虚函数：获取Framebuffer的详细调试信息
+         * @return 包含附件配置和状态的调试字符串
+         *
+         * 教学要点: 提供framebuffer特定的详细调试信息
+         * 包括颜色附件、深度附件、绘制缓冲区配置、完整性状态等
+         */
+        std::string GetDebugInfo() const override;
+
+    protected:
+        /**
+         * @brief 获取Framebuffer的默认Bindless资源类型
+         * @return Framebuffer作为渲染目标系统不直接用于Bindless绑定，返回Texture2D作为兼容
+         *
+         * 教学要点: Framebuffer主要用于渲染管线，但其附件纹理可能需要Bindless访问
+         * 在这种情况下使用Texture2D类型保持与纹理系统的一致性
+         */
+        BindlessResourceType GetDefaultBindlessResourceType() const override;
 
     private:
         /**
@@ -279,13 +315,7 @@ namespace enigma::graphic
          * - 验证索引是否对应已添加的附件
          */
         bool ValidateDrawBuffers(const std::vector<uint32_t>& buffers) const;
-
-        /**
-         * @brief 销毁内部资源
-         *
-         * 教学要点: 实现D12Resource的纯虚函数
-         */
-        virtual void destroyInternal() override;
+        
 
         // ========================================================================
         // 静态工厂方法 (使用D3D12RenderSystem抽象)
