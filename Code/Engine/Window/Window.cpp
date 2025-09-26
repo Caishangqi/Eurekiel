@@ -232,6 +232,31 @@ bool Window::IsInWindowedMode() const
     return m_config.m_windowMode == WindowMode::Windowed;
 }
 
+bool Window::IsAlwaysOnTop() const
+{
+    return m_config.m_alwaysOnTop;
+}
+
+void Window::SetAlwaysOnTop(bool alwaysOnTop)
+{
+    if (m_config.m_alwaysOnTop == alwaysOnTop)
+        return; // No change needed
+
+    m_config.m_alwaysOnTop = alwaysOnTop;
+
+    // Apply the change to the actual window if it exists
+    if (m_windowHandle)
+    {
+        auto windowHandle = static_cast<HWND>(m_windowHandle);
+        HWND insertAfter = alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
+        SetWindowPos(windowHandle, insertAfter, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+
+        DebuggerPrintf("Window always-on-top set to: %s\n",
+                       alwaysOnTop ? "true" : "false");
+    }
+}
+
 //-----------------------------------------------------------------------------------------------
 // #SD1ToDo: We will move this function to a more appropriate place later on... (Engine/Renderer/Window.cpp)
 //
@@ -316,7 +341,16 @@ void Window::CreateOSWindow()
     SetForegroundWindow(windowHandle);
     SetFocus(windowHandle);
 
-    // For full screen mode, make sure the window is at the top and limit the mouse    if (m_config.m_windowMode == WindowMode::Fullscreen)
+    // Apply always-on-top setting if configured
+    if (m_config.m_alwaysOnTop)
+    {
+        SetWindowPos(windowHandle, HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        DebuggerPrintf("Window set to always-on-top as configured\n");
+    }
+
+    // For full screen mode, make sure the window is at the top and limit the mouse
+    if (m_config.m_windowMode == WindowMode::Fullscreen)
     {
         // Force window to front desk and top floor
         SetWindowPos(windowHandle, HWND_TOPMOST, 0, 0, 0, 0,

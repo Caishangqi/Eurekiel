@@ -26,10 +26,11 @@ struct WindowConfig
     std::string  m_windowTitle  = "Unnamed Application";
     WindowMode   m_windowMode   = WindowMode::Windowed;
     IntVec2      m_resolution   = IntVec2(1600, 900);
-    
+    bool         m_alwaysOnTop  = false; // Window always stays on top of other windows
+
     // Backward compatibility method
-    bool IsFullscreen() const { 
-        return m_windowMode != WindowMode::Windowed; 
+    bool IsFullscreen() const {
+        return m_windowMode != WindowMode::Windowed;
     }
 };
 
@@ -60,6 +61,8 @@ public:
     IntVec2    GetConfiguredResolution() const;
     bool       IsInFullscreenMode() const;
     bool       IsInWindowedMode() const;
+    bool       IsAlwaysOnTop() const;
+    void       SetAlwaysOnTop(bool alwaysOnTop);
 
     static Window* s_mainWindow; // fancy way of advertising global variables (advertisement)
 
