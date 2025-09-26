@@ -354,6 +354,20 @@ namespace enigma::graphic
          */
         std::string GetDebugInfo() const;
 
+        /**
+         * @brief 获取描述符堆管理器
+         * @return 描述符堆管理器指针
+         * @details
+         * 提供对底层描述符堆管理器的访问，主要用于：
+         * - SwapChain RTV描述符分配
+         * - 外部系统需要直接分配描述符的场景
+         * - 调试和性能分析
+         */
+        DescriptorHeapManager* GetDescriptorHeapManager() const
+        {
+            return m_heapManager.get();
+        }
+
     private:
         // ========================================================================
         // 私有辅助方法 (🔥 简化架构 - 移除ResourceHandle相关方法)
