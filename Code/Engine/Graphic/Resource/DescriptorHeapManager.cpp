@@ -1,4 +1,5 @@
 ﻿#include "DescriptorHeapManager.hpp"
+#include "../Core/DX12/D3D12RenderSystem.hpp"
 #include <cassert>
 #include <algorithm>
 
@@ -12,11 +13,11 @@ using namespace enigma::graphic;
  * 教学要点: 初始化所有成员为无效状态，确保对象处于明确的初始状态
  */
 DescriptorHeapManager::DescriptorAllocation::DescriptorAllocation()
-    : cpuHandle{}      // 零初始化CPU句柄
-    , gpuHandle{}      // 零初始化GPU句柄
-    , heapIndex(UINT32_MAX)  // 无效索引
-    , heapType(HeapType::CBV_SRV_UAV)  // 默认堆类型
-    , isValid(false)   // 标记为无效
+    : cpuHandle{} // 零初始化CPU句柄
+      , gpuHandle{} // 零初始化GPU句柄
+      , heapIndex(UINT32_MAX) // 无效索引
+      , heapType(HeapType::CBV_SRV_UAV) // 默认堆类型
+      , isValid(false) // 标记为无效
 {
     // 教学注释: 使用UINT32_MAX作为无效索引是常见做法
     // 这样可以很容易地检测未初始化或无效的分配
@@ -30,8 +31,8 @@ void DescriptorHeapManager::DescriptorAllocation::Reset()
     cpuHandle = {};
     gpuHandle = {};
     heapIndex = UINT32_MAX;
-    heapType = HeapType::CBV_SRV_UAV;
-    isValid = false;
+    heapType  = HeapType::CBV_SRV_UAV;
+    isValid   = false;
 }
 
 // ==================== DescriptorHeap 实现 ====================
@@ -41,12 +42,12 @@ void DescriptorHeapManager::DescriptorAllocation::Reset()
  */
 DescriptorHeapManager::DescriptorHeap::DescriptorHeap()
     : heap(nullptr)
-    , type(HeapType::CBV_SRV_UAV)
-    , capacity(0)
-    , used(0)
-    , descriptorSize(0)
-    , cpuStart{}
-    , gpuStart{}
+      , type(HeapType::CBV_SRV_UAV)
+      , capacity(0)
+      , used(0)
+      , descriptorSize(0)
+      , cpuStart{}
+      , gpuStart{}
 {
     // TODO: 稍后完成完整实现
 }
@@ -80,16 +81,26 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeapManager::DescriptorHeap::GetGPUHandle(
  */
 DescriptorHeapManager::DescriptorHeapManager()
     : m_cbvSrvUavHeap(nullptr)
-    , m_samplerHeap(nullptr)
-    , m_cbvSrvUavCapacity(0)
-    , m_samplerCapacity(0)
-    , m_nextFreeCbvSrvUav(0)
-    , m_nextFreeSampler(0)
-    , m_totalCbvSrvUavAllocated(0)
-    , m_totalSamplerAllocated(0)
-    , m_peakCbvSrvUavUsed(0)
-    , m_peakSamplerUsed(0)
-    , m_initialized(false)
+      , m_rtvHeap(nullptr)
+      , m_dsvHeap(nullptr)
+      , m_samplerHeap(nullptr)
+      , m_cbvSrvUavCapacity(0)
+      , m_rtvCapacity(0)
+      , m_dsvCapacity(0)
+      , m_samplerCapacity(0)
+      , m_nextFreeCbvSrvUav(0)
+      , m_nextFreeRtv(0)
+      , m_nextFreeDsv(0)
+      , m_nextFreeSampler(0)
+      , m_totalCbvSrvUavAllocated(0)
+      , m_totalRtvAllocated(0)
+      , m_totalDsvAllocated(0)
+      , m_totalSamplerAllocated(0)
+      , m_peakCbvSrvUavUsed(0)
+      , m_peakRtvUsed(0)
+      , m_peakDsvUsed(0)
+      , m_peakSamplerUsed(0)
+      , m_initialized(false)
 {
     // TODO: 稍后完成完整实现
 }
@@ -106,15 +117,80 @@ DescriptorHeapManager::~DescriptorHeapManager()
 /**
  * @brief 初始化描述符堆管理器
  */
-bool DescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t samplerCapacity)
+bool DescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t rtvCapacity, uint32_t dsvCapacity, uint32_t samplerCapacity)
 {
-    // 避免未引用参数警告
-    (void)cbvSrvUavCapacity;
-    (void)samplerCapacity;
+    std::lock_guard<std::mutex> lock(m_mutex);
 
-    // TODO: 稍后完成完整实现
-    // 目前返回false表示未实现
-    return false;
+    // 防止重复初始化
+    if (m_initialized)
+    {
+        return false;
+    }
+
+    // 1. 验证D3D12RenderSystem已初始化
+    if (!D3D12RenderSystem::IsInitialized())
+    {
+        return false;
+    }
+
+    // 2. 获取D3D12设备
+    auto device = D3D12RenderSystem::GetDevice();
+    if (!device)
+    {
+        return false;
+    }
+
+    try
+    {
+        // 3. 创建4种描述符堆
+        m_cbvSrvUavHeap = CreateDescriptorHeap(HeapType::CBV_SRV_UAV, cbvSrvUavCapacity);
+        m_rtvHeap       = CreateDescriptorHeap(HeapType::RTV, rtvCapacity);
+        m_dsvHeap       = CreateDescriptorHeap(HeapType::DSV, dsvCapacity);
+        m_samplerHeap   = CreateDescriptorHeap(HeapType::Sampler, samplerCapacity);
+
+        // 4. 验证所有堆创建成功
+        if (!m_cbvSrvUavHeap || !m_rtvHeap || !m_dsvHeap || !m_samplerHeap)
+        {
+            Shutdown();
+            return false;
+        }
+
+        // 5. 初始化位图数组
+        m_cbvSrvUavUsed.resize(cbvSrvUavCapacity, false);
+        m_rtvUsed.resize(rtvCapacity, false);
+        m_dsvUsed.resize(dsvCapacity, false);
+        m_samplerUsed.resize(samplerCapacity, false);
+
+        // 6. 设置容量参数
+        m_cbvSrvUavCapacity = cbvSrvUavCapacity;
+        m_rtvCapacity       = rtvCapacity;
+        m_dsvCapacity       = dsvCapacity;
+        m_samplerCapacity   = samplerCapacity;
+
+        // 7. 重置统计和索引
+        m_nextFreeCbvSrvUav = 0;
+        m_nextFreeRtv       = 0;
+        m_nextFreeDsv       = 0;
+        m_nextFreeSampler   = 0;
+
+        m_totalCbvSrvUavAllocated = 0;
+        m_totalRtvAllocated       = 0;
+        m_totalDsvAllocated       = 0;
+        m_totalSamplerAllocated   = 0;
+
+        m_peakCbvSrvUavUsed = 0;
+        m_peakRtvUsed       = 0;
+        m_peakDsvUsed       = 0;
+        m_peakSamplerUsed   = 0;
+
+        m_initialized = true;
+        return true;
+    }
+    catch (...)
+    {
+        Shutdown();
+        return false;
+    }
 }
 
 /**
@@ -122,13 +198,40 @@ bool DescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t samp
  */
 void DescriptorHeapManager::Shutdown()
 {
-    // TODO: 稍后完成完整实现
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // 释放所有描述符堆
     m_cbvSrvUavHeap.reset();
+    m_rtvHeap.reset();
+    m_dsvHeap.reset();
     m_samplerHeap.reset();
+
+    // 清理所有使用状态数组
     m_cbvSrvUavUsed.clear();
+    m_rtvUsed.clear();
+    m_dsvUsed.clear();
     m_samplerUsed.clear();
+
+    // 重置所有状态
+    m_cbvSrvUavCapacity = 0;
+    m_rtvCapacity       = 0;
+    m_dsvCapacity       = 0;
+    m_samplerCapacity   = 0;
+
+    m_nextFreeCbvSrvUav = 0;
+    m_nextFreeRtv       = 0;
+    m_nextFreeDsv       = 0;
+    m_nextFreeSampler   = 0;
+
+    m_totalCbvSrvUavAllocated = 0;
+    m_totalRtvAllocated       = 0;
+    m_totalDsvAllocated       = 0;
+    m_totalSamplerAllocated   = 0;
+
+    m_peakCbvSrvUavUsed = 0;
+    m_peakRtvUsed       = 0;
+    m_peakDsvUsed       = 0;
+    m_peakSamplerUsed   = 0;
 
     m_initialized = false;
 }
@@ -147,9 +250,30 @@ bool DescriptorHeapManager::IsInitialized() const
  */
 DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateCbvSrvUav()
 {
-    // TODO: 稍后完成完整实现
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     DescriptorAllocation allocation;
-    // 目前返回无效分配
+
+    // 1. 检查初始化状态
+    if (!m_initialized || !m_cbvSrvUavHeap)
+    {
+        return allocation; // 返回无效分配
+    }
+
+    // 2. 分配索引
+    uint32_t index = AllocateIndex(HeapType::CBV_SRV_UAV);
+    if (index == UINT32_MAX)
+    {
+        return allocation; // 分配失败
+    }
+
+    // 3. 填充分配信息
+    allocation.heapIndex = index;
+    allocation.heapType  = HeapType::CBV_SRV_UAV;
+    allocation.cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+    allocation.gpuHandle = m_cbvSrvUavHeap->GetGPUHandle(index);
+    allocation.isValid   = true;
+
     return allocation;
 }
 
@@ -158,9 +282,96 @@ DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateCbvSr
  */
 DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateSampler()
 {
-    // TODO: 稍后完成完整实现
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     DescriptorAllocation allocation;
-    // 目前返回无效分配
+
+    // 1. 检查初始化状态
+    if (!m_initialized || !m_samplerHeap)
+    {
+        return allocation; // 返回无效分配
+    }
+
+    // 2. 分配索引
+    uint32_t index = AllocateIndex(HeapType::Sampler);
+    if (index == UINT32_MAX)
+    {
+        return allocation; // 分配失败
+    }
+
+    // 3. 填充分配信息
+    allocation.heapIndex = index;
+    allocation.heapType  = HeapType::Sampler;
+    allocation.cpuHandle = m_samplerHeap->GetCPUHandle(index);
+    allocation.gpuHandle = m_samplerHeap->GetGPUHandle(index);
+    allocation.isValid   = true;
+
+    return allocation;
+}
+
+/**
+ * @brief 分配RTV描述符 (渲染目标视图)
+ */
+DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateRtv()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    DescriptorAllocation allocation;
+
+    // 1. 检查初始化状态
+    if (!m_initialized || !m_rtvHeap)
+    {
+        return allocation; // 返回无效分配
+    }
+
+    // 2. 分配索引
+    uint32_t index = AllocateIndex(HeapType::RTV);
+    if (index == UINT32_MAX)
+    {
+        return allocation; // 分配失败
+    }
+
+    // 3. 填充分配信息
+    allocation.heapIndex = index;
+    allocation.heapType  = HeapType::RTV;
+    allocation.cpuHandle = m_rtvHeap->GetCPUHandle(index);
+    // 注意：RTV堆不是SHADER_VISIBLE，所以GPU句柄无效
+    allocation.gpuHandle = {};
+    allocation.isValid   = true;
+
+    return allocation;
+}
+
+/**
+ * @brief 分配DSV描述符 (深度模板视图)
+ */
+DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateDsv()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    DescriptorAllocation allocation;
+
+    // 1. 检查初始化状态
+    if (!m_initialized || !m_dsvHeap)
+    {
+        return allocation; // 返回无效分配
+    }
+
+    // 2. 分配索引
+    uint32_t index = AllocateIndex(HeapType::DSV);
+    if (index == UINT32_MAX)
+    {
+        return allocation; // 分配失败
+    }
+
+    // 3. 填充分配信息
+    allocation.heapIndex = index;
+    allocation.heapType  = HeapType::DSV;
+    allocation.cpuHandle = m_dsvHeap->GetCPUHandle(index);
+    // 注意：DSV堆不是SHADER_VISIBLE，所以GPU句柄无效
+    allocation.gpuHandle = {};
+    allocation.isValid   = true;
+
     return allocation;
 }
 
@@ -198,11 +409,71 @@ bool DescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allocation
  */
 bool DescriptorHeapManager::FreeSampler(const DescriptorAllocation& allocation)
 {
-    // 避免未引用参数警告
-    (void)allocation;
+    std::lock_guard<std::mutex> lock(m_mutex);
 
-    // TODO: 稍后完成完整实现
-    return false;
+    // 1. 验证分配有效性
+    if (!allocation.isValid || allocation.heapType != HeapType::Sampler)
+    {
+        return false;
+    }
+
+    // 2. 验证初始化状态
+    if (!m_initialized || !m_samplerHeap)
+    {
+        return false;
+    }
+
+    // 3. 释放索引
+    FreeIndex(HeapType::Sampler, allocation.heapIndex);
+    return true;
+}
+
+/**
+ * @brief 释放RTV描述符
+ */
+bool DescriptorHeapManager::FreeRtv(const DescriptorAllocation& allocation)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // 1. 验证分配有效性
+    if (!allocation.isValid || allocation.heapType != HeapType::RTV)
+    {
+        return false;
+    }
+
+    // 2. 验证初始化状态
+    if (!m_initialized || !m_rtvHeap)
+    {
+        return false;
+    }
+
+    // 3. 释放索引
+    FreeIndex(HeapType::RTV, allocation.heapIndex);
+    return true;
+}
+
+/**
+ * @brief 释放DSV描述符
+ */
+bool DescriptorHeapManager::FreeDsv(const DescriptorAllocation& allocation)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // 1. 验证分配有效性
+    if (!allocation.isValid || allocation.heapType != HeapType::DSV)
+    {
+        return false;
+    }
+
+    // 2. 验证初始化状态
+    if (!m_initialized || !m_dsvHeap)
+    {
+        return false;
+    }
+
+    // 3. 释放索引
+    FreeIndex(HeapType::DSV, allocation.heapIndex);
+    return true;
 }
 
 /**
@@ -219,8 +490,23 @@ ID3D12DescriptorHeap* DescriptorHeapManager::GetCbvSrvUavHeap() const
  */
 ID3D12DescriptorHeap* DescriptorHeapManager::GetSamplerHeap() const
 {
-    // TODO: 稍后完成完整实现
     return m_samplerHeap ? m_samplerHeap->heap.Get() : nullptr;
+}
+
+/**
+ * @brief 获取RTV描述符堆 (渲染目标视图堆)
+ */
+ID3D12DescriptorHeap* DescriptorHeapManager::GetRtvHeap() const
+{
+    return m_rtvHeap ? m_rtvHeap->heap.Get() : nullptr;
+}
+
+/**
+ * @brief 获取DSV描述符堆 (深度模板视图堆)
+ */
+ID3D12DescriptorHeap* DescriptorHeapManager::GetDsvHeap() const
+{
+    return m_dsvHeap ? m_dsvHeap->heap.Get() : nullptr;
 }
 
 /**
@@ -251,35 +537,65 @@ void DescriptorHeapManager::SetDescriptorHeaps(ID3D12GraphicsCommandList* comman
  */
 DescriptorHeapManager::HeapStats DescriptorHeapManager::GetStats() const
 {
-    // TODO: 稍后完成完整实现
     std::lock_guard<std::mutex> lock(m_mutex);
 
     HeapStats stats = {};
-    stats.cbvSrvUavCapacity = m_cbvSrvUavCapacity;
-    stats.cbvSrvUavUsed = m_cbvSrvUavHeap ? m_cbvSrvUavHeap->used : 0;
+
+    // CBV/SRV/UAV堆统计 (Bindless统一大堆)
+    stats.cbvSrvUavCapacity  = m_cbvSrvUavCapacity;
+    stats.cbvSrvUavUsed      = m_cbvSrvUavHeap ? m_cbvSrvUavHeap->used : 0;
     stats.cbvSrvUavAllocated = m_totalCbvSrvUavAllocated;
-    stats.cbvSrvUavPeakUsed = m_peakCbvSrvUavUsed;
+    stats.cbvSrvUavPeakUsed  = m_peakCbvSrvUavUsed;
 
-    stats.samplerCapacity = m_samplerCapacity;
-    stats.samplerUsed = m_samplerHeap ? m_samplerHeap->used : 0;
+    // RTV堆统计 (渲染目标专用)
+    stats.rtvCapacity  = m_rtvCapacity;
+    stats.rtvUsed      = m_rtvHeap ? m_rtvHeap->used : 0;
+    stats.rtvAllocated = m_totalRtvAllocated;
+    stats.rtvPeakUsed  = m_peakRtvUsed;
+
+    // DSV堆统计 (深度模板专用)
+    stats.dsvCapacity  = m_dsvCapacity;
+    stats.dsvUsed      = m_dsvHeap ? m_dsvHeap->used : 0;
+    stats.dsvAllocated = m_totalDsvAllocated;
+    stats.dsvPeakUsed  = m_peakDsvUsed;
+
+    // Sampler堆统计
+    stats.samplerCapacity  = m_samplerCapacity;
+    stats.samplerUsed      = m_samplerHeap ? m_samplerHeap->used : 0;
     stats.samplerAllocated = m_totalSamplerAllocated;
-    stats.samplerPeakUsed = m_peakSamplerUsed;
+    stats.samplerPeakUsed  = m_peakSamplerUsed;
 
-    stats.cbvSrvUavUsageRatio = (m_cbvSrvUavCapacity > 0) ?
-        static_cast<float>(stats.cbvSrvUavUsed) / m_cbvSrvUavCapacity : 0.0f;
-    stats.samplerUsageRatio = (m_samplerCapacity > 0) ?
-        static_cast<float>(stats.samplerUsed) / m_samplerCapacity : 0.0f;
+    // 计算使用率 (0.0-1.0)
+    stats.cbvSrvUavUsageRatio = (m_cbvSrvUavCapacity > 0) ? static_cast<float>(stats.cbvSrvUavUsed) / m_cbvSrvUavCapacity : 0.0f;
+    stats.rtvUsageRatio       = (m_rtvCapacity > 0) ? static_cast<float>(stats.rtvUsed) / m_rtvCapacity : 0.0f;
+    stats.dsvUsageRatio       = (m_dsvCapacity > 0) ? static_cast<float>(stats.dsvUsed) / m_dsvCapacity : 0.0f;
+    stats.samplerUsageRatio   = (m_samplerCapacity > 0) ? static_cast<float>(stats.samplerUsed) / m_samplerCapacity : 0.0f;
 
     return stats;
 }
 
 /**
- * @brief 获取CBV/SRV/UAV堆使用率
+ * @brief 获取CBV/SRV/UAV堆使用率 (Bindless统一大堆)
  */
 float DescriptorHeapManager::GetCbvSrvUavUsageRatio() const
 {
-    // TODO: 稍后完成完整实现
     return GetStats().cbvSrvUavUsageRatio;
+}
+
+/**
+ * @brief 获取RTV堆使用率 (渲染目标专用)
+ */
+float DescriptorHeapManager::GetRtvUsageRatio() const
+{
+    return GetStats().rtvUsageRatio;
+}
+
+/**
+ * @brief 获取DSV堆使用率 (深度模板专用)
+ */
+float DescriptorHeapManager::GetDsvUsageRatio() const
+{
+    return GetStats().dsvUsageRatio;
 }
 
 /**
@@ -287,23 +603,34 @@ float DescriptorHeapManager::GetCbvSrvUavUsageRatio() const
  */
 float DescriptorHeapManager::GetSamplerUsageRatio() const
 {
-    // TODO: 稍后完成完整实现
     return GetStats().samplerUsageRatio;
 }
 
 /**
  * @brief 检查是否还有足够空间
  */
-bool DescriptorHeapManager::HasEnoughSpace(uint32_t cbvSrvUavCount, uint32_t samplerCount) const
+bool DescriptorHeapManager::HasEnoughSpace(uint32_t cbvSrvUavCount, uint32_t rtvCount, uint32_t dsvCount, uint32_t samplerCount) const
 {
-    // TODO: 稍后完成完整实现
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // 检查CBV/SRV/UAV堆空间 (Bindless统一大堆)
     uint32_t cbvSrvUavUsed = m_cbvSrvUavHeap ? m_cbvSrvUavHeap->used : 0;
-    uint32_t samplerUsed = m_samplerHeap ? m_samplerHeap->used : 0;
+    bool     cbvSrvUavOk   = (cbvSrvUavUsed + cbvSrvUavCount <= m_cbvSrvUavCapacity);
 
-    return (cbvSrvUavUsed + cbvSrvUavCount <= m_cbvSrvUavCapacity) &&
-           (samplerUsed + samplerCount <= m_samplerCapacity);
+    // 检查RTV堆空间 (渲染目标专用)
+    uint32_t rtvUsed = m_rtvHeap ? m_rtvHeap->used : 0;
+    bool     rtvOk   = (rtvUsed + rtvCount <= m_rtvCapacity);
+
+    // 检查DSV堆空间 (深度模板专用)
+    uint32_t dsvUsed = m_dsvHeap ? m_dsvHeap->used : 0;
+    bool     dsvOk   = (dsvUsed + dsvCount <= m_dsvCapacity);
+
+    // 检查Sampler堆空间
+    uint32_t samplerUsed = m_samplerHeap ? m_samplerHeap->used : 0;
+    bool     samplerOk   = (samplerUsed + samplerCount <= m_samplerCapacity);
+
+    // 所有堆都有足够空间才返回true
+    return cbvSrvUavOk && rtvOk && dsvOk && samplerOk;
 }
 
 /**
@@ -322,13 +649,91 @@ void DescriptorHeapManager::DefragmentHeaps()
  */
 std::unique_ptr<DescriptorHeapManager::DescriptorHeap> DescriptorHeapManager::CreateDescriptorHeap(HeapType type, uint32_t capacity)
 {
-    // TODO: 稍后完成完整实现
-    auto heap = std::make_unique<DescriptorHeap>();
-    heap->type = type;
+    auto heap      = std::make_unique<DescriptorHeap>();
+    heap->type     = type;
     heap->capacity = capacity;
-    heap->used = 0;
+    heap->used     = 0;
 
-    // 目前返回基本初始化的堆，具体的DirectX创建逻辑稍后实现
+    // 1. 获取D3D12设备
+    auto device = D3D12RenderSystem::GetDevice();
+    if (!device)
+    {
+        return nullptr;
+    }
+
+    // 2. 设置堆描述符 - 根据堆类型配置不同参数
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.NumDescriptors             = capacity;
+    desc.NodeMask                   = 0; // 单GPU系统
+
+    // 3. 根据堆类型设置特定属性
+    switch (type)
+    {
+    case HeapType::CBV_SRV_UAV:
+        // Bindless统一大堆 - 必须SHADER_VISIBLE
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        break;
+
+    case HeapType::RTV:
+        // 渲染目标堆 - 不需要SHADER_VISIBLE
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        break;
+
+    case HeapType::DSV:
+        // 深度模板堆 - 不需要SHADER_VISIBLE
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        break;
+
+    case HeapType::Sampler:
+        // 采样器堆 - 必须SHADER_VISIBLE
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        break;
+
+    default:
+        return nullptr;
+    }
+
+    // 4. 创建D3D12描述符堆
+    HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heap->heap));
+    if (FAILED(hr))
+    {
+        return nullptr;
+    }
+
+    // 5. 获取描述符大小和起始句柄
+    heap->descriptorSize = device->GetDescriptorHandleIncrementSize(desc.Type);
+    heap->cpuStart       = heap->heap->GetCPUDescriptorHandleForHeapStart();
+
+    // 6. 获取GPU句柄（仅对SHADER_VISIBLE堆有效）
+    if (desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
+    {
+        heap->gpuStart = heap->heap->GetGPUDescriptorHandleForHeapStart();
+    }
+    else
+    {
+        // 非着色器可见堆的GPU句柄无效
+        heap->gpuStart = {};
+    }
+
+    // 7. 设置调试名称（便于调试）
+    const wchar_t* debugName = L"Unknown";
+    switch (type)
+    {
+    case HeapType::CBV_SRV_UAV: debugName = L"Enigma_CBV_SRV_UAV_Heap";
+        break;
+    case HeapType::RTV: debugName = L"Enigma_RTV_Heap";
+        break;
+    case HeapType::DSV: debugName = L"Enigma_DSV_Heap";
+        break;
+    case HeapType::Sampler: debugName = L"Enigma_Sampler_Heap";
+        break;
+    }
+    heap->heap->SetName(debugName);
+
     return heap;
 }
 
@@ -337,11 +742,69 @@ std::unique_ptr<DescriptorHeapManager::DescriptorHeap> DescriptorHeapManager::Cr
  */
 uint32_t DescriptorHeapManager::AllocateIndex(HeapType heapType)
 {
-    // 避免未引用参数警告
-    (void)heapType;
+    // 1. 根据堆类型选择对应的使用状态数组和容量
+    std::vector<bool>* usedArray     = nullptr;
+    uint32_t*          nextFreeIndex = nullptr;
+    uint32_t           capacity      = 0;
 
-    // TODO: 稍后完成完整实现
-    return UINT32_MAX;  // 表示分配失败
+    switch (heapType)
+    {
+    case HeapType::CBV_SRV_UAV:
+        usedArray = &m_cbvSrvUavUsed;
+        nextFreeIndex = &m_nextFreeCbvSrvUav;
+        capacity      = m_cbvSrvUavCapacity;
+        break;
+    case HeapType::RTV:
+        usedArray = &m_rtvUsed;
+        nextFreeIndex = &m_nextFreeRtv;
+        capacity      = m_rtvCapacity;
+        break;
+    case HeapType::DSV:
+        usedArray = &m_dsvUsed;
+        nextFreeIndex = &m_nextFreeDsv;
+        capacity      = m_dsvCapacity;
+        break;
+    case HeapType::Sampler:
+        usedArray = &m_samplerUsed;
+        nextFreeIndex = &m_nextFreeSampler;
+        capacity      = m_samplerCapacity;
+        break;
+    default:
+        return UINT32_MAX;
+    }
+
+    // 2. 验证数组和容量有效性
+    if (!usedArray || capacity == 0 || usedArray->size() != capacity)
+    {
+        return UINT32_MAX;
+    }
+
+    // 3. 从nextFreeIndex开始搜索空闲位置 (性能优化)
+    for (uint32_t i = *nextFreeIndex; i < capacity; ++i)
+    {
+        if (!(*usedArray)[i])
+        {
+            (*usedArray)[i] = true;
+            *nextFreeIndex  = i + 1; // 下次从后面开始搜索
+            UpdateStats(heapType, +1);
+            return i;
+        }
+    }
+
+    // 4. 如果从nextFreeIndex没找到，从头开始搜索
+    for (uint32_t i = 0; i < *nextFreeIndex && i < capacity; ++i)
+    {
+        if (!(*usedArray)[i])
+        {
+            (*usedArray)[i] = true;
+            *nextFreeIndex  = i + 1;
+            UpdateStats(heapType, +1);
+            return i;
+        }
+    }
+
+    // 5. 没有空闲位置，分配失败
+    return UINT32_MAX;
 }
 
 /**
@@ -349,11 +812,60 @@ uint32_t DescriptorHeapManager::AllocateIndex(HeapType heapType)
  */
 void DescriptorHeapManager::FreeIndex(HeapType heapType, uint32_t index)
 {
-    // 避免未引用参数警告
-    (void)heapType;
-    (void)index;
+    // 1. 根据堆类型选择对应的使用状态数组和容量
+    std::vector<bool>* usedArray     = nullptr;
+    uint32_t*          nextFreeIndex = nullptr;
+    uint32_t           capacity      = 0;
 
-    // TODO: 稍后完成完整实现
+    switch (heapType)
+    {
+    case HeapType::CBV_SRV_UAV:
+        usedArray = &m_cbvSrvUavUsed;
+        nextFreeIndex = &m_nextFreeCbvSrvUav;
+        capacity      = m_cbvSrvUavCapacity;
+        break;
+    case HeapType::RTV:
+        usedArray = &m_rtvUsed;
+        nextFreeIndex = &m_nextFreeRtv;
+        capacity      = m_rtvCapacity;
+        break;
+    case HeapType::DSV:
+        usedArray = &m_dsvUsed;
+        nextFreeIndex = &m_nextFreeDsv;
+        capacity      = m_dsvCapacity;
+        break;
+    case HeapType::Sampler:
+        usedArray = &m_samplerUsed;
+        nextFreeIndex = &m_nextFreeSampler;
+        capacity      = m_samplerCapacity;
+        break;
+    default:
+        return; // 无效堆类型，直接返回
+    }
+
+    // 2. 验证索引有效性
+    if (!usedArray || index >= capacity || index >= usedArray->size())
+    {
+        return; // 索引无效，直接返回
+    }
+
+    // 3. 检查索引是否已分配
+    if (!(*usedArray)[index])
+    {
+        return; // 索引未分配，直接返回
+    }
+
+    // 4. 释放索引
+    (*usedArray)[index] = false;
+
+    // 5. 优化下次分配的起始位置
+    if (index < *nextFreeIndex)
+    {
+        *nextFreeIndex = index;
+    }
+
+    // 6. 更新统计信息
+    UpdateStats(heapType, -1);
 }
 
 /**
@@ -372,21 +884,57 @@ uint32_t DescriptorHeapManager::QueryMaxDescriptorCount(HeapType heapType) const
 void DescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
 {
 #undef max
-    // TODO: 稍后完成完整实现
-    if (heapType == HeapType::CBV_SRV_UAV)
+    switch (heapType)
     {
-        m_totalCbvSrvUavAllocated += delta;
-        if (delta > 0 && m_cbvSrvUavHeap)
+    case HeapType::CBV_SRV_UAV:
+        if (m_cbvSrvUavHeap)
         {
-            m_peakCbvSrvUavUsed = std::max(m_peakCbvSrvUavUsed, m_cbvSrvUavHeap->used);
+            m_cbvSrvUavHeap->used += delta;
+            m_totalCbvSrvUavAllocated += delta;
+            if (delta > 0)
+            {
+                m_peakCbvSrvUavUsed = std::max(m_peakCbvSrvUavUsed, m_cbvSrvUavHeap->used);
+            }
         }
-    }
-    else
-    {
-        m_totalSamplerAllocated += delta;
-        if (delta > 0 && m_samplerHeap)
+        break;
+
+    case HeapType::RTV:
+        if (m_rtvHeap)
         {
-            m_peakSamplerUsed = std::max(m_peakSamplerUsed, m_samplerHeap->used);
+            m_rtvHeap->used += delta;
+            m_totalRtvAllocated += delta;
+            if (delta > 0)
+            {
+                m_peakRtvUsed = std::max(m_peakRtvUsed, m_rtvHeap->used);
+            }
         }
+        break;
+
+    case HeapType::DSV:
+        if (m_dsvHeap)
+        {
+            m_dsvHeap->used += delta;
+            m_totalDsvAllocated += delta;
+            if (delta > 0)
+            {
+                m_peakDsvUsed = std::max(m_peakDsvUsed, m_dsvHeap->used);
+            }
+        }
+        break;
+
+    case HeapType::Sampler:
+        if (m_samplerHeap)
+        {
+            m_samplerHeap->used += delta;
+            m_totalSamplerAllocated += delta;
+            if (delta > 0)
+            {
+                m_peakSamplerUsed = std::max(m_peakSamplerUsed, m_samplerHeap->used);
+            }
+        }
+        break;
+
+    default:
+        break;
     }
 }
