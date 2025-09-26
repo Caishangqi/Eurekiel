@@ -110,8 +110,8 @@ namespace enigma::graphic
         std::vector<CommandListWrapper*> m_executingLists;
 
         // 线程安全
-        std::mutex m_mutex; // 互斥锁
-        bool       m_initialized = false; // 初始化标记
+        mutable std::mutex m_mutex; // 互斥锁 (mutable允许const方法中使用)
+        bool               m_initialized = false; // 初始化标记
 
         // 配置参数
         static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = 4; // 默认图形命令列表数量
