@@ -18,6 +18,7 @@
 
 #include "Engine/Core/SubsystemManager.hpp"
 #include "Engine/Resource/ResourceCommon.hpp"
+#include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
 #include "../Core/Pipeline/ShaderPackManager.hpp"
@@ -69,6 +70,9 @@ namespace enigma::graphic
             bool        enableGPUValidation     = true; ///< GPU verification layer
             bool        enableBindlessResources = true; ///< Enable Bindless resources
             std::string defaultShaderPackPath; ///< Default Shader Pack Path
+
+            // ========================== 窗口系统集成 =========================
+            Window* targetWindow = nullptr; ///< 目标窗口，用于SwapChain创建
 
             // ========================== Immediate mode configuration =========================
             bool   enableImmediateMode    = true; ///< Enable immediate mode rendering
@@ -156,7 +160,6 @@ namespace enigma::graphic
          * @details
          * 在Initialize阶段之后调用，用于：
          * - 创建PipelineManager实例
-         * - 初始化Bindless资源管理器
          * - 加载默认Shader Pack
          * - 准备初始渲染管线（主世界维度）
          */
@@ -172,6 +175,8 @@ namespace enigma::graphic
          * @note 析构函数会调用此方法，但显式调用更安全
          */
         void Shutdown() override;
+
+        bool RequiresInitialize() const override { return true; }
 
         // ==================== 游戏循环接口 - 对应Iris管线生命周期 ====================
 
