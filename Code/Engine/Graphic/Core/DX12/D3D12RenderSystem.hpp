@@ -45,14 +45,24 @@ namespace enigma::graphic
     {
     public:
         /**
-         * 初始化DirectX 12渲染系统（设备和命令系统）
-         * DirectX 12 API: D3D12CreateDevice, CreateDXGIFactory2
+         * 初始化DirectX 12渲染系统（设备、命令系统和SwapChain）
+         * DirectX 12 API: D3D12CreateDevice, CreateDXGIFactory2, CreateSwapChainForHwnd
          * 对应IrisRenderSystem.initialize()方法的完整DirectX 12实现
+         *
+         * 教学要点：
+         * - 这是引擎层的统一初始化入口点，遵循 RendererSubsystem → D3D12RenderSystem → SwapChain 初始化流程
+         * - SwapChain自动创建，无需应用层手动管理
+         * - 完整的DirectX 12系统一次性初始化
+         *
          * @param enableDebugLayer 是否启用调试层
          * @param enableGPUValidation 是否启用GPU验证
+         * @param hwnd 窗口句柄，用于SwapChain创建（如果为nullptr则不创建SwapChain）
+         * @param renderWidth 渲染分辨率宽度（默认1280）
+         * @param renderHeight 渲染分辨率高度（默认720）
          * @return 是否初始化成功
          */
-        static bool Initialize(bool enableDebugLayer = true, bool enableGPUValidation = false);
+        static bool Initialize(bool enableDebugLayer = true, bool        enableGPUValidation = false,
+                               HWND hwnd             = nullptr, uint32_t renderWidth         = 1280, uint32_t renderHeight = 720);
 
         /**
          * 关闭渲染系统，释放所有资源
@@ -208,6 +218,42 @@ namespace enigma::graphic
          */
         static CommandListManager* GetCommandListManager();
 
+        // ===== SwapChain管理API （基于A/A/A决策的直接管理）=====
+
+        /**
+         * 创建SwapChain（基于2.A决策 - D3D12RenderSystem直接管理）
+         * @param hwnd 窗口句柄
+         * @param width 缓冲区宽度
+         * @param height 缓冲区高度
+         * @param bufferCount 后台缓冲区数量（默认3个）
+         * @return 是否创建成功
+         */
+        static bool CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 3);
+
+        /**
+         * 获取当前SwapChain后台缓冲区的RTV句柄
+         * @return 当前RTV句柄，用于ClearRenderTargetView和OMSetRenderTargets
+         */
+        static D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentSwapChainRTV();
+
+        /**
+         * 获取当前SwapChain后台缓冲区资源
+         * @return 当前后台缓冲区ID3D12Resource指针
+         */
+        static ID3D12Resource* GetCurrentSwapChainBuffer();
+
+        /**
+         * 呈现当前帧到屏幕
+         * @param vsync 是否启用垂直同步（默认true）
+         * @return 是否呈现成功
+         */
+        static bool Present(bool vsync = true);
+
+        /**
+         * 准备下一帧渲染（更新后台缓冲区索引）
+         */
+        static void PrepareNextFrame();
+
         // ===== 调试API =====
 
         /**
@@ -299,6 +345,13 @@ namespace enigma::graphic
         static Microsoft::WRL::ComPtr<ID3D12Device>  s_device; // 主设备
         static Microsoft::WRL::ComPtr<IDXGIFactory4> s_dxgiFactory; // DXGI工厂
         static Microsoft::WRL::ComPtr<IDXGIAdapter1> s_adapter; // 图形适配器
+
+        // SwapChain管理（基于A/A/A决策的直接管理）
+        static Microsoft::WRL::ComPtr<IDXGISwapChain3> s_swapChain; // DXGI SwapChain
+        static Microsoft::WRL::ComPtr<ID3D12Resource>  s_swapChainBuffers[3]; // SwapChain后台缓冲区
+        static D3D12_CPU_DESCRIPTOR_HANDLE             s_swapChainRTVs[3]; // SwapChain RTV句柄
+        static uint32_t                                s_currentBackBufferIndex; // 当前后台缓冲区索引
+        static uint32_t                                s_swapChainBufferCount; // SwapChain缓冲区数量
 
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器

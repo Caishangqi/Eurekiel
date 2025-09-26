@@ -16,6 +16,13 @@ namespace enigma::graphic
     Microsoft::WRL::ComPtr<IDXGIFactory4> D3D12RenderSystem::s_dxgiFactory = nullptr;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> D3D12RenderSystem::s_adapter     = nullptr;
 
+    // SwapChain management (based on A/A/A decision)
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> D3D12RenderSystem::s_swapChain              = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12Resource>  D3D12RenderSystem::s_swapChainBuffers[3]    = {nullptr};
+    D3D12_CPU_DESCRIPTOR_HANDLE             D3D12RenderSystem::s_swapChainRTVs[3]       = {};
+    uint32_t                                D3D12RenderSystem::s_currentBackBufferIndex = 0;
+    uint32_t                                D3D12RenderSystem::s_swapChainBufferCount   = 3;
+
     // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
     // Bindless resource management system
@@ -27,11 +34,12 @@ namespace enigma::graphic
     // ===== Public API implementation =====
 
     /**
-     * Initialize DirectX 12 rendering system (device and command system)
+     * Initialize DirectX 12 rendering system (device, command system, and SwapChain)
      * The IrisRenderSystem.initialize() method corresponding to Iris
-     * Note: The complete initialization of CommandListManager is now included
+     * Note: Now includes automatic SwapChain creation for complete engine-layer initialization
      */
-    bool D3D12RenderSystem::Initialize(bool enableDebugLayer, bool enableGPUValidation)
+    bool D3D12RenderSystem::Initialize(bool enableDebugLayer, bool enableGPUValidation,
+                                       HWND hwnd, uint32_t         renderWidth, uint32_t renderHeight)
     {
         if (s_isInitialized)
         {
@@ -58,13 +66,51 @@ namespace enigma::graphic
             return false;
         }
 
+        // 4. Initialize Bindless resource management system (required for SwapChain RTV allocation)
+        s_bindlessResourceManager = std::make_unique<BindlessResourceManager>();
+        if (!s_bindlessResourceManager->Initialize(10000, 1000000, 2)) // initialCapacity, maxCapacity, growthFactor
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to initialize BindlessResourceManager");
+            s_bindlessResourceManager.reset();
+            s_commandListManager.reset();
+            return false;
+        }
+
+        // 5. Initialize ShaderResourceBinder
+        s_shaderResourceBinder = std::make_unique<ShaderResourceBinder>();
+        // Note: ShaderResourceBinder initialization may depend on specific shader requirements,
+        // so we just create the instance here and defer detailed initialization to when it's first used
+
+        // 6. Create SwapChain (if window handle is provided)
+        if (hwnd)
+        {
+            if (!CreateSwapChain(hwnd, renderWidth, renderHeight))
+            {
+                core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "Failed to create SwapChain during D3D12RenderSystem initialization");
+                // SwapChain creation failure is not fatal - continue initialization
+                // This allows headless rendering or manual SwapChain creation later
+            }
+            else
+            {
+                core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                              "D3D12RenderSystem initialized successfully with SwapChain (%dx%d)",
+                              renderWidth, renderHeight);
+            }
+        }
+        else
+        {
+            core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
+        }
+
         s_isInitialized = true;
         return true;
     }
 
     /**
      * Turn off the rendering system (release all resources)
-     * Includes CommandListManager, Devices and DXGI Objects
+     * Includes CommandListManager, Bindless systems, SwapChain, Devices and DXGI Objects
      * Complete cleaning logic corresponding to IrisRenderSystem
      */
     void D3D12RenderSystem::Shutdown()
@@ -81,12 +127,39 @@ namespace enigma::graphic
             s_commandListManager.reset();
         }
 
-        // 2. Release DirectX 12 object (ComPtr will be automatically released)
+        // 2. Clean up Bindless resource management systems
+        if (s_shaderResourceBinder)
+        {
+            s_shaderResourceBinder.reset();
+        }
+
+        if (s_bindlessResourceManager)
+        {
+            s_bindlessResourceManager.reset();
+        }
+
+        // 3. Clean up SwapChain resources
+        for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
+        {
+            if (s_swapChainBuffers[i])
+            {
+                s_swapChainBuffers[i].Reset();
+            }
+            // Note: RTV descriptors are automatically released when BindlessResourceManager is destroyed
+            s_swapChainRTVs[i] = {};
+        }
+        s_swapChain.Reset();
+        s_currentBackBufferIndex = 0;
+        s_swapChainBufferCount   = 3;
+
+        // 4. Release DirectX 12 object (ComPtr will be automatically released)
         s_adapter.Reset();
         s_dxgiFactory.Reset();
         s_device.Reset();
 
         s_isInitialized = false;
+
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem shutdown completed");
     }
 
     // ===== Buffer creation API implementation =====
@@ -615,5 +688,164 @@ namespace enigma::graphic
     std::unique_ptr<ShaderResourceBinder>& D3D12RenderSystem::GetShaderResourceBinder()
     {
         return s_shaderResourceBinder;
+    }
+
+    // ===== SwapChain管理API实现 （基于A/A/A决策）=====
+
+    /**
+     * 创建SwapChain及其RTV描述符
+     */
+    bool D3D12RenderSystem::CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount)
+    {
+        if (!s_device || !s_dxgiFactory || !s_commandListManager)
+        {
+            LogError("D3D12RenderSystem", "Device or DXGI Factory not initialized for SwapChain creation");
+            return false;
+        }
+
+        s_swapChainBufferCount = std::min(bufferCount, 3u); // 限制最多3个缓冲区
+
+        // 1. 创建SwapChain描述符
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+        swapChainDesc.BufferCount           = s_swapChainBufferCount;
+        swapChainDesc.Width                 = width;
+        swapChainDesc.Height                = height;
+        swapChainDesc.Format                = DXGI_FORMAT_R8G8B8A8_UNORM;
+        swapChainDesc.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapChainDesc.SwapEffect            = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        swapChainDesc.SampleDesc.Count      = 1;
+        swapChainDesc.SampleDesc.Quality    = 0;
+        swapChainDesc.Flags                 = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+        // 2. 创建SwapChain (使用CommandListManager的Graphics队列)
+        Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
+        HRESULT                                 hr = s_dxgiFactory->CreateSwapChainForHwnd(
+            s_commandListManager->GetCommandQueue(CommandListManager::Type::Graphics), // 使用Graphics队列
+            hwnd,
+            &swapChainDesc,
+            nullptr,
+            nullptr,
+            &swapChain1
+        );
+
+        if (FAILED(hr))
+        {
+            LogError("D3D12RenderSystem", "Failed to create SwapChain");
+            return false;
+        }
+
+        // 3. 转换为SwapChain3接口
+        hr = swapChain1.As(&s_swapChain);
+        if (FAILED(hr))
+        {
+            LogError("D3D12RenderSystem", "Failed to get SwapChain3 interface");
+            return false;
+        }
+
+        // 4. 禁用Alt+Enter全屏切换（可选）
+        s_dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
+
+        // 5. 获取DescriptorHeapManager用于RTV分配
+        auto* descriptorManager = s_bindlessResourceManager->GetDescriptorHeapManager();
+        if (!descriptorManager)
+        {
+            LogError("D3D12RenderSystem", "DescriptorHeapManager not available for RTV creation");
+            return false;
+        }
+
+        // 6. 为每个SwapChain缓冲区创建RTV描述符
+        for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
+        {
+            // 获取SwapChain缓冲区资源
+            hr = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_swapChainBuffers[i]));
+            if (FAILED(hr))
+            {
+                LogError("D3D12RenderSystem", "Failed to get SwapChain buffer %d", i);
+                return false;
+            }
+
+            // 分配RTV描述符
+            auto rtvHandle = descriptorManager->AllocateRtv();
+            if (!rtvHandle.isValid)
+            {
+                LogError("D3D12RenderSystem", "Failed to allocate RTV descriptor for SwapChain buffer %d", i);
+                return false;
+            }
+
+            s_swapChainRTVs[i] = rtvHandle.cpuHandle;
+
+            // 创建RTV描述符
+            D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+            rtvDesc.Format                        = DXGI_FORMAT_R8G8B8A8_UNORM;
+            rtvDesc.ViewDimension                 = D3D12_RTV_DIMENSION_TEXTURE2D;
+            rtvDesc.Texture2D.MipSlice            = 0;
+
+            s_device->CreateRenderTargetView(
+                s_swapChainBuffers[i].Get(),
+                &rtvDesc,
+                s_swapChainRTVs[i]
+            );
+
+            // 设置调试名称
+            std::string debugName = "SwapChain Buffer " + std::to_string(i);
+            SetDebugName(s_swapChainBuffers[i].Get(), debugName.c_str());
+        }
+
+        // 7. 初始化当前缓冲区索引
+        s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
+
+        LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
+        return true;
+    }
+
+    /**
+     * 获取当前SwapChain后台缓冲区的RTV句柄
+     */
+    D3D12_CPU_DESCRIPTOR_HANDLE D3D12RenderSystem::GetCurrentSwapChainRTV()
+    {
+        return s_swapChainRTVs[s_currentBackBufferIndex];
+    }
+
+    /**
+     * 获取当前SwapChain后台缓冲区资源
+     */
+    ID3D12Resource* D3D12RenderSystem::GetCurrentSwapChainBuffer()
+    {
+        return s_swapChainBuffers[s_currentBackBufferIndex].Get();
+    }
+
+    /**
+     * 呈现当前帧到屏幕
+     */
+    bool D3D12RenderSystem::Present(bool vsync)
+    {
+        if (!s_swapChain)
+        {
+            LogError("D3D12RenderSystem", "SwapChain not initialized");
+            return false;
+        }
+
+        UINT syncInterval = vsync ? 1 : 0;
+        UINT presentFlags = 0;
+
+        HRESULT hr = s_swapChain->Present(syncInterval, presentFlags);
+        if (FAILED(hr))
+        {
+            LogError("D3D12RenderSystem", "Failed to present frame");
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 准备下一帧渲染（更新后台缓冲区索引）
+     */
+    void D3D12RenderSystem::PrepareNextFrame()
+    {
+        if (s_swapChain)
+        {
+            s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
+        }
     }
 } // namespace enigma::graphic
