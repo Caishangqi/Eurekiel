@@ -17,6 +17,7 @@
 #include <array>
 
 #include "Engine/Core/SubsystemManager.hpp"
+#include "Engine/Core/Rgba8.hpp"
 #include "Engine/Resource/ResourceCommon.hpp"
 #include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
@@ -70,6 +71,13 @@ namespace enigma::graphic
             bool        enableGPUValidation     = true; ///< GPU verification layer
             bool        enableBindlessResources = true; ///< Enable Bindless resources
             std::string defaultShaderPackPath; ///< Default Shader Pack Path
+
+            // ========================== 渲染配置 (Milestone 2.6新增) =========================
+            Rgba8   defaultClearColor    = Rgba8::RED; ///< 默认清屏颜色，使用引擎Rgba8系统
+            float   defaultClearDepth    = 1.0f; ///< 默认深度清除值 (0.0-1.0, 1.0表示最远)
+            uint8_t defaultClearStencil  = 0; ///< 默认模板清除值 (0-255)
+            bool    enableAutoClearColor = true; ///< 是否在BeginFrame自动执行清屏
+            bool    enableAutoClearDepth = true; ///< 是否在BeginFrame自动清除深度缓冲
 
             // ========================== 窗口系统集成 =========================
             Window* targetWindow = nullptr; ///< 目标窗口，用于SwapChain创建

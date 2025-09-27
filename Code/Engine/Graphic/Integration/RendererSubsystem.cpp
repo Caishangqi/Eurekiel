@@ -80,16 +80,36 @@ void RendererSubsystem::BeginFrame()
     // 帧开始处理 - 正确的DirectX 12管线架构
     // ========================================================================
 
-    // 1. 准备下一帧 - 这是每帧开始的必要操作
-    // 教学要点：在BeginFrame中统一准备下一帧，保持渲染管线架构清晰
-    enigma::graphic::D3D12RenderSystem::PrepareNextFrame();
-    LogInfo(GetStaticSubsystemName(), "BeginFrame - Next frame prepared successfully");
+    // 1. 准备下一帧并执行清屏操作 - 使用配置的默认颜色 (Milestone 2.6新增)
+    // 教学要点：集成引擎Rgba8颜色系统，通过配置控制清屏行为
+    if (m_configuration.enableAutoClearColor)
+    {
+        bool success = enigma::graphic::D3D12RenderSystem::BeginFrame(
+            m_configuration.defaultClearColor, // 使用配置的Rgba8清屏颜色
+            m_configuration.defaultClearDepth, // 使用配置的深度值
+            m_configuration.defaultClearStencil // 使用配置的模板值
+        );
+
+        if (success)
+        {
+            LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame prepared and cleared with configured colors");
+        }
+        else
+        {
+            LogWarn(GetStaticSubsystemName(), "BeginFrame - Frame preparation or clear operation failed");
+        }
+    }
+    else
+    {
+        // 仅准备下一帧，不执行自动清屏
+        enigma::graphic::D3D12RenderSystem::PrepareNextFrame();
+        LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame prepared without auto-clear (disabled in config)");
+    }
 
     // TODO: 后续扩展
     // - setup1-99: GPU状态初始化、SSBO设置
     // - begin1-99: 每帧参数更新、摄像机矩阵计算
     // - 资源状态转换和绑定
-    // - 渲染目标清理
 
     LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame initialization completed");
 }
@@ -127,6 +147,11 @@ void RendererSubsystem::EndFrame()
     {
         LogWarn(GetStaticSubsystemName(), "EndFrame - CommandListManager not available");
     }
+
+    // 2. 呈现到屏幕 - 关键的Present操作 (Milestone 2.6 修复)
+    // 教学要点：必须调用Present将渲染结果显示到屏幕，否则清屏操作不可见
+    enigma::graphic::D3D12RenderSystem::Present(true); // 启用垂直同步
+    LogInfo(GetStaticSubsystemName(), "EndFrame - Present completed");
 
     // TODO: 后续扩展
     // - final: 最终输出处理
