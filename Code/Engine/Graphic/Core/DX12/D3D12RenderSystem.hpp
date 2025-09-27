@@ -3,6 +3,7 @@
 #include "../../Resource/Buffer/D12Buffer.hpp"
 #include "../../Resource/BindlessResourceTypes.hpp"
 #include "../../Resource/CommandListManager.hpp"
+#include "Engine/Core/Rgba8.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -280,6 +281,54 @@ namespace enigma::graphic
          * @return 内存信息结构
          */
         static DXGI_QUERY_VIDEO_MEMORY_INFO GetVideoMemoryInfo();
+
+        // ===== 渲染管线API (Milestone 2.6新增) =====
+
+        /**
+         * 开始帧渲染 - 清屏操作的正确位置
+         * 在标准DirectX 12管线中，Clear操作应该在BeginFrame执行，而非EndFrame
+         *
+         * 教学要点：
+         * - 这是每帧渲染的起始点，在这里执行清屏和初始化
+         * - 遵循DirectX 12最佳实践：BeginFrame → 清屏 → 渲染 → EndFrame
+         * - 替代了TestClearScreen中的测试逻辑，成为正式渲染管线的一部分
+         * - 使用引擎Rgba8颜色系统，提供类型安全和便捷的颜色操作
+         *
+         * @param clearColor 清屏颜色，使用引擎Rgba8类型(可选，默认为黑色)
+         * @param clearDepth 深度缓冲清除值(可选，默认为1.0f)
+         * @param clearStencil 模板缓冲清除值(可选，默认为0)
+         * @return 是否成功开始帧渲染
+         */
+        static bool BeginFrame(const Rgba8& clearColor = Rgba8::BLACK, float clearDepth = 1.0f, uint8_t clearStencil = 0);
+
+        /**
+         * 清除渲染目标
+         * DirectX 12 API: ID3D12GraphicsCommandList::ClearRenderTargetView()
+         *
+         * @param commandList 要使用的命令列表(如果为nullptr则自动获取)
+         * @param rtvHandle 渲染目标视图句柄(如果为空则使用当前SwapChain RTV)
+         * @param clearColor 清屏颜色，使用引擎Rgba8类型(如果使用默认值则为黑色)
+         * @return 是否清除成功
+         */
+        static bool ClearRenderTarget(ID3D12GraphicsCommandList* commandList = nullptr,
+                                      const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle = nullptr,
+                                      const Rgba8& clearColor = Rgba8::BLACK);
+
+        /**
+         * 清除深度模板缓冲
+         * DirectX 12 API: ID3D12GraphicsCommandList::ClearDepthStencilView()
+         *
+         * @param commandList 要使用的命令列表(如果为nullptr则自动获取)
+         * @param dsvHandle 深度模板视图句柄(如果为空则使用默认深度缓冲)
+         * @param clearDepth 深度清除值(0.0-1.0)
+         * @param clearStencil 模板清除值(0-255)
+         * @param clearFlags 清除标志(深度、模板或两者)
+         * @return 是否清除成功
+         */
+        static bool ClearDepthStencil(ID3D12GraphicsCommandList* commandList = nullptr,
+                                      const D3D12_CPU_DESCRIPTOR_HANDLE* dsvHandle = nullptr,
+                                      float clearDepth = 1.0f, uint8_t clearStencil = 0,
+                                      D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL);
 
         // ===== 资源创建API =====
 

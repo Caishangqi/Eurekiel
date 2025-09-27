@@ -690,6 +690,185 @@ namespace enigma::graphic
         return s_shaderResourceBinder;
     }
 
+    // ===== 渲染管线API实现 (Milestone 2.6新增) =====
+
+    /**
+     * 开始帧渲染 - 清屏操作的正确位置
+     *
+     * 教学要点：
+     * 1. 这是每帧渲染的正确起始点，替代了TestClearScreen的测试逻辑
+     * 2. 遵循DirectX 12标准管线：BeginFrame(清屏) → 渲染 → EndFrame(Present)
+     * 3. 自动处理资源状态转换和命令列表管理
+     * 4. 使用引擎Rgba8颜色系统，提供类型安全和便捷操作
+     * 5. 成为正式渲染系统的重要组成部分
+     */
+    bool D3D12RenderSystem::BeginFrame(const Rgba8& clearColor, float clearDepth, uint8_t clearStencil)
+    {
+        UNUSED(clearStencil)
+        if (!s_isInitialized || !s_commandListManager)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for BeginFrame");
+            return false;
+        }
+
+        // 1. 准备下一帧 (更新SwapChain缓冲区索引)
+        PrepareNextFrame();
+
+        // 2. 清除渲染目标 (参考GameTest.cpp:235-285的实现方式)
+        // 教学要点：正确获取commandList和rtvHandle，遵循GameTest验证的工作流程
+        auto* commandList = s_commandListManager->AcquireCommandList(
+            CommandListManager::Type::Graphics,
+            "BeginFrame Clear Screen"
+        );
+
+        if (!commandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for BeginFrame");
+            return false;
+        }
+
+        // 获取当前SwapChain的RTV句柄 (参考GameTest.cpp:245)
+        auto currentRTV = GetCurrentSwapChainRTV();
+
+        if (!ClearRenderTarget(commandList, &currentRTV, clearColor))
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to clear render target in BeginFrame");
+            return false;
+        }
+
+        // 执行命令列表 (参考GameTest.cpp:284-291)
+        uint64_t fenceValue = s_commandListManager->ExecuteCommandList(commandList);
+        if (fenceValue > 0)
+        {
+            // 等待命令执行完成，确保清屏操作在继续渲染前完成
+            s_commandListManager->WaitForFence(fenceValue);
+        }
+        else
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute clear command list in BeginFrame");
+            return false;
+        }
+
+        // 3. 清除深度模板缓冲 (如果有的话)
+        // TODO: 当实现了深度缓冲系统后，在这里调用ClearDepthStencil
+        // ClearDepthStencil(nullptr, nullptr, clearDepth, clearStencil);
+
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f",
+                      clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
+
+        return true;
+    }
+
+    /**
+     * 清除渲染目标
+     * 从TestClearScreen迁移的核心清屏逻辑，适配为正式API并使用引擎颜色系统
+     */
+    bool D3D12RenderSystem::ClearRenderTarget(ID3D12GraphicsCommandList*         commandList,
+                                              const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle,
+                                              const Rgba8&                       clearColor)
+    {
+        if (!s_isInitialized || !s_commandListManager)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for ClearRenderTarget");
+            return false;
+        }
+
+        // 1. 转换Rgba8为DirectX 12需要的float数组
+        float clearColorAsFloats[4];
+        clearColor.GetAsFloats(clearColorAsFloats);
+
+        // 添加详细的颜色转换调试日志 (Milestone 2.6 诊断)
+        /*core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "ClearRenderTarget - Input Rgba8: r=%d, g=%d, b=%d, a=%d",
+                      clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "ClearRenderTarget - Converted floats: r=%.3f, g=%.3f, b=%.3f, a=%.3f",
+                      clearColorAsFloats[0], clearColorAsFloats[1], clearColorAsFloats[2], clearColorAsFloats[3]);*/
+
+        // 2. 获取命令列表 (如果未提供)
+        ID3D12GraphicsCommandList* actualCommandList = commandList;
+        bool                       needToExecute     = false;
+
+        if (!actualCommandList)
+        {
+            actualCommandList = s_commandListManager->AcquireCommandList(
+                CommandListManager::Type::Graphics,
+                "ClearRenderTarget Command List"
+            );
+
+            if (!actualCommandList)
+            {
+                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for ClearRenderTarget");
+                return false;
+            }
+            needToExecute = true;
+        }
+
+        // 3. 获取RTV句柄 (如果未提供，使用当前SwapChain RTV)
+        D3D12_CPU_DESCRIPTOR_HANDLE actualRtvHandle;
+        ID3D12Resource*             targetResource = nullptr;
+
+        if (rtvHandle)
+        {
+            actualRtvHandle = *rtvHandle;
+            // TODO: 需要从rtvHandle追踪到对应的资源，暂时使用SwapChain资源
+            targetResource = GetCurrentSwapChainBuffer();
+        }
+        else
+        {
+            actualRtvHandle = GetCurrentSwapChainRTV();
+            targetResource  = GetCurrentSwapChainBuffer();
+        }
+
+        if (!targetResource)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "No valid render target resource for ClearRenderTarget");
+            return false;
+        }
+
+        // 4. 资源状态转换：Present → RenderTarget
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = targetResource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        actualCommandList->ResourceBarrier(1, &barrier);
+
+        // 5. 设置渲染目标
+        actualCommandList->OMSetRenderTargets(1, &actualRtvHandle, FALSE, nullptr);
+
+        // 6. 执行清屏操作 (使用转换后的float颜色数组)
+        actualCommandList->ClearRenderTargetView(actualRtvHandle, clearColorAsFloats, 0, nullptr);
+
+        // 7. 资源状态转换：RenderTarget → Present
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
+        actualCommandList->ResourceBarrier(1, &barrier);
+
+        // 8. 只有当我们内部获取命令列表时才自动执行，如果外部传入则由外部控制执行时机
+        if (needToExecute)
+        {
+            uint64_t fenceValue = s_commandListManager->ExecuteCommandList(actualCommandList);
+            if (fenceValue > 0)
+            {
+                // 等待命令执行完成
+                s_commandListManager->WaitForFence(fenceValue);
+            }
+            else
+            {
+                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute ClearRenderTarget command list");
+                return false;
+            }
+        }
+        // 如果commandList是外部传入的，则不执行，让调用者决定何时执行
+
+        return true;
+    }
+
     // ===== SwapChain管理API实现 （基于A/A/A决策）=====
 
     /**
