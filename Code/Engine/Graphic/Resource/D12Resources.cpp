@@ -41,7 +41,6 @@ namespace enigma::graphic
         {
             return 0;
         }
-
         // DirectX 12 API: ID3D12Resource::GetGPUVirtualAddress()
         // 返回资源在GPU虚拟地址空间中的地址
         // 用于Bindless描述符绑定和Shader Resource View
