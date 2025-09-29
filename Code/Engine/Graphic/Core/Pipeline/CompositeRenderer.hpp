@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 
-#include "WorldRenderingPhase.hpp"
 #include <memory>
 #include <vector>
 #include <string>
-#include <functional>
+
+#include "Engine/Graphic/Resource/Buffer/BufferFlipper.hpp"
 
 
 namespace enigma::graphic
@@ -12,7 +12,6 @@ namespace enigma::graphic
     class ShaderPackManager;
     class UniformManager;
     class D12RenderTargets;
-    class BufferFlipper;
     class CommandListManager;
     class D12Texture;
     class D12Buffer;
@@ -105,7 +104,7 @@ namespace enigma::graphic
             /**
              * @brief 默认构造函数
              */
-            PassDescription() = default;
+            PassDescription();
 
             /**
              * @brief 便利构造函数
@@ -126,13 +125,13 @@ namespace enigma::graphic
         // ===========================================
 
         /// 渲染目标管理器 - 管理所有colortex0-15
-        std::shared_ptr<Engine::Graphic::Resource::D12RenderTargets> m_renderTargets;
+        std::shared_ptr<D12RenderTargets> m_renderTargets;
 
         /// 缓冲区翻转器 - 实现乒乓缓冲机制
-        std::unique_ptr<Engine::Graphic::Resource::BufferFlipper> m_bufferFlipper;
+        std::unique_ptr<BufferFlipper> m_bufferFlipper;
 
         /// 命令列表管理器
-        std::shared_ptr<Engine::Graphic::Resource::CommandListManager> m_commandManager;
+        std::shared_ptr<CommandListManager> m_commandManager;
 
         /// 着色器包管理器
         std::shared_ptr<ShaderPackManager> m_shaderManager;
@@ -189,10 +188,10 @@ namespace enigma::graphic
          * 教学重点：依赖注入在复杂系统中的应用
          */
         CompositeRenderer(
-            std::shared_ptr<Engine::Graphic::Resource::D12RenderTargets>   renderTargets,
-            std::shared_ptr<Engine::Graphic::Resource::CommandListManager> commandManager,
-            std::shared_ptr<ShaderPackManager>                             shaderManager,
-            std::shared_ptr<UniformManager>                                uniformManager);
+            std::shared_ptr<D12RenderTargets>   renderTargets,
+            std::shared_ptr<CommandListManager> commandManager,
+            std::shared_ptr<ShaderPackManager>  shaderManager,
+            std::shared_ptr<UniformManager>     uniformManager);
 
         /**
          * @brief 析构函数
@@ -329,7 +328,7 @@ namespace enigma::graphic
          * @param index 渲染目标索引 (0-15)
          * @return 当前渲染目标的指针
          */
-        Engine::Graphic::Resource::D12Texture* GetCurrentRenderTarget(uint32_t index) const;
+        D12Texture* GetCurrentRenderTarget(uint32_t index) const;
 
         /**
          * @brief 获取备用渲染目标
@@ -339,7 +338,7 @@ namespace enigma::graphic
          * @param index 渲染目标索引 (0-15)
          * @return 备用渲染目标的指针
          */
-        Engine::Graphic::Resource::D12Texture* GetAlternateRenderTarget(uint32_t index) const;
+        D12Texture* GetAlternateRenderTarget(uint32_t index) const;
 
         // ===========================================
         // 状态查询和控制
