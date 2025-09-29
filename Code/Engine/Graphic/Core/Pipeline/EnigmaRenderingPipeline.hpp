@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "IShaderRenderingPipeline.hpp"
 #include "WorldRenderingPhase.hpp"
@@ -9,18 +9,14 @@
 #include <atomic>
 #include <unordered_map>
 
-// Forward declarations
-namespace Engine::Graphic::Resource
+namespace enigma::graphic
 {
     class D12RenderTargets;
     class BufferFlipper;
     class CommandListManager;
-}
-
-namespace enigma::graphic
-{
     class CompositeRenderer;
     class ShadowRenderer;
+    class DebugRenderer;
     class ShaderPackManager;
     class UniformManager;
 }
@@ -80,18 +76,22 @@ namespace enigma::graphic
         /// 阴影渲染器 - 对应Iris shadowRenderer
         std::unique_ptr<ShadowRenderer> m_shadowRenderer;
 
+        /// 调试渲染器 - Enigma扩展，用于开发和测试 (Milestone 2.6新增)
+        /// 严格按照Iris的5参数模式构造：(this, CompositePass::DEBUG, nullptr, renderTargets, TextureStage::DEBUG)
+        std::unique_ptr<DebugRenderer> m_debugRenderer;
+
         // ===========================================
         // 核心系统组件
         // ===========================================
 
         /// 渲染目标管理器 - 统一管理所有colortex0-15
-        std::shared_ptr<Engine::Graphic::Resource::D12RenderTargets> m_renderTargets;
+        std::shared_ptr<D12RenderTargets> m_renderTargets;
 
         /// 缓冲区翻转器 - 全局乒乓缓冲管理
-        std::shared_ptr<Engine::Graphic::Resource::BufferFlipper> m_bufferFlipper;
+        std::shared_ptr<BufferFlipper> m_bufferFlipper;
 
         /// 命令列表管理器
-        std::shared_ptr<Engine::Graphic::Resource::CommandListManager> m_commandManager;
+        CommandListManager* m_commandManager;
 
         /// 着色器包管理器
         std::shared_ptr<ShaderPackManager> m_shaderPackManager;
@@ -167,16 +167,17 @@ namespace enigma::graphic
     public:
         /**
          * @brief 构造函数
-         * 
+         *
          * 初始化Enigma渲染管线，创建所有子渲染器和核心系统组件。
-         * 这是一个复杂的初始化过程，需要协调多个子系统。
-         * 
-         * @param commandManager 命令列表管理器
-         * 
-         * 教学重点：复杂系统的构造和依赖管理
+         *
+         * @param commandManager 命令列表管理器（非拥有指针，由D3D12RenderSystem管理生命周期）
+         *
+         * 教学重点：
+         * - EnigmaRenderingPipeline不拥有CommandListManager，只是使用它
+         * - D3D12RenderSystem负责CommandListManager的生命周期管理
+         * - 这种设计避免了循环依赖和所有权混乱
          */
-        explicit EnigmaRenderingPipeline(
-            std::shared_ptr<Engine::Graphic::Resource::CommandListManager> commandManager);
+        explicit EnigmaRenderingPipeline(CommandListManager* commandManager);
 
         /**
          * @brief 析构函数
@@ -388,6 +389,10 @@ namespace enigma::graphic
         /// 执行Final阶段 - 最终输出
         void ExecuteFinalStage();
 
+        /// 执行Debug阶段 - 使用debugRenderer (Milestone 2.6新增)
+        /// 这是Enigma扩展的调试渲染阶段，用于验证渲染管线核心功能
+        void ExecuteDebugStage();
+
         // ===========================================
         // 内部辅助方法
         // ===========================================
@@ -426,18 +431,11 @@ namespace enigma::graphic
 
         /**
          * @brief 更新性能统计
-         * 
+         *
          * 更新管线的性能统计信息。
-         * 
+         *
          * @param frameTime 当前帧时间
          */
         void UpdatePerformanceStats(float frameTime);
-
-        /**
-         * @brief 清理临时资源
-         * 
-         * 清理每帧结束后的临时资源。
-         */
-        void CleanupTemporaryResources();
     };
 } // namespace enigma::graphic
