@@ -1,7 +1,6 @@
-#pragma once
+﻿#pragma once
 
 #include "../RenderCommand.hpp"
-#include <vector>
 #include <memory>
 
 namespace enigma::graphic
@@ -39,61 +38,27 @@ namespace enigma::graphic
             uint32_t startIndexLocation    = 0,
             int32_t  baseVertexLocation    = 0,
             uint32_t startInstanceLocation = 0
-        ) : m_indexCount(indexCount),
-            m_instanceCount(instanceCount),
-            m_startIndexLocation(startIndexLocation),
-            m_baseVertexLocation(baseVertexLocation),
-            m_startInstanceLocation(startInstanceLocation)
-        {
-        }
+        );
 
         /// <summary>
         /// 获取指令类型
         /// </summary>
-        RenderCommandType GetType() const override
-        {
-            return m_instanceCount > 1 ? RenderCommandType::DRAW_INDEXED_INSTANCED : RenderCommandType::DRAW_INDEXED;
-        }
+        RenderCommandType GetType() const override;
 
         /// <summary>
         /// 执行绘制指令
         /// </summary>
-        void Execute(
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            CommandListManager*                               commandManager
-        ) override
-        {
-            if (!commandList)
-            {
-                return;
-            }
-
-            // 执行DirectX 12索引化绘制
-            commandList->DrawIndexedInstanced(
-                m_indexCount,
-                m_instanceCount,
-                m_startIndexLocation,
-                m_baseVertexLocation,
-                m_startInstanceLocation
-            );
-        }
+        void Execute(std::shared_ptr<CommandListManager> commandManager) override;
 
         /// <summary>
         /// 获取指令名称
         /// </summary>
-        std::string GetName() const override
-        {
-            return "DrawIndexed(indices=" + std::to_string(m_indexCount) +
-                ", instances=" + std::to_string(m_instanceCount) + ")";
-        }
+        std::string GetName() const override;
 
         /// <summary>
         /// 验证指令有效性
         /// </summary>
-        bool IsValid() const override
-        {
-            return m_indexCount > 0 && m_instanceCount > 0;
-        }
+        bool IsValid() const override;
     };
 
     /// <summary>
@@ -112,8 +77,6 @@ namespace enigma::graphic
     private:
         uint32_t m_vertexCountPerInstance;
         uint32_t m_instanceCount;
-        uint32_t m_startVertexLocation;
-        uint32_t m_startInstanceLocation;
 
     public:
         /// <summary>
@@ -124,45 +87,14 @@ namespace enigma::graphic
             uint32_t instanceCount,
             uint32_t startVertexLocation   = 0,
             uint32_t startInstanceLocation = 0
-        ) : m_vertexCountPerInstance(vertexCountPerInstance),
-            m_instanceCount(instanceCount),
-            m_startVertexLocation(startVertexLocation),
-            m_startInstanceLocation(startInstanceLocation)
-        {
-        }
+        );
 
-        RenderCommandType GetType() const override
-        {
-            return RenderCommandType::DRAW_INSTANCED;
-        }
+        RenderCommandType GetType() const override;
 
-        void Execute(
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            CommandListManager*                               commandManager
-        ) override
-        {
-            if (!commandList)
-            {
-                return;
-            }
+        void Execute(std::shared_ptr<CommandListManager> commandManager) override;
 
-            commandList->DrawInstanced(
-                m_vertexCountPerInstance,
-                m_instanceCount,
-                m_startVertexLocation,
-                m_startInstanceLocation
-            );
-        }
+        std::string GetName() const override;
 
-        std::string GetName() const override
-        {
-            return "DrawInstanced(vertices=" + std::to_string(m_vertexCountPerInstance) +
-                ", instances=" + std::to_string(m_instanceCount) + ")";
-        }
-
-        bool IsValid() const override
-        {
-            return m_vertexCountPerInstance > 0 && m_instanceCount > 0;
-        }
+        bool IsValid() const override;
     };
 } // namespace enigma::graphic
