@@ -28,6 +28,8 @@ namespace enigma::graphic
     // Bindless resource management system
     std::unique_ptr<BindlessResourceManager> D3D12RenderSystem::s_bindlessResourceManager = nullptr;
     std::unique_ptr<ShaderResourceBinder>    D3D12RenderSystem::s_shaderResourceBinder    = nullptr;
+    // Immediate mode rendering system (Milestone 2.6)
+    std::unique_ptr<RenderCommandQueue> D3D12RenderSystem::s_renderCommandQueue = nullptr;
 
     bool D3D12RenderSystem::s_isInitialized = false;
 
@@ -705,9 +707,10 @@ namespace enigma::graphic
     bool D3D12RenderSystem::BeginFrame(const Rgba8& clearColor, float clearDepth, uint8_t clearStencil)
     {
         UNUSED(clearStencil)
+        UNUSED(clearDepth)
         if (!s_isInitialized || !s_commandListManager)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for BeginFrame");
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for BeginFrame");
             return false;
         }
 
@@ -723,7 +726,7 @@ namespace enigma::graphic
 
         if (!commandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for BeginFrame");
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for BeginFrame");
             return false;
         }
 
@@ -732,7 +735,7 @@ namespace enigma::graphic
 
         if (!ClearRenderTarget(commandList, &currentRTV, clearColor))
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to clear render target in BeginFrame");
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to clear render target in BeginFrame");
             return false;
         }
 
@@ -745,7 +748,7 @@ namespace enigma::graphic
         }
         else
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute clear command list in BeginFrame");
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute clear command list in BeginFrame");
             return false;
         }
 
@@ -753,9 +756,7 @@ namespace enigma::graphic
         // TODO: 当实现了深度缓冲系统后，在这里调用ClearDepthStencil
         // ClearDepthStencil(nullptr, nullptr, clearDepth, clearStencil);
 
-        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
-                      "BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f",
-                      clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
+        //LogInfo(RendererSubsystem::GetStaticSubsystemName(),"BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f", clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
 
         return true;
     }
@@ -1026,5 +1027,185 @@ namespace enigma::graphic
         {
             s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
         }
+    }
+
+    // ===== Immediate模式渲染API实现 (Milestone 2.6新增) =====
+
+    RenderCommandQueue* D3D12RenderSystem::GetRenderCommandQueue()
+    {
+        // 延迟初始化RenderCommandQueue
+        if (!s_renderCommandQueue)
+        {
+            s_renderCommandQueue = std::make_unique<RenderCommandQueue>();
+            if (!s_renderCommandQueue->Initialize())
+            {
+                LogError("D3D12RenderSystem", "Failed to initialize RenderCommandQueue");
+                s_renderCommandQueue.reset();
+                return nullptr;
+            }
+            LogDebug("D3D12RenderSystem", "RenderCommandQueue initialized successfully");
+        }
+
+        return s_renderCommandQueue.get();
+    }
+
+    bool D3D12RenderSystem::AddImmediateCommand(
+        WorldRenderingPhase             phase,
+        std::unique_ptr<IRenderCommand> command,
+        const std::string&              debugTag
+    )
+    {
+        if (!command)
+        {
+            LogError("D3D12RenderSystem", "AddImmediateCommand: command is nullptr");
+            return false;
+        }
+
+        if (!command->IsValid())
+        {
+            LogError("D3D12RenderSystem", "AddImmediateCommand: command is invalid");
+            return false;
+        }
+
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            LogError("D3D12RenderSystem", "AddImmediateCommand: Failed to get RenderCommandQueue");
+            return false;
+        }
+
+        try
+        {
+            // 获取指令名称（在移动之前）
+            std::string commandName = command->GetName();
+
+            // 使用RenderCommandQueue的智能指针类型转换
+            RenderCommandPtr commandPtr(command.release());
+            queue->SubmitCommand(std::move(commandPtr), phase, debugTag);
+
+            LogDebug("D3D12RenderSystem", "AddImmediateCommand: Successfully added command '{}' to phase {}",
+                     commandName, static_cast<uint32_t>(phase));
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            LogError("D3D12RenderSystem", "AddImmediateCommand: Exception occurred: {}", e.what());
+            return false;
+        }
+    }
+
+    size_t D3D12RenderSystem::ExecuteImmediateCommands(WorldRenderingPhase phase)
+    {
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            LogError("D3D12RenderSystem", "ExecuteImmediateCommands: RenderCommandQueue not available");
+            return 0;
+        }
+
+        size_t commandCount = queue->GetCommandCount(phase);
+        if (commandCount == 0)
+        {
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: No commands to execute for phase {}",
+                     static_cast<uint32_t>(phase));
+            return 0;
+        }
+
+        try
+        {
+            // 验证CommandListManager可用性
+            if (!s_commandListManager)
+            {
+                LogError("D3D12RenderSystem", "ExecuteImmediateCommands: CommandListManager not available");
+                return 0;
+            }
+
+            // 获取当前图形命令列表验证
+            auto commandList = s_commandListManager->GetCommandQueue(CommandListManager::Type::Graphics);
+            if (!commandList)
+            {
+                LogError("D3D12RenderSystem", "ExecuteImmediateCommands: No active graphics command list");
+                return 0;
+            }
+
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Executing {} commands for phase {}",
+                     commandCount, static_cast<uint32_t>(phase));
+
+            // 执行指定阶段的命令 - 从unique_ptr创建shared_ptr
+            // 注意：使用空删除器确保不会删除unique_ptr管理的对象
+            std::shared_ptr<CommandListManager> sharedCommandManager(
+                s_commandListManager.get(),
+                [](CommandListManager*){} // 空删除器，不删除对象
+            );
+            queue->ExecutePhase(phase, sharedCommandManager);
+
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Successfully executed {} commands", commandCount);
+
+            // 清空已执行的命令 - 防止指令累积
+            // 教学要点：Immediate模式指令执行后必须清除，否则会不断累积
+            queue->ClearPhase(phase);
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Cleared {} commands from phase {}",
+                     commandCount, static_cast<uint32_t>(phase));
+
+            return commandCount;
+        }
+        catch (const std::exception& e)
+        {
+            LogError("D3D12RenderSystem", "ExecuteImmediateCommands: Exception occurred: {}", e.what());
+            return 0;
+        }
+    }
+
+    void D3D12RenderSystem::ClearImmediateCommands(WorldRenderingPhase phase)
+    {
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            LogWarn("D3D12RenderSystem", "ClearImmediateCommands: RenderCommandQueue not available");
+            return;
+        }
+
+        size_t commandCount = queue->GetCommandCount(phase);
+        queue->ClearPhase(phase);
+
+        LogDebug("D3D12RenderSystem", "ClearImmediateCommands: Cleared {} commands from phase {}",
+                 commandCount, static_cast<uint32_t>(phase));
+    }
+
+    void D3D12RenderSystem::ClearAllImmediateCommands()
+    {
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            LogWarn("D3D12RenderSystem", "ClearAllImmediateCommands: RenderCommandQueue not available");
+            return;
+        }
+
+        size_t totalCommands = queue->GetTotalCommandCount();
+        queue->Clear();
+
+        LogDebug("D3D12RenderSystem", "ClearAllImmediateCommands: Cleared {} total commands from all phases", totalCommands);
+    }
+
+    size_t D3D12RenderSystem::GetImmediateCommandCount(WorldRenderingPhase phase)
+    {
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            return 0;
+        }
+
+        return queue->GetCommandCount(phase);
+    }
+
+    bool D3D12RenderSystem::HasImmediateCommands(WorldRenderingPhase phase)
+    {
+        RenderCommandQueue* queue = GetRenderCommandQueue();
+        if (!queue)
+        {
+            return false;
+        }
+
+        return queue->GetCommandCount(phase) > 0;
     }
 } // namespace enigma::graphic
