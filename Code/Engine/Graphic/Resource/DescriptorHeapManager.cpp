@@ -394,14 +394,59 @@ std::vector<DescriptorHeapManager::DescriptorAllocation> DescriptorHeapManager::
 
 /**
  * @brief 释放CBV/SRV/UAV描述符
+ *
+ * 教学要点:
+ * 1. DirectX 12描述符堆中的资源释放机制
+ * 2. Bindless资源管理的核心 - 索引回收和复用
+ * 3. 线程安全的资源管理实践
+ * 4. 验证机制确保资源释放的正确性
+ *
+ * API来源: 基于DirectX 12最佳实践和现代C++资源管理模式
+ * - std::lock_guard: C++11 RAII锁管理
+ * - DescriptorAllocation: 自定义描述符分配结构
+ * - FreeIndex: 内部索引回收方法
+ *
+ * @param allocation 要释放的描述符分配信息
+ * @return 成功返回true，失败返回false
  */
 bool DescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allocation)
 {
-    // 避免未引用参数警告
-    (void)allocation;
+    // 教学注释: 获取互斥锁确保线程安全
+    // 这是现代C++多线程编程的标准做法，使用RAII管理锁生命周期
+    std::lock_guard<std::mutex> lock(m_mutex);
 
-    // TODO: 稍后完成完整实现
-    return false;
+    // 教学注释: 验证分配有效性 - 防御性编程的重要实践
+    // 1. 检查分配是否有效
+    // 2. 检查堆类型是否匹配CBV_SRV_UAV
+    // 这种验证机制是DirectX 12编程中避免GPU崩溃的关键
+    if (!allocation.isValid || allocation.heapType != HeapType::CBV_SRV_UAV)
+    {
+        // 教学注释: 返回false表示释放失败，调用者可以根据返回值判断操作结果
+        return false;
+    }
+
+    // 教学注释: 验证描述符堆管理器的初始化状态
+    // 在DirectX 12中，未初始化的堆操作会导致运行时错误
+    if (!m_initialized || !m_cbvSrvUavHeap)
+    {
+        return false;
+    }
+
+    // 教学注释: 调用内部索引释放方法
+    // FreeIndex方法实现了以下核心功能:
+    // 1. 将使用状态位图中对应位置设为false
+    // 2. 优化下次分配的起始搜索位置
+    // 3. 更新使用统计信息
+    // 这是Bindless资源系统中索引回收的核心机制
+    FreeIndex(HeapType::CBV_SRV_UAV, allocation.heapIndex);
+
+    // 教学注释: 返回true表示释放成功
+    // 此时:
+    // 1. 描述符索引已标记为可用
+    // 2. 统计信息已更新
+    // 3. 该索引可被后续AllocateCbvSrvUav()重新分配
+    // 4. 对应的GPU资源仍然存在，只是描述符索引被回收
+    return true;
 }
 
 /**

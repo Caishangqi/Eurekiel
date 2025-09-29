@@ -10,6 +10,11 @@ DescriptorHandle::DescriptorHandle() noexcept
     // TODO: 稍后完成完整实现
 }
 
+DescriptorHandle::DescriptorHandle(const DescriptorHeapManager::DescriptorAllocation& allocation, std::shared_ptr<DescriptorHeapManager> heapManager) noexcept : m_allocation(allocation),
+    m_heapManager(heapManager)
+{
+}
+
 DescriptorHandle::~DescriptorHandle()
 {
     // TODO: 稍后完成完整实现 - 释放描述符资源
@@ -19,8 +24,8 @@ DescriptorHandle::~DescriptorHandle()
 
 DescriptorHandle::DescriptorHandle(DescriptorHandle&& other) noexcept
     : m_allocation(std::move(other.m_allocation))
-    , m_heapManager(std::move(other.m_heapManager))
-    , m_ownsResource(other.m_ownsResource)
+      , m_heapManager(std::move(other.m_heapManager))
+      , m_ownsResource(other.m_ownsResource)
 {
     // TODO: 稍后完成完整实现 - 重置源对象
     other.m_ownsResource = false;
@@ -28,11 +33,12 @@ DescriptorHandle::DescriptorHandle(DescriptorHandle&& other) noexcept
 
 DescriptorHandle& DescriptorHandle::operator=(DescriptorHandle&& other) noexcept
 {
-    if (this != &other) {
+    if (this != &other)
+    {
         // TODO: 稍后完成完整实现 - 先释放当前资源，再转移新资源
-        m_allocation = std::move(other.m_allocation);
-        m_heapManager = std::move(other.m_heapManager);
-        m_ownsResource = other.m_ownsResource;
+        m_allocation         = std::move(other.m_allocation);
+        m_heapManager        = std::move(other.m_heapManager);
+        m_ownsResource       = other.m_ownsResource;
         other.m_ownsResource = false;
     }
     return *this;
