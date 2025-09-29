@@ -73,10 +73,10 @@ namespace enigma::graphic
         std::shared_ptr<DescriptorHeapManager> m_heapManager; // 描述符堆管理器
 
         // 🔥 简化的资源管理 (移除ResourceHandle)
-        std::vector<std::shared_ptr<D12Resource>>     m_registeredResources; // 已注册资源数组 (按索引访问)
-        std::queue<uint32_t>                          m_freeIndices; // 空闲索引队列
-        std::unordered_map<ID3D12Resource*, uint32_t> m_resourceToIndex; // 资源到索引映射
-        std::unordered_map<uint32_t, BindlessResourceType>    m_indexToType; // 索引到资源类型映射 (用于调试)
+        std::vector<std::shared_ptr<D12Resource>>          m_registeredResources; // 已注册资源数组 (按索引访问)
+        std::queue<uint32_t>                               m_freeIndices; // 空闲索引队列
+        std::unordered_map<ID3D12Resource*, uint32_t>      m_resourceToIndex; // 资源到索引映射
+        std::unordered_map<uint32_t, BindlessResourceType> m_indexToType; // 索引到资源类型映射 (用于调试)
 
         // 动态扩容参数
         uint32_t m_initialCapacity; // 初始容量
@@ -440,7 +440,7 @@ namespace enigma::graphic
          */
         void CreateDescriptorView(std::shared_ptr<D12Resource> resource,
                                   const DescriptorHandle&      descriptorHandle,
-                                  BindlessResourceType        type);
+                                  BindlessResourceType         type);
 
         /**
          * @brief 获取资源类型的字符串名称 (调试用)
