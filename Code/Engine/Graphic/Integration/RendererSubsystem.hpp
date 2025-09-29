@@ -22,6 +22,7 @@
 #include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
+#include "../Core/Pipeline/EnigmaRenderingPipeline.hpp"
 #include "../Core/Pipeline/ShaderPackManager.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
@@ -78,6 +79,7 @@ namespace enigma::graphic
             uint8_t defaultClearStencil  = 0; ///< 默认模板清除值 (0-255)
             bool    enableAutoClearColor = true; ///< 是否在BeginFrame自动执行清屏
             bool    enableAutoClearDepth = true; ///< 是否在BeginFrame自动清除深度缓冲
+            bool    enableShadowMapping  = false; ///< 是否启用阴影映射（后续Milestone实现）
 
             // ========================== 窗口系统集成 =========================
             Window* targetWindow = nullptr; ///< 目标窗口，用于SwapChain创建
@@ -220,6 +222,20 @@ namespace enigma::graphic
          * - 学习G-Buffer的数据组织
          * - 掌握后处理效果的实现原理
          */
+
+        /// @brief 执行完整的渲染帧管线 (基于Iris架构)
+        ///
+        /// 实现完整的Iris风格渲染流水线：
+        /// Begin → Shadow → Prepare(G-Buffer) → Deferred → Translucent → Composite → Debug → Final
+        ///
+        /// 教学要点:
+        /// - 理解现代渲染管线的完整流程
+        /// - 学习各个渲染阶段的职责分工
+        /// - 掌握延迟渲染的实现架构
+        void RenderFrame();
+
+        /// @brief 更新渲染系统逻辑 (简化版本，建议使用RenderFrame())
+        /// @deprecated 推荐使用RenderFrame()获得完整的渲染管线体验
         void Update(float deltaTime) override;
 
         /**
@@ -390,6 +406,18 @@ namespace enigma::graphic
             return m_shaderPackManager.get();
         }
 
+        /**
+         * @brief 获取当前活跃的渲染管线 (Milestone 2.6新增)
+         * @return 当前EnigmaRenderingPipeline指针
+         * @details
+         * 用于访问调试渲染器和其他管线功能。
+         * 主要供TestGame等测试代码使用。
+         */
+        EnigmaRenderingPipeline* GetCurrentPipeline() const noexcept
+        {
+            return m_currentPipeline.get();
+        }
+
         // ==================== 配置和状态查询 ====================
 
         /**
@@ -524,6 +552,10 @@ namespace enigma::graphic
 
         // TODO: 重新启用PipelineManager（需要修复编码问题）
         // std::unique_ptr<PipelineManager> m_pipelineManager;
+
+        /// 当前活跃的渲染管线 - Enigma扩展 (Milestone 2.6新增)
+        /// 支持EnigmaRenderingPipeline实例，用于开发和测试DirectX 12渲染管线
+        std::unique_ptr<EnigmaRenderingPipeline> m_currentPipeline;
 
         /// Shader Pack管理器 - 着色器包系统
         std::unique_ptr<ShaderPackManager> m_shaderPackManager;

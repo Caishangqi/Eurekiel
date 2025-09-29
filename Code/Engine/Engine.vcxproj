@@ -209,10 +209,17 @@
         <ClCompile Include="Core\XmlUtils.cpp"/>
         <ClCompile Include="Core\Yaml.cpp"/>
         <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp"/>
+        <ClCompile Include="Graphic\Core\Pipeline\CompositeRenderer.cpp"/>
+        <ClCompile Include="Graphic\Core\Pipeline\DebugRenderer.cpp"/>
+        <ClCompile Include="Graphic\Core\Pipeline\ShadowRenderer.cpp"/>
+        <ClCompile Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.cpp"/>
         <ClCompile Include="Graphic\Core\Pipeline\ShaderPackManager.cpp"/>
+        <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp"/>
+        <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp"/>
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
         <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp"/>
         <ClCompile Include="Graphic\Resource\BindlessResourceManager.cpp"/>
+        <ClCompile Include="Graphic\Resource\Buffer\BufferFlipper.cpp"/>
         <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
         <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
         <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
@@ -392,10 +399,14 @@
 
         <!-- Core DirectX 12 API Layer (Static封装，对应Iris的IrisRenderSystem) -->
         <ClInclude Include="Graphic\Core\DX12\D3D12RenderSystem.hpp"/>
+        <ClInclude Include="Graphic\Core\Pipeline\CompositePass.hpp"/>
+        <ClInclude Include="Graphic\Core\Pipeline\DebugRenderer.hpp"/>
 
         <!-- Pipeline Layer -->
         <ClInclude Include="Graphic\Core\Pipeline\IWorldRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\IShaderRenderingPipeline.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\ProgramArrayId.hpp"/>
+        <ClInclude Include="Graphic\Core\Pipeline\TextureStage.hpp"/>
         <ClInclude Include="Graphic\Core\Pipeline\VanillaRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
@@ -408,6 +419,8 @@
         
         <!-- Shader System -->
         <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
+        <ClInclude Include="Graphic\Immediate\Commands\DebugDrawTextCommand.hpp"/>
+        <ClInclude Include="Graphic\Resource\Buffer\BufferFlipper.hpp"/>
         <ClInclude Include="Graphic\Resource\CompiledShader.hpp"/>
         <ClInclude Include="Graphic\Resource\DepthTexture\D12DepthTexture.hpp"/>
         <ClInclude Include="Graphic\Resource\DescriptorHandle.hpp"/>
@@ -430,7 +443,6 @@
         <ClInclude Include="Graphic\Immediate\RenderCommand.hpp"/>
         <ClInclude Include="Graphic\Immediate\RenderCommandQueue.hpp"/>
         <ClInclude Include="Graphic\Immediate\Commands\DrawCommands.hpp"/>
-        <ClInclude Include="Graphic\Immediate\Detection\PhaseDetector.hpp"/>
 
         <!-- Resource Management -->
         <ClInclude Include="Graphic\Resource\BindlessResourceManager.hpp" />
