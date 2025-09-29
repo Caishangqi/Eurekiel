@@ -51,12 +51,8 @@ namespace enigma::graphic
         /// <summary>
         /// 执行渲染指令
         /// </summary>
-        /// <param name="commandList">DirectX 12命令列表</param>
         /// <param name="commandManager">命令列表管理器</param>
-        virtual void Execute(
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            CommandListManager*                               commandManager
-        ) = 0;
+        virtual void Execute(std::shared_ptr<CommandListManager> commandManager) = 0;
 
         /// <summary>
         /// 获取指令名称(用于调试)

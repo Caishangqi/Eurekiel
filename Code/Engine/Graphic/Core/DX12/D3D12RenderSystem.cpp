@@ -882,7 +882,7 @@ namespace enigma::graphic
             LogError("D3D12RenderSystem", "Device or DXGI Factory not initialized for SwapChain creation");
             return false;
         }
-
+#undef min
         s_swapChainBufferCount = std::min(bufferCount, 3u); // 限制最多3个缓冲区
 
         // 1. 创建SwapChain描述符

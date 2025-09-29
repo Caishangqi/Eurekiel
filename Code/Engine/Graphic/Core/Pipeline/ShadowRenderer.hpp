@@ -1,15 +1,18 @@
-#pragma once
+﻿#pragma once
 
 #include "WorldRenderingPhase.hpp"
 #include <memory>
 #include <array>
+
+#include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+#include "Engine/Math/Mat44.hpp"
+#include "Engine/Math/Vec3.hpp"
 
 // Forward declarations
 namespace enigma::graphic
 {
     class D12RenderTargets;
     class CommandListManager;
-    class D12Texture;
     class D12Buffer;
 }
 
@@ -128,16 +131,16 @@ namespace enigma::graphic
         // ===========================================
 
         /// 光源方向（通常是太阳方向）
-        Engine::Math::Vector3f m_lightDirection;
+        Vec3 m_lightDirection;
 
         /// 阴影视图矩阵数组（每个级联一个）
-        std::array<Engine::Math::Matrix4f, 4> m_shadowViewMatrices;
+        std::array<Matrix44, 4> m_shadowViewMatrices;
 
         /// 阴影投影矩阵数组（每个级联一个）
-        std::array<Engine::Math::Matrix4f, 4> m_shadowProjectionMatrices;
+        std::array<Matrix44, 4> m_shadowProjectionMatrices;
 
         /// 光源视图投影矩阵
-        Engine::Math::Matrix4f m_lightViewProjectionMatrix;
+        Matrix44 m_lightViewProjectionMatrix;
 
         // ===========================================
         // 渲染状态

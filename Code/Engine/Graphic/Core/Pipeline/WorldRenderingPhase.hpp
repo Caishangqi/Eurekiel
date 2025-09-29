@@ -85,6 +85,7 @@ namespace enigma::graphic
          * @brief 虚空渲染
          * 在Minecraft的虚空维度中使用的特殊渲染
          * 通常是纯黑或自定义的虚空效果
+         * 注：C++中使用VOID_ENV避免与void关键字冲突
          */
         VOID_ENV,
 
@@ -239,65 +240,144 @@ namespace enigma::graphic
     };
 
     // ===========================================
-    // 辅助函数声明
+    // 内联实现
     // ===========================================
 
     /**
-     * @brief 将枚举值转换为字符串
-     * 
-     * 用于调试输出和日志记录，返回枚举值对应的
-     * 人类可读的字符串表示。
-     * 
-     * @param phase 渲染阶段枚举值
-     * @return 阶段名称字符串
-     * 
-     * 教学价值：枚举反射和调试友好的设计
+     * @brief 内联实现：将枚举值转换为字符串
      */
-    const char* ToString(WorldRenderingPhase phase);
+    inline const char* ToString(WorldRenderingPhase phase)
+    {
+        switch (phase)
+        {
+            case WorldRenderingPhase::NONE:                return "NONE";
+            case WorldRenderingPhase::SKY:                 return "SKY";
+            case WorldRenderingPhase::SUNSET:              return "SUNSET";
+            case WorldRenderingPhase::CUSTOM_SKY:          return "CUSTOM_SKY";
+            case WorldRenderingPhase::SUN:                 return "SUN";
+            case WorldRenderingPhase::MOON:                return "MOON";
+            case WorldRenderingPhase::STARS:               return "STARS";
+            case WorldRenderingPhase::VOID_ENV:            return "VOID_ENV";
+            case WorldRenderingPhase::TERRAIN_SOLID:       return "TERRAIN_SOLID";
+            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED: return "TERRAIN_CUTOUT_MIPPED";
+            case WorldRenderingPhase::TERRAIN_CUTOUT:      return "TERRAIN_CUTOUT";
+            case WorldRenderingPhase::TERRAIN_TRANSLUCENT: return "TERRAIN_TRANSLUCENT";
+            case WorldRenderingPhase::TRIPWIRE:            return "TRIPWIRE";
+            case WorldRenderingPhase::ENTITIES:            return "ENTITIES";
+            case WorldRenderingPhase::BLOCK_ENTITIES:      return "BLOCK_ENTITIES";
+            case WorldRenderingPhase::DESTROY:             return "DESTROY";
+            case WorldRenderingPhase::HAND_SOLID:          return "HAND_SOLID";
+            case WorldRenderingPhase::HAND_TRANSLUCENT:    return "HAND_TRANSLUCENT";
+            case WorldRenderingPhase::OUTLINE:             return "OUTLINE";
+            case WorldRenderingPhase::DEBUG:               return "DEBUG";
+            case WorldRenderingPhase::PARTICLES:           return "PARTICLES";
+            case WorldRenderingPhase::CLOUDS:              return "CLOUDS";
+            case WorldRenderingPhase::RAIN_SNOW:           return "RAIN_SNOW";
+            case WorldRenderingPhase::WORLD_BORDER:        return "WORLD_BORDER";
+            case WorldRenderingPhase::COUNT:               return "COUNT";
+            default:                                        return "UNKNOWN";
+        }
+    }
 
     /**
-     * @brief 从字符串解析枚举值
-     * 
-     * 用于配置文件加载和命令行参数解析，
-     * 将字符串转换回对应的枚举值。
-     * 
-     * @param str 阶段名称字符串
-     * @return 对应的枚举值，无效时返回NONE
+     * @brief 内联实现：从字符串解析枚举值
      */
-    WorldRenderingPhase FromString(const std::string& str);
+    inline WorldRenderingPhase FromString(const std::string& str)
+    {
+        if (str == "NONE")                return WorldRenderingPhase::NONE;
+        if (str == "SKY")                 return WorldRenderingPhase::SKY;
+        if (str == "SUNSET")              return WorldRenderingPhase::SUNSET;
+        if (str == "CUSTOM_SKY")          return WorldRenderingPhase::CUSTOM_SKY;
+        if (str == "SUN")                 return WorldRenderingPhase::SUN;
+        if (str == "MOON")                return WorldRenderingPhase::MOON;
+        if (str == "STARS")               return WorldRenderingPhase::STARS;
+        if (str == "VOID_ENV")            return WorldRenderingPhase::VOID_ENV;
+        if (str == "TERRAIN_SOLID")       return WorldRenderingPhase::TERRAIN_SOLID;
+        if (str == "TERRAIN_CUTOUT_MIPPED") return WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED;
+        if (str == "TERRAIN_CUTOUT")      return WorldRenderingPhase::TERRAIN_CUTOUT;
+        if (str == "TERRAIN_TRANSLUCENT") return WorldRenderingPhase::TERRAIN_TRANSLUCENT;
+        if (str == "TRIPWIRE")            return WorldRenderingPhase::TRIPWIRE;
+        if (str == "ENTITIES")            return WorldRenderingPhase::ENTITIES;
+        if (str == "BLOCK_ENTITIES")      return WorldRenderingPhase::BLOCK_ENTITIES;
+        if (str == "DESTROY")             return WorldRenderingPhase::DESTROY;
+        if (str == "HAND_SOLID")          return WorldRenderingPhase::HAND_SOLID;
+        if (str == "HAND_TRANSLUCENT")    return WorldRenderingPhase::HAND_TRANSLUCENT;
+        if (str == "OUTLINE")             return WorldRenderingPhase::OUTLINE;
+        if (str == "DEBUG")               return WorldRenderingPhase::DEBUG;
+        if (str == "PARTICLES")           return WorldRenderingPhase::PARTICLES;
+        if (str == "CLOUDS")              return WorldRenderingPhase::CLOUDS;
+        if (str == "RAIN_SNOW")           return WorldRenderingPhase::RAIN_SNOW;
+        if (str == "WORLD_BORDER")        return WorldRenderingPhase::WORLD_BORDER;
+
+        return WorldRenderingPhase::NONE; // 默认值
+    }
 
     /**
-     * @brief 检查阶段是否为地形渲染相关
-     * 
-     * 判断给定的渲染阶段是否涉及地形渲染，
-     * 用于优化和特殊处理逻辑。
-     * 
-     * @param phase 渲染阶段
-     * @return true如果是地形相关阶段
+     * @brief 内联实现：检查阶段是否为地形渲染相关
      */
-    bool IsTerrainPhase(WorldRenderingPhase phase);
+    inline bool IsTerrainPhase(WorldRenderingPhase phase)
+    {
+        switch (phase)
+        {
+            case WorldRenderingPhase::TERRAIN_SOLID:
+            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
+            case WorldRenderingPhase::TERRAIN_CUTOUT:
+            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+                return true;
+            default:
+                return false;
+        }
+    }
 
     /**
-     * @brief 检查阶段是否需要透明度处理
-     * 
-     * 判断给定的渲染阶段是否需要Alpha混合
-     * 或其他透明度相关的特殊处理。
-     * 
-     * @param phase 渲染阶段
-     * @return true如果需要透明度处理
-     * 
-     * 教学重点：透明度渲染的复杂性
+     * @brief 内联实现：检查阶段是否需要透明度处理
      */
-    bool RequiresTransparency(WorldRenderingPhase phase);
+    inline bool RequiresTransparency(WorldRenderingPhase phase)
+    {
+        switch (phase)
+        {
+            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+            case WorldRenderingPhase::HAND_TRANSLUCENT:
+            case WorldRenderingPhase::PARTICLES:
+            case WorldRenderingPhase::CLOUDS:
+            case WorldRenderingPhase::RAIN_SNOW:
+            case WorldRenderingPhase::WORLD_BORDER:
+                return true;
+            default:
+                return false;
+        }
+    }
 
     /**
-     * @brief 获取阶段的默认深度测试模式
-     * 
-     * 返回特定渲染阶段建议使用的深度测试配置，
-     * 用于自动化的渲染状态管理。
-     * 
-     * @param phase 渲染阶段
-     * @return 建议的深度测试模式字符串
+     * @brief 内联实现：获取阶段的默认深度测试模式
      */
-    const char* GetDefaultDepthMode(WorldRenderingPhase phase);
+    inline const char* GetDefaultDepthMode(WorldRenderingPhase phase)
+    {
+        switch (phase)
+        {
+            case WorldRenderingPhase::SKY:
+            case WorldRenderingPhase::SUNSET:
+            case WorldRenderingPhase::CUSTOM_SKY:
+                return "LEQUAL"; // 天空盒使用LEQUAL
+
+            case WorldRenderingPhase::TERRAIN_SOLID:
+            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
+            case WorldRenderingPhase::TERRAIN_CUTOUT:
+            case WorldRenderingPhase::ENTITIES:
+            case WorldRenderingPhase::BLOCK_ENTITIES:
+                return "LESS"; // 不透明物体使用标准深度测试
+
+            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+            case WorldRenderingPhase::HAND_TRANSLUCENT:
+            case WorldRenderingPhase::PARTICLES:
+                return "LEQUAL"; // 透明物体使用LEQUAL以正确处理排序
+
+            case WorldRenderingPhase::DEBUG:
+            case WorldRenderingPhase::OUTLINE:
+                return "ALWAYS"; // 调试信息总是可见
+
+            default:
+                return "LESS"; // 默认深度测试
+        }
+    }
 } // namespace enigma::graphic

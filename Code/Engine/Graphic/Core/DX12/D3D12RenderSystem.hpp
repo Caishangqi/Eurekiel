@@ -10,6 +10,8 @@
 #include <wrl/client.h>
 #include <memory>
 
+#undef min
+#undef max
 namespace enigma::graphic
 {
     class D12DepthTexture;
