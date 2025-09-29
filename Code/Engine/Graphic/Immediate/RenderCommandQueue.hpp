@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include "RenderCommand.hpp"
-#include "Detection/PhaseDetector.hpp"
 #include "../Resource/CommandListManager.hpp"
 #include <map>
 #include <vector>
@@ -66,7 +65,6 @@ namespace enigma::graphic
 
         // 配置和管理
         QueueConfig                    m_config;
-        std::unique_ptr<PhaseDetector> m_phaseDetector;
 
         // 性能统计
         struct PerformanceMetrics
@@ -116,6 +114,8 @@ namespace enigma::graphic
         /// </summary>
         bool Initialize();
 
+        unsigned long long GetPhaseCommandCount(WorldRenderingPhase debug);
+
         /// <summary>
         /// 提交绘制指令到指定阶段
         /// </summary>
@@ -158,13 +158,8 @@ namespace enigma::graphic
         /// 执行特定阶段的指令
         /// </summary>
         /// <param name="phase">渲染阶段</param>
-        /// <param name="commandList">DirectX 12命令列表</param>
         /// <param name="commandManager">命令列表管理器</param>
-        void ExecutePhase(
-            Phase                                             phase,
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            CommandListManager*                               commandManager
-        );
+        void ExecutePhase(Phase phase, std::shared_ptr<CommandListManager> commandManager);
 
         /// <summary>
         /// 结束当前帧，清空队列
@@ -237,10 +232,8 @@ namespace enigma::graphic
         /// 内部执行阶段指令的实现
         /// </summary>
         void ExecutePhaseInternal(
-            Phase                                             phase,
-            const CommandVector&                              commands,
-            Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList,
-            CommandListManager*                               commandManager
+            const CommandVector&                commands,
+            std::shared_ptr<CommandListManager> commandManager
         );
 
         /// <summary>
