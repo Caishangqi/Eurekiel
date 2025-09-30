@@ -6,8 +6,12 @@
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Resource/DepthTexture/D12DepthTexture.hpp"
-#include "Engine/Graphic/Resource/BindlessResourceManager.hpp"
+#include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
 #include "Engine/Graphic/Resource/ShaderResourceBinder.hpp"
+#include "Engine/Resource/ResourceSubsystem.hpp"
+#include "Engine/Resource/Atlas/ImageResource.hpp"
+#include "Engine/Core/Image.hpp"
+
 
 namespace enigma::graphic
 {
@@ -25,11 +29,18 @@ namespace enigma::graphic
 
     // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
-    // Bindless resource management system
-    std::unique_ptr<BindlessResourceManager> D3D12RenderSystem::s_bindlessResourceManager = nullptr;
-    std::unique_ptr<ShaderResourceBinder>    D3D12RenderSystem::s_shaderResourceBinder    = nullptr;
+
+    // SM6.6 Bindless resource management system (Milestone 2.7)
+    std::unique_ptr<BindlessIndexAllocator>        D3D12RenderSystem::s_bindlessIndexAllocator        = nullptr;
+    std::unique_ptr<GlobalDescriptorHeapManager>   D3D12RenderSystem::s_globalDescriptorHeapManager   = nullptr;
+    std::unique_ptr<BindlessRootSignature>         D3D12RenderSystem::s_bindlessRootSignature         = nullptr;
+
     // Immediate mode rendering system (Milestone 2.6)
     std::unique_ptr<RenderCommandQueue> D3D12RenderSystem::s_renderCommandQueue = nullptr;
+
+    // Texture cache system (Milestone Bindless)
+    std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> D3D12RenderSystem::s_textureCache;
+    std::mutex                                                      D3D12RenderSystem::s_textureCacheMutex;
 
     bool D3D12RenderSystem::s_isInitialized = false;
 
@@ -68,22 +79,42 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. Initialize Bindless resource management system (required for SwapChain RTV allocation)
-        s_bindlessResourceManager = std::make_unique<BindlessResourceManager>();
-        if (!s_bindlessResourceManager->Initialize(10000, 1000000, 2)) // initialCapacity, maxCapacity, growthFactor
+        // 4. Initialize SM6.6 Bindless components (Milestone 2.7)
+
+        // 4.1 Create Bindless Index Allocator (纯索引分配器)
+        s_bindlessIndexAllocator = std::make_unique<BindlessIndexAllocator>();
+        // 构造函数自动初始化，无需调用Initialize()
+
+        // 4.2 Create Global Descriptor Heap Manager (全局描述符堆)
+        s_globalDescriptorHeapManager = std::make_unique<GlobalDescriptorHeapManager>();
+        if (!s_globalDescriptorHeapManager->Initialize())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to initialize BindlessResourceManager");
-            s_bindlessResourceManager.reset();
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                          "Failed to initialize GlobalDescriptorHeapManager");
+            s_globalDescriptorHeapManager.reset();
+            s_bindlessIndexAllocator.reset();
             s_commandListManager.reset();
             return false;
         }
 
-        // 5. Initialize ShaderResourceBinder
-        s_shaderResourceBinder = std::make_unique<ShaderResourceBinder>();
-        // Note: ShaderResourceBinder initialization may depend on specific shader requirements,
-        // so we just create the instance here and defer detailed initialization to when it's first used
+        // 4.3 Create SM6.6 Bindless Root Signature (极简Root Signature)
+        s_bindlessRootSignature = std::make_unique<BindlessRootSignature>();
+        if (!s_bindlessRootSignature->Initialize())
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                          "Failed to initialize BindlessRootSignature");
+            s_bindlessRootSignature.reset();
+            s_globalDescriptorHeapManager->Shutdown();
+            s_globalDescriptorHeapManager.reset();
+            s_bindlessIndexAllocator.reset();
+            s_commandListManager.reset();
+            return false;
+        }
 
-        // 6. Create SwapChain (if window handle is provided)
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                     "SM6.6 Bindless architecture initialized successfully");
+
+        // 5. Create SwapChain (if window handle is provided)
         if (hwnd)
         {
             if (!CreateSwapChain(hwnd, renderWidth, renderHeight))
@@ -129,15 +160,23 @@ namespace enigma::graphic
             s_commandListManager.reset();
         }
 
-        // 2. Clean up Bindless resource management systems
-        if (s_shaderResourceBinder)
+        // 2. Clean up SM6.6 Bindless components (Milestone 2.7)
+        if (s_bindlessRootSignature)
         {
-            s_shaderResourceBinder.reset();
+            s_bindlessRootSignature->Shutdown();
+            s_bindlessRootSignature.reset();
         }
 
-        if (s_bindlessResourceManager)
+        if (s_globalDescriptorHeapManager)
         {
-            s_bindlessResourceManager.reset();
+            s_globalDescriptorHeapManager->Shutdown();
+            s_globalDescriptorHeapManager.reset();
+        }
+
+        if (s_bindlessIndexAllocator)
+        {
+            // BindlessIndexAllocator无需显式Shutdown，析构函数自动清理
+            s_bindlessIndexAllocator.reset();
         }
 
         // 3. Clean up SwapChain resources
@@ -147,7 +186,7 @@ namespace enigma::graphic
             {
                 s_swapChainBuffers[i].Reset();
             }
-            // Note: RTV descriptors are automatically released when BindlessResourceManager is destroyed
+            // Note: RTV descriptors are automatically released when BindlessIndexAllocator is destroyed
             s_swapChainRTVs[i] = {};
         }
         s_swapChain.Reset();
@@ -418,6 +457,215 @@ namespace enigma::graphic
     }
 
     /**
+     * 从Image对象创建DirectX 12纹理
+     * 
+     * 教学要点：
+     * 1. 直接从Image提取像素数据创建纹理
+     * 2. 自动推断纹理格式(RGBA8)
+     * 3. 使用已有的CreateTexture2D核心方法
+     * 4. **不使用缓存** - Image对象是瞬时的,每次调用都创建新纹理
+     */
+    /**
+     * 从Image对象创建DirectX 12纹理
+     * 
+     * 教学要点：
+     * 1. 直接从Image提取像素数据创建纹理
+     * 2. 自动推断纹理格式(RGBA8)
+     * 3. 使用已有的CreateTexture2D核心方法
+     * 4. **不使用缓存** - Image对象是瞬时的,每次调用都创建新纹理
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(Image& image, TextureUsage usage, const std::string& debugName)
+    {
+        // 验证Image有效性
+        if (!image.GetRawData())
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Image data is null");
+            return nullptr;
+        }
+
+        IntVec2 dimensions = image.GetDimensions();
+        if (dimensions.x <= 0 || dimensions.y <= 0)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Invalid dimensions (%d x %d)", dimensions.x, dimensions.y);
+            return nullptr;
+        }
+
+        // 使用已有的CreateTexture2D方法创建纹理
+        // 注意：Image始终提供RGBA8数据，所以使用DXGI_FORMAT_R8G8B8A8_UNORM
+        auto texture = CreateTexture2D(
+            static_cast<uint32_t>(dimensions.x),
+            static_cast<uint32_t>(dimensions.y),
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            usage,
+            image.GetRawData(),
+            debugName.empty() ? "Image Texture" : debugName.c_str()
+        );
+
+        if (!texture)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Failed to create texture");
+            return nullptr;
+        }
+
+        // 转换unique_ptr到shared_ptr
+        return std::shared_ptr<D12Texture>(texture.release());
+    }
+
+    /**
+     * 从ResourceLocation加载并创建纹理（带缓存）
+     * 
+     * 教学要点：
+     * 1. ResourceLocation作为缓存键，类型安全
+     * 2. 使用std::mutex保护缓存访问（线程安全）
+     * 3. weak_ptr缓存策略：自动释放不再使用的纹理
+     * 4. 通过ResourceSubsystem加载ImageResource
+     * 5. 缓存命中时直接返回，避免重复加载
+     * 
+     * 架构设计：
+     * - 缓存查询 → 命中返回 → 未命中加载 → 创建纹理 → 插入缓存
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(const ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName)
+    {
+        // 1. 线程安全的缓存查询
+        {
+            std::lock_guard<std::mutex> lock(s_textureCacheMutex);
+            auto                        it = s_textureCache.find(resourceLocation);
+            if (it != s_textureCache.end())
+            {
+                // 尝试锁定weak_ptr
+                auto cachedTexture = it->second.lock();
+                if (cachedTexture)
+                {
+                    LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                             "CreateTexture2D(ResourceLocation): Cache hit for '%s'",
+                             resourceLocation.ToString().c_str());
+                    return cachedTexture;
+                }
+                else
+                {
+                    // weak_ptr已过期，从缓存中移除
+                    s_textureCache.erase(it);
+                    LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                             "CreateTexture2D(ResourceLocation): Expired cache entry removed for '%s'",
+                             resourceLocation.ToString().c_str());
+                }
+            }
+        }
+
+        // 2. 缓存未命中，加载资源
+        auto resourceSubsystem = g_theEngine->GetSubsystem<ResourceSubsystem>();
+        if (!resourceSubsystem)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ResourceLocation): ResourceSubsystem not found");
+            ERROR_AND_DIE("Resource subsystem not found")
+            return nullptr;
+        }
+
+        const auto imageResource = std::dynamic_pointer_cast<ImageResource>(resourceSubsystem->GetResource(resourceLocation));
+        if (!imageResource)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "CreateTexture2D(ResourceLocation): Failed to load ImageResource for '%s'",
+                     resourceLocation.ToString().c_str());
+            ERROR_RECOVERABLE("Failed to get image resource")
+            return nullptr;
+        }
+
+        // 3. 创建纹理（委托给ImageResource重载版本）
+        auto d3d12Texture = CreateTexture2D(*imageResource, usage, debugName);
+        if (!d3d12Texture)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "CreateTexture2D(ResourceLocation): Failed to create texture for '%s'",
+                     resourceLocation.ToString().c_str());
+            return nullptr;
+        }
+
+        // 4. 插入缓存（线程安全）
+        {
+            std::lock_guard<std::mutex> lock(s_textureCacheMutex);
+            s_textureCache[resourceLocation] = d3d12Texture;
+            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                    "CreateTexture2D(ResourceLocation): Created and cached texture for '%s'",
+                    resourceLocation.ToString().c_str());
+        }
+
+        return d3d12Texture;
+    }
+
+    /**
+     * 从ImageResource创建纹理
+     * 
+     * 教学要点：
+     * 1. 验证ImageResource已加载
+     * 2. 提取Image对象并委托给Image重载版本
+     * 3. 错误处理和日志记录
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(const ImageResource& imageResource, TextureUsage usage, const std::string& debugName)
+    {
+        // 验证ImageResource已加载
+        if (!imageResource.IsLoaded())
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ImageResource): ImageResource not loaded");
+            ERROR_RECOVERABLE("Failed to get image resource")
+            return nullptr;
+        }
+
+        // 提取Image对象
+        const Image& image = imageResource.GetImage();
+
+        // **修正逻辑错误** - 应该检查GetRawData()返回nullptr才报错
+        if (!image.GetRawData())
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ImageResource): Image raw data is null");
+            ERROR_RECOVERABLE("Image file is null in raw data")
+            return nullptr;
+        }
+
+        // 委托给Image重载版本创建纹理
+        return CreateTexture2D(const_cast<Image&>(image), usage, debugName);
+    }
+
+    /**
+     * 从文件路径创建纹理
+     * 
+     * 教学要点：
+     * 1. 直接从文件路径加载Image
+     * 2. 不使用ResourceLocation缓存（因为是裸文件路径）
+     * 3. 适用于运行时动态加载的纹理
+     * 4. 错误处理和日志记录
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName)
+    {
+        // 验证路径有效性
+        if (imagePath.empty())
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(string): Image path is empty");
+            return nullptr;
+        }
+
+        // 从文件路径加载Image - 使用正确的构造函数
+        Image image(imagePath.c_str());
+
+        // 验证Image加载成功
+        if (!image.GetRawData())
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "CreateTexture2D(string): Failed to load image from path '%s'",
+                     imagePath.c_str());
+            return nullptr;
+        }
+
+        IntVec2 dimensions = image.GetDimensions();
+        LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                "CreateTexture2D(string): Loaded image from '%s' (%dx%d)",
+                imagePath.c_str(), dimensions.x, dimensions.y);
+
+        // 委托给Image重载版本创建纹理
+        return CreateTexture2D(image, usage, debugName.empty() ? imagePath : debugName);
+    }
+
+    /**
      * 创建深度纹理（主要方法）
      * 对应Iris的深度纹理管理功能，支持depthtex1/depthtex2
      *
@@ -682,14 +930,23 @@ namespace enigma::graphic
             IID_PPV_ARGS(resource));
     }
 
-    std::unique_ptr<BindlessResourceManager>& D3D12RenderSystem::GetBindlessResourceManager()
+    // ===== SM6.6 Bindless资源管理API实现 (Milestone 2.7) =====
+
+    BindlessIndexAllocator* D3D12RenderSystem::GetBindlessIndexAllocator()
     {
-        return s_bindlessResourceManager;
+        return s_bindlessIndexAllocator.get();
     }
 
-    std::unique_ptr<ShaderResourceBinder>& D3D12RenderSystem::GetShaderResourceBinder()
+    GlobalDescriptorHeapManager* D3D12RenderSystem::GetGlobalDescriptorHeapManager()
     {
-        return s_shaderResourceBinder;
+        return s_globalDescriptorHeapManager.get();
+    }
+
+    ID3D12RootSignature* D3D12RenderSystem::GetBindlessRootSignature()
+    {
+        if (!s_bindlessRootSignature)
+            return nullptr;
+        return s_bindlessRootSignature->GetRootSignature();
     }
 
     // ===== 渲染管线API实现 (Milestone 2.6新增) =====
@@ -925,15 +1182,15 @@ namespace enigma::graphic
         // 4. 禁用Alt+Enter全屏切换（可选）
         s_dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
 
-        // 5. 获取DescriptorHeapManager用于RTV分配
-        auto* descriptorManager = s_bindlessResourceManager->GetDescriptorHeapManager();
-        if (!descriptorManager)
+        // 5. 为每个SwapChain缓冲区创建RTV描述符
+        // 使用GlobalDescriptorHeapManager的RTV堆
+        if (!s_globalDescriptorHeapManager)
         {
-            LogError("D3D12RenderSystem", "DescriptorHeapManager not available for RTV creation");
+            LogError("D3D12RenderSystem", "GlobalDescriptorHeapManager not available for RTV creation");
             return false;
         }
 
-        // 6. 为每个SwapChain缓冲区创建RTV描述符
+        // 6. 为每个SwapChain缓冲区创建RTV
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
             // 获取SwapChain缓冲区资源
@@ -945,14 +1202,14 @@ namespace enigma::graphic
             }
 
             // 分配RTV描述符
-            auto rtvHandle = descriptorManager->AllocateRtv();
-            if (!rtvHandle.isValid)
+            auto rtvAllocation = s_globalDescriptorHeapManager->AllocateRtv();
+            if (!rtvAllocation.isValid)
             {
                 LogError("D3D12RenderSystem", "Failed to allocate RTV descriptor for SwapChain buffer %d", i);
                 return false;
             }
 
-            s_swapChainRTVs[i] = rtvHandle.cpuHandle;
+            s_swapChainRTVs[i] = rtvAllocation.cpuHandle;
 
             // 创建RTV描述符
             D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
@@ -1135,7 +1392,9 @@ namespace enigma::graphic
             // 注意：使用空删除器确保不会删除unique_ptr管理的对象
             std::shared_ptr<CommandListManager> sharedCommandManager(
                 s_commandListManager.get(),
-                [](CommandListManager*){} // 空删除器，不删除对象
+                [](CommandListManager*)
+                {
+                } // 空删除器，不删除对象
             );
             queue->ExecutePhase(phase, sharedCommandManager);
 
@@ -1207,5 +1466,117 @@ namespace enigma::graphic
         }
 
         return queue->GetCommandCount(phase) > 0;
+    }
+
+    // ===== 纹理缓存管理API实现 (Milestone Bindless新增) =====
+
+    /**
+     * 清理未使用的纹理缓存条目
+     * 
+     * 教学要点：
+     * 1. 遍历缓存map,检查weak_ptr是否已过期
+     * 2. 移除所有过期的weak_ptr条目
+     * 3. 线程安全操作(使用mutex)
+     * 4. 返回清理的条目数量用于调试和统计
+     * 
+     * 使用场景：
+     * - 定期调用以清理内存
+     * - 在关键帧之前调用以优化性能
+     * - 在资源加载后调用以整理缓存
+     */
+    void D3D12RenderSystem::ClearUnusedTextures()
+    {
+        std::lock_guard<std::mutex> lock(s_textureCacheMutex);
+
+        // 使用erase-remove惯用法清理过期weak_ptr
+        size_t initialSize = s_textureCache.size();
+
+        for (auto it = s_textureCache.begin(); it != s_textureCache.end();)
+        {
+            // 尝试锁定weak_ptr
+            if (it->second.expired())
+            {
+                // weak_ptr已过期,删除该条目
+                it = s_textureCache.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        size_t finalSize    = s_textureCache.size();
+        size_t removedCount = initialSize - finalSize;
+
+        if (removedCount > 0)
+        {
+            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                    "ClearUnusedTextures: Removed %zu expired cache entries (%zu remaining)",
+                    removedCount, finalSize);
+        }
+        else
+        {
+            LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                     "ClearUnusedTextures: No expired entries found (%zu total)",
+                     finalSize);
+        }
+    }
+
+    /**
+     * 获取当前纹理缓存大小
+     * 
+     * 教学要点：
+     * 1. 线程安全地获取缓存map大小
+     * 2. 返回的是条目数量,而非内存大小
+     * 3. 包括已过期的weak_ptr条目(调用ClearUnusedTextures清理)
+     * 
+     * 使用场景：
+     * - 性能监控和调试
+     * - 缓存管理策略决策
+     * - UI显示资源统计信息
+     */
+    size_t D3D12RenderSystem::GetTextureCacheSize()
+    {
+        std::lock_guard<std::mutex> lock(s_textureCacheMutex);
+        return s_textureCache.size();
+    }
+
+    /**
+     * 清空整个纹理缓存
+     * 
+     * 教学要点：
+     * 1. 强制清空所有缓存条目
+     * 2. 不会删除纹理资源本身(shared_ptr仍可能存活)
+     * 3. 仅移除缓存map中的weak_ptr引用
+     * 4. 线程安全操作
+     * 
+     * 使用场景：
+     * - 关卡切换时清理缓存
+     * - 内存压力大时强制释放
+     * - 开发调试时重置资源状态
+     * 
+     * ⚠️ 警告：
+     * - 调用后所有纹理将需要重新加载
+     * - 可能导致短暂的性能下降
+     * - 应谨慎使用,避免在渲染关键路径调用
+     */
+    void D3D12RenderSystem::ClearAllTextureCache()
+    {
+        std::lock_guard<std::mutex> lock(s_textureCacheMutex);
+
+        size_t clearedCount = s_textureCache.size();
+        s_textureCache.clear();
+
+        if (clearedCount > 0)
+        {
+            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                    "ClearAllTextureCache: Cleared entire cache (%zu entries removed)",
+                    clearedCount);
+        }
+        else
+        {
+            LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                     "ClearAllTextureCache: Cache was already empty");
+        }
     }
 } // namespace enigma::graphic

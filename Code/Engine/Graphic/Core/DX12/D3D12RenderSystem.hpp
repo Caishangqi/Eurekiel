@@ -3,21 +3,35 @@
 #include "../../Resource/Buffer/D12Buffer.hpp"
 #include "../../Resource/BindlessResourceTypes.hpp"
 #include "../../Resource/CommandListManager.hpp"
+#include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
+#include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
+#include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 Root Signature
 #include "../../Immediate/RenderCommandQueue.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <memory>
+#include <unordered_map>
+#include <mutex>
+#include <string>
+
+#include "Engine/Resource/Model/ModelResource.hpp"
+#include "Engine/Core/Image.hpp"
 
 #undef min
 #undef max
+namespace enigma::resource
+{
+    class ImageResource;
+}
+
 namespace enigma::graphic
 {
     class D12DepthTexture;
     class RendererSubsystem;
     class D12Texture;
-    class BindlessResourceManager;
+    class BindlessIndexAllocator;
     class ShaderResourceBinder;
     class RenderCommandQueue;
     class IRenderCommand;
@@ -40,7 +54,8 @@ namespace enigma::graphic
      * - ID3D12Device: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
      * - D3D12CreateDevice: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-d3d12createdevice
      */
-
+    using namespace enigma::core;
+    using namespace enigma::resource;
     /**
      * D3D12RenderSystem：DirectX 12渲染系统的静态封装
      * 设计理念：对应Iris的IrisRenderSystem，管理完整的DirectX 12底层API
@@ -50,6 +65,8 @@ namespace enigma::graphic
      */
     class D3D12RenderSystem
     {
+
+
     public:
         /**
          * 初始化DirectX 12渲染系统（设备、命令系统和SwapChain）
@@ -196,6 +213,20 @@ namespace enigma::graphic
             const char* debugName   = "Texture2D");
 
 
+        // ===== Image-based纹理创建API（Bindless集成） =====
+
+        /**
+         * 从Image对象创建DirectX 12纹理（支持缓存）
+         */
+        static std::shared_ptr<D12Texture> CreateTexture2D(Image& image, TextureUsage usage, const std::string& debugName = "");
+        static std::shared_ptr<D12Texture> CreateTexture2D(const class ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName = "");
+        static std::shared_ptr<D12Texture> CreateTexture2D(const class ImageResource& imageResource, TextureUsage usage, const std::string& debugName = "");
+        static std::shared_ptr<D12Texture> CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName = "");
+
+        static void   ClearUnusedTextures();
+        static size_t GetTextureCacheSize();
+        static void   ClearAllTextureCache();
+
         // ===== 设备访问API =====
 
         /**
@@ -316,9 +347,9 @@ namespace enigma::graphic
          * @param clearColor 清屏颜色，使用引擎Rgba8类型(如果使用默认值则为黑色)
          * @return 是否清除成功
          */
-        static bool ClearRenderTarget(ID3D12GraphicsCommandList* commandList = nullptr,
-                                      const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle = nullptr,
-                                      const Rgba8& clearColor = Rgba8::BLACK);
+        static bool ClearRenderTarget(ID3D12GraphicsCommandList*         commandList = nullptr,
+                                      const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle   = nullptr,
+                                      const Rgba8&                       clearColor  = Rgba8::BLACK);
 
         /**
          * 清除深度模板缓冲
@@ -331,10 +362,10 @@ namespace enigma::graphic
          * @param clearFlags 清除标志(深度、模板或两者)
          * @return 是否清除成功
          */
-        static bool ClearDepthStencil(ID3D12GraphicsCommandList* commandList = nullptr,
-                                      const D3D12_CPU_DESCRIPTOR_HANDLE* dsvHandle = nullptr,
-                                      float clearDepth = 1.0f, uint8_t clearStencil = 0,
-                                      D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL);
+        static bool ClearDepthStencil(ID3D12GraphicsCommandList*         commandList = nullptr,
+                                      const D3D12_CPU_DESCRIPTOR_HANDLE* dsvHandle   = nullptr,
+                                      float                              clearDepth  = 1.0f, uint8_t clearStencil = 0,
+                                      D3D12_CLEAR_FLAGS                  clearFlags  = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL);
 
         // ===== 资源创建API =====
 
@@ -354,40 +385,44 @@ namespace enigma::graphic
             D3D12_RESOURCE_STATES        initialState,
             ID3D12Resource**             resource);
 
-        // ===== Bindless资源管理API (Milestone 2.3新增) =====
+        // ===== SM6.6 Bindless资源管理API (Milestone 2.7重构) =====
 
         /**
-         * 获取Bindless资源管理器
-         * @return BindlessResourceManager指针，用于底层资源注册
-         * @note 遵循分层架构：D3D12RenderSystem管理BindlessResourceManager
-         */
-        static std::unique_ptr<BindlessResourceManager>& GetBindlessResourceManager();
-
-        /**
-         * 获取着色器资源绑定器
-         * @return ShaderResourceBinder指针，用于现代化语义资源绑定
-         * @note 遵循分层架构：ShaderResourceBinder包含BindlessResourceManager
-         */
-        static std::unique_ptr<ShaderResourceBinder>& GetShaderResourceBinder();
-
-        /**
-         * 统一资源注册接口 - 为D12Resource提供的便捷方法
-         * @param resource 要注册的资源
-         * @param resourceType 资源类型
-         * @return 成功返回bindless索引，失败返回nullopt
+         * @brief 获取Bindless索引分配器
+         * @return BindlessIndexAllocator指针
          *
-         * 教学要点：
-         * - 这是D12Resource RegisterToBindlessManager的底层实现
-         * - 遵循分层原则：D12Resource → D3D12RenderSystem → BindlessResourceManager
+         * 教学要点:
+         * 1. 纯索引分配器：只负责索引的分配和释放（0-1,999,999）
+         * 2. 职责分离：索引管理与描述符创建完全分离
+         * 3. 资源使用流程：
+         *    - 分配索引：allocator->AllocateTextureIndex()
+         *    - 存储索引：resource->SetBindlessIndex(index)
+         *    - 创建描述符：resource->CreateDescriptorInGlobalHeap(device, heapManager)
          */
-        static std::optional<uint32_t> RegisterResourceToBindless(std::shared_ptr<class D12Resource> resource, BindlessResourceType resourceType);
+        static BindlessIndexAllocator* GetBindlessIndexAllocator();
 
         /**
-         * 统一资源注销接口 - 为D12Resource提供的便捷方法
-         * @param resource 要注销的资源
-         * @return 成功返回true
+         * @brief 获取全局描述符堆管理器
+         * @return GlobalDescriptorHeapManager指针
+         *
+         * 教学要点:
+         * 1. 全局堆管理：1,000,000容量的CBV_SRV_UAV堆 + 独立RTV/DSV堆
+         * 2. SM6.6索引创建：提供CreateShaderResourceView(device, resource, desc, index)等方法
+         * 3. 描述符堆绑定：提供SetDescriptorHeaps(commandList)方法
          */
-        static bool UnregisterResourceFromBindless(std::shared_ptr<class D12Resource> resource);
+        static GlobalDescriptorHeapManager* GetGlobalDescriptorHeapManager();
+
+        /**
+         * @brief 获取SM6.6 Bindless Root Signature
+         * @return Root Signature对象
+         *
+         * 教学要点:
+         * 1. 极简Root Signature：只含128字节Root Constants
+         * 2. 全局唯一：所有PSO共享同一个Root Signature
+         * 3. 直接索引标志：D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+         * 4. 性能优化：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
+         */
+        static ID3D12RootSignature* GetBindlessRootSignature();
 
         // ===== Immediate模式渲染API (Milestone 2.6新增) =====
 
@@ -416,9 +451,9 @@ namespace enigma::graphic
          * - 支持按phase分类，与Iris 10阶段渲染管线完全兼容
          */
         static bool AddImmediateCommand(
-            WorldRenderingPhase                  phase,
-            std::unique_ptr<IRenderCommand>      command,
-            const std::string&                   debugTag = ""
+            WorldRenderingPhase             phase,
+            std::unique_ptr<IRenderCommand> command,
+            const std::string&              debugTag = ""
         );
 
         /**
@@ -497,12 +532,18 @@ namespace enigma::graphic
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器
 
-        // Bindless资源管理系统（Milestone 2.3新增）
-        static std::unique_ptr<BindlessResourceManager> s_bindlessResourceManager; // Bindless资源管理器
-        static std::unique_ptr<ShaderResourceBinder>    s_shaderResourceBinder; // 现代化资源绑定器
+        // SM6.6 Bindless资源管理系统（Milestone 2.7重构）
+        static std::unique_ptr<BindlessIndexAllocator>        s_bindlessIndexAllocator;        // 纯索引分配器（0-1,999,999）
+        static std::unique_ptr<GlobalDescriptorHeapManager>   s_globalDescriptorHeapManager;   // 全局描述符堆管理器（1M容量）
+        static std::unique_ptr<BindlessRootSignature>         s_bindlessRootSignature;         // SM6.6极简Root Signature
 
         // Immediate模式渲染系统（Milestone 2.6新增）
         static std::unique_ptr<RenderCommandQueue> s_renderCommandQueue; // Immediate模式命令队列
+
+        // 纹理缓存系统（Milestone Bindless新增）
+        static std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> s_textureCache;
+        static std::mutex                                                      s_textureCacheMutex; // 缓存互斥锁（线程安全）
+
 
         // 系统状态（移除重复的配置结构）
         static bool s_isInitialized; // 初始化状态
