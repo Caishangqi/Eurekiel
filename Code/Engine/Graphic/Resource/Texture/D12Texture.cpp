@@ -4,8 +4,10 @@
 #include <sstream>
 
 #include "../../Core/DX12/D3D12RenderSystem.hpp"
-#include "../BindlessResourceManager.hpp"
+#include "../BindlessIndexAllocator.hpp"
+#include "../GlobalDescriptorHeapManager.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::graphic
 {
@@ -95,10 +97,10 @@ namespace enigma::graphic
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
     {
         // 清空源对象
-        other.m_srvHandle     = {0};
-        other.m_uavHandle     = {0};
-        other.m_hasSRV        = false;
-        other.m_hasUAV        = false;
+        other.m_srvHandle = {0};
+        other.m_uavHandle = {0};
+        other.m_hasSRV    = false;
+        other.m_hasUAV    = false;
         // 基类移动构造函数会处理资源和有效状态的转移
     }
 
@@ -128,10 +130,10 @@ namespace enigma::graphic
             m_formattedDebugName = std::move(other.m_formattedDebugName);
 
             // 清空源对象
-            other.m_srvHandle     = {0};
-            other.m_uavHandle     = {0};
-            other.m_hasSRV        = false;
-            other.m_hasUAV        = false;
+            other.m_srvHandle = {0};
+            other.m_uavHandle = {0};
+            other.m_hasSRV    = false;
+            other.m_hasUAV    = false;
             // 基类移动赋值运算符会处理资源和有效状态的转移
         }
         return *this;
@@ -157,7 +159,7 @@ namespace enigma::graphic
         return m_uavHandle;
     }
 
-    // ==================== 🔥 Bindless支持说明 (Milestone 2.3更新) ====================
+    // ==================== Bindless支持说明 (Milestone 2.3更新) ====================
     //
     // Bindless注册功能已移至D12Resource基类，此处删除冗余实现
     // 统一的RegisterToBindlessManager/UnregisterFromBindlessManager方法
@@ -304,8 +306,8 @@ namespace enigma::graphic
     std::string D12Texture::GetDebugInfo() const
     {
         std::string info = "D12Texture Debug Info:\n";
-        info += "  Name: " + GetDebugName() + "\n";
-        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
+        info             += "  Name: " + GetDebugName() + "\n";
+        info             += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
         if (m_depth > 1)
             info += "x" + std::to_string(m_depth);
         info += "\n";
@@ -366,7 +368,7 @@ namespace enigma::graphic
         }
         else
         {
-            info += std::to_string(GetBindlessIndex().value()) + "\n";
+            info += std::to_string(GetBindlessIndex()) + "\n";
         }
 
         // 资源状态
@@ -669,5 +671,105 @@ namespace enigma::graphic
         // TODO: 稍后完成完整实现 - 根据纹理类型和用途返回对应的BindlessResourceType
         // 暂时返回Texture2D作为默认值
         return BindlessResourceType::Texture2D;
+    }
+
+    /**
+     * @brief 在全局描述符堆中创建纹理描述符 (SM6.6 Bindless架构)
+     *
+     * 教学要点:
+     * 1. SM6.6 Bindless架构要求在全局描述符堆的指定索引位置创建SRV
+     * 2. Bindless索引由BindlessIndexAllocator分配,已存储在m_bindlessIndex中
+     * 3. GlobalDescriptorHeapManager负责在指定索引位置创建描述符
+     * 4. 此方法只在RegisterToBindlessManager()后调用
+     */
+    void D12Texture::CreateDescriptorInGlobalHeap(
+        ID3D12Device*                device,
+        GlobalDescriptorHeapManager* heapManager)
+    {
+        // 验证参数和状态
+        if (!device || !heapManager || !IsValid() || !IsBindlessRegistered())
+        {
+            core::LogError("D12Texture",
+                           "CreateDescriptorInGlobalHeap: Invalid parameters or resource not registered");
+            return;
+        }
+
+        // 获取纹理资源
+        auto* resource = GetResource();
+        if (!resource)
+        {
+            core::LogError("D12Texture", "CreateDescriptorInGlobalHeap: Resource is null");
+            return;
+        }
+
+        // 1. 创建SRV描述符结构
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format                          = m_format;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        // 2. 根据纹理类型设置视图维度
+        switch (m_textureType)
+        {
+        case TextureType::Texture1D:
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE1D;
+            srvDesc.Texture1D.MipLevels        = m_mipLevels;
+            srvDesc.Texture1D.MostDetailedMip  = 0;
+            srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
+            break;
+
+        case TextureType::Texture2D:
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels        = m_mipLevels;
+            srvDesc.Texture2D.MostDetailedMip  = 0;
+            srvDesc.Texture2D.PlaneSlice       = 0;
+            srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+            break;
+
+        case TextureType::Texture3D:
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE3D;
+            srvDesc.Texture3D.MipLevels        = m_mipLevels;
+            srvDesc.Texture3D.MostDetailedMip  = 0;
+            srvDesc.Texture3D.ResourceMinLODClamp = 0.0f;
+            break;
+
+        case TextureType::TextureCube:
+            srvDesc.ViewDimension                  = D3D12_SRV_DIMENSION_TEXTURECUBE;
+            srvDesc.TextureCube.MipLevels          = m_mipLevels;
+            srvDesc.TextureCube.MostDetailedMip    = 0;
+            srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+            break;
+
+        case TextureType::Texture1DArray:
+            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+            srvDesc.Texture1DArray.MipLevels        = m_mipLevels;
+            srvDesc.Texture1DArray.MostDetailedMip  = 0;
+            srvDesc.Texture1DArray.FirstArraySlice  = 0;
+            srvDesc.Texture1DArray.ArraySize        = m_arraySize;
+            srvDesc.Texture1DArray.ResourceMinLODClamp = 0.0f;
+            break;
+
+        case TextureType::Texture2DArray:
+            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+            srvDesc.Texture2DArray.MipLevels        = m_mipLevels;
+            srvDesc.Texture2DArray.MostDetailedMip  = 0;
+            srvDesc.Texture2DArray.FirstArraySlice  = 0;
+            srvDesc.Texture2DArray.ArraySize        = m_arraySize;
+            srvDesc.Texture2DArray.PlaneSlice       = 0;
+            srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
+            break;
+
+        default:
+            core::LogError("D12Texture", "CreateDescriptorInGlobalHeap: Unknown texture type");
+            return;
+        }
+
+        // 3. 在全局描述符堆的Bindless索引位置创建SRV
+        // 使用GlobalDescriptorHeapManager的SM6.6索引创建接口
+        heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
+
+        core::LogInfo("D12Texture",
+                      "CreateDescriptorInGlobalHeap: Created SRV at bindless index %u for texture '%s'",
+                      GetBindlessIndex(),
+                      GetDebugName().c_str());
     }
 } // namespace enigma::graphic

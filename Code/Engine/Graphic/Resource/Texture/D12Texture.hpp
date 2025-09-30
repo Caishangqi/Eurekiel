@@ -33,7 +33,7 @@
 namespace enigma::graphic
 {
     // 前向声明
-    class BindlessResourceManager;
+    class BindlessIndexAllocator;
     /**
      * @brief 纹理使用标志枚举
      * @details 决定纹理的用途和创建的视图类型
@@ -230,7 +230,7 @@ namespace enigma::graphic
          */
         bool HasUnorderedAccessView() const { return m_hasUAV; }
 
-        // ==================== 🔥 Bindless支持说明 (Milestone 2.3更新) ====================
+        // ==================== Bindless支持说明 (Milestone 2.3更新) ====================
         //
         // Bindless注册功能已统一到D12Resource基类中：
         // - RegisterToBindlessManager() - 统一的便捷注册方法
@@ -323,6 +323,7 @@ namespace enigma::graphic
          * 实现指导: 纹理默认注册为Texture2D类型
          */
         BindlessResourceType GetDefaultBindlessResourceType() const override;
+        void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
 
         // ==================== 静态辅助方法 (受保护访问) ====================
 
@@ -358,7 +359,7 @@ namespace enigma::graphic
         D3D12_CPU_DESCRIPTOR_HANDLE m_uavHandle; ///< 无序访问视图句柄
         bool                        m_hasSRV; ///< 是否有SRV
         bool                        m_hasUAV; ///< 是否有UAV
-        
+
         mutable std::string m_formattedDebugName; ///< 格式化的调试名称（用于GetDebugName重写）
 
         // ==================== 内部辅助方法 ====================
@@ -409,6 +410,7 @@ namespace enigma::graphic
          */
         static D3D12_RESOURCE_STATES GetInitialState(TextureUsage usage);
     };
+
     // ==================== 位运算操作符重载 ====================
 
     inline TextureUsage operator|(TextureUsage a, TextureUsage b)

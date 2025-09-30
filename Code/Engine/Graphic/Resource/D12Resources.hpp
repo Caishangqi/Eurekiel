@@ -5,13 +5,7 @@
 #include <optional>
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include "ResourceBindingTraits.hpp"
 #include "BindlessResourceTypes.hpp"
-
-namespace enigma::graphic {
-    class D3D12RenderSystem;
-    class BindlessResourceManager;
-}
 
 namespace enigma::graphic
 {
@@ -41,14 +35,15 @@ namespace enigma::graphic
     class D12Resource : public std::enable_shared_from_this<D12Resource>
     {
     protected:
-        ID3D12Resource*              m_resource; // DX12资源指针
-        D3D12_RESOURCE_STATES        m_currentState; // 当前资源状态
-        std::string                  m_debugName; // 调试名称
-        size_t                       m_size; // 资源大小 (字节)
-        bool                         m_isValid; // 资源有效性标记
+        ID3D12Resource*       m_resource; // DX12资源指针
+        D3D12_RESOURCE_STATES m_currentState; // 当前资源状态
+        std::string           m_debugName; // 调试名称
+        size_t                m_size; // 资源大小 (字节)
+        bool                  m_isValid; // 资源有效性标记
 
-        // 🔥 可选Bindless支持 - 组合模式设计
-        std::optional<ResourceBindingTraits> m_bindingTraits; // 可选的绑定特征
+        // SM6.6 Bindless索引 (Milestone 2.7) - 替代ResourceBindingTraits
+        static constexpr uint32_t INVALID_BINDLESS_INDEX = UINT32_MAX;
+        uint32_t m_bindlessIndex = INVALID_BINDLESS_INDEX;  // Bindless全局索引
 
     public:
         /**
@@ -135,94 +130,88 @@ namespace enigma::graphic
         virtual std::string GetDebugInfo() const = 0;
 
         // ========================================================================
-        // 🔥 Bindless资源绑定接口 (Milestone 2.3新增)
+        // SM6.6 Bindless资源管理接口 (Milestone 2.7简化版)
         // ========================================================================
 
         /**
-         * @brief 启用Bindless支持 (延迟初始化)
+         * @brief 检查是否已注册到Bindless系统
+         * @return 已注册返回true(索引有效)
          *
          * 教学要点:
-         * 1. 延迟初始化模式：只有需要时才创建ResourceBindingTraits
-         * 2. 零开销抽象：不使用Bindless时无内存和性能开销
-         * 3. 类型安全：启用后才能使用Bindless相关方法
+         * 1. SM6.6简化设计：从两层检查简化为单一索引有效性检查
+         * 2. 零额外开销：不再使用std::optional,直接判断索引
          */
-        void EnableBindlessSupport() {
-            if (!m_bindingTraits.has_value()) {
-                m_bindingTraits.emplace();
-            }
-        }
-
-        /**
-         * @brief 检查是否支持Bindless
-         * @return 支持返回true
-         */
-        bool IsBindlessEnabled() const { return m_bindingTraits.has_value(); }
-
-        /**
-         * @brief 检查是否已注册到Bindless系统
-         * @return 已注册返回true，未启用Bindless或未注册返回false
-         */
-        bool IsBindlessRegistered() const {
-            return m_bindingTraits.has_value() && m_bindingTraits->IsBindlessRegistered();
+        bool IsBindlessRegistered() const
+        {
+            return m_bindlessIndex != INVALID_BINDLESS_INDEX;
         }
 
         /**
          * @brief 获取Bindless全局索引
-         * @return 如果已注册返回索引，否则返回nullopt
+         * @return 全局索引,INVALID_BINDLESS_INDEX表示未注册
          *
-         * 教学要点: 类型安全设计，编译时和运行时都能检测状态
+         * 教学要点:
+         * 1. SM6.6简化：从std::optional<uint32_t>改为uint32_t直接返回
+         * 2. 使用INVALID_BINDLESS_INDEX代替std::nullopt
+         * 3. 更高效,无额外堆内存分配
          */
-        virtual std::optional<uint32_t> GetBindlessIndex() const {
-            return m_bindingTraits.has_value() ? m_bindingTraits->GetBindlessIndex() : std::nullopt;
-        }
+        uint32_t GetBindlessIndex() const { return m_bindlessIndex; }
 
         /**
-         * @brief 设置Bindless绑定信息 (由BindlessResourceManager调用)
-         * @param handle 描述符句柄
+         * @brief 设置Bindless索引(由BindlessIndexAllocator调用)
          * @param index 全局索引
          *
-         * 实现指导:
-         * 必须先调用EnableBindlessSupport()才能使用此方法
+         * 教学要点:
+         * 1. SM6.6简化：移除DescriptorHandle参数
+         * 2. 直接设置索引,无需检查启用状态
+         * 3. 描述符创建由CreateDescriptorInGlobalHeap()负责
          */
-        virtual void SetBindlessBinding(DescriptorHandle&& handle, uint32_t index) {
-            if (!m_bindingTraits.has_value()) {
-                EnableBindlessSupport();
-            }
-            m_bindingTraits->SetBindlessBinding(std::move(handle), index);
+        void SetBindlessIndex(uint32_t index)
+        {
+            m_bindlessIndex = index;
         }
 
         /**
-         * @brief 清除Bindless绑定
+         * @brief 清除Bindless索引
+         *
+         * 教学要点: SM6.6简化 - 直接重置索引为无效值
          */
-        virtual void ClearBindlessBinding() {
-            if (m_bindingTraits.has_value()) {
-                m_bindingTraits->ClearBindlessBinding();
-            }
+        void ClearBindlessIndex()
+        {
+            m_bindlessIndex = INVALID_BINDLESS_INDEX;
         }
 
         /**
-         * @brief 获取绑定特征对象 (高级用法)
-         * @return ResourceBindingTraits引用，如果未启用则抛出异常
+         * @brief 在全局描述符堆中创建描述符(纯虚函数)
+         * @param device DX12设备
+         * @param heapManager 全局描述符堆管理器
+         *
+         * 教学要点:
+         * 1. SM6.6架构中,描述符创建与索引分配分离
+         * 2. 子类必须实现如何在全局堆中创建自己的描述符
+         * 3. 描述符创建到指定索引(m_bindlessIndex)
+         * 4. 全局堆容量1M,支持百万级资源
+         *
+         * 实现示例(D12Texture):
+         * ```cpp
+         * void CreateDescriptorInGlobalHeap(ID3D12Device* device,
+         *                                   GlobalDescriptorHeapManager* heapManager) override
+         * {
+         *     if (!IsBindlessRegistered())
+         *         return;
+         *
+         *     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+         *     // ... 配置srvDesc ...
+         *     heapManager->CreateShaderResourceView(device, m_resource, &srvDesc, m_bindlessIndex);
+         * }
+         * ```
          */
-        virtual ResourceBindingTraits& GetBindingTraits() {
-            if (!m_bindingTraits.has_value()) {
-                throw std::runtime_error("Bindless support not enabled for this resource");
-            }
-            return *m_bindingTraits;
-        }
-
-        /**
-         * @brief 获取绑定特征对象 (const版本)
-         */
-        virtual const ResourceBindingTraits& GetBindingTraits() const {
-            if (!m_bindingTraits.has_value()) {
-                throw std::runtime_error("Bindless support not enabled for this resource");
-            }
-            return *m_bindingTraits;
-        }
+        virtual void CreateDescriptorInGlobalHeap(
+            ID3D12Device* device,
+            class GlobalDescriptorHeapManager* heapManager) = 0;
 
         // ========================================================================
-        // 🔥 便捷注册接口 (Milestone 2.3新增) - 统一的资源注册方法
+        // 便捷注册接口 (Milestone 2.3新增) - 统一的资源注册方法
         // ========================================================================
 
         /**
