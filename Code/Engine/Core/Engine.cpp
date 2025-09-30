@@ -5,6 +5,7 @@
 #include "../Resource/ResourceSubsystem.hpp"
 #include "Logger/LoggerSubsystem.hpp"
 #include "Console/ConsoleSubsystem.hpp"
+enigma::core::Engine* g_theEngine = nullptr;
 
 namespace enigma::core
 {

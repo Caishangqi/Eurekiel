@@ -14,6 +14,7 @@
 
 
 using namespace enigma::resource;
+ResourceSubsystem* g_theResource = nullptr;
 
 bool ResourceConfig::IsValid()
 {
@@ -575,7 +576,7 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     }
 
     // Read data
-    auto data = provider->ReadResource(location);
+    auto data                        = provider->ReadResource(location);
     m_perfStats.bytesLoadedThisFrame += data.size();
 
     if (m_config.logResourceLoads)
