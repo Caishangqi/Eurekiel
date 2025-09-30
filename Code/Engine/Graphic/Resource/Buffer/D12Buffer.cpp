@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::graphic
 {
@@ -390,6 +392,114 @@ namespace enigma::graphic
     {
         // TODO: 稍后完成完整实现 - 根据BufferUsage返回对应的BindlessResourceType
         // 暂时返回Buffer作为默认值
-        return BindlessResourceType::Buffer;
+        return BindlessResourceType::RawBuffer;
+    }
+
+    /**
+     * @brief 在全局描述符堆中创建缓冲区描述符 (SM6.6 Bindless架构)
+     *
+     * 教学要点:
+     * 1. SM6.6 Bindless架构要求在全局描述符堆的指定索引位置创建CBV或SRV
+     * 2. ConstantBuffer使用CBV (Constant Buffer View)
+     * 3. StructuredBuffer使用SRV (Structured Buffer View)
+     * 4. 其他类型的Buffer根据用途选择合适的视图类型
+     */
+    void D12Buffer::CreateDescriptorInGlobalHeap(
+        ID3D12Device*                device,
+        GlobalDescriptorHeapManager* heapManager)
+    {
+        // 验证参数和状态
+        if (!device || !heapManager || !IsValid() || !IsBindlessRegistered())
+        {
+            core::LogError("D12Buffer",
+                           "CreateDescriptorInGlobalHeap: Invalid parameters or resource not registered");
+            return;
+        }
+
+        // 获取缓冲区资源
+        auto* resource = GetResource();
+        if (!resource)
+        {
+            core::LogError("D12Buffer", "CreateDescriptorInGlobalHeap: Resource is null");
+            return;
+        }
+
+        // 根据缓冲区用途选择合适的视图类型
+        if (HasFlag(m_usage, BufferUsage::ConstantBuffer))
+        {
+            // 1. 创建Constant Buffer View (CBV)
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+            cbvDesc.BufferLocation = resource->GetGPUVirtualAddress();
+            cbvDesc.SizeInBytes    = static_cast<UINT>((GetSize() + 255) & ~255); // CBV必须256字节对齐
+
+            // 在全局描述符堆的Bindless索引位置创建CBV
+            heapManager->CreateConstantBufferView(device, &cbvDesc, GetBindlessIndex());
+
+            core::LogInfo("D12Buffer",
+                          "CreateDescriptorInGlobalHeap: Created CBV at bindless index %u for buffer '%s'",
+                          GetBindlessIndex(),
+                          GetDebugName().c_str());
+        }
+        else if (HasFlag(m_usage, BufferUsage::StructuredBuffer) ||
+                 HasFlag(m_usage, BufferUsage::StorageBuffer))
+        {
+            // 2. 创建Structured Buffer View (SRV)
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format                     = DXGI_FORMAT_UNKNOWN; // Structured Buffer格式未知
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement        = 0;
+            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4); // 假设每个元素4字节
+            srvDesc.Buffer.StructureByteStride = 4; // 结构体步长（字节）
+            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
+
+            // 在全局描述符堆的Bindless索引位置创建SRV
+            heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
+
+            core::LogInfo("D12Buffer",
+                          "CreateDescriptorInGlobalHeap: Created Structured Buffer SRV at bindless index %u for buffer '%s'",
+                          GetBindlessIndex(),
+                          GetDebugName().c_str());
+        }
+        else if (HasFlag(m_usage, BufferUsage::VertexBuffer) ||
+                 HasFlag(m_usage, BufferUsage::IndexBuffer))
+        {
+            // 3. Vertex/Index Buffer通常使用Raw Buffer View (SRV)
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format                     = DXGI_FORMAT_R32_TYPELESS; // Raw Buffer使用R32_TYPELESS
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement        = 0;
+            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4); // 每个元素4字节
+            srvDesc.Buffer.StructureByteStride = 0; // Raw Buffer的步长为0
+            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_RAW; // Raw Buffer标志
+
+            // 在全局描述符堆的Bindless索引位置创建SRV
+            heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
+
+            core::LogInfo("D12Buffer",
+                          "CreateDescriptorInGlobalHeap: Created Raw Buffer SRV at bindless index %u for buffer '%s'",
+                          GetBindlessIndex(),
+                          GetDebugName().c_str());
+        }
+        else
+        {
+            // 默认情况：创建Raw Buffer View
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format                     = DXGI_FORMAT_R32_TYPELESS;
+            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement        = 0;
+            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4);
+            srvDesc.Buffer.StructureByteStride = 0;
+            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_RAW;
+
+            heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
+
+            core::LogInfo("D12Buffer",
+                          "CreateDescriptorInGlobalHeap: Created default SRV at bindless index %u for buffer '%s'",
+                          GetBindlessIndex(),
+                          GetDebugName().c_str());
+        }
     }
 } // namespace enigma::graphic

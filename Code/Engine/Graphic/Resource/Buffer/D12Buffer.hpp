@@ -6,7 +6,7 @@
 #include <memory>
 #include <cstdint>
 
-#include "Engine/Graphic/Resource/BindlessResourceManager.hpp"
+#include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
 
 namespace enigma::graphic
 {
@@ -177,14 +177,15 @@ namespace enigma::graphic
          * - 其他类型根据实际情况返回合适的BindlessResourceType
          */
         BindlessResourceType GetDefaultBindlessResourceType() const override;
+        void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
 
     private:
         // ==================== D12Buffer特有成员变量 ====================
         // 注意：m_resource, m_size, m_debugName, m_currentState 等已在基类D12Resource中定义
 
-        BufferUsage  m_usage; // 缓冲区使用类型
-        MemoryAccess m_memoryAccess; // 内存访问模式
-        void*        m_mappedData; // 映射的CPU内存指针
+        BufferUsage         m_usage; // 缓冲区使用类型
+        MemoryAccess        m_memoryAccess; // 内存访问模式
+        void*               m_mappedData; // 映射的CPU内存指针
         mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
 
         /**
