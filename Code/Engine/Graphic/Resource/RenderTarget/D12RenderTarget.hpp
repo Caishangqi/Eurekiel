@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../D12Resources.hpp"
 #include "../Texture/D12Texture.hpp"
@@ -174,6 +174,9 @@ namespace enigma::graphic
         D3D12_CPU_DESCRIPTOR_HANDLE m_mainSRV; // 主纹理SRV
         D3D12_CPU_DESCRIPTOR_HANDLE m_altSRV; // 替代纹理SRV
 
+        // 调试支持
+        mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
+
     public:
         /**
          * @brief 创建Builder (对应Iris静态方法 builder())
@@ -297,6 +300,47 @@ namespace enigma::graphic
          * 教学要点: 避免不必要的resize操作，提升性能
          */
         bool ResizeIfNeeded(int width, int height);
+
+        // ========================================================================
+        // 虚函数重写 - 调试支持 (继承自D12Resource)
+        // ========================================================================
+
+        /**
+         * @brief 重写虚函数：设置调试名称并添加RenderTarget特定逻辑
+         * @param name 调试名称
+         *
+         * 教学要点: 重写基类虚函数，在设置名称时同时更新双纹理的调试名称
+         * 对应Iris中的调试信息设置
+         */
+        void SetDebugName(const std::string& name) override;
+
+        /**
+         * @brief 重写虚函数：获取包含RenderTarget信息的调试名称
+         * @return 格式化的调试名称字符串
+         *
+         * 教学要点: 重写基类虚函数，返回包含RenderTarget特定信息的名称
+         * 格式: "RenderTargetName (1920x1080, RGBA8, MainTex + AltTex)"
+         */
+        const std::string& GetDebugName() const override;
+
+        /**
+         * @brief 重写虚函数：获取RenderTarget的详细调试信息
+         * @return 包含尺寸、格式、纹理状态的调试字符串
+         *
+         * 教学要点: 提供RenderTarget特定的详细调试信息
+         * 包括双纹理状态、格式、尺寸、采样设置等信息
+         */
+        std::string GetDebugInfo() const override;
+
+    protected:
+        /**
+         * @brief 获取RenderTarget的默认Bindless资源类型
+         * @return RenderTarget作为可读取纹理返回BindlessResourceType::Texture2D
+         *
+         * 教学要点: RenderTarget的主要纹理作为可采样资源使用Texture2D类型
+         * 对应Iris中将RenderTarget绑定为GL_TEXTURE_2D供着色器采样
+         */
+        BindlessResourceType GetDefaultBindlessResourceType() const override;
 
     private:
         /**
