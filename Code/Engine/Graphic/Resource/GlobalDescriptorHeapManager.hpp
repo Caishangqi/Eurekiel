@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * @note 从BindlessResourceManager中抽离，提高架构清晰度
      */
-    class DescriptorHeapManager final
+    class GlobalDescriptorHeapManager final
     {
     public:
         /**
@@ -150,12 +150,12 @@ namespace enigma::graphic
         /**
          * @brief 构造函数
          */
-        DescriptorHeapManager();
+        GlobalDescriptorHeapManager();
 
         /**
          * @brief 析构函数 - RAII自动清理
          */
-        ~DescriptorHeapManager();
+        ~GlobalDescriptorHeapManager();
 
         // ========================================================================
         // 生命周期管理
@@ -397,6 +397,141 @@ namespace enigma::graphic
          */
         float GetSamplerUsageRatio() const;
 
+        // ========================================================================
+        // SM6.6 Bindless索引创建接口 (Milestone 2.7新增)
+        // ========================================================================
+
+        /**
+         * @brief 在指定索引创建Shader Resource View
+         * @param device DX12设备
+         * @param resource 资源
+         * @param desc SRV描述符
+         * @param index 全局索引（由BindlessIndexAllocator分配）
+         *
+         * 教学要点:
+         * 1. SM6.6架构：索引分配与描述符创建分离
+         * 2. 资源类（D12Texture）负责调用此方法在其索引位置创建描述符
+         * 3. 全局堆支持DIRECTLY_INDEXED，HLSL可直接用索引访问
+         *
+         * 实现指导:
+         * ```cpp
+         * D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+         * device->CreateShaderResourceView(resource, desc, cpuHandle);
+         * ```
+         */
+        void CreateShaderResourceView(
+            ID3D12Device* device,
+            ID3D12Resource* resource,
+            const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,
+            uint32_t index);
+
+        /**
+         * @brief 在指定索引创建Constant Buffer View
+         * @param device DX12设备
+         * @param desc CBV描述符
+         * @param index 全局索引（由BindlessIndexAllocator分配）
+         */
+        void CreateConstantBufferView(
+            ID3D12Device* device,
+            const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,
+            uint32_t index);
+
+        /**
+         * @brief 在指定索引创建Unordered Access View
+         * @param device DX12设备
+         * @param resource 资源
+         * @param desc UAV描述符
+         * @param index 全局索引（由BindlessIndexAllocator分配）
+         */
+        void CreateUnorderedAccessView(
+            ID3D12Device* device,
+            ID3D12Resource* resource,
+            ID3D12Resource* counterResource,
+            const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,
+            uint32_t index);
+
+        /**
+         * @brief 在指定索引创建Render Target View
+         * @param device DX12设备
+         * @param resource 资源
+         * @param desc RTV描述符
+         * @param index RTV索引（独立于CBV/SRV/UAV空间）
+         *
+         * 教学要点: RTV不在全局Bindless堆中，有独立的RTV堆
+         */
+        void CreateRenderTargetView(
+            ID3D12Device* device,
+            ID3D12Resource* resource,
+            const D3D12_RENDER_TARGET_VIEW_DESC* desc,
+            uint32_t index);
+
+        /**
+         * @brief 在指定索引创建Depth Stencil View
+         * @param device DX12设备
+         * @param resource 资源
+         * @param desc DSV描述符
+         * @param index DSV索引（独立于CBV/SRV/UAV空间）
+         *
+         * 教学要点: DSV不在全局Bindless堆中，有独立的DSV堆
+         */
+        void CreateDepthStencilView(
+            ID3D12Device* device,
+            ID3D12Resource* resource,
+            const D3D12_DEPTH_STENCIL_VIEW_DESC* desc,
+            uint32_t index);
+
+        // ========================================================================
+        // 描述符堆容量和数量查询接口 (BindlessResourceManager依赖)
+        // ========================================================================
+
+        /**
+         * @brief 获取CBV/SRV/UAV堆已使用数量
+         * @return 已使用的描述符数量
+         */
+        uint32_t GetCbvSrvUavCount() const;
+
+        /**
+         * @brief 获取CBV/SRV/UAV堆总容量
+         * @return 堆的总容量
+         */
+        uint32_t GetCbvSrvUavCapacity() const;
+
+        /**
+         * @brief 获取RTV堆已使用数量
+         * @return 已使用的RTV描述符数量
+         */
+        uint32_t GetRtvCount() const;
+
+        /**
+         * @brief 获取RTV堆总容量
+         * @return RTV堆的总容量
+         */
+        uint32_t GetRtvCapacity() const;
+
+        /**
+         * @brief 获取DSV堆已使用数量
+         * @return 已使用的DSV描述符数量
+         */
+        uint32_t GetDsvCount() const;
+
+        /**
+         * @brief 获取DSV堆总容量
+         * @return DSV堆的总容量
+         */
+        uint32_t GetDsvCapacity() const;
+
+        /**
+         * @brief 获取Sampler堆已使用数量
+         * @return 已使用的Sampler描述符数量
+         */
+        uint32_t GetSamplerCount() const;
+
+        /**
+         * @brief 获取Sampler堆总容量
+         * @return Sampler堆的总容量
+         */
+        uint32_t GetSamplerCapacity() const;
+
         /**
          * @brief 检查是否还有足够空间
          * @param cbvSrvUavCount 需要的CBV/SRV/UAV数量 (Bindless统一大堆)
@@ -510,9 +645,9 @@ namespace enigma::graphic
         void UpdateStats(HeapType heapType, int32_t delta);
 
         // 禁用拷贝，支持移动
-        DescriptorHeapManager(const DescriptorHeapManager&)            = delete;
-        DescriptorHeapManager& operator=(const DescriptorHeapManager&) = delete;
-        DescriptorHeapManager(DescriptorHeapManager&&)                 = default;
-        DescriptorHeapManager& operator=(DescriptorHeapManager&&)      = default;
+        GlobalDescriptorHeapManager(const GlobalDescriptorHeapManager&)            = delete;
+        GlobalDescriptorHeapManager& operator=(const GlobalDescriptorHeapManager&) = delete;
+        GlobalDescriptorHeapManager(GlobalDescriptorHeapManager&&)                 = default;
+        GlobalDescriptorHeapManager& operator=(GlobalDescriptorHeapManager&&)      = default;
     };
 } // namespace enigma::graphic

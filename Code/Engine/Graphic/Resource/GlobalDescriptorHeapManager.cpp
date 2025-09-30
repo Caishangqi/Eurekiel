@@ -1,5 +1,6 @@
-﻿#include "DescriptorHeapManager.hpp"
+﻿#include "GlobalDescriptorHeapManager.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 #include <cassert>
 #include <algorithm>
 
@@ -12,7 +13,7 @@ using namespace enigma::graphic;
  *
  * 教学要点: 初始化所有成员为无效状态，确保对象处于明确的初始状态
  */
-DescriptorHeapManager::DescriptorAllocation::DescriptorAllocation()
+GlobalDescriptorHeapManager::DescriptorAllocation::DescriptorAllocation()
     : cpuHandle{} // 零初始化CPU句柄
       , gpuHandle{} // 零初始化GPU句柄
       , heapIndex(UINT32_MAX) // 无效索引
@@ -26,7 +27,7 @@ DescriptorHeapManager::DescriptorAllocation::DescriptorAllocation()
 /**
  * @brief 重置分配状态为无效
  */
-void DescriptorHeapManager::DescriptorAllocation::Reset()
+void GlobalDescriptorHeapManager::DescriptorAllocation::Reset()
 {
     cpuHandle = {};
     gpuHandle = {};
@@ -40,7 +41,7 @@ void DescriptorHeapManager::DescriptorAllocation::Reset()
 /**
  * @brief DescriptorHeap默认构造函数
  */
-DescriptorHeapManager::DescriptorHeap::DescriptorHeap()
+GlobalDescriptorHeapManager::DescriptorHeap::DescriptorHeap()
     : heap(nullptr)
       , type(HeapType::CBV_SRV_UAV)
       , capacity(0)
@@ -55,7 +56,7 @@ DescriptorHeapManager::DescriptorHeap::DescriptorHeap()
 /**
  * @brief 获取指定索引的CPU句柄
  */
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeapManager::DescriptorHeap::GetCPUHandle(uint32_t index) const
+D3D12_CPU_DESCRIPTOR_HANDLE GlobalDescriptorHeapManager::DescriptorHeap::GetCPUHandle(uint32_t index) const
 {
     // TODO: 稍后完成完整实现
     D3D12_CPU_DESCRIPTOR_HANDLE handle = cpuStart;
@@ -66,7 +67,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeapManager::DescriptorHeap::GetCPUHandle(
 /**
  * @brief 获取指定索引的GPU句柄
  */
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeapManager::DescriptorHeap::GetGPUHandle(uint32_t index) const
+D3D12_GPU_DESCRIPTOR_HANDLE GlobalDescriptorHeapManager::DescriptorHeap::GetGPUHandle(uint32_t index) const
 {
     // TODO: 稍后完成完整实现
     D3D12_GPU_DESCRIPTOR_HANDLE handle = gpuStart;
@@ -74,12 +75,12 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeapManager::DescriptorHeap::GetGPUHandle(
     return handle;
 }
 
-// ==================== DescriptorHeapManager 实现 ====================
+// ==================== GlobalDescriptorHeapManager 实现 ====================
 
 /**
  * @brief DescriptorHeapManager构造函数
  */
-DescriptorHeapManager::DescriptorHeapManager()
+GlobalDescriptorHeapManager::GlobalDescriptorHeapManager()
     : m_cbvSrvUavHeap(nullptr)
       , m_rtvHeap(nullptr)
       , m_dsvHeap(nullptr)
@@ -108,7 +109,7 @@ DescriptorHeapManager::DescriptorHeapManager()
 /**
  * @brief DescriptorHeapManager析构函数
  */
-DescriptorHeapManager::~DescriptorHeapManager()
+GlobalDescriptorHeapManager::~GlobalDescriptorHeapManager()
 {
     // TODO: 稍后完成完整实现 - 调用Shutdown清理资源
     Shutdown();
@@ -117,7 +118,7 @@ DescriptorHeapManager::~DescriptorHeapManager()
 /**
  * @brief 初始化描述符堆管理器
  */
-bool DescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t rtvCapacity, uint32_t dsvCapacity, uint32_t samplerCapacity)
+bool GlobalDescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t rtvCapacity, uint32_t dsvCapacity, uint32_t samplerCapacity)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -196,7 +197,7 @@ bool DescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_t rtvC
 /**
  * @brief 释放所有资源
  */
-void DescriptorHeapManager::Shutdown()
+void GlobalDescriptorHeapManager::Shutdown()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -239,7 +240,7 @@ void DescriptorHeapManager::Shutdown()
 /**
  * @brief 检查是否已初始化
  */
-bool DescriptorHeapManager::IsInitialized() const
+bool GlobalDescriptorHeapManager::IsInitialized() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_initialized;
@@ -248,7 +249,7 @@ bool DescriptorHeapManager::IsInitialized() const
 /**
  * @brief 分配CBV/SRV/UAV描述符
  */
-DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateCbvSrvUav()
+GlobalDescriptorHeapManager::DescriptorAllocation GlobalDescriptorHeapManager::AllocateCbvSrvUav()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -280,7 +281,7 @@ DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateCbvSr
 /**
  * @brief 分配Sampler描述符
  */
-DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateSampler()
+GlobalDescriptorHeapManager::DescriptorAllocation GlobalDescriptorHeapManager::AllocateSampler()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -312,7 +313,7 @@ DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateSampl
 /**
  * @brief 分配RTV描述符 (渲染目标视图)
  */
-DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateRtv()
+GlobalDescriptorHeapManager::DescriptorAllocation GlobalDescriptorHeapManager::AllocateRtv()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -345,7 +346,7 @@ DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateRtv()
 /**
  * @brief 分配DSV描述符 (深度模板视图)
  */
-DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateDsv()
+GlobalDescriptorHeapManager::DescriptorAllocation GlobalDescriptorHeapManager::AllocateDsv()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -378,7 +379,7 @@ DescriptorHeapManager::DescriptorAllocation DescriptorHeapManager::AllocateDsv()
 /**
  * @brief 批量分配CBV/SRV/UAV描述符
  */
-std::vector<DescriptorHeapManager::DescriptorAllocation> DescriptorHeapManager::BatchAllocateCbvSrvUav(uint32_t count)
+std::vector<GlobalDescriptorHeapManager::DescriptorAllocation> GlobalDescriptorHeapManager::BatchAllocateCbvSrvUav(uint32_t count)
 {
     // TODO: 稍后完成完整实现
     std::vector<DescriptorAllocation> allocations;
@@ -409,7 +410,7 @@ std::vector<DescriptorHeapManager::DescriptorAllocation> DescriptorHeapManager::
  * @param allocation 要释放的描述符分配信息
  * @return 成功返回true，失败返回false
  */
-bool DescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allocation)
+bool GlobalDescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allocation)
 {
     // 教学注释: 获取互斥锁确保线程安全
     // 这是现代C++多线程编程的标准做法，使用RAII管理锁生命周期
@@ -452,7 +453,7 @@ bool DescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allocation
 /**
  * @brief 释放Sampler描述符
  */
-bool DescriptorHeapManager::FreeSampler(const DescriptorAllocation& allocation)
+bool GlobalDescriptorHeapManager::FreeSampler(const DescriptorAllocation& allocation)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -476,7 +477,7 @@ bool DescriptorHeapManager::FreeSampler(const DescriptorAllocation& allocation)
 /**
  * @brief 释放RTV描述符
  */
-bool DescriptorHeapManager::FreeRtv(const DescriptorAllocation& allocation)
+bool GlobalDescriptorHeapManager::FreeRtv(const DescriptorAllocation& allocation)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -500,7 +501,7 @@ bool DescriptorHeapManager::FreeRtv(const DescriptorAllocation& allocation)
 /**
  * @brief 释放DSV描述符
  */
-bool DescriptorHeapManager::FreeDsv(const DescriptorAllocation& allocation)
+bool GlobalDescriptorHeapManager::FreeDsv(const DescriptorAllocation& allocation)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -524,7 +525,7 @@ bool DescriptorHeapManager::FreeDsv(const DescriptorAllocation& allocation)
 /**
  * @brief 获取CBV/SRV/UAV描述符堆
  */
-ID3D12DescriptorHeap* DescriptorHeapManager::GetCbvSrvUavHeap() const
+ID3D12DescriptorHeap* GlobalDescriptorHeapManager::GetCbvSrvUavHeap() const
 {
     // TODO: 稍后完成完整实现
     return m_cbvSrvUavHeap ? m_cbvSrvUavHeap->heap.Get() : nullptr;
@@ -533,7 +534,7 @@ ID3D12DescriptorHeap* DescriptorHeapManager::GetCbvSrvUavHeap() const
 /**
  * @brief 获取Sampler描述符堆
  */
-ID3D12DescriptorHeap* DescriptorHeapManager::GetSamplerHeap() const
+ID3D12DescriptorHeap* GlobalDescriptorHeapManager::GetSamplerHeap() const
 {
     return m_samplerHeap ? m_samplerHeap->heap.Get() : nullptr;
 }
@@ -541,7 +542,7 @@ ID3D12DescriptorHeap* DescriptorHeapManager::GetSamplerHeap() const
 /**
  * @brief 获取RTV描述符堆 (渲染目标视图堆)
  */
-ID3D12DescriptorHeap* DescriptorHeapManager::GetRtvHeap() const
+ID3D12DescriptorHeap* GlobalDescriptorHeapManager::GetRtvHeap() const
 {
     return m_rtvHeap ? m_rtvHeap->heap.Get() : nullptr;
 }
@@ -549,7 +550,7 @@ ID3D12DescriptorHeap* DescriptorHeapManager::GetRtvHeap() const
 /**
  * @brief 获取DSV描述符堆 (深度模板视图堆)
  */
-ID3D12DescriptorHeap* DescriptorHeapManager::GetDsvHeap() const
+ID3D12DescriptorHeap* GlobalDescriptorHeapManager::GetDsvHeap() const
 {
     return m_dsvHeap ? m_dsvHeap->heap.Get() : nullptr;
 }
@@ -557,7 +558,7 @@ ID3D12DescriptorHeap* DescriptorHeapManager::GetDsvHeap() const
 /**
  * @brief 设置描述符堆到命令列表
  */
-void DescriptorHeapManager::SetDescriptorHeaps(ID3D12GraphicsCommandList* commandList) const
+void GlobalDescriptorHeapManager::SetDescriptorHeaps(ID3D12GraphicsCommandList* commandList) const
 {
     // TODO: 稍后完成完整实现
     if (!commandList)
@@ -577,10 +578,180 @@ void DescriptorHeapManager::SetDescriptorHeaps(ID3D12GraphicsCommandList* comman
     }
 }
 
+// ==================== SM6.6 Bindless索引创建接口实现 ====================
+
+/**
+ * @brief 在指定索引创建Shader Resource View
+ *
+ * 教学要点:
+ * 1. SM6.6架构核心：索引由BindlessIndexAllocator分配，描述符在此创建
+ * 2. 全局堆支持DIRECTLY_INDEXED，HLSL可用索引直接访问
+ * 3. 职责分离：BindlessIndexAllocator管理索引，GlobalDescriptorHeapManager管理堆
+ */
+void GlobalDescriptorHeapManager::CreateShaderResourceView(
+    ID3D12Device* device,
+    ID3D12Resource* resource,
+    const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,
+    uint32_t index)
+{
+    if (!m_initialized || !m_cbvSrvUavHeap)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateShaderResourceView: not initialized");
+        return;
+    }
+
+    // 验证索引范围
+    if (index >= m_cbvSrvUavCapacity)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateShaderResourceView: index %u out of range (capacity: %u)",
+                      index, m_cbvSrvUavCapacity);
+        return;
+    }
+
+    // 获取指定索引的CPU句柄
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+
+    // 在全局堆的指定索引位置创建SRV
+    device->CreateShaderResourceView(resource, desc, cpuHandle);
+
+    core::LogInfo("GlobalDescriptorHeapManager",
+                 "CreateShaderResourceView: created at index %u", index);
+}
+
+/**
+ * @brief 在指定索引创建Constant Buffer View
+ */
+void GlobalDescriptorHeapManager::CreateConstantBufferView(
+    ID3D12Device* device,
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,
+    uint32_t index)
+{
+    if (!m_initialized || !m_cbvSrvUavHeap)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateConstantBufferView: not initialized");
+        return;
+    }
+
+    if (index >= m_cbvSrvUavCapacity)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateConstantBufferView: index %u out of range (capacity: %u)",
+                      index, m_cbvSrvUavCapacity);
+        return;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+    device->CreateConstantBufferView(desc, cpuHandle);
+
+    core::LogInfo("GlobalDescriptorHeapManager",
+                 "CreateConstantBufferView: created at index %u", index);
+}
+
+/**
+ * @brief 在指定索引创建Unordered Access View
+ */
+void GlobalDescriptorHeapManager::CreateUnorderedAccessView(
+    ID3D12Device* device,
+    ID3D12Resource* resource,
+    ID3D12Resource* counterResource,
+    const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,
+    uint32_t index)
+{
+    if (!m_initialized || !m_cbvSrvUavHeap)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateUnorderedAccessView: not initialized");
+        return;
+    }
+
+    if (index >= m_cbvSrvUavCapacity)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateUnorderedAccessView: index %u out of range (capacity: %u)",
+                      index, m_cbvSrvUavCapacity);
+        return;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+    device->CreateUnorderedAccessView(resource, counterResource, desc, cpuHandle);
+
+    core::LogInfo("GlobalDescriptorHeapManager",
+                 "CreateUnorderedAccessView: created at index %u", index);
+}
+
+/**
+ * @brief 在指定索引创建Render Target View
+ *
+ * 教学要点: RTV使用独立的堆，不在全局Bindless CBV_SRV_UAV堆中
+ */
+void GlobalDescriptorHeapManager::CreateRenderTargetView(
+    ID3D12Device* device,
+    ID3D12Resource* resource,
+    const D3D12_RENDER_TARGET_VIEW_DESC* desc,
+    uint32_t index)
+{
+    if (!m_initialized || !m_rtvHeap)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateRenderTargetView: not initialized");
+        return;
+    }
+
+    if (index >= m_rtvCapacity)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateRenderTargetView: index %u out of range (capacity: %u)",
+                      index, m_rtvCapacity);
+        return;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_rtvHeap->GetCPUHandle(index);
+    device->CreateRenderTargetView(resource, desc, cpuHandle);
+
+    core::LogInfo("GlobalDescriptorHeapManager",
+                 "CreateRenderTargetView: created at index %u", index);
+}
+
+/**
+ * @brief 在指定索引创建Depth Stencil View
+ *
+ * 教学要点: DSV使用独立的堆，不在全局Bindless CBV_SRV_UAV堆中
+ */
+void GlobalDescriptorHeapManager::CreateDepthStencilView(
+    ID3D12Device* device,
+    ID3D12Resource* resource,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC* desc,
+    uint32_t index)
+{
+    if (!m_initialized || !m_dsvHeap)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateDepthStencilView: not initialized");
+        return;
+    }
+
+    if (index >= m_dsvCapacity)
+    {
+        core::LogError("GlobalDescriptorHeapManager",
+                      "CreateDepthStencilView: index %u out of range (capacity: %u)",
+                      index, m_dsvCapacity);
+        return;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_dsvHeap->GetCPUHandle(index);
+    device->CreateDepthStencilView(resource, desc, cpuHandle);
+
+    core::LogInfo("GlobalDescriptorHeapManager",
+                 "CreateDepthStencilView: created at index %u", index);
+}
+
 /**
  * @brief 获取堆统计信息
  */
-DescriptorHeapManager::HeapStats DescriptorHeapManager::GetStats() const
+GlobalDescriptorHeapManager::HeapStats GlobalDescriptorHeapManager::GetStats() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -622,7 +793,7 @@ DescriptorHeapManager::HeapStats DescriptorHeapManager::GetStats() const
 /**
  * @brief 获取CBV/SRV/UAV堆使用率 (Bindless统一大堆)
  */
-float DescriptorHeapManager::GetCbvSrvUavUsageRatio() const
+float GlobalDescriptorHeapManager::GetCbvSrvUavUsageRatio() const
 {
     return GetStats().cbvSrvUavUsageRatio;
 }
@@ -630,7 +801,7 @@ float DescriptorHeapManager::GetCbvSrvUavUsageRatio() const
 /**
  * @brief 获取RTV堆使用率 (渲染目标专用)
  */
-float DescriptorHeapManager::GetRtvUsageRatio() const
+float GlobalDescriptorHeapManager::GetRtvUsageRatio() const
 {
     return GetStats().rtvUsageRatio;
 }
@@ -638,7 +809,7 @@ float DescriptorHeapManager::GetRtvUsageRatio() const
 /**
  * @brief 获取DSV堆使用率 (深度模板专用)
  */
-float DescriptorHeapManager::GetDsvUsageRatio() const
+float GlobalDescriptorHeapManager::GetDsvUsageRatio() const
 {
     return GetStats().dsvUsageRatio;
 }
@@ -646,7 +817,7 @@ float DescriptorHeapManager::GetDsvUsageRatio() const
 /**
  * @brief 获取Sampler堆使用率
  */
-float DescriptorHeapManager::GetSamplerUsageRatio() const
+float GlobalDescriptorHeapManager::GetSamplerUsageRatio() const
 {
     return GetStats().samplerUsageRatio;
 }
@@ -654,7 +825,7 @@ float DescriptorHeapManager::GetSamplerUsageRatio() const
 /**
  * @brief 检查是否还有足够空间
  */
-bool DescriptorHeapManager::HasEnoughSpace(uint32_t cbvSrvUavCount, uint32_t rtvCount, uint32_t dsvCount, uint32_t samplerCount) const
+bool GlobalDescriptorHeapManager::HasEnoughSpace(uint32_t cbvSrvUavCount, uint32_t rtvCount, uint32_t dsvCount, uint32_t samplerCount) const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -681,7 +852,7 @@ bool DescriptorHeapManager::HasEnoughSpace(uint32_t cbvSrvUavCount, uint32_t rtv
 /**
  * @brief 碎片整理
  */
-void DescriptorHeapManager::DefragmentHeaps()
+void GlobalDescriptorHeapManager::DefragmentHeaps()
 {
     // TODO: 稍后完成完整实现 - 这是复杂操作，需要重新创建堆
     // 目前为空实现
@@ -692,7 +863,7 @@ void DescriptorHeapManager::DefragmentHeaps()
 /**
  * @brief 创建描述符堆
  */
-std::unique_ptr<DescriptorHeapManager::DescriptorHeap> DescriptorHeapManager::CreateDescriptorHeap(HeapType type, uint32_t capacity)
+std::unique_ptr<GlobalDescriptorHeapManager::DescriptorHeap> GlobalDescriptorHeapManager::CreateDescriptorHeap(HeapType type, uint32_t capacity)
 {
     auto heap      = std::make_unique<DescriptorHeap>();
     heap->type     = type;
@@ -785,7 +956,7 @@ std::unique_ptr<DescriptorHeapManager::DescriptorHeap> DescriptorHeapManager::Cr
 /**
  * @brief 分配指定类型的索引
  */
-uint32_t DescriptorHeapManager::AllocateIndex(HeapType heapType)
+uint32_t GlobalDescriptorHeapManager::AllocateIndex(HeapType heapType)
 {
     // 1. 根据堆类型选择对应的使用状态数组和容量
     std::vector<bool>* usedArray     = nullptr;
@@ -855,7 +1026,7 @@ uint32_t DescriptorHeapManager::AllocateIndex(HeapType heapType)
 /**
  * @brief 释放指定类型的索引
  */
-void DescriptorHeapManager::FreeIndex(HeapType heapType, uint32_t index)
+void GlobalDescriptorHeapManager::FreeIndex(HeapType heapType, uint32_t index)
 {
     // 1. 根据堆类型选择对应的使用状态数组和容量
     std::vector<bool>* usedArray     = nullptr;
@@ -916,7 +1087,7 @@ void DescriptorHeapManager::FreeIndex(HeapType heapType, uint32_t index)
 /**
  * @brief 查询硬件支持的最大描述符数量
  */
-uint32_t DescriptorHeapManager::QueryMaxDescriptorCount(HeapType heapType) const
+uint32_t GlobalDescriptorHeapManager::QueryMaxDescriptorCount(HeapType heapType) const
 {
     // TODO: 稍后完成完整实现
     // DirectX 12的典型限制
@@ -926,7 +1097,7 @@ uint32_t DescriptorHeapManager::QueryMaxDescriptorCount(HeapType heapType) const
 /**
  * @brief 更新使用统计
  */
-void DescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
+void GlobalDescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
 {
 #undef max
     switch (heapType)
@@ -982,4 +1153,76 @@ void DescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
     default:
         break;
     }
+}
+
+// ========================================================================
+// 描述符堆容量和数量查询方法实现 (BindlessResourceManager依赖)
+// ========================================================================
+
+/**
+ * @brief 获取CBV/SRV/UAV堆已使用数量
+ */
+uint32_t GlobalDescriptorHeapManager::GetCbvSrvUavCount() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_cbvSrvUavHeap ? m_cbvSrvUavHeap->used : 0;
+}
+
+/**
+ * @brief 获取CBV/SRV/UAV堆总容量
+ */
+uint32_t GlobalDescriptorHeapManager::GetCbvSrvUavCapacity() const
+{
+    return m_cbvSrvUavCapacity;
+}
+
+/**
+ * @brief 获取RTV堆已使用数量
+ */
+uint32_t GlobalDescriptorHeapManager::GetRtvCount() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_rtvHeap ? m_rtvHeap->used : 0;
+}
+
+/**
+ * @brief 获取RTV堆总容量
+ */
+uint32_t GlobalDescriptorHeapManager::GetRtvCapacity() const
+{
+    return m_rtvCapacity;
+}
+
+/**
+ * @brief 获取DSV堆已使用数量
+ */
+uint32_t GlobalDescriptorHeapManager::GetDsvCount() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_dsvHeap ? m_dsvHeap->used : 0;
+}
+
+/**
+ * @brief 获取DSV堆总容量
+ */
+uint32_t GlobalDescriptorHeapManager::GetDsvCapacity() const
+{
+    return m_dsvCapacity;
+}
+
+/**
+ * @brief 获取Sampler堆已使用数量
+ */
+uint32_t GlobalDescriptorHeapManager::GetSamplerCount() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_samplerHeap ? m_samplerHeap->used : 0;
+}
+
+/**
+ * @brief 获取Sampler堆总容量
+ */
+uint32_t GlobalDescriptorHeapManager::GetSamplerCapacity() const
+{
+    return m_samplerCapacity;
 }
