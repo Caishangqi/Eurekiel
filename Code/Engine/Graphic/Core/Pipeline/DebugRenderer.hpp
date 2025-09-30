@@ -20,7 +20,7 @@ namespace enigma::graphic
     class D12RenderTargets;
     class IShaderRenderingPipeline;
     class ProgramSet;
-    class BindlessResourceManager;
+    class BindlessIndexAllocator;
     class UniformManager;
     class D12Texture;
     class D12Buffer;
