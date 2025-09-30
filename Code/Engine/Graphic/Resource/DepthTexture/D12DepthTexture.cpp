@@ -162,6 +162,13 @@ namespace enigma::graphic
         return *this;
     }
 
+    void D12DepthTexture::CreateDescriptorInGlobalHeap(ID3D12Device* device, class GlobalDescriptorHeapManager* heapManager)
+    {
+        UNUSED(device)
+        UNUSED(heapManager)
+        ERROR_AND_DIE("D12DepthTexture::CreateDescriptorInGlobalHeap not implemented")
+    }
+
     // ==================== 资源访问接口 ====================
 
     /**
@@ -359,9 +366,9 @@ namespace enigma::graphic
     std::string D12DepthTexture::GetDebugInfo() const
     {
         std::string info = "D12DepthTexture Debug Info:\n";
-        info += "  Name: " + GetDebugName() + "\n";
-        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height) + "\n";
-        info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
+        info             += "  Name: " + GetDebugName() + "\n";
+        info             += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height) + "\n";
+        info             += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
 
         // 深度类型信息
         info += "  Depth Type: ";

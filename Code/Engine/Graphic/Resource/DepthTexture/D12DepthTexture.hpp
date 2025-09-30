@@ -183,6 +183,7 @@ namespace enigma::graphic
         D12DepthTexture& operator=(D12DepthTexture&& other) noexcept;
 
         // ==================== 资源访问接口 ====================
+        void CreateDescriptorInGlobalHeap(ID3D12Device* device, class GlobalDescriptorHeapManager* heapManager) override;
 
         /**
          * @brief 获取深度纹理ID - 对应Iris的getTextureId()
