@@ -1,12 +1,12 @@
 ﻿#pragma once
 
-#include "DescriptorHeapManager.hpp"
+#include "GlobalDescriptorHeapManager.hpp"
 #include <memory>
 
 namespace enigma::graphic
 {
     // 前向声明
-    class DescriptorHeapManager;
+    class GlobalDescriptorHeapManager;
 
     /**
      * @brief DescriptorHandle类 - RAII描述符句柄封装
@@ -27,10 +27,12 @@ namespace enigma::graphic
      */
     class DescriptorHandle final
     {
+        // Declare non-member swap function as friend to allow access to private Swap method
+        friend void swap(DescriptorHandle& lhs, DescriptorHandle& rhs) noexcept;
     private:
         // 核心数据
-        DescriptorHeapManager::DescriptorAllocation m_allocation; // 描述符分配信息
-        std::weak_ptr<DescriptorHeapManager>        m_heapManager; // 堆管理器弱引用 (避免循环依赖)
+        GlobalDescriptorHeapManager::DescriptorAllocation m_allocation; // 描述符分配信息
+        std::weak_ptr<GlobalDescriptorHeapManager>        m_heapManager; // 堆管理器弱引用 (避免循环依赖)
         bool                                        m_ownsResource; // 是否拥有资源所有权
 
     public:
@@ -44,7 +46,7 @@ namespace enigma::graphic
          * @param allocation 描述符分配信息
          * @param heapManager 堆管理器共享指针
          */
-        DescriptorHandle(const DescriptorHeapManager::DescriptorAllocation& allocation, std::shared_ptr<DescriptorHeapManager> heapManager) noexcept;
+        DescriptorHandle(const GlobalDescriptorHeapManager::DescriptorAllocation& allocation, std::shared_ptr<GlobalDescriptorHeapManager> heapManager) noexcept;
 
         /**
          * @brief 析构函数 - RAII自动释放资源
@@ -151,7 +153,7 @@ namespace enigma::graphic
          * @brief 获取堆类型
          * @return 堆类型
          */
-        DescriptorHeapManager::HeapType GetHeapType() const noexcept;
+        GlobalDescriptorHeapManager::HeapType GetHeapType() const noexcept;
 
         // ========================================================================
         // 状态查询接口
@@ -207,7 +209,7 @@ namespace enigma::graphic
          * 2. 调用者负责手动释放资源
          * 3. 类似std::unique_ptr::release()的语义
          */
-        DescriptorHeapManager::DescriptorAllocation Detach() noexcept;
+        GlobalDescriptorHeapManager::DescriptorAllocation Detach() noexcept;
 
         // ========================================================================
         // 比较操作符
@@ -285,7 +287,7 @@ namespace enigma::graphic
          *
          * 教学要点: 观察者模式，不参与资源管理只提供访问
          */
-        static DescriptorHandle CreateNonOwning(const DescriptorHeapManager::DescriptorAllocation& allocation) noexcept;
+        static DescriptorHandle CreateNonOwning(const GlobalDescriptorHeapManager::DescriptorAllocation& allocation) noexcept;
 
     public:
         // 常量定义
@@ -306,7 +308,7 @@ namespace enigma::graphic
          *     // 2. 检查堆管理器是否还存在 (弱引用检查)
          *     if (auto heapManager = m_heapManager.lock()) {
          *         // 3. 根据堆类型调用对应的释放方法
-         *         if (m_allocation.heapType == DescriptorHeapManager::HeapType::CBV_SRV_UAV) {
+         *         if (m_allocation.heapType == GlobalDescriptorHeapManager::HeapType::CBV_SRV_UAV) {
          *             heapManager->FreeCbvSrvUav(m_allocation);
          *         } else {
          *             heapManager->FreeSampler(m_allocation);
