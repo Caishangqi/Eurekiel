@@ -60,7 +60,7 @@ IntVec2 Image::GetDimensions() const
     return m_dimensions;
 }
 
-const void* Image::GetRawData()
+const  void* Image::GetRawData() const 
 {
     return m_rgbaTexels.data();
 }
