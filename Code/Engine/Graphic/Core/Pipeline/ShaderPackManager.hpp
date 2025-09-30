@@ -13,7 +13,7 @@ namespace enigma::graphic
 {
     // 前向声明
     class GBuffer;
-    class BindlessResourceManager;
+    class BindlessIndexAllocator;
 
     /**
      * @brief ShaderPackManager类 - 支持Iris注释的HLSL着色器管理系统

@@ -72,40 +72,6 @@ namespace enigma::graphic
     using RenderCommandPtr = std::unique_ptr<IRenderCommand>;
 
     /// <summary>
-    /// 简单的绘制指令工厂
-    /// 
-    /// 职责:
-    /// - 创建绘制类型的渲染指令
-    /// - 提供type-safe的参数验证
-    /// 
-    /// 设计模式: 简化的Factory Pattern
-    /// </summary>
-    class RenderCommandFactory
-    {
-    public:
-        /// <summary>
-        /// 创建索引化绘制指令
-        /// </summary>
-        static RenderCommandPtr CreateDrawIndexedCommand(
-            uint32_t indexCount,
-            uint32_t instanceCount         = 1,
-            uint32_t startIndexLocation    = 0,
-            int32_t  baseVertexLocation    = 0,
-            uint32_t startInstanceLocation = 0
-        );
-
-        /// <summary>
-        /// 创建实例化绘制指令
-        /// </summary>
-        static RenderCommandPtr CreateDrawInstancedCommand(
-            uint32_t vertexCountPerInstance,
-            uint32_t instanceCount,
-            uint32_t startVertexLocation   = 0,
-            uint32_t startInstanceLocation = 0
-        );
-    };
-
-    /// <summary>
     /// 简化的渲染指令执行上下文
     /// 
     /// 包含执行指令所需的基本状态信息:

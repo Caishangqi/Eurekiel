@@ -253,7 +253,7 @@ namespace enigma::graphic
          * 
          * @param direction 归一化的光源方向向量
          */
-        void SetLightDirection(const Engine::Math::Vector3f& direction);
+        void SetLightDirection(const Vec3& direction);
 
         /**
          * @brief 更新光源矩阵
@@ -264,9 +264,9 @@ namespace enigma::graphic
          * @param cameraDirection 相机方向
          * @param cameraFov 相机视野角度
          */
-        void UpdateLightMatrices(const Engine::Math::Vector3f& cameraPosition,
-                                 const Engine::Math::Vector3f& cameraDirection,
-                                 float                         cameraFov);
+        void UpdateLightMatrices(const Vec3& cameraPosition,
+                                 const Vec3& cameraDirection,
+                                 float       cameraFov);
 
         // ===========================================
         // 资源访问
@@ -292,7 +292,8 @@ namespace enigma::graphic
          * 
          * @return 光源视图投影矩阵
          */
-        const Engine::Math::Matrix4f& GetLightViewProjectionMatrix() const;
+
+        const Mat44& GetLightViewProjectionMatrix() const;
 
         /**
          * @brief 获取指定级联的阴影矩阵
@@ -300,7 +301,7 @@ namespace enigma::graphic
          * @param cascadeIndex 级联索引
          * @return 阴影矩阵
          */
-        Engine::Math::Matrix4f GetCascadeShadowMatrix(uint32_t cascadeIndex) const;
+        Mat44 GetCascadeShadowMatrix(uint32_t cascadeIndex) const;
 
         // ===========================================
         // 状态查询
@@ -385,10 +386,10 @@ namespace enigma::graphic
          * @param cameraDirection 相机方向
          * @param cameraFov 相机视野角度
          */
-        void CalculateCascadeBounds(uint32_t                      cascadeIndex,
-                                    const Engine::Math::Vector3f& cameraPosition,
-                                    const Engine::Math::Vector3f& cameraDirection,
-                                    float                         cameraFov);
+        void CalculateCascadeBounds(uint32_t    cascadeIndex,
+                                    const Vec3& cameraPosition,
+                                    const Vec3& cameraDirection,
+                                    float       cameraFov);
 
         /**
          * @brief 设置阴影渲染状态
