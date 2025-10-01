@@ -223,6 +223,8 @@ namespace enigma::graphic
          */
         bool HasShaderResourceView() const { return m_hasSRV; }
 
+        bool                  UploadToGPU(ID3D12GraphicsCommandList* commandList, class UploadContext& uploadContext) override;
+        D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
         // ==================== 尺寸和属性管理 ====================
 
         /**
