@@ -6,8 +6,10 @@
 #include "../../Core/DX12/D3D12RenderSystem.hpp"
 #include "../BindlessIndexAllocator.hpp"
 #include "../GlobalDescriptorHeapManager.hpp"
+#include "../UploadContext.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
 namespace enigma::graphic
 {
@@ -61,6 +63,12 @@ namespace enigma::graphic
         if (createInfo.debugName)
         {
             SetDebugName(std::string(createInfo.debugName));
+        }
+
+        // 复制初始数据到CPU端（如果提供了）
+        if (createInfo.initialData && createInfo.dataSize > 0)
+        {
+            SetInitialData(createInfo.initialData, createInfo.dataSize);
         }
 
         // 资源创建成功后，基类的SetResource方法已经设置了有效状态
@@ -705,56 +713,56 @@ namespace enigma::graphic
         // 1. 创建SRV描述符结构
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.Format                          = m_format;
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
         // 2. 根据纹理类型设置视图维度
         switch (m_textureType)
         {
         case TextureType::Texture1D:
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE1D;
-            srvDesc.Texture1D.MipLevels        = m_mipLevels;
-            srvDesc.Texture1D.MostDetailedMip  = 0;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+            srvDesc.Texture1D.MipLevels           = m_mipLevels;
+            srvDesc.Texture1D.MostDetailedMip     = 0;
             srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture2D:
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MipLevels        = m_mipLevels;
-            srvDesc.Texture2D.MostDetailedMip  = 0;
-            srvDesc.Texture2D.PlaneSlice       = 0;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels           = m_mipLevels;
+            srvDesc.Texture2D.MostDetailedMip     = 0;
+            srvDesc.Texture2D.PlaneSlice          = 0;
             srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture3D:
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_TEXTURE3D;
-            srvDesc.Texture3D.MipLevels        = m_mipLevels;
-            srvDesc.Texture3D.MostDetailedMip  = 0;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+            srvDesc.Texture3D.MipLevels           = m_mipLevels;
+            srvDesc.Texture3D.MostDetailedMip     = 0;
             srvDesc.Texture3D.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::TextureCube:
-            srvDesc.ViewDimension                  = D3D12_SRV_DIMENSION_TEXTURECUBE;
-            srvDesc.TextureCube.MipLevels          = m_mipLevels;
-            srvDesc.TextureCube.MostDetailedMip    = 0;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+            srvDesc.TextureCube.MipLevels           = m_mipLevels;
+            srvDesc.TextureCube.MostDetailedMip     = 0;
             srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture1DArray:
-            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-            srvDesc.Texture1DArray.MipLevels        = m_mipLevels;
-            srvDesc.Texture1DArray.MostDetailedMip  = 0;
-            srvDesc.Texture1DArray.FirstArraySlice  = 0;
-            srvDesc.Texture1DArray.ArraySize        = m_arraySize;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+            srvDesc.Texture1DArray.MipLevels           = m_mipLevels;
+            srvDesc.Texture1DArray.MostDetailedMip     = 0;
+            srvDesc.Texture1DArray.FirstArraySlice     = 0;
+            srvDesc.Texture1DArray.ArraySize           = m_arraySize;
             srvDesc.Texture1DArray.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture2DArray:
-            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-            srvDesc.Texture2DArray.MipLevels        = m_mipLevels;
-            srvDesc.Texture2DArray.MostDetailedMip  = 0;
-            srvDesc.Texture2DArray.FirstArraySlice  = 0;
-            srvDesc.Texture2DArray.ArraySize        = m_arraySize;
-            srvDesc.Texture2DArray.PlaneSlice       = 0;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+            srvDesc.Texture2DArray.MipLevels           = m_mipLevels;
+            srvDesc.Texture2DArray.MostDetailedMip     = 0;
+            srvDesc.Texture2DArray.FirstArraySlice     = 0;
+            srvDesc.Texture2DArray.ArraySize           = m_arraySize;
+            srvDesc.Texture2DArray.PlaneSlice          = 0;
             srvDesc.Texture2DArray.ResourceMinLODClamp = 0.0f;
             break;
 
@@ -771,5 +779,77 @@ namespace enigma::graphic
                       "CreateDescriptorInGlobalHeap: Created SRV at bindless index %u for texture '%s'",
                       GetBindlessIndex(),
                       GetDebugName().c_str());
+    }
+
+    // ==================== GPU资源上传(Milestone 2.7) ====================
+
+    /**
+     * @brief 实现纹理特定的上传逻辑
+     * 教学要点:
+     * 1. 计算纹理行间距(RowPitch)必须256字节对齐(DirectX 12要求)
+     * 2. 只上传Mip 0层级(第一个最高分辨率层)
+     * 3. 使用UploadContext::UploadTextureData()执行GPU复制
+     * 4. 资源状态转换由基类D12Resource::Upload()处理
+     */
+    bool D12Texture::UploadToGPU(
+        ID3D12GraphicsCommandList* commandList,
+        UploadContext&             uploadContext
+    )
+    {
+        if (!HasCPUData())
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "D12Texture::UploadToGPU: No CPU data available");
+            return false;
+        }
+
+        // 1. 计算行间距(RowPitch) - 必须256字节对齐
+        uint32_t bytesPerPixel = GetFormatBytesPerPixel(m_format);
+        uint32_t rowPitch      = m_width * bytesPerPixel;
+        rowPitch               = (rowPitch + 255) & ~255; // 256字节对齐
+
+        // 2. 计算切片间距(SlicePitch)
+        uint32_t slicePitch = rowPitch * m_height;
+
+        // 3. 调用UploadContext上传纹理数据(只上传Mip 0)
+        bool uploadSuccess = uploadContext.UploadTextureData(
+            commandList,
+            GetResource(), // GPU纹理资源
+            GetCPUData(), // CPU数据指针
+            GetCPUDataSize(), // 数据大小
+            rowPitch, // 行间距
+            slicePitch, // 切片间距
+            m_width, // 宽度
+            m_height, // 高度
+            m_format // 格式
+        );
+
+        if (!uploadSuccess)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "D12Texture::UploadToGPU: Failed to upload texture '%s'",
+                           GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+            return false;
+        }
+
+        core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                       "D12Texture::UploadToGPU: Successfully uploaded texture '%s' (%ux%u, %u bytes)",
+                       GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
+                       m_width, m_height, GetCPUDataSize());
+
+        return true;
+    }
+
+    /**
+     * @brief 获取纹理上传后的目标资源状态
+     * 教学要点:
+     * 1. 纹理通常作为像素着色器资源使用(SRV)
+     * 2. D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE是最常见的纹理状态
+     * 3. 如果需要其他状态(如UAV),子类可继续重写此方法
+     */
+    D3D12_RESOURCE_STATES D12Texture::GetUploadDestinationState() const
+    {
+        // 纹理默认转换到像素着色器资源状态
+        return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     }
 } // namespace enigma::graphic

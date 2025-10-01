@@ -81,6 +81,7 @@ namespace enigma::graphic
         uint32_t    mipLevels; ///< Mip层级数 (0表示自动生成)
         uint32_t    arraySize; ///< 数组大小 (非数组纹理为1)
         DXGI_FORMAT format; ///< 纹理格式
+        Rgba8       color = Rgba8::WHITE; /// Texture color pure
 
         // 使用属性
         TextureUsage usage; ///< 使用标志
@@ -324,6 +325,33 @@ namespace enigma::graphic
          */
         BindlessResourceType GetDefaultBindlessResourceType() const override;
         void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
+
+        // ==================== GPU资源上传(Milestone 2.7) ====================
+
+        /**
+         * @brief 重写基类方法: 实现纹理特定的上传逻辑
+         * @param commandList Copy队列命令列表
+         * @param uploadContext Upload Heap上下文
+         * @return 上传成功返回true
+         *
+         * 教学要点:
+         * 1. 使用UploadContext::UploadTextureData()执行纹理上传
+         * 2. 计算rowPitch和slicePitch(行间距和切片间距)
+         * 3. 只上传Mip 0层级(其他Mip由GenerateMips()生成)
+         * 4. 资源状态转换由D12Resource::Upload()基类处理
+         */
+        bool UploadToGPU(
+            ID3D12GraphicsCommandList* commandList,
+            class UploadContext&       uploadContext
+        ) override;
+
+        /**
+         * @brief 重写基类方法: 获取纹理上传后的目标状态
+         * @return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE(像素着色器资源)
+         *
+         * 教学要点: 纹理通常作为像素着色器资源使用
+         */
+        D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
 
         // ==================== 静态辅助方法 (受保护访问) ====================
 
