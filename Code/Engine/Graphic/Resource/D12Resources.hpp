@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <vector>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include "BindlessResourceTypes.hpp"
@@ -44,6 +45,10 @@ namespace enigma::graphic
         // SM6.6 Bindless索引 (Milestone 2.7) - 替代ResourceBindingTraits
         static constexpr uint32_t INVALID_BINDLESS_INDEX = UINT32_MAX;
         uint32_t m_bindlessIndex = INVALID_BINDLESS_INDEX;  // Bindless全局索引
+
+        // CPU数据管理 (Milestone 2.7) - True Bindless上传支持
+        std::vector<uint8_t> m_cpuData;      // CPU端数据缓存
+        bool                 m_isUploaded = false; // 上传状态标记 - 用于Bindless注册安全检查
 
     public:
         /**
@@ -130,6 +135,73 @@ namespace enigma::graphic
         virtual std::string GetDebugInfo() const = 0;
 
         // ========================================================================
+        // CPU数据管理接口 (Milestone 2.7) - True Bindless上传支持
+        // ========================================================================
+
+        /**
+         * @brief 设置初始数据(CPU端)
+         * @param data 数据指针
+         * @param dataSize 数据大小(字节)
+         *
+         * 教学要点:
+         * 1. True Bindless流程: Create → SetInitialData → Upload → RegisterBindless
+         * 2. 数据复制到m_cpuData，等待Upload()调用
+         * 3. 上传完成后可以选择保留或释放CPU数据
+         */
+        void SetInitialData(const void* data, size_t dataSize);
+
+        /**
+         * @brief 检查是否有CPU数据
+         * @return 有数据返回true
+         */
+        bool HasCPUData() const { return !m_cpuData.empty(); }
+
+        /**
+         * @brief 获取CPU数据指针
+         * @return CPU数据指针，无数据返回nullptr
+         */
+        const void* GetCPUData() const { return m_cpuData.empty() ? nullptr : m_cpuData.data(); }
+
+        /**
+         * @brief 获取CPU数据大小
+         * @return 数据大小(字节)
+         */
+        size_t GetCPUDataSize() const { return m_cpuData.size(); }
+
+        /**
+         * @brief 释放CPU数据(上传完成后)
+         *
+         * 教学要点: 上传完成后释放CPU内存，节省内存占用
+         */
+        void ReleaseCPUData() { m_cpuData.clear(); m_cpuData.shrink_to_fit(); }
+
+        /**
+         * @brief 上传资源到GPU
+         * @return 成功返回true，失败返回false
+         *
+         * 教学要点:
+         * 1. Template Method模式: 基类管理流程，子类实现细节
+         * 2. 使用Copy Command List专用队列
+         * 3. 同步等待上传完成(KISS原则)
+         * 4. 上传后设置m_isUploaded = true
+         */
+        bool Upload();
+
+        /**
+         * @brief 检查资源是否已上传到GPU
+         * @return 已上传返回true，否则返回false
+         *
+         * 教学要点:
+         * 1. 安全检查: 用于Bindless注册前验证资源状态
+         * 2. True Bindless流程: Create → Upload → Register
+         * 3. 防止运行时错误: GPU访问未上传资源会导致黑屏/崩溃
+         */
+        bool IsUploaded() const
+        {
+            return m_isUploaded;
+        }
+
+        // ========================================================================
         // SM6.6 Bindless资源管理接口 (Milestone 2.7简化版)
         // ========================================================================
 
@@ -181,6 +253,37 @@ namespace enigma::graphic
             m_bindlessIndex = INVALID_BINDLESS_INDEX;
         }
 
+        // ========================================================================
+        // GPU资源上传接口 (Milestone 2.7) - 纯虚函数由子类实现
+        // ========================================================================
+
+        /**
+         * @brief 上传资源到GPU (纯虚函数 - 由子类实现具体上传逻辑)
+         * @param commandList Copy Command List
+         * @param uploadContext Upload Heap上下文
+         * @return 成功返回true，失败返回false
+         *
+         * 教学要点:
+         * 1. Template Method模式: 基类Upload()管理流程，子类UploadToGPU()实现细节
+         * 2. 子类实现: D12Texture使用UploadTextureData(), D12Buffer使用UploadBufferData()
+         * 3. Copy Command List: 专用队列，避免阻塞Graphics/Compute队列
+         */
+        virtual bool UploadToGPU(
+            ID3D12GraphicsCommandList* commandList,
+            class UploadContext&       uploadContext
+        ) = 0;
+
+        /**
+         * @brief 获取上传后的目标资源状态 (纯虚函数 - 由子类指定)
+         * @return 上传完成后资源应处于的状态
+         *
+         * 教学要点:
+         * 1. D12Texture返回: D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE (像素着色器资源)
+         * 2. D12Buffer返回: D3D12_RESOURCE_STATE_GENERIC_READ (通用读取)
+         * 3. 状态转换由基类Upload()统一管理
+         */
+        virtual D3D12_RESOURCE_STATES GetUploadDestinationState() const = 0;
+
         /**
          * @brief 在全局描述符堆中创建描述符(纯虚函数)
          * @param device DX12设备
@@ -211,51 +314,46 @@ namespace enigma::graphic
             class GlobalDescriptorHeapManager* heapManager) = 0;
 
         // ========================================================================
-        // 便捷注册接口 (Milestone 2.3新增) - 统一的资源注册方法
+        // Bindless资源注册接口 (Milestone 2.7) - SM6.6简化架构
         // ========================================================================
 
         /**
-         * @brief 注册到Bindless资源管理器 (通过D3D12RenderSystem统一接口)
+         * @brief 注册到Bindless系统
          * @return 成功返回全局索引，失败返回nullopt
          *
          * 教学要点:
-         * 1. 分层架构：D12Resource -> D3D12RenderSystem -> ShaderResourceBinder -> BindlessResourceManager
-         * 2. 统一接口设计：所有资源类型都使用相同的注册接口
-         * 3. 自动类型检测：基于资源类型自动选择正确的注册方法
-         * 4. 依赖倒置原则：依赖于抽象(D3D12RenderSystem)而非具体实现(BindlessResourceManager)
+         * 1. SM6.6 Bindless架构: BindlessIndexAllocator(索引) + GlobalDescriptorHeapManager(描述符)
+         * 2. True Bindless流程: Create() → Upload() → RegisterBindless()
+         * 3. 安全检查: 必须先Upload()才能RegisterBindless()
+         * 4. 三步注册: 分配索引 → 存储索引 → 创建描述符
          *
-         * 实现指导:
+         * 使用示例:
          * ```cpp
-         * // 1. 检查是否已经注册
-         * if (IsBindlessRegistered()) {
-         *     return std::nullopt;  // 避免重复注册
-         * }
-         *
-         * // 2. 通过D3D12RenderSystem统一接口注册
-         * auto resourceType = GetDefaultBindlessResourceType();
-         * return D3D12RenderSystem::RegisterResourceToBindless(shared_from_this(), resourceType);
+         * auto texture = D12Texture::Create(...);
+         * texture->SetInitialData(...);    // 设置CPU数据
+         * texture->Upload();                // 上传到GPU
+         * auto index = texture->RegisterBindless();  // 注册到Bindless系统
+         * // 现在可以在Shader中通过index访问: ResourceDescriptorHeap[index]
          * ```
          */
-        std::optional<uint32_t> RegisterToBindlessManager();
+        std::optional<uint32_t> RegisterBindless();
 
         /**
-         * @brief 从Bindless资源管理器注销 (通过D3D12RenderSystem统一接口)
+         * @brief 从Bindless系统注销
          * @return 成功返回true，失败返回false
          *
          * 教学要点:
-         * 1. 分层架构：D12Resource -> D3D12RenderSystem -> ShaderResourceBinder -> BindlessResourceManager
-         * 2. 依赖倒置原则：依赖于抽象接口而非具体实现
-         * 3. RAII设计：确保资源正确注销，避免资源泄漏
+         * 1. RAII设计: 确保资源正确注销，避免索引泄漏
+         * 2. 架构分离: 只释放索引，描述符堆自动管理
+         * 3. 幂等操作: 未注册时调用也是安全的
          *
-         * 实现指导:
+         * 使用示例:
          * ```cpp
-         * if (!IsBindlessRegistered()) {
-         *     return false;  // 未注册无需注销
-         * }
-         * return D3D12RenderSystem::UnregisterResourceFromBindless(shared_from_this());
+         * texture->UnregisterBindless();  // 释放Bindless索引
+         * // 资源仍然有效，但不再通过Bindless访问
          * ```
          */
-        bool UnregisterFromBindlessManager();
+        bool UnregisterBindless();
 
     protected:
         /**
