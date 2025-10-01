@@ -181,8 +181,8 @@ namespace enigma::graphic
          * @param createInfo 纹理创建信息
          * @return 创建的D12Texture智能指针，失败返回nullptr
          */
-        static std::unique_ptr<D12Texture>      CreateTexture(const TextureCreateInfo& createInfo);
-        static std::unique_ptr<D12DepthTexture> CreateDepthTexture(const DepthTextureCreateInfo& createInfo);
+        static std::unique_ptr<D12Texture>      CreateTexture(TextureCreateInfo& createInfo);
+        static std::unique_ptr<D12DepthTexture> CreateDepthTexture(DepthTextureCreateInfo& createInfo);
 
         /**
          * 简化的创建2D纹理方法

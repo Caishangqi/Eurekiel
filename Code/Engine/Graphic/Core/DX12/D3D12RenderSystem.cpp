@@ -31,9 +31,9 @@ namespace enigma::graphic
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
 
     // SM6.6 Bindless resource management system (Milestone 2.7)
-    std::unique_ptr<BindlessIndexAllocator>        D3D12RenderSystem::s_bindlessIndexAllocator        = nullptr;
-    std::unique_ptr<GlobalDescriptorHeapManager>   D3D12RenderSystem::s_globalDescriptorHeapManager   = nullptr;
-    std::unique_ptr<BindlessRootSignature>         D3D12RenderSystem::s_bindlessRootSignature         = nullptr;
+    std::unique_ptr<BindlessIndexAllocator>      D3D12RenderSystem::s_bindlessIndexAllocator      = nullptr;
+    std::unique_ptr<GlobalDescriptorHeapManager> D3D12RenderSystem::s_globalDescriptorHeapManager = nullptr;
+    std::unique_ptr<BindlessRootSignature>       D3D12RenderSystem::s_bindlessRootSignature       = nullptr;
 
     // Immediate mode rendering system (Milestone 2.6)
     std::unique_ptr<RenderCommandQueue> D3D12RenderSystem::s_renderCommandQueue = nullptr;
@@ -90,7 +90,7 @@ namespace enigma::graphic
         if (!s_globalDescriptorHeapManager->Initialize())
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                          "Failed to initialize GlobalDescriptorHeapManager");
+                           "Failed to initialize GlobalDescriptorHeapManager");
             s_globalDescriptorHeapManager.reset();
             s_bindlessIndexAllocator.reset();
             s_commandListManager.reset();
@@ -102,7 +102,7 @@ namespace enigma::graphic
         if (!s_bindlessRootSignature->Initialize())
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                          "Failed to initialize BindlessRootSignature");
+                           "Failed to initialize BindlessRootSignature");
             s_bindlessRootSignature.reset();
             s_globalDescriptorHeapManager->Shutdown();
             s_globalDescriptorHeapManager.reset();
@@ -112,7 +112,7 @@ namespace enigma::graphic
         }
 
         core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
-                     "SM6.6 Bindless architecture initialized successfully");
+                      "SM6.6 Bindless architecture initialized successfully");
 
         // 5. Create SwapChain (if window handle is provided)
         if (hwnd)
@@ -346,7 +346,7 @@ namespace enigma::graphic
      * 3. ID3D12Device::CreateUnorderedAccessView() - 创建UAV (如果需要)
      * 4. ID3D12Resource::SetName() - 设置调试名称
      */
-    std::unique_ptr<D12Texture> D3D12RenderSystem::CreateTexture(const TextureCreateInfo& createInfo)
+    std::unique_ptr<D12Texture> D3D12RenderSystem::CreateTexture(TextureCreateInfo& createInfo)
     {
         // 验证系统已初始化
         if (!s_isInitialized || !s_device)
@@ -376,6 +376,7 @@ namespace enigma::graphic
             assert(false && "Texture usage must be specified");
             return nullptr;
         }
+
 
         // 创建D12Texture对象
         // 使用std::make_unique确保异常安全
@@ -558,7 +559,6 @@ namespace enigma::graphic
         {
             LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ResourceLocation): ResourceSubsystem not found");
             ERROR_AND_DIE("Resource subsystem not found")
-            return nullptr;
         }
 
         const auto imageResource = std::dynamic_pointer_cast<ImageResource>(resourceSubsystem->GetResource(resourceLocation));
@@ -681,7 +681,7 @@ namespace enigma::graphic
      * 3. 自动创建DSV和SRV描述符（如果支持采样）
      * 4. 设置调试名称
      */
-    std::unique_ptr<D12DepthTexture> D3D12RenderSystem::CreateDepthTexture(const DepthTextureCreateInfo& createInfo)
+    std::unique_ptr<D12DepthTexture> D3D12RenderSystem::CreateDepthTexture(DepthTextureCreateInfo& createInfo)
     {
         // 验证系统已初始化
         if (!s_isInitialized || !s_device)
