@@ -179,6 +179,36 @@ namespace enigma::graphic
         BindlessResourceType GetDefaultBindlessResourceType() const override;
         void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
 
+        // ==================== GPU资源上传(Milestone 2.7) ====================
+
+        /**
+         * @brief 重写基类方法: 实现缓冲区特定的上传逻辑
+         * @param commandList Copy队列命令列表
+         * @param uploadContext Upload Heap上下文
+         * @return 上传成功返回true
+         *
+         * 教学要点:
+         * 1. 使用UploadContext::UploadBufferData()执行缓冲区上传
+         * 2. 缓冲区上传比纹理简单,直接CopyBufferRegion即可
+         * 3. destOffset设为0(完整替换缓冲区数据)
+         * 4. 资源状态转换由D12Resource::Upload()基类处理
+         */
+        bool UploadToGPU(
+            ID3D12GraphicsCommandList* commandList,
+            class UploadContext&       uploadContext
+        ) override;
+
+        /**
+         * @brief 重写基类方法: 获取缓冲区上传后的目标状态
+         * @return D3D12_RESOURCE_STATE_GENERIC_READ(通用读取状态)
+         *
+         * 教学要点:
+         * 1. 缓冲区通常作为各种着色器的输入(VS/PS/CS)
+         * 2. GENERIC_READ是缓冲区最通用的状态,适用于多种用途
+         * 3. 如果需要UAV访问,子类可重写返回UNORDERED_ACCESS
+         */
+        D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
+
     private:
         // ==================== D12Buffer特有成员变量 ====================
         // 注意：m_resource, m_size, m_debugName, m_currentState 等已在基类D12Resource中定义

@@ -4,7 +4,9 @@
 
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
+#include "Engine/Graphic/Resource/UploadContext.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
 namespace enigma::graphic
 {
@@ -36,6 +38,12 @@ namespace enigma::graphic
         {
             SetDebugName(createInfo.debugName);
         }
+
+    // 复制初始数据到CPU端（如果提供了）
+    if (createInfo.initialData && createInfo.size > 0)
+    {
+        SetInitialData(createInfo.initialData, createInfo.size);
+    }
 
         // 如果提供了初始数据且缓冲区支持CPU写入，则进行数据拷贝
         // 对应Iris的ShaderStorageBuffer中content的处理
@@ -501,5 +509,66 @@ namespace enigma::graphic
                           GetBindlessIndex(),
                           GetDebugName().c_str());
         }
+    }
+
+    // ==================== GPU资源上传(Milestone 2.7) ====================
+
+    /**
+     * @brief 实现缓冲区特定的上传逻辑
+     * 教学要点:
+     * 1. 缓冲区上传比纹理简单,使用CopyBufferRegion即可
+     * 2. destOffset设为0,完整替换整个缓冲区数据
+     * 3. 使用UploadContext::UploadBufferData()执行GPU复制
+     * 4. 资源状态转换由基类D12Resource::Upload()处理
+     */
+    bool D12Buffer::UploadToGPU(
+        ID3D12GraphicsCommandList* commandList,
+        UploadContext&             uploadContext
+    )
+    {
+        if (!HasCPUData())
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "D12Buffer::UploadToGPU: No CPU data available");
+            return false;
+        }
+
+        // 调用UploadContext上传缓冲区数据(destOffset=0,完整替换)
+        bool uploadSuccess = uploadContext.UploadBufferData(
+            commandList,
+            GetResource(), // GPU缓冲区资源
+            GetCPUData(), // CPU数据指针
+            GetCPUDataSize(), // 数据大小
+            0 // destOffset=0(完整替换)
+        );
+
+        if (!uploadSuccess)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "D12Buffer::UploadToGPU: Failed to upload buffer '%s'",
+                           GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+            return false;
+        }
+
+        core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                       "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)",
+                       GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
+                       GetCPUDataSize());
+
+        return true;
+    }
+
+    /**
+     * @brief 获取缓冲区上传后的目标资源状态
+     * 教学要点:
+     * 1. 缓冲区通常作为各种着色器的输入(VS/PS/CS)
+     * 2. D3D12_RESOURCE_STATE_GENERIC_READ是最通用的缓冲区状态
+     * 3. GENERIC_READ包含多种读取状态,适用于Vertex/Index/Constant/Shader Resource
+     * 4. 如果需要UAV访问,应在创建时指定BufferUsage::UnorderedAccess
+     */
+    D3D12_RESOURCE_STATES D12Buffer::GetUploadDestinationState() const
+    {
+        // 缓冲区默认转换到通用读取状态
+        return D3D12_RESOURCE_STATE_GENERIC_READ;
     }
 } // namespace enigma::graphic
