@@ -314,32 +314,6 @@ void RendererSubsystem::RenderFrame()
     }
 }
 
-void RendererSubsystem::Update(float deltaTime)
-{
-    // ========================================================================
-    // 简化版本的渲染更新 (建议使用RenderFrame()代替)
-    // ========================================================================
-
-    LogInfo(GetStaticSubsystemName(), "Update - Using simplified rendering (consider RenderFrame() for full pipeline)");
-
-    // 简化版本：只执行DEBUG阶段用于开发测试
-    if (m_currentPipeline)
-    {
-        try
-        {
-            LogInfo(GetStaticSubsystemName(), "Update - Executing DEBUG phase only");
-            m_currentPipeline->SetPhase(WorldRenderingPhase::DEBUG);
-            m_currentPipeline->OnFrameUpdate();
-        }
-        catch (const std::exception& e)
-        {
-            LogError(GetStaticSubsystemName(), "Update - Exception: {}", e.what());
-        }
-    }
-
-    UNUSED(deltaTime)
-}
-
 void RendererSubsystem::EndFrame()
 {
     // ========================================================================

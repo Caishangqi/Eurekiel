@@ -224,6 +224,7 @@
         <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
         <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
         <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
+        <ClCompile Include="Graphic\Resource\UploadContext.cpp"/>
         <ClCompile Include="Graphic\Resource\DescriptorHandle.cpp"/>
         <ClCompile Include="Graphic\Resource\GlobalDescriptorHeapManager.cpp"/>
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
@@ -450,6 +451,7 @@
         <ClInclude Include="Graphic\Resource\CommandListManager.hpp" />
         <ClInclude Include="Graphic\Resource\Buffer\D12Buffer.hpp" />
         <ClInclude Include="Graphic\Resource\D12Resources.hpp" />
+        <ClInclude Include="Graphic\Resource\UploadContext.hpp"/>
         <ClInclude Include="Graphic\Resource\Texture\D12Texture.hpp" />
         <ClInclude Include="Input\AnalogJoystick.hpp" />
         <ClInclude Include="Input\InputSystem.hpp" />

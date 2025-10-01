@@ -234,10 +234,6 @@ namespace enigma::graphic
         /// - 掌握延迟渲染的实现架构
         void RenderFrame();
 
-        /// @brief 更新渲染系统逻辑 (简化版本，建议使用RenderFrame())
-        /// @deprecated 推荐使用RenderFrame()获得完整的渲染管线体验
-        void Update(float deltaTime) override;
-
         /**
          * @brief 帧结束处理
          * @details
