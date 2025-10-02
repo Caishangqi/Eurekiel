@@ -104,8 +104,7 @@ namespace enigma::registry::block
 
     std::string Block::GetModelPath(enigma::voxel::block::BlockState* state) const
     {
-        UNUSED(state);
-
+        UNUSED(state)
         // Use stored blockstate path if available
         if (!m_blockstatePath.empty())
         {
