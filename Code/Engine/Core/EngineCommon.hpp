@@ -14,6 +14,7 @@ namespace enigma::resource
 // Forward declarations
 namespace enigma::core
 {
+    class ScheduleSubsystem;
     class ConsoleSubsystem;
 }
 
@@ -23,6 +24,7 @@ extern DevConsole*                          g_theDevConsole;
 extern enigma::core::Engine*                g_theEngine;
 extern enigma::core::ConsoleSubsystem*      g_theConsole;
 extern enigma::resource::ResourceSubsystem* g_theResource;
+extern enigma::core::ScheduleSubsystem*     g_theSchedule;
 
 #define UNUSED(x) (void)(x);
 #define STATIC static
