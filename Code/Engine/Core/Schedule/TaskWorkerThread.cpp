@@ -36,18 +36,23 @@ namespace enigma::core
     // 3. If task found: execute it, mark as completed
     // 4. Repeat
     //
-    // PHASE 2 IMPROVEMENTS:
-    // - Replaces sleep_for() with condition_variable::wait()
+    // PHASE 2 IMPROVEMENTS (Plan 1: Per-Type Condition Variables):
+    // - Replaces sleep_for() with type-specific condition_variable::wait()
     // - Worker threads sleep efficiently (no CPU waste)
-    // - Wake immediately when AddTask() notifies new work
+    // - Wake ONLY when tasks of MATCHING type are added (zero spurious wakeups)
     // - Predicate lambda prevents spurious wakeups
     //
-    // EDUCATIONAL NOTE - Condition Variable Pattern:
+    // EDUCATIONAL NOTE - Per-Type Condition Variable Pattern:
     // 1. unique_lock: RAII-style mutex lock (can unlock/relock)
-    // 2. cv.wait(lock, predicate): Atomically releases lock and sleeps
-    // 3. When notified: wakes up, reacquires lock, checks predicate
-    // 4. If predicate true: proceeds; if false: releases lock and sleeps again
-    // 5. This prevents "lost wakeup" and "spurious wakeup" problems
+    // 2. GetConditionVariableForType(m_assignedType): Get type-specific CV
+    // 3. cv.wait(lock, predicate): Atomically releases lock and sleeps
+    // 4. When AddTask() adds task of our type: notify_one() wakes ONE worker of that type
+    // 5. Worker wakes up, reacquires lock, checks predicate, proceeds if true
+    // 6. This eliminates spurious wakeups (only correct-type workers wake up)
+    //
+    // WHY THIS IS BETTER THAN notify_all():
+    // - notify_all(): Wakes ALL workers (9 threads), 8 check and sleep again (wasted CPU)
+    // - Per-type CV: Wakes ONLY workers of matching type (0 spurious wakeups, optimal)
     //
     // WHY THIS IS BETTER THAN PHASE 1:
     // - Phase 1: sleep_for(10ms) = wastes CPU polling, 10ms latency
@@ -75,7 +80,7 @@ namespace enigma::core
 
                 // Wait until: shutdown requested OR task of our type is available
                 // PREDICATE: Return true to wake up and proceed
-                m_system->GetTaskAvailableCV().wait(lock, [this]() {
+                m_system->GetConditionVariableForType(m_assignedType).wait(lock, [this]() {
                     // Wake up if shutting down (need to exit loop)
                     if (m_system->IsShuttingDown())
                         return true;

@@ -33,6 +33,7 @@ namespace enigma::core
     public:
         // Constructor: specify task type with string
         explicit RunnableTask(const std::string& typeStr);
+        explicit RunnableTask();
         virtual  ~RunnableTask() = default;
 
         // Pure virtual: derived classes implement specific task logic
@@ -41,14 +42,14 @@ namespace enigma::core
         // Accessors
         const std::string& GetType() const { return m_type; }
         TaskState          GetState() const { return m_state.load(); }
-        
+
         // State management (called by ScheduleSubsystem)
         void SetState(TaskState newState) { m_state.store(newState); }
 
-    private:
-        std::string            m_type; // Task type (string)
-        std::atomic<TaskState> m_state; // Atomic state (thread-safe)
-
+    protected:
+        std::string m_type = "Generic"; // Task type (string)
         friend class ScheduleSubsystem; // Allow ScheduleSubsystem to modify state
+    private:
+        std::atomic<TaskState> m_state; // Atomic state (thread-safe)
     };
 }

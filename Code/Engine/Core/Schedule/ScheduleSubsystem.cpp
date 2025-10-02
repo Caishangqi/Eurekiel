@@ -74,6 +74,8 @@ ScheduleConfig ScheduleConfig::GetDefaultConfig()
 ScheduleSubsystem::ScheduleSubsystem(ScheduleConfig& config)
     : m_config(config)
 {
+    GEngine->GetLogger()->SetCategoryLogLevel(ScheduleSubsystem::GetStaticSubsystemName(), LogLevel::DEBUG);
+    GEngine->GetLogger()->SetGlobalLogLevel(LogLevel::DEBUG);
 }
 
 ScheduleSubsystem::~ScheduleSubsystem()
@@ -119,7 +121,11 @@ void ScheduleSubsystem::Shutdown()
     LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "Shutdown() called");
 
     m_isShuttingDown.store(true);
-    m_taskAvailable.notify_all();
+    // Notify all types to wake up for shutdown
+    for (auto& cvPair : m_typeConditionVariables)
+    {
+        cvPair.second.notify_all();
+    }
 
     DestroyWorkerThreads();
 
@@ -143,12 +149,23 @@ void ScheduleSubsystem::AddTask(RunnableTask* task)
         return;
     }
 
+    std::string taskType = task->GetType();
+
+    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+            "AddTask: Adding task type='%s' to queue (current pending: %d)",
+            taskType.c_str(), (int)m_pendingTasks.size());
+
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_pendingTasks.push_back(task);
     }
 
-    m_taskAvailable.notify_one();
+    // Notify only workers of the matching type (Plan 1: Per-Type Condition Variables)
+    m_typeConditionVariables[taskType].notify_one();
+
+    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+            "AddTask: Notified workers of type '%s' (pending count: %d)",
+            taskType.c_str(), (int)m_pendingTasks.size());
 }
 
 std::vector<RunnableTask*> ScheduleSubsystem::RetrieveCompletedTasks()
@@ -161,7 +178,8 @@ std::vector<RunnableTask*> ScheduleSubsystem::RetrieveCompletedTasks()
 
 RunnableTask* ScheduleSubsystem::GetNextTaskForType(const std::string& typeStr)
 {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    // IMPORTANT: Caller must already hold m_queueMutex lock!
+    // This is called from TaskWorkerThread::ThreadMain() which already holds unique_lock
 
     auto it = std::find_if(m_pendingTasks.begin(), m_pendingTasks.end(),
                            [&typeStr](RunnableTask* task)
@@ -181,17 +199,32 @@ RunnableTask* ScheduleSubsystem::GetNextTaskForType(const std::string& typeStr)
 
 void ScheduleSubsystem::OnTaskCompleted(RunnableTask* task)
 {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    std::string taskType = task->GetType();
+    bool shouldNotify = false;
 
-    task->SetState(TaskState::Completed);
-
-    auto it = std::find(m_executingTasks.begin(), m_executingTasks.end(), task);
-    if (it != m_executingTasks.end())
     {
-        m_executingTasks.erase(it);
-    }
+        std::lock_guard<std::mutex> lock(m_queueMutex);
 
-    m_completedTasks.push_back(task);
+        task->SetState(TaskState::Completed);
+
+        auto it = std::find(m_executingTasks.begin(), m_executingTasks.end(), task);
+        if (it != m_executingTasks.end())
+        {
+            m_executingTasks.erase(it);
+        }
+
+        m_completedTasks.push_back(task);
+
+        // Plan 1: Check if there are more tasks of the SAME type pending
+        shouldNotify = HasPendingTaskOfType(taskType);
+    }
+    // Release lock before notifying (best practice)
+
+    if (shouldNotify)
+    {
+        // Notify only workers of the matching type (Plan 1: Per-Type Condition Variables)
+        m_typeConditionVariables[taskType].notify_one();
+    }
 }
 
 void ScheduleSubsystem::CreateWorkerThreads()
@@ -236,7 +269,24 @@ bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
     for (const RunnableTask* task : m_pendingTasks)
     {
         if (task->GetType() == typeStr)
+        {
+            LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+                     "HasPendingTaskOfType('%s'): Found task, returning true",
+                     typeStr.c_str());
             return true;
+        }
     }
+    LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+             "HasPendingTaskOfType('%s'): No task found in %d pending tasks",
+             typeStr.c_str(), (int)m_pendingTasks.size());
     return false;
+}
+
+//-----------------------------------------------------------------------------------------------
+// GetConditionVariableForType: Return type-specific condition variable (Plan 1)
+// Auto-creates CV on first access for each type
+//-----------------------------------------------------------------------------------------------
+std::condition_variable& ScheduleSubsystem::GetConditionVariableForType(const std::string& typeStr)
+{
+    return m_typeConditionVariables[typeStr];
 }

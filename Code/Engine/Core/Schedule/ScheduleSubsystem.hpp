@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <string>
+#include <map> // For per-type condition variables
 
 namespace enigma::core
 {
@@ -68,7 +69,7 @@ namespace enigma::core
     };
 
     //-----------------------------------------------------------------------------------------------
-    // Schedule Subsystem (Phase 2: YAML Configuration)
+    // Schedule Subsystem (Phase 2: Per-Type Condition Variables (Plan 1))
     //
     // DESIGN PHILOSOPHY:
     // - Multi-threaded task scheduling system with type-based thread pools
@@ -85,7 +86,7 @@ namespace enigma::core
     // THREAD SAFETY:
     // - All queue operations protected by m_queueMutex
     // - Task state uses std::atomic for lock-free reads
-    // - Condition variable wakes workers when tasks are added
+    // - Per-type condition variables eliminate spurious wakeups
     //-----------------------------------------------------------------------------------------------
     class ScheduleSubsystem : public EngineSubsystem
     {
@@ -131,13 +132,15 @@ namespace enigma::core
         bool IsShuttingDown() const { return m_isShuttingDown.load(); }
 
         //-------------------------------------------------------------------------------------------
-        // PHASE 2 API: Optimized Worker Thread Support (Condition Variable Pattern)
+        // PHASE 2 API: Optimized Worker Thread Support (Per-Type Condition Variables - Plan 1)
         //-------------------------------------------------------------------------------------------
 
         // Access to synchronization primitives for efficient condition variable waiting
         // Workers use these to wait() instead of busy-looping with sleep_for()
         std::mutex&              GetQueueMutex() { return m_queueMutex; }
-        std::condition_variable& GetTaskAvailableCV() { return m_taskAvailable; }
+        // Get type-specific condition variable for a task type
+        // Returns a reference to the CV for precise worker notification (eliminates spurious wakeups)
+        std::condition_variable& GetConditionVariableForType(const std::string& typeStr);
 
         // Check if there are any pending tasks of the specified type (for CV predicate)
         // PRECONDITION: Caller must hold m_queueMutex
@@ -169,10 +172,10 @@ namespace enigma::core
         std::vector<RunnableTask*> m_completedTasks; // Tasks finished execution
 
         //-------------------------------------------------------------------------------------------
-        // Thread Synchronization
+        // Thread Synchronization (Per-Type Condition Variables - Plan 1)
         //-------------------------------------------------------------------------------------------
         mutable std::mutex      m_queueMutex; // Protects all three queues
-        std::condition_variable m_taskAvailable; // Signals workers when tasks added
+        std::map<std::string, std::condition_variable> m_typeConditionVariables; // One CV per task type
         std::atomic<bool>       m_isShuttingDown{false}; // Shutdown flag (atomic for lock-free read)
 
         //-------------------------------------------------------------------------------------------
