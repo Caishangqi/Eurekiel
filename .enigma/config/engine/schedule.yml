@@ -1,0 +1,47 @@
+# Schedule Subsystem Configuration
+# Defines task types and their dedicated thread pool sizes
+#
+# YAML Structure:
+#   task_types:
+#     - type: <string>        # Task type identifier (used in RunnableTask constructor)
+#       threads: <int>         # Number of dedicated worker threads for this type
+#       description: <string>  # Optional: human-readable description
+#
+# DESIGN NOTES:
+# - Each task type gets a dedicated thread pool for isolation
+# - Thread count should match workload characteristics:
+#   * CPU-bound tasks: num_cores or num_cores - 1
+#   * I/O-bound tasks: higher count (e.g., 2-4x num_cores)
+#   * Latency-critical: dedicated single thread
+# - Total threads across all types should not exceed 2-3x CPU core count
+
+task_types:
+  # Generic tasks: CPU-bound work, miscellaneous operations
+  - type: Generic
+    threads: 4
+    description: General-purpose CPU-bound tasks
+
+  # File I/O: Asynchronous file operations (loading, saving)
+  - type: FileIO
+    threads: 2
+    description: File I/O operations (loading assets, saving data)
+
+  # Chunk Generation: Procedural world generation (CPU-intensive)
+  - type: ChunkGen
+    threads: 2
+    description: Procedural chunk generation for voxel world
+
+  # Rendering: Render preparation tasks (mesh building, etc.)
+  - type: Rendering
+    threads: 1
+    description: Render preparation (mesh building, culling)
+
+  # Network: Network I/O and packet processing (future)
+  # - type: Network
+  #   threads: 2
+  #   description: Network packet processing
+
+  # Audio: Audio stream decoding and processing (future)
+  # - type: Audio
+  #   threads: 1
+  #   description: Audio stream processing

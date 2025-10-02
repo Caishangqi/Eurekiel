@@ -186,7 +186,10 @@
         <ClCompile Include="Core\Json.cpp"/>
         <ClCompile Include="Core\NamedStrings.cpp"/>
         <ClCompile Include="Core\Rgba8.cpp"/>
+        <ClCompile Include="Core\Schedule\RunnableTask.cpp"/>
         <ClCompile Include="Core\Schedule\ScheduleSubsystem.cpp"/>
+        <ClCompile Include="Core\Schedule\TaskWorkerThread.cpp"/>
+        <ClCompile Include="Core\Schedule\TaskTypeRegistry.cpp"/>
         <ClCompile Include="Core\StringUtils.cpp"/>
         <ClCompile Include="Core\SubsystemManager.cpp"/>
         <ClCompile Include="Core\Time.cpp"/>
@@ -371,8 +374,11 @@
         <ClInclude Include="Core\Json.hpp" />
         <ClInclude Include="Core\NamedStrings.hpp" />
         <ClInclude Include="Core\Rgba8.hpp" />
+        <ClInclude Include="Core\Schedule\RunnableTask.hpp"/>
         <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp" />
+        <ClInclude Include="Core\Schedule\TaskWorkerThread.hpp"/>
         <ClInclude Include="Core\StringUtils.hpp" />
+        <ClInclude Include="Core\Schedule\TaskTypeRegistry.hpp"/>
         <ClInclude Include="Core\SubsystemManager.hpp" />
         <ClInclude Include="Core\Time.hpp" />
         <ClInclude Include="Core\Timer.hpp" />
@@ -416,7 +422,7 @@
         <ClInclude Include="Graphic\Core\Pipeline\PipelineManager.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\RenderTargets.hpp"/>
 
-        <!-- Renderer Layer (在Pipeline中) -->
+        <!-- Renderer Layer (在Pipeline�? -->
         <ClInclude Include="Graphic\Core\Pipeline\CompositeRenderer.hpp"/>
         <ClInclude Include="Graphic\Core\Pipeline\ShadowRenderer.hpp"/>
         
@@ -581,6 +587,7 @@
         <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png" />
         <Content Include="..\..\.enigma\config\engine\config.yml" />
         <Content Include="..\..\.enigma\config\engine\module.yml" />
+        <Content Include="..\..\.enigma\config\engine\schedule.yml"/>
         <Content Include="..\..\.gitignore" />
         <Content Include="..\..\Readme.md" />
         <Content Include="..\..\Scripts\CopyEngineResources.bat" />
