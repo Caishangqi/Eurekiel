@@ -239,8 +239,23 @@ namespace enigma::core
             return m_node;
         }
 
-        auto       pathParts = SplitPath(path);
-        YAML::Node current   = m_node;
+        auto pathParts = SplitPath(path);
+
+        // FIXED: Optimization for single-key paths (common in array element access)
+        // This fixes the issue where YamlConfiguration objects from GetConfigurationList()
+        // couldn't access their fields using GetString/GetInt
+        if (pathParts.size() == 1)
+        {
+            const std::string& key = pathParts[0];
+            if (m_node.IsDefined() && m_node.IsMap())
+            {
+                return m_node[key]; // Returns undefined node if key doesn't exist
+            }
+            return YAML::Node(); // Return undefined if m_node is not a map
+        }
+
+
+        YAML::Node current = m_node;
 
         for (const auto& part : pathParts)
         {
