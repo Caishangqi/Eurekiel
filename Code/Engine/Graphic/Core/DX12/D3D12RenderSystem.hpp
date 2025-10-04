@@ -65,8 +65,6 @@ namespace enigma::graphic
      */
     class D3D12RenderSystem
     {
-
-
     public:
         /**
          * 初始化DirectX 12渲染系统（设备、命令系统和SwapChain）
@@ -424,6 +422,36 @@ namespace enigma::graphic
          */
         static ID3D12RootSignature* GetBindlessRootSignature();
 
+        // ===== PSO创建API (Milestone 3.0新增) =====
+
+        /**
+         * @brief 创建图形管线状态对象 (PSO)
+         * @param desc PSO描述符
+         * @return ComPtr<ID3D12PipelineState> PSO智能指针
+         *
+         * 教学要点:
+         * 1. 对应Iris的Program创建（OpenGL glCreateProgram + glLinkProgram）
+         * 2. PSO封装了完整的图形管线状态（着色器、混合、光栅化、深度模板等）
+         * 3. 使用ComPtr自动管理生命周期
+         * 4. 失败时返回nullptr，调用者需检查
+         *
+         * DirectX 12 API:
+         * - ID3D12Device::CreateGraphicsPipelineState()
+         *
+         * 使用示例:
+         * @code
+         * D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+         * psoDesc.pRootSignature = GetBindlessRootSignature();
+         * psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+         * psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+         * // ... 配置其他状态 ...
+         * auto pso = D3D12RenderSystem::CreateGraphicsPSO(psoDesc);
+         * @endcode
+         */
+        static Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPSO(
+            const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc
+        );
+
         // ===== Immediate模式渲染API (Milestone 2.6新增) =====
 
         /**
@@ -533,9 +561,9 @@ namespace enigma::graphic
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器
 
         // SM6.6 Bindless资源管理系统（Milestone 2.7重构）
-        static std::unique_ptr<BindlessIndexAllocator>        s_bindlessIndexAllocator;        // 纯索引分配器（0-1,999,999）
-        static std::unique_ptr<GlobalDescriptorHeapManager>   s_globalDescriptorHeapManager;   // 全局描述符堆管理器（1M容量）
-        static std::unique_ptr<BindlessRootSignature>         s_bindlessRootSignature;         // SM6.6极简Root Signature
+        static std::unique_ptr<BindlessIndexAllocator>      s_bindlessIndexAllocator; // 纯索引分配器（0-1,999,999）
+        static std::unique_ptr<GlobalDescriptorHeapManager> s_globalDescriptorHeapManager; // 全局描述符堆管理器（1M容量）
+        static std::unique_ptr<BindlessRootSignature>       s_bindlessRootSignature; // SM6.6极简Root Signature
 
         // Immediate模式渲染系统（Milestone 2.6新增）
         static std::unique_ptr<RenderCommandQueue> s_renderCommandQueue; // Immediate模式命令队列

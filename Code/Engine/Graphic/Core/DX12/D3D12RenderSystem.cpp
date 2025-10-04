@@ -7,7 +7,6 @@
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Resource/DepthTexture/D12DepthTexture.hpp"
 #include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
-#include "Engine/Graphic/Resource/ShaderResourceBinder.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/ImageResource.hpp"
 #include "Engine/Core/Image.hpp"
@@ -947,6 +946,32 @@ namespace enigma::graphic
         if (!s_bindlessRootSignature)
             return nullptr;
         return s_bindlessRootSignature->GetRootSignature();
+    }
+
+    // ===== PSO创建API实现 (Milestone 3.0新增) =====
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> D3D12RenderSystem::CreateGraphicsPSO(
+        const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc
+    )
+    {
+        if (!s_device)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Cannot create PSO: D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+        HRESULT                                     hr = s_device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&pso));
+
+        if (FAILED(hr))
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Failed to create Graphics PSO: HRESULT = 0x%08X", hr);
+            return nullptr;
+        }
+
+        return pso;
     }
 
     // ===== 渲染管线API实现 (Milestone 2.6新增) =====
