@@ -23,7 +23,6 @@
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
 #include "../Core/Pipeline/EnigmaRenderingPipeline.hpp"
-#include "../Core/Pipeline/ShaderPackManager.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 
@@ -33,7 +32,6 @@ using namespace enigma::core;
 namespace enigma::graphic
 {
     // 前向声明 - 避免循环包含
-    class ShaderPackManager;
     class RenderCommandQueue;
 
     /**
@@ -393,16 +391,6 @@ namespace enigma::graphic
         class IWorldRenderingPipeline* PreparePipeline(const enigma::resource::ResourceLocation& dimensionId);
 
         /**
-         * @brief 获取Shader Pack管理器
-         * @return Shader Pack管理器指针
-         * @details 用于加载、管理和切换不同的着色器包
-         */
-        ShaderPackManager* GetShaderPackManager() const noexcept
-        {
-            return m_shaderPackManager.get();
-        }
-
-        /**
          * @brief 获取当前活跃的渲染管线 (Milestone 2.6新增)
          * @return 当前EnigmaRenderingPipeline指针
          * @details
@@ -553,8 +541,8 @@ namespace enigma::graphic
         /// 支持EnigmaRenderingPipeline实例，用于开发和测试DirectX 12渲染管线
         std::unique_ptr<EnigmaRenderingPipeline> m_currentPipeline;
 
-        /// Shader Pack管理器 - 着色器包系统
-        std::unique_ptr<ShaderPackManager> m_shaderPackManager;
+        /// Shader Pack管理器 - 着色器包系统 (已删除 - Milestone 3.0 重构)
+        // std::unique_ptr<ShaderPackManager> m_shaderPackManager;
 
         // ==================== Immediate模式渲染组件 ====================
 

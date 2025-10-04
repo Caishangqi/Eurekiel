@@ -92,7 +92,7 @@
             <SDLCheck>true</SDLCheck>
             <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/ThirdParty/DXC/inc;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
             <MultiProcessorCompilation>true</MultiProcessorCompilation>
         </ClCompile>
@@ -113,7 +113,7 @@
             <SDLCheck>true</SDLCheck>
             <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/ThirdParty/DXC/inc;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
             <MultiProcessorCompilation>true</MultiProcessorCompilation>
         </ClCompile>
@@ -134,7 +134,7 @@
             <SDLCheck>true</SDLCheck>
             <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/ThirdParty/DXC/inc;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
             <MultiProcessorCompilation>true</MultiProcessorCompilation>
         </ClCompile>
@@ -155,7 +155,7 @@
             <SDLCheck>true</SDLCheck>
             <PreprocessorDefinitions>NDEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
             <ConformanceMode>true</ConformanceMode>
-            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)..</AdditionalIncludeDirectories>
+            <AdditionalIncludeDirectories>$(SolutionDir)Code/;$(SolutionDir)../Engine/Code/;$(SolutionDir)../Engine/Code/ThirdParty/DXC/inc;$(SolutionDir)..</AdditionalIncludeDirectories>
             <LanguageStandard>stdcpp17</LanguageStandard>
             <MultiProcessorCompilation>true</MultiProcessorCompilation>
         </ClCompile>
@@ -216,7 +216,6 @@
         <ClCompile Include="Graphic\Core\Pipeline\DebugRenderer.cpp"/>
         <ClCompile Include="Graphic\Core\Pipeline\ShadowRenderer.cpp"/>
         <ClCompile Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.cpp"/>
-        <ClCompile Include="Graphic\Core\Pipeline\ShaderPackManager.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp"/>
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
@@ -231,11 +230,16 @@
         <ClCompile Include="Graphic\Resource\DescriptorHandle.cpp"/>
         <ClCompile Include="Graphic\Resource\GlobalDescriptorHeapManager.cpp"/>
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
+        <ClCompile Include="Graphic\Resource\ShaderDirectives.cpp"/>
         <ClCompile Include="Graphic\Resource\DepthTexture\D12DepthTexture.cpp"/>
         <ClCompile Include="Graphic\Resource\FrameBuffer\D12Framebuffer.cpp"/>
         <ClCompile Include="Graphic\Resource\RenderTarget\D12RenderTarget.cpp"/>
-        <ClCompile Include="Graphic\Resource\ShaderResourceBinder.cpp"/>
         <ClCompile Include="Graphic\Resource\Texture\D12Texture.cpp"/>
+        <ClCompile Include="Graphic\Shader\Compiler\DXCCompiler.cpp"/>
+        <ClCompile Include="Graphic\Shader\ShaderPack\ShaderPackLoader.cpp"/>
+        <ClCompile Include="Graphic\Shader\ShaderPack\ShaderProgram.cpp"/>
+        <ClCompile Include="Graphic\Shader\ShaderPack\ShaderProgramBuilder.cpp"/>
+        <ClCompile Include="Graphic\Shader\ShaderPack\ShaderSource.cpp"/>
         <ClCompile Include="Graphic\Shader\Uniform\UniformBuffer.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp"/>
         <ClCompile Include="Input\InputSystem.cpp"/>
@@ -425,19 +429,25 @@
         <!-- Renderer Layer (在Pipeline�? -->
         <ClInclude Include="Graphic\Core\Pipeline\CompositeRenderer.hpp"/>
         <ClInclude Include="Graphic\Core\Pipeline\ShadowRenderer.hpp"/>
-        
+
         <!-- Shader System -->
-        <ClInclude Include="Graphic\Core\Pipeline\ShaderPackManager.hpp"/>
         <ClInclude Include="Graphic\Immediate\Commands\DebugDrawTextCommand.hpp"/>
         <ClInclude Include="Graphic\Resource\BindlessRootSignature.hpp"/>
         <ClInclude Include="Graphic\Resource\Buffer\BufferFlipper.hpp"/>
         <ClInclude Include="Graphic\Resource\CompiledShader.hpp"/>
+        <ClInclude Include="Graphic\Resource\ShaderDirectives.hpp"/>
+        <ClInclude Include="Graphic\Resource\Vertex.hpp"/>
         <ClInclude Include="Graphic\Resource\DepthTexture\D12DepthTexture.hpp"/>
         <ClInclude Include="Graphic\Resource\DescriptorHandle.hpp"/>
         <ClInclude Include="Graphic\Resource\GlobalDescriptorHeapManager.hpp"/>
         <ClInclude Include="Graphic\Resource\FrameBuffer\D12Framebuffer.hpp"/>
         <ClInclude Include="Graphic\Resource\RenderTarget\D12RenderTarget.hpp"/>
-        <ClInclude Include="Graphic\Resource\ShaderResourceBinder.hpp"/>
+        <Content Include="Graphic\Shader\Common.hlsli"/>
+        <ClInclude Include="Graphic\Shader\Compiler\DXCCompiler.hpp"/>
+        <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackLoader.hpp"/>
+        <ClInclude Include="Graphic\Shader\ShaderPack\ShaderProgram.hpp"/>
+        <ClInclude Include="Graphic\Shader\ShaderPack\ShaderProgramBuilder.hpp"/>
+        <ClInclude Include="Graphic\Shader\ShaderPack\ShaderSource.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\UniformBuffer.hpp"/>
 
         <!-- Support Layer (基于Iris源码验证) -->
@@ -597,8 +607,6 @@
     </ItemGroup>
     <ItemGroup>
         <Folder Include="Core\Logger\Appender\" />
-        <Folder Include="Graphic\Core\Shader\" />
-        <Folder Include="Graphic\Shader\Compiler\"/>
     </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
     <ImportGroup Label="ExtensionTargets">
