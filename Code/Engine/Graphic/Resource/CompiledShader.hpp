@@ -1,106 +1,83 @@
-﻿#pragma once
+﻿/**
+ * @file CompiledShader.hpp
+ * @brief 编译后的着色器程序 - 简化版 (移除反射)
+ * @date 2025-10-03
+ *
+ * 设计变更:
+ * ❌ 移除 ID3D12ShaderReflection - 使用固定 Input Layout
+ * ❌ 移除 ID3DBlob - 使用 std::vector<uint8_t> 字节码
+ * ✅ 保留 IrisAnnotations - 仍需解析注释配置
+ * ✅ 保留 ShaderType/ShaderStage 枚举
+ * ✅ 新增 sourceCode 字段 - 支持热重载
+ */
+
+#pragma once
+
+#include "ShaderDirectives.hpp"
 #include <memory>
 #include <string>
 #include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <optional>
-#include <functional>
-#include <filesystem>
-#include <chrono>
 #include <d3d12.h>
-#include <d3dcompiler.h>
+#include <wrl/client.h>
 
 namespace enigma::graphic
 {
     /**
-        * @brief Iris注释配置结构
-        * 
-        * 教学要点: 封装从着色器注释解析出的配置信息
-        */
-    struct IrisAnnotations
-    {
-        // 渲染目标配置
-        std::vector<uint32_t> renderTargets; // RENDERTARGETS: 0,1,2,3
-        std::string           drawBuffers; // DRAWBUFFERS: 0123 (兼容格式)
-
-        // RT格式配置
-        std::unordered_map<std::string, std::string>             rtFormats; // GAUX1FORMAT: RGBA32F
-        std::unordered_map<std::string, std::pair<float, float>> rtSizes; // GAUX1SIZE: 0.5 0.5
-
-        // 渲染状态配置
-        std::optional<std::string> blendMode; // BLEND: SrcAlpha OneMinusSrcAlpha
-        std::optional<std::string> depthTest; // DEPTHTEST: LessEqual
-        std::optional<bool>        depthWrite; // DEPTHWRITE: false
-        std::optional<std::string> cullFace; // CULLFACE: Back
-
-        // 计算着色器配置
-        std::optional<std::tuple<uint32_t, uint32_t, uint32_t>> computeThreads; // COMPUTE_THREADS: 16,16,1
-        std::optional<std::tuple<uint32_t, uint32_t, uint32_t>> computeSize; // COMPUTE_SIZE: 1920,1080,1
-
-        // 其他配置
-        std::unordered_map<std::string, std::string> customDefines; // 自定义宏定义
-
-        IrisAnnotations();
-        void Reset();
-    };
-
-    /**
-         * @brief 着色器程序类型枚举
-         * 
-         * 教学要点: 对应Iris规范的各种着色器程序类型
-         */
+     * @brief 着色器程序类型枚举
+     *
+     * 教学要点: 对应 Iris 规范的各种着色器程序类型
+     */
     enum class ShaderType
     {
-        // Setup阶段 - Compute Shader only
+        // Setup 阶段 - Compute Shader only
         Setup, // setup1.csh - setup99.csh
 
-        // Begin阶段 - Composite-style
+        // Begin 阶段 - Composite-style
         Begin, // begin1.vsh/.fsh - begin99.vsh/.fsh
 
-        // Shadow阶段 - Gbuffers-style
+        // Shadow 阶段 - Gbuffers-style
         Shadow, // shadow.vsh/.fsh
 
-        // ShadowComp阶段 - Composite-style
+        // ShadowComp 阶段 - Composite-style
         ShadowComp, // shadowcomp1.vsh/.fsh - shadowcomp99.vsh/.fsh
 
-        // Prepare阶段 - Composite-style
+        // Prepare 阶段 - Composite-style
         Prepare, // prepare1.vsh/.fsh - prepare99.vsh/.fsh
 
-        // GBuffers阶段 - Gbuffers-style (18种不同程序)
-        GBuffers_Terrain, // gbuffers_terrain.vsh/.fsh
-        GBuffers_Entities, // gbuffers_entities.vsh/.fsh
-        GBuffers_EntitiesTranslucent, // gbuffers_entities_translucent.vsh/.fsh
-        GBuffers_Hand, // gbuffers_hand.vsh/.fsh
-        GBuffers_Weather, // gbuffers_weather.vsh/.fsh
-        GBuffers_Block, // gbuffers_block.vsh/.fsh
-        GBuffers_BeaconBeam, // gbuffers_beaconbeam.vsh/.fsh
-        GBuffers_Item, // gbuffers_item.vsh/.fsh
-        GBuffers_Entities_glowing, // gbuffers_entities_glowing.vsh/.fsh
-        GBuffers_Glint, // gbuffers_glint.vsh/.fsh
-        GBuffers_Eyes, // gbuffers_eyes.vsh/.fsh
-        GBuffers_Armor_glint, // gbuffers_armor_glint.vsh/.fsh
-        GBuffers_SpiderEyes, // gbuffers_spidereyes.vsh/.fsh
-        GBuffers_Hand_water, // gbuffers_hand_water.vsh/.fsh
-        GBuffers_Textured, // gbuffers_textured.vsh/.fsh
-        GBuffers_Textured_lit, // gbuffers_textured_lit.vsh/.fsh
-        GBuffers_Skybasic, // gbuffers_skybasic.vsh/.fsh
-        GBuffers_Skytextured, // gbuffers_skytextured.vsh/.fsh
-        GBuffers_Clouds, // gbuffers_clouds.vsh/.fsh
-        GBuffers_Water, // gbuffers_water.vsh/.fsh
+        // GBuffers 阶段 - Gbuffers-style (18 种不同程序)
+        GBuffers_Terrain,
+        GBuffers_Entities,
+        GBuffers_EntitiesTranslucent,
+        GBuffers_Hand,
+        GBuffers_Weather,
+        GBuffers_Block,
+        GBuffers_BeaconBeam,
+        GBuffers_Item,
+        GBuffers_Entities_glowing,
+        GBuffers_Glint,
+        GBuffers_Eyes,
+        GBuffers_Armor_glint,
+        GBuffers_SpiderEyes,
+        GBuffers_Hand_water,
+        GBuffers_Textured,
+        GBuffers_Textured_lit,
+        GBuffers_Skybasic,
+        GBuffers_Skytextured,
+        GBuffers_Clouds,
+        GBuffers_Water,
 
-        // Deferred阶段 - Composite-style
+        // Deferred 阶段 - Composite-style
         Deferred, // deferred1.vsh/.fsh - deferred99.vsh/.fsh
 
-        // Composite阶段 - Composite-style  
+        // Composite 阶段 - Composite-style
         Composite, // composite1.vsh/.fsh - composite99.vsh/.fsh
 
-        // Final阶段 - Composite-style
+        // Final 阶段 - Composite-style
         Final // final.vsh/.fsh
     };
 
     /**
-     * @brief 着色器阶段枚举 (GPU流水线阶段)
+     * @brief 着色器阶段枚举 (GPU 流水线阶段)
      */
     enum class ShaderStage
     {
@@ -113,31 +90,121 @@ namespace enigma::graphic
     };
 
     /**
-            * @brief 编译后的着色器程序
-            */
+     * @brief 编译后的着色器程序 - 简化版
+     *
+     * 设计变更:
+     * - ❌ 移除 ID3DBlob* bytecode
+     * - ✅ 使用 std::vector<uint8_t> bytecode (与 DXCCompiler 一致)
+     * - ❌ 移除 ID3D12PipelineState* (PSO 由外部管理)
+     * - ✅ 保留 IrisAnnotations (仍需解析)
+     * - ✅ 保留 sourceCode (支持热重载)
+     */
     struct CompiledShader
     {
+        // 着色器元数据
         ShaderType  type; // 着色器类型
-        ShaderStage stage; // GPU流水线阶段
-        std::string name; // 着色器名称
-        std::string entryPoint; // 入口函数名
-        std::string profile; // HLSL编译配置 (vs_5_0, ps_5_0等)
+        ShaderStage stage; // GPU 流水线阶段
+        std::string name; // 着色器名称 (如 "gbuffers_terrain")
+        std::string entryPoint; // 入口函数名 (如 "VSMain", "PSMain")
+        std::string profile; // HLSL 编译配置 (如 "vs_6_6", "ps_6_6")
 
-        ID3DBlob*            bytecode; // 编译后的字节码
-        ID3D12PipelineState* pipelineState; // 管线状态对象 (如果已创建)
+        // 编译结果
+        std::vector<uint8_t> bytecode; // DXIL 字节码
+        bool                 success; // 编译是否成功
+        std::string          errorMessage; // 编译错误信息 (如果失败)
+        std::string          warningMessage; // 编译警告信息
 
-        IrisAnnotations annotations; // 解析的注释配置
-        std::string     sourceCode; // 原始HLSL代码 (用于热重载)
+        // Iris 配置
+        ShaderDirectives directives; // 解析的注释指令
 
-        CompiledShader();
-        ~CompiledShader();
+        // 热重载支持
+        std::string sourceCode; // 原始 HLSL 代码 (用于热重载)
+
+        // 构造和析构
+        CompiledShader()
+            : type(ShaderType::GBuffers_Terrain)
+              , stage(ShaderStage::Vertex)
+              , success(false)
+        {
+        }
+
+        ~CompiledShader() = default;
 
         // 禁用拷贝
         CompiledShader(const CompiledShader&)            = delete;
         CompiledShader& operator=(const CompiledShader&) = delete;
 
         // 支持移动
-        CompiledShader(CompiledShader&& other) noexcept;
-        CompiledShader& operator=(CompiledShader&& other) noexcept;
+        CompiledShader(CompiledShader&& other) noexcept
+            : type(other.type)
+              , stage(other.stage)
+              , name(std::move(other.name))
+              , entryPoint(std::move(other.entryPoint))
+              , profile(std::move(other.profile))
+              , bytecode(std::move(other.bytecode))
+              , success(other.success)
+              , errorMessage(std::move(other.errorMessage))
+              , warningMessage(std::move(other.warningMessage))
+              , directives(std::move(other.directives))
+              , sourceCode(std::move(other.sourceCode))
+        {
+        }
+
+        CompiledShader& operator=(CompiledShader&& other) noexcept
+        {
+            if (this != &other)
+            {
+                type           = other.type;
+                stage          = other.stage;
+                name           = std::move(other.name);
+                entryPoint     = std::move(other.entryPoint);
+                profile        = std::move(other.profile);
+                bytecode       = std::move(other.bytecode);
+                success        = other.success;
+                errorMessage   = std::move(other.errorMessage);
+                warningMessage = std::move(other.warningMessage);
+                directives     = std::move(other.directives);
+                sourceCode     = std::move(other.sourceCode);
+            }
+            return *this;
+        }
+
+        /**
+         * @brief 获取字节码指针
+         * @return 字节码数据指针
+         *
+         * 教学要点: 用于创建 PSO
+         */
+        const void* GetBytecodePtr() const
+        {
+            return bytecode.data();
+        }
+
+        /**
+         * @brief 获取字节码大小
+         * @return 字节数
+         */
+        size_t GetBytecodeSize() const
+        {
+            return bytecode.size();
+        }
+
+        /**
+         * @brief 检查是否有警告
+         * @return 是否有警告
+         */
+        bool HasWarnings() const
+        {
+            return !warningMessage.empty();
+        }
+
+        /**
+         * @brief 检查是否编译成功且有有效字节码
+         * @return 是否可用
+         */
+        bool IsValid() const
+        {
+            return success && !bytecode.empty();
+        }
     };
-}
+} // namespace enigma::graphic
