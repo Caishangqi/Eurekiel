@@ -165,6 +165,54 @@ namespace enigma::graphic
         CompileResult CompileShaderFromFile(const std::wstring& filePath, const CompileOptions& options);
 
         /**
+         * @brief 从内存编译 HLSL 着色器 (资源系统集成)
+         * @param hlslData HLSL 源码二进制数据 (from IResource::m_data)
+         * @param shaderName 着色器名称 (用于错误信息, 例: "engine:shaders/core/gbuffers_basic.vs")
+         * @param options 编译选项
+         * @return 编译结果 (CompileResult)
+         *
+         * 教学要点:
+         * 1. 资源系统集成:
+         *    - 引擎核心 Fallback 着色器通过资源系统加载 (IResource::m_data)
+         *    - 用户 Shader Pack 通过文件系统加载 (CompileShaderFromFile)
+         * 2. 无文件扩展名约定:
+         *    - 资源标识符不含扩展名: "engine:shaders/core/gbuffers_basic.vs" (无 .hlsl)
+         *    - 符合 Minecraft NeoForge 资源系统约定
+         * 3. 内存 Blob 创建:
+         *    - 使用 IDxcUtils::CreateBlob() 从二进制数据创建 Blob
+         *    - 复用 CompileShader() 核心编译逻辑
+         * 4. 错误报告:
+         *    - shaderName 用于错误消息中的着色器定位
+         *    - 例: "编译失败: engine:shaders/core/gbuffers_basic.vs"
+         *
+         * 示例:
+         * @code
+         * // 从资源系统加载引擎核心 Fallback 着色器
+         * ResourceLocation vsLoc("engine", "shaders/core/gbuffers_basic.vs");
+         * auto resource = g_theResource->GetResource(vsLoc);
+         *
+         * DXCCompiler::CompileOptions opts;
+         * opts.entryPoint = "VSMain";
+         * opts.target = "vs_6_6";
+         *
+         * auto result = compiler.CompileFromMemory(
+         *     resource->GetData(),        // std::vector<uint8_t>
+         *     vsLoc.ToString(),           // "engine:shaders/core/gbuffers_basic.vs"
+         *     opts
+         * );
+         *
+         * if (result.success) {
+         *     // 创建 PSO
+         * }
+         * @endcode
+         */
+        CompileResult CompileFromMemory(
+            const std::vector<uint8_t>& hlslData,
+            const std::string&          shaderName,
+            const CompileOptions&       options
+        );
+
+        /**
          * @brief 检查是否已初始化
          */
         bool IsInitialized() const { return m_compiler != nullptr; }

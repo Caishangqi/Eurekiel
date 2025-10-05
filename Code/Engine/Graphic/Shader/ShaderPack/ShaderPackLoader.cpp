@@ -206,13 +206,13 @@ namespace enigma::graphic
                     m_SinglePrograms[id].vertexPath = path;
                 }
             }
-            // 检测是否为像素着色器 (.ps.hlsl)
+            // 检测是否为像素着色器 (.ps.hlsl) - DirectX 术语
             else if (filename.size() >= 8 && filename.substr(filename.size() - 8) == ".ps.hlsl")
             {
                 auto id = ParseProgramId(stem);
                 if (id != ProgramId::COUNT)
                 {
-                    m_SinglePrograms[id].fragmentPath = path;
+                    m_SinglePrograms[id].pixelPath = path; // DirectX 术语: Pixel Shader
                 }
             }
         }
@@ -239,11 +239,11 @@ namespace enigma::graphic
                 programs[i].vertexPath = vsPath;
             }
 
-            // 尝试加载像素着色器
+            // 尝试加载像素着色器 (.ps.hlsl) - DirectX 术语
             auto psPath = shadersDir / (filename + ".ps.hlsl");
             if (std::filesystem::exists(psPath))
             {
-                programs[i].fragmentPath = psPath;
+                programs[i].pixelPath = psPath; // DirectX 术语: Pixel Shader
             }
         }
     }

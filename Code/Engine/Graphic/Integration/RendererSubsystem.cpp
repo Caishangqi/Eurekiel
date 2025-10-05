@@ -2,6 +2,7 @@
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 using namespace enigma::graphic;
+enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 RendererSubsystem::RendererSubsystem(Configuration& config)
 {

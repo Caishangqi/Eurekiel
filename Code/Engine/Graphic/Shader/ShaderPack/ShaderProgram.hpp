@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ShaderProgram.hpp
  * @brief 着色器程序 - 对应 Iris Program.java
  * @date 2025-10-03
@@ -135,8 +135,13 @@ namespace enigma::graphic
         /**
          * @brief 获取 Root Signature
          * @return ID3D12RootSignature 指针
+         *
+         * 教学要点:
+         * - 不使用 ComPtr 管理全局 Root Signature (避免引用计数问题)
+         * - 全局 Root Signature 由 D3D12RenderSystem 持有所有权
+         * - ShaderProgram 只持有裸指针引用
          */
-        ID3D12RootSignature* GetRootSignature() const { return m_rootSignature.Get(); }
+        ID3D12RootSignature* GetRootSignature() const { return m_rootSignature; }
 
         /**
          * @brief 获取着色器类型
@@ -229,7 +234,7 @@ namespace enigma::graphic
         // ========================================================================
 
         Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState; ///< PSO (对应 glProgramId)
-        Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature; ///< Root Signature
+        ID3D12RootSignature*                        m_rootSignature = nullptr; ///< Root Signature (裸指针，不持有所有权)
 
         // ========================================================================
         // Iris 注释配置

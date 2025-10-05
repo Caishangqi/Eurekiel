@@ -6,6 +6,11 @@
 #include "NamedStrings.hpp"
 #include "ErrorWarningAssert.hpp"
 
+namespace enigma::graphic
+{
+    class RendererSubsystem;
+}
+
 namespace enigma::resource
 {
     class ResourceSubsystem;
@@ -25,6 +30,7 @@ extern enigma::core::Engine*                g_theEngine;
 extern enigma::core::ConsoleSubsystem*      g_theConsole;
 extern enigma::resource::ResourceSubsystem* g_theResource;
 extern enigma::core::ScheduleSubsystem*     g_theSchedule;
+extern enigma::graphic::RendererSubsystem*  g_theRendererSubsystem;
 
 #define UNUSED(x) (void)(x);
 #define STATIC static

@@ -93,16 +93,20 @@ namespace enigma::graphic
 
         /**
          * @brief 着色器文件信息
+         *
+         * 术语说明:
+         * - Vertex Shader (VS) - DirectX 术语,顶点着色器
+         * - Pixel Shader (PS) - DirectX 术语,像素着色器 (OpenGL 称为 Fragment Shader)
          */
         struct ShaderFile
         {
-            std::filesystem::path vertexPath; // 顶点着色器路径
-            std::filesystem::path fragmentPath; // 片段着色器路径
+            std::filesystem::path vertexPath; // 顶点着色器路径 (.vs.hlsl)
+            std::filesystem::path pixelPath; // 像素着色器路径 (.ps.hlsl) (DirectX 术语)
             std::string           vertexSource; // HLSL 源码 (加载后缓存)
-            std::string           fragmentSource; // HLSL 源码
+            std::string           pixelSource; // HLSL 源码
 
             bool hasVertex() const { return !vertexPath.empty(); }
-            bool hasFragment() const { return !fragmentPath.empty(); }
+            bool hasPixel() const { return !pixelPath.empty(); } // DirectX 术语: Pixel Shader
         };
 
         /**

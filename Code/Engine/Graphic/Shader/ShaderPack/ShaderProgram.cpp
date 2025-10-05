@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ShaderProgram.cpp
  * @brief 着色器程序实现
  * @date 2025-10-03
@@ -75,7 +75,7 @@ namespace enigma::graphic
         commandList->SetPipelineState(m_pipelineState.Get());
 
         // 2. 设置 Root Signature
-        commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+        commandList->SetGraphicsRootSignature(m_rootSignature);
 
         // 3. 更新 Root Constants (对应 Iris ProgramUniforms.update())
         // 注意: Root Constants 的设置由外部调用者负责
@@ -107,17 +107,17 @@ namespace enigma::graphic
             return false;
         }
 
-        // 注意: 我们不需要 AddRef,因为 D3D12RenderSystem 持有所有权
-        // ShaderProgram 只持有引用 (不使用 ComPtr 管理这个全局对象)
-        // 但为了保持一致性,我们还是用 ComPtr 包装
-        m_rootSignature.Attach(rootSig);
-        rootSig->AddRef(); // 手动增加引用计数
+        // 教学要点 - Root Signature 引用管理:
+        // - 全局 Root Signature 由 D3D12RenderSystem 持有所有权
+        // - ShaderProgram 只持有裸指针引用 (不增加引用计数)
+        // - 避免 ComPtr 导致的引用计数混乱
+        m_rootSignature = rootSig;
 
         // 2. 配置 PSO 描述符
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 
         // 2.1 Root Signature
-        psoDesc.pRootSignature = m_rootSignature.Get();
+        psoDesc.pRootSignature = m_rootSignature;
 
         // 2.2 着色器字节码
         psoDesc.VS.pShaderBytecode = m_vertexShader.GetBytecodePtr();
