@@ -9,7 +9,7 @@
 namespace enigma::registry::block
 {
     using namespace enigma::core;
-    using namespace enigma::voxel::property;
+    using namespace enigma::voxel;
 
     Registry<Block>* BlockRegistry::GetTypedRegistry()
     {
@@ -521,7 +521,7 @@ namespace enigma::registry::block
         }
     }
 
-    std::vector<std::shared_ptr<enigma::voxel::property::IProperty>> BlockRegistry::ParsePropertiesFromYaml(const YamlConfiguration& yaml)
+    std::vector<std::shared_ptr<enigma::voxel::IProperty>> BlockRegistry::ParsePropertiesFromYaml(const YamlConfiguration& yaml)
     {
         std::vector<std::shared_ptr<IProperty>> properties;
 

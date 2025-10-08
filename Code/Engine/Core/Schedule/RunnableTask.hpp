@@ -47,7 +47,7 @@ namespace enigma::core
         void SetState(TaskState newState) { m_state.store(newState); }
 
     protected:
-        std::string m_type = "Generic"; // Task type (string)
+        std::string m_type = TaskTypeConstants::GENERIC; // Task type (string)
         friend class ScheduleSubsystem; // Allow ScheduleSubsystem to modify state
     private:
         std::atomic<TaskState> m_state; // Atomic state (thread-safe)

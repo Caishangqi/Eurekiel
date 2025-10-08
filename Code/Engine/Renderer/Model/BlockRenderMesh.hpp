@@ -5,14 +5,14 @@
 
 #include "Engine/Math/Vec4.hpp"
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     struct ChunkMesh;
 }
 
 namespace enigma::renderer::model
 {
-    using namespace enigma::voxel::chunk;
+    using namespace enigma::voxel;
 
     /**
      * @brief Specialized render mesh for block models

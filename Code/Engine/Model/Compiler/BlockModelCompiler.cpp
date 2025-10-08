@@ -9,7 +9,7 @@
 #include <array>
 
 using namespace enigma::resource;
-using namespace enigma::voxel::property;
+using namespace enigma::voxel;
 using namespace enigma::core;
 
 namespace enigma::renderer::model
@@ -130,7 +130,7 @@ namespace enigma::renderer::model
         }
     }
 
-    RenderFace BlockModelCompiler::CreateElementFace(voxel::property::Direction                         direction,
+    RenderFace BlockModelCompiler::CreateElementFace(voxel::Direction                                   direction,
                                                      const resource::model::ModelElement&               element,
                                                      [[maybe_unused]] const resource::model::ModelFace& modelFace,
                                                      const Vec2&                                        uvMin, const Vec2& uvMax) const

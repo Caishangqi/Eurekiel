@@ -13,7 +13,7 @@
 
 namespace enigma::renderer::model
 {
-    using namespace enigma::voxel::property;
+    using namespace enigma::voxel;
 
     /**
      * @brief Represents a single face of a block model
@@ -110,7 +110,7 @@ namespace enigma::renderer::model
          * @brief Invalidate GPU data (call when mesh changes)
          */
         void InvalidateGPUData();
-        void TransformAndAppendTo(voxel::chunk::ChunkMesh* chunk_mesh, const Vec3& vec3);
+        void TransformAndAppendTo(voxel::ChunkMesh* chunk_mesh, const Vec3& vec3);
 
         /**
          * @brief Create a simple cube mesh (for testing)

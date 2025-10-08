@@ -53,7 +53,7 @@ namespace enigma::renderer::model
         virtual std::vector<RenderFace> CompileElements(const std::vector<resource::model::ModelElement>& elements, const std::map<std::string, resource::ResourceLocation>& resolvedTextures) = 0;
         virtual RenderFace              CompileFace(const std::string&                          faceDirection, const resource::model::ModelFace&, const resource::model::ModelElement& element,
                                        const std::map<std::string, resource::ResourceLocation>& resolvedTextures) = 0;
-        virtual voxel::property::Direction StringToDirection(const std::string& direction) = 0;
-        virtual void                       SetAtlas(std::shared_ptr<resource::TextureAtlas> atlas) = 0;
+        virtual voxel::Direction StringToDirection(const std::string& direction) = 0;
+        virtual void             SetAtlas(std::shared_ptr<resource::TextureAtlas> atlas) = 0;
     };
 }

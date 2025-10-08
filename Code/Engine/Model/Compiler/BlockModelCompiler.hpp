@@ -40,7 +40,7 @@ namespace enigma::renderer::model
          * @param uvMax Atlas UV maximum coordinates
          * @return Generated render face
          */
-        RenderFace CreateElementFace(voxel::property::Direction           direction,
+        RenderFace CreateElementFace(voxel::Direction                     direction,
                                      const resource::model::ModelElement& element,
                                      const resource::model::ModelFace&    modelFace,
                                      const Vec2&                          uvMin, const Vec2& uvMax) const;
@@ -55,7 +55,7 @@ namespace enigma::renderer::model
         /**
          * @brief Create a face with proper UV mapping and colors
          */
-        RenderFace CreateBlockFace(voxel::property::Direction        direction,
+        RenderFace CreateBlockFace(voxel::Direction                  direction,
                                    const resource::ResourceLocation& texture,
                                    const Vec2&                       uvMin, const Vec2& uvMax) const;
     };

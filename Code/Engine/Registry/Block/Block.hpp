@@ -19,13 +19,13 @@ namespace enigma::resource
     class AtlasManager;
 }
 
-namespace enigma::voxel::block
+namespace enigma::voxel
 {
     class BlockState;
     struct BlockPos;
 }
 
-namespace enigma::voxel::world
+namespace enigma::voxel
 {
     class World;
 }
@@ -33,7 +33,7 @@ namespace enigma::voxel::world
 namespace enigma::registry::block
 {
     using namespace enigma::core;
-    using namespace enigma::voxel::property;
+    using namespace enigma::voxel;
     /**
      * @brief Private implementation class for Block
      * This allows us to hide the BlockState vector from the header
@@ -94,22 +94,22 @@ namespace enigma::registry::block
         /**
          * @brief Get all possible states for this block
          */
-        std::vector<enigma::voxel::block::BlockState*> GetAllStates() const;
+        std::vector<enigma::voxel::BlockState*> GetAllStates() const;
 
         /**
          * @brief Get the default state (usually first state)
          */
-        enigma::voxel::block::BlockState* GetDefaultState() const;
+        enigma::voxel::BlockState* GetDefaultState() const;
 
         /**
          * @brief Get a specific state by property values
          */
-        enigma::voxel::block::BlockState* GetState(const PropertyMap& properties) const;
+        enigma::voxel::BlockState* GetState(const PropertyMap& properties) const;
 
         /**
          * @brief Get state by index (for fast lookup)
          */
-        enigma::voxel::block::BlockState* GetStateByIndex(size_t index) const;
+        enigma::voxel::BlockState* GetStateByIndex(size_t index) const;
 
         size_t GetStateCount() const;
 
@@ -131,21 +131,21 @@ namespace enigma::registry::block
         void               SetBlockstatePath(const std::string& path) { m_blockstatePath = path; }
 
         // Virtual methods for block behavior
-        virtual void OnPlaced(enigma::voxel::world::World* world, const enigma::voxel::block::BlockPos& pos, enigma::voxel::block::BlockState* state)
+        virtual void OnPlaced(enigma::voxel::World* world, const enigma::voxel::BlockPos& pos, enigma::voxel::BlockState* state)
         {
             UNUSED(world);
             UNUSED(pos);
             UNUSED(state);
         }
 
-        virtual void OnBroken(enigma::voxel::world::World* world, const enigma::voxel::block::BlockPos& pos, enigma::voxel::block::BlockState* state)
+        virtual void OnBroken(enigma::voxel::World* world, const enigma::voxel::BlockPos& pos, enigma::voxel::BlockState* state)
         {
             UNUSED(world);
             UNUSED(pos);
             UNUSED(state);
         }
 
-        virtual void OnNeighborChanged(enigma::voxel::world::World* world, const enigma::voxel::block::BlockPos& pos, enigma::voxel::block::BlockState* state, Block* neighborBlock)
+        virtual void OnNeighborChanged(enigma::voxel::World* world, const enigma::voxel::BlockPos& pos, enigma::voxel::BlockState* state, Block* neighborBlock)
         {
             UNUSED(world);
             UNUSED(pos);
@@ -170,14 +170,14 @@ namespace enigma::registry::block
          * @brief Get the model path for a specific state
          * Override this to provide custom model selection logic
          */
-        virtual std::string GetModelPath(enigma::voxel::block::BlockState* state) const;
+        virtual std::string GetModelPath(enigma::voxel::BlockState* state) const;
 
     protected:
         /**
          * @brief Called during state generation to initialize each state
          * Override to add custom state initialization
          */
-        virtual void InitializeState(enigma::voxel::block::BlockState* state, const PropertyMap& properties)
+        virtual void InitializeState(enigma::voxel::BlockState* state, const PropertyMap& properties)
         {
             UNUSED(state);
             UNUSED(properties);

@@ -23,7 +23,7 @@ namespace enigma::registry::block
 namespace enigma::resource::blockstate
 {
     using namespace enigma::resource;
-    using namespace enigma::voxel::property;
+    using namespace enigma::voxel;
 
     /**
      * @brief Builder pattern for creating BlockStateDefinition objects programmatically

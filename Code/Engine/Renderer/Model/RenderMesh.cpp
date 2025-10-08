@@ -68,7 +68,7 @@ void RenderMesh::InvalidateGPUData()
     gpuDataValid = false;
 }
 
-void RenderMesh::TransformAndAppendTo(voxel::chunk::ChunkMesh* chunk_mesh, const Vec3& vec3)
+void RenderMesh::TransformAndAppendTo(voxel::ChunkMesh* chunk_mesh, const Vec3& vec3)
 {
     UNUSED(chunk_mesh)
     UNUSED(vec3)

@@ -241,7 +241,7 @@ namespace enigma::registry::block
         /**
          * @brief Parse properties from YAML
          */
-        static std::vector<std::shared_ptr<enigma::voxel::property::IProperty>> ParsePropertiesFromYaml(const enigma::core::YamlConfiguration& yaml);
+        static std::vector<std::shared_ptr<enigma::voxel::IProperty>> ParsePropertiesFromYaml(const enigma::core::YamlConfiguration& yaml);
 
         /**
          * @brief Extract block name from file path

@@ -15,8 +15,8 @@ namespace enigma::registry::block
     class BlockImpl
     {
     public:
-        std::vector<std::unique_ptr<enigma::voxel::block::BlockState>> allStates;
-        enigma::voxel::block::BlockState*                              defaultState = nullptr;
+        std::vector<std::unique_ptr<enigma::voxel::BlockState>> allStates;
+        enigma::voxel::BlockState*                              defaultState = nullptr;
     };
 
     Block::Block(const std::string& registryName, const std::string& namespaceName)
@@ -32,7 +32,7 @@ namespace enigma::registry::block
         {
             // No properties, create single default state
             PropertyMap emptyMap;
-            auto        state = std::make_unique<enigma::voxel::block::BlockState>(this, emptyMap, 0);
+            auto        state = std::make_unique<enigma::voxel::BlockState>(this, emptyMap, 0);
             InitializeState(state.get(), emptyMap);
             m_impl->defaultState = state.get();
             m_impl->allStates.push_back(std::move(state));
@@ -48,7 +48,7 @@ namespace enigma::registry::block
         m_impl->allStates.reserve(allCombinations.size());
         for (size_t i = 0; i < allCombinations.size(); ++i)
         {
-            auto state = std::make_unique<enigma::voxel::block::BlockState>(this, allCombinations[i], i);
+            auto state = std::make_unique<enigma::voxel::BlockState>(this, allCombinations[i], i);
             InitializeState(state.get(), allCombinations[i]);
 
             if (i == 0)
@@ -60,7 +60,7 @@ namespace enigma::registry::block
         }
     }
 
-    enigma::voxel::block::BlockState* Block::GetState(const PropertyMap& properties) const
+    enigma::voxel::BlockState* Block::GetState(const PropertyMap& properties) const
     {
         // Linear search through states to find matching properties
         // This could be optimized with a hash map if needed
@@ -76,12 +76,12 @@ namespace enigma::registry::block
         return m_impl->defaultState;
     }
 
-    enigma::voxel::block::BlockState* Block::GetDefaultState() const
+    enigma::voxel::BlockState* Block::GetDefaultState() const
     {
         return m_impl->defaultState;
     }
 
-    enigma::voxel::block::BlockState* Block::GetStateByIndex(size_t index) const
+    enigma::voxel::BlockState* Block::GetStateByIndex(size_t index) const
     {
         return index < m_impl->allStates.size() ? m_impl->allStates[index].get() : nullptr;
     }
@@ -91,9 +91,9 @@ namespace enigma::registry::block
         return m_impl->allStates.size();
     }
 
-    std::vector<enigma::voxel::block::BlockState*> Block::GetAllStates() const
+    std::vector<enigma::voxel::BlockState*> Block::GetAllStates() const
     {
-        std::vector<enigma::voxel::block::BlockState*> states;
+        std::vector<enigma::voxel::BlockState*> states;
         states.reserve(m_impl->allStates.size());
         for (const auto& state : m_impl->allStates)
         {
@@ -102,7 +102,7 @@ namespace enigma::registry::block
         return states;
     }
 
-    std::string Block::GetModelPath(enigma::voxel::block::BlockState* state) const
+    std::string Block::GetModelPath(enigma::voxel::BlockState* state) const
     {
         UNUSED(state)
         // Use stored blockstate path if available

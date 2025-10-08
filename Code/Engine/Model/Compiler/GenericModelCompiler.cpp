@@ -4,7 +4,7 @@
 #include "Engine/Renderer/Model/RenderMesh.hpp"
 
 using namespace enigma::renderer::model;
-using namespace enigma::voxel::property;
+using namespace enigma::voxel;
 
 GenericModelCompiler::GenericModelCompiler()
 {
