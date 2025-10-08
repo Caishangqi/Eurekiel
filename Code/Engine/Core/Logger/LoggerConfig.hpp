@@ -15,7 +15,7 @@ namespace enigma::core
     struct LoggerConfig
     {
         // Basic logging configuration
-        LogLevel                                  globalLogLevel = LogLevel::INFO;
+        LogLevel                                  globalLogLevel = LogLevel::ERROR_;
         std::unordered_map<std::string, LogLevel> categoryLogLevels;
 
         // File logging configuration

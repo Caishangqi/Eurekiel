@@ -58,9 +58,11 @@ namespace enigma::core
 
     void LoggerSubsystem::Startup()
     {
-        // Initialize with default settings
-        m_globalLogLevel = LogLevel::INFO;
-        m_asyncMode      = false; // Start with synchronous mode for Phase 3.1
+        // NOTE: Configuration is already loaded in Initialize()
+        // m_globalLogLevel and m_categoryLogLevels are set from YAML config
+        // Do NOT override them here!
+
+        m_asyncMode = false; // Start with synchronous mode for Phase 3.1
 
         // Don't log during startup to avoid circular dependencies
         // Startup message will be logged after configuration is complete
@@ -315,9 +317,10 @@ namespace enigma::core
                 // Load logger-specific configuration
                 if (yamlConfig.Contains("logger"))
                 {
-                    config.globalLogLevel = StringToLogLevel(
-                        yamlConfig.GetString("logger.globalLogLevel", "INFO")
-                    );
+                    std::string logLevelStr = yamlConfig.GetString("logger.globalLogLevel", "INFO");
+                    std::cout << "[DEBUG] YAML returned globalLogLevel string: '" << logLevelStr << "'" << std::endl;
+                    config.globalLogLevel = StringToLogLevel(logLevelStr);
+                    std::cout << "[DEBUG] StringToLogLevel converted to: " << static_cast<int>(config.globalLogLevel) << std::endl;
                     config.enableFileLogging = yamlConfig.GetBoolean("logger.enableFileLogging", true);
                     config.logDirectory      = yamlConfig.GetString("logger.logDirectory", "Run/.enigma/logs");
                     config.latestLogFileName = yamlConfig.GetString("logger.latestLogFileName", "latest.log");
@@ -360,10 +363,17 @@ namespace enigma::core
         // Apply global log level
         SetGlobalLogLevel(m_config.globalLogLevel);
 
+        // DEBUG: Print loaded configuration to console
+        std::cout << "[LoggerSubsystem] ApplyConfiguration: globalLogLevel = "
+            << static_cast<int>(m_config.globalLogLevel)
+            << " (0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR, 5=FATAL)" << std::endl;
+
         // Apply category-specific log levels
         for (const auto& pair : m_config.categoryLogLevels)
         {
             SetCategoryLogLevel(pair.first, pair.second);
+            std::cout << "[LoggerSubsystem] ApplyConfiguration: categoryLogLevel["
+                << pair.first << "] = " << static_cast<int>(pair.second) << std::endl;
         }
     }
 

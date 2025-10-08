@@ -1,7 +1,7 @@
 moduleConfig:
   logger:
     dependencies:
-    globalLogLevel: INFO
+    globalLogLevel: ERROR
     enableFileLogging: true
     logDirectory: .enigma/logs
     latestLogFileName: latest.log
@@ -16,10 +16,10 @@ moduleConfig:
     includeCategory: true
     flushImmediately: false
     categoryLogLevels:
-      Engine: INFO
-      Renderer: WARN
-      Audio: INFO
-      Game: DEBUG
+      Engine: ERROR
+      Renderer: ERROR
+      Audio: ERROR
+      Game: ERROR
   console:
     dependencies:
       - renderer
