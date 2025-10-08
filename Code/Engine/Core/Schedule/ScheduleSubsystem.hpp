@@ -7,13 +7,26 @@
 #include <condition_variable>
 #include <atomic>
 #include <string>
-#include <map> // For per-type condition variables
+#include <map> // For per-type condition variables and priority queues
+#include <deque> // For task queues
 
 namespace enigma::core
 {
     // Forward declarations
     class TaskWorkerThread;
     class YamlConfiguration;
+
+    //-----------------------------------------------------------------------------------------------
+    // Task Priority Enum
+    // Used to prioritize tasks in the pending queue
+    // - Normal: Default priority for world generation, file I/O, etc.
+    // - High: High priority for player interaction, immediate response needed
+    //-----------------------------------------------------------------------------------------------
+    enum class TaskPriority
+    {
+        Normal = 0, // Default priority
+        High = 1 // High priority (processed first)
+    };
 
     //-----------------------------------------------------------------------------------------------
     // Task Type Definition (from YAML configuration)
@@ -108,7 +121,8 @@ namespace enigma::core
 
         // Add a task to the pending queue (thread-safe)
         // The task will be picked up by a worker thread of matching type
-        void AddTask(RunnableTask* task);
+        // Priority parameter: Normal (default) for world generation, High for player interaction
+        void AddTask(RunnableTask* task, TaskPriority priority = TaskPriority::Normal);
 
         // Retrieve all completed tasks and clear the completed queue (thread-safe)
         // Caller is responsible for deleting the tasks
@@ -137,7 +151,7 @@ namespace enigma::core
 
         // Access to synchronization primitives for efficient condition variable waiting
         // Workers use these to wait() instead of busy-looping with sleep_for()
-        std::mutex&              GetQueueMutex() { return m_queueMutex; }
+        std::mutex& GetQueueMutex() { return m_queueMutex; }
         // Get type-specific condition variable for a task type
         // Returns a reference to the CV for precise worker notification (eliminates spurious wakeups)
         std::condition_variable& GetConditionVariableForType(const std::string& typeStr);
@@ -166,17 +180,21 @@ namespace enigma::core
 
         //-------------------------------------------------------------------------------------------
         // Three-Queue System (Pending -> Executing -> Completed)
+        // Pending tasks organized by Type -> Priority -> Queue for O(1) high-priority access
         //-------------------------------------------------------------------------------------------
-        std::vector<RunnableTask*> m_pendingTasks; // Tasks waiting to be executed
+        // Pending tasks: map<TaskType, map<Priority, deque<Task>>>
+        // Example: m_pendingTasksByType["ChunkGen"][TaskPriority::High] = deque of high-priority ChunkGen tasks
+        std::map<std::string, std::map<TaskPriority, std::deque<RunnableTask*>>> m_pendingTasksByType;
+
         std::vector<RunnableTask*> m_executingTasks; // Tasks currently being executed
         std::vector<RunnableTask*> m_completedTasks; // Tasks finished execution
 
         //-------------------------------------------------------------------------------------------
         // Thread Synchronization (Per-Type Condition Variables - Plan 1)
         //-------------------------------------------------------------------------------------------
-        mutable std::mutex      m_queueMutex; // Protects all three queues
+        mutable std::mutex                             m_queueMutex; // Protects all three queues
         std::map<std::string, std::condition_variable> m_typeConditionVariables; // One CV per task type
-        std::atomic<bool>       m_isShuttingDown{false}; // Shutdown flag (atomic for lock-free read)
+        std::atomic<bool>                              m_isShuttingDown{false}; // Shutdown flag (atomic for lock-free read)
 
         //-------------------------------------------------------------------------------------------
         // Worker Thread Pool

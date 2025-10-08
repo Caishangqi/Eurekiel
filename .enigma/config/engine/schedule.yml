@@ -31,10 +31,15 @@ task_types:
     threads: 10
     description: Procedural chunk generation for voxel world
 
-  # Rendering: Render preparation tasks (mesh building, etc.)
+  # Mesh Building: Async chunk mesh construction (CPU-intensive, priority-based)
+  - type: MeshBuilding
+    threads: 6
+    description: Asynchronous chunk mesh building with priority support
+
+  # Rendering: Render preparation tasks (deprecated, use MeshBuilding)
   - type: Rendering
     threads: 1
-    description: Render preparation (mesh building, culling)
+    description: Render preparation (legacy, prefer MeshBuilding for mesh tasks)
 
   # Network: Network I/O and packet processing (future)
   # - type: Network
