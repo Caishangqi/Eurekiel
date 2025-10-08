@@ -22,6 +22,7 @@
 
 namespace enigma::voxel
 {
+    class BuildMeshJob;
     // ========================================================================
     // Core Configuration
     // ========================================================================
@@ -125,6 +126,9 @@ namespace enigma::voxel
         // Submit chunk save job to ScheduleSubsystem
         void SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk);
 
+        // Submit mesh build job to ScheduleSubsystem
+        void SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority = TaskPriority::Normal);
+
         // Handle completed generation job
         void HandleGenerateChunkCompleted(GenerateChunkJob* job);
 
@@ -133,6 +137,9 @@ namespace enigma::voxel
 
         // Handle completed save job
         void HandleSaveChunkCompleted(SaveChunkJob* job);
+
+        // Handle completed mesh build job
+        void HandleBuildMeshCompleted(BuildMeshJob* job);
 
         //-------------------------------------------------------------------------------------------
         // Phase 4: Job Queue Management Methods
@@ -193,11 +200,13 @@ namespace enigma::voxel
         std::atomic<int> m_activeGenerateJobs{0}; // Currently processing generate jobs
         std::atomic<int> m_activeLoadJobs{0}; // Currently processing load jobs
         std::atomic<int> m_activeSaveJobs{0}; // Currently processing save jobs
+        std::atomic<int> m_activeMeshBuildJobs{0}; // Currently processing mesh build jobs
 
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading
-        int m_maxGenerateJobs = 256; // Allow many generation jobs (CPU-bound, parallelizable)
-        int m_maxLoadJobs     = 16; // Increased for ESFS format (no file lock contention, SSD-friendly)
-        int m_maxSaveJobs     = 8; // Increased for better save throughput (lower priority than load)
+        int m_maxGenerateJobs  = 256; // Allow many generation jobs (CPU-bound, parallelizable)
+        int m_maxLoadJobs      = 16; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs      = 8; // Increased for better save throughput (lower priority than load)
+        int m_maxMeshBuildJobs = 64; // Async mesh building jobs (CPU-bound, player interaction needs fast response)
     };
 }

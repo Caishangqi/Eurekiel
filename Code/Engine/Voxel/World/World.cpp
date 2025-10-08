@@ -3,6 +3,7 @@
 #include "ESFSWorldStorage.hpp"
 #include "../Chunk/ChunkStorageConfig.hpp"
 #include "../Chunk/ESFSChunkSerializer.hpp"
+#include "../Chunk/BuildMeshJob.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -49,7 +50,11 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
     Chunk* chunk = GetChunkAt(pos);
     if (chunk)
     {
-        return chunk->SetBlockWorldByPlayer(pos, state);
+        chunk->SetBlockWorldByPlayer(pos, state);
+
+        // Submit high-priority mesh rebuild for player interaction
+        // This ensures instant visual feedback when player places/breaks blocks
+        const_cast<World*>(this)->SubmitBuildMeshJob(chunk, TaskPriority::High);
     }
 }
 
@@ -787,10 +792,11 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
         chunk->SetGenerated(true);
         chunk->SetModified(true); // Newly generated chunks should be saved
 
-        // Phase 3: Mark chunk as dirty to trigger mesh rebuild on main thread
-        chunk->MarkDirty();
+        // Submit normal-priority async mesh build job for generated chunk
+        // No need to mark dirty - async system handles mesh building
+        SubmitBuildMeshJob(chunk, TaskPriority::Normal);
 
-        LogDebug("world", "Chunk (%d, %d) generation completed, now Active (mesh rebuild queued)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Chunk (%d, %d) generation completed, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
     }
     else
     {
@@ -836,10 +842,10 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
         {
             chunk->SetGenerated(true);
 
-            // Phase 3: Mark chunk as dirty to trigger mesh rebuild on main thread
-            chunk->MarkDirty();
+            // Submit normal-priority async mesh build job for loaded chunk
+            SubmitBuildMeshJob(chunk, TaskPriority::Normal);
 
-            LogDebug("world", "Chunk (%d, %d) loaded successfully, now Active (mesh rebuild queued)", chunkCoords.x, chunkCoords.y);
+            LogDebug("world", "Chunk (%d, %d) loaded successfully, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
         }
         else
         {
@@ -1071,9 +1077,115 @@ void World::ProcessCompletedChunkTasks()
         {
             HandleSaveChunkCompleted(saveJob);
         }
+        else if (auto* meshJob = dynamic_cast<BuildMeshJob*>(task))
+        {
+            HandleBuildMeshCompleted(meshJob);
+        }
         // Other task types can be handled here in the future
 
         // Delete the task (caller is responsible for cleanup)
         delete task;
     }
+}
+
+//-----------------------------------------------------------------------------------------------
+// SubmitBuildMeshJob: Submit async mesh building job to ScheduleSubsystem
+//-----------------------------------------------------------------------------------------------
+void World::SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority)
+{
+    if (!chunk)
+    {
+        LogError("world", "SubmitBuildMeshJob called with null chunk");
+        return;
+    }
+
+    IntVec2 chunkCoords = chunk->GetChunkCoords();
+
+    // Check job limit
+    if (m_activeMeshBuildJobs >= m_maxMeshBuildJobs)
+    {
+        // Only log when limit reached (rare event, important to know)
+        /*static int lastLoggedFrame = -1;
+        int currentFrame = g_theApp->GetFrameNumber();
+        if (currentFrame != lastLoggedFrame)
+        {
+            LogDebug("world", "Mesh build job limit reached (%d/%d), skipping new jobs this frame",
+                     m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
+            lastLoggedFrame = currentFrame;
+        }*/
+        return;
+    }
+
+    // PERFORMANCE: Remove per-job debug logging (causes 60% of AddTask time due to console I/O)
+    // Only log high-priority jobs (player interaction) for debugging
+    // const char* priorityStr = (priority == TaskPriority::High) ? "High" : "Normal";
+    // LogDebug("world", "Submitting BuildMeshJob for chunk (%d, %d) priority=%s - Active: %d/%d",
+    //          chunkCoords.x, chunkCoords.y, priorityStr,
+    //          m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
+
+    // Create and submit job
+    auto* job = new BuildMeshJob(chunkCoords, chunk, priority);
+    g_theSchedule->AddTask(job, priority);
+
+    // Increment counter
+    m_activeMeshBuildJobs++;
+}
+
+//-----------------------------------------------------------------------------------------------
+// HandleBuildMeshCompleted: Process completed mesh build job on main thread
+// CRITICAL: CompileToGPU() must run on main thread (DirectX 11 limitation)
+//-----------------------------------------------------------------------------------------------
+void World::HandleBuildMeshCompleted(BuildMeshJob* job)
+{
+    IntVec2 chunkCoords = job->GetChunkCoords();
+
+    // Decrement active mesh job counter
+    m_activeMeshBuildJobs--;
+
+    // PERFORMANCE: Remove per-job debug logging (causes frame drops during mesh rebuild storms)
+    // LogDebug("world", "Mesh build job completed for chunk (%d, %d) - Active: %d/%d",
+    //          chunkCoords.x, chunkCoords.y,
+    //          m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
+
+    // Get chunk from ChunkManager
+    Chunk* chunk = job->GetChunk();
+    if (!chunk)
+    {
+        LogWarn("world", "BuildMeshJob chunk pointer is null for (%d, %d)", chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
+    // Double-check chunk still exists in manager
+    if (chunk != m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y))
+    {
+        LogWarn("world", "Chunk (%d, %d) no longer matches after mesh build", chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
+    // Check if job was cancelled
+    if (job->IsCancelled())
+    {
+        // PERFORMANCE: Only log cancelled jobs (rare event)
+        LogDebug("world", "BuildMeshJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
+    // Take ownership of built mesh
+    std::unique_ptr<ChunkMesh> newMesh = job->TakeMesh();
+    if (!newMesh)
+    {
+        LogWarn("world", "BuildMeshJob produced null mesh for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
+    // MAIN THREAD ONLY: Compile mesh to GPU (DirectX 11 buffer creation)
+    newMesh->CompileToGPU();
+
+    // Set mesh on chunk and clear dirty flag
+    chunk->SetMesh(std::move(newMesh));
+
+    // PERFORMANCE: Remove per-job vertex count logging (use debug panel instead)
+    // LogDebug("world", "Mesh compiled and set for chunk (%d, %d) vertices=%d",
+    //          chunkCoords.x, chunkCoords.y,
+    //          chunk->GetMesh() ? (int)chunk->GetMesh()->GetOpaqueVertexCount() + chunk->GetMesh()->GetTransparentVertexCount() : 0);
 }

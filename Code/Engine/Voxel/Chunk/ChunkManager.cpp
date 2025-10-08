@@ -112,28 +112,11 @@ void ChunkManager::Update(float deltaTime)
         loaded_chunk.second->Update(deltaTime);
     }
 
-    // Phase 3: Mesh rebuild logic (Assignment 02/03 requirement)
-    // Chunk activation/deactivation now handled by World::UpdateNearbyChunks() (async)
-
-    // Priority: Check for dirty chunks and regenerate the nearest ones (main thread only)
-    // Rebuild multiple chunks per frame for better performance (configurable limit)
-    int rebuiltCount = 0;
-    while (rebuiltCount < m_maxMeshRebuildsPerFrame)
-    {
-        Chunk* dirtyChunk = FindNearestDirtyChunk();
-        if (!dirtyChunk)
-        {
-            break; // No more dirty chunks
-        }
-
-        dirtyChunk->RebuildMesh();
-        rebuiltCount++;
-    }
-
-    if (rebuiltCount > 0)
-    {
-        core::LogDebug("chunk", "Rebuilt %d chunk meshes this frame", rebuiltCount);
-    }
+    // REMOVED: Synchronous mesh rebuild loop (now handled by World's async BuildMeshJob system)
+    // Async mesh building provides:
+    // - No main thread blocking (BuildMesh runs on worker threads)
+    // - Priority system (High for player interaction, Normal for world generation)
+    // - Better performance (parallel mesh building, O(1) priority queue)
 }
 
 void ChunkManager::Render(IRenderer* renderer)
