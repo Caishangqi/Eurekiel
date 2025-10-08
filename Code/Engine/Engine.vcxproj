@@ -545,6 +545,7 @@
         <Content Include="..\..\.enigma\assets\engine\textures\module"/>
         <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png"/>
         <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png"/>
+        <Content Include="..\..\.enigma\config\engine\chunkstorage.yml"/>
         <Content Include="..\ThirdParty\DXC\inc\hlsl\LICENSE.txt"/>
         <Content Include="..\ThirdParty\DXC\inc\hlsl\README.txt"/>
         <Content Include="..\ThirdParty\DXC\inc\hlsl\vk\khr\cooperative_matrix.impl"/>

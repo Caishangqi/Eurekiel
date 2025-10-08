@@ -23,12 +23,12 @@ task_types:
 
   # File I/O: Asynchronous file operations (loading, saving)
   - type: FileIO
-    threads: 2
+    threads: 4
     description: File I/O operations (loading assets, saving data)
 
   # Chunk Generation: Procedural world generation (CPU-intensive)
   - type: ChunkGen
-    threads: 2
+    threads: 10
     description: Procedural chunk generation for voxel world
 
   # Rendering: Render preparation tasks (mesh building, etc.)

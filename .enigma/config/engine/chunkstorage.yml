@@ -1,0 +1,137 @@
+# ============================================================================
+# Chunk Storage Configuration
+# ============================================================================
+#
+# This file controls how chunks are saved, loaded, and stored on disk.
+# Modifying these settings affects performance and disk usage.
+#
+# Location: .enigma/config/engine/chunkstorage.yml
+# Loaded by: ChunkStorageConfig::LoadFromYaml()
+#
+# ============================================================================
+
+chunk_storage:
+  # --------------------------------------------------------------------------
+  # Save Strategy
+  # --------------------------------------------------------------------------
+  # Determines which chunks should be saved to disk:
+  #
+  # - All: Save all generated chunks (high disk usage, slow)
+  #   Use case: Preserving all terrain, including unmodified areas
+  #
+  # - ModifiedOnly: Save only chunks marked as modified (RECOMMENDED)
+  #   Use case: Save only chunks that have been changed (player edits, structures)
+  #
+  # - PlayerModifiedOnly: Save only chunks modified by player actions (future)
+  #   Use case: Distinguish between world generation and player edits
+  #
+  save_strategy: PlayerModifiedOnly
+
+  # --------------------------------------------------------------------------
+  # Storage Format
+  # --------------------------------------------------------------------------
+  # File format used for chunk persistence:
+  #
+  # - ESF: Enigma Save Format (Region file, 32 chunks per file)
+  #   Pros: Better for batch operations, fewer files
+  #   Cons: Slower I/O (15ms write), file locking conflicts, large files (512KB/chunk)
+  #
+  # - ESFS: Enigma Single-file Format (1 chunk per file, ID-only) (RECOMMENDED)
+  #   Pros: 8x faster I/O (2ms write), no file conflicts, 25x smaller (20KB/chunk compressed)
+  #   Cons: More file system overhead for thousands of chunks
+  #
+  # Performance Comparison:
+  #   Format | Write Time | Read Time | File Size | Parallel I/O
+  #   ESF    | ~15ms      | ~12ms     | 512 KB    | File locks
+  #   ESFS   | ~2ms       | ~1.5ms    | 20 KB     | No conflicts
+  #
+  storage_format: ESFS
+
+  # --------------------------------------------------------------------------
+  # Compression Settings
+  # --------------------------------------------------------------------------
+  compression:
+    # Enable zlib compression (recommended for ESFS)
+    # Trade CPU time for disk space (3-5x compression ratio)
+    enabled: true
+
+    # Compression level (1-9)
+    # 1: Fastest, lower ratio (~2x)
+    # 3: Balanced (RECOMMENDED) (~4x)
+    # 9: Best ratio (~5x), slowest
+    level: 3
+
+  # --------------------------------------------------------------------------
+  # Cache Settings (ESF format only)
+  # --------------------------------------------------------------------------
+  cache:
+    # Maximum number of cached region files (ESF format only)
+    # Higher values reduce file open/close overhead but use more memory
+    # ESFS format does not use region caching
+    #
+    # Recommended: 16 (uses ~8MB RAM)
+    max_regions: 16
+
+  # --------------------------------------------------------------------------
+  # Auto-Save Settings
+  # --------------------------------------------------------------------------
+  auto_save:
+    # Enable automatic periodic world saving
+    # Modified chunks are saved every 'interval' seconds
+    enabled: true
+
+    # Auto-save interval in seconds
+    # Recommended: 300 seconds (5 minutes)
+    # Lower values increase I/O frequency, higher values risk more data loss
+    interval: 300.0
+
+  # --------------------------------------------------------------------------
+  # File Paths
+  # --------------------------------------------------------------------------
+  paths:
+    # Base directory for world saves
+    # Chunks are stored in: {base_save_path}/{world_name}/chunks/
+    #
+    # ESF format: {base}/region/r.X.Y.esf
+    # ESFS format: {base}/chunks/chunk_X_Y.esfs
+    base_save_path: ".enigma/saves"
+
+# ============================================================================
+# Configuration Examples
+# ============================================================================
+#
+# Example 1: High Performance Setup (ESFS + Compression)
+# - Fast chunk loading during gameplay
+# - Minimal disk usage
+# - Recommended for most users
+#
+# chunk_storage:
+#   save_strategy: ModifiedOnly
+#   storage_format: ESFS
+#   compression:
+#     enabled: true
+#     level: 3
+#
+# Example 2: Legacy Compatibility (ESF)
+# - Use original ESF format
+# - Better for batch chunk operations
+# - Compatible with older saves
+#
+# chunk_storage:
+#   save_strategy: All
+#   storage_format: ESF
+#   cache:
+#     max_regions: 32
+#
+# Example 3: Minimal Disk Usage (Maximum Compression)
+# - Smallest possible file sizes
+# - Slower save/load times
+#
+# chunk_storage:
+#   save_strategy: ModifiedOnly
+#   storage_format: ESFS
+#   compression:
+#     enabled: true
+#     level: 9
+#
+# ============================================================================
