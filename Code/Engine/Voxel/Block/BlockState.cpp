@@ -6,7 +6,7 @@
 #include "../../Registry/Block/BlockRegistry.hpp"
 #include "../../Resource/BlockState/BlockStateDefinition.hpp"
 
-namespace enigma::voxel::block
+namespace enigma::voxel
 {
     template <typename T>
     BlockState* BlockState::With(std::shared_ptr<Property<T>> property, const T& value) const
@@ -97,7 +97,7 @@ namespace enigma::voxel::block
         return m_properties.ToString();
     }
 
-    void BlockState::OnPlaced(enigma::voxel::world::World* world, const BlockPos& pos) const
+    void BlockState::OnPlaced(enigma::voxel::World* world, const BlockPos& pos) const
     {
         if (m_blockType)
         {
@@ -105,7 +105,7 @@ namespace enigma::voxel::block
         }
     }
 
-    void BlockState::OnBroken(enigma::voxel::world::World* world, const BlockPos& pos) const
+    void BlockState::OnBroken(enigma::voxel::World* world, const BlockPos& pos) const
     {
         if (m_blockType)
         {
@@ -113,7 +113,7 @@ namespace enigma::voxel::block
         }
     }
 
-    void BlockState::OnNeighborChanged(enigma::voxel::world::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const
+    void BlockState::OnNeighborChanged(enigma::voxel::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const
     {
         if (m_blockType)
         {

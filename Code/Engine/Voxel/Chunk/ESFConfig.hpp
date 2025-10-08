@@ -32,7 +32,7 @@ Important reminder:
 - Need to delete old archived data
 */
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
      * @file ESFConfig.hpp
@@ -59,7 +59,7 @@ namespace enigma::voxel::chunk
      * - Memory usage: Larger areas require more RAM
      * - I/O performance: Larger area reduces file count but increases single I/O size
      */
-    static constexpr size_t ESF_REGION_SIZE = 32; // After modification: 32x32 = 1024 chunks per region
+    static constexpr size_t ESF_REGION_SIZE = 4; // After modification: 32x32 = 1024 chunks per region
 
     /**
      * @brief The displacement value of the area size (for fast division/multiple)

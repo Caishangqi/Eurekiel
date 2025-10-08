@@ -12,7 +12,7 @@
 #undef min
 #endif
 
-namespace enigma::voxel::property
+namespace enigma::voxel
 {
     /**
      * @brief Direction enumeration for DirectionProperty

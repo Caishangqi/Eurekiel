@@ -4,10 +4,8 @@
 #include <functional>
 #include <string>
 
-namespace enigma::voxel::block
+namespace enigma::voxel
 {
-    using namespace enigma::voxel::property;
-
     /**
      * @brief 3D integer position for blocks in the world
      * 
@@ -157,9 +155,9 @@ namespace enigma::voxel::block
 namespace std
 {
     template <>
-    struct hash<enigma::voxel::block::BlockPos>
+    struct hash<enigma::voxel::BlockPos>
     {
-        size_t operator()(const enigma::voxel::block::BlockPos& pos) const noexcept
+        size_t operator()(const enigma::voxel::BlockPos& pos) const noexcept
         {
             return pos.GetHash();
         }

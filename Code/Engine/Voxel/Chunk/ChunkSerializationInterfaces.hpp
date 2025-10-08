@@ -1,7 +1,9 @@
 ﻿#pragma once
 #include "Engine/Core/EngineCommon.hpp"
+#include <vector>
+#include <cstdint>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     class Chunk;
 
@@ -52,16 +54,29 @@ namespace enigma::voxel::chunk
     public:
         virtual ~IChunkSerializer() = default;
 
-        // 预留：序列化接口
-        virtual bool SerializeChunk(const Chunk* chunk)
+        /**
+         * @brief 序列化区块到二进制数据
+         * @param chunk 要序列化的区块
+         * @param outData 输出的二进制数据
+         * @return 序列化是否成功
+         */
+        virtual bool SerializeChunk(const Chunk* chunk, std::vector<uint8_t>& outData)
         {
             UNUSED(chunk)
+            UNUSED(outData)
             return false;
         }
 
-        virtual bool DeserializeChunk(Chunk* chunk)
+        /**
+         * @brief 从二进制数据反序列化区块
+         * @param chunk 要填充数据的区块
+         * @param data 输入的二进制数据
+         * @return 反序列化是否成功
+         */
+        virtual bool DeserializeChunk(Chunk* chunk, const std::vector<uint8_t>& data)
         {
             UNUSED(chunk)
+            UNUSED(data)
             return false;
         }
 

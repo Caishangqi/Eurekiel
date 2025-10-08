@@ -9,10 +9,9 @@
 #include <chrono>
 #include <ctime>
 
-namespace enigma::voxel::world
+namespace enigma::voxel
 {
     using namespace enigma::core;
-    using namespace enigma::voxel::chunk;
 
     // ESFChunkStorage implementation
     ESFChunkStorage::ESFChunkStorage(const std::string& worldPath)
@@ -129,6 +128,110 @@ namespace enigma::voxel::world
         catch (const std::exception& e)
         {
             core::LogError("world_storage", "Exception saving chunk (%d, %d): %s", chunkX, chunkY, e.what());
+            return false;
+        }
+    }
+
+    bool ESFChunkStorage::SaveChunkFromSnapshot(int32_t                         chunkX, int32_t chunkY,
+                                                const std::vector<BlockState*>& blockData)
+    {
+        // Validate snapshot data
+        if (blockData.size() != Chunk::BLOCKS_PER_CHUNK)
+        {
+            core::LogError("world_storage", "SaveChunkFromSnapshot: Invalid snapshot size %zu, expected %d",
+                           blockData.size(), Chunk::BLOCKS_PER_CHUNK);
+            return false;
+        }
+
+        try
+        {
+            // Convert BlockState pointers to state IDs
+            std::vector<uint32_t> serializedBlocks;
+            serializedBlocks.reserve(Chunk::BLOCKS_PER_CHUNK);
+
+            for (size_t i = 0; i < blockData.size(); ++i)
+            {
+                uint32_t stateID = m_stateMapping.GetStateID(blockData[i]);
+                serializedBlocks.push_back(stateID);
+            }
+
+            // Serialize StateMapping data
+            const size_t         MAX_STATE_MAPPING_SIZE = 64 * 1024;
+            std::vector<uint8_t> stateMappingBuffer(MAX_STATE_MAPPING_SIZE);
+            size_t               stateMappingSize = m_stateMapping.SerializeStates(stateMappingBuffer.data(), stateMappingBuffer.size());
+
+            if (stateMappingSize == 0)
+            {
+                core::LogError("world_storage", "Failed to serialize StateMapping for chunk (%d, %d)", chunkX, chunkY);
+                return false;
+            }
+
+            // Create combined data: [Magic][StateMappingSize][StateMapping][BlockData]
+            size_t               totalSize = sizeof(uint32_t) + sizeof(uint32_t) + stateMappingSize + serializedBlocks.size() * sizeof(uint32_t);
+            std::vector<uint8_t> combinedData(totalSize);
+
+            size_t offset = 0;
+
+            // Write format magic number
+            std::memcpy(combinedData.data() + offset, &ESF_V2_MAGIC, sizeof(uint32_t));
+            offset += sizeof(uint32_t);
+
+            // Write StateMapping size
+            uint32_t mappingSize32 = static_cast<uint32_t>(stateMappingSize);
+            std::memcpy(combinedData.data() + offset, &mappingSize32, sizeof(uint32_t));
+            offset += sizeof(uint32_t);
+
+            // Write StateMapping data
+            std::memcpy(combinedData.data() + offset, stateMappingBuffer.data(), stateMappingSize);
+            offset += stateMappingSize;
+
+            // Write block data
+            std::memcpy(combinedData.data() + offset, serializedBlocks.data(), serializedBlocks.size() * sizeof(uint32_t));
+
+            // Save using ESF region files
+            ESFError error = ESFError::None;
+            try
+            {
+                int32_t regionX, regionY;
+                ESFLayout::WorldChunkToRegion(chunkX, chunkY, regionX, regionY);
+
+                std::string   regionPath = GetWorldSavePath() + "/" + ESFLayout::GenerateRegionFileName(regionX, regionY);
+                ESFRegionFile regionFile(regionPath, regionX, regionY);
+
+                if (!regionFile.IsValid())
+                {
+                    error = regionFile.GetLastError();
+                }
+                else
+                {
+                    int32_t localX, localY;
+                    ESFLayout::WorldChunkToLocal(chunkX, chunkY, regionX, regionY, localX, localY);
+                    error = regionFile.WriteChunk(localX, localY, combinedData.data(), combinedData.size());
+                    if (error == ESFError::None)
+                    {
+                        error = regionFile.Flush();
+                    }
+                }
+            }
+            catch (...)
+            {
+                error = ESFError::FileIOError;
+            }
+
+            if (error == ESFError::None)
+            {
+                core::LogDebug("world_storage", "Chunk snapshot (%d, %d) saved successfully", chunkX, chunkY);
+                return true;
+            }
+            else
+            {
+                core::LogError("world_storage", "Failed to save chunk snapshot (%d, %d): %s", chunkX, chunkY, ESFErrorToString(error));
+                return false;
+            }
+        }
+        catch (const std::exception& e)
+        {
+            core::LogError("world_storage", "Exception saving chunk snapshot (%d, %d): %s", chunkX, chunkY, e.what());
             return false;
         }
     }
@@ -487,33 +590,11 @@ namespace enigma::voxel::world
     }
 
     // ESFChunkSerializer implementation
-    bool ESFChunkSerializer::SerializeChunk(const Chunk* chunk)
+    bool ESFChunkSerializer::SerializeChunk(const Chunk* chunk, std::vector<uint8_t>& outData)
     {
-        // Interface implementation - simplified for interface compatibility
+        // Interface implementation
         if (!chunk)
             return false;
-
-        // In a full implementation, this would store the result somewhere
-        // For now, just validate that serialization is possible
-        std::vector<uint8_t> data = SerializeChunkData(const_cast<Chunk*>(chunk));
-        return !data.empty();
-    }
-
-    bool ESFChunkSerializer::DeserializeChunk(Chunk* chunk)
-    {
-        // Interface implementation - simplified for interface compatibility
-        if (!chunk)
-            return false;
-
-        // In a full implementation, this would load data from storage
-        // For now, just return true to indicate the interface is implemented
-        return true;
-    }
-
-    std::vector<uint8_t> ESFChunkSerializer::SerializeChunkData(Chunk* chunk)
-    {
-        if (!chunk)
-            return {};
 
         try
         {
@@ -527,44 +608,47 @@ namespace enigma::voxel::world
                 {
                     for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
                     {
-                        BlockState* state   = chunk->GetBlock(x, y, z);
+                        BlockState* state   = const_cast<Chunk*>(chunk)->GetBlock(x, y, z);
                         uint32_t    stateID = m_stateMapping.GetStateID(state);
                         blockData.push_back(stateID);
                     }
                 }
             }
 
-            // Convert to byte array
-            std::vector<uint8_t> result(blockData.size() * sizeof(uint32_t));
-            std::memcpy(result.data(), blockData.data(), result.size());
+            // Convert to binary format (simple memcpy)
+            outData.resize(blockData.size() * sizeof(uint32_t));
+            std::memcpy(outData.data(), blockData.data(), outData.size());
 
-            return result;
+            return true;
         }
         catch (const std::exception& e)
         {
-            core::LogError("chunk_serializer", "Exception serializing chunk: %s", e.what());
-            return {};
+            core::LogError("esf_serializer", "Failed to serialize chunk: %s", e.what());
+            return false;
         }
     }
 
-    bool ESFChunkSerializer::DeserializeChunkData(Chunk* chunk, const std::vector<uint8_t>& data)
+    bool ESFChunkSerializer::DeserializeChunk(Chunk* chunk, const std::vector<uint8_t>& data)
     {
+        // Interface implementation
         if (!chunk || data.empty())
             return false;
 
         try
         {
+            // Validate data size
             if (data.size() != Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t))
             {
-                core::LogError("chunk_serializer", "Invalid serialized chunk data size: %zu", data.size());
+                core::LogError("esf_serializer", "Invalid serialized chunk data size: %zu (expected %zu)",
+                               data.size(), Chunk::BLOCKS_PER_CHUNK * sizeof(uint32_t));
                 return false;
             }
 
-            // Convert byte array to block data
+            // Convert binary data to block IDs
             std::vector<uint32_t> blockData(Chunk::BLOCKS_PER_CHUNK);
             std::memcpy(blockData.data(), data.data(), data.size());
 
-            // Reconstruct chunk blocks
+            // Restore chunk blocks from state IDs
             size_t index = 0;
             for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
@@ -583,7 +667,7 @@ namespace enigma::voxel::world
         }
         catch (const std::exception& e)
         {
-            core::LogError("chunk_serializer", "Exception deserializing chunk: %s", e.what());
+            core::LogError("esf_serializer", "Failed to deserialize chunk: %s", e.what());
             return false;
         }
     }

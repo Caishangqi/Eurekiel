@@ -6,7 +6,7 @@
 #include "Engine/Renderer/IRenderer.hpp"
 #include "Game/GameCommon.hpp"
 
-using namespace enigma::voxel::chunk;
+using namespace enigma::voxel;
 
 void ChunkMesh::Clear()
 {

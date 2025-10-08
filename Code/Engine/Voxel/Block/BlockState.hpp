@@ -14,15 +14,13 @@ namespace enigma::renderer::model
     class RenderMesh;
 }
 
-namespace enigma::voxel::world
+namespace enigma::voxel
 {
     class World;
 }
 
-namespace enigma::voxel::block
+namespace enigma::voxel
 {
-    using namespace enigma::voxel::property;
-
     /**
      * @brief Runtime instance representing a specific configuration of a Block
      * 
@@ -115,9 +113,9 @@ namespace enigma::voxel::block
         }
 
         // World interaction
-        void OnPlaced(enigma::voxel::world::World* world, const BlockPos& pos) const;
-        void OnBroken(enigma::voxel::world::World* world, const BlockPos& pos) const;
-        void OnNeighborChanged(enigma::voxel::world::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const;
+        void OnPlaced(enigma::voxel::World* world, const BlockPos& pos) const;
+        void OnBroken(enigma::voxel::World* world, const BlockPos& pos) const;
+        void OnNeighborChanged(enigma::voxel::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const;
 
         // Utility
         std::string ToString() const;
@@ -144,9 +142,9 @@ namespace enigma::voxel::block
 namespace std
 {
     template <>
-    struct hash<enigma::voxel::block::BlockState>
+    struct hash<enigma::voxel::BlockState>
     {
-        size_t operator()(const enigma::voxel::block::BlockState& state) const noexcept
+        size_t operator()(const enigma::voxel::BlockState& state) const noexcept
         {
             return state.GetHash();
         }

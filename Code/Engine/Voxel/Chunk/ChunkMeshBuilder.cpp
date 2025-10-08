@@ -7,7 +7,7 @@
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
 
-using namespace enigma::voxel::chunk;
+using namespace enigma::voxel;
 
 ChunkMeshBuilder::ChunkMeshBuilder()
 {
@@ -46,13 +46,13 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
                     BlockPos blockPos = GetBlockPosition(x, y, z);
 
                     // Count visible faces for this block
-                    static const std::vector<enigma::voxel::property::Direction> allDirections = {
-                        enigma::voxel::property::Direction::NORTH,
-                        enigma::voxel::property::Direction::SOUTH,
-                        enigma::voxel::property::Direction::EAST,
-                        enigma::voxel::property::Direction::WEST,
-                        enigma::voxel::property::Direction::UP,
-                        enigma::voxel::property::Direction::DOWN
+                    static const std::vector<enigma::voxel::Direction> allDirections = {
+                        enigma::voxel::Direction::NORTH,
+                        enigma::voxel::Direction::SOUTH,
+                        enigma::voxel::Direction::EAST,
+                        enigma::voxel::Direction::WEST,
+                        enigma::voxel::Direction::UP,
+                        enigma::voxel::Direction::DOWN
                     };
 
                     for (const auto& direction : allDirections)
@@ -136,13 +136,13 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
     }
 
     // All 6 directions for face iteration
-    static const std::vector<enigma::voxel::property::Direction> allDirections = {
-        enigma::voxel::property::Direction::NORTH,
-        enigma::voxel::property::Direction::SOUTH,
-        enigma::voxel::property::Direction::EAST,
-        enigma::voxel::property::Direction::WEST,
-        enigma::voxel::property::Direction::UP,
-        enigma::voxel::property::Direction::DOWN
+    static const std::vector<enigma::voxel::Direction> allDirections = {
+        enigma::voxel::Direction::NORTH,
+        enigma::voxel::Direction::SOUTH,
+        enigma::voxel::Direction::EAST,
+        enigma::voxel::Direction::WEST,
+        enigma::voxel::Direction::UP,
+        enigma::voxel::Direction::DOWN
     };
 
     // Create transformation matrix from block space to chunk space

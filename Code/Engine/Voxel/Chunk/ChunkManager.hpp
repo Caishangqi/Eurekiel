@@ -13,7 +13,7 @@
 
 #include "Engine/Renderer/Texture.hpp"
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
          * @brief Manages loading, unloading, and lifecycle of world chunks
@@ -28,7 +28,7 @@ namespace enigma::voxel::chunk
          */
     class ChunkManager
     {
-        friend class enigma::voxel::world::World;
+        friend class enigma::voxel::World;
         // TODO: Implement according to comments above
     public:
         explicit ChunkManager(IChunkGenerationCallback* callback = nullptr);
@@ -52,7 +52,6 @@ namespace enigma::voxel::chunk
         void SetPlayerPosition(const Vec3& playerPosition);
         void SetActivationRange(int32_t chunkDistance); // Distance in chunks
         void SetDeactivationRange(int32_t chunkDistance); // Distance in chunks
-        void UpdateChunkActivation(); // Called each frame to manage chunks
 
         void                   SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer);
         void                   SetChunkStorage(std::unique_ptr<IChunkStorage> storage);
@@ -95,16 +94,8 @@ namespace enigma::voxel::chunk
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
         std::unique_ptr<IChunkStorage>    m_chunkStorage;
 
-        // Frame-limited operations tracking
-        enum class ChunkOperationType
-        {
-            None,
-            CheckDirtyChunks,
-            ActivateChunk,
-            DeactivateChunk
-        };
-
-        ChunkOperationType m_lastFrameOperation = ChunkOperationType::None;
+        // Mesh rebuild limits (performance tuning)
+        int m_maxMeshRebuildsPerFrame = 1; // Max mesh rebuilds per frame (increase for better initial loading)
 
         // Cached rendering resources (following NeoForge pattern)
         ::Texture* m_cachedBlocksAtlasTexture = nullptr; // Cached blocks atlas texture

@@ -4,7 +4,7 @@
 #include <array>
 #include <string>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
      * @brief ESF (Enigma Save File) Format Specification

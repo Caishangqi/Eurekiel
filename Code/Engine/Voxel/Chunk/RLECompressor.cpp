@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     size_t RLECompressor::Compress(const uint32_t* inputData, size_t  inputSize,
                                    uint8_t*        outputData, size_t outputSize)

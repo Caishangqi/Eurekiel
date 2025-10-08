@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
      * @brief RLE (Run Length Encoding) Compressor for voxel block data

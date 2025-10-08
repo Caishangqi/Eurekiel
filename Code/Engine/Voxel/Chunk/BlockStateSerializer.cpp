@@ -5,10 +5,9 @@
 #include <cstring>
 #include <algorithm>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     using namespace enigma::registry::block;
-    using namespace enigma::voxel::property;
 
     // StateMapping implementation
     uint32_t BlockStateSerializer::StateMapping::GetStateID(BlockState* state)
@@ -535,7 +534,7 @@ namespace enigma::voxel::chunk
     BlockState* BlockStateSerializer::ReconstructBlockState(const SerializedBlockState& serialized)
     {
         using namespace enigma::registry::block;
-        using namespace enigma::voxel::property;
+        using namespace enigma::voxel;
 
         core::LogDebug("block_serialization", "Reconstructing BlockState for block '%s' with stateID=%u",
                        serialized.blockName.c_str(), serialized.stateID);

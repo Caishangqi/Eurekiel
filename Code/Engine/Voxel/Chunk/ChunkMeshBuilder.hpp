@@ -5,11 +5,8 @@
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include <memory>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
-    using namespace enigma::voxel::block;
-    using namespace enigma::voxel::property;
-
     /**
      * @brief Builds optimized ChunkMesh from Chunk block data
      * 

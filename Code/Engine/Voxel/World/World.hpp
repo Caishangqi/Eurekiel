@@ -4,22 +4,28 @@
 #include "../Chunk/ChunkManager.hpp"
 #include "../Chunk/IChunkGenerationCallback.hpp"
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
+#include "../Chunk/ChunkJob.hpp"
+#include "../Chunk/GenerateChunkJob.hpp"
+#include "../Chunk/LoadChunkJob.hpp"
+#include "../Chunk/SaveChunkJob.hpp"
 #include "../Generation/Generator.hpp"
 #include "ESFWorldStorage.hpp"
 #include "../../Math/Vec3.hpp"
+#include "../../Math/IntVec2.hpp"
+#include "../../Core/Schedule/ScheduleSubsystem.hpp"
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+#include <deque>
+#include <atomic>
 
-namespace enigma::voxel::world
+namespace enigma::voxel
 {
     // ========================================================================
     // Core Configuration
     // ========================================================================
     constexpr char WORLD_SAVE_PATH[] = ".enigma/saves";
-
-    using namespace enigma::voxel::block;
-    using namespace enigma::voxel::chunk;
 
     /**
          * @brief Main world class - manages the voxel world and its chunks
@@ -35,7 +41,7 @@ namespace enigma::voxel::world
     class World : public IChunkGenerationCallback
     {
     public:
-        World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::generation::Generator> generator);
+        World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::Generator> generator);
 
         World() = default;
         ~World() override;
@@ -74,7 +80,7 @@ namespace enigma::voxel::world
         std::unique_ptr<ChunkManager>& GetChunkManager();
 
         // World generation integration
-        void SetWorldGenerator(std::unique_ptr<enigma::voxel::generation::Generator> generator);
+        void SetWorldGenerator(std::unique_ptr<enigma::voxel::Generator> generator);
 
         // Serialize the configuration interface
         void SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer);
@@ -91,6 +97,55 @@ namespace enigma::voxel::world
         uint64_t           GetWorldSeed() const { return m_worldSeed; }
         const std::string& GetWorldPath() const { return m_worldPath; }
 
+        //-------------------------------------------------------------------------------------------
+        // Phase 3: Async Task Management (Multi-threaded Chunk Loading)
+        //-------------------------------------------------------------------------------------------
+
+        // Process completed tasks from ScheduleSubsystem (uses global g_theSchedule)
+        // Called automatically in Update() loop on main thread
+        void ProcessCompletedChunkTasks();
+
+    private:
+        //-------------------------------------------------------------------------------------------
+        // Phase 3: Async Task Management Methods
+        //-------------------------------------------------------------------------------------------
+
+        // Activate a chunk (decide whether to load from disk or generate)
+        void ActivateChunk(IntVec2 chunkCoords);
+
+        // Deactivate and save a chunk (if modified)
+        void DeactivateChunk(IntVec2 chunkCoords);
+
+        // Submit chunk generation job to ScheduleSubsystem
+        void SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk);
+
+        // Submit chunk load job to ScheduleSubsystem
+        void SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk);
+
+        // Submit chunk save job to ScheduleSubsystem
+        void SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk);
+
+        // Handle completed generation job
+        void HandleGenerateChunkCompleted(GenerateChunkJob* job);
+
+        // Handle completed load job
+        void HandleLoadChunkCompleted(LoadChunkJob* job);
+
+        // Handle completed save job
+        void HandleSaveChunkCompleted(SaveChunkJob* job);
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 4: Job Queue Management Methods
+        //-------------------------------------------------------------------------------------------
+
+        // Process pending job queues and submit jobs when under limit
+        // Called from Update() every frame to enforce job limits
+        void ProcessJobQueues();
+
+        // Remove jobs from pending queues that are beyond activation range
+        // Called from Update() to cancel jobs for chunks that moved out of range
+        void RemoveDistantJobs();
+
     private:
         std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
         std::string                   m_worldName; // World identifier
@@ -99,10 +154,10 @@ namespace enigma::voxel::world
 
         // Player position and chunk management
         Vec3    m_playerPosition{0.0f, 0.0f, 128.0f}; // Current player position
-        int32_t m_chunkActivationRange = 12; // Activation range in chunks (from settings.yml)
+        int32_t m_chunkActivationRange = 16; // Activation range in chunks (from settings.yml)
 
         // World generation
-        std::unique_ptr<enigma::voxel::generation::Generator> m_worldGenerator;
+        std::unique_ptr<enigma::voxel::Generator> m_worldGenerator;
 
         // Serialize components
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
@@ -110,5 +165,39 @@ namespace enigma::voxel::world
 
         // World File Manager
         std::unique_ptr<ESFWorldManager> m_worldManager;
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 3: Async Task Management State
+        //-------------------------------------------------------------------------------------------
+
+        // Track chunks in different async states (for debugging and management)
+        // These sets track chunk coordinates that have pending async operations
+        std::unordered_set<int64_t> m_chunksWithPendingLoad; // Chunks with pending Load jobs
+        std::unordered_set<int64_t> m_chunksWithPendingGenerate; // Chunks with pending Generate jobs
+        std::unordered_set<int64_t> m_chunksWithPendingSave; // Chunks with pending Save jobs
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 4: Job Queue and Limits System (Assignment 03 Requirements)
+        //-------------------------------------------------------------------------------------------
+
+        // World-side pending job queues (sorted by distance, nearest first)
+        // Jobs are added to these queues instead of immediately submitting to ScheduleSubsystem
+        // ProcessJobQueues() will submit jobs when active count < limit
+        std::deque<IntVec2> m_pendingGenerateQueue; // Chunks waiting for generation
+        std::deque<IntVec2> m_pendingLoadQueue; // Chunks waiting for disk load
+        std::deque<IntVec2> m_pendingSaveQueue; // Chunks waiting for disk save
+
+        // Active job counters (atomic for thread-safe access)
+        // Incremented when job submitted to ScheduleSubsystem
+        // Decremented when job completes in HandleXxxCompleted()
+        std::atomic<int> m_activeGenerateJobs{0}; // Currently processing generate jobs
+        std::atomic<int> m_activeLoadJobs{0}; // Currently processing load jobs
+        std::atomic<int> m_activeSaveJobs{0}; // Currently processing save jobs
+
+        // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
+        // These prevent overwhelming the thread pool and ensure responsive chunk loading
+        int m_maxGenerateJobs = 256; // Allow many generation jobs (CPU-bound, parallelizable)
+        int m_maxLoadJobs     = 16; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs     = 8; // Increased for better save throughput (lower priority than load)
     };
 }

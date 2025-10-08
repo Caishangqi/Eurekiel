@@ -5,7 +5,7 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Renderer/IRenderer.hpp"
 #include "Engine/Renderer/Texture.hpp" // Add explicit include for Texture class
-using namespace enigma::voxel::chunk;
+using namespace enigma::voxel;
 
 
 void ChunkManager::Initialize()
@@ -66,47 +66,23 @@ Chunk* ChunkManager::GetChunk(int32_t chunkX, int32_t chunkY)
     return m_loadedChunks[chunkPackID].get();
 }
 
+// DEPRECATED: Synchronous loading - Use World::ActivateChunk() for async loading!
+// Only kept for legacy EnsureChunksLoaded() support
 void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
 {
     int64_t chunkPackID = PackCoordinates(chunkX, chunkY);
-    if (m_loadedChunks.find(chunkPackID) == m_loadedChunks.end())
+    if (m_loadedChunks.find(chunkPackID) != m_loadedChunks.end())
     {
-        // First try to load from disk if storage is configured
-        std::unique_ptr<Chunk> chunk = nullptr;
-        if (m_chunkStorage && m_chunkSerializer)
-        {
-            core::LogDebug("chunk", "Attempting to load chunk (%d, %d) from disk", chunkX, chunkY);
-            chunk = LoadChunkFromDisk(chunkX, chunkY);
-            if (chunk)
-            {
-                core::LogInfo("chunk", "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
-            }
-            else
-            {
-                core::LogDebug("chunk", "Failed to load chunk (%d, %d) from disk, will generate new", chunkX, chunkY);
-            }
-        }
-
-        // If not loaded from disk, create new chunk and generate content
-        if (!chunk)
-        {
-            chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
-
-            // Use the callback interface to generate block content
-            if (m_generationCallback)
-            {
-                m_generationCallback->GenerateChunk(chunk.get(), chunkX, chunkY);
-            }
-
-            core::LogDebug("chunk", "Generated new chunk (%d, %d)", chunkX, chunkY);
-        }
-        else
-        {
-            core::LogDebug("chunk", "Loaded chunk (%d, %d) from disk", chunkX, chunkY);
-        }
-
-        m_loadedChunks[chunkPackID] = std::move(chunk);
+        return; // Already loaded
     }
+
+    // Simplified synchronous loading for emergency/legacy use
+    auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+    if (m_generationCallback)
+    {
+        m_generationCallback->GenerateChunk(chunk.get(), chunkX, chunkY);
+    }
+    m_loadedChunks[chunkPackID] = std::move(chunk);
 }
 
 int64_t ChunkManager::PackCoordinates(int32_t x, int32_t y)
@@ -136,8 +112,28 @@ void ChunkManager::Update(float deltaTime)
         loaded_chunk.second->Update(deltaTime);
     }
 
-    // Perform frame-limited chunk activation/deactivation (Assignment 02 requirement)
-    UpdateChunkActivation();
+    // Phase 3: Mesh rebuild logic (Assignment 02/03 requirement)
+    // Chunk activation/deactivation now handled by World::UpdateNearbyChunks() (async)
+
+    // Priority: Check for dirty chunks and regenerate the nearest ones (main thread only)
+    // Rebuild multiple chunks per frame for better performance (configurable limit)
+    int rebuiltCount = 0;
+    while (rebuiltCount < m_maxMeshRebuildsPerFrame)
+    {
+        Chunk* dirtyChunk = FindNearestDirtyChunk();
+        if (!dirtyChunk)
+        {
+            break; // No more dirty chunks
+        }
+
+        dirtyChunk->RebuildMesh();
+        rebuiltCount++;
+    }
+
+    if (rebuiltCount > 0)
+    {
+        core::LogDebug("chunk", "Rebuilt %d chunk meshes this frame", rebuiltCount);
+    }
 }
 
 void ChunkManager::Render(IRenderer* renderer)
@@ -224,55 +220,6 @@ void ChunkManager::SetActivationRange(int32_t chunkDistance)
 void ChunkManager::SetDeactivationRange(int32_t chunkDistance)
 {
     m_deactivationRange = chunkDistance;
-}
-
-void ChunkManager::UpdateChunkActivation()
-{
-    // Assignment 02 requirement: Only ONE operation per frame
-
-    // 1. Priority: Check for dirty chunks and regenerate the nearest one
-    Chunk* dirtyChunk = FindNearestDirtyChunk();
-    if (dirtyChunk)
-    {
-        m_lastFrameOperation = ChunkOperationType::CheckDirtyChunks;
-        // Rebuild mesh for dirty chunk (Assignment 02 requirement)
-        dirtyChunk->RebuildMesh();
-        core::LogDebug("chunk", "Regenerated mesh for dirty chunk");
-        return;
-    }
-
-    // Calculate max allowed chunks based on activation range
-    int32_t maxChunks = (2 * m_activationRange + 1) * (2 * m_activationRange + 1);
-
-    // 2. If we have fewer chunks than max, activate nearest missing chunk
-    if (static_cast<int32_t>(m_loadedChunks.size()) < maxChunks)
-    {
-        auto missingChunk = FindNearestMissingChunk();
-        if (missingChunk.first != INT32_MAX && missingChunk.second != INT32_MAX)
-        {
-            m_lastFrameOperation = ChunkOperationType::ActivateChunk;
-            LoadChunk(missingChunk.first, missingChunk.second);
-            core::LogDebug("chunk", "Activated chunk (%d, %d)", missingChunk.first, missingChunk.second);
-            return;
-        }
-    }
-
-    // 3. Otherwise, deactivate the farthest chunk if it's outside deactivation range
-    auto farthestChunk = FindFarthestChunk();
-    if (farthestChunk.first != INT32_MAX && farthestChunk.second != INT32_MAX)
-    {
-        float distance = GetChunkDistanceToPlayer(farthestChunk.first, farthestChunk.second);
-        if (distance > static_cast<float>(m_deactivationRange))
-        {
-            m_lastFrameOperation = ChunkOperationType::DeactivateChunk;
-            UnloadChunk(farthestChunk.first, farthestChunk.second);
-            core::LogDebug("chunk", "Deactivated chunk (%d, %d) at distance %.1f",
-                           farthestChunk.first, farthestChunk.second, distance);
-            return;
-        }
-    }
-
-    m_lastFrameOperation = ChunkOperationType::None;
 }
 
 float ChunkManager::GetChunkDistanceToPlayer(int32_t chunkX, int32_t chunkY) const
@@ -394,9 +341,10 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
 {
     std::vector<int64_t> chunksToUnload;
 
-    // Calculate the block coordinates of the player's position
+    // Calculate the chunk coordinates of the player's position
+    // Chunk coordinates use (X, Y) horizontal plane, Z is vertical height
     int32_t playerChunkX = static_cast<int32_t>(std::floor(playerPos.x / Chunk::CHUNK_SIZE_X));
-    int32_t playerChunkY = static_cast<int32_t>(std::floor(playerPos.z / Chunk::CHUNK_SIZE_Y));
+    int32_t playerChunkY = static_cast<int32_t>(std::floor(playerPos.y / Chunk::CHUNK_SIZE_Y));
 
     // Check all loaded blocks
     for (const auto& [packedCoords, chunk] : m_loadedChunks)
@@ -535,6 +483,10 @@ size_t ChunkManager::SaveAllModifiedChunks()
     if (savedCount > 0)
     {
         core::LogInfo("chunk", "Saved %zu modified chunks to disk", savedCount);
+    }
+    else
+    {
+        core::LogInfo("chunk", "No modified chunks to save (all chunks are unmodified)");
     }
 
     return savedCount;

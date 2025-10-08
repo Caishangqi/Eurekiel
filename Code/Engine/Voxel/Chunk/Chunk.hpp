@@ -3,6 +3,7 @@
 #include "../Block/BlockPos.hpp"
 #include "ChunkMesh.hpp"
 #include "ChunkSerializationInterfaces.hpp"
+#include "ChunkState.hpp"
 #include <array>
 #include <memory>
 #include <atomic>
@@ -10,89 +11,64 @@
 #include "Engine/Math/AABB3.hpp"
 #include "Engine/Math/IntVec2.hpp"
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
-    using namespace enigma::voxel::block;
-
     /**
-     * @brief Represents a 16x16x(height) section of the world
-     * 
-     * TODO: This class needs to be implemented with the following functionality:
-     * 
+     * @brief Represents a 16x16x128 section of the voxel world
+     *
+     * ARCHITECTURE IMPLEMENTATION:
+     *
      * CORE DATA STRUCTURE:
-     * - Standard Minecraft-style 16x16 horizontal, full height vertical
-     * - Block storage: 3D array or optimized palette system
+     * - Standard Minecraft-style 16x16 horizontal, 128 blocks vertical
+     * - Block storage: Flat array with bit-optimized indexing
      * - Coordinate system: Local chunk coordinates (0-15) and world coordinates
-     * 
-     * REQUIRED CONSTANTS:
-     * - static constexpr int32_t CHUNK_SIZE = 16;     // Horizontal size
-     * - static constexpr int32_t CHUNK_HEIGHT = 128;  // Vertical size (adjust as needed)
-     * - static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT;
-     * 
-     * REQUIRED MEMBER VARIABLES:
-     * - int32_t m_chunkX, m_chunkZ;                    // Chunk coordinates in world
-     * - BlockState* m_blocks[CHUNK_SIZE][CHUNK_HEIGHT][CHUNK_SIZE];  // Block storage
-     * - std::unique_ptr<ChunkMesh> m_mesh;            // Compiled mesh for rendering
-     * - bool m_isDirty = true;                        // Needs mesh rebuild
-     * - bool m_isGenerated = false;                   // Has been world-generated
-     * - bool m_isPopulated = false;                   // Has decorations/structures
-     * - std::atomic<bool> m_isLoading{false};         // Currently being loaded/generated
-     * 
-     * REQUIRED METHODS:
-     * 
+     *
+     * CONSTANTS:
+     * - static constexpr int32_t CHUNK_SIZE_X/Y = 16;  // Horizontal size
+     * - static constexpr int32_t CHUNK_SIZE_Z = 128;   // Vertical size
+     * - static constexpr int32_t TOTAL_BLOCKS = 16 * 16 * 128 = 32768
+     *
+     * MEMBER VARIABLES:
+     * - IntVec2 m_chunkCoords;                         // Chunk coordinates (X, Y)
+     * - BlockState* m_blocks[TOTAL_BLOCKS];            // Flat block storage
+     * - std::unique_ptr<ChunkMesh> m_mesh;             // Compiled mesh for rendering
+     * - bool m_isDirty = true;                         // Needs mesh rebuild
+     * - bool m_isModified = false;                     // Has unsaved changes
+     * - bool m_playerModified = false;                 // Modified by player (save strategy)
+     * - std::atomic<ChunkState> m_chunkState;          // Lifecycle state (Inactive/Loading/Generating/Active/etc)
+     *
+     * IMPLEMENTED METHODS:
+     *
      * Block Access:
-     * - BlockState* GetBlock(int32_t x, int32_t y, int32_t z)  // Local coordinates
-     * - void SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
-     * - BlockState* GetBlockWorld(const BlockPos& worldPos)    // World coordinates
-     * - void SetBlockWorld(const BlockPos& worldPos, BlockState* state)
-     * 
-     * Coordinate Conversion:
-     * - BlockPos LocalToWorld(int32_t x, int32_t y, int32_t z)
-     * - bool WorldToLocal(const BlockPos& worldPos, int32_t& x, int32_t& y, int32_t& z)
-     * - bool ContainsWorldPos(const BlockPos& worldPos)
-     * 
+     * - GetBlock(x, y, z) / SetBlock(x, y, z, state)        // Local coordinates
+     * - GetBlockByPlayer() / SetBlockByPlayer()              // Player modification tracking
+     * - Coordinate conversion and validation utilities
+     *
      * Mesh Management:
-     * - void MarkDirty()  // Mark chunk as needing mesh rebuild
-     * - void RebuildMesh()  // Regenerate ChunkMesh from block data
-     * - ChunkMesh* GetMesh() const  // Get mesh for rendering
-     * - bool NeedsMeshRebuild() const  // Check if mesh needs rebuilding
-     * 
-     * Neighbor Access (for mesh generation):
-     * - BlockState* GetNeighborBlock(int32_t x, int32_t y, int32_t z, Direction dir)
-     * - void SetNeighborChunks(Chunk* north, Chunk* south, Chunk* east, Chunk* west)
-     * 
+     * - MarkDirty() / RebuildMesh()                          // Mesh rebuild workflow
+     * - GetMesh() / IsDirty()                                // Mesh state queries
+     *
      * State Management:
-     * - bool IsGenerated() const
-     * - void SetGenerated(bool generated)
-     * - bool IsPopulated() const 
-     * - void SetPopulated(bool populated)
-     * - bool IsLoading() const
-     * - void SetLoading(bool loading)
-     * 
-     * Utility:
-     * - void Clear()  // Clear all blocks to air
-     * - int32_t GetChunkX() const
-     * - int32_t GetChunkZ() const
-     * - BlockPos GetWorldPos() const  // Bottom corner world position
-     * 
-     * MESH BUILDING INTEGRATION:
-     * - Should call ChunkMeshBuilder when mesh needs rebuilding
-     * - Must handle face culling between adjacent chunks
-     * - Should batch mesh updates to avoid rebuilding every block change
-     * 
-     * THREADING CONSIDERATIONS:
-     * - Block access should be thread-safe during generation
-     * - Mesh building can happen on background thread
-     * - Loading state should be atomic for thread safety
-     * 
+     * - ChunkState enum (Inactive, Loading, Generating, Active, Saving, Unloading)
+     * - Atomic state transitions for thread safety
+     * - IsModified() / IsPlayerModified()                    // Change tracking
+     *
+     * Serialization:
+     * - Serialize() / Deserialize()                          // Chunk data persistence
+     * - Integration with IChunkSerializer and IChunkStorage interfaces
+     *
+     * THREADING DESIGN:
+     * - Block access is safe during single-threaded generation
+     * - Mesh building happens on main thread (deferred via m_isDirty flag)
+     * - State transitions use atomic operations for async loading system
+     *
      * MEMORY OPTIMIZATION:
-     * - Consider palette system for repeated block states
-     * - Empty chunks could be represented more efficiently
-     * - Consider compression for saved chunk data
+     * - Flat array storage with bit-shift indexing for performance
+     * - Empty chunks still allocated (future: consider null optimization)
+     * - Serialization uses RLE compression in ESFS format
      */
     class Chunk
     {
-        // TODO: Implement according to comments above
     public:
         // Chunk dimensions and bit operations for performance optimization (Assignment 02 specification)
         static constexpr int32_t CHUNK_BITS_X = 4; // 2^4 = 16
@@ -144,16 +120,54 @@ namespace enigma::voxel::chunk
         ChunkMesh* GetMesh() const; // Get mesh for rendering
         bool       NeedsMeshRebuild() const; // Check if mesh needs rebuilding
 
+        //-------------------------------------------------------------------------------------------
         // State Management - PUBLIC for World management
-        bool IsGenerated() const { return m_isGenerated; }
-        void SetGenerated(bool generated) { m_isGenerated = generated; }
+        //-------------------------------------------------------------------------------------------
+
+        // New: Atomic State Machine (Thread-Safe)
+        ChunkState  GetState() const { return m_state.Load(); }
+        bool        TrySetState(ChunkState expected, ChunkState desired) { return m_state.CompareAndSwap(expected, desired); }
+        const char* GetStateName() const { return m_state.GetStateName(); }
+
+        // Convenience state queries
+        bool IsActive() const { return GetState() == ChunkState::Active; }
+
+        bool IsLoading() const
+        {
+            ChunkState state = GetState();
+            return state == ChunkState::Loading || state == ChunkState::Generating;
+        }
+
+        bool IsPendingWork() const
+        {
+            ChunkState state = GetState();
+            return state == ChunkState::PendingLoad ||
+                state == ChunkState::PendingGenerate ||
+                state == ChunkState::PendingSave;
+        }
+
+        // Legacy compatibility (to be removed after full migration)
+        bool IsGenerated() const
+        {
+            ChunkState state = GetState();
+            return state == ChunkState::Active ||
+                state == ChunkState::PendingSave ||
+                state == ChunkState::Saving;
+        }
+
+        void SetGenerated(bool generated) { (void)generated; } // Suppress warning
         bool IsPopulated() const { return m_isPopulated; }
         void SetPopulated(bool populated) { m_isPopulated = populated; }
-        bool IsLoading() const { return m_isLoading.load(); }
-        void SetLoading(bool loading) { m_isLoading.store(loading); }
+
+        // Modified flag (only accessed by main thread)
         bool IsModified() const { return m_isModified; }
         void SetModified(bool modified) { m_isModified = modified; }
         void MarkModified() { m_isModified = true; }
+
+        // Player-modified flag (for PlayerModifiedOnly save strategy)
+        bool IsPlayerModified() const { return m_playerModified; }
+        void SetPlayerModified(bool playerModified) { m_playerModified = playerModified; }
+        void MarkPlayerModified() { m_playerModified = true; }
 
         //Update and Management:
         void Update(float deltaTime); // Update chunk
@@ -172,19 +186,32 @@ namespace enigma::voxel::chunk
         const ChunkAttachmentHolder& GetAttachmentHolder() const { return m_attachmentHolder; }
 
     private:
+        //-------------------------------------------------------------------------------------------
+        // Core Data
+        //-------------------------------------------------------------------------------------------
         IntVec2                    m_chunkCoords = IntVec2(0, 0);
         std::vector<BlockState*>   m_blocks; // Block storage
         std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering
-        bool                       m_isDirty     = true; // Needs mesh rebuild
-        bool                       m_isModified  = false; // Needs to be saved to disk
-        bool                       m_isGenerated = false; // Has been world-generated
-        bool                       m_isPopulated = false; // Has decorations/structures
-        std::atomic<bool>          m_isLoading{false}; // Currently being loaded/generated
 
-        // 预留：扩展数据持有者（暂时空实现）
+        //-------------------------------------------------------------------------------------------
+        // State Management (Multi-threaded loading system)
+        //-------------------------------------------------------------------------------------------
+        AtomicChunkState m_state{ChunkState::Inactive}; // Thread-safe state machine
+
+        //-------------------------------------------------------------------------------------------
+        // Sub-states (Only accessed by main thread)
+        //-------------------------------------------------------------------------------------------
+        bool m_isDirty        = true; // Needs mesh rebuild (main thread only)
+        bool m_isModified     = false; // Needs to be saved to disk (main thread only)
+        bool m_playerModified = false; // Modified by player (for PlayerModifiedOnly save strategy)
+        bool m_isPopulated    = false; // Has decorations/structures (legacy, main thread only)
+
+        //-------------------------------------------------------------------------------------------
+        // Extensions
+        //-------------------------------------------------------------------------------------------
         mutable ChunkAttachmentHolder m_attachmentHolder;
 
         /// Debug Drawing
-        AABB3 m_chunkBounding; // Need generated based on chunk coords
+        AABB3 m_chunkBounding;
     };
 }

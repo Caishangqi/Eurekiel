@@ -5,10 +5,8 @@
 #include <cstdint>
 #include <unordered_map>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
-    using namespace enigma::voxel::block;
-
     /**
      * @brief Serializer for BlockState objects to/from binary format
      *

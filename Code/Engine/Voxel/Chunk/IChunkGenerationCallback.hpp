@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     class Chunk;
 

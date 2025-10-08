@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <functional>
 
-namespace enigma::voxel::property
+namespace enigma::voxel
 {
     /**
      * @brief Base interface for all property types

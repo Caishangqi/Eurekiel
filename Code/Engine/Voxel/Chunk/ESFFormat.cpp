@@ -8,7 +8,7 @@
 // TODO: Add CRC32 implementation when available
 // #include <crc32.h>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     // ESFHeader implementation
     bool ESFHeader::IsValid() const

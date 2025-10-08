@@ -6,7 +6,7 @@
 #include <cstring>
 #include <algorithm>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     // Static members initialization
     std::unique_ptr<ESFRegionFile> ChunkFileManager::s_cachedRegionFile = nullptr;

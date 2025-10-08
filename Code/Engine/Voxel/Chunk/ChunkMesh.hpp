@@ -7,7 +7,7 @@
 
 class IRenderer;
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
      * @brief Optimized mesh data for rendering an entire chunk

@@ -10,7 +10,7 @@
 #include <mutex>
 #include <cstdint>
 
-namespace enigma::voxel::world
+namespace enigma::voxel
 {
     /**
      * @brief ESF-based chunk storage implementation
@@ -18,7 +18,7 @@ namespace enigma::voxel::world
      * Implements IChunkStorage interface using ESF region files for persistent chunk storage.
      * Integrates with World class to provide automatic chunk save/load functionality.
      */
-    class ESFChunkStorage : public enigma::voxel::chunk::IChunkStorage
+    class ESFChunkStorage : public enigma::voxel::IChunkStorage
     {
     public:
         explicit ESFChunkStorage(const std::string& worldPath);
@@ -31,8 +31,9 @@ namespace enigma::voxel::world
         bool DeleteChunk(int32_t chunkX, int32_t chunkY) override;
 
         // ESF specific methods with proper types
-        bool SaveChunkData(enigma::voxel::chunk::Chunk* chunk, int32_t chunkX, int32_t chunkY);
-        bool LoadChunkData(enigma::voxel::chunk::Chunk* chunk, int32_t chunkX, int32_t chunkY);
+        bool SaveChunkData(enigma::voxel::Chunk* chunk, int32_t chunkX, int32_t chunkY);
+        bool SaveChunkFromSnapshot(int32_t chunkX, int32_t chunkY, const std::vector<enigma::voxel::BlockState*>& blockData);
+        bool LoadChunkData(enigma::voxel::Chunk* chunk, int32_t chunkX, int32_t chunkY);
 
         // Storage management
         void Flush(); // Force write all pending data to disk
@@ -43,8 +44,8 @@ namespace enigma::voxel::world
         std::string GetStorageInfo() const;
 
     private:
-        std::string                                              m_worldPath;
-        enigma::voxel::chunk::BlockStateSerializer::StateMapping m_stateMapping;
+        std::string                                       m_worldPath;
+        enigma::voxel::BlockStateSerializer::StateMapping m_stateMapping;
 
         // Region file caching for performance
         struct RegionFileCache
@@ -60,8 +61,8 @@ namespace enigma::voxel::world
         mutable std::mutex                                                        m_cacheMutex;
 
         // Helper methods
-        std::vector<uint32_t> SerializeChunkBlocks(enigma::voxel::chunk::Chunk* chunk);
-        bool                  DeserializeChunkBlocks(enigma::voxel::chunk::Chunk* chunk, const std::vector<uint32_t>& blockData);
+        std::vector<uint32_t> SerializeChunkBlocks(enigma::voxel::Chunk* chunk);
+        bool                  DeserializeChunkBlocks(enigma::voxel::Chunk* chunk, const std::vector<uint32_t>& blockData);
         std::string           GetWorldSavePath() const;
         void                  EnsureWorldDirectoryExists();
 
@@ -76,26 +77,22 @@ namespace enigma::voxel::world
      *
      * Implements IChunkSerializer interface using BlockStateSerializer for chunk data conversion.
      */
-    class ESFChunkSerializer : public enigma::voxel::chunk::IChunkSerializer
+    class ESFChunkSerializer : public enigma::voxel::IChunkSerializer
     {
     public:
         ESFChunkSerializer()           = default;
         ~ESFChunkSerializer() override = default;
 
         // IChunkSerializer interface implementation
-        bool SerializeChunk(const enigma::voxel::chunk::Chunk* chunk) override;
-        bool DeserializeChunk(enigma::voxel::chunk::Chunk* chunk) override;
-
-        // ESF specific methods with data handling
-        std::vector<uint8_t> SerializeChunkData(enigma::voxel::chunk::Chunk* chunk);
-        bool                 DeserializeChunkData(enigma::voxel::chunk::Chunk* chunk, const std::vector<uint8_t>& data);
+        bool SerializeChunk(const enigma::voxel::Chunk* chunk, std::vector<uint8_t>& outData) override;
+        bool DeserializeChunk(enigma::voxel::Chunk* chunk, const std::vector<uint8_t>& data) override;
 
         // Utility methods
-        size_t GetSerializedSize(enigma::voxel::chunk::Chunk* chunk) const;
+        size_t GetSerializedSize(enigma::voxel::Chunk* chunk) const;
         bool   ValidateSerializedData(const std::vector<uint8_t>& data) const;
 
     private:
-        enigma::voxel::chunk::BlockStateSerializer::StateMapping m_stateMapping;
+        enigma::voxel::BlockStateSerializer::StateMapping m_stateMapping;
     };
 
     /**

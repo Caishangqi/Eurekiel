@@ -5,11 +5,10 @@
 #include "Engine/Registry/Core/IRegistrable.hpp"
 #include "Engine/Resource/ResourceCommon.hpp"
 
-namespace enigma::voxel::generation
+namespace enigma::voxel
 {
     using namespace enigma::core;
     using namespace enigma::resource;
-    using namespace enigma::voxel::chunk;
 
     /**
      * @brief Abstract base class for world generators

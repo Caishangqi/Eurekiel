@@ -1,8 +1,8 @@
 ﻿#include "PropertyTypes.hpp"
 
-using namespace enigma::voxel::property;
+using namespace enigma::voxel;
 
-std::string enigma::voxel::property::DirectionToString(Direction dir)
+std::string enigma::voxel::DirectionToString(Direction dir)
 {
     switch (dir)
     {
@@ -16,7 +16,7 @@ std::string enigma::voxel::property::DirectionToString(Direction dir)
     }
 }
 
-Direction enigma::voxel::property::StringToDirection(const std::string& str)
+Direction enigma::voxel::StringToDirection(const std::string& str)
 {
     if (str == "south") return Direction::SOUTH;
     if (str == "east") return Direction::EAST;

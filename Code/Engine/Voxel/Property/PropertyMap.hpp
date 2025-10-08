@@ -4,7 +4,7 @@
 #include <memory>
 #include <functional>
 
-namespace enigma::voxel::property
+namespace enigma::voxel
 {
     /**
      * @brief Container for property-value pairs with fast hash-based lookup
@@ -216,9 +216,9 @@ namespace enigma::voxel::property
 namespace std
 {
     template <>
-    struct hash<enigma::voxel::property::PropertyMap>
+    struct hash<enigma::voxel::PropertyMap>
     {
-        size_t operator()(const enigma::voxel::property::PropertyMap& map) const
+        size_t operator()(const enigma::voxel::PropertyMap& map) const
         {
             return map.GetHash();
         }

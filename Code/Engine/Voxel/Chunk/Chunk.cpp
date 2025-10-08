@@ -12,7 +12,7 @@
 #include "Engine/Resource/Atlas/TextureAtlas.hpp"
 #include "Engine/Voxel/Builtin/DefaultBlock.hpp"
 
-using namespace enigma::voxel::chunk;
+using namespace enigma::voxel;
 
 // Optimized bit-shift coordinate to index conversion
 // Formula: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
@@ -93,8 +93,9 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
     m_blocks[index] = state;
 
     // Mark chunk as both modified for saving AND dirty for mesh rebuild (player action)
-    m_isModified = true;
-    m_isDirty    = true;
+    m_isModified     = true;
+    m_playerModified = true; // Mark as player-modified for PlayerModifiedOnly save strategy
+    m_isDirty        = true;
 }
 
 void Chunk::MarkDirty()

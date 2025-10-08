@@ -5,7 +5,7 @@
 #include <fstream>
 #include <memory>
 
-namespace enigma::voxel::chunk
+namespace enigma::voxel
 {
     /**
      * @brief ESF Region File I/O Manager for chunk serialization

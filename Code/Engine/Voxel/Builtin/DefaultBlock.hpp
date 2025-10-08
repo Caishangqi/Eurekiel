@@ -6,7 +6,7 @@ namespace enigma::registry::block
     class Block;
 }
 
-namespace enigma::voxel::block
+namespace enigma::voxel
 {
     inline std::shared_ptr<registry::block::Block> AIR = nullptr;
 }
