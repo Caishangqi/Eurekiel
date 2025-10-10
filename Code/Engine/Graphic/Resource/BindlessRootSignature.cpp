@@ -43,7 +43,7 @@ namespace enigma::graphic
         m_initialized = true;
 
         core::LogInfo("BindlessRootSignature",
-                      "Initialized successfully (SM6.6 Bindless architecture)");
+                      "Initialized successfully (RENDERTARGETS混合架构)");
         core::LogInfo("BindlessRootSignature",
                       "  - Root Constants: %u DWORDs (%u bytes)",
                       ROOT_CONSTANTS_NUM_32BIT_VALUES,
@@ -143,7 +143,7 @@ namespace enigma::graphic
         // 1. 创建Root Parameter - 只有1个32位常量参数
         CD3DX12_ROOT_PARAMETER rootParameter;
         rootParameter.InitAsConstants(
-            ROOT_CONSTANTS_NUM_32BIT_VALUES, // 32 DWORDs = 128 bytes
+            ROOT_CONSTANTS_NUM_32BIT_VALUES, // 11 DWORDs = 44 bytes
             0, // b0 (register)
             0, // space0
             D3D12_SHADER_VISIBILITY_ALL); // 所有着色器阶段可见
@@ -200,10 +200,10 @@ namespace enigma::graphic
         }
 
         // 5. 设置调试名称
-        m_rootSignature->SetName(L"SM6.6 Bindless Root Signature");
+        m_rootSignature->SetName(L"RENDERTARGETS Bindless Root Signature (44 bytes)");
 
         core::LogInfo("BindlessRootSignature",
-                      "CreateRootSignature: SM6.6 Bindless Root Signature created successfully");
+                      "CreateRootSignature: RENDERTARGETS Bindless Root Signature created successfully");
 
         return true;
     }
