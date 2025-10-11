@@ -6,10 +6,10 @@
 #include <vector>
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include "BindlessResourceTypes.hpp"
 
 namespace enigma::graphic
 {
+    class BindlessIndexAllocator;
     /**
      * @brief D12Resource类 - DirectX 12资源的基础封装
      *
@@ -44,10 +44,10 @@ namespace enigma::graphic
 
         // SM6.6 Bindless索引 (Milestone 2.7) - 替代ResourceBindingTraits
         static constexpr uint32_t INVALID_BINDLESS_INDEX = UINT32_MAX;
-        uint32_t m_bindlessIndex = INVALID_BINDLESS_INDEX;  // Bindless全局索引
+        uint32_t                  m_bindlessIndex        = INVALID_BINDLESS_INDEX; // Bindless全局索引
 
         // CPU数据管理 (Milestone 2.7) - True Bindless上传支持
-        std::vector<uint8_t> m_cpuData;      // CPU端数据缓存
+        std::vector<uint8_t> m_cpuData; // CPU端数据缓存
         bool                 m_isUploaded = false; // 上传状态标记 - 用于Bindless注册安全检查
 
     public:
@@ -173,7 +173,11 @@ namespace enigma::graphic
          *
          * 教学要点: 上传完成后释放CPU内存，节省内存占用
          */
-        void ReleaseCPUData() { m_cpuData.clear(); m_cpuData.shrink_to_fit(); }
+        void ReleaseCPUData()
+        {
+            m_cpuData.clear();
+            m_cpuData.shrink_to_fit();
+        }
 
         /**
          * @brief 上传资源到GPU
@@ -310,7 +314,7 @@ namespace enigma::graphic
          * ```
          */
         virtual void CreateDescriptorInGlobalHeap(
-            ID3D12Device* device,
+            ID3D12Device*                      device,
             class GlobalDescriptorHeapManager* heapManager) = 0;
 
         // ========================================================================
@@ -357,14 +361,31 @@ namespace enigma::graphic
 
     protected:
         /**
-         * @brief 获取资源的默认Bindless类型 (由子类重写)
-         * @return 资源的默认类型
+         * @brief 分配Bindless索引（纯虚函数 - 子类决定纹理或缓冲区）
+         * @param allocator 索引分配器
+         * @return 成功返回索引，失败返回INVALID_BINDLESS_INDEX
          *
-         * 教学要点: 虚函数让子类定义自己的默认Bindless类型
-         * - D12Texture返回BindlessResourceType::Texture2D
-         * - D12Buffer根据用途返回ConstantBuffer或StructuredBuffer
+         * 教学要点:
+         * 1. Template Method模式 - 基类管理流程，子类决定索引类型
+         * 2. D12Texture返回: allocator->AllocateTextureIndex()
+         * 3. D12Buffer返回: allocator->AllocateBufferIndex()
          */
-        virtual BindlessResourceType GetDefaultBindlessResourceType() const = 0;
+        virtual uint32_t AllocateBindlessIndexInternal(
+            BindlessIndexAllocator* allocator) const = 0;
+
+        /**
+         * @brief 释放Bindless索引（纯虚函数）
+         * @param allocator 索引分配器
+         * @param index 要释放的索引
+         * @return 成功返回true
+         *
+         * 教学要点:
+         * 1. Template Method模式 - 子类实现具体释放逻辑
+         * 2. D12Texture调用: allocator->FreeTextureIndex(index)
+         * 3. D12Buffer调用: allocator->FreeBufferIndex(index)
+         */
+        virtual bool FreeBindlessIndexInternal(
+            BindlessIndexAllocator* allocator, uint32_t index) const = 0;
 
     protected:
         /**

@@ -39,11 +39,11 @@ namespace enigma::graphic
             SetDebugName(createInfo.debugName);
         }
 
-    // 复制初始数据到CPU端（如果提供了）
-    if (createInfo.initialData && createInfo.size > 0)
-    {
-        SetInitialData(createInfo.initialData, createInfo.size);
-    }
+        // 复制初始数据到CPU端（如果提供了）
+        if (createInfo.initialData && createInfo.size > 0)
+        {
+            SetInitialData(createInfo.initialData, createInfo.size);
+        }
 
         // 如果提供了初始数据且缓冲区支持CPU写入，则进行数据拷贝
         // 对应Iris的ShaderStorageBuffer中content的处理
@@ -105,9 +105,9 @@ namespace enigma::graphic
             D12Resource::operator=(std::move(other));
 
             // 移动D12Buffer特有成员
-            m_usage        = other.m_usage;
-            m_memoryAccess = other.m_memoryAccess;
-            m_mappedData   = other.m_mappedData;
+            m_usage              = other.m_usage;
+            m_memoryAccess       = other.m_memoryAccess;
+            m_mappedData         = other.m_mappedData;
             m_formattedDebugName = std::move(other.m_formattedDebugName);
 
             // 清空源对象
@@ -396,11 +396,42 @@ namespace enigma::graphic
         return flags;
     }
 
-    BindlessResourceType D12Buffer::GetDefaultBindlessResourceType() const
+    /**
+     * @brief 分配Buffer专属的Bindless索引
+     *
+     * 教学要点:
+     * 1. Buffer索引范围: 1,000,000 - 1,999,999 (1M个Buffer容量)
+     * 2. 调用BindlessIndexAllocator::AllocateBufferIndex()
+     * 3. 返回值是全局唯一的索引,用于在全局描述符堆中定位
+     */
+    uint32_t D12Buffer::AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const
     {
-        // TODO: 稍后完成完整实现 - 根据BufferUsage返回对应的BindlessResourceType
-        // 暂时返回Buffer作为默认值
-        return BindlessResourceType::RawBuffer;
+        if (!allocator)
+        {
+            return BindlessIndexAllocator::INVALID_INDEX;
+        }
+
+        // 调用Buffer索引分配器
+        return allocator->AllocateBufferIndex();
+    }
+
+    /**
+     * @brief 释放Buffer专属的Bindless索引
+     *
+     * 教学要点:
+     * 1. 必须使用FreeBufferIndex()释放Buffer索引
+     * 2. 不能使用FreeTextureIndex()释放Buffer索引(会导致索引泄漏)
+     * 3. FreeList架构保证O(1)时间复杂度
+     */
+    bool D12Buffer::FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const
+    {
+        if (!allocator)
+        {
+            return false;
+        }
+
+        // 调用Buffer索引释放器
+        return allocator->FreeBufferIndex(index);
     }
 
     /**
@@ -437,8 +468,8 @@ namespace enigma::graphic
         {
             // 1. 创建Constant Buffer View (CBV)
             D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-            cbvDesc.BufferLocation = resource->GetGPUVirtualAddress();
-            cbvDesc.SizeInBytes    = static_cast<UINT>((GetSize() + 255) & ~255); // CBV必须256字节对齐
+            cbvDesc.BufferLocation                  = resource->GetGPUVirtualAddress();
+            cbvDesc.SizeInBytes                     = static_cast<UINT>((GetSize() + 255) & ~255); // CBV必须256字节对齐
 
             // 在全局描述符堆的Bindless索引位置创建CBV
             heapManager->CreateConstantBufferView(device, &cbvDesc, GetBindlessIndex());
@@ -449,17 +480,17 @@ namespace enigma::graphic
                           GetDebugName().c_str());
         }
         else if (HasFlag(m_usage, BufferUsage::StructuredBuffer) ||
-                 HasFlag(m_usage, BufferUsage::StorageBuffer))
+            HasFlag(m_usage, BufferUsage::StorageBuffer))
         {
             // 2. 创建Structured Buffer View (SRV)
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Format                     = DXGI_FORMAT_UNKNOWN; // Structured Buffer格式未知
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Buffer.FirstElement        = 0;
-            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4); // 假设每个元素4字节
-            srvDesc.Buffer.StructureByteStride = 4; // 结构体步长（字节）
-            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
+            srvDesc.Format                          = DXGI_FORMAT_UNKNOWN; // Structured Buffer格式未知
+            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement             = 0;
+            srvDesc.Buffer.NumElements              = static_cast<UINT>(GetSize() / 4); // 假设每个元素4字节
+            srvDesc.Buffer.StructureByteStride      = 4; // 结构体步长（字节）
+            srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
 
             // 在全局描述符堆的Bindless索引位置创建SRV
             heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
@@ -470,17 +501,17 @@ namespace enigma::graphic
                           GetDebugName().c_str());
         }
         else if (HasFlag(m_usage, BufferUsage::VertexBuffer) ||
-                 HasFlag(m_usage, BufferUsage::IndexBuffer))
+            HasFlag(m_usage, BufferUsage::IndexBuffer))
         {
             // 3. Vertex/Index Buffer通常使用Raw Buffer View (SRV)
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Format                     = DXGI_FORMAT_R32_TYPELESS; // Raw Buffer使用R32_TYPELESS
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Buffer.FirstElement        = 0;
-            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4); // 每个元素4字节
-            srvDesc.Buffer.StructureByteStride = 0; // Raw Buffer的步长为0
-            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_RAW; // Raw Buffer标志
+            srvDesc.Format                          = DXGI_FORMAT_R32_TYPELESS; // Raw Buffer使用R32_TYPELESS
+            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement             = 0;
+            srvDesc.Buffer.NumElements              = static_cast<UINT>(GetSize() / 4); // 每个元素4字节
+            srvDesc.Buffer.StructureByteStride      = 0; // Raw Buffer的步长为0
+            srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_RAW; // Raw Buffer标志
 
             // 在全局描述符堆的Bindless索引位置创建SRV
             heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
@@ -494,13 +525,13 @@ namespace enigma::graphic
         {
             // 默认情况：创建Raw Buffer View
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Format                     = DXGI_FORMAT_R32_TYPELESS;
-            srvDesc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            srvDesc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Buffer.FirstElement        = 0;
-            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / 4);
-            srvDesc.Buffer.StructureByteStride = 0;
-            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_RAW;
+            srvDesc.Format                          = DXGI_FORMAT_R32_TYPELESS;
+            srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Buffer.FirstElement             = 0;
+            srvDesc.Buffer.NumElements              = static_cast<UINT>(GetSize() / 4);
+            srvDesc.Buffer.StructureByteStride      = 0;
+            srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_RAW;
 
             heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
 

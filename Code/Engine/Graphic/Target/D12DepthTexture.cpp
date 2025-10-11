@@ -162,11 +162,63 @@ namespace enigma::graphic
         return *this;
     }
 
+    /**
+     * @brief 在全局描述符堆中创建深度纹理的SRV描述符
+     *
+     * 教学要点:
+     * 1. 深度纹理需要创建SRV用于着色器采样（延迟渲染中读取深度值）
+     * 2. 使用GetTypedFormat()获取深度格式对应的类型化格式
+     * 3. 深度纹理的SRV允许在像素着色器中读取深度信息
+     * 4. DSV（深度模板视图）由单独的DSV堆管理,不在全局堆中
+     *
+     * DirectX 12 API参考:
+     * - ID3D12Device::CreateShaderResourceView()
+     * - D3D12_SHADER_RESOURCE_VIEW_DESC
+     */
     void D12DepthTexture::CreateDescriptorInGlobalHeap(ID3D12Device* device, class GlobalDescriptorHeapManager* heapManager)
     {
-        UNUSED(device)
-        UNUSED(heapManager)
-        ERROR_AND_DIE("D12DepthTexture::CreateDescriptorInGlobalHeap not implemented")
+        if (!device || !heapManager)
+        {
+            return;
+        }
+
+        if (!IsValid())
+        {
+            return;
+        }
+
+        // 1. 获取深度格式对应的类型化格式（用于SRV）
+        // 例如: D32_FLOAT -> R32_FLOAT, D24_UNORM_S8_UINT -> R24_UNORM_X8_TYPELESS
+        DXGI_FORMAT srvFormat = GetTypedFormat(m_depthFormat);
+        if (srvFormat == DXGI_FORMAT_UNKNOWN)
+        {
+            // 不支持的深度格式，无法创建SRV
+            return;
+        }
+
+        // 2. 创建着色器资源视图描述符
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format                          = srvFormat;
+        srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Texture2D.MostDetailedMip       = 0;
+        srvDesc.Texture2D.MipLevels             = 1; // 深度纹理通常没有Mipmap
+        srvDesc.Texture2D.PlaneSlice            = 0;
+        srvDesc.Texture2D.ResourceMinLODClamp   = 0.0f;
+
+        // 3. 在全局描述符堆中创建SRV
+        // 使用m_bindlessIndex作为堆中的索引位置
+        heapManager->CreateShaderResourceView(
+            device,
+            GetResource(),
+            &srvDesc,
+            GetBindlessIndex()
+        );
+
+        // 教学要点:
+        // - 深度纹理的SRV允许在着色器中读取深度值
+        // - 这对于延迟渲染、阴影贴图、后处理效果至关重要
+        // - DSV用于深度测试，SRV用于着色器采样，是两个独立的视图
     }
 
     // ==================== 资源访问接口 ====================
@@ -378,9 +430,9 @@ namespace enigma::graphic
     std::string D12DepthTexture::GetDebugInfo() const
     {
         std::string info = "D12DepthTexture Debug Info:\n";
-        info             += "  Name: " + GetDebugName() + "\n";
-        info             += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height) + "\n";
-        info             += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
+        info += "  Name: " + GetDebugName() + "\n";
+        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height) + "\n";
+        info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
 
         // 深度类型信息
         info += "  Depth Type: ";
@@ -412,12 +464,45 @@ namespace enigma::graphic
         return info;
     }
 
-    BindlessResourceType D12DepthTexture::GetDefaultBindlessResourceType() const
+    /**
+     * @brief 分配深度纹理专属的Bindless索引
+     *
+     * 教学要点:
+     * 1. 深度纹理索引范围: 0 - 999,999 (1M个纹理容量)
+     * 2. 调用BindlessIndexAllocator::AllocateTextureIndex()
+     * 3. 深度纹理作为可采样资源，使用纹理索引而非缓冲区索引
+     * 4. 返回值是全局唯一的索引,用于在全局描述符堆中定位
+     */
+    uint32_t D12DepthTexture::AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const
     {
-        // 深度纹理作为可采样资源使用Texture2D类型
-        // 这允许在延迟渲染管线中采样深度缓冲进行后处理
-        // 对应Iris中深度纹理绑定为GL_TEXTURE_2D用于着色器访问
-        return BindlessResourceType::Texture2D;
+        if (!allocator)
+        {
+            return BindlessIndexAllocator::INVALID_INDEX;
+        }
+
+        // 调用纹理索引分配器
+        // 深度纹理作为可采样资源使用纹理索引范围
+        return allocator->AllocateTextureIndex();
+    }
+
+    /**
+     * @brief 释放深度纹理专属的Bindless索引
+     *
+     * 教学要点:
+     * 1. 必须使用FreeTextureIndex()释放深度纹理索引
+     * 2. 不能使用FreeBufferIndex()释放纹理索引(会导致索引泄漏)
+     * 3. FreeList架构保证O(1)时间复杂度
+     * 4. 深度纹理在延迟渲染中作为着色器可读资源,使用纹理索引
+     */
+    bool D12DepthTexture::FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const
+    {
+        if (!allocator)
+        {
+            return false;
+        }
+
+        // 调用纹理索引释放器
+        return allocator->FreeTextureIndex(index);
     }
 
     // ==================== 静态辅助方法 ====================

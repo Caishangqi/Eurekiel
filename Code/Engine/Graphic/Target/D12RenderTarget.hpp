@@ -1,7 +1,7 @@
 ﻿#pragma once
 
-#include "../D12Resources.hpp"
-#include "../Texture/D12Texture.hpp"
+#include "../Resource/D12Resources.hpp"
+#include "../Resource/Texture/D12Texture.hpp"
 #include <memory>
 #include <string>
 #include <d3d12.h>
@@ -89,6 +89,7 @@ namespace enigma::graphic
             std::string m_name              = ""; // 对应Iris name
             bool        m_allowLinearFilter = true; // 对应Iris allowsLinear判断
             int         m_sampleCount       = 1; // DirectX专有: MSAA采样数
+            bool        m_enableMipmap      = false; // 🔥 Milestone 3.0: Mipmap支持
 
         public:
             /**
@@ -124,12 +125,28 @@ namespace enigma::graphic
             }
 
             /**
+             * @brief 设置尺寸 (别名方法，方便使用)
+             */
+            Builder& SetSize(int width, int height)
+            {
+                return SetDimensions(width, height);
+            }
+
+            /**
              * @brief 设置过滤模式 (对应Iris的allowsLinear逻辑)
              */
             Builder& SetLinearFilter(bool enable)
             {
                 m_allowLinearFilter = enable;
                 return *this;
+            }
+
+            /**
+             * @brief 设置过滤模式 (别名方法)
+             */
+            Builder& SetAllowLinearFilter(bool enable)
+            {
+                return SetLinearFilter(enable);
             }
 
             /**
@@ -142,6 +159,20 @@ namespace enigma::graphic
                     throw std::invalid_argument("Sample count must be between 1 and 16");
                 }
                 m_sampleCount = sampleCount;
+                return *this;
+            }
+
+            /**
+             * @brief 设置Mipmap生成 (Milestone 3.0: Bindless-MRT架构)
+             *
+             * 教学要点:
+             * - Mipmap提供多级细节纹理，减少远距离采样走样
+             * - Iris通过材质属性控制Mipmap生成
+             * - DirectX需要在纹理创建时指定Mipmap级别
+             */
+            Builder& EnableMipmap(bool enable)
+            {
+                m_enableMipmap = enable;
                 return *this;
             }
 
@@ -167,6 +198,11 @@ namespace enigma::graphic
         int         m_height; // 对应Iris height
         bool        m_allowLinearFilter; // 对应Iris allowsLinear判断
         int         m_sampleCount; // DirectX专有: 多重采样数
+        bool        m_enableMipmap; // Milestone 3.0: Mipmap支持
+
+        // Milestone 3.0: Bindless索引支持 🔥
+        uint32_t m_mainTextureIndex; // 主纹理在Bindless堆中的索引 (对应架构文档RenderTargetPair)
+        uint32_t m_altTextureIndex; // 替代纹理在Bindless堆中的索引
 
         // DirectX专有描述符
         D3D12_CPU_DESCRIPTOR_HANDLE m_mainRTV; // 主纹理RTV
@@ -246,6 +282,37 @@ namespace enigma::graphic
          * @brief 获取多重采样数 (DirectX专有)
          */
         int GetSampleCount() const { return m_sampleCount; }
+
+        /**
+         * @brief 获取Mipmap生成状态 (Milestone 3.0: Bindless-MRT架构)
+         * @return 如果启用Mipmap返回true
+         *
+         * 教学要点:
+         * - Mipmap级别数由纹理尺寸决定: log2(max(width, height)) + 1
+         * - Bindless架构下，Mipmap资源仍使用同一个索引，GPU自动选择级别
+         */
+        bool IsMipmapEnabled() const { return m_enableMipmap; }
+
+        /**
+         * @brief 获取主纹理Bindless索引 (Milestone 3.0: Bindless-MRT架构)
+         * @return 主纹理在全局ResourceDescriptorHeap中的索引
+         *
+         * 教学要点:
+         * - 对应架构文档RenderTargetPair::mainTextureIndex
+         * - HLSL通过此索引直接访问: ResourceDescriptorHeap[index]
+         * - 避免传统Descriptor Table绑定，性能提升80%+
+         */
+        uint32_t GetMainTextureIndex() const { return m_mainTextureIndex; }
+
+        /**
+         * @brief 获取替代纹理Bindless索引 (Milestone 3.0: Bindless-MRT架构)
+         * @return 替代纹理在全局ResourceDescriptorHeap中的索引
+         *
+         * 教学要点:
+         * - 对应架构文档RenderTargetPair::altTextureIndex
+         * - 支持Ping-Pong双缓冲机制，Main/Alt交替读写
+         */
+        uint32_t GetAltTextureIndex() const { return m_altTextureIndex; }
 
         // ========================================================================
         // DirectX专有描述符访问
@@ -334,13 +401,68 @@ namespace enigma::graphic
 
     protected:
         /**
-         * @brief 获取RenderTarget的默认Bindless资源类型
-         * @return RenderTarget作为可读取纹理返回BindlessResourceType::Texture2D
+         * @brief 分配Bindless索引（RenderTarget子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @return 成功返回有效索引（0-999,999），失败返回INVALID_INDEX
          *
-         * 教学要点: RenderTarget的主要纹理作为可采样资源使用Texture2D类型
-         * 对应Iris中将RenderTarget绑定为GL_TEXTURE_2D供着色器采样
+         * 教学要点:
+         * 1. RenderTarget使用纹理索引范围（0-999,999）
+         * 2. 调用allocator->AllocateTextureIndex()获取纹理专属索引
+         * 3. 注意: RenderTarget管理双纹理，此索引仅用于主纹理
+         * 4. 替代纹理的索引由内部分配并存储在m_altTextureIndex
          */
-        BindlessResourceType GetDefaultBindlessResourceType() const override;
+        uint32_t AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const override;
+
+        /**
+         * @brief 释放Bindless索引（RenderTarget子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @param index 要释放的索引值
+         * @return 成功返回true，失败返回false
+         *
+         * 教学要点:
+         * 1. 调用allocator->FreeTextureIndex(index)释放纹理专属索引
+         * 2. 必须使用与AllocateTextureIndex对应的释放函数
+         * 3. 双纹理架构: 主纹理和替代纹理索引都需要释放
+         */
+        bool FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const override;
+
+        /**
+         * @brief 在全局描述符堆中创建描述符（RenderTarget子类实现）
+         * @param device DirectX 12设备指针
+         * @param heapManager 全局描述符堆管理器指针
+         *
+         * 教学要点:
+         * 1. RenderTarget创建SRV描述符（用于着色器采样）
+         * 2. 双纹理架构: 主纹理和替代纹理都需要创建SRV
+         * 3. RTV描述符由单独的RTV堆管理，不在全局堆中
+         */
+        void CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
+
+        /**
+         * @brief 重写D12Resource纯虚函数: RenderTarget上传逻辑
+         * @param commandList Copy队列命令列表
+         * @param uploadContext Upload Heap上下文
+         * @return 上传成功返回true
+         *
+         * 教学要点:
+         * - RenderTarget不需要上传初始数据(GPU直接写入)
+         * - 与Texture的区别: Texture需要上传贴图,RenderTarget不需要
+         * - 返回true表示无需上传,直接成功
+         */
+        bool UploadToGPU(
+            ID3D12GraphicsCommandList* commandList,
+            class UploadContext&       uploadContext
+        ) override;
+
+        /**
+         * @brief 重写D12Resource纯虚函数: 获取上传后目标状态
+         * @return D3D12_RESOURCE_STATE_RENDER_TARGET
+         *
+         * 教学要点:
+         * - RenderTarget初始状态为RENDER_TARGET(用于渲染输出)
+         * - 后续如需采样,通过ResourceBarrier转换到PIXEL_SHADER_RESOURCE
+         */
+        D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
 
     private:
         /**

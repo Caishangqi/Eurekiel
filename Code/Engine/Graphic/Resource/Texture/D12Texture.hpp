@@ -23,7 +23,6 @@
 #pragma once
 
 #include "../D12Resources.hpp"
-#include "../BindlessResourceTypes.hpp"
 #include <memory>
 #include <string>
 #include <dxgi1_6.h>
@@ -318,13 +317,31 @@ namespace enigma::graphic
 
     protected:
         /**
-         * @brief 获取纹理的默认Bindless资源类型
-         * @return BindlessResourceType::Texture2D
+         * @brief 分配Bindless纹理索引（重写基类纯虚函数）
+         * @param allocator 索引分配器
+         * @return 成功返回纹理索引(0-999999)，失败返回INVALID_BINDLESS_INDEX
          *
-         * 实现指导: 纹理默认注册为Texture2D类型
+         * 教学要点:
+         * 1. Template Method模式 - 基类管理流程，子类决定索引类型
+         * 2. 调用allocator->AllocateTextureIndex()分配纹理专用索引
+         * 3. 纹理索引范围: 0 - 999,999
          */
-        BindlessResourceType GetDefaultBindlessResourceType() const override;
-        void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
+        uint32_t AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const override;
+
+        /**
+         * @brief 释放Bindless纹理索引（重写基类纯虚函数）
+         * @param allocator 索引分配器
+         * @param index 要释放的索引
+         * @return 成功返回true
+         *
+         * 教学要点:
+         * 1. Template Method模式 - 子类实现具体释放逻辑
+         * 2. 调用allocator->FreeTextureIndex(index)释放纹理索引
+         * 3. 索引范围验证: 必须在0-999999范围内
+         */
+        bool FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const override;
+
+        void CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
 
         // ==================== GPU资源上传(Milestone 2.7) ====================
 

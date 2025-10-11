@@ -314,8 +314,8 @@ namespace enigma::graphic
     std::string D12Texture::GetDebugInfo() const
     {
         std::string info = "D12Texture Debug Info:\n";
-        info             += "  Name: " + GetDebugName() + "\n";
-        info             += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
+        info += "  Name: " + GetDebugName() + "\n";
+        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
         if (m_depth > 1)
             info += "x" + std::to_string(m_depth);
         info += "\n";
@@ -674,11 +674,42 @@ namespace enigma::graphic
         }
     }
 
-    BindlessResourceType D12Texture::GetDefaultBindlessResourceType() const
+    /**
+     * @brief 分配Bindless纹理索引 (Template Method模式 - 子类实现)
+     *
+     * 教学要点:
+     * 1. Template Method模式: 基类管理流程,子类决定索引类型
+     * 2. 纹理调用AllocateTextureIndex()获取纹理专用索引(0-999999)
+     * 3. FreeList架构: O(1)分配,无需遍历
+     */
+    uint32_t D12Texture::AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const
     {
-        // TODO: 稍后完成完整实现 - 根据纹理类型和用途返回对应的BindlessResourceType
-        // 暂时返回Texture2D作为默认值
-        return BindlessResourceType::Texture2D;
+        if (!allocator)
+        {
+            return BindlessIndexAllocator::INVALID_INDEX;
+        }
+
+        // 调用纹理索引分配器
+        return allocator->AllocateTextureIndex();
+    }
+
+    /**
+     * @brief 释放Bindless纹理索引 (Template Method模式 - 子类实现)
+     *
+     * 教学要点:
+     * 1. Template Method模式: 子类实现具体释放逻辑
+     * 2. 纹理调用FreeTextureIndex()释放纹理索引
+     * 3. 索引范围验证: 0-999999
+     */
+    bool D12Texture::FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const
+    {
+        if (!allocator)
+        {
+            return false;
+        }
+
+        // 调用纹理索引释放器
+        return allocator->FreeTextureIndex(index);
     }
 
     /**

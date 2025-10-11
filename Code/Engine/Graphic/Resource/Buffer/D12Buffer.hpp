@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include "../D12Resources.hpp"
-#include "../BindlessResourceTypes.hpp"
 #include <d3d12.h>
 #include <memory>
 #include <cstdint>
@@ -168,16 +167,30 @@ namespace enigma::graphic
 
     protected:
         /**
-         * @brief 获取缓冲区的默认Bindless资源类型
-         * @return 根据BufferUsage确定的BindlessResourceType
+         * @brief 分配Bindless索引（Buffer子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @return 成功返回有效索引（1,000,000-1,999,999），失败返回INVALID_INDEX
          *
-         * 实现指导:
-         * - ConstantBuffer用途返回BindlessResourceType::ConstantBuffer
-         * - StructuredBuffer用途返回BindlessResourceType::Buffer
-         * - 其他类型根据实际情况返回合适的BindlessResourceType
+         * 教学要点:
+         * 1. Buffer使用Buffer索引范围（1,000,000-1,999,999）
+         * 2. 调用allocator->AllocateBufferIndex()获取Buffer专属索引
+         * 3. FreeList O(1)分配策略
          */
-        BindlessResourceType GetDefaultBindlessResourceType() const override;
-        void                 CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
+        uint32_t AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const override;
+
+        /**
+         * @brief 释放Bindless索引（Buffer子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @param index 要释放的索引值
+         * @return 成功返回true，失败返回false
+         *
+         * 教学要点:
+         * 1. 调用allocator->FreeBufferIndex(index)释放Buffer专属索引
+         * 2. 必须使用与AllocateBufferIndex对应的释放函数
+         */
+        bool FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const override;
+
+        void CreateDescriptorInGlobalHeap(ID3D12Device* device, GlobalDescriptorHeapManager* heapManager) override;
 
         // ==================== GPU资源上传(Milestone 2.7) ====================
 

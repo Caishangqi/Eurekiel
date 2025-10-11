@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "../D12Resources.hpp"
+#include "../Resource/D12Resources.hpp"
 #include <memory>
 #include <string>
 #include <dxgi1_6.h>
@@ -55,13 +55,13 @@ namespace enigma::graphic
     struct DepthTextureCreateInfo
     {
         // 基础属性
-        std::string name;        ///< 深度纹理名称 - 对应Iris的name参数
-        uint32_t    width;       ///< 宽度 - 对应Iris的width参数
-        uint32_t    height;      ///< 高度 - 对应Iris的height参数
-        DepthType   depthType;   ///< 深度纹理类型 - 对应Iris的DepthBufferFormat
+        std::string name; ///< 深度纹理名称 - 对应Iris的name参数
+        uint32_t    width; ///< 宽度 - 对应Iris的width参数
+        uint32_t    height; ///< 高度 - 对应Iris的height参数
+        DepthType   depthType; ///< 深度纹理类型 - 对应Iris的DepthBufferFormat
 
         // 清除值设置
-        float   clearDepth;   ///< 默认清除深度值
+        float   clearDepth; ///< 默认清除深度值
         uint8_t clearStencil; ///< 默认清除模板值
 
         // 调试属性
@@ -70,26 +70,26 @@ namespace enigma::graphic
         // 默认构造
         DepthTextureCreateInfo()
             : name("")
-            , width(0), height(0)
-            , depthType(DepthType::DepthStencil)
-            , clearDepth(1.0f), clearStencil(0)
-            , debugName(nullptr)
+              , width(0), height(0)
+              , depthType(DepthType::DepthStencil)
+              , clearDepth(1.0f), clearStencil(0)
+              , debugName(nullptr)
         {
         }
 
         // 便利构造函数
         DepthTextureCreateInfo(
             const std::string& texName,
-            uint32_t w, uint32_t h,
-            DepthType type = DepthType::DepthStencil,
-            float depth = 1.0f,
-            uint8_t stencil = 0
+            uint32_t           w, uint32_t h,
+            DepthType          type    = DepthType::DepthStencil,
+            float              depth   = 1.0f,
+            uint8_t            stencil = 0
         )
             : name(texName)
-            , width(w), height(h)
-            , depthType(type)
-            , clearDepth(depth), clearStencil(stencil)
-            , debugName(texName.c_str())
+              , width(w), height(h)
+              , depthType(type)
+              , clearDepth(depth), clearStencil(stencil)
+              , debugName(texName.c_str())
         {
         }
     };
@@ -181,9 +181,6 @@ namespace enigma::graphic
         // 支持移动语义
         D12DepthTexture(D12DepthTexture&& other) noexcept;
         D12DepthTexture& operator=(D12DepthTexture&& other) noexcept;
-
-        // ==================== 资源访问接口 ====================
-        void CreateDescriptorInGlobalHeap(ID3D12Device* device, class GlobalDescriptorHeapManager* heapManager) override;
 
         /**
          * @brief 获取深度纹理ID - 对应Iris的getTextureId()
@@ -328,13 +325,40 @@ namespace enigma::graphic
 
     protected:
         /**
-         * @brief 获取深度纹理的默认Bindless资源类型
-         * @return 深度纹理通常返回BindlessResourceType::Texture2D用于着色器采样
+         * @brief 分配Bindless索引（DepthTexture子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @return 成功返回有效索引（0-999,999），失败返回INVALID_INDEX
          *
-         * 教学要点: 深度纹理作为可读取的资源，其Bindless类型是Texture2D
-         * 这允许着色器在延迟渲染中采样深度缓冲进行后处理
+         * 教学要点:
+         * 1. 深度纹理使用纹理索引范围（0-999,999）
+         * 2. 调用allocator->AllocateTextureIndex()获取纹理专属索引
+         * 3. FreeList O(1)分配策略
          */
-        BindlessResourceType GetDefaultBindlessResourceType() const override;
+        uint32_t AllocateBindlessIndexInternal(BindlessIndexAllocator* allocator) const override;
+
+        /**
+         * @brief 释放Bindless索引（DepthTexture子类实现）
+         * @param allocator Bindless索引分配器指针
+         * @param index 要释放的索引值
+         * @return 成功返回true，失败返回false
+         *
+         * 教学要点:
+         * 1. 调用allocator->FreeTextureIndex(index)释放纹理专属索引
+         * 2. 必须使用与AllocateTextureIndex对应的释放函数
+         */
+        bool FreeBindlessIndexInternal(BindlessIndexAllocator* allocator, uint32_t index) const override;
+
+        /**
+         * @brief 在全局描述符堆中创建描述符（DepthTexture子类实现）
+         * @param device DirectX 12设备指针
+         * @param heapManager 全局描述符堆管理器指针
+         *
+         * 教学要点:
+         * 1. 深度纹理创建SRV描述符（用于着色器采样）
+         * 2. 使用m_bindlessIndex作为堆中的索引位置
+         * 3. DSV描述符由单独的DSV堆管理，不在全局堆中
+         */
+        void CreateDescriptorInGlobalHeap(ID3D12Device* device, class GlobalDescriptorHeapManager* heapManager) override;
 
         // ==================== 静态辅助方法 ====================
 

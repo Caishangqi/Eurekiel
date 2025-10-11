@@ -1,7 +1,6 @@
 ﻿#include "D12Resources.hpp"
 #include <cassert>
 #include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
-#include "Engine/Graphic/Resource/BindlessResourceTypes.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
 #include "Engine/Graphic/Resource/CommandListManager.hpp"
 #include "Engine/Graphic/Resource/UploadContext.hpp"
@@ -317,36 +316,15 @@ namespace enigma::graphic
             return std::nullopt;
         }
 
-        // 5. 根据资源类型分配索引
-        BindlessResourceType resourceType = GetDefaultBindlessResourceType();
-        uint32_t             index        = INVALID_BINDLESS_INDEX;
-
-        switch (resourceType)
-        {
-        case BindlessResourceType::Texture2D:
-        case BindlessResourceType::Texture3D:
-        case BindlessResourceType::TextureCube:
-            index = indexAllocator->AllocateTextureIndex();
-            break;
-
-        case BindlessResourceType::ConstantBuffer:
-        case BindlessResourceType::StructuredBuffer:
-            index = indexAllocator->AllocateBufferIndex();
-            break;
-
-        default:
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                           "RegisterBindless: Unsupported resource type %d for '%s'",
-                           static_cast<int>(resourceType), m_debugName.c_str());
-            return std::nullopt;
-        }
+        // 5. 调用子类实现的索引分配逻辑 (Template Method模式)
+        uint32_t index = AllocateBindlessIndexInternal(indexAllocator);
 
         // 6. 检查索引分配是否成功
         if (index == INVALID_BINDLESS_INDEX)
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                           "RegisterBindless: Failed to allocate index for '%s' (type=%d)",
-                           m_debugName.c_str(), static_cast<int>(resourceType));
+                           "RegisterBindless: Failed to allocate index for '%s'",
+                           m_debugName.c_str());
             return std::nullopt;
         }
 
@@ -357,8 +335,8 @@ namespace enigma::graphic
         CreateDescriptorInGlobalHeap(device, heapManager);
 
         core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
-                       "RegisterBindless: Resource '%s' registered (index=%u, type=%d)",
-                       m_debugName.c_str(), index, static_cast<int>(resourceType));
+                       "RegisterBindless: Resource '%s' registered (index=%u)",
+                       m_debugName.c_str(), index);
 
         return index;
     }
@@ -390,29 +368,8 @@ namespace enigma::graphic
             return false;
         }
 
-        // 3. 根据资源类型释放索引
-        BindlessResourceType resourceType = GetDefaultBindlessResourceType();
-        bool                 success      = false;
-
-        switch (resourceType)
-        {
-        case BindlessResourceType::Texture2D:
-        case BindlessResourceType::Texture3D:
-        case BindlessResourceType::TextureCube:
-            success = indexAllocator->FreeTextureIndex(m_bindlessIndex);
-            break;
-
-        case BindlessResourceType::ConstantBuffer:
-        case BindlessResourceType::StructuredBuffer:
-            success = indexAllocator->FreeBufferIndex(m_bindlessIndex);
-            break;
-
-        default:
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                           "UnregisterBindless: Unsupported resource type %d for '%s'",
-                           static_cast<int>(resourceType), m_debugName.c_str());
-            break;
-        }
+        // 3. 调用子类实现的索引释放逻辑 (Template Method模式)
+        bool success = FreeBindlessIndexInternal(indexAllocator, m_bindlessIndex);
 
         // 4. 清除索引标记
         if (success)
