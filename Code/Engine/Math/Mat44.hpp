@@ -15,6 +15,8 @@ struct Vec4;
 
 struct Mat44
 {
+    static Mat44 IDENTITY;
+
     enum { Ix, Iy, Iz, Iw, Jx, Jy, Jz, Jw, Kx, Ky, Kz, Kw, Tx, Ty, Tz, Tw }; // index nicknames, [0] thru [15]
     float m_values[16]; // stored in "basis major" order (Ix,Iy,Iz,Iw,Jx,Jy,... translation in [12,13,14]
 

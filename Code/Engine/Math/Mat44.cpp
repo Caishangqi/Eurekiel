@@ -6,6 +6,8 @@
 #include "Vec4.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
+Mat44 Mat44::IDENTITY = Mat44();
+
 Mat44::Mat44()
 {
     for (int i = 0; i < 16; ++i)
