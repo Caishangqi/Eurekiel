@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ShaderDirectives.cpp
  * @brief Iris 着色器注释指令解析器实现
  * @date 2025-10-03
@@ -38,7 +38,8 @@ namespace enigma::graphic
      */
     static std::string ToUpper(std::string str)
     {
-        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+        std::transform(str.begin(), str.end(), str.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
         return str;
     }
 

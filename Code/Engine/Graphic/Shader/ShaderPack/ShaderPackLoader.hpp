@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "ProgramId.hpp"       // Iris 单一程序ID枚举
+#include "ProgramArrayId.hpp"  // Iris 程序数组ID枚举
 #include <string>
 #include <vector>
 #include <array>
@@ -32,65 +34,6 @@ namespace enigma::graphic
     class ShaderPackLoader
     {
     public:
-        /**
-         * @brief 单一着色器程序类型枚举
-         *
-         * Iris 设计: ProgramId (单一程序) vs ProgramArrayId (程序数组)
-         * 参考: ProgramId.java
-         *
-         * 这个枚举只包含单一程序 (不支持数字后缀)
-         */
-        enum class ProgramId
-        {
-            // 核心渲染程序 (优先级最高)
-            GBUFFERS_BASIC, // 最基础的几何着色器
-            GBUFFERS_TEXTURED, // 基础纹理着色器
-            GBUFFERS_TEXTURED_LIT, // 光照纹理着色器
-            GBUFFERS_SKYBASIC, // 天空盒基础
-            GBUFFERS_SKYTEXTURED, // 天空盒纹理
-            GBUFFERS_CLOUDS, // 云层
-            GBUFFERS_TERRAIN, // 地形 (固体+透明)
-            GBUFFERS_TERRAIN_SOLID, // 固体地形
-            GBUFFERS_TERRAIN_CUTOUT, // 剪裁地形 (草、树叶)
-            GBUFFERS_DAMAGEDBLOCK, // 破坏动画
-            GBUFFERS_BLOCK, // 方块实体
-            GBUFFERS_BEACONBEAM, // 信标光束
-            GBUFFERS_ITEM, // 物品
-            GBUFFERS_ENTITIES, // 实体
-            GBUFFERS_ARMOR_GLINT, // 附魔光泽
-            GBUFFERS_SPIDEREYES, // 蜘蛛眼睛
-            GBUFFERS_HAND, // 手部
-            GBUFFERS_WEATHER, // 天气 (雨雪)
-            GBUFFERS_WATER, // 水
-
-            // 最终合成
-            FINAL,
-
-            // 阴影
-            SHADOW,
-            SHADOW_SOLID,
-            SHADOW_CUTOUT,
-
-            COUNT // 总数
-        };
-
-        /**
-         * @brief 程序数组类型枚举
-         *
-         * Iris 设计: 支持动态数量的着色器程序 (0-99)
-         * 例如: composite, composite1, composite2 ... composite99
-         * 参考: ProgramArrayId.java
-         *
-         * 每个数组类型支持最多100个程序槽位
-         */
-        enum class ProgramArrayId
-        {
-            DEFERRED, // deferred, deferred1...deferred99
-            COMPOSITE, // composite, composite1...composite99
-
-            COUNT // 总数
-        };
-
         /**
          * @brief 着色器文件信息
          *

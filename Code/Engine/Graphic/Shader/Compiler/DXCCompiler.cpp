@@ -171,7 +171,13 @@ namespace enigma::graphic
         std::ifstream file(filePath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
-            result.errorMessage = "Unable to open the file:" + std::string(filePath.begin(), filePath.end());
+            // 使用 WideCharToMultiByte 转换宽字符串为窄字符串
+            int         sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, filePath.c_str(), -1, NULL, 0, NULL, NULL);
+            std::string narrowPath(sizeNeeded, 0);
+            WideCharToMultiByte(CP_UTF8, 0, filePath.c_str(), -1, &narrowPath[0], sizeNeeded, NULL, NULL);
+            narrowPath.resize(sizeNeeded - 1); // 移除 null terminator
+
+            result.errorMessage = "Unable to open the file: " + narrowPath;
             return result;
         }
 
@@ -182,7 +188,13 @@ namespace enigma::graphic
         source.resize(static_cast<size_t>(size));
         if (!file.read(source.data(), size))
         {
-            result.errorMessage = "Failed to read the file:" + std::string(filePath.begin(), filePath.end());
+            // 使用 WideCharToMultiByte 转换宽字符串为窄字符串
+            int         sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, filePath.c_str(), -1, NULL, 0, NULL, NULL);
+            std::string narrowPath(sizeNeeded, 0);
+            WideCharToMultiByte(CP_UTF8, 0, filePath.c_str(), -1, &narrowPath[0], sizeNeeded, NULL, NULL);
+            narrowPath.resize(sizeNeeded - 1); // 移除 null terminator
+
+            result.errorMessage = "Failed to read the file: " + narrowPath;
             return result;
         }
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ShaderProgramBuilder.cpp
  * @brief 着色器程序构建器实现
  * @date 2025-10-03
@@ -7,6 +7,8 @@
 #include "ShaderProgramBuilder.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include <iostream>
+
+#include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::graphic
 {
@@ -19,6 +21,7 @@ namespace enigma::graphic
         ShaderType          type
     )
     {
+        UNUSED(type)
         BuildResult result;
 
         // 1. 验证 ShaderSource
@@ -180,8 +183,7 @@ namespace enigma::graphic
         case ShaderStage::Hull: return "hs_6_6";
         case ShaderStage::Domain: return "ds_6_6";
         default:
-            ERROR_AND_DIE("Unknown ShaderStage");
-            return "";
+            ERROR_AND_DIE("Unknown ShaderStage")
         }
     }
 
@@ -197,8 +199,7 @@ namespace enigma::graphic
         case ShaderStage::Hull: return "HSMain";
         case ShaderStage::Domain: return "DSMain";
         default:
-            ERROR_AND_DIE("Unknown ShaderStage");
-            return "";
+            ERROR_AND_DIE("Unknown ShaderStage")
         }
     }
 
@@ -207,6 +208,7 @@ namespace enigma::graphic
         ShaderStage             stage
     )
     {
+        UNUSED(stage)
         DXCCompiler::CompileOptions options;
 
         // 1. 基础配置

@@ -4,81 +4,10 @@
 #include <algorithm>
 #include <regex>
 
+#include "Engine/Core/EngineCommon.hpp"
+
 namespace enigma::graphic
 {
-    // ========================================================================
-    // 静态映射表初始化
-    // ========================================================================
-
-    // ProgramId 名称映射表
-    const std::unordered_map<std::string, ShaderPackLoader::ProgramId> ShaderPackLoader::s_ProgramIdMap = {
-        // 核心渲染程序
-        {"gbuffers_basic", ProgramId::GBUFFERS_BASIC},
-        {"gbuffers_textured", ProgramId::GBUFFERS_TEXTURED},
-        {"gbuffers_textured_lit", ProgramId::GBUFFERS_TEXTURED_LIT},
-        {"gbuffers_skybasic", ProgramId::GBUFFERS_SKYBASIC},
-        {"gbuffers_skytextured", ProgramId::GBUFFERS_SKYTEXTURED},
-        {"gbuffers_clouds", ProgramId::GBUFFERS_CLOUDS},
-        {"gbuffers_terrain", ProgramId::GBUFFERS_TERRAIN},
-        {"gbuffers_terrain_solid", ProgramId::GBUFFERS_TERRAIN_SOLID},
-        {"gbuffers_terrain_cutout", ProgramId::GBUFFERS_TERRAIN_CUTOUT},
-        {"gbuffers_damagedblock", ProgramId::GBUFFERS_DAMAGEDBLOCK},
-        {"gbuffers_block", ProgramId::GBUFFERS_BLOCK},
-        {"gbuffers_beaconbeam", ProgramId::GBUFFERS_BEACONBEAM},
-        {"gbuffers_item", ProgramId::GBUFFERS_ITEM},
-        {"gbuffers_entities", ProgramId::GBUFFERS_ENTITIES},
-        {"gbuffers_armor_glint", ProgramId::GBUFFERS_ARMOR_GLINT},
-        {"gbuffers_spidereyes", ProgramId::GBUFFERS_SPIDEREYES},
-        {"gbuffers_hand", ProgramId::GBUFFERS_HAND},
-        {"gbuffers_weather", ProgramId::GBUFFERS_WEATHER},
-        {"gbuffers_water", ProgramId::GBUFFERS_WATER},
-        // 最终合成
-        {"final", ProgramId::FINAL},
-        // 阴影
-        {"shadow", ProgramId::SHADOW},
-        {"shadow_solid", ProgramId::SHADOW_SOLID},
-        {"shadow_cutout", ProgramId::SHADOW_CUTOUT},
-    };
-
-    // ProgramId 文件名映射表
-    const std::unordered_map<ShaderPackLoader::ProgramId, std::string> ShaderPackLoader::s_ProgramFileNameMap = {
-        {ProgramId::GBUFFERS_BASIC, "gbuffers_basic"},
-        {ProgramId::GBUFFERS_TEXTURED, "gbuffers_textured"},
-        {ProgramId::GBUFFERS_TEXTURED_LIT, "gbuffers_textured_lit"},
-        {ProgramId::GBUFFERS_SKYBASIC, "gbuffers_skybasic"},
-        {ProgramId::GBUFFERS_SKYTEXTURED, "gbuffers_skytextured"},
-        {ProgramId::GBUFFERS_CLOUDS, "gbuffers_clouds"},
-        {ProgramId::GBUFFERS_TERRAIN, "gbuffers_terrain"},
-        {ProgramId::GBUFFERS_TERRAIN_SOLID, "gbuffers_terrain_solid"},
-        {ProgramId::GBUFFERS_TERRAIN_CUTOUT, "gbuffers_terrain_cutout"},
-        {ProgramId::GBUFFERS_DAMAGEDBLOCK, "gbuffers_damagedblock"},
-        {ProgramId::GBUFFERS_BLOCK, "gbuffers_block"},
-        {ProgramId::GBUFFERS_BEACONBEAM, "gbuffers_beaconbeam"},
-        {ProgramId::GBUFFERS_ITEM, "gbuffers_item"},
-        {ProgramId::GBUFFERS_ENTITIES, "gbuffers_entities"},
-        {ProgramId::GBUFFERS_ARMOR_GLINT, "gbuffers_armor_glint"},
-        {ProgramId::GBUFFERS_SPIDEREYES, "gbuffers_spidereyes"},
-        {ProgramId::GBUFFERS_HAND, "gbuffers_hand"},
-        {ProgramId::GBUFFERS_WEATHER, "gbuffers_weather"},
-        {ProgramId::GBUFFERS_WATER, "gbuffers_water"},
-        {ProgramId::FINAL, "final"},
-        {ProgramId::SHADOW, "shadow"},
-        {ProgramId::SHADOW_SOLID, "shadow_solid"},
-        {ProgramId::SHADOW_CUTOUT, "shadow_cutout"},
-    };
-
-    // ProgramArrayId 名称映射表
-    const std::unordered_map<std::string, ShaderPackLoader::ProgramArrayId> ShaderPackLoader::s_ProgramArrayIdMap = {
-        {"deferred", ProgramArrayId::DEFERRED},
-        {"composite", ProgramArrayId::COMPOSITE},
-    };
-
-    // ProgramArrayId 文件名映射表
-    const std::unordered_map<ShaderPackLoader::ProgramArrayId, std::string> ShaderPackLoader::s_ProgramArrayFileNameMap = {
-        {ProgramArrayId::DEFERRED, "deferred"},
-        {ProgramArrayId::COMPOSITE, "composite"},
-    };
-
     // ========================================================================
     // 公共方法实现
     // ========================================================================
@@ -172,8 +101,8 @@ namespace enigma::graphic
         }
 
         // 初始化程序数组
-        m_ArrayPrograms[ProgramArrayId::DEFERRED]  = {};
-        m_ArrayPrograms[ProgramArrayId::COMPOSITE] = {};
+        m_ArrayPrograms[ProgramArrayId::Deferred]  = {};
+        m_ArrayPrograms[ProgramArrayId::Composite] = {};
 
         for (const auto& entry : std::filesystem::directory_iterator(shadersDir))
         {
@@ -265,49 +194,42 @@ namespace enigma::graphic
         }
     }
 
-    ShaderPackLoader::ProgramId ShaderPackLoader::ParseProgramId(const std::string& name)
+    ProgramId ShaderPackLoader::ParseProgramId(const std::string& name)
     {
-        auto it = s_ProgramIdMap.find(name);
-        if (it != s_ProgramIdMap.end())
+        // 遍历所有 ProgramId 枚举值,找到匹配的文件名
+        for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
         {
-            return it->second;
+            ProgramId id = static_cast<ProgramId>(i);
+            if (ProgramIdToSourceName(id) == name)
+            {
+                return id;
+            }
         }
         return ProgramId::COUNT;
     }
 
-    ShaderPackLoader::ProgramArrayId ShaderPackLoader::ParseProgramArrayId(const std::string& name)
+    ProgramArrayId ShaderPackLoader::ParseProgramArrayId(const std::string& name)
     {
-        auto it = s_ProgramArrayIdMap.find(name);
-        if (it != s_ProgramArrayIdMap.end())
-        {
-            return it->second;
-        }
-        return ProgramArrayId::COUNT;
+        // 使用 StringToProgramArrayId 函数 (来自 ProgramArrayId.hpp)
+        return StringToProgramArrayId(name);
     }
 
     std::string ShaderPackLoader::GetProgramFileName(ProgramId id)
     {
-        auto it = s_ProgramFileNameMap.find(id);
-        if (it != s_ProgramFileNameMap.end())
-        {
-            return it->second;
-        }
-        return "";
+        // 使用 ProgramIdToSourceName 函数 (来自 ProgramId.hpp)
+        return ProgramIdToSourceName(id);
     }
 
     std::string ShaderPackLoader::GetProgramArrayFileName(ProgramArrayId arrayId)
     {
-        auto it = s_ProgramArrayFileNameMap.find(arrayId);
-        if (it != s_ProgramArrayFileNameMap.end())
-        {
-            return it->second;
-        }
-        return "";
+        // 使用 GetProgramArrayPrefix 函数 (来自 ProgramArrayId.hpp)
+        return GetProgramArrayPrefix(arrayId);
     }
 
     std::optional<ShaderPackLoader::ShaderFile> ShaderPackLoader::FindWithFallback(
         ProgramId id, const std::filesystem::path& searchDir) const
     {
+        UNUSED(searchDir)
         // 先在已扫描的缓存中查找
         auto it = m_SinglePrograms.find(id);
         if (it != m_SinglePrograms.end())
@@ -329,38 +251,38 @@ namespace enigma::graphic
         return std::nullopt;
     }
 
-    std::vector<ShaderPackLoader::ProgramId> ShaderPackLoader::GetFallbackChain(ProgramId id)
+    std::vector<ProgramId> ShaderPackLoader::GetFallbackChain(ProgramId id)
     {
         // Iris Fallback Chain 定义 (简化版)
         switch (id)
         {
-        case ProgramId::GBUFFERS_TERRAIN:
-        case ProgramId::GBUFFERS_TERRAIN_SOLID:
-        case ProgramId::GBUFFERS_TERRAIN_CUTOUT:
-            return {ProgramId::GBUFFERS_TEXTURED, ProgramId::GBUFFERS_BASIC};
+        case ProgramId::Terrain:
+        case ProgramId::TerrainSolid:
+        case ProgramId::TerrainCutout:
+            return {ProgramId::Textured, ProgramId::Basic};
 
-        case ProgramId::GBUFFERS_WATER:
-            return {ProgramId::GBUFFERS_TERRAIN, ProgramId::GBUFFERS_TEXTURED, ProgramId::GBUFFERS_BASIC};
+        case ProgramId::Water:
+            return {ProgramId::Terrain, ProgramId::Textured, ProgramId::Basic};
 
-        case ProgramId::GBUFFERS_BLOCK:
-        case ProgramId::GBUFFERS_BEACONBEAM:
-        case ProgramId::GBUFFERS_ITEM:
-        case ProgramId::GBUFFERS_ENTITIES:
-        case ProgramId::GBUFFERS_ARMOR_GLINT:
-        case ProgramId::GBUFFERS_SPIDEREYES:
-        case ProgramId::GBUFFERS_HAND:
-        case ProgramId::GBUFFERS_WEATHER:
-            return {ProgramId::GBUFFERS_TEXTURED, ProgramId::GBUFFERS_BASIC};
+        case ProgramId::Block:
+        case ProgramId::BeaconBeam:
+        case ProgramId::Item:
+        case ProgramId::Entities:
+        case ProgramId::ArmorGlint:
+        case ProgramId::SpiderEyes:
+        case ProgramId::Hand:
+        case ProgramId::Weather:
+            return {ProgramId::Textured, ProgramId::Basic};
 
-        case ProgramId::GBUFFERS_SKYTEXTURED:
-            return {ProgramId::GBUFFERS_SKYBASIC, ProgramId::GBUFFERS_BASIC};
+        case ProgramId::SkyTextured:
+            return {ProgramId::SkyBasic, ProgramId::Basic};
 
-        case ProgramId::GBUFFERS_CLOUDS:
-            return {ProgramId::GBUFFERS_SKYBASIC, ProgramId::GBUFFERS_BASIC};
+        case ProgramId::Clouds:
+            return {ProgramId::SkyBasic, ProgramId::Basic};
 
-        case ProgramId::SHADOW_SOLID:
-        case ProgramId::SHADOW_CUTOUT:
-            return {ProgramId::SHADOW};
+        case ProgramId::ShadowSolid:
+        case ProgramId::ShadowCutout:
+            return {ProgramId::Shadow};
 
         default:
             return {};

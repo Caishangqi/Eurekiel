@@ -52,8 +52,7 @@ namespace enigma::graphic
         // 4. 创建 PSO
         if (!CreatePipelineState())
         {
-            ERROR_AND_DIE(Stringf("Failed to create PSO for shader program: %s", m_name.c_str()));
-            return false;
+            ERROR_AND_DIE(Stringf("Failed to create PSO for shader program: %s", m_name.c_str()))
         }
 
         return true;
@@ -84,6 +83,7 @@ namespace enigma::graphic
 
     void ShaderProgram::Unbind(ID3D12GraphicsCommandList* commandList)
     {
+        UNUSED(commandList)
         // DirectX 12 中不需要显式解绑 PSO
         // 保留此方法是为了与 Iris 架构一致
         //
@@ -103,8 +103,7 @@ namespace enigma::graphic
         ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature();
         if (!rootSig)
         {
-            ERROR_AND_DIE("Failed to get Bindless Root Signature");
-            return false;
+            ERROR_AND_DIE("Failed to get Bindless Root Signature")
         }
 
         // 教学要点 - Root Signature 引用管理:
@@ -192,8 +191,7 @@ namespace enigma::graphic
         m_pipelineState = D3D12RenderSystem::CreateGraphicsPSO(psoDesc);
         if (!m_pipelineState)
         {
-            ERROR_AND_DIE(Stringf("Failed to create PSO for %s", m_name.c_str()));
-            return false;
+            ERROR_AND_DIE(Stringf("Failed to create PSO for %s", m_name.c_str()))
         }
 
         return true;
