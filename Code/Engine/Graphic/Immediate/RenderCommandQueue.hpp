@@ -54,17 +54,22 @@ namespace enigma::graphic
         };
 
     private:
-        // 核心存储：按phase分类的指令存储
+        // ==================== 双缓冲队列架构 - 无锁高性能设计 ====================
         using Phase         = WorldRenderingPhase;
         using CommandVector = std::vector<RenderCommandPtr>;
-        std::map<Phase, CommandVector> m_phaseCommands;
+
+        /// 提交队列 - Game线程写入
+        std::unordered_map<Phase, CommandVector> m_submitQueue;
+
+        /// 执行队列 - 渲染线程读取
+        std::unordered_map<Phase, CommandVector> m_executeQueue;
 
         // 当前执行状态
         Phase    m_currentPhase      = Phase::NONE;
         uint64_t m_currentFrameIndex = 0;
 
         // 配置和管理
-        QueueConfig                    m_config;
+        QueueConfig m_config;
 
         // 性能统计
         struct PerformanceMetrics
@@ -75,7 +80,7 @@ namespace enigma::graphic
             uint64_t                  averageCommandsPerFrame = 0;
             std::map<Phase, uint64_t> commandsPerPhase;
 
-            void UpdateFrameStats(const std::map<Phase, CommandVector>& phaseCommands)
+            void UpdateFrameStats(const std::unordered_map<Phase, CommandVector>& phaseCommands)
             {
                 totalFramesProcessed++;
                 uint64_t frameCommands = 0;
@@ -89,8 +94,9 @@ namespace enigma::graphic
             }
         } m_performanceMetrics;
 
-        // 线程安全
-        mutable std::mutex m_queueMutex;
+        // ==================== 双缓冲同步 - 原子操作替代mutex ====================
+        /// 队列交换标志 - 原子布尔值，表示是否正在交换缓冲
+        std::atomic<bool> m_isSwapping{false};
 
     public:
         /// <summary>
@@ -137,6 +143,21 @@ namespace enigma::graphic
             RenderCommandPtr   command,
             const std::string& debugTag = ""
         );
+
+        /// <summary>
+        /// 交换双缓冲队列 (BeginFrame调用)
+        /// </summary>
+        /// <details>
+        /// 将m_submitQueue和m_executeQueue交换:
+        /// - 渲染线程开始执行上一帧提交的指令
+        /// - Game线程开始提交新的指令到空队列
+        ///
+        /// 教学要点:
+        /// - 双缓冲架构避免Game线程和渲染线程的锁竞争
+        /// - 无锁设计,只有一次原子交换操作
+        /// - 一帧延迟是可接受的权衡
+        /// </details>
+        void SwapBuffers();
 
         /// <summary>
         /// 开始新的帧

@@ -5,7 +5,7 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
-#include "Engine/Graphic/Resource/DepthTexture/D12DepthTexture.hpp"
+#include "Engine/Graphic/Target/D12DepthTexture.hpp"
 #include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/ImageResource.hpp"
@@ -1365,8 +1365,8 @@ namespace enigma::graphic
             RenderCommandPtr commandPtr(command.release());
             queue->SubmitCommand(std::move(commandPtr), phase, debugTag);
 
-            LogDebug("D3D12RenderSystem", "AddImmediateCommand: Successfully added command '{}' to phase {}",
-                     commandName, static_cast<uint32_t>(phase));
+            LogDebug("D3D12RenderSystem", "AddImmediateCommand: Successfully added command '%s' to phase %u",
+                     commandName.c_str(), static_cast<uint32_t>(phase));
             return true;
         }
         catch (const std::exception& e)
