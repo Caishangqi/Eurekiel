@@ -26,6 +26,12 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <filesystem>
+
+// Include 系统集成 (Week 7 - Milestone 3.0)
+#include "Engine/Graphic/Shader/ShaderPack/Include/IncludeGraph.hpp"
+#include "Engine/Graphic/Shader/ShaderPack/Include/IncludeProcessor.hpp"
+#include "Engine/Graphic/Shader/ShaderPack/Include/AbsolutePackPath.hpp"
 
 namespace enigma::graphic
 {
@@ -210,6 +216,126 @@ namespace enigma::graphic
             const std::vector<uint8_t>& hlslData,
             const std::string&          shaderName,
             const CompileOptions&       options
+        );
+
+        // ========================================================================
+        // Week 7: Include 系统集成 (Milestone 3.0) 🔥
+        // ========================================================================
+
+        /**
+         * @brief 编译 Shader Pack 着色器（自动 Include 展开）
+         * @param includeGraph 已构建的 Include 依赖图
+         * @param programPath Shader Pack 内部路径 (例: "/shaders/gbuffers_terrain.vs.hlsl")
+         * @param options 编译选项
+         * @return 编译结果 (CompileResult)
+         *
+         * 教学要点 - Week 7 核心功能:
+         * 1. **Include 预处理**:
+         *    - 使用 IncludeProcessor::ExpandWithLineDirectives() 展开所有 #include
+         *    - 保留 #line 指令，编译错误精确定位到原始文件
+         * 2. **虚拟路径支持**:
+         *    - 输入路径是 Shader Pack 内部绝对路径 (例: "/shaders/gbuffers_terrain.vs.hlsl")
+         *    - 无需手动处理文件系统路径
+         * 3. **错误定位**:
+         *    - 编译错误会引用原始文件和行号 (通过 #line 指令)
+         *    - 例: "gbuffers_terrain.vs.hlsl(15,5): error: undeclared identifier 'foo'"
+         * 4. **性能优化**:
+         *    - Include 图构建只发生一次 (在 ShaderPackLoader 初始化时)
+         *    - 每次编译只需展开和编译，无需重新解析依赖
+         *
+         * 使用示例:
+         * @code
+         * // 1. 构建 IncludeGraph (ShaderPackLoader 初始化时执行一次)
+         * std::filesystem::path root = "F:/shaderpacks/CaiziiDefault";
+         * std::vector<AbsolutePackPath> startingPaths = {
+         *     AbsolutePackPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl")
+         * };
+         * IncludeGraph graph(root, startingPaths);
+         *
+         * // 2. 编译着色器 (Include 自动展开)
+         * DXCCompiler compiler;
+         * compiler.Initialize();
+         *
+         * CompileOptions opts;
+         * opts.entryPoint = "VSMain";
+         * opts.target = "vs_6_6";
+         * opts.enableDebugInfo = true; // 开发阶段推荐
+         *
+         * auto result = compiler.CompileShaderWithIncludes(
+         *     graph,
+         *     AbsolutePackPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl"),
+         *     opts
+         * );
+         *
+         * if (result.success) {
+         *     // 编译成功，使用 result.bytecode 创建 PSO
+         * } else {
+         *     // 编译失败，result.errorMessage 包含原始文件定位
+         *     std::cerr << result.errorMessage << std::endl;
+         * }
+         * @endcode
+         *
+         * 对比传统方式:
+         * @code
+         * // ❌ 旧方式: 手动展开 Include
+         * std::string expandedCode = IncludeProcessor::ExpandWithLineDirectives(graph, programPath);
+         * auto result = compiler.CompileShader(expandedCode, opts);
+         *
+         * // ✅ 新方式: 一键编译
+         * auto result = compiler.CompileShaderWithIncludes(graph, programPath, opts);
+         * @endcode
+         */
+        CompileResult CompileShaderWithIncludes(
+            const IncludeGraph&     includeGraph,
+            const AbsolutePackPath& programPath,
+            const CompileOptions&   options
+        );
+
+        /**
+         * @brief DXC 预处理器接口（宏展开 + 条件编译）
+         * @param source HLSL 源码字符串
+         * @param options 编译选项（宏定义从此处提取）
+         * @return 预处理后的 HLSL 代码（字符串）
+         *
+         * 教学要点 - Week 7 预处理器集成:
+         * 1. **DXC 预处理 API**:
+         *    - 使用 IDxcCompiler3::Preprocess() 进行预处理
+         *    - 支持 #define, #ifdef, #ifndef, #else, #endif
+         * 2. **宏注入**:
+         *    - 从 CompileOptions::defines 注入宏定义
+         *    - 支持 ShaderPackOptions 的动态选项系统
+         * 3. **条件编译**:
+         *    - 根据宏定义移除未使用的代码分支
+         *    - 减小最终着色器大小
+         * 4. **调试支持**:
+         *    - 预处理后的代码可用于调试（查看宏展开结果）
+         *
+         * 使用场景:
+         * @code
+         * // 场景1: 查看宏展开结果（调试）
+         * CompileOptions opts;
+         * opts.defines.push_back("USE_BINDLESS=1");
+         * opts.defines.push_back("SHADOW_MAP_SIZE=2048");
+         *
+         * std::string preprocessed = compiler.PreprocessShader(hlslSource, opts);
+         * std::cout << "预处理后的代码:\n" << preprocessed << std::endl;
+         *
+         * // 场景2: 选项系统集成
+         * // ShaderPackOptions 动态切换选项后，重新预处理 + 编译
+         * opts.defines.push_back("ENABLE_SHADOWS=" + (shadowsEnabled ? "1" : "0"));
+         * auto result = compiler.CompileShader(
+         *     compiler.PreprocessShader(hlslSource, opts),
+         *     opts
+         * );
+         * @endcode
+         *
+         * 注意事项:
+         * - ⚠️ 预处理不包含 Include 展开（使用 CompileShaderWithIncludes）
+         * - ⚠️ 预处理结果是纯文本，可用于调试或缓存
+         */
+        std::string PreprocessShader(
+            const std::string&    source,
+            const CompileOptions& options
         );
 
         /**

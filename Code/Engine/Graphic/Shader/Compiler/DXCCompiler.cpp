@@ -409,4 +409,170 @@ namespace enigma::graphic
 
         return "";
     }
+
+    // ============================================================================
+    // Week 7: Include 系统集成 (Milestone 3.0) 🔥
+    // ============================================================================
+
+    DXCCompiler::CompileResult DXCCompiler::CompileShaderWithIncludes(
+        const IncludeGraph&     includeGraph,
+        const AbsolutePackPath& programPath,
+        const CompileOptions&   options)
+    {
+        CompileResult result;
+
+        if (!IsInitialized())
+        {
+            result.errorMessage = "DXCCompiler not initialized";
+            return result;
+        }
+
+        // 教学要点: Week 7 核心实现
+        // 1. 使用 IncludeProcessor 展开所有 #include
+        // 2. 保留 #line 指令用于编译错误精确定位
+        // 3. 复用 CompileShader() 核心编译逻辑
+
+        try
+        {
+            // Step 1: 展开所有 #include 指令（保留 #line 指令）
+            std::string expandedHLSL = IncludeProcessor::ExpandWithLineDirectives(includeGraph, programPath);
+
+            // 调试日志 (可选)
+            std::cout << "[DXCCompiler] Include expansion completed for: " << programPath.GetPathString()
+                << " (" << expandedHLSL.size() << " bytes)" << std::endl;
+
+            // Step 2: 编译展开后的 HLSL 代码
+            result = CompileShader(expandedHLSL, options);
+
+            // Step 3: 如果编译失败，增强错误信息
+            if (!result.success && !result.errorMessage.empty())
+            {
+                // 在错误消息前添加着色器路径
+                result.errorMessage = "[" + programPath.GetPathString() + "]\n" + result.errorMessage;
+            }
+        }
+        catch (const std::exception& e)
+        {
+            // Include 展开失败（例如：循环依赖、文件缺失）
+            result.errorMessage = "Include expansion failed for " + programPath.GetPathString() + ": " + e.what();
+            result.success      = false;
+        }
+
+        return result;
+    }
+
+    std::string DXCCompiler::PreprocessShader(
+        const std::string&    source,
+        const CompileOptions& options)
+    {
+        if (!IsInitialized())
+        {
+            throw std::runtime_error("DXCCompiler not initialized");
+        }
+
+        // 教学要点: Week 7 预处理器实现
+        // 1. IDxcCompiler3 没有 Preprocess() 方法
+        // 2. 使用 Compile() + "-P" 参数实现预处理（宏展开 + 条件编译）
+        // 3. "-P" 参数告诉 DXC 只执行预处理，不生成着色器字节码
+
+        // Step 1: 创建源码 Blob
+        Microsoft::WRL::ComPtr<IDxcBlobEncoding> sourceBlob;
+        HRESULT                                  hr = m_utils->CreateBlob(
+            source.c_str(),
+            static_cast<UINT32>(source.size()),
+            CP_UTF8,
+            &sourceBlob
+        );
+
+        if (FAILED(hr))
+        {
+            throw std::runtime_error("Failed to create source blob for preprocessing");
+        }
+
+        // Step 2: 构建预处理参数
+        // 注意: 预处理需要 -P 参数，但不需要 -E 和 -T
+        std::vector<std::wstring> argsStorage;
+        std::vector<LPCWSTR>      args;
+
+        // 添加预处理标志（只预处理，不编译）
+        argsStorage.push_back(L"-P");
+
+        // 添加宏定义
+        for (const auto& define : options.defines)
+        {
+            std::wstring wDefine = L"-D";
+            wDefine += std::wstring(define.begin(), define.end());
+            argsStorage.push_back(wDefine);
+        }
+
+        // 添加 Include 路径
+        for (const auto& includePath : options.includePaths)
+        {
+            argsStorage.push_back(L"-I");
+            argsStorage.push_back(includePath);
+        }
+
+        // 转换为 LPCWSTR 数组
+        args.reserve(argsStorage.size());
+        for (const auto& arg : argsStorage)
+        {
+            args.push_back(arg.c_str());
+        }
+
+        // Step 3: 设置源码缓冲区
+        DxcBuffer sourceBuffer;
+        sourceBuffer.Ptr      = sourceBlob->GetBufferPointer();
+        sourceBuffer.Size     = sourceBlob->GetBufferSize();
+        sourceBuffer.Encoding = CP_UTF8;
+
+        // Step 4: 调用 DXC Compile（使用 -P 参数执行预处理）
+        Microsoft::WRL::ComPtr<IDxcResult> preprocessResult;
+        hr = m_compiler->Compile(
+            &sourceBuffer,
+            args.data(),
+            static_cast<UINT32>(args.size()),
+            m_includeHandler.Get(),
+            IID_PPV_ARGS(&preprocessResult)
+        );
+
+        if (FAILED(hr))
+        {
+            throw std::runtime_error("DXC Compile (preprocess mode) call failed");
+        }
+
+        // Step 5: 检查预处理状态
+        HRESULT preprocessStatus;
+        hr = preprocessResult->GetStatus(&preprocessStatus);
+        if (FAILED(hr))
+        {
+            throw std::runtime_error("Failed to get preprocess status");
+        }
+
+        // Step 6: 提取错误/警告信息
+        if (FAILED(preprocessStatus))
+        {
+            std::string errorMsg = ExtractErrorMessage(preprocessResult.Get());
+            throw std::runtime_error("Preprocessing failed:\n" + errorMsg);
+        }
+
+        // Step 7: 提取预处理后的代码
+        // 注意: 使用 DXC_OUT_OBJECT 获取预处理后的文本（不是字节码）
+        Microsoft::WRL::ComPtr<IDxcBlob> preprocessedBlob;
+        hr = preprocessResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&preprocessedBlob), nullptr);
+        if (FAILED(hr) || !preprocessedBlob)
+        {
+            throw std::runtime_error("Failed to get preprocessed code");
+        }
+
+        // Step 8: 转换为字符串返回
+        const char* preprocessedData = static_cast<const char*>(preprocessedBlob->GetBufferPointer());
+        size_t      preprocessedSize = preprocessedBlob->GetBufferSize();
+
+        std::string preprocessedCode(preprocessedData, preprocessedSize);
+
+        // 调试日志 (可选)
+        std::cout << "[DXCCompiler] Preprocessing completed (" << preprocessedCode.size() << " bytes)" << std::endl;
+
+        return preprocessedCode;
+    }
 } // namespace enigma::graphic
