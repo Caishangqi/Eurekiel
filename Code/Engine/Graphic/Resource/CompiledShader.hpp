@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "ShaderDirectives.hpp"
+#include "../Shader/ShaderPack/Parsing/CommentDirectiveParser.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -115,7 +115,7 @@ namespace enigma::graphic
         std::string          warningMessage; // 编译警告信息
 
         // Iris 配置
-        ShaderDirectives directives; // 解析的注释指令
+        CommentDirectiveParser directives; // 解析的注释指令
 
         // 热重载支持
         std::string sourceCode; // 原始 HLSL 代码 (用于热重载)

@@ -92,9 +92,19 @@ namespace enigma::graphic
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyQueue; // 复制命令队列 (智能指针)
 
         // 同步对象 (本类负责围栏管理)
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_fence             = nullptr; // 围栏对象 (智能指针)
-        uint64_t                            m_currentFenceValue = 0; // 当前围栏值
-        HANDLE                              m_fenceEvent        = nullptr; // 围栏事件句柄
+        // ⭐ Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
+        // 教学要点: Microsoft官方最佳实践 - 避免多队列共享Fence导致的竞态条件
+        // 参考: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_graphicsFence      = nullptr; // Graphics队列Fence (智能指针)
+        uint64_t                            m_graphicsFenceValue = 0; // Graphics围栏值
+
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_computeFence      = nullptr; // Compute队列Fence (智能指针)
+        uint64_t                            m_computeFenceValue = 0; // Compute围栏值
+
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_copyFence      = nullptr; // Copy队列Fence (智能指针) ⭐ 核心修复
+        uint64_t                            m_copyFenceValue = 0; // Copy围栏值
+
+        HANDLE m_fenceEvent = nullptr; // 围栏事件句柄 (三个Fence共享)
 
         // 命令列表池 - 按类型分组
         std::vector<std::unique_ptr<CommandListWrapper>> m_graphicsCommandLists;
@@ -116,7 +126,7 @@ namespace enigma::graphic
         // 配置参数
         static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = 4; // 默认图形命令列表数量
         static constexpr uint32_t DEFAULT_COMPUTE_LIST_COUNT  = 2; // 默认计算命令列表数量
-        static constexpr uint32_t DEFAULT_COPY_LIST_COUNT     = 2; // 默认复制命令列表数量
+        static constexpr uint32_t DEFAULT_COPY_LIST_COUNT     = 4; // 默认复制命令列表数量
 
     public:
         /**
@@ -336,6 +346,37 @@ namespace enigma::graphic
          * @return 类型名称字符串
          */
         static const char* GetTypeName(Type type);
+
+        // ========================================================================
+        // Fence辅助方法 (Milestone 2.8 新增)
+        // ========================================================================
+
+        /**
+         * @brief 根据fenceValue查找对应的CommandListWrapper
+         * @param fenceValue 要查找的围栏值
+         * @return 找到的包装器指针，未找到返回nullptr
+         *
+         * 教学要点: 用于WaitForFence()智能选择正确的Fence对象
+         */
+        CommandListWrapper* FindWrapperByFenceValue(uint64_t fenceValue);
+
+        /**
+         * @brief 根据Type获取对应的Fence对象
+         * @param type 命令列表类型
+         * @return Fence对象指针
+         *
+         * 教学要点: 集中管理三个Fence对象的访问
+         */
+        ID3D12Fence* GetFenceByType(Type type);
+
+        /**
+         * @brief 根据Type获取对应的Fence值引用
+         * @param type 命令列表类型
+         * @return Fence值引用
+         *
+         * 教学要点: 允许修改对应队列的Fence值
+         */
+        uint64_t& GetFenceValueByType(Type type);
 
         // 禁用拷贝构造和赋值操作
         CommandListManager(const CommandListManager&)            = delete;

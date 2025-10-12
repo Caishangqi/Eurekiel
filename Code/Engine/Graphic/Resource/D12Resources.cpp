@@ -205,12 +205,42 @@ namespace enigma::graphic
             return false;
         }
 
-        // 5. 获取Copy Command List
-        auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Copy, "ResourceUpload");
+        // 5. 获取Graphics Command List（而非Copy）
+        // ⭐ Milestone 2.8 修复: 使用Graphics Command List上传资源
+        //
+        // 教学要点 - 为什么使用Graphics而非Copy？
+        // 1. Copy Command List只支持有限的资源状态: COMMON, COPY_SOURCE, COPY_DEST
+        // 2. Uniform Buffer使用MemoryAccess::CPUToGPU创建，初始状态是GENERIC_READ (0x2C3)
+        // 3. GENERIC_READ包含PIXEL_SHADER_RESOURCE等Graphics专属标志
+        // 4. 在Copy Command List上转换GENERIC_READ ↔ COPY_DEST会导致DirectX错误:
+        //    "D3D12 ERROR: D3D12_RESOURCE_STATES has invalid flags (0x2c3) for copy command list"
+        // 5. Graphics Command List支持所有资源状态转换，包括GENERIC_READ
+        //
+        // Microsoft最佳实践:
+        // - Graphics Queue: 复杂操作、小数据传输、需要Graphics状态的资源
+        // - Copy Queue: 大量简单拷贝、纹理/大缓冲区上传、异步后台传输
+        //
+        // Uniform Buffer特性:
+        // - 数量少(11个)、大小小(几百字节)、上传频率低(初始化时)
+        // - 需要GENERIC_READ状态(用于Vertex/Pixel/Compute Shader读取)
+        // - 适合使用Graphics Queue而非Copy Queue
+        //
+        // 🔍 DEBUG: 在获取命令列表前检查可用数量
+        uint32_t availableBefore = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
+        uint32_t executingBefore = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "Upload[%s]: BEFORE Acquire - Available=%u, Executing=%u",
+                      m_debugName.c_str(), availableBefore, executingBefore);
+
+        auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Graphics, "ResourceUpload");
         if (!commandList)
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                           "Upload: Failed to acquire Copy command list");
+                           "Upload: Failed to acquire Graphics command list for '%s'",
+                           m_debugName.c_str());
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "  Available Graphics Lists: %u, Executing: %u",
+                           availableBefore, executingBefore);
             return false;
         }
 
@@ -245,6 +275,28 @@ namespace enigma::graphic
         // 9. 执行命令列表并同步等待完成
         uint64_t fenceValue = cmdListManager->ExecuteCommandList(commandList);
         cmdListManager->WaitForFence(fenceValue);
+
+        // 9.5. 立即回收已完成的命令列表 - 确保资源池化正确运作
+        // 教学要点: WaitForFence() 只等待GPU完成，不会自动回收命令列表
+        // UpdateCompletedCommandLists() 检查围栏值，将完成的命令列表放回可用队列
+        // 这是 DirectX 12 命令列表池化的正确实践 ⭐⭐⭐
+
+        // 🔍 DEBUG: 在回收前检查状态
+        uint32_t availableBeforeRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
+        uint32_t executingBeforeRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "Upload[%s]: BEFORE Recycle - Available=%u, Executing=%u",
+                      m_debugName.c_str(), availableBeforeRecycle, executingBeforeRecycle);
+
+        cmdListManager->UpdateCompletedCommandLists();
+
+        // 🔍 DEBUG: 在回收后检查状态
+        uint32_t availableAfterRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
+        uint32_t executingAfterRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
+        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                      "Upload[%s]: AFTER Recycle - Available=%u, Executing=%u (Recycled=%u)",
+                      m_debugName.c_str(), availableAfterRecycle, executingAfterRecycle,
+                      availableAfterRecycle - availableBeforeRecycle);
 
         // 10. 更新资源状态和上传标记
         m_currentState = targetState;

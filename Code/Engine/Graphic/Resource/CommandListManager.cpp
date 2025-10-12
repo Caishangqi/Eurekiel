@@ -190,17 +190,44 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
      * 2. GPU执行完命令后，将围栏设置为该值
      * 3. CPU可以查询围栏当前值，判断GPU是否完成了特定批次的命令
      *
-     * Microsoft文档: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
+     * ⭐ Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
+     * Microsoft最佳实践: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
+     *
+     * 为什么需要三个独立Fence:
+     * - 避免多队列共享Fence导致的竞态条件
+     * - Graphics/Compute/Copy队列在硬件层面并行执行
+     * - 共享Fence会导致错误的命令列表回收时机
      */
 
-    m_currentFenceValue = 0;
-    hr                  = device->CreateFence(m_currentFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+    // 创建Graphics队列的Fence
+    m_graphicsFenceValue = 0;
+    hr                   = device->CreateFence(m_graphicsFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_graphicsFence));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Command List Manager Fence, Abort Program");
-        ERROR_AND_DIE("Fail to create Command List Manager Fence, Abort Program")
+        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Graphics Fence, Abort Program");
+        ERROR_AND_DIE("Fail to create Graphics Fence, Abort Program")
     }
-    m_fence->SetName(L"Enigma Command List Manager Fence");
+    m_graphicsFence->SetName(L"Enigma Graphics Queue Fence");
+
+    // 创建Compute队列的Fence
+    m_computeFenceValue = 0;
+    hr                  = device->CreateFence(m_computeFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_computeFence));
+    if (FAILED(hr))
+    {
+        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Compute Fence, Abort Program");
+        ERROR_AND_DIE("Fail to create Compute Fence, Abort Program")
+    }
+    m_computeFence->SetName(L"Enigma Compute Queue Fence");
+
+    // 创建Copy队列的Fence ⭐ 核心修复
+    m_copyFenceValue = 0;
+    hr               = device->CreateFence(m_copyFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_copyFence));
+    if (FAILED(hr))
+    {
+        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Copy Fence, Abort Program");
+        ERROR_AND_DIE("Fail to create Copy Fence, Abort Program")
+    }
+    m_copyFence->SetName(L"Enigma Copy Queue Fence");
 
     // 创建围栏事件 - 用于CPU等待GPU完成
     // 教学要点: Win32事件对象用于阻塞CPU线程直到GPU完成特定操作
@@ -274,19 +301,42 @@ void CommandListManager::Shutdown()
 
     // 第1步: 等待所有GPU操作完成 - 确保没有资源正在使用中
     // 教学要点: 在释放任何DirectX资源之前，必须确保GPU已完成所有相关操作
-    if (m_fence && m_fenceEvent)
+    // ⭐ Milestone 2.8: 等待所有三个队列完成
+    if (m_fenceEvent)
     {
-        // 向图形队列发送最后一个围栏信号
-        if (m_graphicsQueue)
+        // 等待Graphics队列
+        if (m_graphicsQueue && m_graphicsFence)
         {
-            ++m_currentFenceValue;
-            m_graphicsQueue->Signal(m_fence.Get(), m_currentFenceValue);
-
-            // 等待GPU完成所有操作 (最多等待5秒)
-            if (m_fence->GetCompletedValue() < m_currentFenceValue)
+            ++m_graphicsFenceValue;
+            m_graphicsQueue->Signal(m_graphicsFence.Get(), m_graphicsFenceValue);
+            if (m_graphicsFence->GetCompletedValue() < m_graphicsFenceValue)
             {
-                m_fence->SetEventOnCompletion(m_currentFenceValue, m_fenceEvent);
-                WaitForSingleObject(m_fenceEvent, 5000); // 5秒超时
+                m_graphicsFence->SetEventOnCompletion(m_graphicsFenceValue, m_fenceEvent);
+                WaitForSingleObject(m_fenceEvent, 5000);
+            }
+        }
+
+        // 等待Compute队列
+        if (m_computeQueue && m_computeFence)
+        {
+            ++m_computeFenceValue;
+            m_computeQueue->Signal(m_computeFence.Get(), m_computeFenceValue);
+            if (m_computeFence->GetCompletedValue() < m_computeFenceValue)
+            {
+                m_computeFence->SetEventOnCompletion(m_computeFenceValue, m_fenceEvent);
+                WaitForSingleObject(m_fenceEvent, 5000);
+            }
+        }
+
+        // 等待Copy队列
+        if (m_copyQueue && m_copyFence)
+        {
+            ++m_copyFenceValue;
+            m_copyQueue->Signal(m_copyFence.Get(), m_copyFenceValue);
+            if (m_copyFence->GetCompletedValue() < m_copyFenceValue)
+            {
+                m_copyFence->SetEventOnCompletion(m_copyFenceValue, m_fenceEvent);
+                WaitForSingleObject(m_fenceEvent, 5000);
             }
         }
     }
@@ -313,9 +363,15 @@ void CommandListManager::Shutdown()
         m_fenceEvent = nullptr;
     }
 
-    // 智能指针会自动释放围栏对象
-    m_fence.Reset();
-    m_currentFenceValue = 0;
+    // 智能指针会自动释放围栏对象 (Milestone 2.8: 清理三个Fence)
+    m_graphicsFence.Reset();
+    m_graphicsFenceValue = 0;
+
+    m_computeFence.Reset();
+    m_computeFenceValue = 0;
+
+    m_copyFence.Reset();
+    m_copyFenceValue = 0;
 
     // 第4步: 清理命令队列 - 智能指针自动管理
     m_graphicsQueue.Reset();
@@ -325,9 +381,58 @@ void CommandListManager::Shutdown()
     m_initialized = false;
 }
 
+/**
+ * @brief 等待GPU完成所有命令
+ *
+ * ⭐ Milestone 2.8: 等待所有三个队列的Fence完成
+ */
 bool CommandListManager::WaitForGPU(uint32_t timeoutMs)
 {
-    return WaitForFence(m_currentFenceValue, timeoutMs);
+    if (!m_fenceEvent)
+    {
+        return false;
+    }
+
+    // 等待Graphics队列
+    if (m_graphicsFence && m_graphicsFenceValue > 0)
+    {
+        if (m_graphicsFence->GetCompletedValue() < m_graphicsFenceValue)
+        {
+            HRESULT hr = m_graphicsFence->SetEventOnCompletion(m_graphicsFenceValue, m_fenceEvent);
+            if (FAILED(hr)) return false;
+
+            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
+            if (waitResult != WAIT_OBJECT_0) return false;
+        }
+    }
+
+    // 等待Compute队列
+    if (m_computeFence && m_computeFenceValue > 0)
+    {
+        if (m_computeFence->GetCompletedValue() < m_computeFenceValue)
+        {
+            HRESULT hr = m_computeFence->SetEventOnCompletion(m_computeFenceValue, m_fenceEvent);
+            if (FAILED(hr)) return false;
+
+            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
+            if (waitResult != WAIT_OBJECT_0) return false;
+        }
+    }
+
+    // 等待Copy队列
+    if (m_copyFence && m_copyFenceValue > 0)
+    {
+        if (m_copyFence->GetCompletedValue() < m_copyFenceValue)
+        {
+            HRESULT hr = m_copyFence->SetEventOnCompletion(m_copyFenceValue, m_fenceEvent);
+            if (FAILED(hr)) return false;
+
+            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
+            if (waitResult != WAIT_OBJECT_0) return false;
+        }
+    }
+
+    return true;
 }
 
 ID3D12CommandQueue* CommandListManager::GetCommandQueue(Type type) const
@@ -683,29 +788,48 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     ID3D12CommandList* commandLists[] = {commandList};
     queue->ExecuteCommandLists(1, commandLists);
 
+    // ⭐ Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
+    // 教学要点: 每个队列使用独立的Fence避免竞态条件
+    uint64_t&    fenceValue = GetFenceValueByType(wrapper->type);
+    ID3D12Fence* fence      = GetFenceByType(wrapper->type);
+
+    if (!fence)
+    {
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "ExecuteCommandList() - Failed to get Fence for type %s",
+                               GetTypeName(wrapper->type));
+        return 0;
+    }
+
     // 增加围栏值并发送信号 - 标记这批命令的完成时机
-    ++m_currentFenceValue;
-    hr = queue->Signal(m_fence.Get(), m_currentFenceValue);
+    ++fenceValue;
+    hr = queue->Signal(fence, fenceValue);
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 围栏信号发送失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "ExecuteCommandList() - Signal failed for %s queue",
+                               GetTypeName(wrapper->type));
         return 0;
     }
 
     // 更新包装器状态
     wrapper->state      = State::Executing;
-    wrapper->fenceValue = m_currentFenceValue;
+    wrapper->fenceValue = fenceValue;
 
     // 添加到执行中列表
     m_executingLists.push_back(wrapper);
 
-    return m_currentFenceValue;
+    return fenceValue; // ⭐ Milestone 2.8: 返回对应队列的Fence值
 }
 
 /**
  * @brief 批量提交多个命令列表
  *
  * 教学要点: 批量提交可以减少API调用开销
+ *
+ * ⭐ Milestone 2.8: 重构为支持三个独立Fence
+ * - 验证所有命令列表为同一类型
+ * - 使用对应类型的Fence和队列
  */
 uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count)
 {
@@ -720,19 +844,38 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     std::vector<CommandListWrapper*> wrappers;
     wrappers.reserve(count);
 
+    Type batchType    = Type::Graphics; // 批次类型，所有命令列表必须相同
+    bool firstWrapper = true;
+
     for (uint32_t i = 0; i < count; ++i)
     {
         CommandListWrapper* wrapper = FindWrapper(commandLists[i]);
         if (!wrapper || wrapper->state != State::Recording)
         {
-            // TODO: 错误日志 - 找不到对应的包装器或状态不正确
+            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                                   "ExecuteCommandLists() - Invalid wrapper or state for command list %u", i);
+            return 0;
+        }
+
+        // ⭐ Milestone 2.8: 验证所有命令列表类型一致
+        if (firstWrapper)
+        {
+            batchType    = wrapper->type;
+            firstWrapper = false;
+        }
+        else if (wrapper->type != batchType)
+        {
+            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                                   "ExecuteCommandLists() - Mixed types detected! Expected %s, got %s at index %u",
+                                   GetTypeName(batchType), GetTypeName(wrapper->type), i);
             return 0;
         }
 
         HRESULT hr = commandLists[i]->Close();
         if (FAILED(hr))
         {
-            // TODO: 错误日志 - 命令列表关闭失败
+            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                                   "ExecuteCommandLists() - Failed to close command list %u", i);
             return 0;
         }
 
@@ -740,19 +883,39 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         wrappers.push_back(wrapper);
     }
 
-    // 假设所有命令列表都是同一类型 (Graphics)
-    // 在实际应用中可能需要按类型分组提交
-    ID3D12CommandQueue* queue = m_graphicsQueue.Get();
+    // ⭐ Milestone 2.8: 获取对应类型的命令队列
+    ID3D12CommandQueue* queue = GetCommandQueue(batchType);
+    if (!queue)
+    {
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "ExecuteCommandLists() - Failed to get queue for type %s",
+                               GetTypeName(batchType));
+        return 0;
+    }
 
     // 批量提交
     queue->ExecuteCommandLists(count, reinterpret_cast<ID3D12CommandList* const*>(commandLists));
 
-    // 发送围栏信号
-    ++m_currentFenceValue;
-    HRESULT hr = queue->Signal(m_fence.Get(), m_currentFenceValue);
+    // ⭐ Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
+    uint64_t&    fenceValue = GetFenceValueByType(batchType);
+    ID3D12Fence* fence      = GetFenceByType(batchType);
+
+    if (!fence)
+    {
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "ExecuteCommandLists() - Failed to get Fence for type %s",
+                               GetTypeName(batchType));
+        return 0;
+    }
+
+    // 增加围栏值并发送信号
+    ++fenceValue;
+    HRESULT hr = queue->Signal(fence, fenceValue);
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 围栏信号发送失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "ExecuteCommandLists() - Signal failed for %s queue",
+                               GetTypeName(batchType));
         return 0;
     }
 
@@ -760,11 +923,11 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     for (CommandListWrapper* wrapper : wrappers)
     {
         wrapper->state      = State::Executing;
-        wrapper->fenceValue = m_currentFenceValue;
+        wrapper->fenceValue = fenceValue;
         m_executingLists.push_back(wrapper);
     }
 
-    return m_currentFenceValue;
+    return fenceValue; // ⭐ Milestone 2.8: 返回对应队列的Fence值
 }
 
 // ========================================================================
@@ -776,26 +939,71 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
  *
  * 教学要点: CPU等待GPU完成特定命令批次的机制
  *
+ * ⭐ Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
+ *
  * Microsoft文档: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
  */
 bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
 {
-    if (!m_fence || !m_fenceEvent)
+    if (!m_fenceEvent)
     {
         return false;
     }
 
+    // ⭐ Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
+    // 教学要点: 通过wrapper->type确定应该等待哪个Fence
+    CommandListWrapper* wrapper = FindWrapperByFenceValue(fenceValue);
+
+    ID3D12Fence* fence = nullptr;
+    if (wrapper)
+    {
+        // 找到了对应的wrapper，使用其type获取Fence
+        fence = GetFenceByType(wrapper->type);
+    }
+    else
+    {
+        // 未找到wrapper，可能已经完成，尝试检查所有三个Fence
+        // 这是一个fallback机制，确保等待能够完成
+        // 优先检查Graphics（最常用）
+        if (m_graphicsFence && m_graphicsFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+        if (m_computeFence && m_computeFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+        if (m_copyFence && m_copyFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+
+        // 未找到匹配的Fence，使用Graphics Fence作为默认（兼容性处理）
+        fence = m_graphicsFence.Get();
+        enigma::core::LogWarn(RendererSubsystem::GetStaticSubsystemName(),
+                              "WaitForFence() - Could not find wrapper for fenceValue %llu, using Graphics Fence",
+                              fenceValue);
+    }
+
+    if (!fence)
+    {
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "WaitForFence() - Fence is null");
+        return false;
+    }
+
     // 检查围栏是否已经完成
-    if (m_fence->GetCompletedValue() >= fenceValue)
+    if (fence->GetCompletedValue() >= fenceValue)
     {
         return true; // 已经完成，无需等待
     }
 
     // 设置事件，当围栏到达指定值时触发
-    HRESULT hr = m_fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
+    HRESULT hr = fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 设置围栏事件失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "WaitForFence() - SetEventOnCompletion failed");
         return false;
     }
 
@@ -808,28 +1016,93 @@ bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
 
 /**
  * @brief 检查围栏值是否已完成
+ *
+ * ⭐ Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
+ *
+ * 教学要点: 与WaitForFence()类似,需要智能查找对应的Fence
  */
 bool CommandListManager::IsFenceCompleted(uint64_t fenceValue) const
 {
-    if (!m_fence)
+    // ⭐ Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
+    // 注意: 这里需要通过const_cast访问非const方法FindWrapperByFenceValue()
+    CommandListWrapper* wrapper = const_cast<CommandListManager*>(this)->FindWrapperByFenceValue(fenceValue);
+
+    ID3D12Fence* fence = nullptr;
+    if (wrapper)
+    {
+        // 找到了对应的wrapper，使用其type获取Fence
+        fence = const_cast<CommandListManager*>(this)->GetFenceByType(wrapper->type);
+    }
+    else
+    {
+        // 未找到wrapper，可能已经完成，尝试检查所有三个Fence
+        // 这是一个fallback机制
+        if (m_graphicsFence && m_graphicsFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+        if (m_computeFence && m_computeFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+        if (m_copyFence && m_copyFence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+
+        // 未找到任何匹配的Fence
+        return false;
+    }
+
+    if (!fence)
     {
         return false;
     }
 
-    return m_fence->GetCompletedValue() >= fenceValue;
+    return fence->GetCompletedValue() >= fenceValue;
 }
 
 /**
  * @brief 获取当前已完成的围栏值
+ *
+ * ⭐ Milestone 2.8: 返回三个Fence中的最小完成值 - 最保守的完成值
+ *
+ * 教学要点: 返回最小值确保这是"所有队列都完成"的安全值
+ * - 如果返回最大值,可能某些队列还未完成
+ * - 返回最小值是最保守的策略,确保跨队列同步安全
  */
 uint64_t CommandListManager::GetCompletedFenceValue() const
 {
-    if (!m_fence)
+    uint64_t minCompletedValue = UINT64_MAX;
+
+    // 获取Graphics队列的完成值
+    if (m_graphicsFence)
+    {
+        uint64_t graphicsCompleted = m_graphicsFence->GetCompletedValue();
+        minCompletedValue          = (std::min)(minCompletedValue, graphicsCompleted);
+    }
+
+    // 获取Compute队列的完成值
+    if (m_computeFence)
+    {
+        uint64_t computeCompleted = m_computeFence->GetCompletedValue();
+        minCompletedValue         = (std::min)(minCompletedValue, computeCompleted);
+    }
+
+    // 获取Copy队列的完成值
+    if (m_copyFence)
+    {
+        uint64_t copyCompleted = m_copyFence->GetCompletedValue();
+        minCompletedValue      = (std::min)(minCompletedValue, copyCompleted);
+    }
+
+    // 如果所有Fence都为null,返回0
+    if (minCompletedValue == UINT64_MAX)
     {
         return 0;
     }
 
-    return m_fence->GetCompletedValue();
+    return minCompletedValue;
 }
 
 // ========================================================================
@@ -843,24 +1116,60 @@ uint64_t CommandListManager::GetCompletedFenceValue() const
  * 1. 每帧在EndFrame中调用一次，确保资源及时回收
  * 2. 线程安全设计，支持多线程环境
  * 3. 这是DirectX 12资源池化的核心机制
+ *
+ * ⭐ Milestone 2.8: 检查每个wrapper对应的Fence - 三个独立Fence架构
  */
 void CommandListManager::UpdateCompletedCommandLists()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (!m_fence || m_executingLists.empty())
+    // 🔍 DEBUG: 记录调用
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "UpdateCompletedCommandLists() called - ExecutingCount=%zu",
+                          m_executingLists.size());
+
+    if (m_executingLists.empty())
     {
+        enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                              "UpdateCompletedCommandLists() - No executing lists, skipping");
         return;
     }
 
-    uint64_t completedValue = m_fence->GetCompletedValue();
-    size_t   recycledCount  = 0;
+    size_t recycledCount = 0;
+
+    // ⭐ Milestone 2.8: 显示所有三个Fence的状态
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "GPU Fence Status - Graphics: %llu/%llu, Compute: %llu/%llu, Copy: %llu/%llu",
+                          m_graphicsFence ? m_graphicsFence->GetCompletedValue() : 0, m_graphicsFenceValue,
+                          m_computeFence ? m_computeFence->GetCompletedValue() : 0, m_computeFenceValue,
+                          m_copyFence ? m_copyFence->GetCompletedValue() : 0, m_copyFenceValue);
 
     // 检查执行中的命令列表，将完成的移回空闲队列
     auto it = m_executingLists.begin();
     while (it != m_executingLists.end())
     {
         CommandListWrapper* wrapper = *it;
+
+        // ⭐ Milestone 2.8: 根据wrapper->type获取对应的Fence
+        ID3D12Fence* fence = GetFenceByType(wrapper->type);
+        if (!fence)
+        {
+            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                                   "UpdateCompletedCommandLists() - Fence is null for type %s",
+                                   GetTypeName(wrapper->type));
+            ++it;
+            continue;
+        }
+
+        uint64_t completedValue = fence->GetCompletedValue();
+
+        // 🔍 DEBUG: 显示每个命令列表的围栏值
+        enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                              "  Checking wrapper[%s]: fenceValue=%llu (completed=%llu, canRecycle=%s)",
+                              GetTypeName(wrapper->type),
+                              wrapper->fenceValue,
+                              completedValue,
+                              (wrapper->fenceValue <= completedValue) ? "YES" : "NO");
 
         if (wrapper->fenceValue <= completedValue)
         {
@@ -872,21 +1181,26 @@ void CommandListManager::UpdateCompletedCommandLists()
             auto& availableQueue = GetAvailableQueue(wrapper->type);
             availableQueue.push(wrapper);
 
+            enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                                  "  + Recycled %s command list (fenceValue=%llu)",
+                                  GetTypeName(wrapper->type), wrapper->fenceValue);
+
             // 从执行中列表移除
             it = m_executingLists.erase(it);
             recycledCount++;
         }
         else
         {
+            enigma::core::LogWarn(RendererSubsystem::GetStaticSubsystemName(),
+                                  "  ! Cannot recycle %s command list - fenceValue(%llu) > completedValue(%llu)",
+                                  GetTypeName(wrapper->type), wrapper->fenceValue, completedValue);
             ++it;
         }
     }
 
-    if (recycledCount > 0)
-    {
-        enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
-                              "Recycled %zu completed command lists back to available pool", recycledCount);
-    }
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "UpdateCompletedCommandLists() finished - Recycled=%zu, Remaining=%zu",
+                          recycledCount, m_executingLists.size());
 }
 
 /**
@@ -972,4 +1286,82 @@ CommandListManager::CommandListWrapper* CommandListManager::FindWrapper(ID3D12Gr
     if (found) return found;
 
     return nullptr;
+}
+
+// ========================================================================
+// Fence辅助方法实现 (Milestone 2.8)
+// ========================================================================
+
+/**
+ * @brief 根据fenceValue查找对应的CommandListWrapper
+ *
+ * 教学要点: 用于WaitForFence()智能选择正确的Fence对象
+ * - 遍历执行中的命令列表
+ * - 根据fenceValue匹配找到对应的wrapper
+ * - 返回wrapper后可以通过wrapper->type获取命令列表类型
+ */
+CommandListManager::CommandListWrapper* CommandListManager::FindWrapperByFenceValue(uint64_t fenceValue)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    for (auto* wrapper : m_executingLists)
+    {
+        if (wrapper && wrapper->fenceValue == fenceValue)
+        {
+            return wrapper;
+        }
+    }
+
+    return nullptr;
+}
+
+/**
+ * @brief 根据Type获取对应的Fence对象
+ *
+ * 教学要点: 集中管理三个Fence对象的访问
+ * - Graphics → m_graphicsFence
+ * - Compute → m_computeFence
+ * - Copy → m_copyFence
+ */
+ID3D12Fence* CommandListManager::GetFenceByType(Type type)
+{
+    switch (type)
+    {
+    case Type::Graphics:
+        return m_graphicsFence.Get();
+    case Type::Compute:
+        return m_computeFence.Get();
+    case Type::Copy:
+        return m_copyFence.Get();
+    default:
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "GetFenceByType() - Unknown Type");
+        return nullptr;
+    }
+}
+
+/**
+ * @brief 根据Type获取对应的Fence值引用
+ *
+ * 教学要点: 允许修改对应队列的Fence值
+ * - 返回引用允许递增操作 (++fenceValue)
+ * - 每个队列维护独立的Fence值计数器
+ */
+uint64_t& CommandListManager::GetFenceValueByType(Type type)
+{
+    switch (type)
+    {
+    case Type::Graphics:
+        return m_graphicsFenceValue;
+    case Type::Compute:
+        return m_computeFenceValue;
+    case Type::Copy:
+        return m_copyFenceValue;
+    default:
+        // 不应该到达这里，但提供一个静态dummy避免崩溃
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "GetFenceValueByType() - Unknown Type, returning dummy");
+        static uint64_t dummy = 0;
+        return dummy;
+    }
 }

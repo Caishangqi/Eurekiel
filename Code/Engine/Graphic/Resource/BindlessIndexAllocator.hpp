@@ -11,9 +11,9 @@ namespace enigma::graphic
      *
      * 教学要点:
      * 1. 单一职责: 只负责索引的分配和释放
-     * 2. 索引范围:
-     *    - 纹理: 0 - 999,999
-     *    - 缓冲区: 1,000,000 - 1,999,999
+     * 2. 索引范围（Milestone 2.8修正 - 匹配1M描述符堆容量）:
+     *    - 纹理: 0 - 499,999 (500K容量)
+     *    - 缓冲区: 500,000 - 999,999 (500K容量)
      * 3. 线程安全: 使用std::mutex保护
      * 4. 零资源管理: 不存储资源指针,不调用资源方法
      * 5. **FreeList架构**: O(1)分配和释放，替代O(n)线性搜索
@@ -21,7 +21,7 @@ namespace enigma::graphic
      * FreeList架构优势:
      * - 分配: O(1) - std::vector::pop_back()
      * - 释放: O(1) - std::vector::push_back()
-     * - 内存开销: 4 bytes × 2M索引 = 8 MB（纹理1M + 缓冲区1M）
+     * - 内存开销: 4 bytes × 1M索引 = 4 MB（纹理500K + 缓冲区500K）
      * - 性能对比: 比线性搜索快1000倍（在高分配率场景）
      *
      * 实现原理:
@@ -60,11 +60,14 @@ namespace enigma::graphic
     class BindlessIndexAllocator final
     {
     public:
-        // 索引范围常量
+        // 索引范围常量（Milestone 2.8修正 - 匹配1M描述符堆容量）
+        // ⭐ 重要变更: 从2M总容量缩减至1M，匹配GlobalDescriptorHeapManager实际容量
+        // 原因: Buffer索引1M-2M超出描述符堆容量，导致CreateShaderResourceView失败
+        // 解决: 纹理500K + 缓冲区500K = 1M总容量，完全在描述符堆范围内
         static constexpr uint32_t TEXTURE_INDEX_START = 0;
-        static constexpr uint32_t TEXTURE_INDEX_END   = 999'999;
-        static constexpr uint32_t BUFFER_INDEX_START  = 1'000'000;
-        static constexpr uint32_t BUFFER_INDEX_END    = 1'999'999;
+        static constexpr uint32_t TEXTURE_INDEX_END   = 499'999; // ⭐ 从999,999缩减至499,999
+        static constexpr uint32_t BUFFER_INDEX_START  = 500'000; // ⭐ 从1,000,000改为500,000
+        static constexpr uint32_t BUFFER_INDEX_END    = 999'999; // ⭐ 从1,999,999改为999,999
         static constexpr uint32_t INVALID_INDEX       = UINT32_MAX;
 
         BindlessIndexAllocator();
@@ -82,36 +85,36 @@ namespace enigma::graphic
 
         /**
          * @brief 分配纹理索引
-         * @return 成功返回索引(0-999999),失败返回INVALID_INDEX
+         * @return 成功返回索引(0-499999),失败返回INVALID_INDEX
          *
          * 教学要点:
-         * 1. 线性搜索空闲索引 (可优化为位扫描算法)
+         * 1. FreeList架构: O(1)常数时间分配
          * 2. 线程安全: std::lock_guard自动加锁
-         * 3. 容量检查: 达到1M上限时返回失败
+         * 3. 容量检查: 达到500K上限时返回失败
          */
         uint32_t AllocateTextureIndex();
 
         /**
          * @brief 分配缓冲区索引
-         * @return 成功返回索引(1000000-1999999),失败返回INVALID_INDEX
+         * @return 成功返回索引(500000-999999),失败返回INVALID_INDEX
          */
         uint32_t AllocateBufferIndex();
 
         /**
          * @brief 释放纹理索引
-         * @param index 要释放的索引(0-999999)
+         * @param index 要释放的索引(0-499999)
          * @return 成功返回true
          *
          * 教学要点:
          * 1. 索引范围验证
-         * 2. 重复释放检测
+         * 2. 重复释放检测（需额外检查，FreeList不提供）
          * 3. 统计信息更新
          */
         bool FreeTextureIndex(uint32_t index);
 
         /**
          * @brief 释放缓冲区索引
-         * @param index 要释放的索引(1000000-1999999)
+         * @param index 要释放的索引(500000-999999)
          * @return 成功返回true
          */
         bool FreeBufferIndex(uint32_t index);
