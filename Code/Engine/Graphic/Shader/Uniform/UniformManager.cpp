@@ -1,11 +1,16 @@
-﻿#include "UniformManager.hpp"
+﻿// 教学要点: Windows头文件预处理宏，必须在所有头文件之前定义
+#define WIN32_LEAN_AND_MEAN  // ⭐ 减少Windows.h包含内容，加速编译并避免冲突
+#define NOMINMAX             // ⭐ 防止Windows.h定义min/max宏，避免与std::min/max冲突
+
+#include "UniformManager.hpp"
 
 #include "Engine/Core/ErrorWarningAssert.hpp"
-#include "Engine/Graphic/Resource/BindlessResourceManager.hpp"
 
 #include <cstring>
 
-#include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
+// ⭐⭐⭐ 架构正确性: 使用D3D12RenderSystem静态API，遵循严格四层分层架构
+// Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem) → Layer 2 (D12Buffer) → Layer 1 (DX12 Native)
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
 namespace enigma::graphic
 {
@@ -14,7 +19,7 @@ namespace enigma::graphic
     // ========================================================================
 
     UniformManager::UniformManager()
-    // 初始化所有9个CPU端结构体
+    // 初始化所有11个CPU端结构体 ⭐
         : m_rootConstants()
           , m_cameraAndPlayerUniforms()
           , m_playerStatusUniforms()
@@ -24,7 +29,9 @@ namespace enigma::graphic
           , m_biomeAndDimensionUniforms()
           , m_renderingUniforms()
           , m_matricesUniforms()
-          , m_renderTargetsIndexBuffer()
+          , m_colorTargetsIndexBuffer()
+          , m_depthTexturesIndexBuffer() // ⭐ 新增: depthtex0/1/2
+          , m_shadowBufferIndex() // ⭐ 新增: shadowcolor + shadowtex
           // GPU资源指针初始化为nullptr
           , m_cameraAndPlayerBuffer(nullptr)
           , m_playerStatusBuffer(nullptr)
@@ -34,6 +41,9 @@ namespace enigma::graphic
           , m_biomeAndDimensionBuffer(nullptr)
           , m_renderingBuffer(nullptr)
           , m_matricesBuffer(nullptr)
+          , m_colorTargetsBuffer(nullptr) // ⭐ 统一命名: colortex0-15
+          , m_depthTexturesBuffer(nullptr) // ⭐ 新增
+          , m_shadowBuffer(nullptr) // ⭐ 新增
           // 脏标记初始化为true (首次上传)
           , m_cameraAndPlayerDirty(true)
           , m_playerStatusDirty(true)
@@ -43,7 +53,9 @@ namespace enigma::graphic
           , m_biomeAndDimensionDirty(true)
           , m_renderingDirty(true)
           , m_matricesDirty(true)
-          , m_renderTargetsDirty(true)
+          , m_renderTargetsDirty(true) // ⭐ 统一命名
+          , m_depthTexturesDirty(true) // ⭐ 新增
+          , m_shadowDirty(true) // ⭐ 新增
     {
         // 构建字段映射表
         BuildFieldMap();
@@ -76,7 +88,9 @@ namespace enigma::graphic
         delete m_biomeAndDimensionBuffer;
         delete m_renderingBuffer;
         delete m_matricesBuffer;
-        delete m_renderTargetsIndexBuffer;
+        delete m_colorTargetsBuffer; // ⭐ 统一命名: colortex0-15
+        delete m_depthTexturesBuffer; // ⭐ 新增
+        delete m_shadowBuffer; // ⭐ 新增
     }
 
     // ========================================================================
@@ -194,7 +208,13 @@ namespace enigma::graphic
         m_fieldMap["hasSkylight"]         = {5, offsetof(BiomeAndDimensionUniforms, hasSkylight), sizeof(uint32_t)};
         m_fieldMap["heightLimit"]         = {5, offsetof(BiomeAndDimensionUniforms, heightLimit), sizeof(uint32_t)};
         m_fieldMap["logicalHeightLimit"]  = {5, offsetof(BiomeAndDimensionUniforms, logicalHeightLimit), sizeof(uint32_t)};
+#ifdef near
+#undef near
+#endif
 
+#ifdef far
+#undef far
+#endif
         // ========================================================================
         // Category 6: RenderingUniforms (15 fields)
         // ========================================================================
@@ -235,144 +255,203 @@ namespace enigma::graphic
         m_fieldMap["textureMatrix"]             = {7, offsetof(MatricesUniforms, textureMatrix), sizeof(Mat44)};
 
         // ========================================================================
-        // Category 8: RenderTargetsIndexBuffer (9 fields)
+        // Category 8: ColorTargetsIndexBuffer (2 fields)
         // ========================================================================
-        m_fieldMap["readIndices"]       = {8, offsetof(RenderTargetsIndexBuffer, readIndices), sizeof(int[16])};
-        m_fieldMap["writeIndices"]      = {8, offsetof(RenderTargetsIndexBuffer, writeIndices), sizeof(int[16])};
-        m_fieldMap["depthtex0Index"]    = {8, offsetof(RenderTargetsIndexBuffer, depthtex0Index), sizeof(uint32_t)};
-        m_fieldMap["depthtex1Index"]    = {8, offsetof(RenderTargetsIndexBuffer, depthtex1Index), sizeof(uint32_t)};
-        m_fieldMap["depthtex2Index"]    = {8, offsetof(RenderTargetsIndexBuffer, depthtex2Index), sizeof(uint32_t)};
-        m_fieldMap["shadowtex0Index"]   = {8, offsetof(RenderTargetsIndexBuffer, shadowtex0Index), sizeof(uint32_t)};
-        m_fieldMap["shadowtex1Index"]   = {8, offsetof(RenderTargetsIndexBuffer, shadowtex1Index), sizeof(uint32_t)};
-        m_fieldMap["shadowcolor0Index"] = {8, offsetof(RenderTargetsIndexBuffer, shadowcolor0Index), sizeof(uint32_t)};
-        m_fieldMap["shadowcolor1Index"] = {8, offsetof(RenderTargetsIndexBuffer, shadowcolor1Index), sizeof(uint32_t)};
+        // 教学要点: colortex0-15 的读写索引数组
+        // 注意: 这些字段不常通过Uniform1i访问,而是通过专用API (FlipRenderTargets, UpdateRenderTargetsReadIndices)
+        m_fieldMap["readIndices"]  = {8, offsetof(ColorTargetsIndexBuffer, readIndices), sizeof(uint32_t[16])};
+        m_fieldMap["writeIndices"] = {8, offsetof(ColorTargetsIndexBuffer, writeIndices), sizeof(uint32_t[16])};
+
+        // ========================================================================
+        // Category 9: DepthTexturesIndexBuffer (3 fields)
+        // ========================================================================
+        // 教学要点: depthtex0/1/2 索引管理
+        m_fieldMap["depthtex0Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex0Index), sizeof(uint32_t)};
+        m_fieldMap["depthtex1Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex1Index), sizeof(uint32_t)};
+        m_fieldMap["depthtex2Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex2Index), sizeof(uint32_t)};
+
+        // ========================================================================
+        // Category 10: ShadowBufferIndex (18 fields)
+        // ========================================================================
+        // 教学要点: shadowcolor0-7 + shadowtex0/1 索引管理
+        m_fieldMap["shadowColorReadIndices"]  = {10, offsetof(ShadowBufferIndex, shadowColorReadIndices), sizeof(uint32_t[8])};
+        m_fieldMap["shadowColorWriteIndices"] = {10, offsetof(ShadowBufferIndex, shadowColorWriteIndices), sizeof(uint32_t[8])};
+        m_fieldMap["shadowtex0Index"]         = {10, offsetof(ShadowBufferIndex, shadowtex0Index), sizeof(uint32_t)};
+        m_fieldMap["shadowtex1Index"]         = {10, offsetof(ShadowBufferIndex, shadowtex1Index), sizeof(uint32_t)};
     }
 
     // ========================================================================
-    // CreateGPUBuffers() - 创建9个GPU StructuredBuffer
+    // CreateGPUBuffers() - 创建11个GPU StructuredBuffer ⭐
     // ========================================================================
 
     void UniformManager::CreateGPUBuffers()
     {
-        // Category 0: CameraAndPlayerUniforms
-        m_cameraAndPlayerBuffer = D12Buffer::CreateStructuredBuffer(
-            sizeof(CameraAndPlayerUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"CameraAndPlayerBuffer"
-        );
+        // ⭐⭐⭐ 教学要点: 遵循严格四层架构
+        // Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem::CreateStructuredBuffer)
+        // 参数顺序: (elementCount, elementSize, initialData, debugName)
+        // 返回值: std::unique_ptr<D12Buffer> → 调用 .release() 转换为裸指针
 
-        // Category 1: PlayerStatusUniforms
-        m_playerStatusBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 0: CameraAndPlayerUniforms (~112 bytes)
+        m_cameraAndPlayerBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1, // elementCount (单个元素)
+            sizeof(CameraAndPlayerUniforms), // elementSize
+            nullptr, // initialData (稍后上传)
+            "CameraAndPlayerBuffer" // debugName (char* not wchar_t*)
+        ).release(); // ✅ unique_ptr → raw pointer
+
+        // Category 1: PlayerStatusUniforms (~80 bytes)
+        m_playerStatusBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(PlayerStatusUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"PlayerStatusBuffer"
-        );
+            nullptr,
+            "PlayerStatusBuffer"
+        ).release();
 
-        // Category 2: ScreenAndSystemUniforms
-        m_screenAndSystemBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 2: ScreenAndSystemUniforms (~96 bytes)
+        m_screenAndSystemBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(ScreenAndSystemUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"ScreenAndSystemBuffer"
-        );
+            nullptr,
+            "ScreenAndSystemBuffer"
+        ).release();
 
-        // Category 3: IDUniforms
-        m_idBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 3: IDUniforms (~64 bytes)
+        m_idBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(IDUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"IDBuffer"
-        );
+            nullptr,
+            "IDBuffer"
+        ).release();
 
-        // Category 4: WorldAndWeatherUniforms
-        m_worldAndWeatherBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 4: WorldAndWeatherUniforms (~176 bytes)
+        m_worldAndWeatherBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(WorldAndWeatherUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"WorldAndWeatherBuffer"
-        );
+            nullptr,
+            "WorldAndWeatherBuffer"
+        ).release();
 
-        // Category 5: BiomeAndDimensionUniforms
-        m_biomeAndDimensionBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 5: BiomeAndDimensionUniforms (~160 bytes)
+        m_biomeAndDimensionBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(BiomeAndDimensionUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"BiomeAndDimensionBuffer"
-        );
+            nullptr,
+            "BiomeAndDimensionBuffer"
+        ).release();
 
-        // Category 6: RenderingUniforms
-        m_renderingBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 6: RenderingUniforms (~176 bytes)
+        m_renderingBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(RenderingUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"RenderingBuffer"
-        );
+            nullptr,
+            "RenderingBuffer"
+        ).release();
 
-        // Category 7: MatricesUniforms
-        m_matricesBuffer = D12Buffer::CreateStructuredBuffer(
+        // Category 7: MatricesUniforms (1152 bytes - 16个Mat44矩阵)
+        m_matricesBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
             sizeof(MatricesUniforms),
-            1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"MatricesBuffer"
-        );
+            nullptr,
+            "MatricesBuffer"
+        ).release();
 
-        // Category 8: RenderTargetsIndexBuffer
-        m_renderTargetsIndexBuffer = D12Buffer::CreateStructuredBuffer(
-            sizeof(RenderTargetsIndexBuffer),
+        // Category 8: ColorTargetsIndexBuffer (128 bytes - colortex0-15)
+        m_colorTargetsBuffer = D3D12RenderSystem::CreateStructuredBuffer(
             1,
-            D3D12_RESOURCE_FLAG_NONE,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            L"RenderTargetsIndexBuffer"
-        );
+            sizeof(ColorTargetsIndexBuffer),
+            nullptr,
+            "ColorTargetsIndexBuffer"
+        ).release();
+
+        // Category 9: DepthTexturesIndexBuffer (16 bytes - depthtex0/1/2) ⭐
+        m_depthTexturesBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
+            sizeof(DepthTexturesIndexBuffer),
+            nullptr,
+            "DepthTexturesIndexBuffer"
+        ).release();
+
+        // Category 10: ShadowBufferIndex (80 bytes - shadowcolor + shadowtex) ⭐
+        m_shadowBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
+            sizeof(ShadowBufferIndex),
+            nullptr,
+            "ShadowBufferIndex"
+        ).release();
     }
 
     // ========================================================================
-    // RegisterToBindlessSystem() - 注册9个Buffer到Bindless系统
+    // RegisterToBindlessSystem() - 注册11个Buffer到Bindless系统 ⭐
     // ========================================================================
 
     void UniformManager::RegisterToBindlessSystem()
     {
-        BindlessResourceManager* bindlessMgr = BindlessResourceManager::GetInstance();
+        // 教学要点: 新架构使用D12Buffer::RegisterBindless()自动获取Bindless组件
+        // 每个buffer自己管理注册，返回std::optional<uint32_t>
 
-        // 注册并获取索引
-        m_rootConstants.cameraAndPlayerBufferIndex   = bindlessMgr->RegisterBuffer(m_cameraAndPlayerBuffer);
-        m_rootConstants.playerStatusBufferIndex      = bindlessMgr->RegisterBuffer(m_playerStatusBuffer);
-        m_rootConstants.screenAndSystemBufferIndex   = bindlessMgr->RegisterBuffer(m_screenAndSystemBuffer);
-        m_rootConstants.idBufferIndex                = bindlessMgr->RegisterBuffer(m_idBuffer);
-        m_rootConstants.worldAndWeatherBufferIndex   = bindlessMgr->RegisterBuffer(m_worldAndWeatherBuffer);
-        m_rootConstants.biomeAndDimensionBufferIndex = bindlessMgr->RegisterBuffer(m_biomeAndDimensionBuffer);
-        m_rootConstants.renderingBufferIndex         = bindlessMgr->RegisterBuffer(m_renderingBuffer);
-        m_rootConstants.matricesBufferIndex          = bindlessMgr->RegisterBuffer(m_matricesBuffer);
-        m_rootConstants.renderTargetsBufferIndex     = bindlessMgr->RegisterBuffer(m_renderTargetsIndexBuffer);
+        // 注册8个Uniform buffers (Category 0-7)
+        auto index0 = m_cameraAndPlayerBuffer->RegisterBindless();
+        auto index1 = m_playerStatusBuffer->RegisterBindless();
+        auto index2 = m_screenAndSystemBuffer->RegisterBindless();
+        auto index3 = m_idBuffer->RegisterBindless();
+        auto index4 = m_worldAndWeatherBuffer->RegisterBindless();
+        auto index5 = m_biomeAndDimensionBuffer->RegisterBindless();
+        auto index6 = m_renderingBuffer->RegisterBindless();
+        auto index7 = m_matricesBuffer->RegisterBindless();
+
+        // 注册3个纹理系统 Index Buffers (Category 8-10) ⭐
+        auto index8  = m_colorTargetsBuffer->RegisterBindless(); // colortex0-15
+        auto index9  = m_depthTexturesBuffer->RegisterBindless(); // depthtex0/1/2
+        auto index10 = m_shadowBuffer->RegisterBindless(); // shadowcolor + shadowtex
+
+        // 验证并存储索引到Root Constants
+        if (!index0 || !index1 || !index2 || !index3 || !index4 ||
+            !index5 || !index6 || !index7 || !index8 || !index9 || !index10)
+        {
+            ERROR_AND_DIE("UniformManager::RegisterToBindlessSystem - Failed to register buffers to Bindless system");
+        }
+
+        m_rootConstants.cameraAndPlayerBufferIndex   = *index0;
+        m_rootConstants.playerStatusBufferIndex      = *index1;
+        m_rootConstants.screenAndSystemBufferIndex   = *index2;
+        m_rootConstants.idBufferIndex                = *index3;
+        m_rootConstants.worldAndWeatherBufferIndex   = *index4;
+        m_rootConstants.biomeAndDimensionBufferIndex = *index5;
+        m_rootConstants.renderingBufferIndex         = *index6;
+        m_rootConstants.matricesBufferIndex          = *index7;
+        m_rootConstants.colorTargetsBufferIndex      = *index8;
+        m_rootConstants.depthTexturesBufferIndex     = *index9;
+        m_rootConstants.shadowBufferIndex            = *index10;
+
+        // 注意: noiseTextureIndex 不在这里注册,它是直接的纹理索引,由外部设置
+        // 通过 SetNoiseTextureIndex() API 设置
     }
 
     // ========================================================================
-    // UnregisterFromBindlessSystem() - 注销9个Buffer
+    // UnregisterFromBindlessSystem() - 注销11个Buffer ⭐
     // ========================================================================
 
     void UniformManager::UnregisterFromBindlessSystem()
     {
-        BindlessResourceManager* bindlessMgr = BindlessResourceManager::GetInstance();
+        // 教学要点: 新架构使用D12Buffer::UnregisterBindless()自动释放索引
+        // 每个buffer自己管理注销，RAII设计确保安全
 
-        bindlessMgr->UnregisterBuffer(m_rootConstants.cameraAndPlayerBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.playerStatusBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.screenAndSystemBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.idBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.worldAndWeatherBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.biomeAndDimensionBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.renderingBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.matricesBufferIndex);
-        bindlessMgr->UnregisterBuffer(m_rootConstants.renderTargetsBufferIndex);
+        // 注销8个Uniform buffers (Category 0-7)
+        m_cameraAndPlayerBuffer->UnregisterBindless();
+        m_playerStatusBuffer->UnregisterBindless();
+        m_screenAndSystemBuffer->UnregisterBindless();
+        m_idBuffer->UnregisterBindless();
+        m_worldAndWeatherBuffer->UnregisterBindless();
+        m_biomeAndDimensionBuffer->UnregisterBindless();
+        m_renderingBuffer->UnregisterBindless();
+        m_matricesBuffer->UnregisterBindless();
+
+        // 注销3个纹理系统 Index Buffers (Category 8-10) ⭐
+        m_colorTargetsBuffer->UnregisterBindless();
+        m_depthTexturesBuffer->UnregisterBindless();
+        m_shadowBuffer->UnregisterBindless();
+
+        // 注意: noiseTextureIndex 不需要注销,它是外部管理的纹理索引
     }
 
     // ========================================================================
@@ -671,19 +750,19 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // RenderTargetsIndexBuffer 专用API
+    // ColorTargetsIndexBuffer 专用API
     // ========================================================================
 
     void UniformManager::UpdateRenderTargetsReadIndices(const uint32_t readIndices[16])
     {
-        std::memcpy(m_renderTargetsIndexBuffer.readIndices, readIndices, sizeof(uint32_t) * 16);
-        m_renderTargetsDirty = true;
+        std::memcpy(m_colorTargetsIndexBuffer.readIndices, readIndices, sizeof(uint32_t) * 16);
+        m_renderTargetsDirty = true; // ⭐ 统一命名
     }
 
     void UniformManager::UpdateRenderTargetsWriteIndices(const uint32_t writeIndices[16])
     {
-        std::memcpy(m_renderTargetsIndexBuffer.writeIndices, writeIndices, sizeof(uint32_t) * 16);
-        m_renderTargetsDirty = true;
+        std::memcpy(m_colorTargetsIndexBuffer.writeIndices, writeIndices, sizeof(uint32_t) * 16);
+        m_renderTargetsDirty = true; // ⭐ 统一命名
     }
 
     void UniformManager::FlipRenderTargets(const uint32_t mainIndices[16],
@@ -693,14 +772,14 @@ namespace enigma::graphic
         if (useAlt)
         {
             // 读取Alt, 写入Main
-            std::memcpy(m_renderTargetsIndexBuffer.readIndices, altIndices, sizeof(uint32_t) * 16);
-            std::memcpy(m_renderTargetsIndexBuffer.writeIndices, mainIndices, sizeof(uint32_t) * 16);
+            std::memcpy(m_colorTargetsIndexBuffer.readIndices, altIndices, sizeof(uint32_t) * 16);
+            std::memcpy(m_colorTargetsIndexBuffer.writeIndices, mainIndices, sizeof(uint32_t) * 16);
         }
         else
         {
             // 读取Main, 写入Alt
-            std::memcpy(m_renderTargetsIndexBuffer.readIndices, mainIndices, sizeof(uint32_t) * 16);
-            std::memcpy(m_renderTargetsIndexBuffer.writeIndices, altIndices, sizeof(uint32_t) * 16);
+            std::memcpy(m_colorTargetsIndexBuffer.readIndices, mainIndices, sizeof(uint32_t) * 16);
+            std::memcpy(m_colorTargetsIndexBuffer.writeIndices, altIndices, sizeof(uint32_t) * 16);
         }
 
         m_renderTargetsDirty = true;
@@ -709,6 +788,12 @@ namespace enigma::graphic
     // ========================================================================
     // SyncToGPU() - 执行所有Supplier并上传脏Buffer
     // ========================================================================
+
+    void UniformManager::SetShadowTexIndices(uint32_t shadowtex0, uint32_t shadowtex1)
+    {
+        UNUSED(shadowtex0)
+        UNUSED(shadowtex1)
+    }
 
     bool UniformManager::SyncToGPU()
     {
@@ -743,10 +828,11 @@ namespace enigma::graphic
         case 5: return &m_biomeAndDimensionUniforms;
         case 6: return &m_renderingUniforms;
         case 7: return &m_matricesUniforms;
-        case 8: return &m_renderTargetsIndexBuffer;
+        case 8: return &m_colorTargetsIndexBuffer;
+        case 9: return &m_depthTexturesIndexBuffer;
+        case 10: return &m_shadowBufferIndex;
         default:
             ERROR_AND_DIE("UniformManager::GetCategoryDataPtr - Invalid categoryIndex: " + std::to_string(categoryIndex));
-            return nullptr;
         }
     }
 
@@ -776,6 +862,10 @@ namespace enigma::graphic
             break;
         case 8: m_renderTargetsDirty = true;
             break;
+        case 9: m_depthTexturesDirty = true; // ⭐ 新增: depthtex0/1/2
+            break;
+        case 10: m_shadowDirty = true; // ⭐ 新增: shadowcolor + shadowtex
+            break;
         default:
             ERROR_AND_DIE("UniformManager::MarkCategoryDirty - Invalid categoryIndex: " + std::to_string(categoryIndex));
         }
@@ -787,58 +877,130 @@ namespace enigma::graphic
 
     bool UniformManager::UploadDirtyBuffersToGPU()
     {
+        // ⭐⭐⭐ 教学要点: 使用 D12Resource::Upload() 基类方法
+        // 正确模式: SetInitialData() → Upload()
+        // 遵循严格四层架构和 Template Method 设计模式
+
+        // Category 0: CameraAndPlayerUniforms (~112 bytes)
         if (m_cameraAndPlayerDirty)
         {
-            m_cameraAndPlayerBuffer->UploadData(&m_cameraAndPlayerUniforms, sizeof(CameraAndPlayerUniforms));
+            m_cameraAndPlayerBuffer->SetInitialData(&m_cameraAndPlayerUniforms, sizeof(CameraAndPlayerUniforms));
+            if (!m_cameraAndPlayerBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload CameraAndPlayerBuffer to GPU");
+            }
             m_cameraAndPlayerDirty = false;
         }
 
+        // Category 1: PlayerStatusUniforms (~80 bytes)
         if (m_playerStatusDirty)
         {
-            m_playerStatusBuffer->UploadData(&m_playerStatusUniforms, sizeof(PlayerStatusUniforms));
+            m_playerStatusBuffer->SetInitialData(&m_playerStatusUniforms, sizeof(PlayerStatusUniforms));
+            if (!m_playerStatusBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload PlayerStatusBuffer to GPU");
+            }
             m_playerStatusDirty = false;
         }
 
+        // Category 2: ScreenAndSystemUniforms (~96 bytes)
         if (m_screenAndSystemDirty)
         {
-            m_screenAndSystemBuffer->UploadData(&m_screenAndSystemUniforms, sizeof(ScreenAndSystemUniforms));
+            m_screenAndSystemBuffer->SetInitialData(&m_screenAndSystemUniforms, sizeof(ScreenAndSystemUniforms));
+            if (!m_screenAndSystemBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload ScreenAndSystemBuffer to GPU");
+            }
             m_screenAndSystemDirty = false;
         }
 
+        // Category 3: IDUniforms (~64 bytes)
         if (m_idDirty)
         {
-            m_idBuffer->UploadData(&m_idUniforms, sizeof(IDUniforms));
+            m_idBuffer->SetInitialData(&m_idUniforms, sizeof(IDUniforms));
+            if (!m_idBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload IDBuffer to GPU");
+            }
             m_idDirty = false;
         }
 
+        // Category 4: WorldAndWeatherUniforms (~176 bytes)
         if (m_worldAndWeatherDirty)
         {
-            m_worldAndWeatherBuffer->UploadData(&m_worldAndWeatherUniforms, sizeof(WorldAndWeatherUniforms));
+            m_worldAndWeatherBuffer->SetInitialData(&m_worldAndWeatherUniforms, sizeof(WorldAndWeatherUniforms));
+            if (!m_worldAndWeatherBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload WorldAndWeatherBuffer to GPU");
+            }
             m_worldAndWeatherDirty = false;
         }
 
+        // Category 5: BiomeAndDimensionUniforms (~160 bytes)
         if (m_biomeAndDimensionDirty)
         {
-            m_biomeAndDimensionBuffer->UploadData(&m_biomeAndDimensionUniforms, sizeof(BiomeAndDimensionUniforms));
+            m_biomeAndDimensionBuffer->SetInitialData(&m_biomeAndDimensionUniforms, sizeof(BiomeAndDimensionUniforms));
+            if (!m_biomeAndDimensionBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload BiomeAndDimensionBuffer to GPU");
+            }
             m_biomeAndDimensionDirty = false;
         }
 
+        // Category 6: RenderingUniforms (~176 bytes)
         if (m_renderingDirty)
         {
-            m_renderingBuffer->UploadData(&m_renderingUniforms, sizeof(RenderingUniforms));
+            m_renderingBuffer->SetInitialData(&m_renderingUniforms, sizeof(RenderingUniforms));
+            if (!m_renderingBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload RenderingBuffer to GPU");
+            }
             m_renderingDirty = false;
         }
 
+        // Category 7: MatricesUniforms (1152 bytes - 16个Mat44矩阵)
         if (m_matricesDirty)
         {
-            m_matricesBuffer->UploadData(&m_matricesUniforms, sizeof(MatricesUniforms));
+            m_matricesBuffer->SetInitialData(&m_matricesUniforms, sizeof(MatricesUniforms));
+            if (!m_matricesBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload MatricesBuffer to GPU");
+            }
             m_matricesDirty = false;
         }
 
+        // Category 8: ColorTargetsIndexBuffer (128 bytes - colortex0-15) ⭐
         if (m_renderTargetsDirty)
         {
-            m_renderTargetsIndexBuffer->UploadData(&m_renderTargetsIndexBuffer, sizeof(RenderTargetsIndexBuffer));
+            // 教学要点: m_renderTargetsBuffer是GPU buffer指针, m_renderTargetsIndexBuffer是CPU数据
+            m_colorTargetsBuffer->SetInitialData(&m_colorTargetsIndexBuffer, sizeof(ColorTargetsIndexBuffer));
+            if (!m_colorTargetsBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload RenderTargetsBuffer to GPU");
+            }
             m_renderTargetsDirty = false;
+        }
+
+        // Category 9: DepthTexturesIndexBuffer (16 bytes - depthtex0/1/2) ⭐
+        if (m_depthTexturesDirty)
+        {
+            m_depthTexturesBuffer->SetInitialData(&m_depthTexturesIndexBuffer, sizeof(DepthTexturesIndexBuffer));
+            if (!m_depthTexturesBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload DepthTexturesBuffer to GPU");
+            }
+            m_depthTexturesDirty = false;
+        }
+
+        // Category 10: ShadowBufferIndex (80 bytes - shadowcolor + shadowtex) ⭐
+        if (m_shadowDirty)
+        {
+            m_shadowBuffer->SetInitialData(&m_shadowBufferIndex, sizeof(ShadowBufferIndex));
+            if (!m_shadowBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload ShadowBuffer to GPU");
+            }
+            m_shadowDirty = false;
         }
 
         return true;
@@ -888,9 +1050,19 @@ namespace enigma::graphic
         return m_rootConstants.matricesBufferIndex;
     }
 
-    uint32_t UniformManager::GetRenderTargetsBufferIndex() const
+    uint32_t UniformManager::GetColorTargetsBufferIndex() const
     {
-        return m_rootConstants.renderTargetsBufferIndex;
+        return m_rootConstants.colorTargetsBufferIndex;
+    }
+
+    uint32_t UniformManager::GetDepthTexturesBufferIndex() const
+    {
+        return m_rootConstants.depthTexturesBufferIndex;
+    }
+
+    uint32_t UniformManager::GetShadowBufferIndex() const
+    {
+        return m_rootConstants.shadowBufferIndex;
     }
 
     // ========================================================================
@@ -899,7 +1071,7 @@ namespace enigma::graphic
 
     void UniformManager::Reset()
     {
-        // 重置所有9个CPU端结构体为默认值
+        // 重置所有11个CPU端结构体为默认值 ⭐
         m_cameraAndPlayerUniforms   = CameraAndPlayerUniforms();
         m_playerStatusUniforms      = PlayerStatusUniforms();
         m_screenAndSystemUniforms   = ScreenAndSystemUniforms();
@@ -908,9 +1080,11 @@ namespace enigma::graphic
         m_biomeAndDimensionUniforms = BiomeAndDimensionUniforms();
         m_renderingUniforms         = RenderingUniforms();
         m_matricesUniforms          = MatricesUniforms();
-        m_renderTargetsIndexBuffer  = RenderTargetsIndexBuffer();
+        m_colorTargetsIndexBuffer   = ColorTargetsIndexBuffer();
+        m_depthTexturesIndexBuffer  = DepthTexturesIndexBuffer(); // ⭐ 新增
+        m_shadowBufferIndex         = ShadowBufferIndex(); // ⭐ 新增
 
-        // 标记所有为脏
+        // 标记所有11个类别为脏 ⭐
         m_cameraAndPlayerDirty   = true;
         m_playerStatusDirty      = true;
         m_screenAndSystemDirty   = true;
@@ -919,7 +1093,9 @@ namespace enigma::graphic
         m_biomeAndDimensionDirty = true;
         m_renderingDirty         = true;
         m_matricesDirty          = true;
-        m_renderTargetsDirty     = true;
+        m_renderTargetsDirty     = true; // ⭐ 统一命名
+        m_depthTexturesDirty     = true; // ⭐ 新增
+        m_shadowDirty            = true; // ⭐ 新增
 
         // 清空Supplier列表
         m_uniformGetters.clear();

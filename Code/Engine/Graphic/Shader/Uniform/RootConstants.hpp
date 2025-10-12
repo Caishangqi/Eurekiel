@@ -62,7 +62,7 @@ namespace enigma::graphic
      * ```cpp
      * RootConstants constants;
      * constants.cameraAndPlayerBufferIndex = 10;
-     * constants.colorTargetsBufferIndex = 25;        // RenderTargetsIndexBuffer (128 bytes)
+     * constants.colorTargetsBufferIndex = 25;        // ColorTargetsIndexBuffer (128 bytes)
      * constants.depthTexturesBufferIndex = 26;       // DepthTexturesIndexBuffer (16 bytes)
      * constants.shadowBufferIndex = 27;              // ShadowBufferIndex (80 bytes) ⭐ 合并
      * constants.noiseTextureIndex = 5000;            // 直接指向noise texture
@@ -189,7 +189,7 @@ namespace enigma::graphic
         /**
          * @brief ColorTargets Buffer索引 ⭐ 主渲染核心
          *
-         * 指向的Buffer包含（RenderTargetsIndexBuffer，128 bytes）:
+         * 指向的Buffer包含（ColorTargetsIndexBuffer，128 bytes）:
          * - readIndices[16]: colortex0-15读取索引（Main或Alt）
          * - writeIndices[16]: colortex0-15写入索引（预留）
          *

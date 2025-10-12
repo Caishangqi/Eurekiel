@@ -26,7 +26,7 @@ namespace enigma::graphic
      *
      * 对应HLSL (Common.hlsl):
      * ```hlsl
-     * struct RenderTargetsIndexBuffer {
+     * struct ColorTargetsIndexBuffer {
      *     uint readIndices[16];   // 读取索引（Main或Alt的Bindless索引）
      *     uint writeIndices[16];  // 写入索引（预留，当前未使用）
      * };
@@ -40,7 +40,7 @@ namespace enigma::graphic
      *
      * 使用示例（C++端）:
      * ```cpp
-     * RenderTargetsIndexBuffer rtBuffer;
+     * ColorTargetsIndexBuffer rtBuffer;
      *
      * // 场景1: flip = false (Pass A写Alt，Pass B读Main)
      * rtBuffer.readIndices[0] = mainTextureIndices[0];  // 指向Main
@@ -56,7 +56,7 @@ namespace enigma::graphic
      *
      * @note 此结构体必须与Common.hlsl中的RenderTargetsBuffer严格对应（128 bytes）
      */
-    struct RenderTargetsIndexBuffer
+    struct ColorTargetsIndexBuffer
     {
         /**
          * @brief 读取索引数组 - colortex0-15
@@ -114,7 +114,7 @@ namespace enigma::graphic
         /**
          * @brief 默认构造函数 - 初始化为0
          */
-        RenderTargetsIndexBuffer()
+        ColorTargetsIndexBuffer()
         {
             for (int i = 0; i < 16; ++i)
             {
@@ -219,10 +219,10 @@ namespace enigma::graphic
     };
 
     // 编译期验证: 确保结构体大小为128字节
-    static_assert(sizeof(RenderTargetsIndexBuffer) == 128,
-                  "RenderTargetsIndexBuffer must be exactly 128 bytes to match HLSL RenderTargetsIndexBuffer struct");
+    static_assert(sizeof(ColorTargetsIndexBuffer) == 128,
+                  "ColorTargetsIndexBuffer must be exactly 128 bytes to match HLSL ColorTargetsIndexBuffer struct");
 
     // 编译期验证: 确保数组对齐
-    static_assert(alignof(RenderTargetsIndexBuffer) == 4,
-                  "RenderTargetsIndexBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(ColorTargetsIndexBuffer) == 4,
+                  "ColorTargetsIndexBuffer must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic
