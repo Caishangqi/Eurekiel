@@ -72,7 +72,7 @@ namespace enigma::graphic
             std::string defaultShaderPackPath; ///< Default Shader Pack Path
 
             // ========================== 渲染配置 (Milestone 2.6新增) =========================
-            Rgba8   defaultClearColor    = Rgba8::RED; ///< 默认清屏颜色，使用引擎Rgba8系统
+            Rgba8   defaultClearColor    = Rgba8::DEBUG_GREEN; ///< 默认清屏颜色，使用引擎Rgba8系统
             float   defaultClearDepth    = 1.0f; ///< 默认深度清除值 (0.0-1.0, 1.0表示最远)
             uint8_t defaultClearStencil  = 0; ///< 默认模板清除值 (0-255)
             bool    enableAutoClearColor = true; ///< 是否在BeginFrame自动执行清屏
@@ -202,34 +202,6 @@ namespace enigma::graphic
          */
         void BeginFrame() override;
 
-        /**
-         * @brief 主要更新和渲染
-         * @param deltaTime 帧时间间隔(秒)
-         * @details
-         * 对应Iris管线的主要渲染阶段：
-         * - shadow: 阴影贴图生成
-         * - shadowcomp1-99: 阴影后处理
-         * - prepare1-99: SSAO等预处理
-         * - gbuffers(opaque): 不透明几何体G-Buffer填充
-         * - deferred1-99: 延迟光照计算
-         * - gbuffers(translucent): 半透明几何体前向渲染
-         * - composite1-99: 后处理效果链
-         * 
-         * 教学要点:
-         * - 理解延迟渲染的核心概念
-         * - 学习G-Buffer的数据组织
-         * - 掌握后处理效果的实现原理
-         */
-
-        /// @brief 执行完整的渲染帧管线 (基于Iris架构)
-        ///
-        /// 实现完整的Iris风格渲染流水线：
-        /// Begin → Shadow → Prepare(G-Buffer) → Deferred → Translucent → Composite → Debug → Final
-        ///
-        /// 教学要点:
-        /// - 理解现代渲染管线的完整流程
-        /// - 学习各个渲染阶段的职责分工
-        /// - 掌握延迟渲染的实现架构
         void RenderFrame();
 
         /**
@@ -388,7 +360,7 @@ namespace enigma::graphic
          * 对应Iris的preparePipeline(ResourceLocation currentDimension)方法
          * 支持多维度管线缓存和动态切换
          */
-        class IWorldRenderingPipeline* PreparePipeline(const enigma::resource::ResourceLocation& dimensionId);
+        class EnigmaRenderingPipeline* PreparePipeline(const ResourceLocation& dimensionId);
 
         /**
          * @brief 获取当前活跃的渲染管线 (Milestone 2.6新增)

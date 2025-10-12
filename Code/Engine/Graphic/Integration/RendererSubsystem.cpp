@@ -84,6 +84,34 @@ void RendererSubsystem::Startup()
         LogError(GetStaticSubsystemName(), "EnigmaRenderingPipeline creates exception: {}", e.what());
         m_currentPipeline.reset();
     }
+
+    // ==================== 创建RenderCommandQueue (Milestone 3.1 新增) ====================
+    // 初始化immediate模式渲染指令队列
+    if (m_configuration.enableImmediateMode)
+    {
+        try
+        {
+            RenderCommandQueue::QueueConfig queueConfig;
+            queueConfig.maxCommandsPerPhase       = m_configuration.maxCommandsPerPhase;
+            queueConfig.enablePhaseDetection      = m_configuration.enablePhaseDetection;
+            queueConfig.enableDebugLogging        = true; // 开发阶段启用调试日志
+            queueConfig.enablePerformanceCounters = m_configuration.enableCommandProfiling;
+
+            m_renderCommandQueue = std::make_unique<RenderCommandQueue>(queueConfig);
+            m_renderCommandQueue->Initialize();
+
+            LogInfo(GetStaticSubsystemName(), "RenderCommandQueue created and initialized (double-buffered, lock-free)");
+        }
+        catch (const std::exception& e)
+        {
+            LogError(GetStaticSubsystemName(), "RenderCommandQueue creation exception: {}", e.what());
+            m_renderCommandQueue.reset();
+        }
+    }
+    else
+    {
+        LogInfo(GetStaticSubsystemName(), "Immediate mode rendering is disabled (configuration)");
+    }
 }
 
 void RendererSubsystem::Shutdown()
@@ -103,6 +131,12 @@ void RendererSubsystem::Shutdown()
     D3D12RenderSystem::Shutdown();
 }
 
+EnigmaRenderingPipeline* RendererSubsystem::PreparePipeline(const ResourceLocation& dimensionId)
+{
+    UNUSED(dimensionId)
+    return GetCurrentPipeline();
+}
+
 /**
  * @brief 检查渲染系统是否准备好进行渲染
  * @return 如果D3D12RenderSystem已初始化且设备可用则返回true
@@ -118,240 +152,296 @@ bool RendererSubsystem::IsReadyForRendering() const noexcept
 void RendererSubsystem::BeginFrame()
 {
     // ========================================================================
-    // 帧开始处理 - 正确的DirectX 12管线架构
+    // Pipeline 生命周期重构 - BeginFrame 阶段
+    // ========================================================================
+    // 职责对应 Minecraft renderLevel() 最开头:
+    // 1. DirectX 12 帧准备 (PrepareNextFrame)
+    // 2. 获取/切换当前维度的 Pipeline
+    // 3. 清屏操作 (对应 Minecraft CLEAR 注入点之前)
+    // ========================================================================
+    // 教学要点: BeginFrame 不包含 Iris 的任何渲染阶段
+    // - BeginLevelRendering 在 EndFrame 中调用 (AFTER CLEAR)
+    // - Setup/Begin 阶段也在 EndFrame 中调用
     // ========================================================================
 
-    // 1. 准备下一帧并执行清屏操作 - 使用配置的默认颜色 (Milestone 2.6新增)
-    // 教学要点：集成引擎Rgba8颜色系统，通过配置控制清屏行为
+    // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
+    D3D12RenderSystem::PrepareNextFrame();
+    LogDebug(GetStaticSubsystemName(), "BeginFrame - D3D12 next frame prepared");
+
+    // 2. 获取/切换当前维度的 Pipeline
+    // 教学要点: 对应 Iris 的 PipelineManager.preparePipeline(dimensionId)
+    PreparePipeline(ResourceLocation("simpleminer", "world"));
+    LogDebug(GetStaticSubsystemName(), "BeginFrame - Pipeline prepared for current dimension");
+
+    // 3. 执行清屏操作 (对应 Minecraft CLEAR 注入点)
+    // 教学要点: 这是 MixinLevelRenderer 中 CLEAR target 所在位置
     if (m_configuration.enableAutoClearColor)
     {
-        bool success = enigma::graphic::D3D12RenderSystem::BeginFrame(
-            m_configuration.defaultClearColor, // 使用配置的Rgba8清屏颜色
-            m_configuration.defaultClearDepth, // 使用配置的深度值
-            m_configuration.defaultClearStencil // 使用配置的模板值
+        // TODO (Milestone 3.2): 调用 D3D12RenderSystem::ClearRenderTarget()
+        bool success = D3D12RenderSystem::BeginFrame(
+            m_configuration.defaultClearColor, // 配置的默认颜色
+            m_configuration.defaultClearDepth, // 深度清除值
+            m_configuration.defaultClearStencil // 模板清除值
         );
 
-        if (success)
+        if (!success)
         {
-            LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame prepared and cleared with configured colors");
+            LogWarn(GetStaticSubsystemName(), "BeginFrame - D3D12 frame clear failed");
         }
-        else
-        {
-            LogWarn(GetStaticSubsystemName(), "BeginFrame - Frame preparation or clear operation failed");
-        }
-    }
-    else
-    {
-        // 仅准备下一帧，不执行自动清屏
-        enigma::graphic::D3D12RenderSystem::PrepareNextFrame();
-        LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame prepared without auto-clear (disabled in config)");
+
+        LogDebug(GetStaticSubsystemName(), "BeginFrame - Render target cleared");
     }
 
-    // 2. 开始EnigmaRenderingPipeline的世界渲染 (Milestone 2.6新增)
-    // 教学要点：这是渲染管线的入口点，开始一帧的渲染流程
-    if (m_currentPipeline)
-    {
-        m_currentPipeline->BeginLevelRendering();
-        LogInfo(GetStaticSubsystemName(), "BeginFrame - EnigmaRenderingPipeline world rendering started");
-    }
-    else
-    {
-        LogWarn(GetStaticSubsystemName(), "BeginFrame - EnigmaRenderingPipeline not available");
-    }
-
-    // TODO: 后续扩展
-    // - setup1-99: GPU状态初始化、SSBO设置
-    // - begin1-99: 每帧参数更新、摄像机矩阵计算
-    // - 资源状态转换和绑定
-
-    LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame initialization completed");
+    LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame preparation completed (ready for game update)");
 }
 
 void RendererSubsystem::RenderFrame()
 {
     // ========================================================================
-    // 完整的Iris风格24阶段渲染管线流水线 (Milestone 2.7新增)
-    // 基于真实WorldRenderingPhase.hpp的完整24个阶段实现
+    // Pipeline 生命周期重构 - RenderFrame 阶段 (Game Update)
+    // ========================================================================
+    // 职责: 游戏逻辑的 Update 阶段 (对应 Minecraft 的 tick/update)
+    // - 上传 Buffer 修改 (Uniform 更新)
+    // - 材质修改 (纹理加载/卸载)
+    // - 几何体数据更新
+    // - 提交 Immediate 指令到 RenderCommandQueue
+    // ========================================================================
+    // 教学要点: 这个阶段是 Game 线程提交渲染指令的时机
+    // - Game 线程写入 submitQueue (双缓冲的另一半)
+    // - Render 线程读取 executeQueue (上一帧的指令)
+    // - SwapBuffers() 在下一帧 EndFrame 开始时调用
     // ========================================================================
 
-    if (!m_currentPipeline)
-    {
-        LogWarn(GetStaticSubsystemName(), "RenderFrame - EnigmaRenderingPipeline not available, skipping frame");
-        return;
-    }
+    // TODO (Milestone 3.2): 游戏逻辑更新
+    // - 更新实体位置
+    // - 更新方块状态
+    // - 提交几何体绘制指令
 
-    try
-    {
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Starting complete 24-phase Iris-style rendering pipeline");
+    // TODO (Milestone 3.2): Uniform 变量更新
+    // - 更新摄像机矩阵
+    // - 更新时间变量
+    // - 更新光照参数
 
-        // ========================================================================
-        // 天空渲染阶段群组 (Sky Rendering Group)
-        // ========================================================================
+    // TODO (Milestone 3.2): 纹理资源更新
+    // - 加载新的纹理
+    // - 卸载未使用的纹理
+    // - 更新纹理动画
 
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: Starting sky rendering phases");
-
-        // 1. 天空盒基础渲染 (对应Iris gbuffers_skybasic, gbuffers_skytextured)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::SKY);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: SKY phase executed");
-
-        // 2. 日落/日出效果渲染 (大气散射和地平线颜色渐变)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::SUNSET);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: SUNSET phase executed");
-
-        // 3. 自定义天空效果 (着色器包自定义天空)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::CUSTOM_SKY);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: CUSTOM_SKY phase executed");
-
-        // 4. 太阳渲染 (太阳几何体和光晕)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::SUN);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: SUN phase executed");
-
-        // 5. 月亮渲染 (月亮几何体和月相)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::MOON);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: MOON phase executed");
-
-        // 6. 星空渲染 (星星点阵和星座)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::STARS);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: STARS phase executed");
-
-        // 7. 虚空渲染 (虚空维度特殊效果)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::VOID_ENV);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Sky Group: VOID_ENV phase executed");
-
-        // ========================================================================
-        // 地形渲染阶段群组 (Terrain Rendering Group)
-        // ========================================================================
-
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: Starting terrain rendering phases");
-
-        // 8. 不透明地形渲染 (G-Buffer填充的主要阶段)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::TERRAIN_SOLID);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: TERRAIN_SOLID phase executed (G-Buffer filled)");
-
-        // 9. 带Mipmap的镂空地形 (树叶等需要LOD的半透明)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: TERRAIN_CUTOUT_MIPPED phase executed");
-
-        // 10. 镂空地形渲染 (栅栏、花朵等Alpha测试)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::TERRAIN_CUTOUT);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: TERRAIN_CUTOUT phase executed");
-
-        // 11. 半透明地形渲染 (水、冰块等需要透明度排序)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::TERRAIN_TRANSLUCENT);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: TERRAIN_TRANSLUCENT phase executed");
-
-        // 12. 绊线渲染 (红石绊线等细小透明物体)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::TRIPWIRE);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Terrain Group: TRIPWIRE phase executed");
-
-        // ========================================================================
-        // 实体渲染阶段群组 (Entity Rendering Group)
-        // ========================================================================
-
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Entity Group: Starting entity rendering phases");
-
-        // 13. 实体渲染 (生物和物体实体)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::ENTITIES);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Entity Group: ENTITIES phase executed");
-
-        // 14. 方块实体渲染 (箱子、熔炉等复杂几何体)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::BLOCK_ENTITIES);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Entity Group: BLOCK_ENTITIES phase executed");
-
-        // 15. 破坏效果渲染 (方块破坏裂纹和碎片)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::DESTROY);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Entity Group: DESTROY phase executed");
-
-        // ========================================================================
-        // 玩家手部渲染阶段群组 (Hand Rendering Group)
-        // ========================================================================
-
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Hand Group: Starting hand rendering phases");
-
-        // 16. 手部不透明物体 (玩家手中的不透明物品)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::HAND_SOLID);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Hand Group: HAND_SOLID phase executed");
-
-        // 17. 手部半透明物体 (玩家手中的半透明物品如药水瓶)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::HAND_TRANSLUCENT);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Hand Group: HAND_TRANSLUCENT phase executed");
-
-        // ========================================================================
-        // 特效和调试渲染阶段群组 (Effects & Debug Group)
-        // ========================================================================
-
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: Starting effects and debug phases");
-
-        // 18. 选中物体轮廓 (方块和实体的选择框)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::OUTLINE);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: OUTLINE phase executed");
-
-        // 19. 调试信息渲染 (碰撞箱、光照调试等)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::DEBUG);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: DEBUG phase executed - Immediate commands execute here!");
-
-        // 20. 粒子效果渲染 (烟雾、火花、魔法效果等大规模粒子系统)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::PARTICLES);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: PARTICLES phase executed");
-
-        // 21. 云层渲染 (2D或3D体积云)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::CLOUDS);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: CLOUDS phase executed");
-
-        // 22. 雨雪天气效果 (降水效果和地形交互)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::RAIN_SNOW);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: RAIN_SNOW phase executed");
-
-        // 23. 世界边界渲染 (世界边界的半透明屏障效果)
-        m_currentPipeline->SetPhase(WorldRenderingPhase::WORLD_BORDER);
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Effects Group: WORLD_BORDER phase executed");
-
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Complete 24-phase Iris-style rendering pipeline finished successfully");
-        LogInfo(GetStaticSubsystemName(), "RenderFrame - Pipeline Summary: 7 Sky + 5 Terrain + 3 Entity + 2 Hand + 6 Effects = 23 phases executed");
-    }
-    catch (const std::exception& e)
-    {
-        LogError(GetStaticSubsystemName(), "RenderFrame - Exception during 24-phase rendering pipeline: {}", e.what());
-    }
+    LogDebug(GetStaticSubsystemName(), "RenderFrame - Game update completed (commands submitted to queue)");
 }
 
 void RendererSubsystem::EndFrame()
 {
     // ========================================================================
-    // 帧结束处理 - 正确的DirectX 12管线架构
+    // Pipeline 生命周期重构 - EndFrame 阶段
+    // ========================================================================
+    // 职责: 执行完整的 Iris 渲染管线
+    // 1. 双缓冲队列交换 (将 Game 线程提交的指令移入执行队列)
+    // 2. Setup 阶段 (setup1-99.fsh)
+    // 3. BeginLevelRendering (对应 Iris AFTER CLEAR 注入点)
+    // 4. 执行所有 WorldRenderingPhase (24个阶段)
+    // 5. EndLevelRendering (finalizeLevelRendering)
+    // 6. GPU 命令提交和 Present
+    // ========================================================================
+    // 教学要点: EndFrame 对应 Minecraft renderLevel() 的主体部分
+    // - CLEAR 之后开始执行 Iris 渲染管线
+    // - Setup 阶段在最开始 (初始化全局 Uniform)
+    // - BeginLevelRendering 紧随其后 (begin1-99.fsh)
     // ========================================================================
 
-    // 1. 结束EnigmaRenderingPipeline的世界渲染 (Milestone 2.6新增)
-    // 教学要点：在帧结束时正确关闭渲染管线
-    if (m_currentPipeline)
+    if (!m_currentPipeline)
     {
-        m_currentPipeline->EndLevelRendering();
-        LogInfo(GetStaticSubsystemName(), "EndFrame - EnigmaRenderingPipeline world rendering ended");
+        LogWarn(GetStaticSubsystemName(), "EndFrame - No active pipeline, skipping rendering");
+        return;
     }
 
-    // 2. 回收已完成的命令列表 - 这是每帧必须的维护操作
-    // 教学要点：在EndFrame中统一回收，保持渲染管线架构清晰
-    auto* commandListManager = enigma::graphic::D3D12RenderSystem::GetCommandListManager();
+    // ==================== 阶段 0: 双缓冲队列交换 ====================
+    // 教学要点: 将上一帧 Game 线程提交的指令移入执行队列
+    // - submitQueue (Game 线程写入) → executeQueue (Render 线程读取)
+    // - 无锁双缓冲设计，完全分离 Game 和 Render 线程
+    if (m_renderCommandQueue)
+    {
+        m_renderCommandQueue->SwapBuffers();
+        m_renderStatistics.frameIndex++;
+        m_renderStatistics.Reset(); // 重置本帧统计
+        LogDebug(GetStaticSubsystemName(), "EndFrame - Command queue buffers swapped (frame: {})",
+                 m_renderStatistics.frameIndex);
+    }
+
+    // ==================== 阶段 1: Setup 阶段 (setup1-99.fsh) ====================
+    // 教学要点: Iris 渲染管线的第一个阶段
+    // - 初始化全局 Uniform 变量
+    // - 设置渲染目标清除值
+    // - 准备 Shadow Map 和其他资源
+    // TODO (Milestone 3.2): m_currentPipeline->ExecuteSetupStage();
+    LogDebug(GetStaticSubsystemName(), "EndFrame - Setup stage completed (setup1-99)");
+
+    // ==================== 阶段 2: BeginLevelRendering (begin1-99.fsh) ====================
+    // 教学要点: 对应 Iris 的 beginWorldRender() 调用
+    // - 注入点: @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = CLEAR, shift = At.Shift.AFTER))
+    // - 位置: Minecraft CLEAR 操作之后
+    // - 职责: 执行 begin1-99.fsh 着色器程序
+    m_currentPipeline->BeginLevelRendering();
+    LogDebug(GetStaticSubsystemName(), "EndFrame - BeginLevelRendering completed (begin1-99)");
+
+    // ==================== 阶段 3: Shadow Pass (shadow.vsh/shadow.fsh) ====================
+    // 教学要点: Shadow 阶段不是 WorldRenderingPhase 枚举值
+    // - 通过单独的 renderShadows() 方法处理
+    // - Iris 使用 ShadowRenderer，独立于 WorldRenderingPhase 系统
+    // - 渲染到 Shadow Map (shadowtex0, shadowtex1, shadowcolor0, shadowcolor1)
+    m_currentPipeline->RenderShadows();
+    LogDebug(GetStaticSubsystemName(), "EndFrame - Shadow pass completed (shadow.vsh/fsh)");
+
+    // ==================== 阶段 4-27: 执行完整的 WorldRenderingPhase (24个阶段) ====================
+    // 教学要点: 严格按照 Iris 的 24 个 WorldRenderingPhase 顺序执行
+    // 每个 Phase 的执行流程:
+    // 1. SetPhase(phase) - 设置当前阶段标志 (零开销，只是flag)
+    // 2. CompositeRenderer/DebugRenderer 的 RenderAll() 方法:
+    //    - 遍历该 Phase 的所有 Pass (例如 composite1.fsh, composite2.fsh, ...)
+    //    - 每个 Pass 执行: 绑定Program → 更新Uniform → Flip Buffer → 渲染全屏四边形
+    // 3. 从 executeQueue 提取该 Phase 的所有 Immediate 指令并执行
+    // ========================================================================
+
+    // 天空和环境阶段
+    const WorldRenderingPhase skyPhases[] = {
+        WorldRenderingPhase::SKY,
+        WorldRenderingPhase::SUNSET,
+        WorldRenderingPhase::CUSTOM_SKY,
+        WorldRenderingPhase::SUN,
+        WorldRenderingPhase::MOON,
+        WorldRenderingPhase::STARS,
+        WorldRenderingPhase::VOID_ENV
+    };
+
+    for (auto phase : skyPhases)
+    {
+        // TODO (Milestone 3.2): 实现正确的 Phase 执行流程
+        // 1. SetPhase(phase) - 只是设置标志位
+        // 2. 找到对应的 Renderer (例如 SkyRenderer)
+        // 3. 调用 Renderer->RenderAll() 方法
+        //    - RenderAll() 内部 loop 所有 Pass
+        //    - 每个 Pass 对应一个着色器程序 (例如 gbuffers_skybasic.vsh/fsh)
+        // 4. 从 executeQueue 提取该 Phase 的 Immediate 指令并执行
+
+        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
+        {
+            m_currentPipeline->SetPhase(phase);
+            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
+            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
+                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
+        }
+    }
+
+    // G-Buffer 填充阶段 (Terrain, Entities, 等)
+    const WorldRenderingPhase gbufferPhases[] = {
+        WorldRenderingPhase::TERRAIN_SOLID,
+        WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED,
+        WorldRenderingPhase::TERRAIN_CUTOUT,
+        WorldRenderingPhase::ENTITIES,
+        WorldRenderingPhase::BLOCK_ENTITIES,
+        WorldRenderingPhase::DESTROY
+    };
+
+    for (auto phase : gbufferPhases)
+    {
+        // TODO (Milestone 3.2): 同上，执行对应的 Renderer
+        // - TERRAIN_SOLID/CUTOUT/CUTOUT_MIPPED: TerrainRenderer (gbuffers_terrain_solid.vsh/fsh)
+        // - ENTITIES: EntityRenderer (gbuffers_entities.vsh/fsh)
+        // - BLOCK_ENTITIES: BlockEntityRenderer (gbuffers_block.vsh/fsh)
+
+        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
+        {
+            m_currentPipeline->SetPhase(phase);
+            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
+            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
+                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
+        }
+    }
+
+    // 半透明和特效阶段
+    const WorldRenderingPhase translucentPhases[] = {
+        WorldRenderingPhase::TERRAIN_TRANSLUCENT,
+        WorldRenderingPhase::TRIPWIRE,
+        WorldRenderingPhase::PARTICLES,
+        WorldRenderingPhase::CLOUDS,
+        WorldRenderingPhase::RAIN_SNOW,
+        WorldRenderingPhase::WORLD_BORDER
+    };
+
+    for (auto phase : translucentPhases)
+    {
+        // TODO (Milestone 3.2): 同上
+        // - TERRAIN_TRANSLUCENT: TerrainRenderer (gbuffers_water.vsh/fsh)
+        // - PARTICLES: ParticleRenderer (gbuffers_textured.vsh/fsh)
+
+        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
+        {
+            m_currentPipeline->SetPhase(phase);
+            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
+            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
+                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
+        }
+    }
+
+    // 手部渲染阶段
+    const WorldRenderingPhase handPhases[] = {
+        WorldRenderingPhase::HAND_SOLID,
+        WorldRenderingPhase::HAND_TRANSLUCENT
+    };
+
+    for (auto phase : handPhases)
+    {
+        // TODO (Milestone 3.2): 同上
+        // - HAND_SOLID/TRANSLUCENT: HandRenderer (gbuffers_hand.vsh/fsh, gbuffers_hand_water.vsh/fsh)
+
+        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
+        {
+            m_currentPipeline->SetPhase(phase);
+            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
+            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
+                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
+        }
+    }
+
+    // OUTLINE 阶段 (outline.fsh)
+    if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::OUTLINE) > 0)
+    {
+        m_currentPipeline->SetPhase(WorldRenderingPhase::OUTLINE);
+        // TODO (Milestone 3.2): m_currentPipeline->ExecuteOutlineStage();
+        LogDebug(GetStaticSubsystemName(), "EndFrame - OUTLINE phase executed ({} commands)",
+                 m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::OUTLINE));
+    }
+
+    // DEBUG 阶段 - 显式调用 DebugRenderer (debug.vsh/debug.fsh)
+    if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::DEBUG) > 0)
+    {
+        m_currentPipeline->SetPhase(WorldRenderingPhase::DEBUG);
+        // 教学要点: ExecuteDebugStage() 内部调用 DebugRenderer->RenderAll()
+        // - RenderAll() 遍历所有 debug Pass (debug1.fsh, debug2.fsh, ...)
+        // - 每个 Pass 执行完整的渲染流程
+        m_currentPipeline->ExecuteDebugStage();
+        LogDebug(GetStaticSubsystemName(), "EndFrame - DEBUG phase executed ({} commands)",
+                 m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::DEBUG));
+    }
+
+    // ==================== 阶段 28: EndLevelRendering (finalize.fsh) ====================
+    // 教学要点: 对应 Iris 的 finalizeLevelRendering() 调用
+    // - 执行最终的后处理 Pass (final.vsh/fsh)
+    // - 合成所有渲染目标到最终输出
+    m_currentPipeline->EndLevelRendering();
+    LogDebug(GetStaticSubsystemName(), "EndFrame - EndLevelRendering completed (final.fsh)");
+
+    // ==================== GPU 命令提交和 Present ====================
+    // 1. 回收已完成的命令列表
+    auto* commandListManager = D3D12RenderSystem::GetCommandListManager();
     if (commandListManager)
     {
         commandListManager->UpdateCompletedCommandLists();
-        LogInfo(GetStaticSubsystemName(), "EndFrame - Command lists recycled successfully");
-    }
-    else
-    {
-        LogWarn(GetStaticSubsystemName(), "EndFrame - CommandListManager not available");
     }
 
-    // 3. 呈现到屏幕 - 关键的Present操作 (Milestone 2.6 修复)
-    // 教学要点：必须调用Present将渲染结果显示到屏幕，否则清屏操作不可见
-    enigma::graphic::D3D12RenderSystem::Present(true); // 启用垂直同步
-    LogInfo(GetStaticSubsystemName(), "EndFrame - Present completed");
+    // 2. 呈现到屏幕 (Present)
+    D3D12RenderSystem::Present(true); // 启用垂直同步
 
-    // TODO: 后续扩展
-    // - final: 最终输出处理
-    // - Present: 交换链呈现
-    // - 性能统计收集
-    // - GPU/CPU同步优化
-
-    LogInfo(GetStaticSubsystemName(), "EndFrame - Frame completed");
+    LogInfo(GetStaticSubsystemName(), "EndFrame - Frame {} completed and presented",
+            m_renderStatistics.frameIndex);
 }
