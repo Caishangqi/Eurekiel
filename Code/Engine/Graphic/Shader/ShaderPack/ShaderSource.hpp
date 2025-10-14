@@ -175,6 +175,38 @@ namespace enigma::graphic
             return IsValid() ? this : nullptr;
         }
 
+        /**
+         * @brief 检查着色器源码是否包含非空白内容（严格验证）
+         * @return true 如果VS和PS都包含至少一个非空白字符
+         *
+         * **教学要点**：
+         * - 比IsValid()更严格：IsValid()只检查empty()，此方法检查空白内容
+         * - 用于过滤空文件、纯注释文件、纯空白文件
+         * - 使用std::any_of + std::isspace实现
+         * - Phase 4.4 - 三层验证第三层
+         */
+        bool HasNonEmptySource() const;
+
+        /**
+         * @brief 获取顶点着色器行数（用于调试输出）
+         * @return 行数（通过统计'\n'字符）
+         *
+         * **教学要点**：
+         * - 辅助调试方法，输出着色器内容统计
+         * - 使用std::count算法统计换行符
+         */
+        size_t GetVertexLineCount() const;
+
+        /**
+         * @brief 获取像素着色器行数（用于调试输出）
+         * @return 行数（通过统计'\n'字符）
+         *
+         * **教学要点**：
+         * - 辅助调试方法，输出着色器内容统计
+         * - 使用std::count算法统计换行符
+         */
+        size_t GetPixelLineCount() const;
+
         // ========================================================================
         // Setter 方法 - 用于 ProgramSet 延迟设置
         // ========================================================================

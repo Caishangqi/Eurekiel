@@ -75,60 +75,80 @@ namespace enigma::graphic
     // ========================================================================
 
     ShaderPack::ShaderPack(const std::filesystem::path& root)
-        : m_root(root)
+        : m_root(std::filesystem::absolute(root)) // + 转换为绝对路径
     {
         /**
          * 教学要点：协调器模式 - 按依赖顺序初始化所有子系统
          *
          * 初始化顺序至关重要：
-         * 1. IncludeGraph 不依赖任何子系统（先初始化）✅ Phase 1
-         * 2. ShaderProperties 不依赖 IncludeGraph（可并行）✅ Phase 0.5
+         * 1. IncludeGraph 不依赖任何子系统（先初始化）+ Phase 1
+         * 2. ShaderProperties 不依赖 IncludeGraph（可并行）+ Phase 0.5
          * 3. ShaderPackOptions 依赖 IncludeGraph 和 ShaderProperties（后初始化）⚠️ Phase 2
          * 4. ProgramSet 依赖 IncludeGraph 和 ShaderProperties（最后初始化）⚠️ Phase 3-4
+         *
+         * **路径处理修复 (2025-10-14)**:
+         * - 使用 std::filesystem::absolute() 将相对路径转换为绝对路径
+         * - 使用 std::filesystem::canonical() 规范化路径（统一分隔符为 /）
+         * - 确保所有文件系统操作基于正确的绝对路径
+         * - 避免相对路径在不同工作目录下解析失败
          */
+
+        // ========================================================================
+        // Step 0: 验证路径存在性并规范化路径
+        // ========================================================================
+        if (!std::filesystem::exists(m_root))
+        {
+            DebuggerPrintf("[ShaderPack] ERROR: Root path does not exist: '%s'\n", m_root.string().c_str());
+            ERROR_AND_DIE("ShaderPack root path does not exist");
+        }
+
+        // + 规范化路径（解析 . 和 ..，统一分隔符为 /）
+        m_root = std::filesystem::canonical(m_root);
+
+        DebuggerPrintf("[ShaderPack] Using canonical absolute path: '%s'\n", m_root.string().c_str());
 
         // ========================================================================
         // Step 1: 扫描起始路径（shaders/ 目录下的所有着色器文件）
         // ========================================================================
-        auto shadersDir    = root / "shaders";
+        auto shadersDir    = m_root / "shaders";
         auto startingPaths = detail::ScanStartingPaths(shadersDir);
 
         // ========================================================================
-        // Step 2: 构建 IncludeGraph（BFS 加载所有依赖）✅ Phase 1
+        // Step 2: 构建 IncludeGraph（BFS 加载所有依赖）+ Phase 1
         // ========================================================================
-        m_includeGraph = std::make_unique<IncludeGraph>(root, startingPaths);
+        m_includeGraph = std::make_unique<IncludeGraph>(m_root, startingPaths);
 
         // ========================================================================
-        // Step 3: 解析 ShaderProperties（读取 shaders.properties）✅ Phase 0.5
+        // Step 3: 解析 ShaderProperties（读取 shaders.properties）+ Phase 0.5
         // ========================================================================
         m_shaderProperties = std::make_unique<ShaderProperties>();
 
         // 调用 Parse() 方法加载 shaders.properties
         // 路径: <root>/shaders/shaders.properties
-        bool propertiesParsed = m_shaderProperties->Parse(root);
+        bool propertiesParsed = m_shaderProperties->Parse(m_root);
 
         if (!propertiesParsed)
         {
             // 解析失败，记录警告但不中断初始化（对齐 Iris 行为）
             // Iris 也是允许没有 shaders.properties 的 Shader Pack 运行
             DebuggerPrintf("[ShaderPack] Warning: Failed to parse shaders.properties at '%s'\n",
-                           (root / "shaders" / "shaders.properties").string().c_str());
+                           (m_root / "shaders" / "shaders.properties").string().c_str());
         }
 
         // ========================================================================
-        // Step 4: 创建 ShaderPackOptions（基于 shaderpack.properties）✅ Phase 2
+        // Step 4: 创建 ShaderPackOptions（基于 shaderpack.properties）+ Phase 2
         // ========================================================================
         m_options = std::make_unique<ShaderPackOptions>();
 
         // 调用 Parse() 方法加载 shaderpack.properties
-        bool optionsParsed = m_options->Parse(root);
+        bool optionsParsed = m_options->Parse(m_root);
 
         if (!optionsParsed)
         {
             // 解析失败，记录警告但不中断初始化（对齐 Iris 宽松策略）
             // shaderpack.properties 是可选文件
             DebuggerPrintf("[ShaderPack] Warning: Failed to parse shaderpack.properties at '%s'\n",
-                           (root / "shaderpack.properties").string().c_str());
+                           (m_root / "shaderpack.properties").string().c_str());
         }
         else
         {
@@ -139,7 +159,7 @@ namespace enigma::graphic
 
         // ========================================================================
         // Step 5: 加载默认维度（world0）的 ProgramSet
-        // ✅ Phase 4.4 - 使用延迟加载机制，首次调用 GetProgramSet("world0") 时自动加载
+        // + Phase 4.4 - 使用延迟加载机制，首次调用 GetProgramSet("world0") 时自动加载
         // ========================================================================
         // 教学要点：
         // - 构造函数不再直接加载 ProgramSet，而是触发延迟加载
@@ -203,7 +223,7 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // Phase 0.5 验证：ShaderProperties 解析成功 ✅
+        // Phase 0.5 验证：ShaderProperties 解析成功 +
         // ========================================================================
         // 注意：ShaderProperties 解析失败不影响 Shader Pack 有效性
         // Iris 允许没有 shaders.properties 的 Shader Pack 运行（使用默认配置）
@@ -220,7 +240,7 @@ namespace enigma::graphic
         // }
 
         // ========================================================================
-        // Phase 2 验证：ShaderPackOptions 存在 ✅
+        // Phase 2 验证：ShaderPackOptions 存在 +
         // ========================================================================
         // 注意：ShaderPackOptions 解析失败不影响 Shader Pack 有效性
         // shaderpack.properties 是可选文件，只验证对象存在即可
@@ -231,7 +251,7 @@ namespace enigma::graphic
 
         // ========================================================================
         // Phase 4.4 验证：默认维度（world0）的 ProgramSet 至少加载了 Basic 程序
-        // ✅ Phase 4.4 实现 - 支持多维度验证
+        // + Phase 4.4 实现 - 支持多维度验证
         // ========================================================================
         // 教学要点：
         // - 使用 const_cast 绕过 const 限制调用 GetProgramSet()
@@ -337,6 +357,53 @@ namespace enigma::graphic
     }
 
     /**
+     * @brief 检测 Base ProgramSet 的默认程序目录（Iris 标准优先级）
+     *
+     * **教学要点**:
+     * - Iris 标准优先级: world0/ > program/ > shaders/
+     * - program/ 是 Iris 标准的默认程序目录（单数，不是 programs/）
+     * - world0/ 如果存在，优先级最高（作为默认维度）
+     * - 这个检测结果影响所有维度的 Fallback Chain 行为
+     *
+     * **Iris 对应**:
+     * - net.irisshaders.iris.pipeline.ProgramSet.scanDirectoryForPrograms()
+     * - Iris 在扫描时会检测 world0/ 和 program/ 目录
+     *
+     * **返回值**:
+     * - "world0"  - 如果 shaders/world0/ 存在
+     * - "program" - 如果 shaders/program/ 存在
+     * - ""        - 回退到 shaders/ 根目录
+     */
+    std::string ShaderPack::DetectBaseProgramDirectory() const
+    {
+        // ========================================================================
+        // 步骤 1: 检测 world0 目录（最高优先级）⭐⭐⭐
+        // ========================================================================
+        std::filesystem::path world0Dir = m_root / "shaders" / "world0";
+        if (std::filesystem::exists(world0Dir))
+        {
+            DebuggerPrintf("[ShaderPack] Detected world0/ directory, using as base program directory\n");
+            return "world0";
+        }
+
+        // ========================================================================
+        // 步骤 2: 检测 program 目录（次高优先级）⭐
+        // ========================================================================
+        std::filesystem::path programDir = m_root / "shaders" / "program";
+        if (std::filesystem::exists(programDir))
+        {
+            DebuggerPrintf("[ShaderPack] Detected program/ directory, using as base program directory\n");
+            return "program";
+        }
+
+        // ========================================================================
+        // 步骤 3: 回退到 shaders/ 根目录（最低优先级）
+        // ========================================================================
+        DebuggerPrintf("[ShaderPack] No world0/ or program/ directory found, using shaders/ root as base\n");
+        return "";
+    }
+
+    /**
      * @brief NamespacedId 到目录名的转换（Adapter Pattern）
      *
      * **教学要点**:
@@ -411,7 +478,7 @@ namespace enigma::graphic
         std::string           dimensionPrefix = "/shaders/" + dimensionName + "/";
 
         // ========================================================================
-        // Step 2: 检查维度目录是否存在
+        // Step 2: 检查维度目录是否存在（优先级最高）⭐⭐⭐
         // ========================================================================
         bool hasDimensionOverride = std::filesystem::exists(dimensionDir);
 
@@ -421,7 +488,18 @@ namespace enigma::graphic
         }
         else
         {
-            DebuggerPrintf("[ShaderPack] No dimension override directory, using default shaders/ directory\n");
+            DebuggerPrintf("[ShaderPack] No dimension override directory for '%s'\n", dimensionName.c_str());
+        }
+
+        // ========================================================================
+        // Step 2.5: 检测 program/ 目录是否存在（优先级中等）⭐
+        // ========================================================================
+        std::filesystem::path programDir    = m_root / "shaders" / "program";
+        bool                  hasProgramDir = std::filesystem::exists(programDir);
+
+        if (hasProgramDir)
+        {
+            DebuggerPrintf("[ShaderPack] program/ directory found, will be used as fallback\n");
         }
 
         // ========================================================================
@@ -430,18 +508,19 @@ namespace enigma::graphic
         auto programSet = std::make_unique<ProgramSet>();
 
         // ========================================================================
-        // Step 4: 加载所有单一程序（47 个 ProgramId）
+        // Step 4: 加载所有单一程序（47 个 ProgramId）⭐⭐⭐
+        // 实现完整的三级 Fallback Chain（Iris 标准）
         // ========================================================================
         for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
         {
             ProgramId   id         = static_cast<ProgramId>(i);
             std::string sourceName = ProgramIdToSourceName(id);
 
-            // ====================================================================
-            // Step 4.1: 优先尝试维度覆盖目录（如果存在）
-            // ====================================================================
-            bool foundInDimension = false;
+            bool foundProgram = false;
 
+            // ====================================================================
+            // 优先级 1: 维度覆盖目录（shaders/worldX/）⭐⭐⭐
+            // ====================================================================
             if (hasDimensionOverride)
             {
                 // 构造维度覆盖路径: /shaders/world1/gbuffers_terrain.vs.hlsl
@@ -454,29 +533,139 @@ namespace enigma::graphic
 
                 if (vsNodeOpt.has_value() && psNodeOpt.has_value())
                 {
-                    foundInDimension = true;
-
                     // 获取源码
                     const auto& vsLines = vsNodeOpt.value().GetLines();
                     const auto& psLines = psNodeOpt.value().GetLines();
 
-                    std::string vsSource, psSource;
-                    for (const auto& line : vsLines) vsSource += line + "\n";
-                    for (const auto& line : psLines) psSource += line + "\n";
+                    // ========================================================================
+                    // 三层验证（Phase 4.4 - 空文件过滤）
+                    // ========================================================================
 
-                    // 创建 ShaderSource
-                    auto shaderSource = std::make_unique<ShaderSource>(sourceName, vsSource, psSource);
-                    programSet->RegisterProgram(id, std::move(shaderSource));
+                    // + 第一层：检查文件行数非空
+                    if (vsLines.empty() || psLines.empty())
+                    {
+                        DebuggerPrintf("[ShaderPack] Warning: '%s' has 0 lines (empty file) in dimension directory, trying next fallback\n",
+                                       sourceName.c_str());
+                        // 不设置foundProgram，让代码继续尝试下一级Fallback
+                    }
+                    else
+                    {
+                        // 拼接源码
+                        std::string vsSource, psSource;
+                        for (const auto& line : vsLines)
+                        {
+                            vsSource += line + "\n";
+                        }
+                        for (const auto& line : psLines)
+                        {
+                            psSource += line + "\n";
+                        }
 
-                    DebuggerPrintf("[ShaderPack] Loaded dimension override: '%s' (dimension: %s)\n",
-                                   sourceName.c_str(), dimensionName.c_str());
+                        // 创建 ShaderSource
+                        auto shaderSource = std::make_unique<ShaderSource>(sourceName, vsSource, psSource);
+
+                        // + 第二层：IsValid()检查（Iris兼容性）
+                        if (!shaderSource->IsValid())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' failed IsValid() check in dimension directory, trying next fallback\n",
+                                           sourceName.c_str());
+                        }
+                        // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                        else if (!shaderSource->HasNonEmptySource())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' has no non-whitespace content in dimension directory, trying next fallback\n",
+                                           sourceName.c_str());
+                        }
+                        else
+                        {
+                            // + 所有验证通过，注册着色器
+                            foundProgram = true;
+                            programSet->RegisterProgram(id, std::move(shaderSource));
+                            DebuggerPrintf("[ShaderPack] + Registered '%s' from dimension directory '%s' (VS=%zu lines, PS=%zu lines)\n",
+                                           sourceName.c_str(),
+                                           dimensionName.c_str(),
+                                           shaderSource->GetVertexLineCount(),
+                                           shaderSource->GetPixelLineCount());
+                        }
+                    }
                 }
             }
 
             // ====================================================================
-            // Step 4.2: Fallback 到默认目录（如果维度目录不存在或未找到）
+            // 优先级 2: program/ 目录回退（shaders/program/）⭐⭐
             // ====================================================================
-            if (!foundInDimension)
+            if (!foundProgram && hasProgramDir)
+            {
+                // 构造 program/ 路径: /shaders/program/gbuffers_terrain.vs.hlsl
+                AbsolutePackPath vsPath = AbsolutePackPath::FromAbsolutePath("/shaders/program/" + sourceName + ".vs.hlsl");
+                AbsolutePackPath psPath = AbsolutePackPath::FromAbsolutePath("/shaders/program/" + sourceName + ".ps.hlsl");
+
+                auto vsNodeOpt = m_includeGraph->GetNode(vsPath);
+                auto psNodeOpt = m_includeGraph->GetNode(psPath);
+
+                if (vsNodeOpt.has_value() && psNodeOpt.has_value())
+                {
+                    // 获取源码
+                    const auto& vsLines = vsNodeOpt.value().GetLines();
+                    const auto& psLines = psNodeOpt.value().GetLines();
+
+                    // ========================================================================
+                    // 三层验证（Phase 4.4 - 空文件过滤）
+                    // ========================================================================
+
+                    // + 第一层：检查文件行数非空
+                    if (vsLines.empty() || psLines.empty())
+                    {
+                        DebuggerPrintf("[ShaderPack] Warning: '%s' has 0 lines (empty file) in program/ directory, trying next fallback\n",
+                                       sourceName.c_str());
+                        // 不设置foundProgram，让代码继续尝试下一级Fallback
+                    }
+                    else
+                    {
+                        // 拼接源码
+                        std::string vsSource, psSource;
+                        for (const auto& line : vsLines)
+                        {
+                            vsSource += line + "\n";
+                        }
+                        for (const auto& line : psLines)
+                        {
+                            psSource += line + "\n";
+                        }
+
+                        // 创建 ShaderSource
+                        auto shaderSource = std::make_unique<ShaderSource>(sourceName, vsSource, psSource);
+
+                        // + 第二层：IsValid()检查（Iris兼容性）
+                        if (!shaderSource->IsValid())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' failed IsValid() check in program/ directory, trying next fallback\n",
+                                           sourceName.c_str());
+                        }
+                        // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                        else if (!shaderSource->HasNonEmptySource())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' has no non-whitespace content in program/ directory, trying next fallback\n",
+                                           sourceName.c_str());
+                        }
+                        else
+                        {
+                            // + 所有验证通过，注册着色器
+                            foundProgram = true;
+                            programSet->RegisterProgram(id, std::move(shaderSource));
+                            DebuggerPrintf("[ShaderPack] + Registered '%s' from program/ directory (VS=%zu lines, PS=%zu lines)\n",
+                                           sourceName.c_str(),
+                                           shaderSource->GetVertexLineCount(),
+                                           shaderSource->GetPixelLineCount());
+                        }
+                    }
+                }
+            }
+
+            // ====================================================================
+            // 优先级 3: shaders/ 根目录回退 ⭐
+            // ====================================================================
+            if (!foundProgram)
             {
                 // 构造默认路径: /shaders/gbuffers_terrain.vs.hlsl
                 AbsolutePackPath vsPath = AbsolutePackPath::FromAbsolutePath("/shaders/" + sourceName + ".vs.hlsl");
@@ -491,27 +680,72 @@ namespace enigma::graphic
                     const auto& vsLines = vsNodeOpt.value().GetLines();
                     const auto& psLines = psNodeOpt.value().GetLines();
 
-                    std::string vsSource, psSource;
-                    for (const auto& line : vsLines) vsSource += line + "\n";
-                    for (const auto& line : psLines) psSource += line + "\n";
+                    // ========================================================================
+                    // 三层验证（Phase 4.4 - 空文件过滤）
+                    // ========================================================================
 
-                    // 创建 ShaderSource
-                    auto shaderSource = std::make_unique<ShaderSource>(sourceName, vsSource, psSource);
-                    programSet->RegisterProgram(id, std::move(shaderSource));
+                    // + 第一层：检查文件行数非空
+                    if (vsLines.empty() || psLines.empty())
+                    {
+                        DebuggerPrintf("[ShaderPack] Warning: '%s' has 0 lines (empty file) in shaders/ root, skipping\n",
+                                       sourceName.c_str());
+                        // 这是最后一级Fallback，直接跳过，不再尝试
+                    }
+                    else
+                    {
+                        // 拼接源码
+                        std::string vsSource, psSource;
+                        for (const auto& line : vsLines)
+                        {
+                            vsSource += line + "\n";
+                        }
+                        for (const auto& line : psLines)
+                        {
+                            psSource += line + "\n";
+                        }
 
-                    // 不输出日志(避免大量输出)
+                        // 创建 ShaderSource
+                        auto shaderSource = std::make_unique<ShaderSource>(sourceName, vsSource, psSource);
+
+                        // + 第二层：IsValid()检查（Iris兼容性）
+                        if (!shaderSource->IsValid())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' failed IsValid() check in shaders/ root, skipping\n",
+                                           sourceName.c_str());
+                        }
+                        // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                        else if (!shaderSource->HasNonEmptySource())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: '%s' has no non-whitespace content in shaders/ root, skipping\n",
+                                           sourceName.c_str());
+                        }
+                        else
+                        {
+                            // + 所有验证通过，注册着色器
+                            foundProgram = true;
+                            programSet->RegisterProgram(id, std::move(shaderSource));
+                            DebuggerPrintf("[ShaderPack] + Registered '%s' from shaders/ root (VS=%zu lines, PS=%zu lines)\n",
+                                           sourceName.c_str(),
+                                           shaderSource->GetVertexLineCount(),
+                                           shaderSource->GetPixelLineCount());
+                        }
+                    }
                 }
-                else
-                {
-                    // 文件不存在,尝试 Fallback Chain（与原有逻辑相同）
-                    // 此处省略 Fallback 逻辑代码以节省篇幅
-                    // 实际实现中应该复制原有的 Fallback Chain 逻辑
-                }
+            }
+
+            // ====================================================================
+            // 所有 Fallback 都失败
+            // ====================================================================
+            if (!foundProgram)
+            {
+                // 可选：添加调试输出
+                // DebuggerPrintf("[ShaderPack] Program '%s' not found in any directory\n", sourceName.c_str());
             }
         }
 
         // ========================================================================
-        // Step 5: 加载程序数组（6 个 ProgramArrayId）
+        // Step 5: 加载程序数组（6 个 ProgramArrayId）⭐⭐⭐
+        // 实现完整的三级 Fallback Chain（Iris 标准）
         // ========================================================================
         for (int arrayIdx = 0; arrayIdx < static_cast<int>(ProgramArrayId::COUNT); ++arrayIdx)
         {
@@ -523,9 +757,11 @@ namespace enigma::graphic
             {
                 std::string programName = GetProgramArraySlotName(arrayId, slotIndex);
 
-                // 优先尝试维度覆盖
-                bool foundInDimension = false;
+                bool foundProgram = false;
 
+                // ================================================================
+                // 优先级 1: 维度覆盖目录（shaders/worldX/）⭐⭐⭐
+                // ================================================================
                 if (hasDimensionOverride)
                 {
                     AbsolutePackPath vsPath = AbsolutePackPath::FromAbsolutePath(dimensionPrefix + programName + ".vs.hlsl");
@@ -536,25 +772,138 @@ namespace enigma::graphic
 
                     if (vsNodeOpt.has_value() && psNodeOpt.has_value())
                     {
-                        foundInDimension = true;
-
                         const auto& vsLines = vsNodeOpt.value().GetLines();
                         const auto& psLines = psNodeOpt.value().GetLines();
 
-                        std::string vsSource, psSource;
-                        for (const auto& line : vsLines) vsSource += line + "\n";
-                        for (const auto& line : psLines) psSource += line + "\n";
+                        // ========================================================================
+                        // 三层验证（Phase 4.4 - 空文件过滤）
+                        // ========================================================================
 
-                        auto shaderSource = std::make_unique<ShaderSource>(programName, vsSource, psSource);
-                        programSet->RegisterArrayProgram(arrayId, static_cast<size_t>(slotIndex), std::move(shaderSource));
+                        // + 第一层：检查文件行数非空
+                        if (vsLines.empty() || psLines.empty())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has 0 lines (empty file) in dimension directory, trying next fallback\n",
+                                           programName.c_str(), slotIndex);
+                            // 不设置foundProgram，让代码继续尝试下一级Fallback
+                        }
+                        else
+                        {
+                            // 拼接源码
+                            std::string vsSource, psSource;
+                            for (const auto& line : vsLines)
+                            {
+                                vsSource += line + "\n";
+                            }
+                            for (const auto& line : psLines)
+                            {
+                                psSource += line + "\n";
+                            }
 
-                        DebuggerPrintf("[ShaderPack] Loaded array dimension override: '%s' at slot %d (dimension: %s)\n",
-                                       programName.c_str(), slotIndex, dimensionName.c_str());
+                            // 创建 ShaderSource
+                            auto shaderSource = std::make_unique<ShaderSource>(programName, vsSource, psSource);
+
+                            // + 第二层：IsValid()检查（Iris兼容性）
+                            if (!shaderSource->IsValid())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] failed IsValid() check in dimension directory, trying next fallback\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                            else if (!shaderSource->HasNonEmptySource())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has no non-whitespace content in dimension directory, trying next fallback\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            else
+                            {
+                                // + 所有验证通过，注册着色器
+                                foundProgram = true;
+                                programSet->RegisterArrayProgram(arrayId, static_cast<size_t>(slotIndex), std::move(shaderSource));
+                                DebuggerPrintf("[ShaderPack] + Registered array '%s'[%d] from dimension directory '%s' (VS=%zu lines, PS=%zu lines)\n",
+                                               programName.c_str(),
+                                               slotIndex,
+                                               dimensionName.c_str(),
+                                               shaderSource->GetVertexLineCount(),
+                                               shaderSource->GetPixelLineCount());
+                            }
+                        }
                     }
                 }
 
-                // Fallback 到默认目录
-                if (!foundInDimension)
+                // ================================================================
+                // 优先级 2: program/ 目录回退（shaders/program/）⭐⭐
+                // ================================================================
+                if (!foundProgram && hasProgramDir)
+                {
+                    AbsolutePackPath vsPath = AbsolutePackPath::FromAbsolutePath("/shaders/program/" + programName + ".vs.hlsl");
+                    AbsolutePackPath psPath = AbsolutePackPath::FromAbsolutePath("/shaders/program/" + programName + ".ps.hlsl");
+
+                    auto vsNodeOpt = m_includeGraph->GetNode(vsPath);
+                    auto psNodeOpt = m_includeGraph->GetNode(psPath);
+
+                    if (vsNodeOpt.has_value() && psNodeOpt.has_value())
+                    {
+                        const auto& vsLines = vsNodeOpt.value().GetLines();
+                        const auto& psLines = psNodeOpt.value().GetLines();
+
+                        // ========================================================================
+                        // 三层验证（Phase 4.4 - 空文件过滤）
+                        // ========================================================================
+
+                        // + 第一层：检查文件行数非空
+                        if (vsLines.empty() || psLines.empty())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has 0 lines (empty file) in program/ directory, trying next fallback\n",
+                                           programName.c_str(), slotIndex);
+                            // 不设置foundProgram，让代码继续尝试下一级Fallback
+                        }
+                        else
+                        {
+                            // 拼接源码
+                            std::string vsSource, psSource;
+                            for (const auto& line : vsLines)
+                            {
+                                vsSource += line + "\n";
+                            }
+                            for (const auto& line : psLines)
+                            {
+                                psSource += line + "\n";
+                            }
+
+                            // 创建 ShaderSource
+                            auto shaderSource = std::make_unique<ShaderSource>(programName, vsSource, psSource);
+
+                            // + 第二层：IsValid()检查（Iris兼容性）
+                            if (!shaderSource->IsValid())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] failed IsValid() check in program/ directory, trying next fallback\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                            else if (!shaderSource->HasNonEmptySource())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has no non-whitespace content in program/ directory, trying next fallback\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            else
+                            {
+                                // + 所有验证通过，注册着色器
+                                foundProgram = true;
+                                programSet->RegisterArrayProgram(arrayId, static_cast<size_t>(slotIndex), std::move(shaderSource));
+                                DebuggerPrintf("[ShaderPack] + Registered array '%s'[%d] from program/ directory (VS=%zu lines, PS=%zu lines)\n",
+                                               programName.c_str(),
+                                               slotIndex,
+                                               shaderSource->GetVertexLineCount(),
+                                               shaderSource->GetPixelLineCount());
+                            }
+                        }
+                    }
+                }
+
+                // ================================================================
+                // 优先级 3: shaders/ 根目录回退 ⭐
+                // ================================================================
+                if (!foundProgram)
                 {
                     AbsolutePackPath vsPath = AbsolutePackPath::FromAbsolutePath("/shaders/" + programName + ".vs.hlsl");
                     AbsolutePackPath psPath = AbsolutePackPath::FromAbsolutePath("/shaders/" + programName + ".ps.hlsl");
@@ -567,15 +916,61 @@ namespace enigma::graphic
                         const auto& vsLines = vsNodeOpt.value().GetLines();
                         const auto& psLines = psNodeOpt.value().GetLines();
 
-                        std::string vsSource, psSource;
-                        for (const auto& line : vsLines) vsSource += line + "\n";
-                        for (const auto& line : psLines) psSource += line + "\n";
+                        // ========================================================================
+                        // 三层验证（Phase 4.4 - 空文件过滤）
+                        // ========================================================================
 
-                        auto shaderSource = std::make_unique<ShaderSource>(programName, vsSource, psSource);
-                        programSet->RegisterArrayProgram(arrayId, static_cast<size_t>(slotIndex), std::move(shaderSource));
+                        // + 第一层：检查文件行数非空
+                        if (vsLines.empty() || psLines.empty())
+                        {
+                            DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has 0 lines (empty file) in shaders/ root, skipping\n",
+                                           programName.c_str(), slotIndex);
+                            // 这是最后一级Fallback，直接跳过，不再尝试
+                        }
+                        else
+                        {
+                            // 拼接源码
+                            std::string vsSource, psSource;
+                            for (const auto& line : vsLines)
+                            {
+                                vsSource += line + "\n";
+                            }
+                            for (const auto& line : psLines)
+                            {
+                                psSource += line + "\n";
+                            }
+
+                            // 创建 ShaderSource
+                            auto shaderSource = std::make_unique<ShaderSource>(programName, vsSource, psSource);
+
+                            // + 第二层：IsValid()检查（Iris兼容性）
+                            if (!shaderSource->IsValid())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] failed IsValid() check in shaders/ root, skipping\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            // + 第三层：HasNonEmptySource()检查（严格内容验证）
+                            else if (!shaderSource->HasNonEmptySource())
+                            {
+                                DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has no non-whitespace content in shaders/ root, skipping\n",
+                                               programName.c_str(), slotIndex);
+                            }
+                            else
+                            {
+                                // + 所有验证通过，注册着色器
+                                foundProgram = true;
+                                programSet->RegisterArrayProgram(arrayId, static_cast<size_t>(slotIndex), std::move(shaderSource));
+                                DebuggerPrintf("[ShaderPack] + Registered array '%s'[%d] from shaders/ root (VS=%zu lines, PS=%zu lines)\n",
+                                               programName.c_str(),
+                                               slotIndex,
+                                               shaderSource->GetVertexLineCount(),
+                                               shaderSource->GetPixelLineCount());
+                            }
+                        }
                     }
-                    // 程序数组允许稀疏,不输出警告
                 }
+
+                // 程序数组允许稀疏，不输出警告
             }
         }
 

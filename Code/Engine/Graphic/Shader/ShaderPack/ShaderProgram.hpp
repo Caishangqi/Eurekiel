@@ -15,8 +15,8 @@
  *
  * 设计决策:
  * - ❌ 不继承 D12Resource (PSO/Root Signature 不是 ID3D12Resource)
- * - ✅ 使用 ComPtr 管理 DirectX 对象生命周期 (RAII)
- * - ✅ 符合 Iris 架构 - Program 持有已编译的 OpenGL 程序
+ * - + 使用 ComPtr 管理 DirectX 对象生命周期 (RAII)
+ * - + 符合 Iris 架构 - Program 持有已编译的 OpenGL 程序
  */
 
 #pragma once

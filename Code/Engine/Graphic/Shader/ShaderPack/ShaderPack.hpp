@@ -31,7 +31,7 @@ namespace enigma::graphic
      *
      * **架构对比**:
      * - ❌ **旧设计 (Loader 模式)**: ShaderPackLoader 负责加载 + 持有数据（职责混合）
-     * - ✅ **新设计 (Coordinator 模式)**: ShaderPack 只负责协调子系统，加载逻辑分散到各子系统
+     * - + **新设计 (Coordinator 模式)**: ShaderPack 只负责协调子系统，加载逻辑分散到各子系统
      *
      * **子系统职责分离**:
      * - **IncludeGraph**: 管理 #include 依赖图（BFS 构建 + 循环检测）
@@ -52,10 +52,10 @@ namespace enigma::graphic
      * - IncludeGraph.java（依赖图构建）
      *
      * **Phase 1 实现范围** ⭐:
-     * - ✅ 重命名 ShaderPackLoader → ShaderPack
-     * - ✅ 添加子系统成员变量（IncludeGraph, ShaderProperties, ShaderPackOptions, ProgramSet）
-     * - ✅ 重构构造函数（协调器模式）
-     * - ✅ 添加访问器方法
+     * - + 重命名 ShaderPackLoader → ShaderPack
+     * - + 添加子系统成员变量（IncludeGraph, ShaderProperties, ShaderPackOptions, ProgramSet）
+     * - + 重构构造函数（协调器模式）
+     * - + 添加访问器方法
      * - ⚠️ 子系统初始化（IncludeGraph 完整实现，其他子系统为空壳）
      */
     class ShaderPack
@@ -78,8 +78,8 @@ namespace enigma::graphic
          * - 错误处理：任何子系统初始化失败都会记录，但不会中断后续初始化
          *
          * **Phase 1 实施范围**:
-         * - ✅ 扫描起始路径
-         * - ✅ 初始化 IncludeGraph
+         * - + 扫描起始路径
+         * - + 初始化 IncludeGraph
          * - ⚠️ 其他子系统创建空对象（Phase 2-5 填充实现）
          */
         explicit ShaderPack(const std::filesystem::path& root);
@@ -214,6 +214,27 @@ namespace enigma::graphic
         // ========================================================================
         // Phase 4.4 - 维度覆盖系统辅助函数
         // ========================================================================
+
+        /**
+         * @brief 检测 Base ProgramSet 的默认程序目录
+         * @return 目录名称（"world0", "program", 或 ""）
+         *
+         * **检测优先级（遵循 Iris 标准）**：
+         * 1. **world0/** - 如果存在，使用主世界作为默认 ⭐⭐⭐
+         * 2. **program/** - 如果存在，使用专用程序目录 ⭐
+         * 3. **""** (空字符串) - 回退到 shaders/ 根目录
+         *
+         * **教学要点**：
+         * - Iris 标准：优先使用 world0/ 作为 Base ProgramSet 目录
+         * - program/ 是 Iris 标准的默认程序目录（单数）
+         * - 如果两者都不存在，回退到 shaders/ 根目录
+         * - 这个检测结果影响所有维度的 Fallback Chain 行为
+         *
+         * **Iris 对应**：
+         * - net.irisshaders.iris.pipeline.ProgramSet.scanDirectoryForPrograms()
+         * - Iris 也使用相同的目录优先级规则
+         */
+        std::string DetectBaseProgramDirectory() const;
 
         /**
          * @brief NamespacedId 到目录名的转换（Adapter Pattern）

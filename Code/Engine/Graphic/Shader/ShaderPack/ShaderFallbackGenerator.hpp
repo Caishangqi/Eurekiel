@@ -4,10 +4,10 @@
  * @date 2025-10-04
  *
  * 设计决策:
- * ✅ 使用预编译的 HLSL 模板 (gbuffers_basic, gbuffers_textured)
- * ✅ 支持 Fallback = null (Shadow passes 跳过渲染)
- * ✅ 完整实现 Iris Fallback 链 (Water → Terrain → TexturedLit → Textured → Basic)
- * ✅ 资源系统集成 - 引擎核心着色器通过资源系统加载 (engine:shaders/core/*)
+ * + 使用预编译的 HLSL 模板 (gbuffers_basic, gbuffers_textured)
+ * + 支持 Fallback = null (Shadow passes 跳过渲染)
+ * + 完整实现 Iris Fallback 链 (Water → Terrain → TexturedLit → Textured → Basic)
+ * + 资源系统集成 - 引擎核心着色器通过资源系统加载 (engine:shaders/core/*)
  * ❌ 不动态生成着色器 (简化设计, 利用固定 Input Layout)
  *
  * 教学要点:

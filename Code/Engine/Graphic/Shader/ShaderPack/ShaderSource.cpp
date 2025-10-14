@@ -6,9 +6,12 @@
  * 更新历史:
  * - 2025-10-05: 添加 Hull/Domain Shader 支持
  * - 2025-10-05: 添加 ProgramSet 反向引用
+ * - 2025-10-14: 添加 HasNonEmptySource() 和行数统计方法 (Phase 4.4)
  */
 
 #include "ShaderSource.hpp"
+#include <algorithm> // std::any_of, std::count
+#include <cctype>    // std::isspace
 
 namespace enigma::graphic
 {
@@ -75,5 +78,34 @@ namespace enigma::graphic
         // - m_directives 先使用默认构造（成员初始化列表隐式调用）
         // - 然后在构造函数体内重新赋值为正确的值
         m_directives = shader::ProgramDirectives(*this);
+    }
+
+    // ========================================================================
+    // Phase 4.4 - 三层验证方法实现
+    // ========================================================================
+
+    bool ShaderSource::HasNonEmptySource() const
+    {
+        // Lambda辅助函数：检查字符串是否包含非空白字符
+        auto hasContent = [](const std::string& str) -> bool
+        {
+            return std::any_of(str.begin(), str.end(), [](unsigned char c)
+            {
+                return !std::isspace(c);
+            });
+        };
+
+        // 两个着色器都必须有非空白内容
+        return hasContent(m_vertexSource) && hasContent(m_pixelSource);
+    }
+
+    size_t ShaderSource::GetVertexLineCount() const
+    {
+        return std::count(m_vertexSource.begin(), m_vertexSource.end(), '\n');
+    }
+
+    size_t ShaderSource::GetPixelLineCount() const
+    {
+        return std::count(m_pixelSource.begin(), m_pixelSource.end(), '\n');
     }
 } // namespace enigma::graphic
