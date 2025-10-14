@@ -556,22 +556,34 @@ namespace enigma::graphic
         }
 
         // Step 7: 提取预处理后的代码
-        // 注意: 使用 DXC_OUT_OBJECT 获取预处理后的文本（不是字节码）
-        Microsoft::WRL::ComPtr<IDxcBlob> preprocessedBlob;
-        hr = preprocessResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&preprocessedBlob), nullptr);
+        // 教学要点: 预处理结果在 DXC_OUT_HLSL 输出（不是 DXC_OUT_OBJECT）
+        Microsoft::WRL::ComPtr<IDxcBlobUtf8> preprocessedBlob;
+        hr = preprocessResult->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&preprocessedBlob), nullptr);
+
+        // 如果 DXC_OUT_HLSL 失败，尝试 DXC_OUT_OBJECT（向后兼容）
         if (FAILED(hr) || !preprocessedBlob)
         {
-            throw std::runtime_error("Failed to get preprocessed code");
+            Microsoft::WRL::ComPtr<IDxcBlob> objBlob;
+            hr = preprocessResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&objBlob), nullptr);
+            if (FAILED(hr) || !objBlob)
+            {
+                throw std::runtime_error("Failed to get preprocessed code (tried DXC_OUT_HLSL and DXC_OUT_OBJECT)");
+            }
+
+            // 使用 DXC_OUT_OBJECT 的结果
+            const char* preprocessedData = static_cast<const char*>(objBlob->GetBufferPointer());
+            size_t      preprocessedSize = objBlob->GetBufferSize();
+            std::string preprocessedCode(preprocessedData, preprocessedSize);
+
+            std::cout << "[DXCCompiler] Preprocessing completed via DXC_OUT_OBJECT (" << preprocessedCode.size() << " bytes)" << std::endl;
+            return preprocessedCode;
         }
 
-        // Step 8: 转换为字符串返回
-        const char* preprocessedData = static_cast<const char*>(preprocessedBlob->GetBufferPointer());
-        size_t      preprocessedSize = preprocessedBlob->GetBufferSize();
-
-        std::string preprocessedCode(preprocessedData, preprocessedSize);
+        // Step 8: 转换为字符串返回（从 DXC_OUT_HLSL）
+        std::string preprocessedCode(preprocessedBlob->GetStringPointer(), preprocessedBlob->GetStringLength());
 
         // 调试日志 (可选)
-        std::cout << "[DXCCompiler] Preprocessing completed (" << preprocessedCode.size() << " bytes)" << std::endl;
+        std::cout << "[DXCCompiler] Preprocessing completed via DXC_OUT_HLSL (" << preprocessedCode.size() << " bytes)" << std::endl;
 
         return preprocessedCode;
     }

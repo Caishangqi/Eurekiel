@@ -7,9 +7,9 @@
  * ❌ 移除 ID3D12ShaderReflection - 使用固定 Input Layout
  * ❌ 移除 ExtractInputLayout() - 全局统一顶点格式
  * ❌ 移除 ExtractResourceBindings() - Bindless 架构通过 Root Constants 传递索引
- * ✅ 保留 DXC 核心编译功能
- * ✅ 保留错误处理和日志
- * ✅ 支持 Shader Model 6.6 编译选项
+ * + 保留 DXC 核心编译功能
+ * + 保留错误处理和日志
+ * + 支持 Shader Model 6.6 编译选项
  *
  * 教学要点:
  * 1. KISS 原则 - 移除不必要的反射复杂度
@@ -281,7 +281,7 @@ namespace enigma::graphic
          * std::string expandedCode = IncludeProcessor::ExpandWithLineDirectives(graph, programPath);
          * auto result = compiler.CompileShader(expandedCode, opts);
          *
-         * // ✅ 新方式: 一键编译
+         * // + 新方式: 一键编译
          * auto result = compiler.CompileShaderWithIncludes(graph, programPath, opts);
          * @endcode
          */
