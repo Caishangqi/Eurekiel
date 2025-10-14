@@ -5,6 +5,9 @@
  */
 
 #include "ShaderFallbackGenerator.hpp"
+#include "ProgramId.hpp" // 使用 GetProgramFallback() 函数
+#include "Engine/Core/ErrorWarningAssert.hpp" // ERROR_RECOVERABLE, DebuggerPrintf
+#include "Engine/Core/StringUtils.hpp" // Stringf
 
 namespace enigma::graphic
 {
@@ -15,25 +18,31 @@ namespace enigma::graphic
     std::optional<ShaderFallbackGenerator::ShaderResourceRef> ShaderFallbackGenerator::GetFallbackShader(
         ProgramId id) const
     {
+        // 教学要点: 错误处理和日志
+        // 1. HasFallback() 判断是否支持 Fallback
+        // 2. DebuggerPrintf() 记录 Fallback 查找结果
+        // 3. ERROR_RECOVERABLE() 处理异常情况（可选）
         if (!HasFallback(id))
         {
+            DebuggerPrintf("ShaderFallbackGenerator: Program %s has no fallback (Fallback = null)", ProgramIdToSourceName(id).c_str());
             return std::nullopt;
         }
 
         auto fallbackId = GetDirectFallback(id);
         if (!fallbackId)
         {
+            ERROR_RECOVERABLE(Stringf("ShaderFallbackGenerator: Failed to get direct fallback for program %s",ProgramIdToSourceName(id).c_str()))
             return std::nullopt;
         }
 
         ProgramId currentId = *fallbackId;
         while (true)
         {
-            if (currentId == ProgramId::GBUFFERS_BASIC || currentId == ProgramId::GBUFFERS_TEXTURED)
+            if (currentId == ProgramId::Basic || currentId == ProgramId::Textured)
             {
                 ShaderResourceRef shaderRef;
                 std::string       baseName =
-                    (currentId == ProgramId::GBUFFERS_BASIC) ? "gbuffers_basic" : "gbuffers_textured";
+                    (currentId == ProgramId::Basic) ? "gbuffers_basic" : "gbuffers_textured";
 
                 // 教学要点: 资源系统集成
                 // 1. 使用 ResourceLocation 而非文件路径
@@ -44,12 +53,16 @@ namespace enigma::graphic
                 shaderRef.vertexShader = ResourceLocation("engine", "shaders/core/" + baseName + ".vs");
                 shaderRef.pixelShader  = ResourceLocation("engine", "shaders/core/" + baseName + ".ps");
 
+                // 教学要点: 成功日志
+                DebuggerPrintf("ShaderFallbackGenerator: Found fallback for %s -> %s", ProgramIdToSourceName(id).c_str(), baseName.c_str());
+
                 return shaderRef;
             }
 
             auto nextFallback = GetDirectFallback(currentId);
             if (!nextFallback)
             {
+                ERROR_RECOVERABLE(Stringf("ShaderFallbackGenerator: Fallback chain broken for %s at %s",ProgramIdToSourceName(id).c_str(),ProgramIdToSourceName(currentId).c_str()))
                 return std::nullopt;
             }
             currentId = *nextFallback;
@@ -58,17 +71,17 @@ namespace enigma::graphic
 
     bool ShaderFallbackGenerator::HasFallback(ProgramId id) const
     {
-        if (id == ProgramId::SHADOW || id == ProgramId::SHADOW_SOLID || id == ProgramId::SHADOW_CUTOUT)
+        if (id == ProgramId::Shadow || id == ProgramId::ShadowSolid || id == ProgramId::ShadowCutout)
         {
             return false;
         }
 
-        if (id == ProgramId::FINAL)
+        if (id == ProgramId::Final)
         {
             return false;
         }
 
-        if (id == ProgramId::GBUFFERS_BASIC)
+        if (id == ProgramId::Basic)
         {
             return false;
         }
@@ -76,7 +89,7 @@ namespace enigma::graphic
         return true;
     }
 
-    std::vector<ShaderFallbackGenerator::ProgramId> ShaderFallbackGenerator::GetFallbackChain(
+    std::vector<ProgramId> ShaderFallbackGenerator::GetFallbackChain(
         ProgramId id) const
     {
         std::vector<ProgramId> chain;
@@ -115,19 +128,19 @@ namespace enigma::graphic
         {
             auto nextFallback = GetDirectFallback(finalFallback);
             if (!nextFallback ||
-                finalFallback == ProgramId::GBUFFERS_BASIC ||
-                finalFallback == ProgramId::GBUFFERS_TEXTURED)
+                finalFallback == ProgramId::Basic ||
+                finalFallback == ProgramId::Textured)
             {
                 break;
             }
             finalFallback = *nextFallback;
         }
 
-        if (finalFallback == ProgramId::GBUFFERS_BASIC)
+        if (finalFallback == ProgramId::Basic)
         {
             return "gbuffers_basic - Pure color rendering (no texture)";
         }
-        else if (finalFallback == ProgramId::GBUFFERS_TEXTURED)
+        else if (finalFallback == ProgramId::Textured)
         {
             return "gbuffers_textured - Textured rendering (with sampling)";
         }
@@ -139,60 +152,10 @@ namespace enigma::graphic
     // 私有方法实现 - Fallback 链定义
     // ========================================================================
 
-    std::optional<ShaderFallbackGenerator::ProgramId> ShaderFallbackGenerator::GetDirectFallback(
-        ProgramId id) const
+    std::optional<ProgramId> ShaderFallbackGenerator::GetDirectFallback(ProgramId id) const
     {
-        switch (id)
-        {
-        case ProgramId::SHADOW:
-        case ProgramId::SHADOW_SOLID:
-        case ProgramId::SHADOW_CUTOUT:
-        case ProgramId::FINAL:
-        case ProgramId::GBUFFERS_BASIC:
-            return std::nullopt;
-
-        case ProgramId::GBUFFERS_TEXTURED:
-            return ProgramId::GBUFFERS_BASIC;
-
-        case ProgramId::GBUFFERS_TEXTURED_LIT:
-            return ProgramId::GBUFFERS_TEXTURED;
-
-        case ProgramId::GBUFFERS_SKYBASIC:
-            return ProgramId::GBUFFERS_BASIC;
-
-        case ProgramId::GBUFFERS_SKYTEXTURED:
-            return ProgramId::GBUFFERS_TEXTURED;
-
-        case ProgramId::GBUFFERS_CLOUDS:
-            return ProgramId::GBUFFERS_TEXTURED;
-
-        case ProgramId::GBUFFERS_TERRAIN:
-            return ProgramId::GBUFFERS_TEXTURED_LIT;
-
-        case ProgramId::GBUFFERS_TERRAIN_SOLID:
-        case ProgramId::GBUFFERS_TERRAIN_CUTOUT:
-        case ProgramId::GBUFFERS_DAMAGEDBLOCK:
-        case ProgramId::GBUFFERS_BLOCK:
-            return ProgramId::GBUFFERS_TERRAIN;
-
-        case ProgramId::GBUFFERS_BEACONBEAM:
-            return ProgramId::GBUFFERS_TEXTURED;
-
-        case ProgramId::GBUFFERS_ITEM:
-        case ProgramId::GBUFFERS_ENTITIES:
-        case ProgramId::GBUFFERS_HAND:
-        case ProgramId::GBUFFERS_WEATHER:
-            return ProgramId::GBUFFERS_TEXTURED_LIT;
-
-        case ProgramId::GBUFFERS_ARMOR_GLINT:
-        case ProgramId::GBUFFERS_SPIDEREYES:
-            return ProgramId::GBUFFERS_TEXTURED;
-
-        case ProgramId::GBUFFERS_WATER:
-            return ProgramId::GBUFFERS_TERRAIN;
-
-        default:
-            return ProgramId::GBUFFERS_TEXTURED;
-        }
+        // 教学要点: DRY 原则
+        // 不重复实现 Fallback 逻辑，直接调用 ProgramId.hpp 中的函数
+        return GetProgramFallback(id);
     }
 } // namespace enigma::graphic

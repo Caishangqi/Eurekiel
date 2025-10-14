@@ -22,7 +22,7 @@
 #pragma once
 
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
-#include "Engine/Graphic/Resource/ShaderDirectives.hpp"
+#include "Engine/Graphic/Shader/ShaderPack/Properties/ProgramDirectives.hpp"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <string>
@@ -75,19 +75,21 @@ namespace enigma::graphic
          * @param pixelShader 像素着色器
          * @param geometryShader 几何着色器 (可选)
          * @param type 着色器类型
+         * @param directives 程序指令 (从 ShaderSource 解析)
          * @return 成功返回 true
          *
          * 教学要点:
          * 1. 调用 D3D12RenderSystem::CreateGraphicsPSO() 创建 PSO
-         * 2. 根据 ShaderDirectives 配置 PSO 描述符
+         * 2. 根据 ProgramDirectives 配置 PSO 描述符
          * 3. 使用全局 Bindless Root Signature
-         * 4. 合并 VS 和 PS 的 ShaderDirectives
+         * 4. ProgramDirectives 从 ShaderSource 构造并传入
          */
         bool Create(
-            CompiledShader&&                vertexShader,
-            CompiledShader&&                pixelShader,
-            std::optional<CompiledShader>&& geometryShader,
-            ShaderType                      type
+            CompiledShader&&                 vertexShader,
+            CompiledShader&&                 pixelShader,
+            std::optional<CompiledShader>&&  geometryShader,
+            ShaderType                       type,
+            const shader::ProgramDirectives& directives
         );
 
         /**
@@ -153,7 +155,7 @@ namespace enigma::graphic
          * @brief 获取着色器指令
          * @return ShaderDirectives 引用
          */
-        const ShaderDirectives& GetDirectives() const { return m_directives; }
+        const shader::ProgramDirectives& GetDirectives() const { return m_directives; }
 
         /**
          * @brief 获取程序名称
@@ -240,7 +242,7 @@ namespace enigma::graphic
         // Iris 注释配置
         // ========================================================================
 
-        ShaderDirectives m_directives; ///< 合并后的着色器指令
+        shader::ProgramDirectives m_directives; ///< 合并后的着色器指令
 
         // ========================================================================
         // 注意: 不继承 D12Resource

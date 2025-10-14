@@ -26,6 +26,9 @@ namespace enigma::graphic
           , m_vertexSource(vertexSource)
           , m_pixelSource(pixelSource)
           , m_parent(parent)
+    // ❌ 不要在成员初始化列表中初始化 m_directives
+    // 因为 ProgramDirectives 构造函数需要访问 *this，而此时对象还未完全构造
+    // 正确做法：使用默认构造函数，然后在构造函数体内重新赋值
     {
         // ========================================================================
         // 设置可选着色器源码
@@ -52,36 +55,25 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // 解析 ShaderDirectives - 对应 Iris ProgramDirectives 构造
+        // 解析 ProgramDirectives - 对应 Iris ProgramDirectives 构造
         // ========================================================================
 
         // 教学要点:
-        // Iris 的注释通常在片段着色器 (fragment/pixel) 中定义
-        // 例如:
-        //   /* RENDERTARGETS: 0,1,2 */
-        //   /* DRAWBUFFERS: 012 */
-
-        m_directives = ShaderDirectives::Parse(pixelSource);
-
-        // 如果像素着色器没有指令，尝试从顶点着色器解析
-        // (某些 Shader Pack 可能把注释放在顶点着色器)
-        if (m_directives.renderTargets.empty() && m_directives.drawBuffers.empty())
-        {
-            ShaderDirectives vertexDirectives = ShaderDirectives::Parse(vertexSource);
-            if (!vertexDirectives.renderTargets.empty() || !vertexDirectives.drawBuffers.empty())
-            {
-                m_directives = vertexDirectives;
-            }
-        }
-
-        // 如果几何着色器存在，也尝试解析其指令
-        if (m_geometrySource.has_value() && m_directives.renderTargets.empty())
-        {
-            ShaderDirectives geometryDirectives = ShaderDirectives::Parse(m_geometrySource.value());
-            if (!geometryDirectives.renderTargets.empty() || !geometryDirectives.drawBuffers.empty())
-            {
-                m_directives = geometryDirectives;
-            }
-        }
+        // ProgramDirectives 构造函数会自动调用 CommentDirectiveParser 解析指令
+        // 这里在所有成员都初始化完成后，再重新构造 m_directives
+        //
+        // 修复理由:
+        // 1. 避免在成员初始化列表中使用 this 指针（未定义行为）
+        // 2. 确保所有成员都已正确初始化后，再访问 *this
+        // 3. 使用 默认构造 + 赋值 的两步初始化模式
+        //
+        // 对应编译错误:
+        // - Error C2512: 'ProgramDirectives': no appropriate default constructor available
+        //
+        // 解决方案:
+        // - 添加 ProgramDirectives 默认构造函数
+        // - m_directives 先使用默认构造（成员初始化列表隐式调用）
+        // - 然后在构造函数体内重新赋值为正确的值
+        m_directives = shader::ProgramDirectives(*this);
     }
 } // namespace enigma::graphic

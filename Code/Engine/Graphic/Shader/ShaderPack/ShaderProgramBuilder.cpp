@@ -102,11 +102,8 @@ namespace enigma::graphic
             }
         }
 
-        // 6. 合并 ShaderDirectives
-        result.directives = MergeDirectives(
-            result.vertexShader->directives,
-            result.pixelShader->directives
-        );
+        // 6. 存储 ProgramDirectives (从 ShaderSource 获取)
+        result.directives = source.GetDirectives();
 
         // 7. 成功
         result.success = true;
@@ -118,10 +115,10 @@ namespace enigma::graphic
     // ========================================================================
 
     std::unique_ptr<CompiledShader> ShaderProgramBuilder::CompileShaderStage(
-        const std::string&      source,
-        ShaderStage             stage,
-        const std::string&      name,
-        const ShaderDirectives& directives
+        const std::string&               source,
+        ShaderStage                      stage,
+        const std::string&               name,
+        const shader::ProgramDirectives& directives
     )
     {
         auto compiledShader = std::make_unique<CompiledShader>();
@@ -132,7 +129,6 @@ namespace enigma::graphic
         compiledShader->entryPoint = GetEntryPoint(stage);
         compiledShader->profile    = GetShaderProfile(stage);
         compiledShader->sourceCode = source;
-        compiledShader->directives = directives;
 
         // 2. 配置 DXC 编译选项
         DXCCompiler::CompileOptions options = ConfigureCompileOptions(directives, stage);
@@ -204,8 +200,8 @@ namespace enigma::graphic
     }
 
     DXCCompiler::CompileOptions ShaderProgramBuilder::ConfigureCompileOptions(
-        const ShaderDirectives& directives,
-        ShaderStage             stage
+        const shader::ProgramDirectives& directives,
+        ShaderStage                      stage
     )
     {
         UNUSED(stage)
@@ -216,34 +212,38 @@ namespace enigma::graphic
         options.enableDebugInfo    = false; // Release 模式不生成调试信息
         options.enable16BitTypes   = true; // 支持 16-bit 类型 (性能优化)
 
-        // 2. 宏定义 (从 ShaderDirectives 转换)
+        // 2. 宏定义 (从 ProgramDirectives 转换)
         // 例如: const int shadowMapResolution = 4096; → -D SHADOW_MAP_RES=4096
-        // (注意: ShaderDirectives 当前没有存储 const 定义,此处预留扩展)
+        // (注意: ProgramDirectives 当前没有存储 const 定义,此处预留扩展)
 
         // 3. Include 路径
         // 默认包含 ShaderPack 目录
         options.includePaths.push_back(L"F:/p4/Personal/SD/Engine/Code/Engine/Graphic/Shader/ShaderPack/");
         options.includePaths.push_back(L"F:/p4/Personal/SD/Engine/Code/Engine/Graphic/Shader/Common/");
 
-        // 4. 根据 ShaderDirectives 添加宏定义
-        if (directives.blendMode.has_value())
+        // 4. 根据 ProgramDirectives 添加宏定义
+        auto blendModeOpt = directives.GetBlendMode();
+        if (blendModeOpt.has_value())
         {
-            options.defines.push_back("BLEND_MODE=" + directives.blendMode.value());
+            options.defines.push_back("BLEND_MODE=" + blendModeOpt.value());
         }
 
-        if (directives.depthTest.has_value())
+        auto depthTestOpt = directives.GetDepthTest();
+        if (depthTestOpt.has_value())
         {
-            options.defines.push_back("DEPTH_TEST=" + directives.depthTest.value());
+            options.defines.push_back("DEPTH_TEST=" + depthTestOpt.value());
         }
 
-        if (directives.cullFace.has_value())
+        auto cullFaceOpt = directives.GetCullFace();
+        if (cullFaceOpt.has_value())
         {
-            options.defines.push_back("CULL_FACE=" + directives.cullFace.value());
+            options.defines.push_back("CULL_FACE=" + cullFaceOpt.value());
         }
 
-        if (directives.depthWrite.has_value())
+        auto depthWriteOpt = directives.GetDepthWrite();
+        if (depthWriteOpt.has_value())
         {
-            if (directives.depthWrite.value())
+            if (depthWriteOpt.value())
             {
                 options.defines.push_back("DEPTH_WRITE=1");
             }
@@ -254,53 +254,5 @@ namespace enigma::graphic
         }
 
         return options;
-    }
-
-    ShaderDirectives ShaderProgramBuilder::MergeDirectives(
-        const ShaderDirectives& vertexDirectives,
-        const ShaderDirectives& pixelDirectives
-    )
-    {
-        // 像素着色器的指令优先级更高 (Iris 约定)
-        ShaderDirectives merged = pixelDirectives;
-
-        // 如果像素着色器没有指定,则使用顶点着色器的配置
-        if (merged.renderTargets.empty() && !vertexDirectives.renderTargets.empty())
-        {
-            merged.renderTargets = vertexDirectives.renderTargets;
-        }
-
-        if (merged.drawBuffers.empty() && !vertexDirectives.drawBuffers.empty())
-        {
-            merged.drawBuffers = vertexDirectives.drawBuffers;
-        }
-
-        if (!merged.blendMode.has_value() && vertexDirectives.blendMode.has_value())
-        {
-            merged.blendMode = vertexDirectives.blendMode;
-        }
-
-        if (!merged.depthTest.has_value() && vertexDirectives.depthTest.has_value())
-        {
-            merged.depthTest = vertexDirectives.depthTest;
-        }
-
-        if (!merged.cullFace.has_value() && vertexDirectives.cullFace.has_value())
-        {
-            merged.cullFace = vertexDirectives.cullFace;
-        }
-
-        if (!merged.depthWrite.has_value() && vertexDirectives.depthWrite.has_value())
-        {
-            merged.depthWrite = vertexDirectives.depthWrite;
-        }
-
-        // 合并 RT 格式
-        if (merged.rtFormats.empty() && !vertexDirectives.rtFormats.empty())
-        {
-            merged.rtFormats = vertexDirectives.rtFormats;
-        }
-
-        return merged;
     }
 } // namespace enigma::graphic

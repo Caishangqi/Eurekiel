@@ -25,10 +25,11 @@ namespace enigma::graphic
     // ========================================================================
 
     bool ShaderProgram::Create(
-        CompiledShader&&                vertexShader,
-        CompiledShader&&                pixelShader,
-        std::optional<CompiledShader>&& geometryShader,
-        ShaderType                      type
+        CompiledShader&&                 vertexShader,
+        CompiledShader&&                 pixelShader,
+        std::optional<CompiledShader>&&  geometryShader,
+        ShaderType                       type,
+        const shader::ProgramDirectives& directives
     )
     {
         // 1. 存储着色器
@@ -40,14 +41,8 @@ namespace enigma::graphic
         // 2. 设置程序名称
         m_name = m_vertexShader.name;
 
-        // 3. 合并 ShaderDirectives (像素着色器优先)
-        m_directives = m_pixelShader.directives;
-
-        // 如果像素着色器没有指令,使用顶点着色器的指令
-        if (m_directives.renderTargets.empty() && m_directives.drawBuffers.empty())
-        {
-            m_directives = m_vertexShader.directives;
-        }
+        // 3. 存储 ProgramDirectives (从 ShaderSource 传入)
+        m_directives = directives;
 
         // 4. 创建 PSO
         if (!CreatePipelineState())
@@ -132,13 +127,13 @@ namespace enigma::graphic
             psoDesc.GS.BytecodeLength  = m_geometryShader->GetBytecodeSize();
         }
 
-        // 2.4 Blend 状态 (根据 ShaderDirectives 配置)
+        // 2.4 Blend 状态 (根据 CommentDirectiveParser 配置)
         ConfigureBlendState(psoDesc.BlendState);
 
-        // 2.5 光栅化状态 (根据 ShaderDirectives 配置)
+        // 2.5 光栅化状态 (根据 CommentDirectiveParser 配置)
         ConfigureRasterizerState(psoDesc.RasterizerState);
 
-        // 2.6 深度模板状态 (根据 ShaderDirectives 配置)
+        // 2.6 深度模板状态 (根据 CommentDirectiveParser 配置)
         ConfigureDepthStencilState(psoDesc.DepthStencilState);
 
         // 2.7 固定 Input Layout (全局统一顶点格式 - Vertex_PCUTBN)
@@ -156,20 +151,24 @@ namespace enigma::graphic
         // 2.8 图元拓扑
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-        // 2.9 渲染目标格式 (根据 ShaderDirectives 配置)
-        psoDesc.NumRenderTargets = static_cast<UINT>(m_directives.renderTargets.size());
+        // 2.9 渲染目标格式 (根据 ProgramDirectives 配置)
+        const auto& drawBuffers  = m_directives.GetDrawBuffers();
+        psoDesc.NumRenderTargets = static_cast<UINT>(drawBuffers.size());
         if (psoDesc.NumRenderTargets == 0)
         {
             psoDesc.NumRenderTargets = 1; // 默认至少有一个 RT
         }
 
+        const auto& rtFormats = m_directives.GetRTFormats();
         for (UINT i = 0; i < psoDesc.NumRenderTargets && i < 8; ++i)
         {
-            // 从 ShaderDirectives.rtFormats 获取格式
-            auto it = m_directives.rtFormats.find(Stringf("colortex%u", i));
-            if (it != m_directives.rtFormats.end())
+            // 从 ProgramDirectives.GetRTFormats() 获取格式
+            std::string rtName = Stringf("colortex%u", i);
+            auto        it     = rtFormats.find(rtName);
+            if (it != rtFormats.end())
             {
-                psoDesc.RTVFormats[i] = it->second;
+                // TODO: 将字符串格式转换为 DXGI_FORMAT
+                psoDesc.RTVFormats[i] = DXGI_FORMAT_R8G8B8A8_UNORM; // 临时默认格式
             }
             else
             {
@@ -214,10 +213,11 @@ namespace enigma::graphic
             blendDesc.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         }
 
-        // 根据 ShaderDirectives.blendMode 配置
-        if (m_directives.blendMode.has_value())
+        // 根据 ProgramDirectives.GetBlendMode() 配置
+        auto blendModeOpt = m_directives.GetBlendMode();
+        if (blendModeOpt.has_value())
         {
-            const std::string& blendMode = m_directives.blendMode.value();
+            const std::string& blendMode = blendModeOpt.value();
 
             if (blendMode == "ADD")
             {
@@ -251,10 +251,11 @@ namespace enigma::graphic
         depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS;
         depthStencilDesc.StencilEnable  = FALSE;
 
-        // 根据 ShaderDirectives 配置
-        if (m_directives.depthTest.has_value())
+        // 根据 ProgramDirectives 配置
+        auto depthTestOpt = m_directives.GetDepthTest();
+        if (depthTestOpt.has_value())
         {
-            const std::string& depthTest = m_directives.depthTest.value();
+            const std::string& depthTest = depthTestOpt.value();
 
             if (depthTest == "LESS")
             {
@@ -276,9 +277,10 @@ namespace enigma::graphic
         }
 
         // 根据 depthWrite 配置
-        if (m_directives.depthWrite.has_value())
+        auto depthWriteOpt = m_directives.GetDepthWrite();
+        if (depthWriteOpt.has_value())
         {
-            if (m_directives.depthWrite.value())
+            if (depthWriteOpt.value())
             {
                 depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
             }
@@ -304,10 +306,11 @@ namespace enigma::graphic
         rasterDesc.ForcedSampleCount     = 0;
         rasterDesc.ConservativeRaster    = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 
-        // 根据 ShaderDirectives.cullFace 配置
-        if (m_directives.cullFace.has_value())
+        // 根据 ProgramDirectives.GetCullFace() 配置
+        auto cullFaceOpt = m_directives.GetCullFace();
+        if (cullFaceOpt.has_value())
         {
-            const std::string& cullFace = m_directives.cullFace.value();
+            const std::string& cullFace = cullFaceOpt.value();
 
             if (cullFace == "BACK")
             {

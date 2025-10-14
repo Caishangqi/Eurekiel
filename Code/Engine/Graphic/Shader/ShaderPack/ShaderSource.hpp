@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include "Engine/Graphic/Resource/ShaderDirectives.hpp"
+#include "Engine/Graphic/Shader/ShaderPack/Properties/ProgramDirectives.hpp"
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
 #include <string>
 #include <optional>
@@ -114,8 +114,8 @@ namespace enigma::graphic
         const std::optional<std::string>& GetComputeSource() const { return m_computeSource; }
 
         // Directives 和 Parent
-        const ShaderDirectives& GetDirectives() const { return m_directives; }
-        ProgramSet*             GetParent() const { return m_parent; }
+        const shader::ProgramDirectives& GetDirectives() const { return m_directives; }
+        ProgramSet*                      GetParent() const { return m_parent; }
 
         // ========================================================================
         // 检查方法
@@ -203,7 +203,7 @@ namespace enigma::graphic
         std::optional<std::string> m_computeSource; ///< 计算着色器源码
 
         // Iris 注释解析结果
-        ShaderDirectives m_directives; ///< 解析的着色器指令
+        shader::ProgramDirectives m_directives; ///< 解析的着色器指令
 
         // ProgramSet 反向引用 (对应 Iris parent 字段)
         ProgramSet* m_parent = nullptr; ///< 所属 ProgramSet (可为 nullptr)

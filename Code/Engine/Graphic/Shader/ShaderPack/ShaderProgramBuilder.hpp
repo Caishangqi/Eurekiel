@@ -65,7 +65,7 @@ namespace enigma::graphic
             std::unique_ptr<CompiledShader> geometryShader; // 几何着色器 (可选)
             std::unique_ptr<CompiledShader> computeShader; // 计算着色器 (可选)
 
-            ShaderDirectives directives; // 从源码解析的指令
+            shader::ProgramDirectives directives; // 从 ShaderSource 解析的指令
         };
 
         /**
@@ -107,10 +107,10 @@ namespace enigma::graphic
          * - 处理编译错误和警告
          */
         static std::unique_ptr<CompiledShader> CompileShaderStage(
-            const std::string&      source,
-            ShaderStage             stage,
-            const std::string&      name,
-            const ShaderDirectives& directives
+            const std::string&               source,
+            ShaderStage                      stage,
+            const std::string&               name,
+            const shader::ProgramDirectives& directives
         );
 
     private:
@@ -149,24 +149,8 @@ namespace enigma::graphic
          * - blend 模式影响 PSO 配置,不影响编译
          */
         static DXCCompiler::CompileOptions ConfigureCompileOptions(
-            const ShaderDirectives& directives,
-            ShaderStage             stage
-        );
-
-        /**
-         * @brief 合并多个着色器阶段的 ShaderDirectives
-         * @param vertexDirectives 顶点着色器指令
-         * @param pixelDirectives 像素着色器指令
-         * @return 合并后的 ShaderDirectives
-         *
-         * 教学要点:
-         * - Iris 的注释可能在 VS 或 PS 中
-         * - 像素着色器的指令优先级更高
-         * - 处理冲突时保留 PS 的配置
-         */
-        static ShaderDirectives MergeDirectives(
-            const ShaderDirectives& vertexDirectives,
-            const ShaderDirectives& pixelDirectives
+            const shader::ProgramDirectives& directives,
+            ShaderStage                      stage
         );
     };
 } // namespace enigma::graphic

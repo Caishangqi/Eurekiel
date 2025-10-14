@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "ShaderPackLoader.hpp"
+#include "ShaderPack.hpp"
 #include "Engine/Resource/ResourceCommon.hpp" // 资源系统集成
 #include <optional>
 #include <string>
@@ -53,8 +53,6 @@ namespace enigma::graphic
     class ShaderFallbackGenerator
     {
     public:
-        using ProgramId = ShaderPackLoader::ProgramId;
-
         /**
          * @struct ShaderResourceRef
          * @brief 着色器资源引用 (ResourceLocation 版本)

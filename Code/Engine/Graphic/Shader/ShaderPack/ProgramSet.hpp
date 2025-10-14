@@ -23,9 +23,10 @@
 #include <optional>
 #include <memory>
 
+#include "ShaderSource.hpp"
+
 namespace enigma::graphic
 {
-    class ShaderSource;
     /**
      * @class ProgramSet
      * @brief Shader Pack 程序集容器 - DirectX 12 简化版本
@@ -47,8 +48,8 @@ namespace enigma::graphic
     public:
         static constexpr size_t MAX_PROGRAM_ARRAY_SIZE = 100;
 
-        ProgramSet()  = default;
-        ~ProgramSet() = default;
+        ProgramSet() = default;
+        ~ProgramSet(); // 在 .cpp 中定义（Pimpl 惯用法，避免 incomplete type 错误）
 
         // 禁用拷贝
         ProgramSet(const ProgramSet&)            = delete;
