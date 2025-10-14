@@ -1,4 +1,4 @@
-#include "ShaderPackSourceNames.hpp"
+﻿#include "ShaderPackSourceNames.hpp"
 #include <algorithm>
 
 namespace enigma::graphic

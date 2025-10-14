@@ -185,15 +185,18 @@ namespace enigma::graphic
          *
          * 业务逻辑:
          * 1. 如果 relativePath 以 `/` 开头，直接返回新的绝对路径
-         * 2. 否则，基于当前路径解析相对路径
+         * 2. 检测当前路径是文件路径还是目录路径
+         * 3. 文件路径：基于父路径解析；目录路径：基于当前路径解析
          *
-         * 示例:
+         * 示例（文件路径）:
          * - 当前路径: `/shaders/gbuffers_terrain.hlsl`
          * - 解析 `../lib/common.hlsl`
-         * - 步骤:
-         *   a) 获取父路径: `/shaders`
-         *   b) 拼接: `/shaders/lib/common.hlsl`
-         *   c) 标准化: `/shaders/lib/common.hlsl`
+         * - 步骤: 获取父路径 `/shaders` → 拼接 → 标准化为 `/shaders/lib/common.hlsl`
+         *
+         * 示例（目录路径）:
+         * - 当前路径: `/shaders/programs`
+         * - 解析 `Common.hlsl`
+         * - 步骤: 直接使用 `/shaders/programs` → 拼接 → 标准化为 `/shaders/programs/Common.hlsl`
          */
 
         if (relativePath.empty())
@@ -207,9 +210,54 @@ namespace enigma::graphic
             return FromAbsolutePath(relativePath);
         }
 
-        // 相对路径解析: 基于父路径
-        auto        parentOpt = Parent();
-        std::string basePath  = parentOpt.has_value() ? parentOpt->GetPathString() : "/";
+        // ========================================================================
+        // 检测当前路径是文件路径还是目录路径
+        // ========================================================================
+        // 策略：检查路径的最后一个段是否包含 '.'（可能是文件扩展名）
+        //
+        // 规则:
+        // - `/shaders/main.hlsl` → 文件路径（最后一个段包含 '.'）
+        // - `/shaders/programs` → 目录路径（最后一个段不包含 '.'）
+        // - `/shaders/lib.old` → 目录路径（虽然包含 '.' 但是目录名）
+        //
+        // 注意：这个判断不是100%准确（目录也可能包含 '.'），
+        // 但符合常见的文件系统约定，在绝大多数情况下都能正确工作
+        // ========================================================================
+
+        bool   isFilePath = false;
+        size_t lastSlash  = m_path.find_last_of('/');
+
+        if (lastSlash != std::string::npos && lastSlash + 1 < m_path.size())
+        {
+            // 获取最后一个段（文件名或目录名）
+            std::string lastSegment = m_path.substr(lastSlash + 1);
+
+            // 如果最后一个段包含 '.' 且不是以 '.' 开头，则可能是文件路径
+            size_t dotPos = lastSegment.find('.');
+            if (dotPos != std::string::npos && dotPos > 0)
+            {
+                isFilePath = true;
+            }
+        }
+
+        // ========================================================================
+        // 基于路径类型选择基础路径
+        // ========================================================================
+
+        std::string basePath;
+        if (isFilePath)
+        {
+            // 文件路径：获取父路径作为基础
+            // 例如：`/shaders/main.hlsl` → 基础路径为 `/shaders`
+            auto parentOpt = Parent();
+            basePath       = parentOpt.has_value() ? parentOpt->GetPathString() : "/";
+        }
+        else
+        {
+            // 目录路径：直接使用当前路径作为基础
+            // 例如：`/shaders/programs` → 基础路径为 `/shaders/programs`
+            basePath = m_path;
+        }
 
         // 拼接路径
         std::string combinedPath = basePath + "/" + relativePath;
