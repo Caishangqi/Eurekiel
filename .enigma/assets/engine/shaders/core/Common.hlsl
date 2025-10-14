@@ -155,9 +155,316 @@ struct ShadowBuffer
     uint padding[2]; // 对齐填充
 };
 
+// ===== Uniform Buffers（8个）=====
+
+/**
+ * @brief CameraAndPlayerBuffer - 相机和玩家数据（对应CameraAndPlayerUniforms.hpp）
+ */
+struct CameraAndPlayerData
+{
+    float3 cameraPosition; // 相机世界位置
+    float  eyeAltitude; // 玩家高度
+
+    float3 cameraPositionFract; // 相机位置小数部分
+    float  _padding1;
+
+    int3  cameraPositionInt; // 相机位置整数部分
+    float _padding2;
+
+    float3 previousCameraPosition; // 上一帧相机位置
+    float  _padding3;
+
+    float3 previousCameraPositionFract; // 上一帧相机位置小数部分
+    float  _padding4;
+
+    int3  previousCameraPositionInt; // 上一帧相机位置整数部分
+    float _padding5;
+
+    float3 eyePosition; // 玩家头部位置
+    float  _padding6;
+
+    float3 relativeEyePosition; // 头部到相机偏移
+    float  _padding7;
+
+    float3 playerBodyVector; // 玩家身体朝向
+    float  _padding8;
+
+    float3 playerLookVector; // 玩家视线朝向
+    float  _padding9;
+
+    float3 upPosition; // 上方向向量（长度100）
+    float  _padding10;
+
+    int2 eyeBrightness; // 玩家位置光照值
+    int2 eyeBrightnessSmooth; // 平滑光照值
+
+    float  centerDepthSmooth; // 屏幕中心深度（平滑）
+    bool   firstPersonCamera; // 是否第一人称
+    float2 _padding11;
+};
+
+/**
+ * @brief PlayerStatusData - 玩家状态数据（对应PlayerStatusUniforms.hpp）
+ */
+struct PlayerStatusData
+{
+    int   isEyeInWater; // 眼睛是否在流体中（0-3）
+    bool  isSpectator; // 是否旁观模式
+    bool  isRightHanded; // 是否右撇子
+    float blindness; // 失明效果强度
+
+    float darknessFactor; // 黑暗效果因子
+    float darknessLightFactor; // 黑暗光照因子
+    float nightVision; // 夜视效果强度
+    float playerMood; // 玩家情绪值
+
+    float constantMood; // 持续情绪值
+    float currentPlayerAir; // 当前氧气
+    float maxPlayerAir; // 最大氧气
+    float currentPlayerArmor; // 当前护甲
+
+    float maxPlayerArmor; // 最大护甲
+    float currentPlayerHealth; // 当前血量
+    float maxPlayerHealth; // 最大血量
+    float currentPlayerHunger; // 当前饥饿值
+
+    float maxPlayerHunger; // 最大饥饿值
+    bool  is_burning; // 是否着火
+    bool  is_hurt; // 是否受伤
+    bool  is_invisible; // 是否隐身
+
+    bool is_on_ground; // 是否在地面
+    bool is_sneaking; // 是否潜行
+    bool is_sprinting; // 是否疾跑
+    bool hideGUI; // 是否隐藏GUI
+};
+
+/**
+ * @brief ScreenAndSystemData - 屏幕和系统数据（对应ScreenAndSystemUniforms.hpp）
+ */
+struct ScreenAndSystemData
+{
+    float viewHeight; // 视口高度
+    float viewWidth; // 视口宽度
+    float aspectRatio; // 宽高比
+    float screenBrightness; // 屏幕亮度
+
+    int   frameCounter; // 帧计数器
+    float frameTime; // 上一帧时间（秒）
+    float frameTimeCounter; // 运行时间累计（秒）
+    int   currentColorSpace; // 显示器颜色空间
+
+    int3  currentDate; // 系统日期（年，月，日）
+    float _padding1;
+
+    int3  currentTime; // 系统时间（时，分，秒）
+    float _padding2;
+
+    int2   currentYearTime; // 年内时间统计
+    float2 _padding3;
+};
+
+/**
+ * @brief IDData - ID数据（对应IDUniforms.hpp）
+ * 注意：需要读取IDUniforms.hpp确定确切字段
+ */
+struct IDData
+{
+    int   entityId; // 实体ID
+    int   blockId; // 方块ID
+    int   renderStage; // 渲染阶段
+    float _padding;
+};
+
+/**
+ * @brief WorldAndWeatherData - 世界和天气数据（对应WorldAndWeatherUniforms.hpp）
+ * 注意：需要读取WorldAndWeatherUniforms.hpp确定确切字段
+ */
+struct WorldAndWeatherData
+{
+    int   worldTime; // 世界时间
+    int   worldDay; // 世界天数
+    int   moonPhase; // 月相
+    float sunAngle; // 太阳角度
+
+    float shadowAngle; // 阴影角度
+    float rainStrength; // 雨强度
+    float wetness; // 湿度
+    float thunderStrength; // 雷电强度
+
+    float3 sunPosition; // 太阳位置
+    float  _padding1;
+
+    float3 moonPosition; // 月亮位置
+    float  _padding2;
+
+    float3 shadowLightPosition; // 阴影光源位置
+    float  _padding3;
+
+    float3 upVector; // 上方向向量
+    float  _padding4;
+};
+
+/**
+ * @brief BiomeAndDimensionData - 生物群系和维度数据（对应BiomeAndDimensionUniforms.hpp）
+ * 注意：需要读取BiomeAndDimensionUniforms.hpp确定确切字段
+ */
+struct BiomeAndDimensionData
+{
+    float temperature; // 温度
+    float rainfall; // 降雨量
+    float humidity; // 湿度
+    int   biomeId; // 生物群系ID
+
+    int   dimensionId; // 维度ID（0=主世界，-1=下界，1=末地）
+    bool  hasCeiling; // 是否有天花板
+    bool  hasSkylight; // 是否有天空光
+    float _padding;
+};
+
+/**
+ * @brief RenderingData - 渲染数据（对应RenderingUniforms.hpp）
+ * 注意：需要读取RenderingUniforms.hpp确定确切字段
+ */
+struct RenderingData
+{
+    float fogStart; // 雾起始距离
+    float fogEnd; // 雾结束距离
+    float fogDensity; // 雾密度
+    int   fogMode; // 雾模式
+
+    float3 fogColor; // 雾颜色
+    float  _padding1;
+
+    float3 skyColor; // 天空颜色
+    float  _padding2;
+
+    int   renderStage; // 当前渲染阶段
+    bool  isMainHand; // 是否主手
+    bool  isOffHand; // 是否副手
+    float _padding3;
+};
+
+/**
+ * @brief MatricesData - 矩阵数据（对应MatricesUniforms.hpp）
+ */
+struct MatricesData
+{
+    float4x4 gbufferModelView; // GBuffer模型视图矩阵
+    float4x4 gbufferModelViewInverse; // GBuffer模型视图逆矩阵
+    float4x4 gbufferProjection; // GBuffer投影矩阵
+    float4x4 gbufferProjectionInverse; // GBuffer投影逆矩阵
+    float4x4 gbufferPreviousModelView; // 上一帧GBuffer模型视图矩阵
+    float4x4 gbufferPreviousProjection; // 上一帧GBuffer投影矩阵
+
+    float4x4 shadowModelView; // 阴影模型视图矩阵
+    float4x4 shadowModelViewInverse; // 阴影模型视图逆矩阵
+    float4x4 shadowProjection; // 阴影投影矩阵
+    float4x4 shadowProjectionInverse; // 阴影投影逆矩阵
+
+    float4x4 modelViewMatrix; // 当前模型视图矩阵
+    float4x4 modelViewMatrixInverse; // 当前模型视图逆矩阵
+    float4x4 projectionMatrix; // 当前投影矩阵
+    float4x4 projectionMatrixInverse; // 当前投影逆矩阵
+    float4x4 normalMatrix; // 法线矩阵（3x3存储在4x4中）
+    float4x4 textureMatrix; // 纹理矩阵
+};
+
 //──────────────────────────────────────────────────────
 // Bindless资源访问函数
 //──────────────────────────────────────────────────────
+
+// ===== Uniform Buffer访问函数（8个）=====
+
+/**
+ * @brief 获取相机和玩家数据
+ * @return CameraAndPlayerData结构体
+ */
+CameraAndPlayerData GetCameraAndPlayerData()
+{
+    StructuredBuffer<CameraAndPlayerData> buffer =
+        ResourceDescriptorHeap[cameraAndPlayerBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取玩家状态数据
+ * @return PlayerStatusData结构体
+ */
+PlayerStatusData GetPlayerStatusData()
+{
+    StructuredBuffer<PlayerStatusData> buffer =
+        ResourceDescriptorHeap[playerStatusBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取屏幕和系统数据
+ * @return ScreenAndSystemData结构体
+ */
+ScreenAndSystemData GetScreenAndSystemData()
+{
+    StructuredBuffer<ScreenAndSystemData> buffer =
+        ResourceDescriptorHeap[screenAndSystemBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取ID数据
+ * @return IDData结构体
+ */
+IDData GetIDData()
+{
+    StructuredBuffer<IDData> buffer =
+        ResourceDescriptorHeap[idBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取世界和天气数据
+ * @return WorldAndWeatherData结构体
+ */
+WorldAndWeatherData GetWorldAndWeatherData()
+{
+    StructuredBuffer<WorldAndWeatherData> buffer =
+        ResourceDescriptorHeap[worldAndWeatherBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取生物群系和维度数据
+ * @return BiomeAndDimensionData结构体
+ */
+BiomeAndDimensionData GetBiomeAndDimensionData()
+{
+    StructuredBuffer<BiomeAndDimensionData> buffer =
+        ResourceDescriptorHeap[biomeAndDimensionBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取渲染数据
+ * @return RenderingData结构体
+ */
+RenderingData GetRenderingData()
+{
+    StructuredBuffer<RenderingData> buffer =
+        ResourceDescriptorHeap[renderingBufferIndex];
+    return buffer[0];
+}
+
+/**
+ * @brief 获取矩阵数据
+ * @return MatricesData结构体
+ */
+MatricesData GetMatricesData()
+{
+    StructuredBuffer<MatricesData> buffer =
+        ResourceDescriptorHeap[matricesBufferIndex];
+    return buffer[0];
+}
+
+// ===== 纹理资源访问函数（7个）=====
 
 /**
  * @brief 获取ColorTarget（colortex0-15读取用）
@@ -505,6 +812,58 @@ float4 UnpackRgba8(uint packedColor)
     float b = float((packedColor >> 16) & 0xFF) / 255.0;
     float a = float((packedColor >> 24) & 0xFF) / 255.0;
     return float4(r, g, b, a);
+}
+
+/**
+ * @brief 标准顶点变换函数（用于Fallback Shader）
+ * @param input 顶点输入（VSInput结构体）
+ * @return VSOutput - 变换后的顶点输出
+ *
+ * 教学要点:
+ * 1. 用于 gbuffers_basic 和 gbuffers_textured 的 Fallback 着色器
+ * 2. 自动处理 MVP 变换、颜色解包、数据传递
+ * 3. 从 Uniform Buffers 获取变换矩阵
+ * 4. KISS 原则 - 极简实现，无额外计算
+ *
+ * 工作流程:
+ * 1. 从 MatricesData 获取 modelViewMatrix 和 projectionMatrix
+ * 2. 顶点位置变换: Position → ViewSpace → ClipSpace
+ * 3. 法线变换: normalMatrix 变换法线向量
+ * 4. 颜色解包: uint → float4
+ * 5. 传递所有顶点属性到像素着色器
+ */
+VSOutput StandardVertexTransform(VSInput input)
+{
+    VSOutput output;
+
+    // 1. 获取矩阵数据
+    MatricesData matrices = GetMatricesData();
+
+    // 2. 顶点位置变换: 模型空间 → 视图空间 → 裁剪空间
+    float4 worldPos = float4(input.Position, 1.0);
+    float4 viewPos  = mul(worldPos, matrices.gbufferModelView);
+    float4 clipPos  = mul(viewPos, matrices.gbufferProjection);
+
+    output.Position = clipPos;
+    output.WorldPos = worldPos.xyz;
+
+    // 3. 颜色解包（uint → float4）
+    output.Color = UnpackRgba8(input.Color);
+
+    // 4. 传递纹理坐标
+    output.TexCoord = input.TexCoord;
+
+    // 5. 法线变换（使用 normalMatrix 的 3x3 部分）
+    float3 transformedNormal = mul(float4(input.Normal, 0.0), matrices.normalMatrix).xyz;
+    output.Normal            = normalize(transformedNormal);
+
+    // 6. 传递切线和副切线（用于法线贴图）
+    float3 transformedTangent   = mul(float4(input.Tangent, 0.0), matrices.gbufferModelView).xyz;
+    float3 transformedBitangent = mul(float4(input.Bitangent, 0.0), matrices.gbufferModelView).xyz;
+    output.Tangent              = normalize(transformedTangent);
+    output.Bitangent            = normalize(transformedBitangent);
+
+    return output;
 }
 
 //──────────────────────────────────────────────────────
