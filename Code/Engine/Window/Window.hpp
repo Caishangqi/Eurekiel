@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <string>
+#include <vector>
 
 #include "Engine/Math/IntVec2.hpp"
 
@@ -11,6 +12,11 @@ typedef struct tagRECT RECT;
 
 struct Vec2;
 class InputSystem;
+
+namespace enigma::window
+{
+    class IWindowsMessagePreprocessor;
+}
 
 enum class WindowMode
 {
@@ -64,13 +70,30 @@ public:
     bool       IsAlwaysOnTop() const;
     void       SetAlwaysOnTop(bool alwaysOnTop);
 
+    //---------------------------------------------------------------------
+    // 消息预处理器管理
+    //---------------------------------------------------------------------
+
+    // 注册消息预处理器
+    // 预处理器将按优先级排序，优先级数值越小越早处理
+    void RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor);
+
+    // 注销消息预处理器
+    void UnregisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor);
+
     static Window* s_mainWindow; // fancy way of advertising global variables (advertisement)
+
+    // 消息预处理器列表（按优先级排序）
+    std::vector<enigma::window::IWindowsMessagePreprocessor*> m_messagePreprocessors;
 
 private:
     void CreateOSWindow();
     void CreateFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
     void CreateBorderlessFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
     void CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
+
+    // 按优先级排序预处理器
+    void SortPreprocessors();
 
     WindowConfig m_config;
     void*        m_windowHandle   = nullptr; // Actually a Windows HWND on the Windows platform

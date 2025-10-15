@@ -6,6 +6,11 @@
 #include "NamedStrings.hpp"
 #include "ErrorWarningAssert.hpp"
 
+namespace enigma::core
+{
+    class ImGuiSubsystem;
+}
+
 namespace enigma::graphic
 {
     class RendererSubsystem;
@@ -29,6 +34,7 @@ extern DevConsole*                          g_theDevConsole;
 extern enigma::core::Engine*                g_theEngine;
 extern enigma::core::ConsoleSubsystem*      g_theConsole;
 extern enigma::resource::ResourceSubsystem* g_theResource;
+extern enigma::core::ImGuiSubsystem*        g_theImGui;
 extern enigma::core::ScheduleSubsystem*     g_theSchedule;
 extern enigma::graphic::RendererSubsystem*  g_theRendererSubsystem;
 

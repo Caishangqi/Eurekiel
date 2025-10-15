@@ -1,9 +1,12 @@
 ﻿#include "Window.hpp"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <algorithm>
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Input/InputSystem.hpp"
+#include "IWindowsMessagePreprocessor.hpp"
+
 // static variables
 Window* Window::s_mainWindow = nullptr;
 
@@ -13,6 +16,21 @@ Window* Window::s_mainWindow = nullptr;
 
 LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessageCode, WPARAM wParam, LPARAM lParam)
 {
+    // 优先调用消息预处理器链
+    if (Window::s_mainWindow)
+    {
+        LRESULT result = 0;
+        for (auto* preprocessor : Window::s_mainWindow->m_messagePreprocessors)
+        {
+            if (preprocessor->ProcessMessage(windowHandle, wmMessageCode, wParam, lParam, result))
+            {
+                // 消息已被此预处理器消费，立即返回
+                return result;
+            }
+        }
+    }
+
+    // 如果没有预处理器消费消息，继续原有的InputSystem处理逻辑
     InputSystem* input = nullptr;
 
     if (Window::s_mainWindow && Window::s_mainWindow->GetConfig().m_inputSystem)
@@ -146,6 +164,9 @@ void Window::Shutdown()
         ClipCursor(nullptr);
         DebuggerPrintf("Mouse cursor clipping released\n");
     }
+
+    // 清空预处理器列表(但不删除,因为生命周期由外部管理)
+    m_messagePreprocessors.clear();
 }
 
 void Window::BeginFrame()
@@ -481,4 +502,54 @@ void Window::CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD
     // Calculate the outer dimensions of the physical window, including frame et. al.
     windowRect = clientRect;
     AdjustWindowRectEx(&windowRect, windowStyleFlags, FALSE, windowStyleExFlags);
+}
+
+//-----------------------------------------------------------------------------------------------
+// 消息预处理器管理
+
+void Window::RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor)
+{
+    if (!preprocessor)
+    {
+        DebuggerPrintf("[Window] Warning: Attempted to register null preprocessor\n");
+        return;
+    }
+
+    // 检查是否已注册
+    auto it = std::find(m_messagePreprocessors.begin(), m_messagePreprocessors.end(), preprocessor);
+    if (it != m_messagePreprocessors.end())
+    {
+        DebuggerPrintf("[Window] Warning: Preprocessor '%s' already registered\n", preprocessor->GetName());
+        return;
+    }
+
+    m_messagePreprocessors.push_back(preprocessor);
+    SortPreprocessors();
+    
+    DebuggerPrintf("[Window] Registered message preprocessor: %s (priority: %d)\n",
+                   preprocessor->GetName(), preprocessor->GetPriority());
+}
+
+void Window::UnregisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor)
+{
+    if (!preprocessor)
+    {
+        return;
+    }
+
+    auto it = std::find(m_messagePreprocessors.begin(), m_messagePreprocessors.end(), preprocessor);
+    if (it != m_messagePreprocessors.end())
+    {
+        DebuggerPrintf("[Window] Unregistered message preprocessor: %s\n", preprocessor->GetName());
+        m_messagePreprocessors.erase(it);
+    }
+}
+
+void Window::SortPreprocessors()
+{
+    std::sort(m_messagePreprocessors.begin(), m_messagePreprocessors.end(),
+        [](const enigma::window::IWindowsMessagePreprocessor* a, const enigma::window::IWindowsMessagePreprocessor* b)
+        {
+            return a->GetPriority() < b->GetPriority();
+        });
 }
