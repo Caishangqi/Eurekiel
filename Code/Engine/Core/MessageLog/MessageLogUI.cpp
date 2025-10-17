@@ -155,127 +155,186 @@ namespace enigma::core
     // ================================================================================================
     void MessageLogUI::RenderVerbosityFilter()
     {
-        ImGui::Indent();
+        // Use ImGui Table for proper alignment
+        // Table layout: 4 columns (Level | None | Filtered | All)
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders |
+                                     ImGuiTableFlags_RowBg |
+                                     ImGuiTableFlags_SizingFixedFit;
 
-        // Define button size for all selectables
-        ImVec2 buttonSize(60.0f, 0.0f);
+        if (ImGui::BeginTable("VerbosityFilterTable", 4, tableFlags))
+        {
+            // Setup columns
+            ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("None", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("Filtered", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("All", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableHeadersRow();
 
-        // Verbose: [None] [Filtered] [All]
-        ImGui::Text("Verbose");
-        ImGui::SameLine();
-        ImGui::PushID("Verbose");
-        if (ImGui::Selectable("None", m_verboseModeFilter == VerbosityMode::None, 0, buttonSize))
-        {
-            m_verboseModeFilter = VerbosityMode::None;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("Filtered", m_verboseModeFilter == VerbosityMode::Filtered, 0, buttonSize))
-        {
-            m_verboseModeFilter = VerbosityMode::Filtered;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("All", m_verboseModeFilter == VerbosityMode::All, 0, buttonSize))
-        {
-            m_verboseModeFilter = VerbosityMode::All;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::PopID();
+            // Selectable flags to prevent closing popup
+            ImGuiSelectableFlags selectableFlags = ImGuiSelectableFlags_DontClosePopups;
 
-        // Info: [None] [Filtered] [All]
-        ImGui::Text("Info   ");
-        ImGui::SameLine();
-        ImGui::PushID("Info");
-        if (ImGui::Selectable("None", m_infoModeFilter == VerbosityMode::None, 0, buttonSize))
-        {
-            m_infoModeFilter = VerbosityMode::None;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("Filtered", m_infoModeFilter == VerbosityMode::Filtered, 0, buttonSize))
-        {
-            m_infoModeFilter = VerbosityMode::Filtered;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("All", m_infoModeFilter == VerbosityMode::All, 0, buttonSize))
-        {
-            m_infoModeFilter = VerbosityMode::All;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::PopID();
+            // Row 1: Verbose
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Verbose");
 
-        // Warning: [None] [Filtered] [All]
-        ImGui::Text("Warning");
-        ImGui::SameLine();
-        ImGui::PushID("Warning");
-        if (ImGui::Selectable("None", m_warningModeFilter == VerbosityMode::None, 0, buttonSize))
-        {
-            m_warningModeFilter = VerbosityMode::None;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("Filtered", m_warningModeFilter == VerbosityMode::Filtered, 0, buttonSize))
-        {
-            m_warningModeFilter = VerbosityMode::Filtered;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("All", m_warningModeFilter == VerbosityMode::All, 0, buttonSize))
-        {
-            m_warningModeFilter = VerbosityMode::All;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::PopID();
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID("Verbose_None");
+            if (ImGui::Selectable("None", m_verboseModeFilter == VerbosityMode::None, selectableFlags))
+            {
+                m_verboseModeFilter = VerbosityMode::None;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
 
-        // Error: [None] [Filtered] [All]
-        ImGui::Text("Error  ");
-        ImGui::SameLine();
-        ImGui::PushID("Error");
-        if (ImGui::Selectable("None", m_errorModeFilter == VerbosityMode::None, 0, buttonSize))
-        {
-            m_errorModeFilter = VerbosityMode::None;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("Filtered", m_errorModeFilter == VerbosityMode::Filtered, 0, buttonSize))
-        {
-            m_errorModeFilter = VerbosityMode::Filtered;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("All", m_errorModeFilter == VerbosityMode::All, 0, buttonSize))
-        {
-            m_errorModeFilter = VerbosityMode::All;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::PopID();
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushID("Verbose_Filtered");
+            if (ImGui::Selectable("Filtered", m_verboseModeFilter == VerbosityMode::Filtered, selectableFlags))
+            {
+                m_verboseModeFilter = VerbosityMode::Filtered;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
 
-        // Fatal: [None] [Filtered] [All]
-        ImGui::Text("Fatal  ");
-        ImGui::SameLine();
-        ImGui::PushID("Fatal");
-        if (ImGui::Selectable("None", m_fatalModeFilter == VerbosityMode::None, 0, buttonSize))
-        {
-            m_fatalModeFilter = VerbosityMode::None;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("Filtered", m_fatalModeFilter == VerbosityMode::Filtered, 0, buttonSize))
-        {
-            m_fatalModeFilter = VerbosityMode::Filtered;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::Selectable("All", m_fatalModeFilter == VerbosityMode::All, 0, buttonSize))
-        {
-            m_fatalModeFilter = VerbosityMode::All;
-            m_needsFilterUpdate = true;
-        }
-        ImGui::PopID();
+            ImGui::TableSetColumnIndex(3);
+            ImGui::PushID("Verbose_All");
+            if (ImGui::Selectable("All", m_verboseModeFilter == VerbosityMode::All, selectableFlags))
+            {
+                m_verboseModeFilter = VerbosityMode::All;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
 
-        ImGui::Unindent();
+            // Row 2: Info
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Info");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID("Info_None");
+            if (ImGui::Selectable("None", m_infoModeFilter == VerbosityMode::None, selectableFlags))
+            {
+                m_infoModeFilter = VerbosityMode::None;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushID("Info_Filtered");
+            if (ImGui::Selectable("Filtered", m_infoModeFilter == VerbosityMode::Filtered, selectableFlags))
+            {
+                m_infoModeFilter = VerbosityMode::Filtered;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::PushID("Info_All");
+            if (ImGui::Selectable("All", m_infoModeFilter == VerbosityMode::All, selectableFlags))
+            {
+                m_infoModeFilter = VerbosityMode::All;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            // Row 3: Warning
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Warning");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID("Warning_None");
+            if (ImGui::Selectable("None", m_warningModeFilter == VerbosityMode::None, selectableFlags))
+            {
+                m_warningModeFilter = VerbosityMode::None;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushID("Warning_Filtered");
+            if (ImGui::Selectable("Filtered", m_warningModeFilter == VerbosityMode::Filtered, selectableFlags))
+            {
+                m_warningModeFilter = VerbosityMode::Filtered;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::PushID("Warning_All");
+            if (ImGui::Selectable("All", m_warningModeFilter == VerbosityMode::All, selectableFlags))
+            {
+                m_warningModeFilter = VerbosityMode::All;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            // Row 4: Error
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Error");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID("Error_None");
+            if (ImGui::Selectable("None", m_errorModeFilter == VerbosityMode::None, selectableFlags))
+            {
+                m_errorModeFilter = VerbosityMode::None;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushID("Error_Filtered");
+            if (ImGui::Selectable("Filtered", m_errorModeFilter == VerbosityMode::Filtered, selectableFlags))
+            {
+                m_errorModeFilter = VerbosityMode::Filtered;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::PushID("Error_All");
+            if (ImGui::Selectable("All", m_errorModeFilter == VerbosityMode::All, selectableFlags))
+            {
+                m_errorModeFilter = VerbosityMode::All;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            // Row 5: Fatal
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("Fatal");
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID("Fatal_None");
+            if (ImGui::Selectable("None", m_fatalModeFilter == VerbosityMode::None, selectableFlags))
+            {
+                m_fatalModeFilter = VerbosityMode::None;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::PushID("Fatal_Filtered");
+            if (ImGui::Selectable("Filtered", m_fatalModeFilter == VerbosityMode::Filtered, selectableFlags))
+            {
+                m_fatalModeFilter = VerbosityMode::Filtered;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::TableSetColumnIndex(3);
+            ImGui::PushID("Fatal_All");
+            if (ImGui::Selectable("All", m_fatalModeFilter == VerbosityMode::All, selectableFlags))
+            {
+                m_fatalModeFilter = VerbosityMode::All;
+                m_needsFilterUpdate = true;
+            }
+            ImGui::PopID();
+
+            ImGui::EndTable();
+        }
     }
 
     // ================================================================================================
