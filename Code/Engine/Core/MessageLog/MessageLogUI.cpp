@@ -14,11 +14,11 @@ namespace enigma::core
     MessageLogUI::MessageLogUI()
     {
         // Initialize level filter modes (default to show all)
-        m_verboseModeFilter  = VerbosityMode::All;
-        m_infoModeFilter     = VerbosityMode::All;
-        m_warningModeFilter  = VerbosityMode::All;
-        m_errorModeFilter    = VerbosityMode::All;
-        m_fatalModeFilter    = VerbosityMode::All;
+        m_verboseModeFilter = VerbosityMode::All;
+        m_infoModeFilter    = VerbosityMode::All;
+        m_warningModeFilter = VerbosityMode::All;
+        m_errorModeFilter   = VerbosityMode::All;
+        m_fatalModeFilter   = VerbosityMode::All;
 
         // Initialize collapse states (default to expanded)
         m_verbosityCollapsed  = false;
@@ -99,19 +99,26 @@ namespace enigma::core
         // Filter button
         if (ImGui::Button("Filter", ImVec2(filterButtonWidth, 0)))
         {
+            // Pre-calculate expected popup size to prevent positioning issues on first open
+            // Calculate width from config: leftTableWidth + rightTableWidth + padding
+            float popupWidth = m_verbosityTableConfig.GetTotalWidth() + 30.0f; // Add padding
+            // Height: tableHeight + title + separator + spacing + categories section + padding
+            // Adjusted from 280px to account for reduced tableHeight (150 -> 120) and new spacing
+            float popupHeight = m_verbosityTableConfig.tableHeight + m_verbosityTableConfig.spacingAfterVerbosity + 130.0f;
+            ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
             ImGui::OpenPopup("FilterPopup");
         }
 
-        // Filter Popup
-        if (ImGui::BeginPopup("FilterPopup"))
+        // Filter Popup (with AlwaysAutoResize to ensure proper sizing)
+        if (ImGui::BeginPopup("FilterPopup", ImGuiWindowFlags_AlwaysAutoResize))
         {
             // Verbosity title + separator (without collapse)
-            ImGui::Text("Verbosity");
+            ImGui::Text("Lengthy");
             ImGui::Separator();
             RenderVerbosityFilter();
 
-            ImGui::Spacing();
-            ImGui::Spacing();
+            // Add configurable spacing after Verbosity section
+            ImGui::Dummy(ImVec2(0, m_verbosityTableConfig.spacingAfterVerbosity));
 
             // Categories select all checkbox + button
             // Calculate whether all categories are enabled
@@ -124,7 +131,8 @@ namespace enigma::core
                     break;
                 }
             }
-
+            ImGui::Text("Categories");
+            ImGui::Separator();
             // Render select all checkbox
             if (ImGui::Checkbox("##AllCategories", &allCategoriesEnabled))
             {
@@ -139,7 +147,7 @@ namespace enigma::core
             ImGui::SameLine();
 
             // Categories button (click to open nested popup)
-            if (ImGui::Button("Categories", ImVec2(-1.0f, 0)))
+            if (ImGui::Button("Category Filter", ImVec2(-1.0f, 0)))
             {
                 ImGui::OpenPopup("CategoriesPopup");
             }
@@ -155,11 +163,262 @@ namespace enigma::core
     // ================================================================================================
     void MessageLogUI::RenderVerbosityFilter()
     {
+        // Define this macro to switch between single table and split table layouts
+        // 0 = Single table with colored cells (previous default)
+        // 1 = Split layout: left table for levels + right table for buttons
+#define USE_SPLIT_TABLE_LAYOUT 1
+
+#if USE_SPLIT_TABLE_LAYOUT
+        // ============================================================================================
+        // SPLIT TABLE IMPLEMENTATION: Two-table layout with colored level cells on left
+        // ============================================================================================
+
+        // Selectable flags to prevent closing popup
+        ImGuiSelectableFlags selectableFlags = ImGuiSelectableFlags_DontClosePopups;
+
+        // Use BeginChild to create fixed-width containers for proper horizontal layout
+        // Get layout parameters from config
+        float tableHeight    = m_verbosityTableConfig.tableHeight;
+        float leftTableWidth = m_verbosityTableConfig.leftTableWidth;
+
+        // Left child: Fixed width and height for level names
+        ImGui::BeginChild("LeftTableChild", ImVec2(leftTableWidth, tableHeight), false, ImGuiWindowFlags_NoScrollbar);
+        {
+            // --- Left Table: Level names with colored backgrounds ---
+            ImGuiTableFlags leftTableFlags = ImGuiTableFlags_Borders |
+                ImGuiTableFlags_SizingFixedFit;
+
+            if (ImGui::BeginTable("VerbosityLevelTable", 1, leftTableFlags))
+            {
+                ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, leftTableWidth - 10.0f);
+
+                // Verbose
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(153, 153, 153, 80));
+                ImGui::Text("Verbose");
+
+                // Info
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(242, 242, 242, 80));
+                ImGui::Text("Info");
+
+                // Warning
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(255, 240, 150, 80));
+                ImGui::Text("Warning");
+
+                // Error
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(255, 180, 180, 80));
+                ImGui::Text("Error");
+
+                // Fatal
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(220, 120, 140, 80));
+                ImGui::Text("Fatal");
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
+
+        // Add spacing between the two tables (horizontal)
+        ImGui::SameLine();
+        //ImGui::Dummy(ImVec2(10.0f, 0.0f));
+        ImGui::SameLine();
+
+        // Right child: Fixed width based on button columns
+        float rightTableWidth = m_verbosityTableConfig.GetRightTableWidth();
+        ImGui::BeginChild("RightTableChild", ImVec2(rightTableWidth, tableHeight), false, ImGuiWindowFlags_NoScrollbar);
+        {
+            // --- Right Table: None/Filtered/All buttons ---
+            ImGuiTableFlags rightTableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit;
+
+            if (ImGui::BeginTable("VerbosityButtonTable", 3, rightTableFlags))
+            {
+                // Use config for equal-width button columns
+                float buttonWidth = m_verbosityTableConfig.buttonColumnWidth;
+                ImGui::TableSetupColumn("None", ImGuiTableColumnFlags_WidthFixed, buttonWidth);
+                ImGui::TableSetupColumn("Filtered", ImGuiTableColumnFlags_WidthFixed, buttonWidth);
+                ImGui::TableSetupColumn("All", ImGuiTableColumnFlags_WidthFixed, buttonWidth);
+
+                // Center-align text in button columns
+                ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+
+                // Row 1: Verbose
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushID("Verbose_None");
+                if (ImGui::Selectable("None", m_verboseModeFilter == VerbosityMode::None, selectableFlags))
+                {
+                    m_verboseModeFilter = VerbosityMode::None;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushID("Verbose_Filtered");
+                if (ImGui::Selectable("Filtered", m_verboseModeFilter == VerbosityMode::Filtered, selectableFlags))
+                {
+                    m_verboseModeFilter = VerbosityMode::Filtered;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID("Verbose_All");
+                if (ImGui::Selectable("All", m_verboseModeFilter == VerbosityMode::All, selectableFlags))
+                {
+                    m_verboseModeFilter = VerbosityMode::All;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                // Row 2: Info
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushID("Info_None");
+                if (ImGui::Selectable("None", m_infoModeFilter == VerbosityMode::None, selectableFlags))
+                {
+                    m_infoModeFilter    = VerbosityMode::None;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushID("Info_Filtered");
+                if (ImGui::Selectable("Filtered", m_infoModeFilter == VerbosityMode::Filtered, selectableFlags))
+                {
+                    m_infoModeFilter    = VerbosityMode::Filtered;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID("Info_All");
+                if (ImGui::Selectable("All", m_infoModeFilter == VerbosityMode::All, selectableFlags))
+                {
+                    m_infoModeFilter    = VerbosityMode::All;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                // Row 3: Warning
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushID("Warning_None");
+                if (ImGui::Selectable("None", m_warningModeFilter == VerbosityMode::None, selectableFlags))
+                {
+                    m_warningModeFilter = VerbosityMode::None;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushID("Warning_Filtered");
+                if (ImGui::Selectable("Filtered", m_warningModeFilter == VerbosityMode::Filtered, selectableFlags))
+                {
+                    m_warningModeFilter = VerbosityMode::Filtered;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID("Warning_All");
+                if (ImGui::Selectable("All", m_warningModeFilter == VerbosityMode::All, selectableFlags))
+                {
+                    m_warningModeFilter = VerbosityMode::All;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                // Row 4: Error
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushID("Error_None");
+                if (ImGui::Selectable("None", m_errorModeFilter == VerbosityMode::None, selectableFlags))
+                {
+                    m_errorModeFilter   = VerbosityMode::None;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushID("Error_Filtered");
+                if (ImGui::Selectable("Filtered", m_errorModeFilter == VerbosityMode::Filtered, selectableFlags))
+                {
+                    m_errorModeFilter   = VerbosityMode::Filtered;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID("Error_All");
+                if (ImGui::Selectable("All", m_errorModeFilter == VerbosityMode::All, selectableFlags))
+                {
+                    m_errorModeFilter   = VerbosityMode::All;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                // Row 5: Fatal
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushID("Fatal_None");
+                if (ImGui::Selectable("None", m_fatalModeFilter == VerbosityMode::None, selectableFlags))
+                {
+                    m_fatalModeFilter   = VerbosityMode::None;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::PushID("Fatal_Filtered");
+                if (ImGui::Selectable("Filtered", m_fatalModeFilter == VerbosityMode::Filtered, selectableFlags))
+                {
+                    m_fatalModeFilter   = VerbosityMode::Filtered;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::PushID("Fatal_All");
+                if (ImGui::Selectable("All", m_fatalModeFilter == VerbosityMode::All, selectableFlags))
+                {
+                    m_fatalModeFilter   = VerbosityMode::All;
+                    m_needsFilterUpdate = true;
+                }
+                ImGui::PopID();
+
+                // Pop the center-align style
+                ImGui::PopStyleVar();
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::EndChild();
+
+        // SPACING REDUCTION: Move cursor up to compensate for EndChild bottom padding + default ItemSpacing
+        // Risk Level: MEDIUM - This is a visual adjustment that doesn't break functionality
+        // Analysis: EndChild typically adds ~4-6px bottom padding, plus ItemSpacing.y adds another ~4-8px
+        // Solution: Move cursor up by 10px to significantly reduce the gap while keeping some minimal spacing
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 10.0f);
+
+#else
+        // ============================================================================================
+        // SINGLE TABLE IMPLEMENTATION: Single table with colored level cells
+        // ============================================================================================
+
         // Use ImGui Table for proper alignment
         // Table layout: 4 columns (Level | None | Filtered | All)
         ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders |
-                                     ImGuiTableFlags_RowBg |
-                                     ImGuiTableFlags_SizingFixedFit;
+            ImGuiTableFlags_RowBg |
+            ImGuiTableFlags_SizingFixedFit;
 
         if (ImGui::BeginTable("VerbosityFilterTable", 4, tableFlags))
         {
@@ -168,14 +427,15 @@ namespace enigma::core
             ImGui::TableSetupColumn("None", ImGuiTableColumnFlags_WidthFixed, 70.0f);
             ImGui::TableSetupColumn("Filtered", ImGuiTableColumnFlags_WidthFixed, 70.0f);
             ImGui::TableSetupColumn("All", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableHeadersRow();
+            // REMOVED: ImGui::TableHeadersRow(); - No header row as per requirement
 
             // Selectable flags to prevent closing popup
             ImGuiSelectableFlags selectableFlags = ImGuiSelectableFlags_DontClosePopups;
 
-            // Row 1: Verbose
+            // Row 1: Verbose (Light Gray)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(153, 153, 153, 80)); // Light gray
             ImGui::Text("Verbose");
 
             ImGui::TableSetColumnIndex(1);
@@ -205,16 +465,17 @@ namespace enigma::core
             }
             ImGui::PopID();
 
-            // Row 2: Info
+            // Row 2: Info (Light White/Very Light Gray)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(242, 242, 242, 80)); // Very light gray
             ImGui::Text("Info");
 
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID("Info_None");
             if (ImGui::Selectable("None", m_infoModeFilter == VerbosityMode::None, selectableFlags))
             {
-                m_infoModeFilter = VerbosityMode::None;
+                m_infoModeFilter    = VerbosityMode::None;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -223,7 +484,7 @@ namespace enigma::core
             ImGui::PushID("Info_Filtered");
             if (ImGui::Selectable("Filtered", m_infoModeFilter == VerbosityMode::Filtered, selectableFlags))
             {
-                m_infoModeFilter = VerbosityMode::Filtered;
+                m_infoModeFilter    = VerbosityMode::Filtered;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -232,14 +493,15 @@ namespace enigma::core
             ImGui::PushID("Info_All");
             if (ImGui::Selectable("All", m_infoModeFilter == VerbosityMode::All, selectableFlags))
             {
-                m_infoModeFilter = VerbosityMode::All;
+                m_infoModeFilter    = VerbosityMode::All;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
 
-            // Row 3: Warning
+            // Row 3: Warning (Light Yellow)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(255, 240, 150, 80)); // Light yellow
             ImGui::Text("Warning");
 
             ImGui::TableSetColumnIndex(1);
@@ -269,16 +531,17 @@ namespace enigma::core
             }
             ImGui::PopID();
 
-            // Row 4: Error
+            // Row 4: Error (Light Red)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(255, 180, 180, 80)); // Light red
             ImGui::Text("Error");
 
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID("Error_None");
             if (ImGui::Selectable("None", m_errorModeFilter == VerbosityMode::None, selectableFlags))
             {
-                m_errorModeFilter = VerbosityMode::None;
+                m_errorModeFilter   = VerbosityMode::None;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -287,7 +550,7 @@ namespace enigma::core
             ImGui::PushID("Error_Filtered");
             if (ImGui::Selectable("Filtered", m_errorModeFilter == VerbosityMode::Filtered, selectableFlags))
             {
-                m_errorModeFilter = VerbosityMode::Filtered;
+                m_errorModeFilter   = VerbosityMode::Filtered;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -296,21 +559,22 @@ namespace enigma::core
             ImGui::PushID("Error_All");
             if (ImGui::Selectable("All", m_errorModeFilter == VerbosityMode::All, selectableFlags))
             {
-                m_errorModeFilter = VerbosityMode::All;
+                m_errorModeFilter   = VerbosityMode::All;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
 
-            // Row 5: Fatal
+            // Row 5: Fatal (Light Dark Red)
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(220, 120, 140, 80)); // Light dark red
             ImGui::Text("Fatal");
 
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID("Fatal_None");
             if (ImGui::Selectable("None", m_fatalModeFilter == VerbosityMode::None, selectableFlags))
             {
-                m_fatalModeFilter = VerbosityMode::None;
+                m_fatalModeFilter   = VerbosityMode::None;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -319,7 +583,7 @@ namespace enigma::core
             ImGui::PushID("Fatal_Filtered");
             if (ImGui::Selectable("Filtered", m_fatalModeFilter == VerbosityMode::Filtered, selectableFlags))
             {
-                m_fatalModeFilter = VerbosityMode::Filtered;
+                m_fatalModeFilter   = VerbosityMode::Filtered;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
@@ -328,13 +592,17 @@ namespace enigma::core
             ImGui::PushID("Fatal_All");
             if (ImGui::Selectable("All", m_fatalModeFilter == VerbosityMode::All, selectableFlags))
             {
-                m_fatalModeFilter = VerbosityMode::All;
+                m_fatalModeFilter   = VerbosityMode::All;
                 m_needsFilterUpdate = true;
             }
             ImGui::PopID();
 
             ImGui::EndTable();
         }
+
+#endif
+
+#undef USE_SPLIT_TABLE_LAYOUT
     }
 
     // ================================================================================================

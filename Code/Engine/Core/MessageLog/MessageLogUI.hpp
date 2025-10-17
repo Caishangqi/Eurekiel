@@ -75,6 +75,27 @@ namespace enigma::core
         void ExportToFile(const std::string& filepath);
 
     private:
+        // Configuration struct for Verbosity filter table layout
+        struct VerbosityTableConfig
+        {
+            float leftTableWidth = 80.0f;           // Width of the level names column
+            float buttonColumnWidth = 70.0f;        // Width of each button column (None/Filtered/All)
+            float tableHeight = 120.0f;             // Height of both tables (reduced from 150.0f to fit 5 rows tightly)
+            int numButtonColumns = 3;               // Number of button columns
+            float spacingAfterVerbosity = 0.0f;    // Vertical spacing after Verbosity section (before Categories)
+
+            // Calculated values
+            float GetRightTableWidth() const {
+                return buttonColumnWidth * numButtonColumns;
+            }
+
+            float GetTotalWidth() const {
+                return leftTableWidth + GetRightTableWidth();
+            }
+        };
+
+        VerbosityTableConfig m_verbosityTableConfig;
+
         // Render sections
         void RenderTopToolbar();              // Render top toolbar (search + Filter button)
         void RenderMainPanel();               // Render main panel (fullscreen log display)
