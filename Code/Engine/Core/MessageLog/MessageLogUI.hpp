@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Engine/Core/Rgba8.hpp"
 #include <string>
 #include <vector>
@@ -6,25 +6,27 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include "ThirdParty/imgui/imgui.h"
+
 namespace enigma::core
 {
-    // 日志消息结构（简化版，用于显示）
+    // Log message structure (simplified, for display)
     struct DisplayMessage
     {
-        std::string timestamp;      // 时间戳 HH:MM:SS
-        std::string category;       // 类别（Game, Render, Audio等）
-        std::string level;          // 级别（Verbose, Info, Warning, Error, Fatal）
-        std::string message;        // 消息内容
+        std::string timestamp;      // Timestamp HH:MM:SS
+        std::string category;       // Category (Game, Render, Audio, etc.)
+        std::string level;          // Level (Verbose, Info, Warning, Error, Fatal)
+        std::string message;        // Message content
 
-        // 用于过滤的小写文本
-        std::string searchableText; // 全部小写的可搜索文本（category + message）
+        // Lowercase text for filtering
+        std::string searchableText; // All lowercase searchable text (category + message)
 
         DisplayMessage() = default;
         DisplayMessage(const std::string& ts, const std::string& cat,
                        const std::string& lvl, const std::string& msg)
             : timestamp(ts), category(cat), level(lvl), message(msg)
         {
-            // 构造可搜索文本（小写）
+            // Construct searchable text (lowercase)
             searchableText = category + " " + message;
             for (char& c : searchableText)
             {
@@ -33,99 +35,103 @@ namespace enigma::core
         }
     };
 
-    // MessageLog UI配置
+    // MessageLog UI configuration
     struct MessageLogUIConfig
     {
-        bool showWindow = false;         // 窗口是否显示
-        int toggleKey = 0xC0;            // 开关按键（默认~键，VK_OEM_3）
-        size_t maxMessages = 10000;      // 最大消息数量
-        bool autoScroll = true;          // 自动滚动到底部
-        float windowWidth = 1000.0f;     // 窗口宽度
-        float windowHeight = 600.0f;     // 窗口高度
+        bool showWindow = false;         // Whether the window is visible
+        int toggleKey = 0xC0;            // Toggle key (default ~ key, VK_OEM_3)
+        size_t maxMessages = 10000;      // Maximum number of messages
+        bool autoScroll = true;          // Auto-scroll to bottom
+        float windowWidth = 1200.0f;     // Window width
+        float windowHeight = 700.0f;     // Window height
     };
 
-    // MessageLog UI类（增强版 - 支持选取、复制、类别面板）
+    // MessageLog UI class (refactored - top toolbar + fullscreen log panel layout)
     class MessageLogUI
     {
     public:
         MessageLogUI();
         ~MessageLogUI();
 
-        // 渲染UI
+        // Render UI
         void Render();
 
-        // 添加消息
+        // Add message (API: AddMessage("LogGame", "Info", "Game initialized successfully"))
         void AddMessage(const std::string& category, const std::string& level, const std::string& message);
 
-        // 开关窗口
+        // Toggle window
         void ToggleWindow();
         bool IsWindowOpen() const { return m_config.showWindow; }
         void SetWindowOpen(bool open) { m_config.showWindow = open; }
 
-        // 配置
+        // Configuration
         MessageLogUIConfig& GetConfig() { return m_config; }
         const MessageLogUIConfig& GetConfig() const { return m_config; }
 
-        // 清空消息
+        // Clear messages
         void Clear();
 
-        // 导出消息到文件
+        // Export messages to file
         void ExportToFile(const std::string& filepath);
 
     private:
-        // 渲染各部分
-        void RenderMessageList();
-        void RenderBottomToolbar();
-        void RenderFilterMenu();
-        void RenderStatusBar();
+        // Render sections
+        void RenderTopToolbar();              // Render top toolbar (search + Filter button)
+        void RenderMainPanel();               // Render main panel (fullscreen log display)
+        void RenderVerbosityFilter();        // Render Verbosity filter
+        void RenderCategoryFilter();         // Render Category filter
+        void RenderCategoryPopup();          // Render Categories popup
+        void RenderBottomToolbar();          // Render bottom toolbar
 
-        // 过滤逻辑
+        // Filter logic
         void ApplyFilter();
         bool PassesFilter(const DisplayMessage& msg) const;
 
-        // 选取功能
-        void HandleSelection(size_t index);
-        void CopySelectedToClipboard();
-        void CopyMessageToClipboard(const DisplayMessage& msg);
-        bool IsSelected(size_t index) const;
-        void SelectAll();
+        // Category management
+        void UpdateCategoryCounts();          // Update category message counts
 
-        // 类别和级别过滤
-        void UpdateMessageCounts();
-
-        // 辅助函数
-        const float* GetLevelColor(const std::string& level) const;
+        // Helper functions
+        ImVec4 GetLevelColor(const std::string& level) const;
         std::string GetCurrentTimestamp() const;
         std::string ToLowerCase(const std::string& str) const;
 
-        // 配置
+        // Configuration
         MessageLogUIConfig m_config;
 
-        // 消息存储
-        std::deque<DisplayMessage> m_allMessages;        // 所有消息
-        std::vector<size_t> m_filteredIndices;           // 过滤后的消息索引
+        // Message storage
+        std::deque<DisplayMessage> m_allMessages;        // All messages
+        std::vector<size_t> m_filteredIndices;           // Filtered message indices
 
-        // 过滤器状态
-        char m_searchBuffer[256] = {0};                  // 搜索框内容
-        std::string m_selectedCategory = "All";          // 选中的类别
-        std::unordered_set<std::string> m_allCategories; // 所有出现过的类别
+        // Filter state - search
+        char m_searchBuffer[256] = {0};                  // Search box content
+        char m_categorySearchBuffer[256] = {0};          // Categories search buffer
 
-        // 选取状态
-        std::unordered_set<size_t> m_selectedIndices;    // 选中的消息索引
-        size_t m_lastClickedIndex = SIZE_MAX;            // 最后点击的索引（用于Shift选取）
+        // Verbosity level filter mode
+        enum class VerbosityMode
+        {
+            None,      // None - don't display
+            Filtered,  // Filtered - filter based on search box
+            All        // All - display all
+        };
 
-        // 底部工具栏状态（级别过滤按钮）
-        bool m_showVerbose = true;                       // 显示Verbose消息
-        bool m_showInfo = true;                          // 显示Info消息
-        bool m_showWarning = true;                       // 显示Warning消息
-        bool m_showError = true;                         // 显示Error消息
-        bool m_showFatal = true;                         // 显示Fatal消息
+        // Filter state - Verbosity (three-choice)
+        VerbosityMode m_verboseModeFilter = VerbosityMode::All;      // Verbose filter mode
+        VerbosityMode m_infoModeFilter = VerbosityMode::All;         // Info filter mode
+        VerbosityMode m_warningModeFilter = VerbosityMode::All;      // Warning filter mode
+        VerbosityMode m_errorModeFilter = VerbosityMode::All;        // Error filter mode
+        VerbosityMode m_fatalModeFilter = VerbosityMode::All;        // Fatal filter mode
 
-        // 类别过滤状态
-        std::unordered_map<std::string, int> m_categoryMessageCount; // 类别消息数量
+        // Filter state - Category (multiple-choice)
+        std::unordered_set<std::string> m_allCategories;        // All categories that have appeared
+        std::unordered_map<std::string, bool> m_categoryEnabled; // Whether category is enabled
+        std::unordered_map<std::string, int> m_categoryCounts;  // Category message counts
 
-        // UI状态
-        bool m_needsFilterUpdate = true;                 // 需要更新过滤
-        bool m_scrollToBottom = false;                   // 需要滚动到底部
+        // UI collapse state
+        bool m_verbosityCollapsed = false;               // Whether Verbosity area is collapsed
+        bool m_categoriesCollapsed = false;              // Whether Categories area is collapsed
+
+        // UI state
+        bool m_needsFilterUpdate = true;                 // Needs filter update
+        bool m_scrollToBottom = false;                   // Needs to scroll to bottom
     };
 }
