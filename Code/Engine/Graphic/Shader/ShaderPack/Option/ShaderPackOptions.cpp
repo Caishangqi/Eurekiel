@@ -27,17 +27,17 @@ ShaderPackOptions::ShaderPackOptions()
 bool ShaderPackOptions::Parse(const std::filesystem::path& rootPath)
 {
     // ========================================================================
-    // Step 1: 构造 shaderpack.properties 路径
+    // Step 1: 构造 shaders.properties 路径
     // ========================================================================
-    auto propertiesPath = rootPath / "shaderpack.properties";
+    auto propertiesPath = rootPath / "shaders" / "shaders.properties";
 
     // ========================================================================
     // Step 2: 检查文件存在性
     // ========================================================================
-    // 注意: shaderpack.properties 是可选文件，不存在不算错误 (对齐 Iris 宽松策略)
+    // 注意: shaders.properties 是可选文件，不存在不算错误 (对齐 Iris 宽松策略)
     if (!std::filesystem::exists(propertiesPath))
     {
-        DebuggerPrintf("[ShaderPackOptions] shaderpack.properties not found at '%s' (optional file)\n",
+        DebuggerPrintf("[ShaderPackOptions] shaders.properties not found at '%s' (optional file)\n",
                        propertiesPath.string().c_str());
 
         // 标记为有效，但不包含任何选项
@@ -50,7 +50,7 @@ bool ShaderPackOptions::Parse(const std::filesystem::path& rootPath)
     // ========================================================================
     if (!m_propertiesFile.Load(propertiesPath))
     {
-        DebuggerPrintf("[ShaderPackOptions] Failed to load shaderpack.properties at '%s'\n",
+        DebuggerPrintf("[ShaderPackOptions] Failed to load shaders.properties at '%s'\n",
                        propertiesPath.string().c_str());
 
         // 对齐 Iris 宽松策略: 加载失败不中断初始化

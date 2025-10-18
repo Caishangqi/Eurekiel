@@ -9,7 +9,7 @@
  * 它不存储任何状态，所有方法都是静态的，可以多次调用。
  *
  * 职责边界:
- * - ✅ 解析字符串 → CommentDirective (中间数据)
+ * - + 解析字符串 → CommentDirective (中间数据)
  * - ❌ 不存储数据 (由 ProgramDirectives 负责)
  * - ❌ 不做数据转换 (由 ProgramDirectives 负责)
  *
@@ -76,7 +76,7 @@
  * };
  * @endcode
  *
- * ✅ 正确设计:
+ * + 正确设计:
  * @code
  * class CommentDirectiveParser {
  *     // 禁止实例化

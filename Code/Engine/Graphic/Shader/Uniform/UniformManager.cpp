@@ -297,7 +297,7 @@ namespace enigma::graphic
             sizeof(CameraAndPlayerUniforms), // elementSize
             nullptr, // initialData (稍后上传)
             "CameraAndPlayerBuffer" // debugName (char* not wchar_t*)
-        ).release(); // ✅ unique_ptr → raw pointer
+        ).release(); // + unique_ptr → raw pointer
 
         // Category 1: PlayerStatusUniforms (~80 bytes)
         m_playerStatusBuffer = D3D12RenderSystem::CreateStructuredBuffer(

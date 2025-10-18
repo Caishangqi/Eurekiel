@@ -9,8 +9,8 @@
  * 这些配置用于创建 Pipeline State Object (PSO)。
  *
  * 职责边界:
- * - ✅ 存储解析后的数据 (drawBuffers, blendMode, depthTest 等)
- * - ✅ 提供 Getter 访问接口 (供 PSO 创建使用)
+ * - + 存储解析后的数据 (drawBuffers, blendMode, depthTest 等)
+ * - + 提供 Getter 访问接口 (供 PSO 创建使用)
  * - ❌ 不负责解析逻辑 (由 CommentDirectiveParser 负责)
  *
  * 对应 Iris:
