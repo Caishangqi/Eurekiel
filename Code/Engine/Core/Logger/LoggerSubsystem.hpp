@@ -16,6 +16,9 @@
 
 namespace enigma::core
 {
+    // Forward declaration for LogCategoryBase
+    class LogCategoryBase;
+
     class LoggerSubsystem : public EngineSubsystem
     {
     public:
@@ -33,16 +36,16 @@ namespace enigma::core
         bool RequiresInitialize() const override { return true; } // Need early init for config loading
 
         // Main logging interface
-        void Log(LogLevel level, const std::string& category, const std::string& message);
-        void LogFormatted(LogLevel level, const std::string& category, const char* format, ...);
+        void Log(LogLevel level, const char* category, const char* message);
+        void LogFormatted(LogLevel level, const char* category, const char* format, ...);
 
         // Convenience interface
-        void LogTrace(const std::string& category, const std::string& message);
-        void LogDebug(const std::string& category, const std::string& message);
-        void LogInfo(const std::string& category, const std::string& message);
-        void LogWarn(const std::string& category, const std::string& message);
-        void LogError(const std::string& category, const std::string& message);
-        void LogFatal(const std::string& category, const std::string& message);
+        void LogTrace(const char* category, const char* message);
+        void LogDebug(const char* category, const char* message);
+        void LogInfo(const char* category, const char* message);
+        void LogWarn(const char* category, const char* message);
+        void LogError(const char* category, const char* message);
+        void LogFatal(const char* category, const char* message);
 
         // Appender management
         void AddAppender(std::unique_ptr<ILogAppender> appender);
@@ -51,7 +54,7 @@ namespace enigma::core
         // Configuration interface
         void     SetGlobalLogLevel(LogLevel level);
         void     SetCategoryLogLevel(const std::string& category, LogLevel level);
-        LogLevel GetEffectiveLogLevel(const std::string& category) const;
+        LogLevel GetEffectiveLogLevel(const char* category) const;
 
         // Thread safety
         void Flush(); // Force process all pending messages
@@ -59,6 +62,10 @@ namespace enigma::core
         // Configuration access
         const LoggerConfig& GetConfig() const { return m_config; }
         LogFileManager&     GetFileManager() { return *m_fileManager; }
+
+        // Check if message should be logged
+        bool ShouldLogMessage(LogLevel level, const char* category) const;
+        bool ShouldLogMessage(LogLevel level, const LogCategoryBase& category) const;
 
     private:
         // Phase 3.1: Synchronous processing
@@ -68,8 +75,6 @@ namespace enigma::core
         void ProcessMessageAsync(const LogMessage& message);
         void WorkerThreadFunction();
 
-        // Check if message should be logged
-        bool ShouldLogMessage(LogLevel level, const std::string& category) const;
 
         // Get current frame number (from DevConsole)
         int GetCurrentFrameNumber() const;

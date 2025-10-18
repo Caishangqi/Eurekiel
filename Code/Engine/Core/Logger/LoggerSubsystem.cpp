@@ -5,6 +5,9 @@
 #include "Appender/ConsoleAppender.hpp"
 #include "Appender/DevConsoleAppender.hpp"
 #include "Appender/FileAppender.hpp"
+#include "../MessageLog/MessageLogAppender.hpp"
+#include "../MessageLog/MessageLogSubsystem.hpp"
+#include "../LogCategory/LogCategory.hpp"
 #include <stdarg.h>
 #include <stdio.h>
 #include <iostream>
@@ -87,7 +90,7 @@ namespace enigma::core
         RemoveAllAppenders();
     }
 
-    void LoggerSubsystem::Log(LogLevel level, const std::string& category, const std::string& message)
+    void LoggerSubsystem::Log(LogLevel level, const char* category, const char* message)
     {
         // Quick level check to avoid unnecessary work
         if (!ShouldLogMessage(level, category))
@@ -109,7 +112,7 @@ namespace enigma::core
         }
     }
 
-    void LoggerSubsystem::LogFormatted(LogLevel level, const std::string& category, const char* format, ...)
+    void LoggerSubsystem::LogFormatted(LogLevel level, const char* category, const char* format, ...)
     {
         // Quick level check
         if (!ShouldLogMessage(level, category))
@@ -133,39 +136,39 @@ namespace enigma::core
             vsnprintf(&formatted[0], size + 1, format, args);
             formatted.resize(size); // Remove the null terminator
 
-            Log(level, category, formatted);
+            Log(level, category, formatted.c_str());
         }
 
         va_end(args);
     }
 
     // Convenience methods
-    void LoggerSubsystem::LogTrace(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogTrace(const char* category, const char* message)
     {
         Log(LogLevel::TRACE, category, message);
     }
 
-    void LoggerSubsystem::LogDebug(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogDebug(const char* category, const char* message)
     {
         Log(LogLevel::DEBUG, category, message);
     }
 
-    void LoggerSubsystem::LogInfo(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogInfo(const char* category, const char* message)
     {
         Log(LogLevel::INFO, category, message);
     }
 
-    void LoggerSubsystem::LogWarn(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogWarn(const char* category, const char* message)
     {
         Log(LogLevel::WARNING, category, message);
     }
 
-    void LoggerSubsystem::LogError(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogError(const char* category, const char* message)
     {
         Log(LogLevel::ERROR_, category, message);
     }
 
-    void LoggerSubsystem::LogFatal(const std::string& category, const std::string& message)
+    void LoggerSubsystem::LogFatal(const char* category, const char* message)
     {
         Log(LogLevel::FATAL, category, message);
     }
@@ -196,7 +199,7 @@ namespace enigma::core
         m_categoryLogLevels[category] = level;
     }
 
-    LogLevel LoggerSubsystem::GetEffectiveLogLevel(const std::string& category) const
+    LogLevel LoggerSubsystem::GetEffectiveLogLevel(const char* category) const
     {
         std::lock_guard<std::mutex> lock(m_configMutex);
 
@@ -256,10 +259,20 @@ namespace enigma::core
         // Phase 3.4 implementation - placeholder
     }
 
-    bool LoggerSubsystem::ShouldLogMessage(LogLevel level, const std::string& category) const
+    bool LoggerSubsystem::ShouldLogMessage(LogLevel level, const char* category) const
     {
         LogLevel effectiveLevel = GetEffectiveLogLevel(category);
         return level >= effectiveLevel;
+    }
+
+    bool LoggerSubsystem::ShouldLogMessage(LogLevel level, const LogCategoryBase& category) const
+    {
+        // First check Category's default level
+        if (level < category.GetDefaultLevel())
+            return false;
+
+        // Then check global and specific Category settings
+        return ShouldLogMessage(level, category.GetName());
     }
 
     int LoggerSubsystem::GetCurrentFrameNumber() const
@@ -392,6 +405,16 @@ namespace enigma::core
         if (m_config.enableFileLogging && m_fileManager)
         {
             AddAppender(std::make_unique<FileAppender>(m_config.GetLatestLogPath().string()));
+        }
+
+        // Add MessageLog appender if MessageLogSubsystem is available
+        if (auto* engine = Engine::GetInstance())
+        {
+            if (auto* messageLogSubsystem = engine->GetSubsystem<MessageLogSubsystem>())
+            {
+                AddAppender(std::make_unique<MessageLogAppender>(messageLogSubsystem));
+                std::cout << "[LoggerSubsystem] MessageLogAppender added successfully" << std::endl;
+            }
         }
     }
 }
