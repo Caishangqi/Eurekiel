@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <filesystem>
 
 #include "Engine/Core/SubsystemManager.hpp"
 #include "Engine/Core/Rgba8.hpp"
@@ -25,6 +26,7 @@
 #include "../Core/Pipeline/EnigmaRenderingPipeline.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
+#include "../Shader/ShaderPack/ShaderPack.hpp"
 
 // 使用Enigma核心命名空间中的EngineSubsystem
 using namespace enigma::core;
@@ -33,6 +35,9 @@ namespace enigma::graphic
 {
     // 前向声明 - 避免循环包含
     class RenderCommandQueue;
+    class ShaderProgram;
+    class ShaderSource;
+    class ProgramSet;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -63,13 +68,34 @@ namespace enigma::graphic
           */
         struct Configuration
         {
-            uint32_t    renderWidth             = 1920; ///< render resolution width
-            uint32_t    renderHeight            = 1080; ///< Render resolution height
-            uint32_t    maxFramesInFlight       = 3; ///< Maximum number of flight frames
-            bool        enableDebugLayer        = true; ///< DirectX 12 debug layer
-            bool        enableGPUValidation     = true; ///< GPU verification layer
-            bool        enableBindlessResources = true; ///< Enable Bindless resources
-            std::string defaultShaderPackPath; ///< Default Shader Pack Path
+            uint32_t renderWidth             = 1920; ///< render resolution width
+            uint32_t renderHeight            = 1080; ///< Render resolution height
+            uint32_t maxFramesInFlight       = 3; ///< Maximum number of flight frames
+            bool     enableDebugLayer        = true; ///< DirectX 12 debug layer
+            bool     enableGPUValidation     = true; ///< GPU verification layer
+            bool     enableBindlessResources = true; ///< Enable Bindless resources
+
+            // ========================== ShaderPack Configuration (Phase 6.3) =========================
+            /**
+             * @brief Current ShaderPack name (empty = use engine default)
+             *
+             * - Empty string: Use ENGINE_DEFAULT_SHADERPACK_PATH
+             * - "PackName": Use USER_SHADERPACK_SEARCH_PATH/PackName
+             *
+             * Examples: "ComplementaryReimagined", "BSL", "Sildurs"
+             *
+             * Future Enhancement (Milestone 3.2+):
+             * - Load from GameConfig.xml (persistent user choice)
+             * - Hot-reload support via ReloadShaderPack() method
+             *
+             * Architecture Rationale:
+             * - User-configurable parameter → belongs in Configuration struct
+             * - Fixed paths (ENGINE_DEFAULT_PATH) → private constexpr (Line 500+)
+             * - Follows Iris design: IrisConfig::shaderPackName (configurable)
+             *   vs Iris::shaderpacksDirectory (fixed path)
+             */
+            std::string currentShaderPackName; ///< User-selected ShaderPack name
+            // ======================================================================================
 
             // ========================== 渲染配置 (Milestone 2.6新增) =========================
             Rgba8   defaultClearColor    = Rgba8::DEBUG_GREEN; ///< 默认清屏颜色，使用引擎Rgba8系统
@@ -254,29 +280,6 @@ namespace enigma::graphic
         bool SubmitRenderCommand(RenderCommandPtr command, const std::string& debugTag = "");
 
         /**
-         * @brief 立即执行队列中的所有指令
-         * @details 
-         * 强制同步执行，主要用于：
-         * - 帧结束时确保所有指令完成
-         * - 调试时的即时执行
-         * - 需要同步的特殊情况
-         */
-        void FlushRenderQueue();
-
-        /**
-         * @brief 执行指定阶段的所有指令
-         * @param phase 要执行的渲染阶段
-         * @details 按阶段执行存储的绘制指令
-         */
-        void ExecutePhase(WorldRenderingPhase phase);
-
-        /**
-         * @brief 按顺序执行所有阶段的指令
-         * @details 按Iris标准顺序执行所有有指令的阶段
-         */
-        void ExecuteAllPhases();
-
-        /**
          * @brief 设置当前渲染阶段
          * @param phase Iris渲染阶段
          * @details 
@@ -377,25 +380,58 @@ namespace enigma::graphic
         // ==================== 配置和状态查询 ====================
 
         /**
-         * @brief 更新渲染配置
-         * @param config 新的配置参数
-         * @details 某些配置更改可能需要重新创建资源
-         */
-        void UpdateConfiguration(const Configuration& config);
-
-        /**
          * @brief 获取当前配置
          * @return 当前的配置参数
          */
         const Configuration& GetConfiguration() const noexcept { return m_configuration; }
 
         /**
-         * @brief 调整渲染分辨率
-         * @param width 新宽度
-         * @param height 新高度
-         * @details 处理窗口大小变化，重新创建相关资源
+         * @brief Get current loaded ShaderPack
+         * @return Pointer to ShaderPack, or nullptr if not loaded
+         *
+         * Usage Example:
+         * @code
+         * const ShaderPack* pack = g_theRenderer->GetShaderPack();
+         * if (pack && pack->IsValid()) {
+         *     const ShaderProgram* program = pack->GetProgram(ProgramId::GBUFFERS_TERRAIN);
+         * }
+         * @endcode
+         *
+         * Teaching Note:
+         * - Returns const pointer (read-only access, prevents accidental modification)
+         * - Check for nullptr before use (defensive programming)
+         * - Iris equivalent: IrisRenderingPipeline::getShaderPack()
          */
-        void ResizeRenderTargets(uint32_t width, uint32_t height);
+        const ShaderPack* GetShaderPack() const noexcept { return m_shaderPack.get(); }
+
+        /**
+         * @brief Shortcut to get ShaderSource by ProgramId
+         * @param id Program identifier (e.g., ProgramId::GBUFFERS_TERRAIN)
+         * @return Pointer to ShaderSource, or nullptr if pack not loaded or program not found
+         *
+         * Usage Example:
+         * @code
+         * const ShaderSource* terrain = g_theRenderer->GetShaderSource(ProgramId::GBUFFERS_TERRAIN);
+         * if (terrain && terrain->IsValid()) {
+         *     // Compile to ShaderProgram (Phase 5.4+)
+         *     // Use shader source
+         * }
+         * @endcode
+         *
+         * Teaching Note:
+         * - Returns shader source code (not compiled program yet)
+         * - Phase 5.1-5.3: Only ShaderPack lifecycle implemented
+         * - Phase 5.4+: Add compilation system (ShaderSource → ShaderProgram)
+         * - Convenience wrapper to avoid repeated null checks
+         * - Follows Facade pattern (simplifies common operations)
+         *
+         * Architecture:
+         * - ShaderPack::GetProgramSet() → ProgramSet*
+         * - ProgramSet::GetRaw(id) → ShaderSource*
+         *
+         * Iris equivalent: NewWorldRenderingPipeline::getShaderProgram()
+         */
+        const ShaderSource* GetShaderSource(ProgramId id) const noexcept;
 
         /**
          * @brief 获取渲染统计信息
@@ -450,13 +486,6 @@ namespace enigma::graphic
         // ==================== 调试和开发支持 ====================
 
         /**
-         * @brief 启用/禁用调试渲染
-         * @param enable true表示启用调试输出
-         * @details 包括线框模式、法线可视化等调试功能
-         */
-        void EnableDebugRendering(bool enable);
-
-        /**
          * @brief 获取DirectX 12设备
          * @return D3D12设备指针
          * @details 委托给D3D12RenderSystem的全局设备访问
@@ -472,31 +501,113 @@ namespace enigma::graphic
          * @return 命令队列指针
          * @details 委托给D3D12RenderSystem获取CommandListManager的图形队列
          */
-        ID3D12CommandQueue* GetCommandQueue() const noexcept
-        {
-            auto* cmdMgr = D3D12RenderSystem::GetCommandListManager();
-            return cmdMgr ? cmdMgr->GetCommandQueue(CommandListManager::Type::Graphics) : nullptr;
-        }
+        ID3D12CommandQueue* GetCommandQueue() const noexcept;
 
     private:
+        // ==================== ShaderPack Fixed Paths (Internal Constants) ====================
+        /**
+         * @brief Internal fixed paths for ShaderPack system
+         *
+         * These are compile-time constants defining the file system structure.
+         * NOT intended to be user-configurable (use Configuration::currentShaderPackName instead).
+         *
+         * Rationale:
+         * - Separation of Concerns: Fixed paths vs user choices
+         * - KISS Principle: 99% of users never need to change these paths
+         * - Iris Compatibility: Maintains standard directory structure
+         */
+
+        /**
+         * @brief Engine default ShaderPack path (Fallback)
+         *
+         * This path points to the engine's built-in default shaders.
+         * Used as a fallback when no user pack is selected.
+         *
+         * Architecture Decision (Plan 1):
+         * - Engine assets directory is treated as a standard ShaderPack
+         * - Directory structure: core/Common.hlsl + program/gbuffers_*.hlsl
+         * - 100% Iris-compatible (program/ directory structure)
+         *
+         * Teaching Note:
+         * - constexpr: Compile-time constant, zero runtime overhead
+         * - Relative path: Assumes Run Directory is properly configured
+         * - Path will be copied from Engine/.enigma/ to Run/.enigma/ during build
+         */
+        static constexpr const char* ENGINE_DEFAULT_SHADERPACK_PATH =
+            ".enigma/assets/engine/shaders";
+
+        /**
+         * @brief User ShaderPack search directory
+         *
+         * This is where users can place custom ShaderPacks.
+         * Each subdirectory represents one ShaderPack (Iris standard).
+         *
+         * Example structure:
+         * .enigma/shaderpacks/
+         * ├── ComplementaryReimagined/
+         * │   └── shaders/
+         * │       ├── program/
+         * │       └── shaders.properties
+         * ├── BSL/
+         * │   └── shaders/
+         * └── Sildurs/
+         *     └── shaders/
+         *
+         * Teaching Note:
+         * - Users can download ShaderPacks from Modrinth/CurseForge
+         * - Each pack is self-contained in its own directory
+         * - Compatible with Minecraft Iris/Optifine ShaderPacks
+         */
+        static constexpr const char* USER_SHADERPACK_SEARCH_PATH =
+            ".enigma/shaderpacks";
+
+        /**
+         * @brief Current ShaderPack name
+         *
+         * - Empty string: Use ENGINE_DEFAULT_SHADERPACK_PATH
+         * - "PackName": Use USER_SHADERPACK_SEARCH_PATH/PackName
+         *
+         * Teaching Note:
+         * - This can be loaded from a config file (e.g., GameConfig.xml)
+         * - Allows users to switch ShaderPacks without recompiling
+         * - Hot-reload supported via ReloadShaderPack() method
+         */
+        std::string m_currentPackName;
+        // ==================================================================
+
         // ==================== 内部初始化方法 ====================
 
         /**
-         * @brief 初始化交换链
-         * @param windowHandle 窗口句柄
-         * @details 创建与窗口关联的交换链，使用D3D12RenderSystem提供的设备
+         * @brief ShaderPack path selection logic
+         * @return Selected ShaderPack path (user pack or engine default)
+         * @details
+         * Priority 1: User selected pack (from m_currentPackName)
+         * Priority 2: Engine default pack (fallback)
+         *
+         * Teaching Note:
+         * - Implements fallback mechanism for ShaderPack loading
+         * - Returns std::filesystem::path for robust path handling
+         * - Logs warning if user pack not found
          */
-        void InitializeSwapChain(HWND windowHandle);
+        std::filesystem::path SelectShaderPackPath() const;
+
+        // ==================== ShaderPack Lifecycle Management ====================
 
         /**
-         * @brief 创建管线工厂函数
-         * @param dimensionId 维度ID
-         * @return 创建的渲染管线实例
-         * @details 
-         * 对应Iris中的createPipeline(ResourceLocation dimensionId)方法
-         * 根据当前着色器包状态决定创建VanillaRenderingPipeline或EnigmaRenderingPipeline
+         * @brief Load ShaderPack from specified path (private overload)
+         * @param packPath Path to ShaderPack directory
+         * @return true if loaded successfully, false otherwise
+         *
+         * Teaching Note:
+         * - Private overload for internal use (filesystem::path parameter)
+         * - Public interface uses std::string parameter for user convenience
+         * - Implements actual loading logic
+         *
+         * Implementation in RendererSubsystem.cpp
          */
-        std::unique_ptr<class IWorldRenderingPipeline> CreatePipeline(const enigma::resource::ResourceLocation& dimensionId);
+        bool LoadShaderPackInternal(const std::filesystem::path& packPath);
+
+        // =========================================================================
 
     private:
         // ==================== 子系统特定对象 (非DirectX核心对象) ====================
@@ -515,6 +626,11 @@ namespace enigma::graphic
 
         /// Shader Pack管理器 - 着色器包系统 (已删除 - Milestone 3.0 重构)
         // std::unique_ptr<ShaderPackManager> m_shaderPackManager;
+
+        /// ShaderPack instance - Iris-compatible shader system (Milestone 3.0 Phase 5)
+        /// Loaded from Configuration::currentShaderPackName or engine default
+        /// Architecture: RendererSubsystem directly owns ShaderPack (no ShaderPackManager)
+        std::unique_ptr<ShaderPack> m_shaderPack;
 
         // ==================== Immediate模式渲染组件 ====================
 

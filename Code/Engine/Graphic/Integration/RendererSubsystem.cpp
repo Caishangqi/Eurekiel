@@ -56,6 +56,75 @@ void RendererSubsystem::Startup()
 {
     LogInfo(GetStaticSubsystemName(), "Starting up...");
 
+    // ==================== ShaderPack Initialization (Plan 1 Architecture) ====================
+    // Step 1: Initialize current pack name from Configuration (unified config interface) ✅
+    m_currentPackName = m_configuration.currentShaderPackName;
+
+    // Teaching Note: Configuration-Driven Design
+    // - Configuration::currentShaderPackName is the SINGLE source of truth
+    // - Future: Load from GameConfig.xml and update m_configuration.currentShaderPackName
+    //   Example:
+    //   GameConfig* config = g_theGame->GetConfig();
+    //   m_configuration.currentShaderPackName = config->GetString("Graphics.ShaderPackName", "");
+    //   m_currentPackName = m_configuration.currentShaderPackName;
+
+    // Step 2: Select ShaderPack path (user pack or engine default)
+    std::filesystem::path shaderPackPath = SelectShaderPackPath();
+
+    // Step 3: Log which pack is being loaded
+    if (m_currentPackName.empty())
+    {
+        LogInfo(GetStaticSubsystemName(),
+                "Loading engine default ShaderPack from: {}",
+                shaderPackPath.string().c_str());
+    }
+    else
+    {
+        LogInfo(GetStaticSubsystemName(),
+                "Loading user ShaderPack '{}' from: {}",
+                m_currentPackName.c_str(),
+                shaderPackPath.string().c_str());
+    }
+
+    // Step 4: Load ShaderPack (Phase 5.3 - Using LoadShaderPackInternal() method)
+    // Teaching Note: Iris loads ShaderPack in loadShaderpack() method
+    // Reference: Iris.java Line 211-245
+    bool loadSuccess = LoadShaderPackInternal(shaderPackPath);
+    if (!loadSuccess)
+    {
+        // Fallback to engine default if user pack failed
+        // Teaching Note: Iris uses setShadersDisabled() on failure
+        // Reference: Iris.java Line 242-243
+        if (!m_currentPackName.empty())
+        {
+            LogWarn(GetStaticSubsystemName(),
+                    "User ShaderPack failed to load, falling back to engine default");
+
+            // Try engine default pack
+            std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
+            loadSuccess = LoadShaderPackInternal(engineDefaultPath);
+        }
+
+        // Critical error if even engine default fails
+        if (!loadSuccess)
+        {
+            ERROR_AND_DIE(Stringf("Failed to load ShaderPack from: %s",
+                shaderPackPath.string().c_str()).c_str());
+        }
+    }
+
+    // Step 5: ShaderPack loaded successfully
+    LogInfo(GetStaticSubsystemName(), "ShaderPack system initialized successfully");
+
+    // TODO (Phase 5.4): Initialize rendering pipeline with loaded ShaderPack
+    // Teaching Note: Iris creates PipelineManager AFTER ShaderPack loads
+    // Reference: Iris.java Line 658 (getPipelineManager() lazy initialization)
+    // - Create PipelineManager with m_shaderPack
+    // - Prepare default dimension pipeline (world0)
+    // - Compile all shader programs to PSOs
+    // - Iris equivalent: pipelineManager = new PipelineManager(Iris::createPipeline)
+    // =========================================================================================
+
     // 创建EnigmaRenderingPipeline实例 (Milestone 2.6新增)
     // 这是验证DirectX 12渲染管线的核心组件
 
@@ -118,7 +187,12 @@ void RendererSubsystem::Shutdown()
 {
     LogInfo(GetStaticSubsystemName(), "Shutting down...");
 
-    // 清理EnigmaRenderingPipeline (Milestone 2.6新增)
+    // Step 1: Unload ShaderPack before other resources (Phase 5.3)
+    // Teaching Note: Iris destroys ShaderPack in destroyEverything()
+    // Reference: Iris.java Line 576-593
+    UnloadShaderPack();
+
+    // Step 2: 清理EnigmaRenderingPipeline (Milestone 2.6新增)
     if (m_currentPipeline)
     {
         LogInfo(GetStaticSubsystemName(), "Destroy EnigmaRenderingPipeline...");
@@ -127,7 +201,7 @@ void RendererSubsystem::Shutdown()
         LogInfo(GetStaticSubsystemName(), "EnigmaRenderingPipeline destroyed");
     }
 
-    // 最后关闭D3D12RenderSystem
+    // Step 3: 最后关闭D3D12RenderSystem
     D3D12RenderSystem::Shutdown();
 }
 
@@ -135,6 +209,16 @@ EnigmaRenderingPipeline* RendererSubsystem::PreparePipeline(const ResourceLocati
 {
     UNUSED(dimensionId)
     return GetCurrentPipeline();
+}
+
+const ShaderSource* RendererSubsystem::GetShaderSource(ProgramId id) const noexcept
+{
+    if (!m_shaderPack) return nullptr;
+
+    ProgramSet* programSet = m_shaderPack->GetProgramSet();
+    if (!programSet) return nullptr;
+
+    return programSet->GetRaw(id);
 }
 
 /**
@@ -230,6 +314,36 @@ void RendererSubsystem::RenderFrame()
     LogDebug(GetStaticSubsystemName(), "RenderFrame - Game update completed (commands submitted to queue)");
 }
 
+//-----------------------------------------------------------------------------------------------
+std::filesystem::path RendererSubsystem::SelectShaderPackPath() const
+{
+    // Priority 1: User selected pack (from config file or future GUI)
+    if (!m_currentPackName.empty())
+    {
+        std::filesystem::path userPackPath =
+            std::filesystem::path(USER_SHADERPACK_SEARCH_PATH) / m_currentPackName;
+
+        if (std::filesystem::exists(userPackPath))
+        {
+            // User pack found, use it
+            return userPackPath;
+        }
+
+        // User pack not found, log warning and fall back
+        LogWarn(GetStaticSubsystemName(),
+                "User ShaderPack '{}' not found at '{}', falling back to engine default",
+                m_currentPackName.c_str(),
+                userPackPath.string().c_str());
+    }
+
+    // Priority 2: Engine default pack (always exists after build)
+    // Teaching Note:
+    // - Engine assets are copied from Engine/.enigma/ to Run/.enigma/ during build
+    // - This ensures the default pack is always available
+    return std::filesystem::path(ENGINE_DEFAULT_SHADERPACK_PATH);
+}
+
+//-----------------------------------------------------------------------------------------------
 void RendererSubsystem::EndFrame()
 {
     // ========================================================================
@@ -444,4 +558,178 @@ void RendererSubsystem::EndFrame()
 
     LogInfo(GetStaticSubsystemName(), "EndFrame - Frame {} completed and presented",
             m_renderStatistics.frameIndex);
+}
+
+//-----------------------------------------------------------------------------------------------
+// ShaderPack Lifecycle Management (Phase 5.2)
+// Teaching Note: Based on Iris.java lifecycle methods
+// Reference: F:\github\Iris\common\src\main\java\net\irisshaders\iris\Iris.java
+//-----------------------------------------------------------------------------------------------
+
+bool RendererSubsystem::LoadShaderPack(const std::string& packPath)
+{
+    // Teaching Note: Public interface - converts string to filesystem::path
+    // Delegates to private LoadShaderPackInternal() for actual loading
+    return LoadShaderPackInternal(std::filesystem::path(packPath));
+}
+
+bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& packPath)
+{
+    // Teaching Note: Based on Iris.java::loadExternalShaderpack() implementation
+    // Reference: Iris.java Line 248-348
+
+    // Step 1: Validate path exists
+    if (!std::filesystem::exists(packPath))
+    {
+        LogError(GetStaticSubsystemName(),
+                 "ShaderPack path does not exist: {}", packPath.string().c_str());
+        return false;
+    }
+
+    // Step 2: Validate ShaderPack structure (has "shaders/" subdirectory)
+    // Teaching Note: Iris uses isValidShaderpack() to check for "shaders/" directory
+    // Reference: Iris.java Line 467-506
+    std::filesystem::path shadersDir = packPath / "shaders";
+    if (!std::filesystem::exists(shadersDir) || !std::filesystem::is_directory(shadersDir))
+    {
+        LogError(GetStaticSubsystemName(),
+                 "Invalid ShaderPack structure - missing 'shaders/' directory: {}",
+                 packPath.string().c_str());
+        return false;
+    }
+
+    // Step 3: Unload existing ShaderPack (if any)
+    // Teaching Note: Iris destroys everything before loading new pack
+    // Reference: Iris.java Line 561 (destroyEverything())
+    if (m_shaderPack)
+    {
+        LogInfo(GetStaticSubsystemName(), "Unloading previous ShaderPack before loading new one");
+        UnloadShaderPack();
+    }
+
+    // Step 4: Load new ShaderPack
+    // Teaching Note: Iris constructs ShaderPack with path, user options, and environment defines
+    // Reference: Iris.java Line 324 (new ShaderPack(...))
+    try
+    {
+        LogInfo(GetStaticSubsystemName(),
+                "Loading ShaderPack from: {}", packPath.string().c_str());
+
+        // Pass "shaders/" subdirectory path (Iris convention)
+        m_shaderPack = std::make_unique<ShaderPack>(shadersDir);
+
+        // Step 5: Validate ShaderPack loaded successfully
+        // Teaching Note: Check both pointer and IsValid() for robustness
+        if (!m_shaderPack || !m_shaderPack->IsValid())
+        {
+            LogError(GetStaticSubsystemName(), "ShaderPack loaded but validation failed");
+            m_shaderPack.reset();
+            return false;
+        }
+
+        // Step 6: Log success
+        LogInfo(GetStaticSubsystemName(),
+                "ShaderPack loaded successfully: {}", packPath.string().c_str());
+
+        // TODO (Phase 5.4): Rebuild rendering pipeline with new ShaderPack
+        // Teaching Note: Iris immediately rebuilds pipeline after loading
+        // Reference: Iris.java Line 568-570 (preparePipeline())
+        // - Update PipelineManager with new ShaderPack programs
+        // - Recompile PSOs (Pipeline State Objects)
+        // - Iris equivalent: PipelineManager.preparePipeline(shaderPack)
+
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        // Teaching Note: Iris catches all exceptions and shows user-friendly error
+        // Reference: Iris.java Line 334-338 (handleException())
+        LogError(GetStaticSubsystemName(),
+                 "Exception loading ShaderPack: {}", e.what());
+        m_shaderPack.reset();
+        return false;
+    }
+}
+
+//-----------------------------------------------------------------------------------------------
+void RendererSubsystem::UnloadShaderPack()
+{
+    // Teaching Note: Based on Iris.java::destroyEverything() implementation
+    // Reference: Iris.java Line 576-593
+
+    if (!m_shaderPack)
+    {
+        LogWarn(GetStaticSubsystemName(), "No ShaderPack to unload");
+        return;
+    }
+
+    LogInfo(GetStaticSubsystemName(), "Unloading ShaderPack");
+
+    // TODO (Phase 5.4): Clean up pipeline before unloading ShaderPack
+    // Teaching Note: Iris destroys pipeline BEFORE nullifying ShaderPack
+    // Reference: Iris.java Line 579 (getPipelineManager().destroyPipeline())
+    // - Release PSOs (Pipeline State Objects)
+    // - Clear shader program references
+    // - Unbind all descriptor heap slots (Bindless resources)
+    // - Iris equivalent: PipelineManager.destroy()
+
+    // Release ShaderPack
+    // Teaching Note: Iris uses "currentPack = null" (Java GC handles cleanup)
+    // DirectX 12: unique_ptr::reset() calls destructor and releases memory
+    m_shaderPack.reset();
+
+    LogInfo(GetStaticSubsystemName(), "ShaderPack unloaded successfully");
+}
+
+//-----------------------------------------------------------------------------------------------
+bool RendererSubsystem::ReloadShaderPack()
+{
+    // Teaching Note: Based on Iris.java::reload() implementation
+    // Reference: Iris.java Line 556-571
+
+    LogInfo(GetStaticSubsystemName(), "Reloading ShaderPack (hot-reload)");
+
+    // Step 1: Get current ShaderPack path (before unloading)
+    // Teaching Note: Iris uses SelectShaderPackPath() to resolve path priority
+    std::filesystem::path currentPath = SelectShaderPackPath();
+
+    // Step 2: Unload current ShaderPack
+    // Teaching Note: Iris calls destroyEverything() first
+    // Reference: Iris.java Line 561
+    UnloadShaderPack();
+
+    // Step 3: Reload from same path
+    // Teaching Note: Iris calls loadShaderpack() after destruction
+    // Reference: Iris.java Line 564
+    bool success = LoadShaderPackInternal(currentPath);
+
+    if (success)
+    {
+        LogInfo(GetStaticSubsystemName(), "ShaderPack reloaded successfully");
+
+        // TODO (Phase 5.4): Immediately rebuild pipeline for current dimension
+        // Teaching Note: Iris re-creates pipeline IMMEDIATELY after reload
+        // Reference: Iris.java Line 568-570
+        // - Check if in game world (Minecraft.getInstance().level != null)
+        // - Call preparePipeline(getCurrentDimension())
+        // - CRITICAL: Prevents "extremely dangerous" inconsistent state (Iris warning)
+    }
+    else
+    {
+        LogError(GetStaticSubsystemName(), "Failed to reload ShaderPack");
+
+        // TODO (Phase 6+): Implement fallback to engine default
+        // Teaching Note: Iris calls setShadersDisabled() on failure
+        // Reference: Iris.java Line 224
+        // - Attempt to load ENGINE_DEFAULT_SHADERPACK_PATH
+        // - If that fails too, disable shaders completely
+    }
+
+    return success;
+}
+
+ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
+{
+    auto* cmdMgr = D3D12RenderSystem::GetCommandListManager();
+    return cmdMgr ? cmdMgr->GetCommandQueue(CommandListManager::Type::Graphics) : nullptr;
 }
