@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Core/LogCategory/LogCategory.hpp"
 #include <string>
 #include <vector>
 #include <deque>
@@ -56,7 +57,10 @@ namespace enigma::core
         // Render UI
         void Render();
 
-        // Add message (API: AddMessage("LogGame", "Info", "Game initialized successfully"))
+        // Add message (Backward compatible - Category type-safe, Level string)
+        void AddMessage(const LogCategoryBase& category, const std::string& level, const std::string& message);
+
+        // Add message (Legacy API - kept for backward compatibility)
         void AddMessage(const std::string& category, const std::string& level, const std::string& message);
 
         // Toggle window
@@ -116,6 +120,9 @@ namespace enigma::core
         std::string GetCurrentTimestamp() const;
         std::string ToLowerCase(const std::string& str) const;
 
+        // Copy functionality
+        void CopySelectedMessageToClipboard(bool includeMetadata = false);
+
         // Configuration
         MessageLogUIConfig m_config;
 
@@ -154,5 +161,30 @@ namespace enigma::core
         // UI state
         bool m_needsFilterUpdate = true;                 // Needs filter update
         bool m_scrollToBottom = false;                   // Needs to scroll to bottom
+
+        // Selection state (single selection - legacy)
+        int m_selectedMessageIndex = -1;                 // Currently selected message index (-1 means no selection)
+
+        // Multi-selection state
+        std::vector<int> m_selectedMessageIndices;       // All selected message indices (sorted)
+        int m_lastClickedIndex = -1;                     // Last clicked index for Shift+Click range selection
+
+        // Box selection state (mouse drag rectangle selection)
+        bool m_isBoxSelecting = false;                   // Whether currently performing box selection
+        ImVec2 m_boxSelectStart;                         // Box selection start position (screen coordinates)
+        ImVec2 m_boxSelectEnd;                           // Box selection end position (screen coordinates)
+        float m_boxSelectScrollY = 0.0f;                 // Scroll position when box selection started
+        std::vector<int> m_boxSelectInitialSelection;   // Initial selection state before box select started
+
+        // Multi-selection helper methods
+        bool IsMessageSelected(int index) const;
+        void SelectMessage(int index, bool selected);
+        void ClearSelection();
+        void SelectRange(int startIndex, int endIndex);
+        void ToggleMessageSelection(int index);
+        bool IsMessageInBoxSelection(int index, const ImVec2& itemMin, const ImVec2& itemMax) const;
+
+        // Multi-selection copy functionality
+        void CopySelectedMessagesToClipboard(bool includeMetadata = false);
     };
 }

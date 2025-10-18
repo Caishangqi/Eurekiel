@@ -2,6 +2,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/StringUtils.hpp"
 #include <ThirdParty/imgui/imgui.h>
+#include <ThirdParty/imgui/imgui_internal.h>
 #include <algorithm>
 #include <ctime>
 #include <chrono>
@@ -54,7 +55,7 @@ namespace enigma::core
 
         // Begin rendering window
         bool windowOpen = m_config.showWindow;
-        if (!ImGui::Begin("MessageLog - Press ~ to toggle", &windowOpen))
+        if (!ImGui::Begin("MessageLog", &windowOpen))
         {
             ImGui::End();
             m_config.showWindow = windowOpen;
@@ -188,7 +189,7 @@ namespace enigma::core
             ImGuiTableFlags leftTableFlags = ImGuiTableFlags_Borders |
                 ImGuiTableFlags_SizingFixedFit;
 
-            if (ImGui::BeginTable("VerbosityLevelTable", 1, leftTableFlags))
+            if (ImGui::BeginTable("LevelNamesTable", 1, leftTableFlags))
             {
                 ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, leftTableWidth - 10.0f);
 
@@ -704,7 +705,7 @@ namespace enigma::core
     }
 
     // ================================================================================================
-    // Main panel rendering (fullscreen log display area)
+    // Main panel rendering (fullscreen log display area) - WITH MULTI-SELECTION SUPPORT
     // ================================================================================================
     void MessageLogUI::RenderMainPanel()
     {
@@ -714,9 +715,144 @@ namespace enigma::core
 
         ImGui::BeginChild("LogPanel", availSize, false, ImGuiWindowFlags_HorizontalScrollbar);
 
+        // ========================================
+        // Box Selection: Start detection (in empty space)
+        // ========================================
+        ImGuiIO& io = ImGui::GetIO();
+        const bool isCtrlHeld = io.KeyCtrl;
+        const bool isShiftHeld = io.KeyShift;
+
+        // Detect box selection start (left click in window)
+        if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !isShiftHeld)
+        {
+            // Only start box select if clicking on empty space (not on a Selectable)
+            // We'll check this by seeing if mouse was over any Selectable later
+            // For now, mark as potentially starting box select
+            m_isBoxSelecting = true;
+            m_boxSelectStart = ImGui::GetMousePos();
+            m_boxSelectEnd = m_boxSelectStart;
+            m_boxSelectScrollY = ImGui::GetScrollY(); // Save scroll position at start
+            // Save initial state: if Ctrl is held, we're adding to selection; otherwise start fresh
+            if (isCtrlHeld)
+            {
+                m_boxSelectInitialSelection = m_selectedMessageIndices; // Save initial state for additive selection
+            }
+            else
+            {
+                m_boxSelectInitialSelection.clear(); // Start with empty selection
+            }
+        }
+
+        // ========================================
+        // Box Selection: Update (if active)
+        // ========================================
+        if (m_isBoxSelecting)
+        {
+            m_boxSelectEnd = ImGui::GetMousePos();
+
+            // Calculate scroll offset since box selection started
+            float currentScrollY = ImGui::GetScrollY();
+            float scrollDelta = currentScrollY - m_boxSelectScrollY;
+
+            // Draw selection rectangle (adjusted for scroll)
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            // Adjust box coordinates by scroll delta
+            ImVec2 adjustedStart = ImVec2(m_boxSelectStart.x, m_boxSelectStart.y - scrollDelta);
+            ImVec2 adjustedEnd = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
+
+            ImVec2 rectMin = ImVec2(ImMin(adjustedStart.x, adjustedEnd.x),
+                                     ImMin(adjustedStart.y, adjustedEnd.y));
+            ImVec2 rectMax = ImVec2(ImMax(adjustedStart.x, adjustedEnd.x),
+                                     ImMax(adjustedStart.y, adjustedEnd.y));
+
+            // Draw border and filled rectangle
+            drawList->AddRect(rectMin, rectMax, IM_COL32(100, 150, 255, 255), 0.0f, 0, 2.0f);
+            drawList->AddRectFilled(rectMin, rectMax, IM_COL32(100, 150, 255, 30));
+
+            // End box selection when mouse released
+            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+            {
+                m_isBoxSelecting = false;
+            }
+        }
+
+        // ========================================
+        // Keyboard Shortcuts
+        // ========================================
+        if (ImGui::IsWindowFocused())
+        {
+            // Ctrl+A: Select all
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false))
+            {
+                ClearSelection();
+                for (int i = 0; i < static_cast<int>(m_filteredIndices.size()); ++i)
+                {
+                    SelectMessage(i, true);
+                }
+            }
+
+            // Ctrl+C: Copy selected messages
+            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false) && !m_selectedMessageIndices.empty())
+            {
+                CopySelectedMessagesToClipboard(false);
+            }
+
+            // Escape: Clear selection
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false))
+            {
+                ClearSelection();
+            }
+
+            // Arrow keys for navigation (single selection mode compatibility)
+            if (m_selectedMessageIndex >= 0)
+            {
+                if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, false))
+                {
+                    if (m_selectedMessageIndex > 0)
+                        m_selectedMessageIndex--;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, false))
+                {
+                    if (m_selectedMessageIndex < static_cast<int>(m_filteredIndices.size()) - 1)
+                        m_selectedMessageIndex++;
+                }
+            }
+        }
+
+        // ========================================
+        // Box Selection: Calculate which items should be selected (before rendering)
+        // ========================================
+        std::vector<int> itemsInBoxSelection; // Track items currently in box
+        if (m_isBoxSelecting)
+        {
+            // We'll build this list as we render items below
+            itemsInBoxSelection.reserve(m_filteredIndices.size());
+        }
+
+        // ========================================
+        // Render Message List with Clipper
+        // ========================================
         // Use ImGuiListClipper for virtual scrolling, improves performance
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(m_filteredIndices.size()));
+
+        // Track if any Selectable was clicked (for box select cancel)
+        bool anyItemClicked = false;
+
+        // First pass: collect items in box selection (if box selecting)
+        // We need to do this in a first pass because clipper only renders visible items
+        // But we want to track ALL items in the selection box
+        if (m_isBoxSelecting)
+        {
+            // Calculate box selection rectangle (normalized)
+            ImVec2 rectMin = ImVec2(ImMin(m_boxSelectStart.x, m_boxSelectEnd.x),
+                                     ImMin(m_boxSelectStart.y, m_boxSelectEnd.y));
+            ImVec2 rectMax = ImVec2(ImMax(m_boxSelectStart.x, m_boxSelectEnd.x),
+                                     ImMax(m_boxSelectStart.y, m_boxSelectEnd.y));
+
+            // For each visible item during rendering, we'll check if it's in the box
+            // and add to itemsInBoxSelection
+        }
 
         while (clipper.Step())
         {
@@ -728,15 +864,199 @@ namespace enigma::core
                 // Get level color
                 ImVec4 color = GetLevelColor(msg.level);
 
-                // Display format: "[HH:MM:SS] LogGame: Game initialized successfully"
-                // Timestamp displayed in gray, other parts use level color
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "[%s]", msg.timestamp.c_str());
-                ImGui::SameLine();
-                ImGui::TextColored(color, "%s: %s", msg.category.c_str(), msg.message.c_str());
+                // Check if this message is selected (use multi-selection system)
+                bool isSelected = IsMessageSelected(i);
+
+                // During box selection, check if item should be selected based on current box
+                if (m_isBoxSelecting)
+                {
+                    // We'll determine selection after getting item rect
+                    // For now, use the calculated selection state
+                    // (This will be updated below after we know if item is in box)
+                }
+
+                // Create display text: "[HH:MM:SS] LogGame: Game initialized successfully"
+                std::string displayText = Stringf("[%s] %s: %s",
+                                                   msg.timestamp.c_str(),
+                                                   msg.category.c_str(),
+                                                   msg.message.c_str());
+
+                // Apply selection highlight colors
+                if (isSelected)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.3f, 0.5f, 0.8f, 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.4f, 0.6f, 0.9f, 0.6f));
+                    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.5f, 0.7f, 1.0f, 0.7f));
+                }
+
+                // Use Selectable to allow selection
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                bool wasClicked = ImGui::Selectable(displayText.c_str(), isSelected, ImGuiSelectableFlags_AllowDoubleClick);
+                ImGui::PopStyleColor(); // Pop Text color
+
+                if (isSelected)
+                {
+                    ImGui::PopStyleColor(3); // Pop Header colors
+                }
+
+                // Get item rect for box selection test
+                ImVec2 itemMin = ImGui::GetItemRectMin();
+                ImVec2 itemMax = ImGui::GetItemRectMax();
+
+                // ========================================
+                // Box selection: Track items in box during rendering
+                // ========================================
+                if (m_isBoxSelecting && IsMessageInBoxSelection(i, itemMin, itemMax))
+                {
+                    itemsInBoxSelection.push_back(i);
+                }
+
+                // ========================================
+                // Multi-selection logic (click handling)
+                // ========================================
+                if (wasClicked)
+                {
+                    anyItemClicked = true;
+
+                    // Cancel box selection if we clicked on an item
+                    if (m_isBoxSelecting)
+                    {
+                        m_isBoxSelecting = false;
+                    }
+
+                    if (isShiftHeld && m_lastClickedIndex >= 0)
+                    {
+                        // Shift+Click: Range selection
+                        // Keep existing selection and add range from m_lastClickedIndex to current item
+                        int startIdx = ImMin(m_lastClickedIndex, i);
+                        int endIdx = ImMax(m_lastClickedIndex, i);
+
+                        // Don't clear selection - preserve existing selections
+                        // SelectRange will add to current selection
+                        SelectRange(startIdx, endIdx);
+                        // Don't update m_lastClickedIndex for Shift+Click
+                        // This allows extending the range from the same anchor point
+                    }
+                    else if (isCtrlHeld)
+                    {
+                        // Ctrl+Click: Toggle individual item selection
+                        ToggleMessageSelection(i);
+                        m_lastClickedIndex = i;
+                    }
+                    else
+                    {
+                        // Normal click: Clear other selections, select only this
+                        ClearSelection();
+                        SelectMessage(i, true);
+                        m_lastClickedIndex = i;
+                    }
+
+                    // Update legacy single-selection index for compatibility
+                    m_selectedMessageIndex = i;
+
+                    // Double-click to copy (use multi-selection copy if multiple selected)
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+                    {
+                        if (m_selectedMessageIndices.size() > 1)
+                        {
+                            CopySelectedMessagesToClipboard(false);
+                        }
+                        else
+                        {
+                            CopySelectedMessageToClipboard(false);
+                        }
+                    }
+                }
+
+                // ========================================
+                // Right-click context menu
+                // ========================================
+                if (isSelected && ImGui::BeginPopupContextItem())
+                {
+                    // Display selected count
+                    ImGui::Text("Selected: %d message(s)", static_cast<int>(m_selectedMessageIndices.size()));
+                    ImGui::Separator();
+
+                    if (ImGui::MenuItem("Copy Message(s) (Ctrl+C)"))
+                    {
+                        if (m_selectedMessageIndices.size() > 1)
+                        {
+                            CopySelectedMessagesToClipboard(false);
+                        }
+                        else
+                        {
+                            CopySelectedMessageToClipboard(false);
+                        }
+                    }
+
+                    if (ImGui::MenuItem("Copy Full Details"))
+                    {
+                        if (m_selectedMessageIndices.size() > 1)
+                        {
+                            CopySelectedMessagesToClipboard(true);
+                        }
+                        else
+                        {
+                            CopySelectedMessageToClipboard(true);
+                        }
+                    }
+
+                    ImGui::Separator();
+
+                    if (ImGui::MenuItem("Select All (Ctrl+A)"))
+                    {
+                        ClearSelection();
+                        for (int j = 0; j < static_cast<int>(m_filteredIndices.size()); ++j)
+                        {
+                            SelectMessage(j, true);
+                        }
+                    }
+
+                    if (ImGui::MenuItem("Clear Selection (Esc)"))
+                    {
+                        ClearSelection();
+                        m_selectedMessageIndex = -1;
+                    }
+
+                    ImGui::EndPopup();
+                }
             }
         }
 
         clipper.End();
+
+        // ========================================
+        // Box Selection: Apply final selection state (after rendering all items)
+        // ========================================
+        if (m_isBoxSelecting)
+        {
+            // Rebuild selection: initial selection + items in current box
+            // This ensures shrinking the box correctly removes items
+            std::vector<int> newSelection = m_boxSelectInitialSelection;
+
+            // Add all items currently in box
+            for (int itemIdx : itemsInBoxSelection)
+            {
+                // Only add if not already in initial selection
+                if (std::find(newSelection.begin(), newSelection.end(), itemIdx) == newSelection.end())
+                {
+                    newSelection.push_back(itemIdx);
+                }
+            }
+
+            // Sort for consistency
+            std::sort(newSelection.begin(), newSelection.end());
+
+            // Apply the new selection
+            m_selectedMessageIndices = newSelection;
+        }
+
+        // If box select ended on empty space, clear selection
+        if (!m_isBoxSelecting && !anyItemClicked && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered())
+        {
+            ClearSelection();
+            m_selectedMessageIndex = -1;
+        }
 
         // Auto-scroll to bottom
         if (m_scrollToBottom && m_config.autoScroll)
@@ -784,6 +1104,15 @@ namespace enigma::core
     }
 
     // ================================================================================================
+    // Hybrid API: Type-safe Category + String Level
+    // ================================================================================================
+    void MessageLogUI::AddMessage(const LogCategoryBase& category, const std::string& level, const std::string& message)
+    {
+        AddMessage(category.GetName(), level, message);
+    }
+
+    // ================================================================================================
+    // Legacy API: String Category + String Level (kept for backward compatibility)
     // ================================================================================================
     void MessageLogUI::AddMessage(const std::string& category, const std::string& level, const std::string& message)
     {
@@ -822,6 +1151,10 @@ namespace enigma::core
         m_categoryEnabled.clear();
         m_categoryCounts.clear();
         m_needsFilterUpdate = true;
+
+        // Reset selection when clearing (both legacy and multi-selection)
+        m_selectedMessageIndex = -1;
+        ClearSelection(); // Clear multi-selection state
 
         // Add clear prompt message
         AddMessage("LogSystem", "Info", "Message log cleared");
@@ -868,21 +1201,43 @@ namespace enigma::core
                 m_filteredIndices.push_back(i);
             }
         }
+
+        // Reset legacy single selection if it's out of bounds after filtering
+        if (m_selectedMessageIndex >= static_cast<int>(m_filteredIndices.size()))
+        {
+            m_selectedMessageIndex = -1;
+        }
+
+        // Clean up multi-selection: Remove any selected indices that are out of bounds
+        // This is important because filtering changes the valid index range
+        m_selectedMessageIndices.erase(
+            std::remove_if(m_selectedMessageIndices.begin(),
+                           m_selectedMessageIndices.end(),
+                           [this](int idx) {
+                               return idx < 0 || idx >= static_cast<int>(m_filteredIndices.size());
+                           }),
+            m_selectedMessageIndices.end());
     }
 
     bool MessageLogUI::PassesFilter(const DisplayMessage& msg) const
     {
         // Helper function: get VerbosityMode for specified level
+        // Convert level string to uppercase for case-insensitive comparison
+        std::string levelUpper = msg.level;
+        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), ::toupper);
+
         VerbosityMode mode = VerbosityMode::All;
-        if (msg.level == "Verbose")
+
+        // Map level strings to filters (case-insensitive)
+        if (levelUpper == "TRACE" || levelUpper == "DEBUG" || levelUpper == "VERBOSE")
             mode = m_verboseModeFilter;
-        else if (msg.level == "Info")
+        else if (levelUpper == "INFO")
             mode = m_infoModeFilter;
-        else if (msg.level == "Warning")
+        else if (levelUpper == "WARN" || levelUpper == "WARNING")
             mode = m_warningModeFilter;
-        else if (msg.level == "Error")
+        else if (levelUpper == "ERROR")
             mode = m_errorModeFilter;
-        else if (msg.level == "Fatal")
+        else if (levelUpper == "FATAL")
             mode = m_fatalModeFilter;
 
         // 1. Verbosity level filtering (three-choice)
@@ -935,24 +1290,28 @@ namespace enigma::core
     // ================================================================================================
     ImVec4 MessageLogUI::GetLevelColor(const std::string& level) const
     {
-        // Verbose: Gray
-        if (level == "Verbose")
+        // Convert level string to uppercase for case-insensitive comparison
+        std::string levelUpper = level;
+        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), ::toupper);
+
+        // Verbose/Debug/Trace: Gray
+        if (levelUpper == "VERBOSE" || levelUpper == "DEBUG" || levelUpper == "TRACE")
             return ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
 
         // Info: White
-        if (level == "Info")
+        if (levelUpper == "INFO")
             return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-        // Warning: Yellow
-        if (level == "Warning")
+        // Warning/Warn: Yellow
+        if (levelUpper == "WARNING" || levelUpper == "WARN")
             return ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
 
         // Error: Red
-        if (level == "Error")
+        if (levelUpper == "ERROR")
             return ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
 
         // Fatal: Dark red/Magenta
-        if (level == "Fatal")
+        if (levelUpper == "FATAL")
             return ImVec4(0.8f, 0.0f, 0.2f, 1.0f);
 
         // Default: White
@@ -988,5 +1347,182 @@ namespace enigma::core
     void MessageLogUI::ToggleWindow()
     {
         m_config.showWindow = !m_config.showWindow;
+    }
+
+    // ================================================================================================
+    // Copy selected message to clipboard
+    // ================================================================================================
+    void MessageLogUI::CopySelectedMessageToClipboard(bool includeMetadata)
+    {
+        // Validate selection
+        if (m_selectedMessageIndex < 0 || m_selectedMessageIndex >= static_cast<int>(m_filteredIndices.size()))
+            return;
+
+        // Get the selected message
+        size_t msgIndex = m_filteredIndices[m_selectedMessageIndex];
+        const DisplayMessage& msg = m_allMessages[msgIndex];
+
+        // Build text to copy
+        std::string textToCopy;
+        if (includeMetadata)
+        {
+            // Full format: [HH:MM:SS] [Level] [Category] Message
+            textToCopy = Stringf("[%s] [%s] [%s] %s",
+                                 msg.timestamp.c_str(),
+                                 msg.level.c_str(),
+                                 msg.category.c_str(),
+                                 msg.message.c_str());
+        }
+        else
+        {
+            // Simple format: Message content only
+            textToCopy = msg.message;
+        }
+
+        // Copy to clipboard using ImGui API
+        ImGui::SetClipboardText(textToCopy.c_str());
+
+        // Optional: Add a feedback message to log
+        AddMessage("LogSystem", "Info", "Message copied to clipboard");
+    }
+
+    // ================================================================================================
+    // Multi-selection helper methods
+    // ================================================================================================
+
+    bool MessageLogUI::IsMessageSelected(int index) const
+    {
+        return std::find(m_selectedMessageIndices.begin(),
+                         m_selectedMessageIndices.end(),
+                         index) != m_selectedMessageIndices.end();
+    }
+
+    void MessageLogUI::SelectMessage(int index, bool selected)
+    {
+        if (selected)
+        {
+            // Add to selection if not already selected
+            if (!IsMessageSelected(index))
+            {
+                m_selectedMessageIndices.push_back(index);
+                // Keep sorted for efficient range operations
+                std::sort(m_selectedMessageIndices.begin(), m_selectedMessageIndices.end());
+            }
+        }
+        else
+        {
+            // Remove from selection
+            auto it = std::find(m_selectedMessageIndices.begin(),
+                                m_selectedMessageIndices.end(),
+                                index);
+            if (it != m_selectedMessageIndices.end())
+            {
+                m_selectedMessageIndices.erase(it);
+            }
+        }
+    }
+
+    void MessageLogUI::ClearSelection()
+    {
+        m_selectedMessageIndices.clear();
+        m_lastClickedIndex = -1;
+    }
+
+    void MessageLogUI::SelectRange(int startIndex, int endIndex)
+    {
+        // Ensure start <= end
+        if (startIndex > endIndex)
+        {
+            std::swap(startIndex, endIndex);
+        }
+
+        // Select all messages in range
+        for (int i = startIndex; i <= endIndex; ++i)
+        {
+            SelectMessage(i, true);
+        }
+    }
+
+    void MessageLogUI::ToggleMessageSelection(int index)
+    {
+        if (IsMessageSelected(index))
+        {
+            SelectMessage(index, false); // Deselect
+        }
+        else
+        {
+            SelectMessage(index, true); // Select
+        }
+    }
+
+    bool MessageLogUI::IsMessageInBoxSelection(int index, const ImVec2& itemMin, const ImVec2& itemMax) const
+    {
+        // Calculate scroll offset since box selection started
+        float currentScrollY = ImGui::GetScrollY();
+        float scrollDelta = currentScrollY - m_boxSelectScrollY;
+
+        // Adjust box start position by scroll delta
+        ImVec2 adjustedStart = ImVec2(m_boxSelectStart.x, m_boxSelectStart.y - scrollDelta);
+        ImVec2 adjustedEnd = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
+
+        // Calculate box selection rectangle (normalized)
+        ImVec2 rectMin = ImVec2(ImMin(adjustedStart.x, adjustedEnd.x),
+                                 ImMin(adjustedStart.y, adjustedEnd.y));
+        ImVec2 rectMax = ImVec2(ImMax(adjustedStart.x, adjustedEnd.x),
+                                 ImMax(adjustedStart.y, adjustedEnd.y));
+
+        // Check if item rectangle intersects with selection rectangle
+        return !(itemMax.x < rectMin.x || itemMin.x > rectMax.x ||
+                 itemMax.y < rectMin.y || itemMin.y > rectMax.y);
+    }
+
+    // ================================================================================================
+    // Multi-selection copy functionality
+    // ================================================================================================
+
+    void MessageLogUI::CopySelectedMessagesToClipboard(bool includeMetadata)
+    {
+        if (m_selectedMessageIndices.empty())
+            return;
+
+        std::string textToCopy;
+
+        for (int idx : m_selectedMessageIndices)
+        {
+            // Validate index
+            if (idx < 0 || idx >= static_cast<int>(m_filteredIndices.size()))
+                continue;
+
+            size_t msgIndex = m_filteredIndices[idx];
+            if (msgIndex >= m_allMessages.size())
+                continue;
+
+            const DisplayMessage& msg = m_allMessages[msgIndex];
+
+            // Add separator between messages
+            if (!textToCopy.empty())
+                textToCopy += "\n";
+
+            // Build message text
+            if (includeMetadata)
+            {
+                textToCopy += Stringf("[%s] [%s] [%s] %s",
+                                      msg.timestamp.c_str(),
+                                      msg.level.c_str(),
+                                      msg.category.c_str(),
+                                      msg.message.c_str());
+            }
+            else
+            {
+                textToCopy += msg.message;
+            }
+        }
+
+        // Copy to clipboard
+        ImGui::SetClipboardText(textToCopy.c_str());
+
+        // Add feedback message
+        AddMessage("LogSystem", "Info",
+                   Stringf("Copied %d messages to clipboard", static_cast<int>(m_selectedMessageIndices.size())));
     }
 }

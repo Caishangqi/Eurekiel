@@ -1,6 +1,9 @@
 ﻿#include "MessageLogSubsystem.hpp"
-#include "LogCategories.hpp"
+#include "MessageLogAppender.hpp"
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "../Logger/LogLevel.hpp"
+#include "../Logger/LoggerSubsystem.hpp"
+#include "../Engine.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "Game/GameCommon.hpp"
@@ -19,17 +22,19 @@ namespace enigma::core
         // 创建UI实例
         m_ui = std::make_unique<MessageLogUI>();
 
+        // 注意: MessageLogAppender 会由 LoggerSubsystem::CreateDefaultAppenders() 自动添加
+        // 无需在此手动注册,避免重复添加导致日志输出两次
+
         // 注册预定义的核心Category
-        RegisterCategory(LogCategories::Engine, "Engine", Rgba8(150, 200, 255, 255));
-        RegisterCategory(LogCategories::Game, "Game", Rgba8(100, 255, 100, 255));
-        RegisterCategory(LogCategories::Renderer, "Renderer", Rgba8(255, 200, 100, 255));
-        RegisterCategory(LogCategories::Audio, "Audio", Rgba8(255, 150, 255, 255));
-        RegisterCategory(LogCategories::Physics, "Physics", Rgba8(200, 255, 200, 255));
-        RegisterCategory(LogCategories::Network, "Network", Rgba8(150, 150, 255, 255));
-        RegisterCategory(LogCategories::UI, "UI", Rgba8(255, 255, 150, 255));
-        RegisterCategory(LogCategories::Input, "Input", Rgba8(200, 200, 255, 255));
-        RegisterCategory(LogCategories::Resource, "Resource", Rgba8(255, 200, 150, 255));
-        RegisterCategory(LogCategories::AI, "AI", Rgba8(255, 150, 150, 255));
+        RegisterCategory(LogEngine.GetName(), "Engine", Rgba8(150, 200, 255, 255));
+        RegisterCategory(LogCore.GetName(), "Core", Rgba8(100, 255, 100, 255));
+        RegisterCategory(LogSystem.GetName(), "System", Rgba8(100, 200, 100, 255));
+        RegisterCategory(LogRenderer.GetName(), "Renderer", Rgba8(255, 200, 100, 255));
+        RegisterCategory(LogRender.GetName(), "Render", Rgba8(255, 180, 100, 255));
+        RegisterCategory(LogGraphics.GetName(), "Graphics", Rgba8(255, 160, 100, 255));
+        RegisterCategory(LogAudio.GetName(), "Audio", Rgba8(255, 150, 255, 255));
+        RegisterCategory(LogInput.GetName(), "Input", Rgba8(200, 200, 255, 255));
+        RegisterCategory(LogTemp.GetName(), "Temp", Rgba8(200, 200, 200, 255));
 
         DebuggerPrintf("[MessageLogSubsystem] Initialized with UI\n");
     }
