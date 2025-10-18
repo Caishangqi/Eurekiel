@@ -249,6 +249,23 @@ public:
 
     void SetViewport(const IntVec2& dimension) override;
 
+    // ==================== ImGui资源访问接口实现 ====================
+    // DX11接口（DX12不支持，返回nullptr）
+    ID3D11Device*        GetD3D11Device() const override;
+    ID3D11DeviceContext* GetD3D11DeviceContext() const override;
+    IDXGISwapChain*      GetD3D11SwapChain() const override;
+
+    // DX12接口
+    ID3D12Device*              GetD3D12Device() const override;
+    ID3D12CommandQueue*        GetD3D12CommandQueue() const override;
+    ID3D12DescriptorHeap*      GetD3D12SRVHeap() const override;
+    ID3D12GraphicsCommandList* GetD3D12CommandList() const override;
+
+    DXGI_FORMAT     GetRTVFormat() const override;
+    uint32_t        GetNumFramesInFlight() const override;
+    bool            IsRendererReady() const override;
+    RendererBackend GetBackendType() const override;
+
 private:
     // Device-level resources (StartUp / Shutdown lifecycle)
     RenderConfig                 m_config{};

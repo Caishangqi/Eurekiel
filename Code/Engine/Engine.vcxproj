@@ -172,10 +172,10 @@
     </ItemDefinitionGroup>
     <ItemGroup>
         <Content Include="..\..\.enigma\assets\engine\shaders\core\Common.hlsl"/>
-        <Content Include="..\..\.enigma\assets\engine\shaders\core\gbuffers_basic.ps.hlsl"/>
-        <Content Include="..\..\.enigma\assets\engine\shaders\core\gbuffers_basic.vs.hlsl"/>
-        <Content Include="..\..\.enigma\assets\engine\shaders\core\gbuffers_textured.ps.hlsl"/>
-        <Content Include="..\..\.enigma\assets\engine\shaders\core\gbuffers_textured.vs.hlsl"/>
+        <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_basic.ps.hlsl"/>
+        <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_basic.vs.hlsl"/>
+        <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_textured.ps.hlsl"/>
+        <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_textured.vs.hlsl"/>
         <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp"/>
         <!-- ImGui Core -->
         <ClCompile Include="..\ThirdParty\imgui\imgui.cpp"/>
@@ -258,7 +258,6 @@
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
         <ClCompile Include="Graphic\Resource\Texture\D12Texture.cpp" />
         <ClCompile Include="Graphic\Shader\Compiler\DXCCompiler.cpp" />
-        <ClCompile Include="Graphic\Shader\ShaderPack\Discovery\ShaderPackDirectoryManager.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\AbsolutePackPath.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\FileNode.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\IncludeGraph.cpp" />
@@ -403,6 +402,7 @@
         <ClCompile Include="Voxel\World\World.cpp" />
         <ClCompile Include="Window\Window.cpp" />
         <Content Include="..\..\.enigma\assets\engine\resource_type_category" />
+        <Content Include="..\..\.enigma\assets\engine\shaders\shaders.properties"/>
         <Content Include="..\..\.enigma\assets\engine\sounds\ambient\weather\rain1.ogg" />
         <Content Include="..\..\.enigma\assets\engine\sounds\ambient\weather\rain2.ogg" />
         <Content Include="..\..\.enigma\assets\engine\sounds\ambient\weather\rain3.ogg" />
@@ -703,7 +703,6 @@
         <ClInclude Include="Graphic\Resource\DescriptorHandle.hpp" />
         <ClInclude Include="Graphic\Resource\GlobalDescriptorHeapManager.hpp" />
         <ClInclude Include="Graphic\Shader\Compiler\DXCCompiler.hpp" />
-        <ClInclude Include="Graphic\Shader\ShaderPack\Discovery\ShaderPackDirectoryManager.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\Include\AbsolutePackPath.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\Include\FileIncludeException.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\Include\FileNode.hpp" />
@@ -899,7 +898,6 @@
     <ItemGroup>
         <Folder Include="..\..\.enigma\assets\engine\shaders\include\" />
         <Folder Include="..\..\.enigma\assets\engine\shaders\post\" />
-        <Folder Include="..\..\.enigma\assets\engine\shaders\program\" />
         <Folder Include="Core\Logger\Appender\" />
     </ItemGroup>
     <ItemGroup>

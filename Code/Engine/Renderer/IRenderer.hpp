@@ -29,6 +29,15 @@ struct Vertex_PCUTBN;
 struct BlurConstants;
 struct LightConstants;
 
+// DirectX类型前置声明（用于ImGui接口）
+struct ID3D11Device;
+struct ID3D11DeviceContext;
+struct IDXGISwapChain;
+struct ID3D12Device;
+struct ID3D12CommandQueue;
+struct ID3D12DescriptorHeap;
+struct ID3D12GraphicsCommandList;
+
 #if defined(OPAQUE)
 #undef OPAQUE
 #endif
@@ -263,6 +272,51 @@ public:
     [[maybe_unused]] virtual RenderTarget* GetBackBufferRenderTarget() = 0;
 
     [[maybe_unused]] virtual void SetViewport(const IntVec2& dimension) = 0;
+
+    // ==================== ImGui资源访问接口 ====================
+    /// @brief 获取DirectX 11设备
+    /// @return D3D11设备指针，若当前后端非DX11则返回nullptr
+    virtual ID3D11Device* GetD3D11Device() const = 0;
+
+    /// @brief 获取DirectX 11设备上下文
+    /// @return D3D11设备上下文指针，若当前后端非DX11则返回nullptr
+    virtual ID3D11DeviceContext* GetD3D11DeviceContext() const = 0;
+
+    /// @brief 获取DirectX 11 SwapChain
+    /// @return D3D11 SwapChain指针，若当前后端非DX11则返回nullptr
+    virtual IDXGISwapChain* GetD3D11SwapChain() const = 0;
+
+    /// @brief 获取DirectX 12设备
+    /// @return D3D12设备指针，若当前后端非DX12则返回nullptr
+    virtual ID3D12Device* GetD3D12Device() const = 0;
+
+    /// @brief 获取DirectX 12命令队列
+    /// @return D3D12命令队列指针，若当前后端非DX12则返回nullptr
+    virtual ID3D12CommandQueue* GetD3D12CommandQueue() const = 0;
+
+    /// @brief 获取DirectX 12 SRV描述符堆（用于ImGui纹理）
+    /// @return D3D12 SRV描述符堆指针，若当前后端非DX12则返回nullptr
+    virtual ID3D12DescriptorHeap* GetD3D12SRVHeap() const = 0;
+
+    /// @brief 获取DirectX 12命令列表（当前帧）
+    /// @return D3D12命令列表指针，若当前后端非DX12则返回nullptr
+    virtual ID3D12GraphicsCommandList* GetD3D12CommandList() const = 0;
+
+    /// @brief 获取渲染目标格式
+    /// @return 渲染目标的DXGI格式
+    virtual DXGI_FORMAT GetRTVFormat() const = 0;
+
+    /// @brief 获取在途帧数（用于多帧缓冲）
+    /// @return 帧缓冲数量
+    virtual uint32_t GetNumFramesInFlight() const = 0;
+
+    /// @brief 检查渲染器是否已初始化并可用
+    /// @return 若渲染器已就绪返回true，否则返回false
+    virtual bool IsRendererReady() const = 0;
+
+    /// @brief 获取当前渲染后端类型
+    /// @return 渲染后端枚举值
+    virtual RendererBackend GetBackendType() const = 0;
 
     static IRenderer* CreateRenderer(RenderConfig& config);
 

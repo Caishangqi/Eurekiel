@@ -1186,3 +1186,61 @@ void DX11Renderer::CreateInputLayoutFromShader(Shader* shader, std::vector<uint8
         return;
     }
 }
+
+// ==================== ImGui资源访问接口实现 ====================
+
+ID3D11Device* DX11Renderer::GetD3D11Device() const
+{
+    return m_device;
+}
+
+ID3D11DeviceContext* DX11Renderer::GetD3D11DeviceContext() const
+{
+    return m_deviceContext;
+}
+
+IDXGISwapChain* DX11Renderer::GetD3D11SwapChain() const
+{
+    return m_swapChain;
+}
+
+// DX12接口（DX11不支持）
+ID3D12Device* DX11Renderer::GetD3D12Device() const
+{
+    return nullptr;
+}
+
+ID3D12CommandQueue* DX11Renderer::GetD3D12CommandQueue() const
+{
+    return nullptr;
+}
+
+ID3D12DescriptorHeap* DX11Renderer::GetD3D12SRVHeap() const
+{
+    return nullptr;
+}
+
+ID3D12GraphicsCommandList* DX11Renderer::GetD3D12CommandList() const
+{
+    return nullptr;
+}
+
+DXGI_FORMAT DX11Renderer::GetRTVFormat() const
+{
+    return DXGI_FORMAT_R8G8B8A8_UNORM; // DX11默认格式
+}
+
+uint32_t DX11Renderer::GetNumFramesInFlight() const
+{
+    return 1; // DX11通常使用单缓冲或双缓冲
+}
+
+bool DX11Renderer::IsRendererReady() const
+{
+    return m_device != nullptr && m_deviceContext != nullptr;
+}
+
+RendererBackend DX11Renderer::GetBackendType() const
+{
+    return RendererBackend::DirectX11;
+}

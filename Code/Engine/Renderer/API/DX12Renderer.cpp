@@ -2091,3 +2091,69 @@ void DX12Renderer::UploadToCB(ConstantBuffer* cb, const void* data, size_t size)
     memcpy(dst, data, size);
     cb->m_dx12ConstantBuffer->Unmap(0, nullptr);
 }
+
+// ==================== ImGui资源访问接口实现 ====================
+
+// DX11接口（DX12不支持）
+ID3D11Device* DX12Renderer::GetD3D11Device() const
+{
+    return nullptr;
+}
+
+ID3D11DeviceContext* DX12Renderer::GetD3D11DeviceContext() const
+{
+    return nullptr;
+}
+
+IDXGISwapChain* DX12Renderer::GetD3D11SwapChain() const
+{
+    return nullptr;
+}
+
+// DX12接口
+ID3D12Device* DX12Renderer::GetD3D12Device() const
+{
+    return m_device.Get(); // ComPtr需要使用.Get()
+}
+
+ID3D12CommandQueue* DX12Renderer::GetD3D12CommandQueue() const
+{
+    return m_commandQueue.Get();
+}
+
+ID3D12DescriptorHeap* DX12Renderer::GetD3D12SRVHeap() const
+{
+    // 返回当前帧的GPU heap（用于ImGui渲染）
+    if (m_descriptorHandler)
+    {
+        return m_descriptorHandler->GetCurrentFrameHeap();
+    }
+    return nullptr;
+}
+
+ID3D12GraphicsCommandList* DX12Renderer::GetD3D12CommandList() const
+{
+    return m_commandList.Get();
+}
+
+DXGI_FORMAT DX12Renderer::GetRTVFormat() const
+{
+    return DXGI_FORMAT_R8G8B8A8_UNORM; // DX12渲染目标格式
+}
+
+uint32_t DX12Renderer::GetNumFramesInFlight() const
+{
+    return kBackBufferCount; // DX12Renderer.hpp:45定义为4
+}
+
+bool DX12Renderer::IsRendererReady() const
+{
+    return m_device != nullptr &&
+        m_commandQueue != nullptr &&
+        m_commandList != nullptr;
+}
+
+RendererBackend DX12Renderer::GetBackendType() const
+{
+    return RendererBackend::DirectX12;
+}

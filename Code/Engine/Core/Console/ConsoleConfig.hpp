@@ -18,7 +18,7 @@ namespace enigma::core
     struct ConsoleConfig
     {
         // Basic settings
-        bool     enableExternalConsole = true;
+        bool     enableExternalConsole = false;
         bool     enableAnsiColors      = true;
         bool     startupVisible        = true;
         LogLevel verbosityLevel        = LogLevel::INFO;
