@@ -736,7 +736,7 @@ SamplerState shadowSampler : register(s2); // 阴影比较采样器
 
 /**
  * ❌ 不在Common.hlsl中定义固定的PSOutput！
- * ✅ PSOutput由ShaderCodeGenerator动态生成
+ * + PSOutput由ShaderCodeGenerator动态生成
  *
  * 原因:
  * 1. 每个Shader的RENDERTARGETS注释不同
