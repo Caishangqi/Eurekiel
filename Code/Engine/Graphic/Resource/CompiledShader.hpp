@@ -6,14 +6,13 @@
  * 设计变更:
  * ❌ 移除 ID3D12ShaderReflection - 使用固定 Input Layout
  * ❌ 移除 ID3DBlob - 使用 std::vector<uint8_t> 字节码
- * ✅ 保留 IrisAnnotations - 仍需解析注释配置
- * ✅ 保留 ShaderType/ShaderStage 枚举
- * ✅ 新增 sourceCode 字段 - 支持热重载
+ * ❌ 移除 ProgramDirectives - 由 ShaderProgram 持有
+ * + 保留 ShaderType/ShaderStage 枚举
+ * + 新增 sourceCode 字段 - 支持热重载
  */
 
 #pragma once
 
-#include "../Shader/ShaderPack/Parsing/CommentDirectiveParser.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -94,10 +93,10 @@ namespace enigma::graphic
      *
      * 设计变更:
      * - ❌ 移除 ID3DBlob* bytecode
-     * - ✅ 使用 std::vector<uint8_t> bytecode (与 DXCCompiler 一致)
+     * - + 使用 std::vector<uint8_t> bytecode (与 DXCCompiler 一致)
      * - ❌ 移除 ID3D12PipelineState* (PSO 由外部管理)
-     * - ✅ 保留 IrisAnnotations (仍需解析)
-     * - ✅ 保留 sourceCode (支持热重载)
+     * - ❌ 移除 ProgramDirectives (由 ShaderProgram 从 ShaderSource 构造)
+     * - + 保留 sourceCode (支持热重载)
      */
     struct CompiledShader
     {
@@ -113,9 +112,6 @@ namespace enigma::graphic
         bool                 success; // 编译是否成功
         std::string          errorMessage; // 编译错误信息 (如果失败)
         std::string          warningMessage; // 编译警告信息
-
-        // Iris 配置
-        CommentDirectiveParser directives; // 解析的注释指令
 
         // 热重载支持
         std::string sourceCode; // 原始 HLSL 代码 (用于热重载)
@@ -145,7 +141,6 @@ namespace enigma::graphic
               , success(other.success)
               , errorMessage(std::move(other.errorMessage))
               , warningMessage(std::move(other.warningMessage))
-              , directives(std::move(other.directives))
               , sourceCode(std::move(other.sourceCode))
         {
         }
@@ -163,7 +158,6 @@ namespace enigma::graphic
                 success        = other.success;
                 errorMessage   = std::move(other.errorMessage);
                 warningMessage = std::move(other.warningMessage);
-                directives     = std::move(other.directives);
                 sourceCode     = std::move(other.sourceCode);
             }
             return *this;

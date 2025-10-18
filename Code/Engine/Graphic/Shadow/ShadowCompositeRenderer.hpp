@@ -1,7 +1,7 @@
 ﻿#pragma once
 namespace enigma::graphic
 {
-    class BufferFlipper
+    class ShadowCompositeRenderer
     {
     public:
     };

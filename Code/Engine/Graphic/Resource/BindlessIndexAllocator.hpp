@@ -32,7 +32,7 @@ namespace enigma::graphic
      * ```
      *
      * 权衡取舍:
-     * ✅ 优势: 常数时间分配/释放，实现简单
+     * + 优势: 常数时间分配/释放，实现简单
      * ❌ 劣势: 无法直接检测double free（需额外std::unordered_set）
      *
      * SM6.6 Bindless架构(Milestone 2.7):
