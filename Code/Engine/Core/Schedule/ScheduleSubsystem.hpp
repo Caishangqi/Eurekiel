@@ -160,6 +160,13 @@ namespace enigma::core
         // PRECONDITION: Caller must hold m_queueMutex
         bool HasPendingTaskOfType(const std::string& typeStr) const;
 
+        //-------------------------------------------------------------------------------------------
+        // Query API
+        //-------------------------------------------------------------------------------------------
+        int32_t GetPendingTaskCount(const std::string& typeStr) const;
+        int32_t GetExecutingTaskCount(const std::string& typeStr) const;
+        int32_t GetCompletedTaskCount(const std::string& typeStr) const;
+
     private:
         //-------------------------------------------------------------------------------------------
         // Internal Helpers

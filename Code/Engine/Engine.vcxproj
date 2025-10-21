@@ -240,9 +240,6 @@
         <ClCompile Include="Core\XmlUtils.cpp"/>
         <ClCompile Include="Core\Yaml.cpp"/>
         <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp"/>
-        <ClCompile Include="Graphic\Core\Pipeline\CompositeRenderer.cpp"/>
-        <ClCompile Include="Graphic\Core\Pipeline\DebugRenderer.cpp"/>
-        <ClCompile Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp"/>
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
@@ -250,6 +247,8 @@
         <ClCompile Include="Graphic\Resource\BindlessIndexAllocator.cpp"/>
         <ClCompile Include="Graphic\Resource\BindlessRootSignature.cpp"/>
         <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
+        <ClCompile Include="Graphic\Resource\Buffer\D12IndexBuffer.cpp"/>
+        <ClCompile Include="Graphic\Resource\Buffer\D12VertexBuffer.cpp"/>
         <ClCompile Include="Graphic\Resource\CommandListManager.cpp"/>
         <ClCompile Include="Graphic\Resource\D12Resources.cpp"/>
         <ClCompile Include="Graphic\Resource\UploadContext.cpp"/>
@@ -271,7 +270,6 @@
         <ClCompile Include="Graphic\Shader\ShaderPack\Properties\PackShadowDirectives.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Properties\ProgramDirectives.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Properties\ShaderProperties.cpp" />
-        <ClCompile Include="Graphic\Shader\ShaderPack\ShaderFallbackGenerator.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\ShaderPack.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\ShaderProgram.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\ShaderProgramBuilder.cpp" />
@@ -283,6 +281,7 @@
         <ClCompile Include="Graphic\Shadow\ShadowRenderTargetManager.cpp" />
         <ClCompile Include="Graphic\Target\D12DepthTexture.cpp" />
         <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
+        <ClCompile Include="Graphic\Target\DepthTextureManager.cpp"/>
         <ClCompile Include="Graphic\Target\RenderTargetManager.cpp" />
         <ClCompile Include="Input\AnalogJoystick.cpp" />
         <ClCompile Include="Input\InputSystem.cpp" />
@@ -662,6 +661,11 @@
         <ClInclude Include="Core\ImGui\ImGuiBackendDX11.hpp" />
         <ClInclude Include="Core\ImGui\ImGuiBackendDX12.hpp" />
         <ClInclude Include="Core\ImGui\ImGuiMessagePreprocessor.hpp" />
+        <ClInclude Include="Graphic\Core\Pipeline\ProgramArrayId.hpp"/>
+        <ClInclude Include="Graphic\Core\RenderState.hpp"/>
+        <ClInclude Include="Graphic\Resource\Buffer\D12IndexBuffer.hpp"/>
+        <ClInclude Include="Graphic\Resource\Buffer\D12VertexBuffer.hpp"/>
+        <ClInclude Include="Graphic\Target\DepthTextureManager.hpp"/>
         <ClInclude Include="Window\IWindowsMessagePreprocessor.hpp" />
         <ClInclude Include="Core\Command\CommandSubsystem.hpp" />
         <ClInclude Include="Core\Command\CommandTypes.hpp" />
@@ -681,19 +685,13 @@
 
         <!-- Core DirectX 12 API Layer (Static封装，对应Iris的IrisRenderSystem) -->
         <ClInclude Include="Graphic\Core\DX12\D3D12RenderSystem.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\CompositePass.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\DebugRenderer.hpp" />
 
-        <!-- Pipeline Layer -->
-        <ClInclude Include="Graphic\Core\Pipeline\IWorldRenderingPipeline.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\IShaderRenderingPipeline.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\VanillaRenderingPipeline.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\EnigmaRenderingPipeline.hpp" />
+        <!-- Pipeline Layer (M1清理 - 删除旧Phase系统) -->
+        <!-- 已删除: IWorldRenderingPipeline.hpp, IShaderRenderingPipeline.hpp -->
+        <!-- 已删除: VanillaRenderingPipeline.hpp, PipelineManager.hpp -->
         <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
-        <ClInclude Include="Graphic\Core\Pipeline\PipelineManager.hpp" />
 
         <!-- Renderer Layer (在Pipeline�? -->
-        <ClInclude Include="Graphic\Core\Pipeline\CompositeRenderer.hpp" />
 
         <!-- Shader System -->
         <ClInclude Include="Graphic\Immediate\Commands\DebugDrawTextCommand.hpp" />
@@ -718,7 +716,6 @@
         <ClInclude Include="Graphic\Shader\ShaderPack\Properties\PackShadowDirectives.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\Properties\ProgramDirectives.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\Properties\ShaderProperties.hpp" />
-        <ClInclude Include="Graphic\Shader\ShaderPack\ShaderFallbackGenerator.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\ProgramArrayId.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\ProgramId.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPack.hpp" />

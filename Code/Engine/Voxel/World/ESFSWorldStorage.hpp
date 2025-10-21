@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
 #include "../Chunk/ESFSFile.hpp"
 #include "../Chunk/ChunkStorageConfig.hpp"

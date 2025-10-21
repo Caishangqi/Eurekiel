@@ -7,6 +7,7 @@
 #include <cstring>
 // TODO: Add CRC32 implementation when available
 // #include <crc32.h>
+DECLARE_LOG_CATEGORY_EXTERN(LogESF)
 
 namespace enigma::voxel
 {
@@ -134,8 +135,8 @@ namespace enigma::voxel
         // Debugging output for coordinate conversion problems
         if (localX < 0 || localX >= ESF_REGION_SIZE || localY < 0 || localY >= ESF_REGION_SIZE)
         {
-            core::LogError("chunk", Stringf("Coordinate conversion error: chunkX=%d, chunkY=%d, regionX=%d, regionY=%d, regionStartX=%d, regionStartY=%d, localX=%d, localY=%d",
-                                            chunkX, chunkY, regionX, regionY, regionStartX, regionStartY, localX, localY));
+            core::LogError(LogESF, Stringf("Coordinate conversion error: chunkX=%d, chunkY=%d, regionX=%d, regionY=%d, regionStartX=%d, regionStartY=%d, localX=%d, localY=%d",
+                                           chunkX, chunkY, regionX, regionY, regionStartX, regionStartY, localX, localY).c_str());
         }
 
         // Verify that the local coordinates are within the region boundary

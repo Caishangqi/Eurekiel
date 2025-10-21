@@ -356,6 +356,40 @@ bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
     return false;
 }
 
+int32_t ScheduleSubsystem::GetPendingTaskCount(const std::string& typeStr) const
+{
+    auto copyTemp = m_pendingTasksByType;
+    return (int32_t)copyTemp[typeStr].size();
+}
+
+int32_t ScheduleSubsystem::GetExecutingTaskCount(const std::string& typeStr) const
+{
+    int  result   = 0;
+    auto copyTemp = m_executingTasks;
+    for (const auto& executing_task : copyTemp)
+    {
+        if (executing_task->m_type == typeStr)
+        {
+            result++;
+        }
+    }
+    return result;
+}
+
+int32_t ScheduleSubsystem::GetCompletedTaskCount(const std::string& typeStr) const
+{
+    int  result   = 0;
+    auto copyTemp = m_executingTasks;
+    for (const auto& completed_task : copyTemp)
+    {
+        if (completed_task->m_type == typeStr)
+        {
+            result++;
+        }
+    }
+    return result;
+}
+
 //-----------------------------------------------------------------------------------------------
 // GetConditionVariableForType: Return type-specific condition variable (Plan 1)
 // Auto-creates CV on first access for each type
