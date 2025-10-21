@@ -11,6 +11,10 @@
 #include "Engine/Resource/Atlas/ImageResource.hpp"
 #include "Engine/Core/Image.hpp"
 
+// Milestone 2.X: 类型安全的VertexBuffer/IndexBuffer
+#include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
+
 
 namespace enigma::graphic
 {
@@ -27,7 +31,8 @@ namespace enigma::graphic
     uint32_t                                D3D12RenderSystem::s_swapChainBufferCount   = 3;
 
     // Command system management
-    std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager = nullptr;
+    std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager         = nullptr;
+    ID3D12GraphicsCommandList*          D3D12RenderSystem::s_currentGraphicsCommandList = nullptr;
 
     // SM6.6 Bindless resource management system (Milestone 2.7)
     std::unique_ptr<BindlessIndexAllocator>      D3D12RenderSystem::s_bindlessIndexAllocator      = nullptr;
@@ -291,6 +296,110 @@ namespace enigma::graphic
         createInfo.debugName    = debugName;
 
         return CreateBuffer(createInfo);
+    }
+
+    // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
+
+    /**
+     * @brief 创建类型安全的VertexBuffer
+     *
+     * 教学要点:
+     * 1. 使用D12VertexBuffer构造函数，自动封装stride逻辑
+     * 2. 返回具体类型指针，提供类型安全的接口
+     * 3. 失败时返回nullptr（D12VertexBuffer构造函数内部assert）
+     */
+    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBufferTyped(
+        size_t size, size_t stride, const void* initialData, const char* debugName)
+    {
+        try
+        {
+            return std::make_unique<D12VertexBuffer>(size, stride, initialData, debugName);
+        }
+        catch (const std::exception& e)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Failed to create D12VertexBuffer: %s", e.what());
+            return nullptr;
+        }
+    }
+
+    /**
+     * @brief 创建类型安全的IndexBuffer
+     *
+     * 教学要点:
+     * 1. 使用D12IndexBuffer构造函数，自动封装format逻辑
+     * 2. 返回具体类型指针，提供类型安全的接口
+     * 3. 失败时返回nullptr
+     */
+    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBufferTyped(
+        size_t size, D12IndexBuffer::IndexFormat format, const void* initialData, const char* debugName)
+    {
+        try
+        {
+            return std::make_unique<D12IndexBuffer>(size, format, initialData, debugName);
+        }
+        catch (const std::exception& e)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Failed to create D12IndexBuffer: %s", e.what());
+            return nullptr;
+        }
+    }
+
+    /**
+     * @brief 绑定VertexBuffer（重载：接受D12VertexBuffer*）
+     *
+     * 教学要点:
+     * 1. 便捷接口，自动调用GetView()
+     * 2. 空指针检查，避免崩溃
+     * 3. 委托给现有的BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW&)实现
+     */
+    void D3D12RenderSystem::BindVertexBuffer(const D12VertexBuffer* vertexBuffer, UINT slot)
+    {
+        if (!vertexBuffer)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindVertexBuffer: VertexBuffer is nullptr");
+            return;
+        }
+
+        if (!vertexBuffer->IsValid())
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindVertexBuffer: VertexBuffer is invalid");
+            return;
+        }
+
+        // 委托给现有的BindVertexBuffer(view, slot)实现
+        BindVertexBuffer(vertexBuffer->GetView(), slot);
+    }
+
+    /**
+     * @brief 绑定IndexBuffer（重载：接受D12IndexBuffer*）
+     *
+     * 教学要点:
+     * 1. 便捷接口，自动调用GetView()
+     * 2. 空指针检查，避免崩溃
+     * 3. 委托给现有的BindIndexBuffer(const D3D12_INDEX_BUFFER_VIEW&)实现
+     */
+    void D3D12RenderSystem::BindIndexBuffer(const D12IndexBuffer* indexBuffer)
+    {
+        if (!indexBuffer)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindIndexBuffer: IndexBuffer is nullptr");
+            return;
+        }
+
+        if (!indexBuffer->IsValid())
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindIndexBuffer: IndexBuffer is invalid");
+            return;
+        }
+
+        // 委托给现有的BindIndexBuffer(view)实现
+        BindIndexBuffer(indexBuffer->GetView());
     }
 
     /**
@@ -974,6 +1083,73 @@ namespace enigma::graphic
         return pso;
     }
 
+    // ===== Buffer管理API实现 - 细粒度操作 (Milestone M2新增) =====
+
+    void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)
+    {
+        if (!s_currentGraphicsCommandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindVertexBuffer: No active graphics command list (call BeginFrame first)");
+            return;
+        }
+
+        // 绑定VertexBuffer到指定槽位
+        s_currentGraphicsCommandList->IASetVertexBuffers(slot, 1, &bufferView);
+    }
+
+    void D3D12RenderSystem::BindIndexBuffer(const D3D12_INDEX_BUFFER_VIEW& bufferView)
+    {
+        if (!s_currentGraphicsCommandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "BindIndexBuffer: No active graphics command list (call BeginFrame first)");
+            return;
+        }
+
+        // 绑定IndexBuffer
+        s_currentGraphicsCommandList->IASetIndexBuffer(&bufferView);
+    }
+
+    void D3D12RenderSystem::Draw(UINT vertexCount, UINT startVertex)
+    {
+        if (!s_currentGraphicsCommandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "Draw: No active graphics command list (call BeginFrame first)");
+            return;
+        }
+
+        // 执行Draw指令（instanceCount=1, startInstance=0）
+        s_currentGraphicsCommandList->DrawInstanced(vertexCount, 1, startVertex, 0);
+    }
+
+    void D3D12RenderSystem::DrawIndexed(UINT indexCount, UINT startIndex, INT baseVertex)
+    {
+        if (!s_currentGraphicsCommandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "DrawIndexed: No active graphics command list (call BeginFrame first)");
+            return;
+        }
+
+        // 执行DrawIndexed指令（instanceCount=1, startInstance=0）
+        s_currentGraphicsCommandList->DrawIndexedInstanced(indexCount, 1, startIndex, baseVertex, 0);
+    }
+
+    void D3D12RenderSystem::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY topology)
+    {
+        if (!s_currentGraphicsCommandList)
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "SetPrimitiveTopology: No active graphics command list (call BeginFrame first)");
+            return;
+        }
+
+        // 设置图元拓扑
+        s_currentGraphicsCommandList->IASetPrimitiveTopology(topology);
+    }
+
     // ===== 渲染管线API实现 (Milestone 2.6新增) =====
 
     /**
@@ -999,46 +1175,198 @@ namespace enigma::graphic
         // 1. 准备下一帧 (更新SwapChain缓冲区索引)
         PrepareNextFrame();
 
-        // 2. 清除渲染目标 (参考GameTest.cpp:235-285的实现方式)
-        // 教学要点：正确获取commandList和rtvHandle，遵循GameTest验证的工作流程
-        auto* commandList = s_commandListManager->AcquireCommandList(
+        LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                "BeginFrame - SwapChain Buffer Index: %u", s_currentBackBufferIndex);
+
+        // 2. 获取当前帧的图形命令列表（M2灵活渲染架构）
+        // 教学要点：保持CommandList打开状态，用于后续的绘制操作
+        s_currentGraphicsCommandList = s_commandListManager->AcquireCommandList(
             CommandListManager::Type::Graphics,
-            "BeginFrame Clear Screen"
+            "MainFrame Graphics Commands"
         );
 
-        if (!commandList)
+        if (!s_currentGraphicsCommandList)
         {
             LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for BeginFrame");
             return false;
         }
 
-        // 获取当前SwapChain的RTV句柄 (参考GameTest.cpp:245)
+        // 2. 转换资源状态：PRESENT → RENDER_TARGET
+        //
+        // Bug Fix (2025-10-21 最终修复): 必须显式添加资源 barrier
+        //
+        // 根本原因：
+        // - DirectX 12 **不会**自动转换 SwapChain buffer 的资源状态
+        // - ClearRenderTargetView() 要求资源处于 RENDER_TARGET 状态
+        // - Present() 要求资源处于 PRESENT/COMMON 状态
+        // - 必须手动转换状态，否则会导致 D3D12 ERROR: INVALID_SUBRESOURCE_STATE
+        //
+        // 错误日志证据：
+        // - "Resource state (0x0: D3D12_RESOURCE_STATE_[COMMON|PRESENT]) is invalid for use as a render target"
+        // - "Expected State Bits: 0x4: D3D12_RESOURCE_STATE_RENDER_TARGET"
+        //
+        // DirectX 12 资源状态管理规则：
+        // 1. 开发者负责显式管理所有资源状态转换
+        // 2. 使用 ResourceBarrier() 转换状态
+        // 3. SwapChain buffer 需要在渲染前转到 RENDER_TARGET
+        // 4. SwapChain buffer 需要在 Present 前转回 PRESENT/COMMON
+        //
+        // 参考资料：
+        // - DirectX 12 Programming Guide: Resource Barriers
+        // - Microsoft D3D12HelloTriangle 示例确实有 barrier
+        //
+        // 结论：必须添加显式资源 barrier
+        ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
+        if (!currentBackBuffer)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "BeginFrame: Failed to get current SwapChain buffer");
+            return false;
+        }
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = currentBackBuffer;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        s_currentGraphicsCommandList->ResourceBarrier(1, &barrier);
+
+        // 3. 清除渲染目标（使用当前CommandList）
         auto currentRTV = GetCurrentSwapChainRTV();
 
-        if (!ClearRenderTarget(commandList, &currentRTV, clearColor))
+        if (!ClearRenderTarget(s_currentGraphicsCommandList, &currentRTV, clearColor))
         {
             LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to clear render target in BeginFrame");
             return false;
         }
 
-        // 执行命令列表 (参考GameTest.cpp:284-291)
-        uint64_t fenceValue = s_commandListManager->ExecuteCommandList(commandList);
-        if (fenceValue > 0)
-        {
-            // 等待命令执行完成，确保清屏操作在继续渲染前完成
-            s_commandListManager->WaitForFence(fenceValue);
-        }
-        else
-        {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute clear command list in BeginFrame");
-            return false;
-        }
+        // 注意：CommandList不在此处执行，保持打开状态用于后续绘制
+        // 将在EndFrame中统一执行并提交
 
-        // 3. 清除深度模板缓冲 (如果有的话)
+        // 5. 清除深度模板缓冲 (如果有的话)
         // TODO: 当实现了深度缓冲系统后，在这里调用ClearDepthStencil
         // ClearDepthStencil(nullptr, nullptr, clearDepth, clearStencil);
 
         //LogInfo(RendererSubsystem::GetStaticSubsystemName(),"BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f", clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
+
+        return true;
+    }
+
+    /**
+     * 结束帧渲染 - 执行CommandList并Present
+     *
+     * 教学要点：
+     * 1. 资源状态转换：RENDER_TARGET → PRESENT（准备显示）
+     * 2. 执行CommandList：提交所有渲染指令到GPU
+     * 3. Present：将后台缓冲区显示到屏幕
+     * 4. GPU同步：等待当前帧完成（临时方案）
+     * 5. 清理引用：为下一帧做准备
+     *
+     * DirectX 12 API调用链：
+     * - ID3D12GraphicsCommandList::ResourceBarrier() - 状态转换
+     * - CommandListManager::ExecuteCommandList() - 执行指令
+     * - IDXGISwapChain::Present() - 显示到屏幕
+     * - CommandListManager::WaitForFence() - GPU同步
+     */
+    bool D3D12RenderSystem::EndFrame()
+    {
+        // 1. 检查CommandList有效性
+        if (!s_currentGraphicsCommandList)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "EndFrame: No active command list (BeginFrame not called?)");
+            return false;
+        }
+
+        if (!s_swapChain)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "EndFrame: SwapChain not initialized");
+            return false;
+        }
+
+        // 2. 转换资源状态：RENDER_TARGET → PRESENT
+        //
+        // Bug Fix (2025-10-21 最终修复): 必须显式添加资源 barrier
+        //
+        // 根本原因：
+        // - DirectX 12 **不会**自动转换 SwapChain buffer 的资源状态
+        // - Present() 要求资源处于 PRESENT/COMMON 状态
+        // - 渲染完成后资源处于 RENDER_TARGET 状态
+        // - 必须手动转换回 PRESENT，否则会导致 D3D12 ERROR: INVALID_SUBRESOURCE_STATE
+        //
+        // 错误日志证据：
+        // - "Resource state (0x4: D3D12_RESOURCE_STATE_RENDER_TARGET) is invalid for use as a PRESENT_SOURCE"
+        // - "Expected State Bits: 0x0: D3D12_RESOURCE_STATE_[COMMON|PRESENT]"
+        //
+        // DirectX 12 资源状态管理规则：
+        // 1. 开发者负责显式管理所有资源状态转换
+        // 2. 使用 ResourceBarrier() 转换状态
+        // 3. SwapChain buffer 需要在 Present 前转回 PRESENT/COMMON
+        // 4. CommandList 执行前必须完成所有状态转换
+        //
+        // 参考资料：
+        // - DirectX 12 Programming Guide: Resource Barriers
+        // - Microsoft D3D12HelloTriangle 示例确实有 barrier
+        //
+        // 结论：必须添加显式资源 barrier
+        ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
+        if (!currentBackBuffer)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(), "EndFrame: Failed to get current SwapChain buffer");
+            return false;
+        }
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = currentBackBuffer;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        s_currentGraphicsCommandList->ResourceBarrier(1, &barrier);
+
+        // 3. 执行CommandList（通过CommandListManager）
+        // 教学要点：ExecuteCommandList会关闭CommandList并提交到GPU队列
+        uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);
+        if (fenceValue == 0)
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "EndFrame: Failed to execute command list");
+            return false;
+        }
+
+        // 3. Present SwapChain（显示到屏幕）
+        // 教学要点：Present将后台缓冲区显示到屏幕，并轮换缓冲区
+        // DirectX 12会在Present()内部自动处理资源状态转换
+        if (!Present(true)) // vsync = true
+        {
+            LogError(RendererSubsystem::GetStaticSubsystemName(),
+                     "EndFrame: Failed to present frame");
+            return false;
+        }
+
+        // 4. 等待GPU fence（临时同步方案）
+        // 教学要点：这是简化版同步，实际项目应使用多帧并行
+        // TODO (性能优化): 改为异步fence管理，支持2-3帧并行
+        s_commandListManager->WaitForFence(fenceValue);
+
+        // ⭐ 5. 显式回收已完成的CommandList
+        // 教学要点：WaitForFence只负责等待GPU完成，不负责回收CommandList
+        // 需要显式调用UpdateCompletedCommandLists将完成的CommandList移回available队列
+        //
+        // 原理：
+        // - ExecuteCommandList已将wrapper添加到m_executingLists (State::Executing)
+        // - WaitForFence确保GPU已完成（fence值已达到）
+        // - UpdateCompletedCommandLists检查fence，将完成的wrapper移回available队列
+        s_commandListManager->UpdateCompletedCommandLists();
+
+        // 6. 重置s_currentGraphicsCommandList为nullptr
+        // 教学要点：防止在下次BeginFrame之前误用已执行的CommandList
+        s_currentGraphicsCommandList = nullptr;
 
         return true;
     }
@@ -1110,29 +1438,33 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. 资源状态转换：Present → RenderTarget
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource   = targetResource;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        // ✅ 资源状态管理 - 由调用者负责
+        //
+        // Bug Fix (2025-10-21 最终修复): ClearRenderTarget 不负责状态转换
+        //
+        // 设计决策：
+        // - ClearRenderTarget 假设资源已处于 RENDER_TARGET 状态
+        // - 调用者（如 BeginFrame）负责在调用前转换状态
+        // - 这样避免了重复的状态转换和复杂的状态跟踪
+        //
+        // 调用约定：
+        // 1. 外部提供 commandList：调用者负责状态转换（BeginFrame 的情况）
+        // 2. 内部创建 commandList（needToExecute=true）：仍然假设外部已转换状态
+        //
+        // 为什么不在这里添加 barrier：
+        // - BeginFrame 已经转换了状态（PRESENT → RENDER_TARGET）
+        // - 避免重复的 barrier 调用
+        // - 保持函数职责单一（清屏，不管理状态）
+        //
+        // 结论：不在 ClearRenderTarget 中添加 barrier
 
-        actualCommandList->ResourceBarrier(1, &barrier);
-
-        // 5. 设置渲染目标
+        // 4. 设置渲染目标
         actualCommandList->OMSetRenderTargets(1, &actualRtvHandle, FALSE, nullptr);
 
-        // 6. 执行清屏操作 (使用转换后的float颜色数组)
+        // 5. 执行清屏操作 (使用转换后的float颜色数组)
         actualCommandList->ClearRenderTargetView(actualRtvHandle, clearColorAsFloats, 0, nullptr);
 
-        // 7. 资源状态转换：RenderTarget → Present
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
-        actualCommandList->ResourceBarrier(1, &barrier);
-
-        // 8. 只有当我们内部获取命令列表时才自动执行，如果外部传入则由外部控制执行时机
+        // 6. 只有当我们内部获取命令列表时才自动执行，如果外部传入则由外部控制执行时机
         if (needToExecute)
         {
             uint64_t fenceValue = s_commandListManager->ExecuteCommandList(actualCommandList);
@@ -1153,6 +1485,45 @@ namespace enigma::graphic
     }
 
     // ===== SwapChain管理API实现 （基于A/A/A决策）=====
+
+    /**
+     * ⭐ DirectX 12官方最佳实践：SwapChain Buffer状态管理
+     *
+     * 关键发现（基于Microsoft DirectX 12 SDK d3d12.h）：
+     *
+     * 1. D3D12_RESOURCE_STATE_PRESENT == D3D12_RESOURCE_STATE_COMMON (都等于 0)
+     *    - 这两个状态在数值上完全等价
+     *    - SwapChain buffer创建后自动处于COMMON/PRESENT状态
+     *    - 无需显式初始化转换！
+     *
+     * 2. 官方示例代码（如D3D12HelloWorld）的标准做法：
+     *    - CreateSwapChain后不做任何状态初始化
+     *    - BeginFrame: PRESENT → RENDER_TARGET
+     *    - EndFrame: RENDER_TARGET → PRESENT
+     *    - IDXGISwapChain::Present()兼容PRESENT和COMMON状态
+     *
+     * 3. 删除InitializeSwapChainBufferStates()的理由：
+     *    - COMMON → PRESENT的转换实际上是0 → 0，完全无效
+     *    - DirectX 12会忽略这种无操作Barrier
+     *    - 创建额外的CommandList、执行、同步都是不必要的开销
+     *    - 违反KISS原则和DirectX 12最佳实践
+     *
+     * 4. 正确的资源状态流程（符合Microsoft官方示例）：
+     *    - SwapChain创建 → buffer自动处于COMMON(=PRESENT)
+     *    - BeginFrame → PRESENT → RENDER_TARGET
+     *    - 渲染操作
+     *    - EndFrame → RENDER_TARGET → PRESENT
+     *    - Present() → 显示（要求PRESENT或COMMON状态）
+     *
+     * 教学价值：
+     * - 展示了如何根据官方API定义优化代码
+     * - 证明了查阅官方文档的重要性
+     * - 体现了"简单即是美"的工程哲学
+     *
+     * 参考资料：
+     * - DirectX 12 SDK: C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\d3d12.h (Line 3177)
+     * - Microsoft DirectX-Graphics-Samples: https://github.com/microsoft/DirectX-Graphics-Samples
+     */
 
     /**
      * 创建SwapChain及其RTV描述符
@@ -1257,6 +1628,26 @@ namespace enigma::graphic
         s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
 
         LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
+
+        // ⭐ DirectX 12官方最佳实践：无需显式初始化SwapChain buffer状态
+        //
+        // 理由（基于Microsoft DirectX 12 SDK官方定义）：
+        // 1. D3D12_RESOURCE_STATE_PRESENT == D3D12_RESOURCE_STATE_COMMON == 0
+        // 2. SwapChain buffer创建后自动处于COMMON/PRESENT状态
+        // 3. BeginFrame会正确处理 PRESENT → RENDER_TARGET 转换
+        // 4. 符合Microsoft官方示例代码（D3D12HelloWorld等）的标准做法
+        //
+        // 之前的错误设计：
+        // - InitializeSwapChainBufferStates()执行0→0的无效状态转换
+        // - 浪费了CommandList创建、执行、同步的开销
+        // - 违反了KISS原则和DirectX 12最佳实践
+        //
+        // 正确的状态流程：
+        // - CreateSwapChain → buffer自动处于COMMON(=PRESENT) ✅
+        // - BeginFrame → PRESENT → RENDER_TARGET ✅
+        // - EndFrame → RENDER_TARGET → PRESENT ✅
+        // - Present() → 显示（兼容PRESENT和COMMON） ✅
+
         return true;
     }
 

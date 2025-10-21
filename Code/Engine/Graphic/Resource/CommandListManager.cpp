@@ -272,6 +272,22 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
                           "+ All command list pools created successfully - Graphics:%u, Compute:%u, Copy:%u",
                           graphicsCount, computeCount, copyCount);
 
+    // ✅ 验证命令列表池创建结果
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "+ Graphics command lists created: %u (available: %u)",
+                          static_cast<uint32_t>(m_graphicsCommandLists.size()),
+                          static_cast<uint32_t>(m_availableGraphicsLists.size()));
+
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "+ Compute command lists created: %u (available: %u)",
+                          static_cast<uint32_t>(m_computeCommandLists.size()),
+                          static_cast<uint32_t>(m_availableComputeLists.size()));
+
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "+ Copy command lists created: %u (available: %u)",
+                          static_cast<uint32_t>(m_copyCommandLists.size()),
+                          static_cast<uint32_t>(m_availableCopyLists.size()));
+
     m_initialized = true;
     LogInfo(RendererSubsystem::GetStaticSubsystemName(), "+ CommandListManager Initialized");
     return true;
@@ -536,6 +552,8 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     auto* device = D3D12RenderSystem::GetDevice();
     if (!device)
     {
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "CreateCommandList: Device is null");
         return nullptr;
     }
 
@@ -552,7 +570,10 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
         break;
     case Type::Copy: d3d12Type = D3D12_COMMAND_LIST_TYPE_COPY;
         break;
-    default: return nullptr;
+    default:
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "CreateCommandList: Invalid type %d", static_cast<int>(type));
+        return nullptr;
     }
 
     // 创建命令分配器 - 管理命令存储的底层内存
@@ -564,7 +585,9 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
 
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令分配器创建失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "CreateCommandList: CreateCommandAllocator failed for type %s, HRESULT=0x%08X",
+                               GetTypeName(type), hr);
         return nullptr;
     }
 
@@ -579,7 +602,9 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
 
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令列表创建失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "CreateCommandList: CreateCommandList failed for type %s, HRESULT=0x%08X",
+                               GetTypeName(type), hr);
         return nullptr;
     }
 
@@ -588,7 +613,9 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     hr = wrapper->commandList->Close();
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令列表关闭失败
+        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                               "CreateCommandList: Close() failed for type %s, HRESULT=0x%08X",
+                               GetTypeName(type), hr);
         return nullptr;
     }
 
@@ -610,6 +637,10 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
 
     wrapper->commandList->SetName(debugName.c_str());
     wrapper->commandAllocator->SetName((debugName + L" Allocator").c_str());
+
+    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "CreateCommandList: Successfully created %s command list",
+                          GetTypeName(type));
 
     return wrapper;
 }

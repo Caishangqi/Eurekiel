@@ -3,10 +3,10 @@
  * @brief Enigma引擎渲染子系统 - DirectX 12延迟渲染管线管理器
  * 
  * 教学重点:
- * 1. 理解Iris真实的管线管理架构（PipelineManager模式）
+ * 1. 理解新的灵活渲染架构（BeginFrame/Render/EndFrame + 60+ API）
  * 2. 学习DirectX 12的现代化资源管理
  * 3. 掌握引擎子系统的生命周期管理
- * 4. 理解按维度分离的管线设计理念
+ * 4. 理解双ShaderPack架构和Fallback机制
  */
 
 #pragma once
@@ -22,8 +22,8 @@
 #include "Engine/Resource/ResourceCommon.hpp"
 #include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
-#include "../Core/Pipeline/IWorldRenderingPipeline.hpp"
-#include "../Core/Pipeline/EnigmaRenderingPipeline.hpp"
+#include "../Core/Pipeline/WorldRenderingPhase.hpp"
+#include "../Core/RenderState.hpp"
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 #include "../Shader/ShaderPack/ShaderPack.hpp"
@@ -38,6 +38,8 @@ namespace enigma::graphic
     class ShaderProgram;
     class ShaderSource;
     class ProgramSet;
+    class D12VertexBuffer;
+    class D12IndexBuffer;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -193,9 +195,9 @@ namespace enigma::graphic
          * @brief 主要启动阶段
          * @details
          * 在Initialize阶段之后调用，用于：
-         * - 创建PipelineManager实例
-         * - 加载默认Shader Pack
-         * - 准备初始渲染管线（主世界维度）
+         * - 加载引擎默认ShaderPack（必需）
+         * - 加载用户ShaderPack（可选）
+         * - 初始化渲染资源和状态
          */
         void Startup() override;
 
@@ -353,29 +355,149 @@ namespace enigma::graphic
             uint32_t            startInstanceLocation = 0
         );
 
-        // ==================== 管线管理接口 - 基于Iris PipelineManager ====================
+        // ==================== M2 灵活渲染接口 ====================
+
+        // TODO: M2 - 实现60+ API灵活渲染接口
+        // BeginCamera/EndCamera, UseProgram, DrawVertexBuffer等
+        // 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
 
         /**
-         * @brief 准备指定维度的渲染管线
-         * @param dimensionId 维度标识符
-         * @return 渲染管线指针
-         * @details 
-         * 对应Iris的preparePipeline(ResourceLocation currentDimension)方法
-         * 支持多维度管线缓存和动态切换
+         * @brief 开始Camera渲染
+         * @param camera 要使用的相机
+         *
+         * 教学要点：
+         * - 设置View-Projection矩阵
+         * - 更新Camera相关的Uniform Buffer
+         * - 对应Iris的setCamera()
          */
-        class EnigmaRenderingPipeline* PreparePipeline(const ResourceLocation& dimensionId);
+        void BeginCamera(const class Camera& camera);
 
         /**
-         * @brief 获取当前活跃的渲染管线 (Milestone 2.6新增)
-         * @return 当前EnigmaRenderingPipeline指针
-         * @details
-         * 用于访问调试渲染器和其他管线功能。
-         * 主要供TestGame等测试代码使用。
+         * @brief 结束Camera渲染
+         *
+         * 教学要点：
+         * - 清理Camera状态
+         * - 对应Iris的endCamera()
          */
-        EnigmaRenderingPipeline* GetCurrentPipeline() const noexcept
-        {
-            return m_currentPipeline.get();
-        }
+        void EndCamera();
+
+        /**
+         * @brief 创建VertexBuffer
+         * @param size 缓冲区大小（字节）
+         * @param stride 顶点步长（字节）
+         * @return D12VertexBuffer指针
+         *
+         * 教学要点：
+         * - 创建GPU可见的顶点缓冲区
+         * - 使用D3D12RenderSystem::CreateVertexBufferTyped()
+         * - 返回D12VertexBuffer*（新架构）
+         * - 调用者负责管理生命周期（或由RendererSubsystem内部管理）
+         */
+        D12VertexBuffer* CreateVertexBuffer(size_t size, unsigned stride);
+
+        /**
+         * @brief 设置VertexBuffer到渲染管线
+         * @param buffer 要绑定的D12VertexBuffer
+         * @param slot 顶点缓冲区槽位（默认0）
+         *
+         * 教学要点：
+         * - 设置当前活动的VertexBuffer
+         * - 对应OpenGL的glBindBuffer
+         * - DirectX 12使用IASetVertexBuffers()绑定
+         * - 委托给D3D12RenderSystem::BindVertexBuffer()
+         */
+        void SetVertexBuffer(D12VertexBuffer* buffer, uint32_t slot = 0);
+
+        /**
+         * @brief 设置IndexBuffer到渲染管线
+         * @param buffer 要绑定的D12IndexBuffer
+         *
+         * 教学要点：
+         * - 设置当前活动的IndexBuffer
+         * - 对应OpenGL的glBindBuffer(GL_ELEMENT_ARRAY_BUFFER)
+         * - DirectX 12使用IASetIndexBuffer()绑定
+         * - IndexBuffer只有一个槽位（与VertexBuffer不同）
+         * - 委托给D3D12RenderSystem::BindIndexBuffer()
+         */
+        void SetIndexBuffer(D12IndexBuffer* buffer);
+
+        /**
+         * @brief 更新Buffer数据（CPU → GPU）
+         * @param buffer 目标D12VertexBuffer
+         * @param data CPU数据指针
+         * @param size 数据大小（字节）
+         * @param offset 偏移量（字节，默认0）
+         *
+         * 教学要点：
+         * - 数据上传到GPU
+         * - 调用D12VertexBuffer的Update()方法
+         * - 对应DirectX 11的UpdateSubresource
+         * - 对应OpenGL的glBufferSubData
+         * - 对应Vulkan的vkMapMemory
+         *
+         * 行业标准参考：
+         * - DirectX 11: UpdateSubresource()
+         * - OpenGL: glBufferSubData()
+         * - Vulkan: vkMapMemory() + memcpy
+         * - Metal: contents() + didModifyRange()
+         */
+        void UpdateBuffer(D12VertexBuffer* buffer, const void* data, size_t size, size_t offset = 0);
+
+        /**
+         * @brief 绘制顶点（非索引）
+         * @param vertexCount 顶点数量
+         * @param startVertex 起始顶点偏移（默认0）
+         *
+         * 教学要点：
+         * - 执行Draw指令
+         * - 对应OpenGL的glDrawArrays
+         * - 对应DirectX 11的Draw
+         * - 使用当前绑定的VertexBuffer
+         */
+        void Draw(uint32_t vertexCount, uint32_t startVertex = 0);
+
+        /**
+         * @brief 执行索引绘制
+         * @param indexCount 索引数量
+         * @param startIndex 起始索引（默认0）
+         * @param baseVertex 基础顶点偏移（默认0）
+         *
+         * 教学要点：
+         * - 执行DrawIndexed指令
+         * - 对应OpenGL的glDrawElements
+         * - 对应DirectX 11的DrawIndexed
+         * - 使用当前绑定的IndexBuffer和VertexBuffer
+         */
+        void DrawIndexed(uint32_t indexCount, uint32_t startIndex = 0, int32_t baseVertex = 0);
+
+        /**
+         * @brief 绘制全屏四边形
+         *
+         * 教学要点：
+         * - 便捷方法用于后处理
+         * - 自动管理顶点数据
+         */
+        void DrawFullscreenQuad();
+
+        /**
+         * @brief 设置混合模式
+         * @param mode 混合模式
+         *
+         * 教学要点：
+         * - 控制颜色混合
+         * - 对应OpenGL的glBlendFunc
+         */
+        void SetBlendMode(BlendMode mode);
+
+        /**
+         * @brief 设置深度模式
+         * @param mode 深度模式
+         *
+         * 教学要点：
+         * - 控制深度测试
+         * - 对应OpenGL的glDepthFunc
+         */
+        void SetDepthMode(DepthMode mode);
 
         // ==================== 配置和状态查询 ====================
 
@@ -402,7 +524,47 @@ namespace enigma::graphic
          * - Check for nullptr before use (defensive programming)
          * - Iris equivalent: IrisRenderingPipeline::getShaderPack()
          */
-        const ShaderPack* GetShaderPack() const noexcept { return m_shaderPack.get(); }
+        const ShaderPack* GetShaderPack() const noexcept { return m_userShaderPack ? m_userShaderPack.get() : m_defaultShaderPack.get(); }
+
+        /**
+         * @brief Get user ShaderPack (may be nullptr if not loaded)
+         *
+         * Returns the user-loaded ShaderPack without fallback to engine default.
+         * Use this when you need to check if a user ShaderPack is currently loaded.
+         *
+         * @return Pointer to user ShaderPack, or nullptr if not loaded
+         *
+         * @note Dual ShaderPack Architecture:
+         * - GetShaderPack() returns user or default (never nullptr)
+         * - GetUserShaderPack() returns only user pack (may be nullptr)
+         * - GetDefaultShaderPack() returns engine default (never nullptr after Startup)
+         *
+         * Teaching Note:
+         * - Used in unit tests to verify user ShaderPack lifecycle
+         * - Enables precise testing of LoadShaderPack()/UnloadShaderPack() behavior
+         * - Does not trigger fallback mechanism (unlike GetShaderPack())
+         */
+        const ShaderPack* GetUserShaderPack() const noexcept { return m_userShaderPack.get(); }
+
+        /**
+         * @brief Get engine default ShaderPack (always valid after Startup)
+         *
+         * Returns the engine default ShaderPack which is loaded during Startup() and
+         * remains loaded throughout the application lifetime.
+         *
+         * @return Pointer to engine default ShaderPack (never nullptr after Startup)
+         *
+         * @note Dual ShaderPack Architecture:
+         * - Loaded once in Startup() from ENGINE_DEFAULT_SHADERPACK_PATH
+         * - Never unloaded (persistent for entire application lifetime)
+         * - Used as fallback when user ShaderPack is not loaded
+         *
+         * Teaching Note:
+         * - Guarantees shader system always has valid shaders (defensive programming)
+         * - Prevents crashes from missing user shader packs
+         * - Follows Null Object pattern (always provide valid default)
+         */
+        const ShaderPack* GetDefaultShaderPack() const noexcept { return m_defaultShaderPack.get(); }
 
         /**
          * @brief Shortcut to get ShaderSource by ProgramId
@@ -432,6 +594,35 @@ namespace enigma::graphic
          * Iris equivalent: NewWorldRenderingPipeline::getShaderProgram()
          */
         const ShaderSource* GetShaderSource(ProgramId id) const noexcept;
+
+        /**
+         * @brief Get shader program with dual ShaderPack fallback mechanism (Phase 5.2)
+         * @param id Program identifier (e.g., ProgramId::GBUFFERS_TERRAIN)
+         * @param dimension Dimension name (default: "world0", supports "world-1", "world1", etc.)
+         * @return Pointer to ShaderSource, or nullptr if not found in both packs
+         *
+         * Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
+         *
+         * Usage Example:
+         * @code
+         * const ShaderSource* terrain = g_theRenderer->GetShaderProgram(ProgramId::GBUFFERS_TERRAIN);
+         * if (terrain && terrain->IsValid()) {
+         *     // Use shader (will automatically fallback to engine default if user pack missing)
+         * }
+         * @endcode
+         *
+         * Teaching Note:
+         * - Implements in-memory fallback (KISS principle, no file copying)
+         * - User ShaderPack can partially override engine defaults
+         * - Engine default ShaderPack always loaded (guaranteed fallback)
+         * - Iris-compatible architecture (NewWorldRenderingPipeline behavior)
+         *
+         * Architecture (Milestone 3.0 Phase 5.2 - 2025-10-19):
+         * - m_userShaderPack (Priority 1): User-downloaded shader packs
+         * - m_defaultShaderPack (Priority 2): Engine built-in shaders
+         * - Returns first valid ShaderSource found in priority order
+         */
+        const ShaderSource* GetShaderProgram(ProgramId id, const std::string& dimension = "world0") const noexcept;
 
         /**
          * @brief 获取渲染统计信息
@@ -525,16 +716,23 @@ namespace enigma::graphic
          *
          * Architecture Decision (Plan 1):
          * - Engine assets directory is treated as a standard ShaderPack
-         * - Directory structure: core/Common.hlsl + program/gbuffers_*.hlsl
-         * - 100% Iris-compatible (program/ directory structure)
+         * - Directory structure: .enigma/assets/engine/shaders/ (Iris-compatible)
+         * - Contains: shaders/core/Common.hlsl + shaders/program/gbuffers_*.hlsl
+         * - 100% Iris-compatible (shaders/program/ directory structure)
          *
          * Teaching Note:
          * - constexpr: Compile-time constant, zero runtime overhead
-         * - Relative path: Assumes Run Directory is properly configured
+         * - Relative path: Points to ShaderPack root (LoadShaderPackInternal adds /shaders)
+         * - Final path: ".enigma/assets/engine/shaders/" (after /shaders appended)
          * - Path will be copied from Engine/.enigma/ to Run/.enigma/ during build
+         *
+         * Bug Fix (2025-10-19):
+         * - Changed from ".enigma/assets/engine/shaders" to ".enigma/assets/engine"
+         * - Reason: LoadShaderPackInternal() always appends "/shaders" subdirectory
+         * - Previous path caused: .enigma/assets/engine/shaders/shaders (duplicate)
          */
         static constexpr const char* ENGINE_DEFAULT_SHADERPACK_PATH =
-            ".enigma/assets/engine/shaders";
+            ".enigma/assets/engine";
 
         /**
          * @brief User ShaderPack search directory
@@ -617,20 +815,17 @@ namespace enigma::graphic
 
         // ==================== 渲染系统组件 - 基于Iris架构 ====================
 
-        // TODO: 重新启用PipelineManager（需要修复编码问题）
-        // std::unique_ptr<PipelineManager> m_pipelineManager;
-
-        /// 当前活跃的渲染管线 - Enigma扩展 (Milestone 2.6新增)
-        /// 支持EnigmaRenderingPipeline实例，用于开发和测试DirectX 12渲染管线
-        std::unique_ptr<EnigmaRenderingPipeline> m_currentPipeline;
+        // TODO: M2 - 添加新的灵活渲染架构成员变量
 
         /// Shader Pack管理器 - 着色器包系统 (已删除 - Milestone 3.0 重构)
         // std::unique_ptr<ShaderPackManager> m_shaderPackManager;
 
-        /// ShaderPack instance - Iris-compatible shader system (Milestone 3.0 Phase 5)
-        /// Loaded from Configuration::currentShaderPackName or engine default
-        /// Architecture: RendererSubsystem directly owns ShaderPack (no ShaderPackManager)
-        std::unique_ptr<ShaderPack> m_shaderPack;
+        /// Dual ShaderPack Architecture (Milestone 3.0 Phase 5.2 - 2025-10-19)
+        /// Priority 1: User ShaderPack (user-downloaded shader packs from Configuration::currentShaderPackName)
+        /// Priority 2: Engine Default ShaderPack (fallback for missing programs, always required)
+        /// Fallback Strategy: User → Engine Default → nullptr (3-step in-memory fallback, KISS principle)
+        std::unique_ptr<ShaderPack> m_userShaderPack; // User ShaderPack (may be null)
+        std::unique_ptr<ShaderPack> m_defaultShaderPack; // Engine default ShaderPack (always valid)
 
         // ==================== Immediate模式渲染组件 ====================
 

@@ -1,7 +1,6 @@
 ﻿#include "ShaderPack.hpp"
 #include "Include/AbsolutePackPath.hpp"
 #include "Include/ShaderPackSourceNames.hpp"
-#include "Engine/Graphic/Core/Pipeline/PipelineManager.hpp"  // Phase 4.4 - NamespacedId 支持
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -343,31 +342,6 @@ namespace enigma::graphic
     }
 
     /**
-     * @brief 获取指定维度的 ProgramSet（NamespacedId 模式 - 兼容接口）
-     *
-     * **教学要点**:
-     * - Adapter Pattern - 将 NamespacedId 转换为字符串
-     * - 内部调用主接口 GetProgramSet(string)
-     * - 保持与 PipelineManager 的互操作性
-     *
-     * **Iris 对应**:
-     * - net.irisshaders.iris.pipeline.PipelineManager.preparePipeline(NamespacedId)
-     * - NamespacedId 是 Minecraft 标准的维度标识符格式
-     */
-    ProgramSet* ShaderPack::GetProgramSet(const NamespacedId& dimension)
-    {
-        // 使用 Adapter Pattern 转换 NamespacedId → 字符串
-        std::string dimensionName = NamespacedIdToDirectoryName(dimension);
-
-        DebuggerPrintf("[ShaderPack] GetProgramSet: NamespacedId '%s' → Directory '%s'\n",
-                       dimension.ToString().c_str(),
-                       dimensionName.c_str());
-
-        // 调用主接口
-        return GetProgramSet(dimensionName);
-    }
-
-    /**
      * @brief 检测 Base ProgramSet 的默认程序目录（Iris 标准优先级）
      *
      * **教学要点**:
@@ -412,49 +386,6 @@ namespace enigma::graphic
         // ========================================================================
         DebuggerPrintf("[ShaderPack] No world0/ or program/ directory found, using shaders/ root as base\n");
         return "";
-    }
-
-    /**
-     * @brief NamespacedId 到目录名的转换（Adapter Pattern）
-     *
-     * **教学要点**:
-     * - Iris 标准维度目录约定:
-     *   - minecraft:overworld  → "world0"
-     *   - minecraft:the_nether → "world-1"
-     *   - minecraft:the_end    → "world1"
-     * - 其他命名空间直接使用 path（支持自定义维度）
-     *
-     * **Iris 对应**:
-     * - net.irisshaders.iris.pipeline.DimensionId.getId()
-     * - Iris 使用固定的目录名约定来定位维度覆盖着色器
-     */
-    std::string ShaderPack::NamespacedIdToDirectoryName(const NamespacedId& id)
-    {
-        // ========================================================================
-        // Iris 标准维度映射
-        // ========================================================================
-        if (id.nameSpace == "minecraft")
-        {
-            if (id.path == "overworld")
-            {
-                return "world0"; // 主世界（Overworld）
-            }
-            else if (id.path == "the_nether")
-            {
-                return "world-1"; // 下界（Nether）
-            }
-            else if (id.path == "the_end")
-            {
-                return "world1"; // 末地（End）
-            }
-        }
-
-        // ========================================================================
-        // 其他命名空间 或 自定义维度
-        // ========================================================================
-        // 直接使用 path 作为目录名（如 "world2", "world3", "world99"）
-        // 这支持自定义维度（如 Mod 添加的维度）
-        return id.path;
     }
 
     /**

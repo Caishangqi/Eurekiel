@@ -156,22 +156,6 @@ namespace enigma::graphic
         ProgramSet* GetProgramSet(const std::string& dimensionName);
 
         /**
-         * @brief 获取指定维度的 ProgramSet（NamespacedId 模式 - 兼容接口）
-         * @param dimension NamespacedId 结构体（如 DimensionIds::OVERWORLD）
-         * @return ProgramSet 指针，如果不存在则自动创建
-         *
-         * 教学要点：
-         * - 兼容接口，保留与 PipelineManager 的互操作性
-         * - 使用 Adapter Pattern 转换 NamespacedId → 字符串
-         * - 内部调用 GetProgramSet(string) 主接口
-         *
-         * Phase 4.4 实现：
-         * - 支持标准 Minecraft 维度（OVERWORLD, NETHER, END）
-         * - 自动映射到 Iris 标准目录名（world0, world-1, world1）
-         */
-        ProgramSet* GetProgramSet(const NamespacedId& dimension);
-
-        /**
          * @brief 获取默认维度（world0）的 ProgramSet
          * @return 默认 ProgramSet 指针（等价于 GetProgramSet("world0")）
          *
@@ -235,24 +219,6 @@ namespace enigma::graphic
          * - Iris 也使用相同的目录优先级规则
          */
         std::string DetectBaseProgramDirectory() const;
-
-        /**
-         * @brief NamespacedId 到目录名的转换（Adapter Pattern）
-         * @param id NamespacedId 结构体
-         * @return 维度目录名字符串
-         *
-         * 映射规则（基于 Iris 标准）：
-         * - minecraft:overworld  → "world0"
-         * - minecraft:the_nether → "world-1"
-         * - minecraft:the_end    → "world1"
-         * - 其他命名空间       → 直接使用 path（如 "world99"）
-         *
-         * 教学要点：
-         * - Adapter Pattern：转换外部接口（NamespacedId）到内部表示（字符串）
-         * - Iris 维度目录约定（world0, world-1, world1）
-         * - 支持自定义维度名称（world2, world3, ...）
-         */
-        static std::string NamespacedIdToDirectoryName(const NamespacedId& id);
 
         /**
          * @brief 加载特定维度的 ProgramSet（延迟加载核心逻辑）

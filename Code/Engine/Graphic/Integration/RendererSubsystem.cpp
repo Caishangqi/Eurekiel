@@ -1,6 +1,9 @@
 ﻿#include "RendererSubsystem.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
+
 using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
@@ -56,103 +59,110 @@ void RendererSubsystem::Startup()
 {
     LogInfo(GetStaticSubsystemName(), "Starting up...");
 
-    // ==================== ShaderPack Initialization (Plan 1 Architecture) ====================
-    // Step 1: Initialize current pack name from Configuration (unified config interface) ✅
+    // ==================== ShaderPack Initialization (Dual ShaderPack Architecture - Phase 5.2) ====================
+    // Architecture (2025-10-19): Dual ShaderPack system with in-memory fallback
+    // - m_userShaderPack: User-downloaded shader packs (optional, may be null)
+    // - m_defaultShaderPack: Engine built-in shaders (required, always valid)
+    // - Fallback: User → Engine Default → ERROR_AND_DIE()
+
+    // Step 1: Initialize current pack name from Configuration (unified config interface)
     m_currentPackName = m_configuration.currentShaderPackName;
 
-    // Teaching Note: Configuration-Driven Design
-    // - Configuration::currentShaderPackName is the SINGLE source of truth
-    // - Future: Load from GameConfig.xml and update m_configuration.currentShaderPackName
-    //   Example:
-    //   GameConfig* config = g_theGame->GetConfig();
-    //   m_configuration.currentShaderPackName = config->GetString("Graphics.ShaderPackName", "");
-    //   m_currentPackName = m_configuration.currentShaderPackName;
-
-    // Step 2: Select ShaderPack path (user pack or engine default)
-    std::filesystem::path shaderPackPath = SelectShaderPackPath();
-
-    // Step 3: Log which pack is being loaded
-    if (m_currentPackName.empty())
+    // Step 2: Attempt to load User ShaderPack (if specified in configuration)
+    if (!m_currentPackName.empty())
     {
-        LogInfo(GetStaticSubsystemName(),
-                "Loading engine default ShaderPack from: {}",
-                shaderPackPath.string().c_str());
-    }
-    else
-    {
-        LogInfo(GetStaticSubsystemName(),
-                "Loading user ShaderPack '{}' from: {}",
-                m_currentPackName.c_str(),
-                shaderPackPath.string().c_str());
-    }
+        std::filesystem::path userPackPath = std::filesystem::path(USER_SHADERPACK_SEARCH_PATH) / m_currentPackName;
 
-    // Step 4: Load ShaderPack (Phase 5.3 - Using LoadShaderPackInternal() method)
-    // Teaching Note: Iris loads ShaderPack in loadShaderpack() method
-    // Reference: Iris.java Line 211-245
-    bool loadSuccess = LoadShaderPackInternal(shaderPackPath);
-    if (!loadSuccess)
-    {
-        // Fallback to engine default if user pack failed
-        // Teaching Note: Iris uses setShadersDisabled() on failure
-        // Reference: Iris.java Line 242-243
-        if (!m_currentPackName.empty())
+        if (std::filesystem::exists(userPackPath))
+        {
+            LogInfo(GetStaticSubsystemName(),
+                    "Loading user ShaderPack '{}' from: {}",
+                    m_currentPackName.c_str(),
+                    userPackPath.string().c_str());
+
+            // Load user ShaderPack (may fail without crashing)
+            try
+            {
+                m_userShaderPack = std::make_unique<ShaderPack>(userPackPath);
+
+                if (!m_userShaderPack || !m_userShaderPack->IsValid())
+                {
+                    LogError(GetStaticSubsystemName(),
+                             "User ShaderPack loaded but validation failed: {}",
+                             m_currentPackName.c_str());
+                    m_userShaderPack.reset();
+                }
+                else
+                {
+                    LogInfo(GetStaticSubsystemName(),
+                            "User ShaderPack loaded successfully: {}",
+                            m_currentPackName.c_str());
+                }
+            }
+            catch (const std::exception& e)
+            {
+                LogError(GetStaticSubsystemName(),
+                         "Exception loading user ShaderPack '{}': {}",
+                         m_currentPackName.c_str(), e.what());
+                m_userShaderPack.reset();
+            }
+        }
+        else
         {
             LogWarn(GetStaticSubsystemName(),
-                    "User ShaderPack failed to load, falling back to engine default");
-
-            // Try engine default pack
-            std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
-            loadSuccess = LoadShaderPackInternal(engineDefaultPath);
-        }
-
-        // Critical error if even engine default fails
-        if (!loadSuccess)
-        {
-            ERROR_AND_DIE(Stringf("Failed to load ShaderPack from: %s",
-                shaderPackPath.string().c_str()).c_str());
+                    "User ShaderPack '{}' not found at '{}', using engine default only",
+                    m_currentPackName.c_str(),
+                    userPackPath.string().c_str());
         }
     }
 
-    // Step 5: ShaderPack loaded successfully
-    LogInfo(GetStaticSubsystemName(), "ShaderPack system initialized successfully");
-
-    // TODO (Phase 5.4): Initialize rendering pipeline with loaded ShaderPack
-    // Teaching Note: Iris creates PipelineManager AFTER ShaderPack loads
-    // Reference: Iris.java Line 658 (getPipelineManager() lazy initialization)
-    // - Create PipelineManager with m_shaderPack
-    // - Prepare default dimension pipeline (world0)
-    // - Compile all shader programs to PSOs
-    // - Iris equivalent: pipelineManager = new PipelineManager(Iris::createPipeline)
-    // =========================================================================================
-
-    // 创建EnigmaRenderingPipeline实例 (Milestone 2.6新增)
-    // 这是验证DirectX 12渲染管线的核心组件
-
-    // 获取CommandListManager (假设D3D12RenderSystem已经创建)
-    auto commandManager = D3D12RenderSystem::GetCommandListManager();
-    if (!commandManager)
-    {
-        LogError(GetStaticSubsystemName(), "无法获取CommandListManager，EnigmaRenderingPipeline创建失败");
-        return;
-    }
+    // Step 3: ALWAYS load Engine Default ShaderPack (required fallback)
+    std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
+    LogInfo(GetStaticSubsystemName(),
+            "Loading engine default ShaderPack from: {}",
+            engineDefaultPath.string().c_str());
 
     try
     {
-        // 创建EnigmaRenderingPipeline实例
-        m_currentPipeline = std::make_unique<EnigmaRenderingPipeline>(commandManager);
+        m_defaultShaderPack = std::make_unique<ShaderPack>(engineDefaultPath);
 
-        LogInfo(GetStaticSubsystemName(), "EnigmaRenderingPipeline was created successfully");
+        if (!m_defaultShaderPack || !m_defaultShaderPack->IsValid())
+        {
+            ERROR_AND_DIE(Stringf("Engine default ShaderPack loaded but validation failed! Path: %s",
+                engineDefaultPath.string().c_str()).c_str());
+        }
 
-        // 启用调试模式用于开发验证
-        m_currentPipeline->SetDebugMode(true);
-
-        LogInfo(GetStaticSubsystemName(), "EnigmaRenderingPipeline debug mode is enabled");
+        LogInfo(GetStaticSubsystemName(),
+                "Engine default ShaderPack loaded successfully");
     }
     catch (const std::exception& e)
     {
-        LogError(GetStaticSubsystemName(), "EnigmaRenderingPipeline creates exception: {}", e.what());
-        m_currentPipeline.reset();
+        ERROR_AND_DIE(Stringf("Failed to load engine default ShaderPack! Path: %s, Error: %s",
+            engineDefaultPath.string().c_str(), e.what()).c_str());
     }
+
+    // Step 4: Verify at least one ShaderPack is available
+    // Teaching Note: m_defaultShaderPack is always required, m_userShaderPack is optional
+    if (!m_defaultShaderPack)
+    {
+        ERROR_AND_DIE("Both user and engine default ShaderPacks failed to load!");
+    }
+
+    // Step 5: Log final ShaderPack system status
+    LogInfo(GetStaticSubsystemName(),
+            "ShaderPack system initialized (User: {}, Default: {})",
+            m_userShaderPack ? "+" : "-",
+            m_defaultShaderPack ? "+" : "-");
+
+    // TODO (M2): Initialize flexible rendering architecture
+    // Teaching Note: New architecture (BeginFrame/Render/EndFrame + 60+ API)
+    // - No PipelineManager (旧架构已删除)
+    // - Direct ShaderPack usage (dual pack: user + default)
+    // - Implement: BeginCamera, UseProgram, DrawVertexBuffer等
+    // =========================================================================================
+
+    // TODO: M2 - 实现新的灵活渲染架构
+    // 替代旧的Phase系统（IWorldRenderingPipeline/PipelineManager已删除）
 
     // ==================== 创建RenderCommandQueue (Milestone 3.1 新增) ====================
     // 初始化immediate模式渲染指令队列
@@ -192,33 +202,67 @@ void RendererSubsystem::Shutdown()
     // Reference: Iris.java Line 576-593
     UnloadShaderPack();
 
-    // Step 2: 清理EnigmaRenderingPipeline (Milestone 2.6新增)
-    if (m_currentPipeline)
-    {
-        LogInfo(GetStaticSubsystemName(), "Destroy EnigmaRenderingPipeline...");
-        m_currentPipeline->Destroy();
-        m_currentPipeline.reset();
-        LogInfo(GetStaticSubsystemName(), "EnigmaRenderingPipeline destroyed");
-    }
+    // TODO: M2 - 清理新的灵活渲染架构资源
 
     // Step 3: 最后关闭D3D12RenderSystem
     D3D12RenderSystem::Shutdown();
 }
 
-EnigmaRenderingPipeline* RendererSubsystem::PreparePipeline(const ResourceLocation& dimensionId)
-{
-    UNUSED(dimensionId)
-    return GetCurrentPipeline();
-}
+// TODO: M2 - 移除PreparePipeline，实现新的灵活渲染接口
 
 const ShaderSource* RendererSubsystem::GetShaderSource(ProgramId id) const noexcept
 {
-    if (!m_shaderPack) return nullptr;
+    // Delegate to GetShaderProgram() for dual ShaderPack fallback (Phase 5.2)
+    // Teaching Note: GetShaderProgram() handles user -> default fallback automatically
+    return GetShaderProgram(id, "world0");
+}
 
-    ProgramSet* programSet = m_shaderPack->GetProgramSet();
-    if (!programSet) return nullptr;
+//----------------------------------------------------------------------------------------------------------------------
+// Get shader program with dual ShaderPack fallback mechanism (Phase 5.2 - 2025-10-19)
+// Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
+//
+// Teaching Note:
+// - KISS principle: Simple 3-step lookup, no complex file copying
+// - In-memory fallback: Check user pack first, then engine default
+// - Iris-compatible: Matches NewWorldRenderingPipeline::getShaderProgram() behavior
+// - User ShaderPack can partially override engine defaults
+//----------------------------------------------------------------------------------------------------------------------
+const ShaderSource* RendererSubsystem::GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept
+{
+    // Priority 1: Try user ShaderPack first (if loaded)
+    if (m_userShaderPack)
+    {
+        const ProgramSet* userProgramSet = m_userShaderPack->GetProgramSet(dimension);
+        if (userProgramSet)
+        {
+            std::optional<const ShaderSource*> userSource = userProgramSet->Get(id);
+            if (userSource && *userSource && (*userSource)->IsValid())
+            {
+                // User shader found and valid - use it
+                return *userSource;
+            }
+        }
+    }
 
-    return programSet->GetRaw(id);
+    // Priority 2: Fallback to engine default ShaderPack (always loaded)
+    if (m_defaultShaderPack)
+    {
+        const ProgramSet* defaultProgramSet = m_defaultShaderPack->GetProgramSet(dimension);
+        if (defaultProgramSet)
+        {
+            std::optional<const ShaderSource*> defaultSource = defaultProgramSet->Get(id);
+            if (defaultSource && *defaultSource && (*defaultSource)->IsValid())
+            {
+                // Engine default shader found - use as fallback
+                return *defaultSource;
+            }
+        }
+    }
+
+    // Priority 3: Complete failure - program not found in both packs
+    // Teaching Note: Return nullptr (caller should handle gracefully)
+    // Iris behavior: Returns null and logs error in NewWorldRenderingPipeline::getShaderProgram()
+    return nullptr;
 }
 
 /**
@@ -252,10 +296,9 @@ void RendererSubsystem::BeginFrame()
     D3D12RenderSystem::PrepareNextFrame();
     LogDebug(GetStaticSubsystemName(), "BeginFrame - D3D12 next frame prepared");
 
-    // 2. 获取/切换当前维度的 Pipeline
-    // 教学要点: 对应 Iris 的 PipelineManager.preparePipeline(dimensionId)
-    PreparePipeline(ResourceLocation("simpleminer", "world"));
-    LogDebug(GetStaticSubsystemName(), "BeginFrame - Pipeline prepared for current dimension");
+    // TODO: M2 - 准备当前维度的渲染资源
+    // 替代 PreparePipeline 调用
+    LogDebug(GetStaticSubsystemName(), "BeginFrame - Render resources prepared for current dimension");
 
     // 3. 执行清屏操作 (对应 Minecraft CLEAR 注入点)
     // 教学要点: 这是 MixinLevelRenderer 中 CLEAR target 所在位置
@@ -347,217 +390,31 @@ std::filesystem::path RendererSubsystem::SelectShaderPackPath() const
 void RendererSubsystem::EndFrame()
 {
     // ========================================================================
-    // Pipeline 生命周期重构 - EndFrame 阶段
+    // ✅ SIMPLIFIED (2025-10-21): 简单委托给 D3D12RenderSystem
     // ========================================================================
-    // 职责: 执行完整的 Iris 渲染管线
-    // 1. 双缓冲队列交换 (将 Game 线程提交的指令移入执行队列)
-    // 2. Setup 阶段 (setup1-99.fsh)
-    // 3. BeginLevelRendering (对应 Iris AFTER CLEAR 注入点)
-    // 4. 执行所有 WorldRenderingPhase (24个阶段)
-    // 5. EndLevelRendering (finalizeLevelRendering)
-    // 6. GPU 命令提交和 Present
+    // 职责: 结束帧渲染，提交 GPU 命令并呈现画面
+    // - 不再包含 Phase 管理逻辑（已移除）
+    // - 不再包含 RenderCommandQueue 管理（TODO: M2）
+    // - 只负责简单委托给底层 API 封装层
     // ========================================================================
-    // 教学要点: EndFrame 对应 Minecraft renderLevel() 的主体部分
-    // - CLEAR 之后开始执行 Iris 渲染管线
-    // - Setup 阶段在最开始 (初始化全局 Uniform)
-    // - BeginLevelRendering 紧随其后 (begin1-99.fsh)
+    // 教学要点: 高层Subsystem应该是轻量级的委托层
+    // - BeginFrame() → D3D12RenderSystem::BeginFrame()
+    // - EndFrame() → D3D12RenderSystem::EndFrame()
+    // - 避免重复的业务逻辑（KISS原则）
     // ========================================================================
 
-    if (!m_currentPipeline)
-    {
-        LogWarn(GetStaticSubsystemName(), "EndFrame - No active pipeline, skipping rendering");
-        return;
-    }
+    LogInfo(GetStaticSubsystemName(), "RendererSubsystem::EndFrame() called");
 
-    // ==================== 阶段 0: 双缓冲队列交换 ====================
-    // 教学要点: 将上一帧 Game 线程提交的指令移入执行队列
-    // - submitQueue (Game 线程写入) → executeQueue (Render 线程读取)
-    // - 无锁双缓冲设计，完全分离 Game 和 Render 线程
-    if (m_renderCommandQueue)
-    {
-        m_renderCommandQueue->SwapBuffers();
-        m_renderStatistics.frameIndex++;
-        m_renderStatistics.Reset(); // 重置本帧统计
-        LogDebug(GetStaticSubsystemName(), "EndFrame - Command queue buffers swapped (frame: {})",
-                 m_renderStatistics.frameIndex);
-    }
+    // ✅ 简单委托给 D3D12RenderSystem（完整的 EndFrame 逻辑）
+    D3D12RenderSystem::EndFrame();
 
-    // ==================== 阶段 1: Setup 阶段 (setup1-99.fsh) ====================
-    // 教学要点: Iris 渲染管线的第一个阶段
-    // - 初始化全局 Uniform 变量
-    // - 设置渲染目标清除值
-    // - 准备 Shadow Map 和其他资源
-    // TODO (Milestone 3.2): m_currentPipeline->ExecuteSetupStage();
-    LogDebug(GetStaticSubsystemName(), "EndFrame - Setup stage completed (setup1-99)");
+    LogInfo(GetStaticSubsystemName(), "RendererSubsystem::EndFrame() completed");
 
-    // ==================== 阶段 2: BeginLevelRendering (begin1-99.fsh) ====================
-    // 教学要点: 对应 Iris 的 beginWorldRender() 调用
-    // - 注入点: @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = CLEAR, shift = At.Shift.AFTER))
-    // - 位置: Minecraft CLEAR 操作之后
-    // - 职责: 执行 begin1-99.fsh 着色器程序
-    m_currentPipeline->BeginLevelRendering();
-    LogDebug(GetStaticSubsystemName(), "EndFrame - BeginLevelRendering completed (begin1-99)");
-
-    // ==================== 阶段 3: Shadow Pass (shadow.vsh/shadow.fsh) ====================
-    // 教学要点: Shadow 阶段不是 WorldRenderingPhase 枚举值
-    // - 通过单独的 renderShadows() 方法处理
-    // - Iris 使用 ShadowRenderer，独立于 WorldRenderingPhase 系统
-    // - 渲染到 Shadow Map (shadowtex0, shadowtex1, shadowcolor0, shadowcolor1)
-    m_currentPipeline->RenderShadows();
-    LogDebug(GetStaticSubsystemName(), "EndFrame - Shadow pass completed (shadow.vsh/fsh)");
-
-    // ==================== 阶段 4-27: 执行完整的 WorldRenderingPhase (24个阶段) ====================
-    // 教学要点: 严格按照 Iris 的 24 个 WorldRenderingPhase 顺序执行
-    // 每个 Phase 的执行流程:
-    // 1. SetPhase(phase) - 设置当前阶段标志 (零开销，只是flag)
-    // 2. CompositeRenderer/DebugRenderer 的 RenderAll() 方法:
-    //    - 遍历该 Phase 的所有 Pass (例如 composite1.fsh, composite2.fsh, ...)
-    //    - 每个 Pass 执行: 绑定Program → 更新Uniform → Flip Buffer → 渲染全屏四边形
-    // 3. 从 executeQueue 提取该 Phase 的所有 Immediate 指令并执行
-    // ========================================================================
-
-    // 天空和环境阶段
-    const WorldRenderingPhase skyPhases[] = {
-        WorldRenderingPhase::SKY,
-        WorldRenderingPhase::SUNSET,
-        WorldRenderingPhase::CUSTOM_SKY,
-        WorldRenderingPhase::SUN,
-        WorldRenderingPhase::MOON,
-        WorldRenderingPhase::STARS,
-        WorldRenderingPhase::VOID_ENV
-    };
-
-    for (auto phase : skyPhases)
-    {
-        // TODO (Milestone 3.2): 实现正确的 Phase 执行流程
-        // 1. SetPhase(phase) - 只是设置标志位
-        // 2. 找到对应的 Renderer (例如 SkyRenderer)
-        // 3. 调用 Renderer->RenderAll() 方法
-        //    - RenderAll() 内部 loop 所有 Pass
-        //    - 每个 Pass 对应一个着色器程序 (例如 gbuffers_skybasic.vsh/fsh)
-        // 4. 从 executeQueue 提取该 Phase 的 Immediate 指令并执行
-
-        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
-        {
-            m_currentPipeline->SetPhase(phase);
-            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
-            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
-                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
-        }
-    }
-
-    // G-Buffer 填充阶段 (Terrain, Entities, 等)
-    const WorldRenderingPhase gbufferPhases[] = {
-        WorldRenderingPhase::TERRAIN_SOLID,
-        WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED,
-        WorldRenderingPhase::TERRAIN_CUTOUT,
-        WorldRenderingPhase::ENTITIES,
-        WorldRenderingPhase::BLOCK_ENTITIES,
-        WorldRenderingPhase::DESTROY
-    };
-
-    for (auto phase : gbufferPhases)
-    {
-        // TODO (Milestone 3.2): 同上，执行对应的 Renderer
-        // - TERRAIN_SOLID/CUTOUT/CUTOUT_MIPPED: TerrainRenderer (gbuffers_terrain_solid.vsh/fsh)
-        // - ENTITIES: EntityRenderer (gbuffers_entities.vsh/fsh)
-        // - BLOCK_ENTITIES: BlockEntityRenderer (gbuffers_block.vsh/fsh)
-
-        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
-        {
-            m_currentPipeline->SetPhase(phase);
-            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
-            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
-                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
-        }
-    }
-
-    // 半透明和特效阶段
-    const WorldRenderingPhase translucentPhases[] = {
-        WorldRenderingPhase::TERRAIN_TRANSLUCENT,
-        WorldRenderingPhase::TRIPWIRE,
-        WorldRenderingPhase::PARTICLES,
-        WorldRenderingPhase::CLOUDS,
-        WorldRenderingPhase::RAIN_SNOW,
-        WorldRenderingPhase::WORLD_BORDER
-    };
-
-    for (auto phase : translucentPhases)
-    {
-        // TODO (Milestone 3.2): 同上
-        // - TERRAIN_TRANSLUCENT: TerrainRenderer (gbuffers_water.vsh/fsh)
-        // - PARTICLES: ParticleRenderer (gbuffers_textured.vsh/fsh)
-
-        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
-        {
-            m_currentPipeline->SetPhase(phase);
-            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
-            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
-                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
-        }
-    }
-
-    // 手部渲染阶段
-    const WorldRenderingPhase handPhases[] = {
-        WorldRenderingPhase::HAND_SOLID,
-        WorldRenderingPhase::HAND_TRANSLUCENT
-    };
-
-    for (auto phase : handPhases)
-    {
-        // TODO (Milestone 3.2): 同上
-        // - HAND_SOLID/TRANSLUCENT: HandRenderer (gbuffers_hand.vsh/fsh, gbuffers_hand_water.vsh/fsh)
-
-        if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(phase) > 0)
-        {
-            m_currentPipeline->SetPhase(phase);
-            // TODO: m_currentPipeline->ExecutePhaseRenderer(phase);
-            LogDebug(GetStaticSubsystemName(), "EndFrame - Phase {} executed ({} commands)",
-                     static_cast<uint32_t>(phase), m_renderCommandQueue->GetCommandCount(phase));
-        }
-    }
-
-    // OUTLINE 阶段 (outline.fsh)
-    if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::OUTLINE) > 0)
-    {
-        m_currentPipeline->SetPhase(WorldRenderingPhase::OUTLINE);
-        // TODO (Milestone 3.2): m_currentPipeline->ExecuteOutlineStage();
-        LogDebug(GetStaticSubsystemName(), "EndFrame - OUTLINE phase executed ({} commands)",
-                 m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::OUTLINE));
-    }
-
-    // DEBUG 阶段 - 显式调用 DebugRenderer (debug.vsh/debug.fsh)
-    if (m_renderCommandQueue && m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::DEBUG) > 0)
-    {
-        m_currentPipeline->SetPhase(WorldRenderingPhase::DEBUG);
-        // 教学要点: ExecuteDebugStage() 内部调用 DebugRenderer->RenderAll()
-        // - RenderAll() 遍历所有 debug Pass (debug1.fsh, debug2.fsh, ...)
-        // - 每个 Pass 执行完整的渲染流程
-        m_currentPipeline->ExecuteDebugStage();
-        LogDebug(GetStaticSubsystemName(), "EndFrame - DEBUG phase executed ({} commands)",
-                 m_renderCommandQueue->GetCommandCount(WorldRenderingPhase::DEBUG));
-    }
-
-    // ==================== 阶段 28: EndLevelRendering (finalize.fsh) ====================
-    // 教学要点: 对应 Iris 的 finalizeLevelRendering() 调用
-    // - 执行最终的后处理 Pass (final.vsh/fsh)
-    // - 合成所有渲染目标到最终输出
-    m_currentPipeline->EndLevelRendering();
-    LogDebug(GetStaticSubsystemName(), "EndFrame - EndLevelRendering completed (final.fsh)");
-
-    // ==================== GPU 命令提交和 Present ====================
-    // 1. 回收已完成的命令列表
-    auto* commandListManager = D3D12RenderSystem::GetCommandListManager();
-    if (commandListManager)
-    {
-        commandListManager->UpdateCompletedCommandLists();
-    }
-
-    // 2. 呈现到屏幕 (Present)
-    D3D12RenderSystem::Present(true); // 启用垂直同步
-
-    LogInfo(GetStaticSubsystemName(), "EndFrame - Frame {} completed and presented",
-            m_renderStatistics.frameIndex);
+    // TODO (M2): 恢复 RenderCommandQueue 管理（在新的灵活渲染架构中）
+    // - 双缓冲队列交换
+    // - Setup/Begin/End 阶段
+    // - WorldRenderingPhase 执行
+    // - 当前简化版本只负责委托，业务逻辑在 D3D12RenderSystem
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -577,8 +434,17 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
 {
     // Teaching Note: Based on Iris.java::loadExternalShaderpack() implementation
     // Reference: Iris.java Line 248-348
+    // Phase 5.2: Load user ShaderPack only (engine default ShaderPack remains unchanged)
 
-    // Step 1: Validate path exists
+    // Step 1: Unload existing user ShaderPack (if any)
+    // Teaching Note: Only unload user pack, keep engine default pack intact
+    if (m_userShaderPack)
+    {
+        LogInfo(GetStaticSubsystemName(), "Unloading previous user ShaderPack before attempting new load");
+        m_userShaderPack.reset();
+    }
+
+    // Step 2: Validate path exists
     if (!std::filesystem::exists(packPath))
     {
         LogError(GetStaticSubsystemName(),
@@ -586,7 +452,9 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
         return false;
     }
 
-    // Step 2: Validate ShaderPack structure (has "shaders/" subdirectory)
+    // Step 3: Validate ShaderPack structure (has "shaders/" subdirectory)
+    // Bug Fix (2025-10-19): This validation is redundant
+    // ShaderPack constructor will validate and error out if shaders/ directory is missing
     // Teaching Note: Iris uses isValidShaderpack() to check for "shaders/" directory
     // Reference: Iris.java Line 467-506
     std::filesystem::path shadersDir = packPath / "shaders";
@@ -598,45 +466,38 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
         return false;
     }
 
-    // Step 3: Unload existing ShaderPack (if any)
-    // Teaching Note: Iris destroys everything before loading new pack
-    // Reference: Iris.java Line 561 (destroyEverything())
-    if (m_shaderPack)
-    {
-        LogInfo(GetStaticSubsystemName(), "Unloading previous ShaderPack before loading new one");
-        UnloadShaderPack();
-    }
-
-    // Step 4: Load new ShaderPack
+    // Step 4: Load new user ShaderPack
     // Teaching Note: Iris constructs ShaderPack with path, user options, and environment defines
     // Reference: Iris.java Line 324 (new ShaderPack(...))
     try
     {
         LogInfo(GetStaticSubsystemName(),
-                "Loading ShaderPack from: {}", packPath.string().c_str());
+                "Loading user ShaderPack from: {}", packPath.string().c_str());
 
-        // Pass "shaders/" subdirectory path (Iris convention)
-        m_shaderPack = std::make_unique<ShaderPack>(shadersDir);
+        // Bug Fix (2025-10-19): Pass ShaderPack root directory, NOT "shaders/" subdirectory
+        // ShaderPack constructor expects the root directory containing "shaders/" folder
+        // It will internally append "shaders/" when accessing files
+        // Previous bug: Passing shadersDir caused path duplication (.../shaders/shaders/...)
+        m_userShaderPack = std::make_unique<ShaderPack>(packPath);
 
         // Step 5: Validate ShaderPack loaded successfully
         // Teaching Note: Check both pointer and IsValid() for robustness
-        if (!m_shaderPack || !m_shaderPack->IsValid())
+        if (!m_userShaderPack || !m_userShaderPack->IsValid())
         {
-            LogError(GetStaticSubsystemName(), "ShaderPack loaded but validation failed");
-            m_shaderPack.reset();
+            LogError(GetStaticSubsystemName(), "User ShaderPack loaded but validation failed");
+            m_userShaderPack.reset();
             return false;
         }
 
         // Step 6: Log success
         LogInfo(GetStaticSubsystemName(),
-                "ShaderPack loaded successfully: {}", packPath.string().c_str());
+                "User ShaderPack loaded successfully: {}", packPath.string().c_str());
 
-        // TODO (Phase 5.4): Rebuild rendering pipeline with new ShaderPack
-        // Teaching Note: Iris immediately rebuilds pipeline after loading
-        // Reference: Iris.java Line 568-570 (preparePipeline())
-        // - Update PipelineManager with new ShaderPack programs
-        // - Recompile PSOs (Pipeline State Objects)
-        // - Iris equivalent: PipelineManager.preparePipeline(shaderPack)
+        // TODO (M2): Rebuild rendering resources with new ShaderPack
+        // Teaching Note: New architecture doesn't need PipelineManager
+        // - m_userShaderPack已更新（自动生效）
+        // - GetShaderProgram()会自动使用新的user pack
+        // - M2实现时：重新编译PSOs（如果需要）
 
         return true;
     }
@@ -645,8 +506,8 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
         // Teaching Note: Iris catches all exceptions and shows user-friendly error
         // Reference: Iris.java Line 334-338 (handleException())
         LogError(GetStaticSubsystemName(),
-                 "Exception loading ShaderPack: {}", e.what());
-        m_shaderPack.reset();
+                 "Exception loading user ShaderPack: {}", e.what());
+        m_userShaderPack.reset();
         return false;
     }
 }
@@ -656,29 +517,46 @@ void RendererSubsystem::UnloadShaderPack()
 {
     // Teaching Note: Based on Iris.java::destroyEverything() implementation
     // Reference: Iris.java Line 576-593
+    // Phase 5.2: Dual ShaderPack system - unload both user and default packs
 
-    if (!m_shaderPack)
+    bool hadUserPack    = (m_userShaderPack != nullptr);
+    bool hadDefaultPack = (m_defaultShaderPack != nullptr);
+
+    if (!hadUserPack && !hadDefaultPack)
     {
         LogWarn(GetStaticSubsystemName(), "No ShaderPack to unload");
         return;
     }
 
-    LogInfo(GetStaticSubsystemName(), "Unloading ShaderPack");
+    // ✅ IMPROVED: Clarify we're only unloading user ShaderPack
+    LogInfo(GetStaticSubsystemName(), "Unloading user ShaderPack (engine default remains)");
 
-    // TODO (Phase 5.4): Clean up pipeline before unloading ShaderPack
-    // Teaching Note: Iris destroys pipeline BEFORE nullifying ShaderPack
-    // Reference: Iris.java Line 579 (getPipelineManager().destroyPipeline())
-    // - Release PSOs (Pipeline State Objects)
+    // TODO (M2): Clean up rendering resources before unloading ShaderPack
+    // Teaching Note: New architecture uses direct ShaderPack management
+    // - Release PSOs (Pipeline State Objects) - M2实现时
     // - Clear shader program references
     // - Unbind all descriptor heap slots (Bindless resources)
-    // - Iris equivalent: PipelineManager.destroy()
+    // - No PipelineManager (旧架构已删除)
 
-    // Release ShaderPack
-    // Teaching Note: Iris uses "currentPack = null" (Java GC handles cleanup)
-    // DirectX 12: unique_ptr::reset() calls destructor and releases memory
-    m_shaderPack.reset();
+    // ✅ Release User ShaderPack (if loaded)
+    if (m_userShaderPack)
+    {
+        LogInfo(GetStaticSubsystemName(), "Unloading user ShaderPack");
+        m_userShaderPack.reset();
+    }
 
-    LogInfo(GetStaticSubsystemName(), "ShaderPack unloaded successfully");
+    // ✅ FIXED (Phase 5.2 - Bug Fix 2025-10-19): Do NOT unload engine default ShaderPack
+    // Teaching Note: Engine default ShaderPack is PERSISTENT across user pack changes
+    // - It provides fallback shader programs when user pack is not loaded
+    // - Only destroyed during Shutdown() (engine termination)
+    // - Iris equivalent: Default internal shaders always available
+    //
+    // Dual ShaderPack Architecture:
+    // - User ShaderPack: Unloaded here (m_userShaderPack.reset())
+    // - Default ShaderPack: Persistent (unloaded only in Shutdown)
+
+    LogInfo(GetStaticSubsystemName(), "ShaderPack(s) unloaded successfully");
+    // Note: m_defaultShaderPack remains valid (fallback layer)
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -732,4 +610,223 @@ ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
 {
     auto* cmdMgr = D3D12RenderSystem::GetCommandListManager();
     return cmdMgr ? cmdMgr->GetCommandQueue(CommandListManager::Type::Graphics) : nullptr;
+}
+
+//-----------------------------------------------------------------------------------------------
+// M2 灵活渲染接口实现 (Milestone 2)
+// Teaching Note: 提供高层API，封装DirectX 12复杂性
+// Reference: DX11Renderer.cpp中的类似方法
+//-----------------------------------------------------------------------------------------------
+
+void RendererSubsystem::BeginCamera(const Camera& camera)
+{
+    UNUSED(camera);
+    // TODO (M2.1): 实现Camera设置
+    // 1. 提取View和Projection矩阵
+    // 2. 更新Camera Uniform Buffer（通过UniformManager）
+    // 3. 对应Iris的setCamera()
+    LogWarn(GetStaticSubsystemName(), "BeginCamera: Not implemented yet (M2.1)");
+}
+
+void RendererSubsystem::EndCamera()
+{
+    // TODO (M2.1): 实现Camera清理
+    LogWarn(GetStaticSubsystemName(), "EndCamera: Not implemented yet (M2.1)");
+}
+
+D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned stride)
+{
+    // 教学要点：
+    // 1. 调用D3D12RenderSystem::CreateVertexBufferTyped()创建新架构的VertexBuffer
+    // 2. 返回裸指针，调用者负责管理生命周期
+    // 3. 使用nullptr作为initialData（后续通过UpdateBuffer上传数据）
+
+    if (size == 0 || stride == 0)
+    {
+        LogError(GetStaticSubsystemName(),
+                 "CreateVertexBuffer: Invalid parameters (size: {}, stride: {})",
+                 size, stride);
+        return nullptr;
+    }
+
+    // 调用D3D12RenderSystem创建D12VertexBuffer
+    auto vertexBuffer = D3D12RenderSystem::CreateVertexBufferTyped(size, stride, nullptr, "AppVertexBuffer");
+
+    if (!vertexBuffer)
+    {
+        LogError(GetStaticSubsystemName(),
+                 "CreateVertexBuffer: Failed to create D12VertexBuffer (size: {}, stride: {})",
+                 size, stride);
+        return nullptr;
+    }
+
+    LogInfo(GetStaticSubsystemName(),
+            "CreateVertexBuffer: Successfully created D12VertexBuffer (size: {}, stride: {}, count: {})",
+            size, stride, size / stride);
+
+    // 返回裸指针，转移所有权给调用者
+    return vertexBuffer.release();
+}
+
+void RendererSubsystem::SetVertexBuffer(D12VertexBuffer* buffer, uint32_t slot)
+{
+    if (!buffer)
+    {
+        LogError(GetStaticSubsystemName(), "SetVertexBuffer: D12VertexBuffer is nullptr");
+        return;
+    }
+
+    // 教学要点：
+    // - 直接调用D3D12RenderSystem::BindVertexBuffer()的D12VertexBuffer重载
+    // - D3D12RenderSystem内部会提取D3D12_VERTEX_BUFFER_VIEW并绑定
+    // - 无需手动访问View（封装性更好）
+
+    // 委托给D3D12RenderSystem的底层API（D12VertexBuffer重载）
+    D3D12RenderSystem::BindVertexBuffer(buffer, slot);
+
+    LogDebug(GetStaticSubsystemName(),
+             "SetVertexBuffer: Bound D12VertexBuffer to slot {} (size: {}, stride: {}, count: {})",
+             slot, buffer->GetSize(), buffer->GetStride(), buffer->GetVertexCount());
+}
+
+void RendererSubsystem::SetIndexBuffer(D12IndexBuffer* buffer)
+{
+    if (!buffer)
+    {
+        LogError(GetStaticSubsystemName(), "SetIndexBuffer: D12IndexBuffer is nullptr");
+        return;
+    }
+
+    // 教学要点：
+    // - 直接调用D3D12RenderSystem::BindIndexBuffer()的D12IndexBuffer重载
+    // - D3D12RenderSystem内部会提取D3D12_INDEX_BUFFER_VIEW并绑定
+    // - IndexBuffer只有一个槽位（与VertexBuffer不同）
+    // - 无需手动访问View（封装性更好）
+
+    // 委托给D3D12RenderSystem的底层API（D12IndexBuffer重载）
+    D3D12RenderSystem::BindIndexBuffer(buffer);
+
+    LogDebug(GetStaticSubsystemName(),
+             "SetIndexBuffer: Bound D12IndexBuffer (size: {}, count: {}, format: {})",
+             buffer->GetSize(),
+             buffer->GetIndexCount(),
+             buffer->GetFormat() == D12IndexBuffer::IndexFormat::Uint16 ? "Uint16" : "Uint32");
+}
+
+void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, size_t size, size_t offset)
+{
+    if (!data || !buffer)
+    {
+        LogError(GetStaticSubsystemName(), "UpdateBuffer: Invalid parameters (data or buffer is nullptr)");
+        return;
+    }
+
+    if (size == 0)
+    {
+        LogWarn(GetStaticSubsystemName(), "UpdateBuffer: Size is 0, nothing to update");
+        return;
+    }
+
+    // 教学要点：
+    // - D12VertexBuffer使用Map/Unmap模式进行CPU更新
+    // - Map()将GPU内存映射到CPU可访问地址空间
+    // - Unmap()取消映射并确保GPU可见性
+    // - 对应DirectX 11的UpdateSubresource，但DirectX 12更显式
+
+    // 检查越界
+    if (offset + size > buffer->GetSize())
+    {
+        LogError(GetStaticSubsystemName(),
+                 "UpdateBuffer: Data exceeds buffer size (offset: {}, size: {}, buffer size: {})",
+                 offset, size, buffer->GetSize());
+        return;
+    }
+
+    // Map缓冲区（获取CPU可访问指针）
+    void* mappedPtr = buffer->Map(nullptr);
+    if (!mappedPtr)
+    {
+        LogError(GetStaticSubsystemName(), "UpdateBuffer: Failed to map D12VertexBuffer");
+        return;
+    }
+
+    // 将数据拷贝到映射的内存（支持offset）
+    memcpy(static_cast<uint8_t*>(mappedPtr) + offset, data, size);
+
+    // Unmap缓冲区（使数据对GPU可见）
+    D3D12_RANGE writtenRange = {offset, offset + size};
+    buffer->Unmap(&writtenRange);
+
+    LogDebug(GetStaticSubsystemName(),
+             "UpdateBuffer: Updated {} bytes at offset {} (total size: {})",
+             size, offset, buffer->GetSize());
+}
+
+void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
+{
+    if (vertexCount == 0)
+    {
+        LogWarn(GetStaticSubsystemName(), "Draw: vertexCount is 0, nothing to draw");
+        return;
+    }
+
+    // 教学要点：
+    // - 非索引绘制，使用当前绑定的VertexBuffer
+    // - 委托给D3D12RenderSystem的底层Draw API
+    // - 对应OpenGL的glDrawArrays
+
+    D3D12RenderSystem::Draw(vertexCount, startVertex);
+
+    LogDebug(GetStaticSubsystemName(),
+             "Draw: Drew {} vertices starting from vertex {}",
+             vertexCount, startVertex);
+}
+
+void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
+{
+    if (indexCount == 0)
+    {
+        LogWarn(GetStaticSubsystemName(), "DrawIndexed: indexCount is 0, nothing to draw");
+        return;
+    }
+
+    // 教学要点：
+    // - 索引绘制，使用当前绑定的IndexBuffer和VertexBuffer
+    // - 委托给D3D12RenderSystem的底层DrawIndexed API
+    // - 对应OpenGL的glDrawElements
+
+    D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
+
+    LogDebug(GetStaticSubsystemName(),
+             "DrawIndexed: Drew {} indices starting from index {} with base vertex {}",
+             indexCount, startIndex, baseVertex);
+}
+
+void RendererSubsystem::DrawFullscreenQuad()
+{
+    // TODO (M2.3): 实现全屏四边形绘制
+    // 1. 创建或使用缓存的全屏四边形VertexBuffer
+    // 2. 绑定并绘制（6个顶点，2个三角形）
+    // 教学要点：常用于后处理Pass
+    LogWarn(GetStaticSubsystemName(), "DrawFullscreenQuad: Not implemented yet (M2.3)");
+}
+
+void RendererSubsystem::SetBlendMode(BlendMode mode)
+{
+    UNUSED(mode);
+    // TODO (M2.4): 实现BlendMode设置
+    // 1. 需要PSO支持（Graphics Pipeline State）
+    // 2. 在Milestone 3.0 PSO系统实现后启用
+    // 教学要点：DirectX 12的混合状态是PSO的一部分，不能动态修改
+    LogWarn(GetStaticSubsystemName(), "SetBlendMode: Not implemented yet (M2.4, requires PSO system)");
+}
+
+void RendererSubsystem::SetDepthMode(DepthMode mode)
+{
+    UNUSED(mode);
+    // TODO (M2.4): 实现DepthMode设置
+    // 1. 需要PSO支持（Graphics Pipeline State）
+    // 2. 在Milestone 3.0 PSO系统实现后启用
+    // 教学要点：DirectX 12的深度状态是PSO的一部分，不能动态修改
+    LogWarn(GetStaticSubsystemName(), "SetDepthMode: Not implemented yet (M2.4, requires PSO system)");
 }

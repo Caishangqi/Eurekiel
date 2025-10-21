@@ -225,6 +225,49 @@ void RenderTargetManager::OnResize(int newBaseWidth, int newBaseHeight)
 }
 
 // ============================================================================
+// Mipmap生成 - Milestone 3.0延迟渲染管线
+// ============================================================================
+
+void RenderTargetManager::GenerateMipmaps(ID3D12GraphicsCommandList* cmdList)
+{
+    // 参数验证
+    if (!cmdList)
+    {
+        throw std::invalid_argument("Command list cannot be null");
+    }
+
+    // 遍历16个RenderTarget
+    for (int i = 0; i < 16; ++i)
+    {
+        // 检查是否启用Mipmap
+        if (!m_settings[i].enableMipmap || !m_renderTargets[i])
+        {
+            continue;
+        }
+
+        // 对Main纹理生成Mipmap
+        auto mainTex = m_renderTargets[i]->GetMainTexture();
+        if (mainTex)
+        {
+            mainTex->GenerateMips();
+        }
+
+        // 对Alt纹理生成Mipmap
+        auto altTex = m_renderTargets[i]->GetAltTexture();
+        if (altTex)
+        {
+            altTex->GenerateMips();
+        }
+    }
+
+    // 教学要点:
+    // 1. Mipmap生成通常在写入RenderTarget后调用
+    // 2. 对Main和Alt纹理都生成Mipmap，确保Ping-Pong双缓冲机制正常
+    // 3. GenerateMips()内部使用Compute Shader实现高效Mipmap生成
+    // 4. Mipmap提供多级细节纹理，减少远距离采样走样
+}
+
+// ============================================================================
 // 调试支持 - 查询RT状态
 // ============================================================================
 

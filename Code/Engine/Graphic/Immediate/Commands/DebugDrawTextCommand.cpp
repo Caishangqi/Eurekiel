@@ -10,7 +10,7 @@ using namespace enigma::core;
 namespace enigma::graphic
 {
     DebugDrawTextCommand::DebugDrawTextCommand(const std::string& text, Vec2 position, Rgba8 color, const std::string& debugTag) : m_text(text), m_position(position), m_color(color),
-        m_debugTag(debugTag)
+                                                                                                                                   m_debugTag(debugTag)
     {
     }
 
@@ -21,15 +21,17 @@ namespace enigma::graphic
 
     void DebugDrawTextCommand::Execute(std::shared_ptr<CommandListManager> commandManager)
     {
-        // 详细的日志输出，用于验证调用链
+        // 详细的日志输出,用于验证调用链
         LogInfo("DebugDrawTextCommand", "=== Executing Debug Text Command ===");
-        LogInfo("DebugDrawTextCommand", "Text: '{}'", m_text);
-        LogInfo("DebugDrawTextCommand", "Position: ({:.2f}, {:.2f})", m_position.x, m_position.y);
-        LogInfo("DebugDrawTextCommand", "Color: 0x{:08X}", m_color);
+        LogInfo("DebugDrawTextCommand", "Text: %s", m_text.c_str());
+        LogInfo("DebugDrawTextCommand", "Position: (%.2f, %.2f)", m_position.x, m_position.y);
+        LogInfo("DebugDrawTextCommand", "Color: RGBA(%d, %d, %d, %d)",
+                static_cast<int>(m_color.r), static_cast<int>(m_color.g),
+                static_cast<int>(m_color.b), static_cast<int>(m_color.a));
 
         if (!m_debugTag.empty())
         {
-            LogInfo("DebugDrawTextCommand", "Debug Tag: '{}'", m_debugTag);
+            LogInfo("DebugDrawTextCommand", "Debug Tag: '%s'", m_debugTag.c_str());
         }
 
         // 验证参数有效性
@@ -51,8 +53,8 @@ namespace enigma::graphic
             LogWarn("DebugDrawTextCommand", "CommandManager: Invalid (nullptr)");
         }
 
-        // 模拟文本渲染过程（仅日志输出）
-        LogInfo("DebugDrawTextCommand", "Step 1: [Simulated] Generate text geometry for '{}'", m_text);
+        // 模拟文本渲染过程(仅日志输出)
+        LogInfo("DebugDrawTextCommand", "Step 1: [Simulated] Generate text geometry for '%s'", m_text.c_str());
         LogInfo("DebugDrawTextCommand", "Step 2: [Simulated] Set viewport and scissor rect");
         LogInfo("DebugDrawTextCommand", "Step 3: [Simulated] Bind font texture and text shader");
         LogInfo("DebugDrawTextCommand", "Step 4: [Simulated] Draw text vertices");
@@ -71,7 +73,7 @@ namespace enigma::graphic
 
     bool DebugDrawTextCommand::IsValid() const
     {
-        // 基本验证：文本不为空
+        // 基本验证:文本不为空
         return !m_text.empty();
     }
 

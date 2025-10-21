@@ -12,14 +12,21 @@ namespace enigma::graphic
     namespace
     {
         /**
-         * @brief 移除字符串前导和尾随空白
-         * @param str 原始字符串
-         * @return 去除空白后的字符串
+         * @brief Remove leading and trailing whitespace from string
+         * @param str Original string
+         * @return String with whitespace removed
+         *
+         * BUGFIX: Use lambda with static_cast to prevent assertion failure
+         *         when processing UTF-8 Chinese characters in shader files.
+         *         std::isspace() requires char value in range [-1, 255],
+         *         but UTF-8 multi-byte characters exceed this range.
          */
         std::string Trim(const std::string& str)
         {
-            auto start = std::find_if_not(str.begin(), str.end(), ::isspace);
-            auto end   = std::find_if_not(str.rbegin(), str.rend(), ::isspace).base();
+            auto start = std::find_if_not(str.begin(), str.end(),
+                                          [](unsigned char c) { return std::isspace(c); });
+            auto end = std::find_if_not(str.rbegin(), str.rend(),
+                                        [](unsigned char c) { return std::isspace(c); }).base();
             return (start < end) ? std::string(start, end) : std::string();
         }
 

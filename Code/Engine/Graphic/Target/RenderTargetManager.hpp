@@ -203,6 +203,25 @@ namespace enigma::graphic
         void OnResize(int newBaseWidth, int newBaseHeight);
 
         // ========================================================================
+        // Mipmap生成 - Milestone 3.0延迟渲染管线
+        // ========================================================================
+
+        /**
+         * @brief 生成所有启用Mipmap的RenderTarget的Mipmap
+         * @param cmdList 命令列表
+         *
+         * 教学要点:
+         * - 遍历16个RT，对启用Mipmap的调用GenerateMips()
+         * - 对Main和Alt纹理都生成Mipmap
+         * - 通常在写入RenderTarget后调用
+         *
+         * **Iris调用时机**:
+         * - 在Composite Pass结束后
+         * - 对需要Mipmap的RenderTarget生成多级细节纹理
+         */
+        void GenerateMipmaps(ID3D12GraphicsCommandList* cmdList);
+
+        // ========================================================================
         // 调试支持 - 查询RT状态
         // ========================================================================
 

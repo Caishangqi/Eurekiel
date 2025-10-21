@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include "../../Resource/Buffer/D12Buffer.hpp"
-#include "../../Resource/BindlessResourceTypes.hpp"
 #include "../../Resource/CommandListManager.hpp"
 #include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
 #include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
@@ -18,6 +17,7 @@
 
 #include "Engine/Resource/Model/ModelResource.hpp"
 #include "Engine/Core/Image.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 
 #undef min
 #undef max
@@ -137,6 +137,107 @@ namespace enigma::graphic
             size_t      size,
             const void* initialData = nullptr,
             const char* debugName   = "IndexBuffer");
+
+        // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
+
+        /**
+         * @brief 创建类型安全的VertexBuffer
+         * @param size 缓冲区大小（字节），必须是stride的整数倍
+         * @param stride 单个顶点的大小（字节）
+         * @param initialData 初始顶点数据（可为nullptr）
+         * @param debugName 调试名称
+         * @return D12VertexBuffer智能指针
+         *
+         * 教学要点:
+         * 1. 类型安全：返回D12VertexBuffer而非D12Buffer
+         * 2. 封装stride逻辑：避免用户手动计算
+         * 3. 自动创建D3D12_VERTEX_BUFFER_VIEW
+         * 4. 推荐使用此方法代替CreateVertexBuffer()
+         *
+         * 使用示例:
+         * @code
+         * struct Vertex { Vec3 pos; Vec3 normal; Vec2 uv; };
+         * auto vb = D3D12RenderSystem::CreateVertexBufferTyped(
+         *     vertices.size() * sizeof(Vertex),
+         *     sizeof(Vertex),
+         *     vertices.data()
+         * );
+         * D3D12RenderSystem::BindVertexBuffer(vb->GetView());
+         * @endcode
+         */
+        static std::unique_ptr<class D12VertexBuffer> CreateVertexBufferTyped(
+            size_t      size,
+            size_t      stride,
+            const void* initialData = nullptr,
+            const char* debugName   = "VertexBuffer"
+        );
+
+        /**
+         * @brief 创建类型安全的IndexBuffer
+         * @param size 缓冲区大小（字节），必须是索引大小的整数倍
+         * @param format 索引格式（Uint16或Uint32）
+         * @param initialData 初始索引数据（可为nullptr）
+         * @param debugName 调试名称
+         * @return D12IndexBuffer智能指针
+         *
+         * 教学要点:
+         * 1. 类型安全：返回D12IndexBuffer而非D12Buffer
+         * 2. 封装format逻辑：避免用户手动配置DXGI_FORMAT
+         * 3. 自动创建D3D12_INDEX_BUFFER_VIEW
+         * 4. 推荐使用此方法代替CreateIndexBuffer()
+         *
+         * 使用示例:
+         * @code
+         * std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
+         * auto ib = D3D12RenderSystem::CreateIndexBufferTyped(
+         *     indices.size() * sizeof(uint32_t),
+         *     D12IndexBuffer::IndexFormat::Uint32,
+         *     indices.data()
+         * );
+         * D3D12RenderSystem::BindIndexBuffer(ib->GetView());
+         * @endcode
+         */
+        static std::unique_ptr<class D12IndexBuffer> CreateIndexBufferTyped(
+            size_t                      size,
+            D12IndexBuffer::IndexFormat format,
+            const void*                 initialData = nullptr,
+            const char*                 debugName   = "IndexBuffer"
+        );
+
+        /**
+         * @brief 绑定VertexBuffer（重载：接受D12VertexBuffer*）
+         * @param vertexBuffer VertexBuffer指针
+         * @param slot 顶点缓冲区槽位（默认0）
+         *
+         * 教学要点:
+         * 1. 便捷接口：直接传递D12VertexBuffer指针
+         * 2. 内部调用GetView()获取D3D12_VERTEX_BUFFER_VIEW
+         * 3. 空指针检查，安全绑定
+         *
+         * 使用示例:
+         * @code
+         * auto vb = D3D12RenderSystem::CreateVertexBufferTyped(...);
+         * D3D12RenderSystem::BindVertexBuffer(vb.get());
+         * @endcode
+         */
+        static void BindVertexBuffer(const class D12VertexBuffer* vertexBuffer, UINT slot = 0);
+
+        /**
+         * @brief 绑定IndexBuffer（重载：接受D12IndexBuffer*）
+         * @param indexBuffer IndexBuffer指针
+         *
+         * 教学要点:
+         * 1. 便捷接口：直接传递D12IndexBuffer指针
+         * 2. 内部调用GetView()获取D3D12_INDEX_BUFFER_VIEW
+         * 3. 空指针检查，安全绑定
+         *
+         * 使用示例:
+         * @code
+         * auto ib = D3D12RenderSystem::CreateIndexBufferTyped(...);
+         * D3D12RenderSystem::BindIndexBuffer(ib.get());
+         * @endcode
+         */
+        static void BindIndexBuffer(const class D12IndexBuffer* indexBuffer);
 
         /**
          * 简化的创建常量缓冲区方法
@@ -337,6 +438,27 @@ namespace enigma::graphic
         static bool BeginFrame(const Rgba8& clearColor = Rgba8::BLACK, float clearDepth = 1.0f, uint8_t clearStencil = 0);
 
         /**
+         * 结束帧渲染 - 执行CommandList并Present
+         *
+         * 教学要点：
+         * - 这是每帧渲染的终点，负责提交所有渲染指令并显示到屏幕
+         * - 遵循DirectX 12标准管线：BeginFrame(清屏) → 渲染 → EndFrame(Present)
+         * - 处理资源状态转换、CommandList执行、SwapChain Present、GPU同步
+         * - 清理当前CommandList引用，为下一帧做准备
+         *
+         * 操作流程：
+         * 1. 检查CommandList有效性（必须先调用BeginFrame）
+         * 2. Transition BackBuffer: RENDER_TARGET → PRESENT
+         * 3. 执行CommandList（通过CommandListManager）
+         * 4. Present SwapChain（显示到屏幕）
+         * 5. 等待GPU fence（临时同步方案，后续优化为异步）
+         * 6. 重置s_currentGraphicsCommandList为nullptr
+         *
+         * @return 是否成功结束帧渲染
+         */
+        static bool EndFrame();
+
+        /**
          * 清除渲染目标
          * DirectX 12 API: ID3D12GraphicsCommandList::ClearRenderTargetView()
          *
@@ -421,6 +543,111 @@ namespace enigma::graphic
          * 4. 性能优化：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
          */
         static ID3D12RootSignature* GetBindlessRootSignature();
+
+        // ===== Buffer管理API - 细粒度操作 (Milestone M2新增) =====
+
+        /**
+         * @brief 绑定VertexBuffer到Pipeline
+         * @param bufferView VertexBufferView描述
+         * @param slot 顶点缓冲区槽位（默认0）
+         *
+         * 教学要点:
+         * 1. 对应Iris的BufferBinding操作
+         * 2. DirectX 12使用View描述符绑定（不直接绑定资源）
+         * 3. 支持多个VertexBuffer绑定（不同槽位）
+         * 4. 需要在Draw之前调用
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::IASetVertexBuffers()
+         *
+         * 使用示例:
+         * @code
+         * D3D12_VERTEX_BUFFER_VIEW vbView = myBuffer->GetView();
+         * D3D12RenderSystem::BindVertexBuffer(vbView);
+         * @endcode
+         */
+        static void BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot = 0);
+
+        /**
+         * @brief 绑定IndexBuffer到Pipeline
+         * @param bufferView IndexBufferView描述
+         *
+         * 教学要点:
+         * 1. 对应Iris的IndexBuffer绑定
+         * 2. IndexBuffer只有一个槽位（与VertexBuffer不同）
+         * 3. 支持16位和32位索引格式
+         * 4. 需要在DrawIndexed之前调用
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::IASetIndexBuffer()
+         *
+         * 使用示例:
+         * @code
+         * D3D12_INDEX_BUFFER_VIEW ibView = myIndexBuffer->GetView();
+         * D3D12RenderSystem::BindIndexBuffer(ibView);
+         * @endcode
+         */
+        static void BindIndexBuffer(const D3D12_INDEX_BUFFER_VIEW& bufferView);
+
+        /**
+         * @brief 执行Draw指令（非索引）
+         * @param vertexCount 顶点数量
+         * @param startVertex 起始顶点偏移
+         *
+         * 教学要点:
+         * 1. 对应OpenGL的glDrawArrays
+         * 2. 使用当前绑定的VertexBuffer
+         * 3. 不使用IndexBuffer
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::DrawInstanced()
+         *
+         * 使用示例:
+         * @code
+         * D3D12RenderSystem::Draw(3); // 绘制三角形
+         * @endcode
+         */
+        static void Draw(UINT vertexCount, UINT startVertex = 0);
+
+        /**
+         * @brief 执行DrawIndexed指令
+         * @param indexCount 索引数量
+         * @param startIndex 起始索引偏移
+         * @param baseVertex 基础顶点偏移
+         *
+         * 教学要点:
+         * 1. 对应OpenGL的glDrawElements
+         * 2. 使用当前绑定的IndexBuffer + VertexBuffer
+         * 3. 支持baseVertex偏移（复用VertexBuffer）
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::DrawIndexedInstanced()
+         *
+         * 使用示例:
+         * @code
+         * D3D12RenderSystem::DrawIndexed(36); // 绘制立方体（12个三角形）
+         * @endcode
+         */
+        static void DrawIndexed(UINT indexCount, UINT startIndex = 0, INT baseVertex = 0);
+
+        /**
+         * @brief 设置图元拓扑类型
+         * @param topology 拓扑类型（TRIANGLE_LIST, LINE_LIST等）
+         *
+         * 教学要点:
+         * 1. 定义顶点如何组成图元（三角形、线、点等）
+         * 2. 必须在Draw之前设置
+         * 3. 对应OpenGL的glDrawMode参数
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::IASetPrimitiveTopology()
+         *
+         * 使用示例:
+         * @code
+         * D3D12RenderSystem::SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+         * @endcode
+         */
+        static void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY topology);
 
         // ===== PSO创建API (Milestone 3.0新增) =====
 
@@ -559,6 +786,7 @@ namespace enigma::graphic
 
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器
+        static ID3D12GraphicsCommandList*          s_currentGraphicsCommandList; // 当前活动的图形命令列表（用于M2灵活渲染API）
 
         // SM6.6 Bindless资源管理系统（Milestone 2.7重构）
         static std::unique_ptr<BindlessIndexAllocator>      s_bindlessIndexAllocator; // 纯索引分配器（0-1,999,999）
