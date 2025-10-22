@@ -157,11 +157,15 @@ namespace enigma::graphic
      * 1. Template Method模式: 基类管理流程，子类实现细节
      * 2. 使用Copy Command List专用队列
      * 3. 同步等待上传完成
+     * 4. 虚函数: 复合资源可重写来管理子资源上传
      */
-    bool D12Resource::Upload()
+    bool D12Resource::Upload(ID3D12GraphicsCommandList* providedCommandList)
     {
-        // 1. 检查是否有CPU数据
-        if (!HasCPUData())
+        UNUSED(providedCommandList) // 基类实现不使用外部命令列表，获取自己的
+
+        // 1. 检查是否有CPU数据（仅对需要CPU数据的资源）
+        // Milestone 3.0 Bug Fix: RenderTarget/DepthStencil不需要CPU数据
+        if (RequiresCPUData() && !HasCPUData())
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: No CPU data for '%s'. Call SetInitialData() first.",
@@ -176,6 +180,21 @@ namespace enigma::graphic
                            "Upload: Resource '%s' is invalid",
                            m_debugName.c_str());
             return false;
+        }
+
+        // 2.5. Milestone 3.0 Bug Fix: 对于不需要CPU数据的资源（如RenderTarget），直接标记为已上传
+        // 教学要点:
+        // - RenderTarget/DepthStencil是GPU输出纹理，没有CPU数据
+        // - 它们的m_cpuData.size() == 0，导致UploadContext创建失败
+        // - 但仍需调用Upload()来设置m_isUploaded=true，通过RegisterBindless()的安全检查
+        // - 这里跳过实际的上传流程，直接标记完成
+        if (!RequiresCPUData())
+        {
+            m_isUploaded = true;
+            core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                          "Upload: Successfully marked '%s' as uploaded (no CPU data required)",
+                          m_debugName.c_str());
+            return true;
         }
 
         // 3. 获取CommandListManager

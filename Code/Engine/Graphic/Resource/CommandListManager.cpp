@@ -4,6 +4,7 @@
 #include <cassert>
 #include <string>
 
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 using namespace enigma::graphic;
@@ -109,11 +110,11 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     if (!device)
     {
         // TODO: 使用统一的日志系统
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(), "× Failed to initialize CommandListManager reason: device is null");
+        enigma::core::LogError(LogRenderer, "× Failed to initialize CommandListManager reason: device is null");
         ERROR_AND_DIE("× Failed to initialize CommandListManager reason: device is null")
     }
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "CommandListManager::Initialize() - graphicsCount=%u, computeCount=%u, copyCount=%u",
                           graphicsCount, computeCount, copyCount);
 
@@ -158,7 +159,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     hr = device->CreateCommandQueue(&computeQueueDesc, IID_PPV_ARGS(&m_computeQueue));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Compute Queue, Abort Program");
+        LogError(LogRenderer, "Fail to create Compute Queue, Abort Program");
         ERROR_AND_DIE("Fail to create Compute Queue, Abort Program")
     }
     m_computeQueue->SetName(L"Enigma Compute Command Queue");
@@ -173,7 +174,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     hr = device->CreateCommandQueue(&copyQueueDesc, IID_PPV_ARGS(&m_copyQueue));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Copy Command Queue, Abort Program");
+        LogError(LogRenderer, "Fail to create Copy Command Queue, Abort Program");
         ERROR_AND_DIE("Fail to create Copy Command Queue, Abort Program")
     }
     m_copyQueue->SetName(L"Enigma Copy Command Queue");
@@ -204,7 +205,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     hr                   = device->CreateFence(m_graphicsFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_graphicsFence));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Graphics Fence, Abort Program");
+        LogError(LogRenderer, "Fail to create Graphics Fence, Abort Program");
         ERROR_AND_DIE("Fail to create Graphics Fence, Abort Program")
     }
     m_graphicsFence->SetName(L"Enigma Graphics Queue Fence");
@@ -214,7 +215,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     hr                  = device->CreateFence(m_computeFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_computeFence));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Compute Fence, Abort Program");
+        LogError(LogRenderer, "Fail to create Compute Fence, Abort Program");
         ERROR_AND_DIE("Fail to create Compute Fence, Abort Program")
     }
     m_computeFence->SetName(L"Enigma Compute Queue Fence");
@@ -224,7 +225,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     hr               = device->CreateFence(m_copyFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_copyFence));
     if (FAILED(hr))
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Copy Fence, Abort Program");
+        LogError(LogRenderer, "Fail to create Copy Fence, Abort Program");
         ERROR_AND_DIE("Fail to create Copy Fence, Abort Program")
     }
     m_copyFence->SetName(L"Enigma Copy Queue Fence");
@@ -234,7 +235,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     m_fenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
     if (m_fenceEvent == nullptr)
     {
-        LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create Fence Event, Abort Program");
+        LogError(LogRenderer, "Fail to create Fence Event, Abort Program");
         ERROR_AND_DIE("Fail to create Fence Event, Abort Program")
     }
 
@@ -255,41 +256,41 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
      */
 
     bool success = true;
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(), "Creating command list pools...");
+    enigma::core::LogInfo(LogRenderer, "Creating command list pools...");
     success &= CreateCommandListPool(Type::Graphics, graphicsCount);
     success &= CreateCommandListPool(Type::Compute, computeCount);
     success &= CreateCommandListPool(Type::Copy, copyCount);
 
     if (!success)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(), "× Failed to create command list pools");
+        enigma::core::LogError(LogRenderer, "× Failed to create command list pools");
         // 清理部分创建的资源
         Shutdown();
         return false;
     }
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "+ All command list pools created successfully - Graphics:%u, Compute:%u, Copy:%u",
                           graphicsCount, computeCount, copyCount);
 
     // ✅ 验证命令列表池创建结果
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "+ Graphics command lists created: %u (available: %u)",
                           static_cast<uint32_t>(m_graphicsCommandLists.size()),
                           static_cast<uint32_t>(m_availableGraphicsLists.size()));
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "+ Compute command lists created: %u (available: %u)",
                           static_cast<uint32_t>(m_computeCommandLists.size()),
                           static_cast<uint32_t>(m_availableComputeLists.size()));
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "+ Copy command lists created: %u (available: %u)",
                           static_cast<uint32_t>(m_copyCommandLists.size()),
                           static_cast<uint32_t>(m_availableCopyLists.size()));
 
     m_initialized = true;
-    LogInfo(RendererSubsystem::GetStaticSubsystemName(), "+ CommandListManager Initialized");
+    LogInfo(LogRenderer, "+ CommandListManager Initialized");
     return true;
 }
 
@@ -476,13 +477,13 @@ ID3D12CommandQueue* CommandListManager::GetCommandQueue(Type type) const
 bool CommandListManager::CreateCommandListPool(Type type, uint32_t count)
 {
     const char* typeName = GetTypeName(type);
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "Creating %s command list pool with %u command lists...", typeName, count);
 
     auto* device = D3D12RenderSystem::GetDevice();
     if (!device || count == 0)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "× CreateCommandListPool failed - device=%p, count=%u", device, count);
         return false;
     }
@@ -518,7 +519,7 @@ bool CommandListManager::CreateCommandListPool(Type type, uint32_t count)
         auto wrapper = CreateCommandList(type);
         if (!wrapper)
         {
-            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogError(LogRenderer,
                                    "× Failed to create %s command list %u/%u", typeName, i + 1, count);
             return false;
         }
@@ -530,7 +531,7 @@ bool CommandListManager::CreateCommandListPool(Type type, uint32_t count)
         container->push_back(std::move(wrapper));
     }
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "+ Successfully created %u %s command lists", count, typeName);
     return true;
 }
@@ -552,7 +553,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     auto* device = D3D12RenderSystem::GetDevice();
     if (!device)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "CreateCommandList: Device is null");
         return nullptr;
     }
@@ -571,7 +572,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     case Type::Copy: d3d12Type = D3D12_COMMAND_LIST_TYPE_COPY;
         break;
     default:
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "CreateCommandList: Invalid type %d", static_cast<int>(type));
         return nullptr;
     }
@@ -585,7 +586,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
 
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "CreateCommandList: CreateCommandAllocator failed for type %s, HRESULT=0x%08X",
                                GetTypeName(type), hr);
         return nullptr;
@@ -602,7 +603,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
 
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "CreateCommandList: CreateCommandList failed for type %s, HRESULT=0x%08X",
                                GetTypeName(type), hr);
         return nullptr;
@@ -613,7 +614,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     hr = wrapper->commandList->Close();
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "CreateCommandList: Close() failed for type %s, HRESULT=0x%08X",
                                GetTypeName(type), hr);
         return nullptr;
@@ -638,7 +639,7 @@ std::unique_ptr<CommandListManager::CommandListWrapper> CommandListManager::Crea
     wrapper->commandList->SetName(debugName.c_str());
     wrapper->commandAllocator->SetName((debugName + L" Allocator").c_str());
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "CreateCommandList: Successfully created %s command list",
                           GetTypeName(type));
 
@@ -698,12 +699,12 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(Type type, con
     std::lock_guard<std::mutex> lock(m_mutex);
 
     const char* typeName = GetTypeName(type);
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "AcquireCommandList() - type=%s, debugName='%s'", typeName, debugName.c_str());
 
     if (!m_initialized)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "- AcquireCommandList failed - CommandListManager not initialized");
         return nullptr;
     }
@@ -714,14 +715,14 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(Type type, con
     auto& availableQueue = GetAvailableQueue(type);
     if (availableQueue.empty())
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "- AcquireCommandList failed - no available %s command lists in queue", typeName);
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "   This indicates the command list pool was not properly created");
         return nullptr;
     }
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "Found %zu available %s command lists in queue", availableQueue.size(), typeName);
 
     // 从队列中取出一个可用的命令列表
@@ -826,7 +827,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
 
     if (!fence)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "ExecuteCommandList() - Failed to get Fence for type %s",
                                GetTypeName(wrapper->type));
         return 0;
@@ -837,7 +838,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     hr = queue->Signal(fence, fenceValue);
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "ExecuteCommandList() - Signal failed for %s queue",
                                GetTypeName(wrapper->type));
         return 0;
@@ -883,7 +884,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         CommandListWrapper* wrapper = FindWrapper(commandLists[i]);
         if (!wrapper || wrapper->state != State::Recording)
         {
-            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogError(LogRenderer,
                                    "ExecuteCommandLists() - Invalid wrapper or state for command list %u", i);
             return 0;
         }
@@ -896,7 +897,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         }
         else if (wrapper->type != batchType)
         {
-            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogError(LogRenderer,
                                    "ExecuteCommandLists() - Mixed types detected! Expected %s, got %s at index %u",
                                    GetTypeName(batchType), GetTypeName(wrapper->type), i);
             return 0;
@@ -905,7 +906,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         HRESULT hr = commandLists[i]->Close();
         if (FAILED(hr))
         {
-            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogError(LogRenderer,
                                    "ExecuteCommandLists() - Failed to close command list %u", i);
             return 0;
         }
@@ -918,7 +919,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     ID3D12CommandQueue* queue = GetCommandQueue(batchType);
     if (!queue)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "ExecuteCommandLists() - Failed to get queue for type %s",
                                GetTypeName(batchType));
         return 0;
@@ -933,7 +934,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
 
     if (!fence)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "ExecuteCommandLists() - Failed to get Fence for type %s",
                                GetTypeName(batchType));
         return 0;
@@ -944,7 +945,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     HRESULT hr = queue->Signal(fence, fenceValue);
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "ExecuteCommandLists() - Signal failed for %s queue",
                                GetTypeName(batchType));
         return 0;
@@ -1011,14 +1012,14 @@ bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
 
         // 未找到匹配的Fence，使用Graphics Fence作为默认（兼容性处理）
         fence = m_graphicsFence.Get();
-        enigma::core::LogWarn(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogWarn(LogRenderer,
                               "WaitForFence() - Could not find wrapper for fenceValue %llu, using Graphics Fence",
                               fenceValue);
     }
 
     if (!fence)
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "WaitForFence() - Fence is null");
         return false;
     }
@@ -1033,7 +1034,7 @@ bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
     HRESULT hr = fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
     if (FAILED(hr))
     {
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "WaitForFence() - SetEventOnCompletion failed");
         return false;
     }
@@ -1155,13 +1156,13 @@ void CommandListManager::UpdateCompletedCommandLists()
     std::lock_guard<std::mutex> lock(m_mutex);
 
     // 🔍 DEBUG: 记录调用
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "UpdateCompletedCommandLists() called - ExecutingCount=%zu",
                           m_executingLists.size());
 
     if (m_executingLists.empty())
     {
-        enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogInfo(LogRenderer,
                               "UpdateCompletedCommandLists() - No executing lists, skipping");
         return;
     }
@@ -1169,7 +1170,7 @@ void CommandListManager::UpdateCompletedCommandLists()
     size_t recycledCount = 0;
 
     // ⭐ Milestone 2.8: 显示所有三个Fence的状态
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "GPU Fence Status - Graphics: %llu/%llu, Compute: %llu/%llu, Copy: %llu/%llu",
                           m_graphicsFence ? m_graphicsFence->GetCompletedValue() : 0, m_graphicsFenceValue,
                           m_computeFence ? m_computeFence->GetCompletedValue() : 0, m_computeFenceValue,
@@ -1185,7 +1186,7 @@ void CommandListManager::UpdateCompletedCommandLists()
         ID3D12Fence* fence = GetFenceByType(wrapper->type);
         if (!fence)
         {
-            enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogError(LogRenderer,
                                    "UpdateCompletedCommandLists() - Fence is null for type %s",
                                    GetTypeName(wrapper->type));
             ++it;
@@ -1195,7 +1196,7 @@ void CommandListManager::UpdateCompletedCommandLists()
         uint64_t completedValue = fence->GetCompletedValue();
 
         // 🔍 DEBUG: 显示每个命令列表的围栏值
-        enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogInfo(LogRenderer,
                               "  Checking wrapper[%s]: fenceValue=%llu (completed=%llu, canRecycle=%s)",
                               GetTypeName(wrapper->type),
                               wrapper->fenceValue,
@@ -1212,7 +1213,7 @@ void CommandListManager::UpdateCompletedCommandLists()
             auto& availableQueue = GetAvailableQueue(wrapper->type);
             availableQueue.push(wrapper);
 
-            enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogInfo(LogRenderer,
                                   "  + Recycled %s command list (fenceValue=%llu)",
                                   GetTypeName(wrapper->type), wrapper->fenceValue);
 
@@ -1222,14 +1223,14 @@ void CommandListManager::UpdateCompletedCommandLists()
         }
         else
         {
-            enigma::core::LogWarn(RendererSubsystem::GetStaticSubsystemName(),
+            enigma::core::LogWarn(LogRenderer,
                                   "  ! Cannot recycle %s command list - fenceValue(%llu) > completedValue(%llu)",
                                   GetTypeName(wrapper->type), wrapper->fenceValue, completedValue);
             ++it;
         }
     }
 
-    enigma::core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+    enigma::core::LogInfo(LogRenderer,
                           "UpdateCompletedCommandLists() finished - Recycled=%zu, Remaining=%zu",
                           recycledCount, m_executingLists.size());
 }
@@ -1365,7 +1366,7 @@ ID3D12Fence* CommandListManager::GetFenceByType(Type type)
     case Type::Copy:
         return m_copyFence.Get();
     default:
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "GetFenceByType() - Unknown Type");
         return nullptr;
     }
@@ -1390,7 +1391,7 @@ uint64_t& CommandListManager::GetFenceValueByType(Type type)
         return m_copyFenceValue;
     default:
         // 不应该到达这里，但提供一个静态dummy避免崩溃
-        enigma::core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+        enigma::core::LogError(LogRenderer,
                                "GetFenceValueByType() - Unknown Type, returning dummy");
         static uint64_t dummy = 0;
         return dummy;

@@ -180,7 +180,8 @@ namespace enigma::graphic
         }
 
         /**
-         * @brief 上传资源到GPU
+         * @brief 上传资源到GPU (虚函数 - 支持复合资源重写)
+         * @param commandList 可选的命令列表（复合资源可能需要传递给子资源）
          * @return 成功返回true，失败返回false
          *
          * 教学要点:
@@ -188,8 +189,9 @@ namespace enigma::graphic
          * 2. 使用Copy Command List专用队列
          * 3. 同步等待上传完成(KISS原则)
          * 4. 上传后设置m_isUploaded = true
+         * 5. 虚函数设计: 复合资源(如RenderTarget)可重写此方法来管理子资源上传
          */
-        bool Upload();
+        virtual bool Upload(ID3D12GraphicsCommandList* commandList = nullptr);
 
         /**
          * @brief 检查资源是否已上传到GPU
@@ -204,6 +206,7 @@ namespace enigma::graphic
         {
             return m_isUploaded;
         }
+
 
         // ========================================================================
         // SM6.6 Bindless资源管理接口 (Milestone 2.7简化版)
@@ -289,6 +292,21 @@ namespace enigma::graphic
         virtual D3D12_RESOURCE_STATES GetUploadDestinationState() const = 0;
 
         /**
+         * @brief 检查资源是否需要CPU数据上传 (虚函数 - 子类可重写)
+         * @return 需要CPU数据返回true，否则返回false
+         *
+         * 教学要点:
+         * 1. RenderTarget/DepthStencil纹理作为输出纹理，不需要CPU数据
+         * 2. 普通纹理(贴图)、缓冲区需要CPU数据
+         * 3. 默认实现返回true(大多数资源需要CPU数据)
+         * 4. 子类可重写返回false来跳过CPU数据检查
+         */
+        virtual bool RequiresCPUData() const
+        {
+            return true; // 默认需要CPU数据
+        }
+
+        /**
          * @brief 在全局描述符堆中创建描述符(纯虚函数)
          * @param device DX12设备
          * @param heapManager 全局描述符堆管理器
@@ -322,7 +340,7 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief 注册到Bindless系统
+         * @brief 注册到Bindless系统 (虚函数 - 支持复合资源重写)
          * @return 成功返回全局索引，失败返回nullopt
          *
          * 教学要点:
@@ -330,6 +348,7 @@ namespace enigma::graphic
          * 2. True Bindless流程: Create() → Upload() → RegisterBindless()
          * 3. 安全检查: 必须先Upload()才能RegisterBindless()
          * 4. 三步注册: 分配索引 → 存储索引 → 创建描述符
+         * 5. 虚函数设计: 复合资源(如RenderTarget)可重写此方法来管理子资源注册
          *
          * 使用示例:
          * ```cpp
@@ -340,7 +359,7 @@ namespace enigma::graphic
          * // 现在可以在Shader中通过index访问: ResourceDescriptorHeap[index]
          * ```
          */
-        std::optional<uint32_t> RegisterBindless();
+        virtual std::optional<uint32_t> RegisterBindless();
 
         /**
          * @brief 从Bindless系统注销
