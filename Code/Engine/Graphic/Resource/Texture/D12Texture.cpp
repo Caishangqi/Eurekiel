@@ -8,6 +8,7 @@
 #include "../GlobalDescriptorHeapManager.hpp"
 #include "../UploadContext.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
@@ -628,6 +629,18 @@ namespace enigma::graphic
             flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         }
 
+        // Milestone 3.0修复：添加RenderTarget标志处理
+        if (HasFlag(usage, TextureUsage::RenderTarget))
+        {
+            flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        }
+
+        // Milestone 3.0修复：添加DepthStencil标志处理
+        if (HasFlag(usage, TextureUsage::DepthStencil))
+        {
+            flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        }
+
         return flags;
     }
 
@@ -827,10 +840,93 @@ namespace enigma::graphic
         UploadContext&             uploadContext
     )
     {
+        /*
+         * ============================================================================
+         * Educational Note: Why RenderTarget/DepthStencil Doesn't Need Upload()
+         * ============================================================================
+         *
+         * Key Concept: Input Texture vs Output Texture
+         * ---------------------------------------------
+         * - Input Texture (e.g., "texture/block/stone.png"):
+         *   Loaded from disk/memory, requires CPU-to-GPU data transfer via upload heap.
+         *
+         * - Output Texture (RenderTarget/DepthStencil):
+         *   GPU render output destination, no CPU data exists initially.
+         *   GPU directly writes rendered pixels during draw calls.
+         *
+         * RenderTarget Lifecycle (e.g., colortex0 in Iris/Minecraft Deferred Rendering)
+         * -------------------------------------------------------------------------------
+         * 1. Create():
+         *    Allocate empty GPU memory (e.g., 1920x1080 RGBA16F = 16.6MB).
+         *    Initial state: D3D12_RESOURCE_STATE_COMMON (undefined content).
+         *
+         * 2. Upload() [THIS METHOD]:
+         *    Does NOT transfer CPU data (because no CPU data exists).
+         *    Only marks m_isUploaded = true for safety checks.
+         *    Allows subsequent RegisterBindless() to proceed.
+         *
+         * 3. RegisterBindless():
+         *    Create Shader Resource View (SRV) for shader sampling.
+         *    Assign bindless index (e.g., colortex0 -> index 10).
+         *
+         * 4. OMSetRenderTargets():
+         *    Bind as render target for GPU output (RTV - Render Target View).
+         *    State transition: COMMON -> RENDER_TARGET.
+         *
+         * 5. Draw Calls (Geometry Pass):
+         *    GPU writes rendered pixels directly to this texture.
+         *    Example: Store albedo, normal, depth into colortex0-2 (GBuffer).
+         *
+         * 6. Later Rendering Pass (Lighting Pass):
+         *    Sample this texture via SRV (bindless index).
+         *    State transition: RENDER_TARGET -> PIXEL_SHADER_RESOURCE.
+         *    Example: Read GBuffer to compute final lighting.
+         *
+         * Why Still Call Upload() for RenderTarget?
+         * ------------------------------------------
+         * - Architecture Consistency:
+         *   All textures follow unified lifecycle: Create() -> Upload() -> RegisterBindless().
+         *   This simplifies code and prevents special-case bugs.
+         *
+         * - Safety Check:
+         *   RegisterBindless() requires m_isUploaded == true to prevent using uninitialized resources.
+         *   Without calling Upload(), RegisterBindless() would fail assertion.
+         *
+         * - State Transition (if needed):
+         *   Base class D12Resource::Upload() may convert resource state.
+         *   Example: COMMON -> RENDER_TARGET (though typically done at first OMSetRenderTargets).
+         *
+         * Analogy for Understanding
+         * -------------------------
+         * - Input Texture = Import a photo into Photoshop (requires loading from disk).
+         * - Output Texture = Create a new blank canvas in Photoshop (empty, ready for painting).
+         *
+         * Iris/Minecraft Deferred Rendering Context
+         * ------------------------------------------
+         * - colortex0-15 = RenderTargets storing GBuffer (Albedo, Normal, Depth, etc.).
+         * - texture/block/stone.png = Input Texture loaded from resource pack.
+         * - Geometry Pass: Render scene -> Write to colortex0-2 (Output).
+         * - Lighting Pass: Read colortex0-2 (Input via SRV) -> Compute lighting -> Write to colortex3.
+         * ============================================================================
+         */
+        if (HasFlag(m_usage, TextureUsage::RenderTarget) || HasFlag(m_usage, TextureUsage::DepthStencil))
+        {
+            // Mark as uploaded (no actual data transfer, just state marking)
+            m_isUploaded = true;
+
+            core::LogInfo(LogRenderer,
+                          "Texture '%s' marked as uploaded (RenderTarget/DepthStencil, no CPU data needed)",
+                          GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+
+            return true;
+        }
+
+        // 输入纹理：必须提供CPU数据
         if (!HasCPUData())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
-                           "D12Texture::UploadToGPU: No CPU data available");
+            core::LogError(LogRenderer,
+                           "D12Texture::UploadToGPU: No CPU data available for input texture '%s'",
+                           GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
             return false;
         }
 
@@ -857,13 +953,13 @@ namespace enigma::graphic
 
         if (!uploadSuccess)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "D12Texture::UploadToGPU: Failed to upload texture '%s'",
                            GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
             return false;
         }
 
-        core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+        core::LogDebug(LogRenderer,
                        "D12Texture::UploadToGPU: Successfully uploaded texture '%s' (%ux%u, %u bytes)",
                        GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
                        m_width, m_height, GetCPUDataSize());

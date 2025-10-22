@@ -45,12 +45,37 @@ namespace enigma::graphic
         UnorderedAccess = 0x2, ///< 无序访问 (UAV) - 用于Compute Shader
         CopySource = 0x4, ///< 复制源
         CopyDestination = 0x8, ///< 复制目标
+        RenderTarget = 0x10, ///< 渲染目标 (RTV) - Milestone 3.0修复
+        DepthStencil = 0x20, ///< 深度模板 (DSV) - Milestone 3.0修复
 
         // 组合标志
         Default = ShaderResource,
         Compute = ShaderResource | UnorderedAccess,
-        AllUsages = ShaderResource | UnorderedAccess | CopySource | CopyDestination
+        RT_And_SRV = RenderTarget | ShaderResource, ///< 常用组合：RenderTarget + ShaderResource
+        AllUsages = ShaderResource | UnorderedAccess | CopySource | CopyDestination | RenderTarget | DepthStencil
     };
+
+    // ==================== 位运算操作符重载 (TextureUsage) ====================
+    // 注意: 必须在TextureUsage枚举之后、D12Texture类之前定义，以便类内方法可以使用
+
+    inline TextureUsage operator|(TextureUsage a, TextureUsage b)
+    {
+        return static_cast<TextureUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+    }
+
+    inline TextureUsage operator&(TextureUsage a, TextureUsage b)
+    {
+        return static_cast<TextureUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+    }
+
+    /// @brief 检查TextureUsage标志是否包含指定的标志位
+    /// @param value 要检查的标志集合
+    /// @param flag 要查找的标志位
+    /// @return 如果value包含flag返回true，否则返回false
+    inline bool HasFlag(TextureUsage value, TextureUsage flag)
+    {
+        return (value & flag) == flag;
+    }
 
     /**
      * @brief 纹理类型枚举
@@ -370,6 +395,22 @@ namespace enigma::graphic
          */
         D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
 
+        /**
+         * @brief 重写基类方法: 检查纹理是否需要CPU数据上传
+         * @return RenderTarget/DepthStencil返回false，其他纹理返回true
+         *
+         * 教学要点:
+         * 1. RenderTarget和DepthStencil是输出纹理，由GPU渲染写入
+         * 2. 普通纹理(贴图)是输入纹理，需要从CPU加载数据
+         * 3. 这个方法允许Upload()跳过对输出纹理的CPU数据检查
+         */
+        bool RequiresCPUData() const override
+        {
+            // 输出纹理(RenderTarget/DepthStencil)不需要CPU数据
+            return !HasFlag(m_usage, TextureUsage::RenderTarget) &&
+                !HasFlag(m_usage, TextureUsage::DepthStencil);
+        }
+
         // ==================== 静态辅助方法 (受保护访问) ====================
 
         /**
@@ -455,23 +496,6 @@ namespace enigma::graphic
          */
         static D3D12_RESOURCE_STATES GetInitialState(TextureUsage usage);
     };
-
-    // ==================== 位运算操作符重载 ====================
-
-    inline TextureUsage operator|(TextureUsage a, TextureUsage b)
-    {
-        return static_cast<TextureUsage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-    }
-
-    inline TextureUsage operator&(TextureUsage a, TextureUsage b)
-    {
-        return static_cast<TextureUsage>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
-    }
-
-    inline bool HasFlag(TextureUsage value, TextureUsage flag)
-    {
-        return (value & flag) == flag;
-    }
 
     // ==================== 类型别名 ====================
     using TexturePtr = std::unique_ptr<D12Texture>;
