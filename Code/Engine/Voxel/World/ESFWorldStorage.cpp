@@ -898,7 +898,7 @@ namespace enigma::voxel
             oldestEntry->second->fileStream.flush();
         }
 
-        core::LogDebug("chunk", "Evicted region file from cache: %s", oldestEntry->first.c_str());
+        core::LogDebug(LogChunk, "Evicted region file from cache: %s", oldestEntry->first.c_str());
         m_regionCache.erase(oldestEntry);
     }
 

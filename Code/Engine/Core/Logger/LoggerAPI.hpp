@@ -217,19 +217,19 @@ namespace enigma::core
     template <typename... Args>
     inline void LogGameInfo(Args&&... args)
     {
-        LogInfo("Game", std::forward<Args>(args)...);
+        LogInfo("LogGame", std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void LogGameWarn(Args&&... args)
     {
-        LogWarn("Game", std::forward<Args>(args)...);
+        LogWarn("LogGame", std::forward<Args>(args)...);
     }
 
     template <typename... Args>
     inline void LogGameError(Args&&... args)
     {
-        LogError("Game", std::forward<Args>(args)...);
+        LogError("LogGame", std::forward<Args>(args)...);
     }
 
     // Formatted logging functions - LogCategoryBase overloads with default level filtering

@@ -10,6 +10,10 @@
 #include <memory>
 #include <functional>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogBlockStateBuilder)
+
 namespace enigma::model
 {
     class ModelSubsystem;

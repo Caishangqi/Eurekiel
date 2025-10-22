@@ -74,6 +74,7 @@ namespace enigma::core
         // 主启动阶段（预留）
         // 在Initialize之后调用，所有子系统的Initialize都已完成
         DebuggerPrintf("[ImGuiSubsystem] Startup completed\n");
+        g_theImGui = this;
     }
 
     void ImGuiSubsystem::Shutdown()

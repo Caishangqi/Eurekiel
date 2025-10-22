@@ -244,6 +244,7 @@
         <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp"/>
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
         <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp"/>
+        <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp"/>
         <ClCompile Include="Graphic\Resource\BindlessIndexAllocator.cpp"/>
         <ClCompile Include="Graphic\Resource\BindlessRootSignature.cpp"/>
         <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp"/>
@@ -283,6 +284,7 @@
         <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
         <ClCompile Include="Graphic\Target\DepthTextureManager.cpp"/>
         <ClCompile Include="Graphic\Target\RenderTargetManager.cpp" />
+        <ClCompile Include="Graphic\Test\TestPSO.cpp"/>
         <ClCompile Include="Input\AnalogJoystick.cpp" />
         <ClCompile Include="Input\InputSystem.cpp" />
         <ClCompile Include="Input\KeyButtonState.cpp" />
@@ -663,6 +665,7 @@
         <ClInclude Include="Core\ImGui\ImGuiMessagePreprocessor.hpp" />
         <ClInclude Include="Graphic\Core\Pipeline\ProgramArrayId.hpp"/>
         <ClInclude Include="Graphic\Core\RenderState.hpp"/>
+        <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp"/>
         <ClInclude Include="Graphic\Resource\Buffer\D12IndexBuffer.hpp"/>
         <ClInclude Include="Graphic\Resource\Buffer\D12VertexBuffer.hpp"/>
         <ClInclude Include="Graphic\Target\DepthTextureManager.hpp"/>
@@ -762,6 +765,9 @@
         <ClInclude Include="Graphic\Target\D12DepthTexture.hpp" />
         <ClInclude Include="Graphic\Target\D12RenderTarget.hpp" />
         <ClInclude Include="Graphic\Target\RenderTargetManager.hpp" />
+        <ClInclude Include="Graphic\Test\TestPSO.hpp"/>
+        <ClInclude Include="Graphic\Test\TestInputLayout.hpp"/>
+        <ClInclude Include="Graphic\Test\TestTriangleShader.hpp"/>
         <ClInclude Include="Input\AnalogJoystick.hpp" />
         <ClInclude Include="Input\InputSystem.hpp" />
         <ClInclude Include="Input\KeyButtonState.hpp" />

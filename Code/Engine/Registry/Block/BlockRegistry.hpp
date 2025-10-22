@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+DECLARE_LOG_CATEGORY_EXTERN(LogRegistryBlock)
 
 namespace enigma::registry::block
 {

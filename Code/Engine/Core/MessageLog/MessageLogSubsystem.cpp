@@ -42,7 +42,7 @@ namespace enigma::core
     void MessageLogSubsystem::Startup()
     {
         // 添加启动消息
-        AddMessage(LogLevel::INFO, "System", "MessageLog system started");
+        AddMessage(LogLevel::INFO, "LogSystem", "MessageLog system started");
     }
 
     void MessageLogSubsystem::Update(float deltaTime)

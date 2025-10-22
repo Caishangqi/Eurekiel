@@ -4,6 +4,10 @@
 #include <array>
 #include <string>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogESF)
+
 namespace enigma::voxel
 {
     /**

@@ -7,9 +7,9 @@ namespace enigma::core
 {
     TaskWorkerThread::TaskWorkerThread(int workerID, const std::string& assignedType, ScheduleSubsystem* system)
         : m_workerID(workerID)
-        , m_assignedType(assignedType)
-        , m_system(system)
-        , m_thread(nullptr)
+          , m_assignedType(assignedType)
+          , m_system(system)
+          , m_thread(nullptr)
     {
         m_thread = new std::thread(&TaskWorkerThread::ThreadMain, this);
     }
@@ -65,7 +65,7 @@ namespace enigma::core
     //-----------------------------------------------------------------------------------------------
     void TaskWorkerThread::ThreadMain()
     {
-        LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogDebug(LogSchedule,
                  "Worker #%d (type='%s') started (Phase 2: CV optimization)",
                  m_workerID, m_assignedType.c_str());
 
@@ -80,11 +80,12 @@ namespace enigma::core
 
                 // Wait until: shutdown requested OR task of our type is available
                 // PREDICATE: Return true to wake up and proceed
-                m_system->GetConditionVariableForType(m_assignedType).wait(lock, [this]() {
+                m_system->GetConditionVariableForType(m_assignedType).wait(lock, [this]()
+                {
                     // Wake up if shutting down (need to exit loop)
                     if (m_system->IsShuttingDown())
                         return true;
-                    
+
                     // Wake up if task of our type is pending
                     return m_system->HasPendingTaskOfType(m_assignedType);
                 });
@@ -102,23 +103,23 @@ namespace enigma::core
             // Execute task outside critical section (allows parallel execution)
             if (task)
             {
-                LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
-                        "Worker #%d executing task of type='%s'",
-                        m_workerID, task->GetType().c_str());
+                LogDebug(LogSchedule,
+                         "Worker #%d executing task of type='%s'",
+                         m_workerID, task->GetType().c_str());
 
                 task->SetState(TaskState::Executing);
-                task->Execute();  // This may take time (file I/O, computation, etc.)
+                task->Execute(); // This may take time (file I/O, computation, etc.)
 
                 // Mark task as completed (re-enters critical section internally)
                 m_system->OnTaskCompleted(task);
 
-                LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
-                        "Worker #%d completed task of type='%s'",
-                        m_workerID, task->GetType().c_str());
+                LogDebug(LogSchedule,
+                         "Worker #%d completed task of type='%s'",
+                         m_workerID, task->GetType().c_str());
             }
         }
 
-        LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
-                "Worker #%d exiting", m_workerID);
+        LogDebug(LogSchedule,
+                 "Worker #%d exiting", m_workerID);
     }
 }

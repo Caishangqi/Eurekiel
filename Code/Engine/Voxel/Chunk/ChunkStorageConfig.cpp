@@ -4,6 +4,8 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include <sstream>
 
+DEFINE_LOG_CATEGORY(LogChunkSave)
+
 namespace enigma::voxel
 {
     using namespace enigma::core;
@@ -34,7 +36,7 @@ namespace enigma::voxel
         if (str == "ModifiedOnly") return ChunkSaveStrategy::ModifiedOnly;
         if (str == "PlayerModifiedOnly") return ChunkSaveStrategy::PlayerModifiedOnly;
 
-        LogWarn("chunkstorage", "Unknown ChunkSaveStrategy: %s, using default ModifiedOnly", str.c_str());
+        LogWarn(LogChunkSave, "Unknown ChunkSaveStrategy: %s, using default ModifiedOnly", str.c_str());
         return ChunkSaveStrategy::ModifiedOnly;
     }
 
@@ -53,7 +55,7 @@ namespace enigma::voxel
         if (str == "ESF") return ChunkStorageFormat::ESF;
         if (str == "ESFS") return ChunkStorageFormat::ESFS;
 
-        LogWarn("chunkstorage", "Unknown ChunkStorageFormat: %s, using default ESFS", str.c_str());
+        LogWarn(LogChunkSave, "Unknown ChunkStorageFormat: %s, using default ESFS", str.c_str());
         return ChunkStorageFormat::ESFS;
     }
 
@@ -87,7 +89,7 @@ namespace enigma::voxel
             auto yamlOpt = YamlConfiguration::TryLoadFromFile(actualPath);
             if (!yamlOpt.has_value())
             {
-                LogWarn("chunkstorage", "Failed to load config from '%s', using defaults", actualPath.c_str());
+                LogWarn(LogChunkSave, "Failed to load config from '%s', using defaults", actualPath.c_str());
                 return config;
             }
 
@@ -96,7 +98,7 @@ namespace enigma::voxel
             // Load chunk_storage section
             if (!yaml.Contains("chunk_storage"))
             {
-                LogWarn("chunkstorage", "Config file missing 'chunk_storage' section, using defaults");
+                LogWarn(LogChunkSave, "Config file missing 'chunk_storage' section, using defaults");
                 return config;
             }
 
@@ -149,16 +151,16 @@ namespace enigma::voxel
             // Validate loaded config
             if (!config.Validate())
             {
-                LogError("chunkstorage", "Loaded config is invalid, falling back to defaults");
+                LogError(LogChunkSave, "Loaded config is invalid, falling back to defaults");
                 return GetDefault();
             }
 
-            LogInfo("chunkstorage", "Successfully loaded config from '%s'", actualPath.c_str());
-            LogInfo("chunkstorage", "Config: %s", config.ToString().c_str());
+            LogInfo(LogChunkSave, "Successfully loaded config from '%s'", actualPath.c_str());
+            LogInfo(LogChunkSave, "Config: %s", config.ToString().c_str());
         }
         catch (const std::exception& e)
         {
-            LogError("chunkstorage", "Exception loading config: %s, using defaults", e.what());
+            LogError(LogChunkSave, "Exception loading config: %s, using defaults", e.what());
             return GetDefault();
         }
 
@@ -190,16 +192,16 @@ namespace enigma::voxel
             // Save to file
             if (!yaml.SaveToFile(actualPath))
             {
-                LogError("chunkstorage", "Failed to save config to '%s'", actualPath.c_str());
+                LogError(LogChunkSave, "Failed to save config to '%s'", actualPath.c_str());
                 return false;
             }
 
-            LogInfo("chunkstorage", "Successfully saved config to '%s'", actualPath.c_str());
+            LogInfo(LogChunkSave, "Successfully saved config to '%s'", actualPath.c_str());
             return true;
         }
         catch (const std::exception& e)
         {
-            LogError("chunkstorage", "Exception saving config: %s", e.what());
+            LogError(LogChunkSave, "Exception saving config: %s", e.what());
             return false;
         }
     }
@@ -209,28 +211,28 @@ namespace enigma::voxel
         // Validate compression level
         if (enableCompression && (compressionLevel < 1 || compressionLevel > 9))
         {
-            LogError("chunkstorage", "Invalid compressionLevel: %d (must be 1-9)", compressionLevel);
+            LogError(LogChunkSave, "Invalid compressionLevel: %d (must be 1-9)", compressionLevel);
             return false;
         }
 
         // Validate cache size
         if (maxCachedRegions < 1 || maxCachedRegions > 256)
         {
-            LogError("chunkstorage", "Invalid maxCachedRegions: %zu (must be 1-256)", maxCachedRegions);
+            LogError(LogChunkSave, "Invalid maxCachedRegions: %zu (must be 1-256)", maxCachedRegions);
             return false;
         }
 
         // Validate auto-save interval
         if (autoSaveEnabled && (autoSaveInterval < 10.0f || autoSaveInterval > 3600.0f))
         {
-            LogError("chunkstorage", "Invalid autoSaveInterval: %.1f (must be 10-3600 seconds)", autoSaveInterval);
+            LogError(LogChunkSave, "Invalid autoSaveInterval: %.1f (must be 10-3600 seconds)", autoSaveInterval);
             return false;
         }
 
         // Validate base path
         if (baseSavePath.empty())
         {
-            LogError("chunkstorage", "baseSavePath cannot be empty");
+            LogError(LogChunkSave, "baseSavePath cannot be empty");
             return false;
         }
 

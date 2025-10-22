@@ -5,7 +5,7 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 using namespace enigma::core;
-
+DEFINE_LOG_CATEGORY(LogSchedule)
 ScheduleSubsystem* g_theSchedule = nullptr;
 
 //-----------------------------------------------------------------------------------------------
@@ -83,7 +83,7 @@ ScheduleSubsystem::~ScheduleSubsystem()
 {
     if (!m_workerThreads.empty())
     {
-        LogWarn(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogWarn(LogSchedule,
                 "ScheduleSubsystem destroyed without Shutdown()!");
     }
 }
@@ -93,25 +93,25 @@ ScheduleSubsystem::~ScheduleSubsystem()
 //-----------------------------------------------------------------------------------------------
 void ScheduleSubsystem::Startup()
 {
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogInfo(LogSchedule,
             "Startup() - Phase 2 (YAML-driven), loaded %d task types",
             (int)m_config.task_types.size());
 
     for (const auto& typeDef : m_config.task_types)
     {
         m_typeRegistry.RegisterType(typeDef.type, typeDef.threads);
-        LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogInfo(LogSchedule,
                 "Registered type '%s' with %d threads",
                 typeDef.type.c_str(), typeDef.threads);
     }
 
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogInfo(LogSchedule,
             "Registered %d task types, total %d threads",
             (int)m_typeRegistry.GetAllTypes().size(),
             m_typeRegistry.GetTotalThreadCount());
 
     CreateWorkerThreads();
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "Startup complete");
+    LogInfo(LogSchedule, "Startup complete");
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -119,7 +119,7 @@ void ScheduleSubsystem::Startup()
 //-----------------------------------------------------------------------------------------------
 void ScheduleSubsystem::Shutdown()
 {
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "Shutdown() called");
+    LogInfo(LogSchedule, "Shutdown() called");
 
     m_isShuttingDown.store(true);
     // Notify all types to wake up for shutdown
@@ -149,14 +149,14 @@ void ScheduleSubsystem::Shutdown()
     m_executingTasks.clear();
     m_completedTasks.clear();
 
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "Shutdown complete");
+    LogInfo(LogSchedule, "Shutdown complete");
 }
 
 void ScheduleSubsystem::AddTask(RunnableTask* task, TaskPriority priority)
 {
     if (!task)
     {
-        LogError(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogError(LogSchedule,
                  "Attempted to add null task");
         return;
     }
@@ -180,7 +180,7 @@ void ScheduleSubsystem::AddTask(RunnableTask* task, TaskPriority priority)
             }
         }
 
-        LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogInfo(LogSchedule,
                 "AddTask: Added task type='%s' priority=%s (total pending: %d)",
                 taskType.c_str(), priorityStr, totalPending);
     }
@@ -188,7 +188,7 @@ void ScheduleSubsystem::AddTask(RunnableTask* task, TaskPriority priority)
     // Notify only workers of the matching type (Plan 1: Per-Type Condition Variables)
     m_typeConditionVariables[taskType].notify_one();
 
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogInfo(LogSchedule,
             "AddTask: Notified workers of type '%s'", taskType.c_str());
 }
 
@@ -289,7 +289,7 @@ void ScheduleSubsystem::OnTaskCompleted(RunnableTask* task)
 
 void ScheduleSubsystem::CreateWorkerThreads()
 {
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "Creating worker threads...");
+    LogInfo(LogSchedule, "Creating worker threads...");
 
     int  globalWorkerID = 0;
     auto allTypes       = m_typeRegistry.GetAllTypes();
@@ -306,13 +306,13 @@ void ScheduleSubsystem::CreateWorkerThreads()
         }
     }
 
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogInfo(LogSchedule,
             "Created %d worker threads", globalWorkerID);
 }
 
 void ScheduleSubsystem::DestroyWorkerThreads()
 {
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogInfo(LogSchedule,
             "Destroying %d worker threads...", (int)m_workerThreads.size());
 
     for (TaskWorkerThread* worker : m_workerThreads)
@@ -321,7 +321,7 @@ void ScheduleSubsystem::DestroyWorkerThreads()
     }
 
     m_workerThreads.clear();
-    LogInfo(ScheduleSubsystem::GetStaticSubsystemName(), "All worker threads destroyed");
+    LogInfo(LogSchedule, "All worker threads destroyed");
 }
 
 bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
@@ -330,7 +330,7 @@ bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
     auto typeIt = m_pendingTasksByType.find(typeStr);
     if (typeIt == m_pendingTasksByType.end())
     {
-        LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogDebug(LogSchedule,
                  "HasPendingTaskOfType('%s'): No tasks found (type not in map)",
                  typeStr.c_str());
         return false;
@@ -343,14 +343,14 @@ bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
     {
         if (!priorityPair.second.empty())
         {
-            LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+            LogDebug(LogSchedule,
                      "HasPendingTaskOfType('%s'): Found %d tasks in priority queue",
                      typeStr.c_str(), (int)priorityPair.second.size());
             return true;
         }
     }
 
-    LogDebug(ScheduleSubsystem::GetStaticSubsystemName(),
+    LogDebug(LogSchedule,
              "HasPendingTaskOfType('%s'): No tasks found (all queues empty)",
              typeStr.c_str());
     return false;

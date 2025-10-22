@@ -8,8 +8,11 @@
 #include <memory>
 #include <atomic>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
 #include "Engine/Math/AABB3.hpp"
 #include "Engine/Math/IntVec2.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogChunk)
 
 namespace enigma::voxel
 {

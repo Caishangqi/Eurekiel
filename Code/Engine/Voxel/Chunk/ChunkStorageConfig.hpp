@@ -2,6 +2,9 @@
 #include <string>
 #include <cstdint>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+DECLARE_LOG_CATEGORY_EXTERN(LogChunkSave)
+
 namespace enigma::voxel
 {
     // Forward declaration

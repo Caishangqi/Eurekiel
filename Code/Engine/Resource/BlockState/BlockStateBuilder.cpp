@@ -11,7 +11,7 @@
 
 using namespace enigma::resource::blockstate;
 using namespace enigma::registry::block;
-
+DEFINE_LOG_CATEGORY(LogBlockStateBuilder)
 // ConditionBuilder implementation
 std::map<std::string, std::string> BlockStateBuilder::ConditionBuilder::Build() const
 {
@@ -218,7 +218,7 @@ std::shared_ptr<BlockStateDefinition> BlockStateBuilder::Build()
     auto* modelSubsystem = GEngine->GetSubsystem<enigma::model::ModelSubsystem>();
     if (!modelSubsystem)
     {
-        LogWarn("BlockStateBuilder", "ModelSubsystem not found - models will not be compiled");
+        LogWarn(LogBlockStateBuilder, "ModelSubsystem not found - models will not be compiled");
     }
 
     if (m_isMultipart)
@@ -362,7 +362,7 @@ void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::
 
         if (compiledMesh)
         {
-            LogInfo("BlockStateBuilder", "Successfully compiled model: %s",
+            LogInfo(LogBlockStateBuilder, "Successfully compiled model: %s",
                     variant.model.ToString().c_str());
 
             // Store the compiled mesh in the variant for BlockState to access
@@ -370,13 +370,13 @@ void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::
         }
         else
         {
-            LogWarn("BlockStateBuilder", "Failed to compile model: %s",
+            LogWarn(LogBlockStateBuilder, "Failed to compile model: %s",
                     variant.model.ToString().c_str());
         }
     }
     catch (const std::exception& e)
     {
-        LogError("BlockStateBuilder", "Exception while compiling model %s: %s",
+        LogError(LogBlockStateBuilder, "Exception while compiling model %s: %s",
                  variant.model.ToString().c_str(), e.what());
     }
 }

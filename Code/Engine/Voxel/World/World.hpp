@@ -19,6 +19,7 @@
 #include <vector>
 #include <deque>
 #include <atomic>
+DECLARE_LOG_CATEGORY_EXTERN(LogWorld)
 
 namespace enigma::voxel
 {

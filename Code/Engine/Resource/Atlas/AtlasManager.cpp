@@ -9,6 +9,7 @@
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 using namespace enigma::core;
+DEFINE_LOG_CATEGORY(LogAtlas)
 
 namespace enigma::resource
 {
@@ -55,11 +56,11 @@ namespace enigma::resource
 
         if (images.empty())
         {
-            LogWarn("AtlasManager", "No textures found for atlas '%s'", atlasName.c_str());
+            LogWarn(LogAtlas, "No textures found for atlas '%s'", atlasName.c_str());
             return false;
         }
 
-        LogInfo("AtlasManager", "Building atlas '%s' with %zu textures", atlasName.c_str(), images.size());
+        LogInfo(LogAtlas, "Building atlas '%s' with %zu textures", atlasName.c_str(), images.size());
 
         // Create or get existing atlas
         auto atlasIt = m_atlases.find(atlasName);
@@ -78,7 +79,7 @@ namespace enigma::resource
         if (success)
         {
             m_lookupCacheValid = false;
-            LogInfo("AtlasManager", "Atlas '%s' built successfully", atlasName.c_str());
+            LogInfo(LogAtlas, "Atlas '%s' built successfully", atlasName.c_str());
 
             // Export to PNG if configured
             if (config.exportPNG)
@@ -89,7 +90,7 @@ namespace enigma::resource
         }
         else
         {
-            LogInfo("AtlasManager", "Atlas '%s' failed to build\n", atlasName.c_str());
+            LogInfo(LogAtlas, "Atlas '%s' failed to build\n", atlasName.c_str());
             m_atlases.erase(atlasName);
         }
 

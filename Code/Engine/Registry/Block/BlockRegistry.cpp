@@ -6,6 +6,8 @@
 #include "../../Resource/ResourceSubsystem.hpp"
 #include <filesystem>
 
+DEFINE_LOG_CATEGORY(LogRegistryBlock)
+
 namespace enigma::registry::block
 {
     using namespace enigma::core;
@@ -16,7 +18,7 @@ namespace enigma::registry::block
         auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
         if (!registerSubsystem)
         {
-            LogError("registry", "RegisterSubsystem not found in engine");
+            LogError(LogRegistryBlock, "RegisterSubsystem not found in engine");
             return nullptr;
         }
 
@@ -27,7 +29,7 @@ namespace enigma::registry::block
             registry = registerSubsystem->CreateRegistry<Block>("blocks");
             if (registry)
             {
-                LogInfo("registry", "Block registry created successfully");
+                LogInfo(LogRegistryBlock, "Block registry created successfully");
             }
         }
 
@@ -39,7 +41,7 @@ namespace enigma::registry::block
         auto* registerSubsystem = GEngine->GetSubsystem<RegisterSubsystem>();
         if (!registerSubsystem)
         {
-            LogError("registry", "RegisterSubsystem not found in engine");
+            LogError(LogRegistryBlock, "RegisterSubsystem not found in engine");
             return nullptr;
         }
 
@@ -90,7 +92,7 @@ namespace enigma::registry::block
         std::string fullName              = block->GetNamespace() + ":" + block->GetRegistryName();
         s_blockStateDefinitions[fullName] = definition;
 
-        LogDebug("registry", ("Generated BlockStateDefinition for block: " + fullName).c_str());
+        LogDebug(LogRegistryBlock, ("Generated BlockStateDefinition for block: " + fullName).c_str());
 
         return definition;
     }
@@ -123,7 +125,7 @@ namespace enigma::registry::block
             // Register the block
             registry->Register(name, block);
 
-            LogInfo("registry", ("Registered block: " + name + " with " +
+            LogInfo(LogRegistryBlock, ("Registered block: " + name + " with " +
                         std::to_string(block->GetStateCount()) + " states and resource mappings").c_str());
         }
     }
@@ -151,7 +153,7 @@ namespace enigma::registry::block
             registry->Register(namespaceName, name, block);
 
             std::string fullName = namespaceName + ":" + name;
-            LogInfo("registry", ("Registered block: " + fullName + " with " +
+            LogInfo(LogRegistryBlock, ("Registered block: " + fullName + " with " +
                         std::to_string(block->GetStateCount()) + " states and resource mappings").c_str());
         }
     }
@@ -245,7 +247,7 @@ namespace enigma::registry::block
 
         // Fallback - this should not happen in normal operation
         static enigma::resource::ResourceMapper fallbackMapper;
-        LogError("registry", "ResourceSubsystem not found! Using fallback ResourceMapper.");
+        LogError(LogRegistryBlock, "ResourceSubsystem not found! Using fallback ResourceMapper.");
         return fallbackMapper;
     }
 
@@ -385,7 +387,7 @@ namespace enigma::registry::block
         }
         catch (const std::exception& e)
         {
-            LogError("BlockRegistry", "Failed to register block from YAML: %s - %s", filePath.c_str(), e.what());
+            LogError(LogRegistryBlock, "Failed to register block from YAML: %s - %s", filePath.c_str(), e.what());
             return false;
         }
     }
@@ -401,18 +403,18 @@ namespace enigma::registry::block
             auto block = CreateBlockFromYaml(blockName, namespaceName, yaml);
             if (!block)
             {
-                LogError("BlockRegistry", "Failed to create block from YAML: %s", filePath.c_str());
+                LogError(LogRegistryBlock, "Failed to create block from YAML: %s", filePath.c_str());
                 return false;
             }
 
             // Register the block
             RegisterBlock(namespaceName, blockName, block);
-            LogInfo("BlockRegistry", "Successfully registered block: %s:%s", namespaceName.c_str(), blockName.c_str());
+            LogInfo(LogRegistryBlock, "Successfully registered block: %s:%s", namespaceName.c_str(), blockName.c_str());
             return true;
         }
         catch (const std::exception& e)
         {
-            LogError("BlockRegistry", "Failed to register block from YAML: %s - %s", filePath.c_str(), e.what());
+            LogError(LogRegistryBlock, "Failed to register block from YAML: %s - %s", filePath.c_str(), e.what());
             return false;
         }
     }
@@ -423,11 +425,11 @@ namespace enigma::registry::block
 
         if (!std::filesystem::exists(blockDir) || !std::filesystem::is_directory(blockDir))
         {
-            LogWarn("registry", "Block directory does not exist: %s", blockDir.string().c_str());
+            LogWarn(LogRegistryBlock, "Block directory does not exist: %s", blockDir.string().c_str());
             return;
         }
 
-        LogInfo("registry", "Loading blocks from directory: %s", blockDir.string().c_str());
+        LogInfo(LogRegistryBlock, "Loading blocks from directory: %s", blockDir.string().c_str());
 
         LoadBlocksFromDirectory(blockDir.string(), namespaceName);
     }
@@ -447,7 +449,7 @@ namespace enigma::registry::block
         }
         catch (const std::exception& e)
         {
-            LogError("registry", "Error loading blocks from directory: %s - %s", directoryPath.c_str(), e.what());
+            LogError(LogRegistryBlock, "Error loading blocks from directory: %s - %s", directoryPath.c_str(), e.what());
         }
     }
 
@@ -474,21 +476,21 @@ namespace enigma::registry::block
             {
                 std::string blockstatePath = yaml.GetString("blockstate");
                 block->SetBlockstatePath(blockstatePath);
-                LogDebug("registry", "Block %s:%s references blockstate: %s", namespaceName.c_str(), blockName.c_str(), blockstatePath.c_str());
+                LogDebug(LogRegistryBlock, "Block %s:%s references blockstate: %s", namespaceName.c_str(), blockName.c_str(), blockstatePath.c_str());
             }
             else if (yaml.Contains("model"))
             {
                 // Fallback for direct model reference (not recommended but supported)
                 std::string modelPath = yaml.GetString("model");
                 block->SetBlockstatePath(modelPath); // Store as blockstate path for now
-                LogWarn("registry", "Block %s:%s directly references model: %s (consider using blockstate)", namespaceName.c_str(), blockName.c_str(), modelPath.c_str());
+                LogWarn(LogRegistryBlock, "Block %s:%s directly references model: %s (consider using blockstate)", namespaceName.c_str(), blockName.c_str(), modelPath.c_str());
             }
             else
             {
                 // Generate default blockstate path
                 std::string defaultPath = namespaceName + ":block/" + blockName;
                 block->SetBlockstatePath(defaultPath);
-                LogDebug("registry", "Block %s:%s using default blockstate: %s", namespaceName.c_str(), blockName.c_str(), defaultPath.c_str());
+                LogDebug(LogRegistryBlock, "Block %s:%s using default blockstate: %s", namespaceName.c_str(), blockName.c_str(), defaultPath.c_str());
             }
 
             // Parse block properties
@@ -516,7 +518,7 @@ namespace enigma::registry::block
         }
         catch (const std::exception& e)
         {
-            LogError("registry", "Failed to create block %s:%s from YAML: %s", namespaceName.c_str(), blockName.c_str(), e.what());
+            LogError(LogRegistryBlock, "Failed to create block %s:%s from YAML: %s", namespaceName.c_str(), blockName.c_str(), e.what());
             return nullptr;
         }
     }
@@ -570,7 +572,7 @@ namespace enigma::registry::block
         }
         catch (const std::exception& e)
         {
-            LogError("registry", "Failed to parse properties from YAML: %s", e.what());
+            LogError(LogRegistryBlock, "Failed to parse properties from YAML: %s", e.what());
         }
 
         return properties;

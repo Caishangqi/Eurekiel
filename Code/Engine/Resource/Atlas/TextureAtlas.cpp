@@ -19,6 +19,7 @@
 #pragma warning(push)
 #pragma warning(disable: 4996) // Disable 'sprintf' unsafe warning
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Renderer/IRenderer.hpp"
 #include "ThirdParty/stb/stb_image_write.h"
 #pragma warning(pop)
@@ -182,13 +183,13 @@ namespace enigma::resource
                 m_atlasTexture = g_theRenderer->CreateTextureFromImage(*m_atlasImage);
                 if (m_atlasTexture)
                 {
-                    core::LogInfo("atlas", "Created GPU texture for atlas: %s (%dx%d)",
+                    core::LogInfo(core::LogResource, "Created GPU texture for atlas: %s (%dx%d)",
                                   m_location.ToString().c_str(),
                                   m_atlasDimensions.x, m_atlasDimensions.y);
                 }
                 else
                 {
-                    core::LogError("atlas", "Failed to create GPU texture for atlas: %s",
+                    core::LogError(core::LogResource, "Failed to create GPU texture for atlas: %s",
                                    m_location.ToString().c_str());
                 }
             }

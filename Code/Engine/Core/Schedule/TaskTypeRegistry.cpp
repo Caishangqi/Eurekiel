@@ -11,14 +11,14 @@ namespace enigma::core
     {
         if (!IsValidTypeName(typeStr))
         {
-            LogWarn(ScheduleSubsystem::GetStaticSubsystemName(), 
+            LogWarn(LogSchedule,
                     "Invalid task type name '%s'", typeStr.c_str());
             return;
         }
 
         if (threadCount <= 0)
         {
-            LogWarn(ScheduleSubsystem::GetStaticSubsystemName(),
+            LogWarn(LogSchedule,
                     "Invalid thread count %d for type '%s'",
                     threadCount, typeStr.c_str());
             return;
@@ -27,7 +27,7 @@ namespace enigma::core
         m_typeThreadCounts[typeStr] = threadCount;
         m_registeredTypes.insert(typeStr);
 
-        LogInfo(ScheduleSubsystem::GetStaticSubsystemName(),
+        LogInfo(LogSchedule,
                 "Registered task type: %s -> %d threads",
                 typeStr.c_str(), threadCount);
     }
@@ -46,7 +46,7 @@ namespace enigma::core
     std::vector<std::string> TaskTypeRegistry::GetAllTypes() const
     {
         return std::vector<std::string>(m_registeredTypes.begin(),
-                                         m_registeredTypes.end());
+                                        m_registeredTypes.end());
     }
 
     int TaskTypeRegistry::GetTotalThreadCount() const

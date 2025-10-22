@@ -10,6 +10,10 @@
 #include <map> // For per-type condition variables and priority queues
 #include <deque> // For task queues
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogSchedule)
+
 namespace enigma::core
 {
     // Forward declarations

@@ -7,6 +7,9 @@
 #include <string>
 #include <unordered_map>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+DECLARE_LOG_CATEGORY_EXTERN(LogModel)
+
 namespace enigma::renderer::model
 {
     class IModelCompiler;

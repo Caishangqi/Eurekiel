@@ -11,6 +11,7 @@
 using namespace enigma::resource;
 using namespace enigma::voxel;
 using namespace enigma::core;
+DEFINE_LOG_CATEGORY(LogBlockModelCompiler)
 
 namespace enigma::renderer::model
 {
@@ -18,7 +19,7 @@ namespace enigma::renderer::model
     {
         if (!model)
         {
-            LogError("BlockModelCompiler", "Cannot compile null model");
+            LogError(LogBlockModelCompiler, "Cannot compile null model");
             return nullptr;
         }
 
@@ -30,7 +31,7 @@ namespace enigma::renderer::model
 
         if (context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Compiling block model with %zu textures and %zu elements",
+            LogInfo(LogBlockModelCompiler, "Compiling block model with %zu textures and %zu elements",
                     resolvedTextures.size(), resolvedElements.size());
         }
 
@@ -40,7 +41,7 @@ namespace enigma::renderer::model
         // BlockModelCompiler is pure - it only compiles existing ModelElements
         if (resolvedElements.empty())
         {
-            LogError("BlockModelCompiler", "No elements to compile! ModelResource should contain geometry.");
+            LogError(LogBlockModelCompiler, "No elements to compile! ModelResource should contain geometry.");
             return blockMesh; // Return empty mesh
         }
 
@@ -52,7 +53,7 @@ namespace enigma::renderer::model
 
         if (context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Generated block mesh with %zu faces", blockMesh->faces.size());
+            LogInfo(LogBlockModelCompiler, "Generated block mesh with %zu faces", blockMesh->faces.size());
         }
 
         return blockMesh;
@@ -64,7 +65,7 @@ namespace enigma::renderer::model
     {
         if (m_context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Compiling element with %zu faces (from: %.1f,%.1f,%.1f, to: %.1f,%.1f,%.1f)",
+            LogInfo(LogBlockModelCompiler, "Compiling element with %zu faces (from: %.1f,%.1f,%.1f, to: %.1f,%.1f,%.1f)",
                     element.faces.size(),
                     element.from.x, element.from.y, element.from.z,
                     element.to.x, element.to.y, element.to.z);
@@ -98,7 +99,7 @@ namespace enigma::renderer::model
                 }
                 else
                 {
-                    LogWarn("BlockModelCompiler", "Unresolved texture variable: %s", textureRef.c_str());
+                    LogWarn(LogBlockModelCompiler, "Unresolved texture variable: %s", textureRef.c_str());
                     textureLocation = ResourceLocation("engine", "missingno");
                 }
             }
@@ -215,7 +216,7 @@ namespace enigma::renderer::model
     {
         if (!m_atlas)
         {
-            LogWarn("BlockModelCompiler", "No atlas available for texture: %s", textureLocation.ToString().c_str());
+            LogWarn(LogBlockModelCompiler, "No atlas available for texture: %s", textureLocation.ToString().c_str());
             return {Vec2(0, 0), Vec2(1, 1)};
         }
 
@@ -231,8 +232,8 @@ namespace enigma::renderer::model
         // Debug: Print atlas info
         if (m_context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Looking for texture: %s -> %s in atlas with %zu sprites",
-                    textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str(), m_atlas->GetAllSprites().size());
+            LogInfo(LogBlockModelCompiler, "Looking for texture: %s -> %s in atlas with %zu sprites", textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str(),
+                    m_atlas->GetAllSprites().size());
         }
 
         // Find sprite in atlas using the resolved path
@@ -241,14 +242,13 @@ namespace enigma::renderer::model
         {
             if (m_context.enableLogging)
             {
-                LogWarn("BlockModelCompiler", "Texture not found in atlas: %s (resolved to %s)",
-                        textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
+                LogWarn(LogBlockModelCompiler, "Texture not found in atlas: %s (resolved to %s)", textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
 
                 // List all sprites in atlas for debugging
                 const auto& allSprites = m_atlas->GetAllSprites();
                 for (const auto& spriteInfo : allSprites)
                 {
-                    LogInfo("BlockModelCompiler", "  Atlas contains sprite: %s", spriteInfo.location.ToString().c_str());
+                    LogInfo(LogBlockModelCompiler, "  Atlas contains sprite: %s", spriteInfo.location.ToString().c_str());
                 }
             }
             return {Vec2(0, 0), Vec2(1, 1)};
@@ -256,8 +256,7 @@ namespace enigma::renderer::model
 
         if (m_context.enableLogging)
         {
-            LogInfo("BlockModelCompiler", "Found texture: %s -> %s",
-                    textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
+            LogInfo(LogBlockModelCompiler, "Found texture: %s -> %s", textureLocation.ToString().c_str(), actualTextureLocation.ToString().c_str());
         }
 
         return {sprite->uvMin, sprite->uvMax};

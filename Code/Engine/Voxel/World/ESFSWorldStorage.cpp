@@ -4,6 +4,8 @@
 #include "../../Core/Logger/LoggerAPI.hpp"
 #include <fstream>
 
+#include "Engine/Voxel/Chunk/ESFFormat.hpp"
+
 namespace enigma::voxel
 {
     using namespace enigma::core;
@@ -22,11 +24,11 @@ namespace enigma::voxel
         // Ensure region directory exists
         if (!ESFSFile::EnsureRegionDirectory(worldPath))
         {
-            LogError("esfs_storage", "Failed to create region directory for world: %s", worldPath.c_str());
+            LogError(LogESF, "Failed to create region directory for world: %s", worldPath.c_str());
         }
 
-        LogInfo("esfs_storage", "Initialized ESFS storage for world: %s", worldPath.c_str());
-        LogInfo("esfs_storage", "Config: %s", config.ToString().c_str());
+        LogInfo(LogESF, "Initialized ESFS storage for world: %s", worldPath.c_str());
+        LogInfo(LogESF, "Config: %s", config.ToString().c_str());
     }
 
     //-------------------------------------------------------------------------------------------
@@ -36,13 +38,13 @@ namespace enigma::voxel
     {
         if (!data)
         {
-            LogError("esfs_storage", "Cannot save chunk (%d, %d): data is null", chunkX, chunkY);
+            LogError(LogESF, "Cannot save chunk (%d, %d): data is null", chunkX, chunkY);
             return false;
         }
 
         if (!m_serializer)
         {
-            LogError("esfs_storage", "Cannot save chunk (%d, %d): serializer not configured", chunkX, chunkY);
+            LogError(LogESF, "Cannot save chunk (%d, %d): serializer not configured", chunkX, chunkY);
             return false;
         }
 
@@ -54,7 +56,7 @@ namespace enigma::voxel
         case ChunkSaveStrategy::ModifiedOnly:
             if (!chunk->IsModified())
             {
-                LogDebug("esfs_storage", "Skipping save for unmodified chunk (%d, %d)", chunkX, chunkY);
+                LogDebug(LogESF, "Skipping save for unmodified chunk (%d, %d)", chunkX, chunkY);
                 return true; // Not an error, just skipped
             }
             break;
@@ -63,7 +65,7 @@ namespace enigma::voxel
             // Check player-modified flag (only save chunks modified by player actions)
             if (!chunk->IsPlayerModified())
             {
-                LogDebug("esfs_storage", "Skipping save for non-player-modified chunk (%d, %d)", chunkX, chunkY);
+                LogDebug(LogESF, "Skipping save for non-player-modified chunk (%d, %d)", chunkX, chunkY);
                 return true;
             }
             break;
@@ -78,7 +80,7 @@ namespace enigma::voxel
         std::vector<uint8_t> serializedData;
         if (!m_serializer->SerializeChunk(chunk, serializedData))
         {
-            LogError("esfs_storage", "Failed to serialize chunk (%d, %d)", chunkX, chunkY);
+            LogError(LogESF, "Failed to serialize chunk (%d, %d)", chunkX, chunkY);
             return false;
         }
 
@@ -87,7 +89,7 @@ namespace enigma::voxel
         std::ofstream file(filePath, std::ios::binary | std::ios::trunc);
         if (!file.is_open())
         {
-            LogError("esfs_storage", "Failed to open file for writing: %s", filePath.c_str());
+            LogError(LogESF, "Failed to open file for writing: %s", filePath.c_str());
             return false;
         }
 
@@ -95,7 +97,7 @@ namespace enigma::voxel
         file.close();
 
         ++m_chunksSaved;
-        LogDebug("esfs_storage", "Saved chunk (%d, %d) to %s (%zu bytes) - Total saved: %zu",
+        LogDebug(LogESF, "Saved chunk (%d, %d) to %s (%zu bytes) - Total saved: %zu",
                  chunkX, chunkY, filePath.c_str(), serializedData.size(), m_chunksSaved);
 
         return true;
@@ -105,13 +107,13 @@ namespace enigma::voxel
     {
         if (!data)
         {
-            LogError("esfs_storage", "Cannot load chunk (%d, %d): data is null", chunkX, chunkY);
+            LogError(LogESF, "Cannot load chunk (%d, %d): data is null", chunkX, chunkY);
             return false;
         }
 
         if (!m_serializer)
         {
-            LogError("esfs_storage", "Cannot load chunk (%d, %d): serializer not configured", chunkX, chunkY);
+            LogError(LogESF, "Cannot load chunk (%d, %d): serializer not configured", chunkX, chunkY);
             return false;
         }
 
@@ -121,7 +123,7 @@ namespace enigma::voxel
         std::string filePath = ESFSFile::GetChunkFilePath(m_worldPath, chunkX, chunkY);
         if (!ESFSFile::ChunkExists(m_worldPath, chunkX, chunkY))
         {
-            LogDebug("esfs_storage", "Chunk (%d, %d) does not exist on disk", chunkX, chunkY);
+            LogDebug(LogESF, "Chunk (%d, %d) does not exist on disk", chunkX, chunkY);
             return false;
         }
 
@@ -129,7 +131,7 @@ namespace enigma::voxel
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
         {
-            LogError("esfs_storage", "Failed to open file for reading: %s", filePath.c_str());
+            LogError(LogESF, "Failed to open file for reading: %s", filePath.c_str());
             return false;
         }
 
@@ -145,12 +147,12 @@ namespace enigma::voxel
         // Deserialize chunk using serializer
         if (!m_serializer->DeserializeChunk(chunk, serializedData))
         {
-            LogError("esfs_storage", "Failed to deserialize chunk (%d, %d)", chunkX, chunkY);
+            LogError(LogESF, "Failed to deserialize chunk (%d, %d)", chunkX, chunkY);
             return false;
         }
 
         ++m_chunksLoaded;
-        LogDebug("esfs_storage", "Loaded chunk (%d, %d) from %s (%zu bytes) - Total loaded: %zu",
+        LogDebug(LogESF, "Loaded chunk (%d, %d) from %s (%zu bytes) - Total loaded: %zu",
                  chunkX, chunkY, filePath.c_str(), fileSize, m_chunksLoaded);
 
         return true;
@@ -167,11 +169,11 @@ namespace enigma::voxel
 
         if (success)
         {
-            LogDebug("esfs_storage", "Deleted chunk (%d, %d)", chunkX, chunkY);
+            LogDebug(LogESF, "Deleted chunk (%d, %d)", chunkX, chunkY);
         }
         else
         {
-            LogError("esfs_storage", "Failed to delete chunk (%d, %d)", chunkX, chunkY);
+            LogError(LogESF, "Failed to delete chunk (%d, %d)", chunkX, chunkY);
         }
 
         return success;
@@ -181,13 +183,13 @@ namespace enigma::voxel
     {
         // ESFS format writes are immediate (no buffering)
         // This method is a no-op for ESFS
-        LogDebug("esfs_storage", "Flush() called - ESFS writes are immediate, no action needed");
+        LogDebug(LogESF, "Flush() called - ESFS writes are immediate, no action needed");
     }
 
     void ESFSChunkStorage::Close()
     {
-        LogInfo("esfs_storage", "Closing ESFS storage for world: %s", m_worldPath.c_str());
-        LogInfo("esfs_storage", "Final statistics: %s", GetStatistics().c_str());
+        LogInfo(LogESF, "Closing ESFS storage for world: %s", m_worldPath.c_str());
+        LogInfo(LogESF, "Final statistics: %s", GetStatistics().c_str());
     }
 
     //-------------------------------------------------------------------------------------------
@@ -219,7 +221,7 @@ namespace enigma::voxel
     {
         if (!m_serializer)
         {
-            LogError("esfs_storage", "Cannot save chunk snapshot (%d, %d): serializer not configured", chunkX, chunkY);
+            LogError(LogESF, "Cannot save chunk snapshot (%d, %d): serializer not configured", chunkX, chunkY);
             return false;
         }
 

@@ -15,10 +15,11 @@
 using namespace enigma::model;
 using namespace enigma::core;
 using namespace enigma::resource;
+DEFINE_LOG_CATEGORY(LogModel)
 
 void ModelSubsystem::Startup()
 {
-    LogInfo("ModelSubsystem", "Starting up ModelSubsystem...");
+    LogInfo(LogModel, "Starting up ModelSubsystem...");
 
     // Get dependencies on other subsystems
     m_resourceSubsystem = GEngine->GetSubsystem<ResourceSubsystem>();
@@ -28,23 +29,23 @@ void ModelSubsystem::Startup()
     // Initialize builtin models
     InitializeBuiltinModels();
 
-    LogInfo("ModelSubsystem", "ModelSubsystem startup complete");
+    LogInfo(LogModel, "ModelSubsystem startup complete");
 }
 
 void ModelSubsystem::Shutdown()
 {
-    LogInfo("ModelSubsystem", "Shutting down ModelSubsystem...");
+    LogInfo(LogModel, "Shutting down ModelSubsystem...");
 
     ClearCompiledCache();
 
     m_statistics = Statistics(); // Reset statistics
 
-    LogInfo("ModelSubsystem", "ModelSubsystem shutdown complete");
+    LogInfo(LogModel, "ModelSubsystem shutdown complete");
 }
 
 void ModelSubsystem::InitializeBuiltinModels()
 {
-    LogInfo("ModelSubsystem", "Initializing builtin models...");
+    LogInfo(LogModel, "Initializing builtin models...");
 
     ModelResourcePtr blockCube = ModelBuiltin::CreateBlockCube();
     m_resourceSubsystem->LoadResource(ResourceLocation("block/cube"), blockCube);
@@ -56,7 +57,7 @@ std::shared_ptr<RenderMesh> ModelSubsystem::CompileModel(const ResourceLocation&
     ModelResourcePtr modelResource = std::dynamic_pointer_cast<ModelResource>(m_resourceSubsystem->GetResource(modelPath));
     if (!modelResource)
     {
-        LogWarn("ModelSubsystem", "Failed to get model resource: %s", modelPath.ToString().c_str());
+        LogWarn(LogModel, "Failed to get model resource: %s", modelPath.ToString().c_str());
         return nullptr;
     }
     // TODO: Right now we assume we only compile block, so we use block atlas.
@@ -82,7 +83,7 @@ std::shared_ptr<RenderMesh> ModelSubsystem::GetCompiledMesh(const std::string& c
 std::shared_ptr<IModelCompiler> ModelSubsystem::RegisterCompiler(const std::string& templateName, std::shared_ptr<IModelCompiler> compiler)
 {
     m_compilers.emplace(templateName, compiler);
-    LogInfo("ModelSubsystem", "Registered model compiler: %s", templateName.c_str());
+    LogInfo(LogModel, "Registered model compiler: %s", templateName.c_str());
     return compiler;
 }
 
@@ -90,17 +91,17 @@ void ModelSubsystem::ClearCompiledCache()
 {
     m_compiledMeshCache.clear();
     m_statistics.cachedMeshesCount = 0;
-    LogInfo("ModelSubsystem", "Compiled mesh cache cleared");
+    LogInfo(LogModel, "Compiled mesh cache cleared");
 }
 
 void ModelSubsystem::OnResourceReload()
 {
-    LogInfo("ModelSubsystem", "Handling resource reload...");
+    LogInfo(LogModel, "Handling resource reload...");
 
     ClearCompiledCache();
     // Builtin models don't need to be reloaded as they're hardcoded
 
-    LogInfo("ModelSubsystem", "Resource reload complete");
+    LogInfo(LogModel, "Resource reload complete");
 }
 
 std::string ModelSubsystem::CreateCacheKey(const ResourceLocation&                             modelPath,
@@ -149,14 +150,14 @@ std::shared_ptr<ModelResource> ModelSubsystem::LoadModelFromFile(const ResourceL
 {
     if (!m_resourceSubsystem)
     {
-        LogError("ModelSubsystem", "ResourceSubsystem not available for loading model: %s",
+        LogError(LogModel, "ResourceSubsystem not available for loading model: %s",
                  location.ToString().c_str());
         return nullptr;
     }
 
     // Use ResourceSubsystem to load the model file
     // TODO: Implement proper model loading via ResourceSubsystem
-    LogInfo("ModelSubsystem", "Loading model from file: %s", location.ToString().c_str());
+    LogInfo(LogModel, "Loading model from file: %s", location.ToString().c_str());
     ResourcePtr      resourcePtr = m_resourceSubsystem->GetResource(location);
     ModelResourcePtr model       = std::static_pointer_cast<ModelResource>(m_resourceSubsystem->GetResource(location));
     return model;
@@ -178,14 +179,14 @@ std::string ModelSubsystem::GetBuiltinKey(const ResourceLocation& location) cons
 
 void ModelSubsystem::CompileAllBlockModels()
 {
-    LogInfo("ModelSubsystem", "Starting automatic block model compilation...");
+    LogInfo(LogModel, "Starting automatic block model compilation...");
 
     // Get all registered blocks
     auto allBlocks = enigma::registry::block::BlockRegistry::GetAllBlocks();
 
     if (allBlocks.empty())
     {
-        LogWarn("ModelSubsystem", "No blocks registered for model compilation");
+        LogWarn(LogModel, "No blocks registered for model compilation");
         return;
     }
 
@@ -193,11 +194,11 @@ void ModelSubsystem::CompileAllBlockModels()
     auto* atlasManager = m_resourceSubsystem ? m_resourceSubsystem->GetAtlasManager() : nullptr;
     if (!atlasManager)
     {
-        LogError("ModelSubsystem", "AtlasManager not available - cannot compile block models");
+        LogError(LogModel, "AtlasManager not available - cannot compile block models");
         return;
     }
 
-    LogInfo("ModelSubsystem", "Compiling models for %zu registered blocks...", allBlocks.size());
+    LogInfo(LogModel, "Compiling models for %zu registered blocks...", allBlocks.size());
 
     int totalCompiled = 0;
     int totalFailed   = 0;
@@ -207,7 +208,7 @@ void ModelSubsystem::CompileAllBlockModels()
     {
         if (block)
         {
-            LogDebug("ModelSubsystem", "Compiling models for block: %s:%s",
+            LogDebug(LogModel, "Compiling models for block: %s:%s",
                      block->GetNamespace().c_str(), block->GetRegistryName().c_str());
 
             // Use Block's CompileModels method which handles all states
@@ -229,7 +230,7 @@ void ModelSubsystem::CompileAllBlockModels()
         }
     }
 
-    LogInfo("ModelSubsystem", "Block model compilation complete: compiled=%d, failed=%d",
+    LogInfo(LogModel, "Block model compilation complete: compiled=%d, failed=%d",
             totalCompiled, totalFailed);
 
     // Update statistics

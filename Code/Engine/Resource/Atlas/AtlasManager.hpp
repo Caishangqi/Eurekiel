@@ -9,6 +9,9 @@
 #include <string>
 #include <functional>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+DECLARE_LOG_CATEGORY_EXTERN(LogAtlas)
+
 namespace enigma::resource
 {
     // Forward declaration

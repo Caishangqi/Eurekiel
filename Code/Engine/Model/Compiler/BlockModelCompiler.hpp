@@ -3,6 +3,8 @@
 #include "../../Renderer/Model/BlockRenderMesh.hpp"
 #include "../../Resource/Atlas/TextureAtlas.hpp"
 #include "../../Math/Vec2.hpp"
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+DECLARE_LOG_CATEGORY_EXTERN(LogBlockModelCompiler)
 
 namespace enigma::renderer::model
 {

@@ -1,6 +1,7 @@
 ﻿#include "ModelBuiltin.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Model/ModelSubsystem.hpp"
 
 using namespace enigma::resource::model;
 
@@ -44,7 +45,7 @@ ModelResourcePtr ModelBuiltin::CreateBlockCube()
     // Mark as loaded
     model->GetMutableMetadata().state = ResourceState::LOADED;
 
-    LogInfo("ModelSubsystem", "Created builtin model: block/cube with 1 element and 6 faces");
+    LogInfo(LogModel, "Created builtin model: block/cube with 1 element and 6 faces");
     return model;
 }
 
@@ -69,6 +70,6 @@ ModelResourcePtr ModelBuiltin::CreateBlockCubeAll()
     // Mark as loaded
     model->GetMutableMetadata().state = ResourceState::LOADED;
 
-    LogInfo("ModelSubsystem", "Created builtin model: block/cube_all");
+    LogInfo(LogModel, "Created builtin model: block/cube_all");
     return model;
 }

@@ -7,7 +7,7 @@
 #include <cstring>
 // TODO: Add CRC32 implementation when available
 // #include <crc32.h>
-DECLARE_LOG_CATEGORY_EXTERN(LogESF)
+DEFINE_LOG_CATEGORY(LogESF)
 
 namespace enigma::voxel
 {
