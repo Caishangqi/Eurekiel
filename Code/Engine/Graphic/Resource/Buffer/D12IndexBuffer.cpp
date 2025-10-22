@@ -12,9 +12,12 @@ D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* init
     : D12Buffer([&]()
       {
           BufferCreateInfo info;
-          info.size         = size;
-          info.usage        = BufferUsage::IndexBuffer;
-          info.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
+          info.size  = size;
+          info.usage = BufferUsage::IndexBuffer;
+          // 教学要点: 应用层IndexBuffer需要频繁更新，统一使用CPUWritable
+          // 即使没有initialData，也可能在后续通过UpdateBuffer更新
+          // 参考Iris: 动态索引数据使用UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
+          info.memoryAccess = MemoryAccess::CPUWritable;
           info.initialData  = initialData;
           info.debugName    = debugName;
           return info;

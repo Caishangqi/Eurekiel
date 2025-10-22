@@ -2,6 +2,7 @@
 #include <cassert>
 #include <algorithm>
 
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
 #include "Engine/Graphic/Resource/UploadContext.hpp"
@@ -559,7 +560,7 @@ namespace enigma::graphic
     {
         if (!HasCPUData())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "D12Buffer::UploadToGPU: No CPU data available");
             return false;
         }
@@ -575,13 +576,13 @@ namespace enigma::graphic
 
         if (!uploadSuccess)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "D12Buffer::UploadToGPU: Failed to upload buffer '%s'",
                            GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
             return false;
         }
 
-        core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+        core::LogDebug(LogRenderer,
                        "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)",
                        GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
                        GetCPUDataSize());
