@@ -765,6 +765,31 @@ namespace enigma::graphic
          */
         static bool HasImmediateCommands(WorldRenderingPhase phase);
 
+        // ===== CommandList访问API (Milestone 2.6新增) =====
+
+        /**
+         * @brief 获取当前活动的Graphics CommandList
+         * @return 当前CommandList指针，如果未调用BeginFrame则返回nullptr
+         *
+         * 教学要点:
+         * 1. 提供对s_currentGraphicsCommandList的受控访问
+         * 2. 必须在BeginFrame()之后、EndFrame()之前调用
+         * 3. 用于手动记录渲染指令到当前帧的CommandList
+         * 4. 遵循DirectX 12最佳实践：一个CommandList记录整帧的渲染指令
+         *
+         * 使用示例:
+         * @code
+         * D3D12RenderSystem::BeginFrame();
+         * auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+         * if (cmdList) {
+         *     cmdList->SetPipelineState(pso.Get());
+         *     cmdList->DrawInstanced(3, 1, 0, 0);
+         * }
+         * D3D12RenderSystem::EndFrame();
+         * @endcode
+         */
+        static ID3D12GraphicsCommandList* GetCurrentCommandList() { return s_currentGraphicsCommandList; }
+
     private:
         // 禁用实例化（纯静态类）
         D3D12RenderSystem()                                    = delete;
@@ -783,6 +808,8 @@ namespace enigma::graphic
         static D3D12_CPU_DESCRIPTOR_HANDLE             s_swapChainRTVs[3]; // SwapChain RTV句柄
         static uint32_t                                s_currentBackBufferIndex; // 当前后台缓冲区索引
         static uint32_t                                s_swapChainBufferCount; // SwapChain缓冲区数量
+        static uint32_t                                s_swapChainWidth; // SwapChain宽度（用于Viewport和ScissorRect）
+        static uint32_t                                s_swapChainHeight; // SwapChain高度（用于Viewport和ScissorRect）
 
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器

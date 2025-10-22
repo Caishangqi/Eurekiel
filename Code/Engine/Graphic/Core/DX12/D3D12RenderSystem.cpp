@@ -12,6 +12,7 @@
 #include "Engine/Core/Image.hpp"
 
 // Milestone 2.X: 类型安全的VertexBuffer/IndexBuffer
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 
@@ -29,6 +30,8 @@ namespace enigma::graphic
     D3D12_CPU_DESCRIPTOR_HANDLE             D3D12RenderSystem::s_swapChainRTVs[3]       = {};
     uint32_t                                D3D12RenderSystem::s_currentBackBufferIndex = 0;
     uint32_t                                D3D12RenderSystem::s_swapChainBufferCount   = 3;
+    uint32_t                                D3D12RenderSystem::s_swapChainWidth         = 0;
+    uint32_t                                D3D12RenderSystem::s_swapChainHeight        = 0;
 
     // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager         = nullptr;
@@ -93,7 +96,7 @@ namespace enigma::graphic
         s_globalDescriptorHeapManager = std::make_unique<GlobalDescriptorHeapManager>();
         if (!s_globalDescriptorHeapManager->Initialize())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Failed to initialize GlobalDescriptorHeapManager");
             s_globalDescriptorHeapManager.reset();
             s_bindlessIndexAllocator.reset();
@@ -105,7 +108,7 @@ namespace enigma::graphic
         s_bindlessRootSignature = std::make_unique<BindlessRootSignature>();
         if (!s_bindlessRootSignature->Initialize())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Failed to initialize BindlessRootSignature");
             s_bindlessRootSignature.reset();
             s_globalDescriptorHeapManager->Shutdown();
@@ -115,7 +118,7 @@ namespace enigma::graphic
             return false;
         }
 
-        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        core::LogInfo(LogRenderer,
                       "SM6.6 Bindless architecture initialized successfully");
 
         // 5. Create SwapChain (if window handle is provided)
@@ -123,21 +126,21 @@ namespace enigma::graphic
         {
             if (!CreateSwapChain(hwnd, renderWidth, renderHeight))
             {
-                core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                core::LogError(LogRenderer,
                                "Failed to create SwapChain during D3D12RenderSystem initialization");
                 // SwapChain creation failure is not fatal - continue initialization
                 // This allows headless rendering or manual SwapChain creation later
             }
             else
             {
-                core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+                core::LogInfo(LogRenderer,
                               "D3D12RenderSystem initialized successfully with SwapChain (%dx%d)",
                               renderWidth, renderHeight);
             }
         }
         else
         {
-            core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogInfo(LogRenderer,
                           "D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
         }
 
@@ -204,7 +207,7 @@ namespace enigma::graphic
 
         s_isInitialized = false;
 
-        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem shutdown completed");
+        core::LogInfo(LogRenderer, "D3D12RenderSystem shutdown completed");
     }
 
     // ===== Buffer creation API implementation =====
@@ -223,7 +226,7 @@ namespace enigma::graphic
         // Verify that the system has been initialized
         if (!s_isInitialized || !s_device)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized");
             assert(false && "D3D12RenderSystem not initialized");
             return nullptr;
         }
@@ -260,7 +263,7 @@ namespace enigma::graphic
         catch (const std::exception&)
         {
             // Log Error
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Fail to create D12Buffer");
+            core::LogError(LogRenderer, "Fail to create D12Buffer");
             assert(false && "Failed to create D12Buffer");
             return nullptr;
         }
@@ -317,7 +320,7 @@ namespace enigma::graphic
         }
         catch (const std::exception& e)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Failed to create D12VertexBuffer: %s", e.what());
             return nullptr;
         }
@@ -340,7 +343,7 @@ namespace enigma::graphic
         }
         catch (const std::exception& e)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Failed to create D12IndexBuffer: %s", e.what());
             return nullptr;
         }
@@ -358,14 +361,14 @@ namespace enigma::graphic
     {
         if (!vertexBuffer)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindVertexBuffer: VertexBuffer is nullptr");
             return;
         }
 
         if (!vertexBuffer->IsValid())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindVertexBuffer: VertexBuffer is invalid");
             return;
         }
@@ -386,14 +389,14 @@ namespace enigma::graphic
     {
         if (!indexBuffer)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindIndexBuffer: IndexBuffer is nullptr");
             return;
         }
 
         if (!indexBuffer->IsValid())
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindIndexBuffer: IndexBuffer is invalid");
             return;
         }
@@ -459,7 +462,7 @@ namespace enigma::graphic
         // 验证系统已初始化
         if (!s_isInitialized || !s_device)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized");
             assert(false && "D3D12RenderSystem not initialized");
             return nullptr;
         }
@@ -495,7 +498,7 @@ namespace enigma::graphic
             // 验证纹理创建成功
             if (!texture->IsValid())
             {
-                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to create D12Texture resource");
+                core::LogError(LogRenderer, "Failed to create D12Texture resource");
                 return nullptr;
             }
 
@@ -504,7 +507,7 @@ namespace enigma::graphic
         catch (const std::exception& e)
         {
             // 记录错误
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Exception during D12Texture creation: %s", e.what());
             assert(false && "Failed to create D12Texture");
             return nullptr;
@@ -588,14 +591,14 @@ namespace enigma::graphic
         // 验证Image有效性
         if (!image.GetRawData())
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Image data is null");
+            LogError(LogRenderer, "CreateTexture2D(Image): Image data is null");
             return nullptr;
         }
 
         IntVec2 dimensions = image.GetDimensions();
         if (dimensions.x <= 0 || dimensions.y <= 0)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Invalid dimensions (%d x %d)", dimensions.x, dimensions.y);
+            LogError(LogRenderer, "CreateTexture2D(Image): Invalid dimensions (%d x %d)", dimensions.x, dimensions.y);
             return nullptr;
         }
 
@@ -612,7 +615,7 @@ namespace enigma::graphic
 
         if (!texture)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(Image): Failed to create texture");
+            LogError(LogRenderer, "CreateTexture2D(Image): Failed to create texture");
             return nullptr;
         }
 
@@ -645,7 +648,7 @@ namespace enigma::graphic
                 auto cachedTexture = it->second.lock();
                 if (cachedTexture)
                 {
-                    LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                    LogDebug(LogRenderer,
                              "CreateTexture2D(ResourceLocation): Cache hit for '%s'",
                              resourceLocation.ToString().c_str());
                     return cachedTexture;
@@ -654,7 +657,7 @@ namespace enigma::graphic
                 {
                     // weak_ptr已过期，从缓存中移除
                     s_textureCache.erase(it);
-                    LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                    LogDebug(LogRenderer,
                              "CreateTexture2D(ResourceLocation): Expired cache entry removed for '%s'",
                              resourceLocation.ToString().c_str());
                 }
@@ -665,14 +668,14 @@ namespace enigma::graphic
         auto resourceSubsystem = g_theEngine->GetSubsystem<ResourceSubsystem>();
         if (!resourceSubsystem)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ResourceLocation): ResourceSubsystem not found");
+            LogError(LogRenderer, "CreateTexture2D(ResourceLocation): ResourceSubsystem not found");
             ERROR_AND_DIE("Resource subsystem not found")
         }
 
         const auto imageResource = std::dynamic_pointer_cast<ImageResource>(resourceSubsystem->GetResource(resourceLocation));
         if (!imageResource)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "CreateTexture2D(ResourceLocation): Failed to load ImageResource for '%s'",
                      resourceLocation.ToString().c_str());
             ERROR_RECOVERABLE("Failed to get image resource")
@@ -683,7 +686,7 @@ namespace enigma::graphic
         auto d3d12Texture = CreateTexture2D(*imageResource, usage, debugName);
         if (!d3d12Texture)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "CreateTexture2D(ResourceLocation): Failed to create texture for '%s'",
                      resourceLocation.ToString().c_str());
             return nullptr;
@@ -693,7 +696,7 @@ namespace enigma::graphic
         {
             std::lock_guard<std::mutex> lock(s_textureCacheMutex);
             s_textureCache[resourceLocation] = d3d12Texture;
-            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            LogInfo(LogRenderer,
                     "CreateTexture2D(ResourceLocation): Created and cached texture for '%s'",
                     resourceLocation.ToString().c_str());
         }
@@ -714,7 +717,7 @@ namespace enigma::graphic
         // 验证ImageResource已加载
         if (!imageResource.IsLoaded())
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ImageResource): ImageResource not loaded");
+            LogError(LogRenderer, "CreateTexture2D(ImageResource): ImageResource not loaded");
             ERROR_RECOVERABLE("Failed to get image resource")
             return nullptr;
         }
@@ -725,7 +728,7 @@ namespace enigma::graphic
         // **修正逻辑错误** - 应该检查GetRawData()返回nullptr才报错
         if (!image.GetRawData())
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(ImageResource): Image raw data is null");
+            LogError(LogRenderer, "CreateTexture2D(ImageResource): Image raw data is null");
             ERROR_RECOVERABLE("Image file is null in raw data")
             return nullptr;
         }
@@ -748,7 +751,7 @@ namespace enigma::graphic
         // 验证路径有效性
         if (imagePath.empty())
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "CreateTexture2D(string): Image path is empty");
+            LogError(LogRenderer, "CreateTexture2D(string): Image path is empty");
             return nullptr;
         }
 
@@ -758,14 +761,14 @@ namespace enigma::graphic
         // 验证Image加载成功
         if (!image.GetRawData())
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "CreateTexture2D(string): Failed to load image from path '%s'",
                      imagePath.c_str());
             return nullptr;
         }
 
         IntVec2 dimensions = image.GetDimensions();
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        LogInfo(LogRenderer,
                 "CreateTexture2D(string): Loaded image from '%s' (%dx%d)",
                 imagePath.c_str(), dimensions.x, dimensions.y);
 
@@ -794,7 +797,7 @@ namespace enigma::graphic
         // 验证系统已初始化
         if (!s_isInitialized || !s_device)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized");
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized");
             assert(false && "D3D12RenderSystem not initialized");
             return nullptr;
         }
@@ -829,13 +832,13 @@ namespace enigma::graphic
             // 验证深度纹理创建成功
             if (!depthTexture->IsValid())
             {
-                core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                core::LogError(LogRenderer,
                                "Failed to create D12DepthTexture resource: %s", createInfo.name.c_str());
                 return nullptr;
             }
 
             // 记录成功创建的日志（调试用）
-            core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogInfo(LogRenderer,
                           "Created D12DepthTexture: %s (%dx%d, Type: %d)",
                           createInfo.name.c_str(),
                           createInfo.width,
@@ -847,7 +850,7 @@ namespace enigma::graphic
         catch (const std::exception& e)
         {
             // 记录错误
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Exception during D12DepthTexture creation (%s): %s",
                            createInfo.name.c_str(), e.what());
             assert(false && "Failed to create D12DepthTexture");
@@ -979,7 +982,7 @@ namespace enigma::graphic
 
         if (!s_device)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to create D3D12 device");
+            LogError(LogRenderer, "Failed to create D3D12 device");
             assert(false && "Failed to create D3D12 device");
             ERROR_AND_DIE("Failed to create D3D12 device")
         }
@@ -1065,7 +1068,7 @@ namespace enigma::graphic
     {
         if (!s_device)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Cannot create PSO: D3D12RenderSystem not initialized");
             return nullptr;
         }
@@ -1075,7 +1078,7 @@ namespace enigma::graphic
 
         if (FAILED(hr))
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Failed to create Graphics PSO: HRESULT = 0x%08X", hr);
             return nullptr;
         }
@@ -1089,7 +1092,7 @@ namespace enigma::graphic
     {
         if (!s_currentGraphicsCommandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindVertexBuffer: No active graphics command list (call BeginFrame first)");
             return;
         }
@@ -1102,7 +1105,7 @@ namespace enigma::graphic
     {
         if (!s_currentGraphicsCommandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "BindIndexBuffer: No active graphics command list (call BeginFrame first)");
             return;
         }
@@ -1115,7 +1118,7 @@ namespace enigma::graphic
     {
         if (!s_currentGraphicsCommandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "Draw: No active graphics command list (call BeginFrame first)");
             return;
         }
@@ -1128,7 +1131,7 @@ namespace enigma::graphic
     {
         if (!s_currentGraphicsCommandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "DrawIndexed: No active graphics command list (call BeginFrame first)");
             return;
         }
@@ -1141,7 +1144,7 @@ namespace enigma::graphic
     {
         if (!s_currentGraphicsCommandList)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+            core::LogError(LogRenderer,
                            "SetPrimitiveTopology: No active graphics command list (call BeginFrame first)");
             return;
         }
@@ -1168,14 +1171,14 @@ namespace enigma::graphic
         UNUSED(clearDepth)
         if (!s_isInitialized || !s_commandListManager)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for BeginFrame");
+            LogError(LogRenderer, "D3D12RenderSystem not initialized for BeginFrame");
             return false;
         }
 
         // 1. 准备下一帧 (更新SwapChain缓冲区索引)
         PrepareNextFrame();
 
-        LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        LogInfo(LogRenderer,
                 "BeginFrame - SwapChain Buffer Index: %u", s_currentBackBufferIndex);
 
         // 2. 获取当前帧的图形命令列表（M2灵活渲染架构）
@@ -1187,8 +1190,26 @@ namespace enigma::graphic
 
         if (!s_currentGraphicsCommandList)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for BeginFrame");
+            LogError(LogRenderer, "Failed to acquire command list for BeginFrame");
             return false;
+        }
+
+        // 2.5 绑定全局Descriptor Heaps（SM6.6 Bindless必需）
+        // 教学要点：
+        // 1. 使用DIRECTLY_INDEXED标志的Root Signature必须先绑定Heaps
+        // 2. 每次获取新CommandList后都要重新绑定（CommandList状态不保留）
+        // 3. SetDescriptorHeaps会同时绑定CBV/SRV/UAV堆和Sampler堆
+        // 4. 必须在任何SetGraphicsRootSignature()调用之前完成
+        if (s_globalDescriptorHeapManager)
+        {
+            s_globalDescriptorHeapManager->SetDescriptorHeaps(s_currentGraphicsCommandList);
+            LogInfo(LogRenderer,
+                    "BeginFrame: Descriptor Heaps bound to CommandList");
+        }
+        else
+        {
+            LogWarn(LogRenderer,
+                    "BeginFrame: GlobalDescriptorHeapManager is null - Bindless features may not work");
         }
 
         // 2. 转换资源状态：PRESENT → RENDER_TARGET
@@ -1219,7 +1240,7 @@ namespace enigma::graphic
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "BeginFrame: Failed to get current SwapChain buffer");
+            LogError(LogRenderer, "BeginFrame: Failed to get current SwapChain buffer");
             return false;
         }
 
@@ -1238,18 +1259,61 @@ namespace enigma::graphic
 
         if (!ClearRenderTarget(s_currentGraphicsCommandList, &currentRTV, clearColor))
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to clear render target in BeginFrame");
+            LogError(LogRenderer, "Failed to clear render target in BeginFrame");
             return false;
         }
+
+        // 3.5 绑定渲染目标到Output Merger阶段
+        // 教学要点：OMSetRenderTargets是所有Draw命令的前提条件
+        // 教学要点：虽然ClearRenderTargetView不需要此调用，但DrawInstanced必须要
+        // 教学要点：DirectX 12不会自动绑定RenderTarget，必须显式调用
+        s_currentGraphicsCommandList->OMSetRenderTargets(
+            1, // NumRenderTargetDescriptors - 绑定1个RenderTarget
+            &currentRTV, // pRenderTargetDescriptors - RTV句柄
+            FALSE, // RTsSingleHandleToDescriptorRange - 非连续堆
+            nullptr // pDepthStencilDescriptor - 暂不使用深度缓冲
+        );
+
+        LogInfo(LogRenderer,
+                "BeginFrame: RenderTarget bound to Output Merger (RTV=0x%p)",
+                currentRTV.ptr);
+
+        // 4. 设置视口（Viewport）
+        // 教学要点：Viewport定义NDC坐标到屏幕像素坐标的映射
+        // 教学要点：未设置Viewport会导致三角形被裁剪到空区域
+        // 教学要点：每次获取新CommandList后必须重新设置（状态不保留）
+        D3D12_VIEWPORT viewport = {};
+        viewport.TopLeftX       = 0.0f;
+        viewport.TopLeftY       = 0.0f;
+        viewport.Width          = static_cast<float>(s_swapChainWidth);
+        viewport.Height         = static_cast<float>(s_swapChainHeight);
+        viewport.MinDepth       = 0.0f;
+        viewport.MaxDepth       = 1.0f;
+        s_currentGraphicsCommandList->RSSetViewports(1, &viewport);
+
+        // 5. 设置裁剪矩形（Scissor Rect）
+        // 教学要点：ScissorRect定义像素级别的裁剪区域
+        // 教学要点：超出此矩形的像素会被丢弃
+        // 教学要点：DirectX 12必须显式设置ScissorRect，否则无法渲染
+        D3D12_RECT scissorRect = {};
+        scissorRect.left       = 0;
+        scissorRect.top        = 0;
+        scissorRect.right      = static_cast<LONG>(s_swapChainWidth);
+        scissorRect.bottom     = static_cast<LONG>(s_swapChainHeight);
+        s_currentGraphicsCommandList->RSSetScissorRects(1, &scissorRect);
+
+        LogInfo(LogRenderer,
+                "BeginFrame: Viewport and ScissorRect set (%ux%u)",
+                s_swapChainWidth, s_swapChainHeight);
 
         // 注意：CommandList不在此处执行，保持打开状态用于后续绘制
         // 将在EndFrame中统一执行并提交
 
-        // 5. 清除深度模板缓冲 (如果有的话)
+        // 6. 清除深度模板缓冲 (如果有的话)
         // TODO: 当实现了深度缓冲系统后，在这里调用ClearDepthStencil
         // ClearDepthStencil(nullptr, nullptr, clearDepth, clearStencil);
 
-        //LogInfo(RendererSubsystem::GetStaticSubsystemName(),"BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f", clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
+        //LogInfo(LogRenderer,"BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f", clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
 
         return true;
     }
@@ -1275,14 +1339,14 @@ namespace enigma::graphic
         // 1. 检查CommandList有效性
         if (!s_currentGraphicsCommandList)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "EndFrame: No active command list (BeginFrame not called?)");
             return false;
         }
 
         if (!s_swapChain)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "EndFrame: SwapChain not initialized");
             return false;
         }
@@ -1315,7 +1379,7 @@ namespace enigma::graphic
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(), "EndFrame: Failed to get current SwapChain buffer");
+            LogError(LogRenderer, "EndFrame: Failed to get current SwapChain buffer");
             return false;
         }
 
@@ -1334,7 +1398,7 @@ namespace enigma::graphic
         uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);
         if (fenceValue == 0)
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "EndFrame: Failed to execute command list");
             return false;
         }
@@ -1344,7 +1408,7 @@ namespace enigma::graphic
         // DirectX 12会在Present()内部自动处理资源状态转换
         if (!Present(true)) // vsync = true
         {
-            LogError(RendererSubsystem::GetStaticSubsystemName(),
+            LogError(LogRenderer,
                      "EndFrame: Failed to present frame");
             return false;
         }
@@ -1381,7 +1445,7 @@ namespace enigma::graphic
     {
         if (!s_isInitialized || !s_commandListManager)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "D3D12RenderSystem not initialized for ClearRenderTarget");
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized for ClearRenderTarget");
             return false;
         }
 
@@ -1390,10 +1454,10 @@ namespace enigma::graphic
         clearColor.GetAsFloats(clearColorAsFloats);
 
         // 添加详细的颜色转换调试日志 (Milestone 2.6 诊断)
-        /*core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        /*core::LogInfo(LogRenderer,
                       "ClearRenderTarget - Input Rgba8: r=%d, g=%d, b=%d, a=%d",
                       clearColor.r, clearColor.g, clearColor.b, clearColor.a);
-        core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+        core::LogInfo(LogRenderer,
                       "ClearRenderTarget - Converted floats: r=%.3f, g=%.3f, b=%.3f, a=%.3f",
                       clearColorAsFloats[0], clearColorAsFloats[1], clearColorAsFloats[2], clearColorAsFloats[3]);*/
 
@@ -1410,7 +1474,7 @@ namespace enigma::graphic
 
             if (!actualCommandList)
             {
-                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to acquire command list for ClearRenderTarget");
+                core::LogError(LogRenderer, "Failed to acquire command list for ClearRenderTarget");
                 return false;
             }
             needToExecute = true;
@@ -1434,7 +1498,7 @@ namespace enigma::graphic
 
         if (!targetResource)
         {
-            core::LogError(RendererSubsystem::GetStaticSubsystemName(), "No valid render target resource for ClearRenderTarget");
+            core::LogError(LogRenderer, "No valid render target resource for ClearRenderTarget");
             return false;
         }
 
@@ -1475,7 +1539,7 @@ namespace enigma::graphic
             }
             else
             {
-                core::LogError(RendererSubsystem::GetStaticSubsystemName(), "Failed to execute ClearRenderTarget command list");
+                core::LogError(LogRenderer, "Failed to execute ClearRenderTarget command list");
                 return false;
             }
         }
@@ -1537,6 +1601,10 @@ namespace enigma::graphic
         }
 #undef min
         s_swapChainBufferCount = std::min(bufferCount, 3u); // 限制最多3个缓冲区
+
+        // 存储SwapChain尺寸（用于BeginFrame中的Viewport和ScissorRect设置）
+        s_swapChainWidth  = width;
+        s_swapChainHeight = height;
 
         // 1. 创建SwapChain描述符
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -1762,7 +1830,7 @@ namespace enigma::graphic
         }
         catch (const std::exception& e)
         {
-            LogError("D3D12RenderSystem", "AddImmediateCommand: Exception occurred: {}", e.what());
+            LogError("D3D12RenderSystem", "AddImmediateCommand: Exception occurred: %s", e.what());
             return false;
         }
     }
@@ -1779,7 +1847,7 @@ namespace enigma::graphic
         size_t commandCount = queue->GetCommandCount(phase);
         if (commandCount == 0)
         {
-            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: No commands to execute for phase {}",
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: No commands to execute for phase %u",
                      static_cast<uint32_t>(phase));
             return 0;
         }
@@ -1801,7 +1869,7 @@ namespace enigma::graphic
                 return 0;
             }
 
-            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Executing {} commands for phase {}",
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Executing %zu commands for phase %u",
                      commandCount, static_cast<uint32_t>(phase));
 
             // 执行指定阶段的命令 - 从unique_ptr创建shared_ptr
@@ -1814,19 +1882,19 @@ namespace enigma::graphic
             );
             queue->ExecutePhase(phase, sharedCommandManager);
 
-            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Successfully executed {} commands", commandCount);
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Successfully executed %zu commands", commandCount);
 
             // 清空已执行的命令 - 防止指令累积
             // 教学要点：Immediate模式指令执行后必须清除，否则会不断累积
             queue->ClearPhase(phase);
-            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Cleared {} commands from phase {}",
+            LogDebug("D3D12RenderSystem", "ExecuteImmediateCommands: Cleared %zu commands from phase %u",
                      commandCount, static_cast<uint32_t>(phase));
 
             return commandCount;
         }
         catch (const std::exception& e)
         {
-            LogError("D3D12RenderSystem", "ExecuteImmediateCommands: Exception occurred: {}", e.what());
+            LogError("D3D12RenderSystem", "ExecuteImmediateCommands: Exception occurred: %s", e.what());
             return 0;
         }
     }
@@ -1843,7 +1911,7 @@ namespace enigma::graphic
         size_t commandCount = queue->GetCommandCount(phase);
         queue->ClearPhase(phase);
 
-        LogDebug("D3D12RenderSystem", "ClearImmediateCommands: Cleared {} commands from phase {}",
+        LogDebug("D3D12RenderSystem", "ClearImmediateCommands: Cleared %zu commands from phase %u",
                  commandCount, static_cast<uint32_t>(phase));
     }
 
@@ -1859,7 +1927,7 @@ namespace enigma::graphic
         size_t totalCommands = queue->GetTotalCommandCount();
         queue->Clear();
 
-        LogDebug("D3D12RenderSystem", "ClearAllImmediateCommands: Cleared {} total commands from all phases", totalCommands);
+        LogDebug("D3D12RenderSystem", "ClearAllImmediateCommands: Cleared %zu total commands from all phases", totalCommands);
     }
 
     size_t D3D12RenderSystem::GetImmediateCommandCount(WorldRenderingPhase phase)
@@ -1926,13 +1994,13 @@ namespace enigma::graphic
 
         if (removedCount > 0)
         {
-            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            LogInfo(LogRenderer,
                     "ClearUnusedTextures: Removed %zu expired cache entries (%zu remaining)",
                     removedCount, finalSize);
         }
         else
         {
-            LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+            LogDebug(LogRenderer,
                      "ClearUnusedTextures: No expired entries found (%zu total)",
                      finalSize);
         }
@@ -1985,13 +2053,13 @@ namespace enigma::graphic
 
         if (clearedCount > 0)
         {
-            LogInfo(RendererSubsystem::GetStaticSubsystemName(),
+            LogInfo(LogRenderer,
                     "ClearAllTextureCache: Cleared entire cache (%zu entries removed)",
                     clearedCount);
         }
         else
         {
-            LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+            LogDebug(LogRenderer,
                      "ClearAllTextureCache: Cache was already empty");
         }
     }
