@@ -1,13 +1,17 @@
 ﻿#include "RendererSubsystem.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Core/Yaml.hpp" // Milestone 3.0 任务3: YAML配置读取
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
+#include "Engine/Graphic/Target/RenderTargetManager.hpp" // Milestone 3.0: GBuffer配置API
 
 using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
-RendererSubsystem::RendererSubsystem(Configuration& config)
+// Milestone 3.0: 构造函数参数类型从Configuration改为RendererSubsystemConfig
+RendererSubsystem::RendererSubsystem(RendererSubsystemConfig& config)
 {
     m_configuration = config;
 }
@@ -18,18 +22,24 @@ RendererSubsystem::~RendererSubsystem()
 
 void RendererSubsystem::Initialize()
 {
-    LogInfo(GetStaticSubsystemName(), "Initializing D3D12 rendering system...");
+    LogInfo(LogRenderer, "Initializing D3D12 rendering system...");
+
+    //-----------------------------------------------------------------------------------------------
+    // Milestone 3.0: 配置系统重构完成
+    // 配置已在构造函数中通过参数传入（m_configuration），无需在Initialize()中加载
+    // 删除了原有的ParseFromYaml()调用和m_config赋值代码
+    //-----------------------------------------------------------------------------------------------
 
     // 获取窗口句柄（通过配置参数）
     HWND hwnd = nullptr;
     if (m_configuration.targetWindow)
     {
         hwnd = static_cast<HWND>(m_configuration.targetWindow->GetWindowHandle());
-        LogInfo(GetStaticSubsystemName(), "Window handle obtained from configuration for SwapChain creation");
+        LogInfo(LogRenderer, "Window handle obtained from configuration for SwapChain creation");
     }
     else
     {
-        LogWarn(GetStaticSubsystemName(), "No window provided in configuration - initializing in headless mode");
+        LogWarn(LogRenderer, "No window provided in configuration - initializing in headless mode");
     }
 
     // 调用D3D12RenderSystem的完整初始化，包括SwapChain创建
@@ -43,21 +53,21 @@ void RendererSubsystem::Initialize()
 
     if (!success)
     {
-        LogError(GetStaticSubsystemName(), "Failed to initialize D3D12RenderSystem");
+        LogError(LogRenderer, "Failed to initialize D3D12RenderSystem");
         m_isInitialized = false;
         return;
     }
 
     m_isInitialized = true;
-    LogInfo(GetStaticSubsystemName(), "D3D12RenderSystem initialized successfully through RendererSubsystem");
+    LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully through RendererSubsystem");
 
     // 显示架构流程确认信息
-    LogInfo(GetStaticSubsystemName(), "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
+    LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
 }
 
 void RendererSubsystem::Startup()
 {
-    LogInfo(GetStaticSubsystemName(), "Starting up...");
+    LogInfo(LogRenderer, "Starting up...");
 
     // ==================== ShaderPack Initialization (Dual ShaderPack Architecture - Phase 5.2) ====================
     // Architecture (2025-10-19): Dual ShaderPack system with in-memory fallback
@@ -75,7 +85,7 @@ void RendererSubsystem::Startup()
 
         if (std::filesystem::exists(userPackPath))
         {
-            LogInfo(GetStaticSubsystemName(),
+            LogInfo(LogRenderer,
                     "Loading user ShaderPack '{}' from: {}",
                     m_currentPackName.c_str(),
                     userPackPath.string().c_str());
@@ -87,21 +97,21 @@ void RendererSubsystem::Startup()
 
                 if (!m_userShaderPack || !m_userShaderPack->IsValid())
                 {
-                    LogError(GetStaticSubsystemName(),
+                    LogError(LogRenderer,
                              "User ShaderPack loaded but validation failed: {}",
                              m_currentPackName.c_str());
                     m_userShaderPack.reset();
                 }
                 else
                 {
-                    LogInfo(GetStaticSubsystemName(),
+                    LogInfo(LogRenderer,
                             "User ShaderPack loaded successfully: {}",
                             m_currentPackName.c_str());
                 }
             }
             catch (const std::exception& e)
             {
-                LogError(GetStaticSubsystemName(),
+                LogError(LogRenderer,
                          "Exception loading user ShaderPack '{}': {}",
                          m_currentPackName.c_str(), e.what());
                 m_userShaderPack.reset();
@@ -109,7 +119,7 @@ void RendererSubsystem::Startup()
         }
         else
         {
-            LogWarn(GetStaticSubsystemName(),
+            LogWarn(LogRenderer,
                     "User ShaderPack '{}' not found at '{}', using engine default only",
                     m_currentPackName.c_str(),
                     userPackPath.string().c_str());
@@ -118,7 +128,7 @@ void RendererSubsystem::Startup()
 
     // Step 3: ALWAYS load Engine Default ShaderPack (required fallback)
     std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
-    LogInfo(GetStaticSubsystemName(),
+    LogInfo(LogRenderer,
             "Loading engine default ShaderPack from: {}",
             engineDefaultPath.string().c_str());
 
@@ -132,7 +142,7 @@ void RendererSubsystem::Startup()
                 engineDefaultPath.string().c_str()).c_str());
         }
 
-        LogInfo(GetStaticSubsystemName(),
+        LogInfo(LogRenderer,
                 "Engine default ShaderPack loaded successfully");
     }
     catch (const std::exception& e)
@@ -149,7 +159,7 @@ void RendererSubsystem::Startup()
     }
 
     // Step 5: Log final ShaderPack system status
-    LogInfo(GetStaticSubsystemName(),
+    LogInfo(LogRenderer,
             "ShaderPack system initialized (User: {}, Default: {})",
             m_userShaderPack ? "+" : "-",
             m_defaultShaderPack ? "+" : "-");
@@ -179,23 +189,97 @@ void RendererSubsystem::Startup()
             m_renderCommandQueue = std::make_unique<RenderCommandQueue>(queueConfig);
             m_renderCommandQueue->Initialize();
 
-            LogInfo(GetStaticSubsystemName(), "RenderCommandQueue created and initialized (double-buffered, lock-free)");
+            LogInfo(LogRenderer, "RenderCommandQueue created and initialized (double-buffered, lock-free)");
         }
         catch (const std::exception& e)
         {
-            LogError(GetStaticSubsystemName(), "RenderCommandQueue creation exception: {}", e.what());
+            LogError(LogRenderer, "RenderCommandQueue creation exception: %s", e.what());
             m_renderCommandQueue.reset();
         }
     }
     else
     {
-        LogInfo(GetStaticSubsystemName(), "Immediate mode rendering is disabled (configuration)");
+        LogInfo(LogRenderer, "Immediate mode rendering is disabled (configuration)");
+    }
+
+    // ==================== 创建RenderTargetManager (Milestone 3.0任务4) ====================
+    // 初始化GBuffer管理器 - 管理16个colortex RenderTarget（Iris兼容）
+    try
+    {
+        LogInfo(LogRenderer, "Creating RenderTargetManager...");
+
+        // Step 1: 准备RenderTargetSettings配置数组（16个）
+        // 参考Iris的colortex配置，使用RGBA16F（高精度）和RGBA8（辅助数据）
+        std::array<RenderTargetSettings, 16> rtSettings = {};
+
+        // colortex0-7: RGBA16F格式（高精度渲染，适合HDR/法线/位置等）
+        for (int i = 0; i < 8; ++i)
+        {
+            rtSettings[i].format            = DXGI_FORMAT_R16G16B16A16_FLOAT; // RGBA16F
+            rtSettings[i].widthScale        = 1.0f; // 全分辨率
+            rtSettings[i].heightScale       = 1.0f;
+            rtSettings[i].enableMipmap      = false; // Milestone 3.0: 默认关闭Mipmap
+            rtSettings[i].allowLinearFilter = true;
+            rtSettings[i].sampleCount       = 1; // 无MSAA
+            rtSettings[i].debugName         = "colortex"; // RenderTargetManager会自动追加索引
+        }
+
+        // colortex8-15: RGBA8格式（辅助数据，节省内存）
+        for (int i = 8; i < 16; ++i)
+        {
+            rtSettings[i].format            = DXGI_FORMAT_R8G8B8A8_UNORM; // RGBA8
+            rtSettings[i].widthScale        = 1.0f;
+            rtSettings[i].heightScale       = 1.0f;
+            rtSettings[i].enableMipmap      = false;
+            rtSettings[i].allowLinearFilter = true;
+            rtSettings[i].sampleCount       = 1;
+            rtSettings[i].debugName         = "colortex"; // RenderTargetManager会自动追加索引
+        }
+
+        // Step 2: 从配置读取渲染尺寸和colortex数量
+        const int baseWidth     = m_configuration.renderWidth;
+        const int baseHeight    = m_configuration.renderHeight;
+        const int colorTexCount = m_configuration.gbufferColorTexCount;
+
+        LogInfo(LogRenderer,
+                "RenderTargetManager configuration: %dx%d, %d colortex (max 16)",
+                baseWidth, baseHeight, colorTexCount);
+
+        // Step 3: 创建RenderTargetManager实例（RAII原则，无需单独Initialize）
+        m_renderTargetManager = std::make_unique<RenderTargetManager>(
+            baseWidth,
+            baseHeight,
+            rtSettings,
+            colorTexCount
+        );
+
+        // Step 4: 日志输出成功信息
+        LogInfo(LogRenderer,
+                "RenderTargetManager created successfully (%dx%d, %d colortex)",
+                baseWidth, baseHeight, colorTexCount);
+
+        // Step 5: 输出内存优化信息（仅当colorTexCount < 16时）
+        if (colorTexCount < RenderTargetManager::MAX_COLOR_TEXTURES)
+        {
+            const float optimization = (1.0f - static_cast<float>(colorTexCount) /
+                static_cast<float>(RenderTargetManager::MAX_COLOR_TEXTURES)) * 100.0f;
+            LogInfo(LogRenderer,
+                    "Memory optimization enabled: ~%.1f%% saved (%d colortex instead of 16)",
+                    optimization, colorTexCount);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer,
+                 "Failed to create RenderTargetManager: {}",
+                 e.what());
+        ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()).c_str());
     }
 }
 
 void RendererSubsystem::Shutdown()
 {
-    LogInfo(GetStaticSubsystemName(), "Shutting down...");
+    LogInfo(LogRenderer, "Shutting down...");
 
     // Step 1: Unload ShaderPack before other resources (Phase 5.3)
     // Teaching Note: Iris destroys ShaderPack in destroyEverything()
@@ -294,11 +378,11 @@ void RendererSubsystem::BeginFrame()
 
     // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
     D3D12RenderSystem::PrepareNextFrame();
-    LogDebug(GetStaticSubsystemName(), "BeginFrame - D3D12 next frame prepared");
+    LogDebug(LogRenderer, "BeginFrame - D3D12 next frame prepared");
 
     // TODO: M2 - 准备当前维度的渲染资源
     // 替代 PreparePipeline 调用
-    LogDebug(GetStaticSubsystemName(), "BeginFrame - Render resources prepared for current dimension");
+    LogDebug(LogRenderer, "BeginFrame - Render resources prepared for current dimension");
 
     // 3. 执行清屏操作 (对应 Minecraft CLEAR 注入点)
     // 教学要点: 这是 MixinLevelRenderer 中 CLEAR target 所在位置
@@ -313,13 +397,13 @@ void RendererSubsystem::BeginFrame()
 
         if (!success)
         {
-            LogWarn(GetStaticSubsystemName(), "BeginFrame - D3D12 frame clear failed");
+            LogWarn(LogRenderer, "BeginFrame - D3D12 frame clear failed");
         }
 
-        LogDebug(GetStaticSubsystemName(), "BeginFrame - Render target cleared");
+        LogDebug(LogRenderer, "BeginFrame - Render target cleared");
     }
 
-    LogInfo(GetStaticSubsystemName(), "BeginFrame - Frame preparation completed (ready for game update)");
+    LogInfo(LogRenderer, "BeginFrame - Frame preparation completed (ready for game update)");
 }
 
 void RendererSubsystem::RenderFrame()
@@ -354,7 +438,7 @@ void RendererSubsystem::RenderFrame()
     // - 卸载未使用的纹理
     // - 更新纹理动画
 
-    LogDebug(GetStaticSubsystemName(), "RenderFrame - Game update completed (commands submitted to queue)");
+    LogDebug(LogRenderer, "RenderFrame - Game update completed (commands submitted to queue)");
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -373,7 +457,7 @@ std::filesystem::path RendererSubsystem::SelectShaderPackPath() const
         }
 
         // User pack not found, log warning and fall back
-        LogWarn(GetStaticSubsystemName(),
+        LogWarn(LogRenderer,
                 "User ShaderPack '{}' not found at '{}', falling back to engine default",
                 m_currentPackName.c_str(),
                 userPackPath.string().c_str());
@@ -403,12 +487,12 @@ void RendererSubsystem::EndFrame()
     // - 避免重复的业务逻辑（KISS原则）
     // ========================================================================
 
-    LogInfo(GetStaticSubsystemName(), "RendererSubsystem::EndFrame() called");
+    LogInfo(LogRenderer, "RendererSubsystem::EndFrame() called");
 
     // ✅ 简单委托给 D3D12RenderSystem（完整的 EndFrame 逻辑）
     D3D12RenderSystem::EndFrame();
 
-    LogInfo(GetStaticSubsystemName(), "RendererSubsystem::EndFrame() completed");
+    LogInfo(LogRenderer, "RendererSubsystem::EndFrame() completed");
 
     // TODO (M2): 恢复 RenderCommandQueue 管理（在新的灵活渲染架构中）
     // - 双缓冲队列交换
@@ -440,14 +524,14 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
     // Teaching Note: Only unload user pack, keep engine default pack intact
     if (m_userShaderPack)
     {
-        LogInfo(GetStaticSubsystemName(), "Unloading previous user ShaderPack before attempting new load");
+        LogInfo(LogRenderer, "Unloading previous user ShaderPack before attempting new load");
         m_userShaderPack.reset();
     }
 
     // Step 2: Validate path exists
     if (!std::filesystem::exists(packPath))
     {
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "ShaderPack path does not exist: {}", packPath.string().c_str());
         return false;
     }
@@ -460,7 +544,7 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
     std::filesystem::path shadersDir = packPath / "shaders";
     if (!std::filesystem::exists(shadersDir) || !std::filesystem::is_directory(shadersDir))
     {
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "Invalid ShaderPack structure - missing 'shaders/' directory: {}",
                  packPath.string().c_str());
         return false;
@@ -471,7 +555,7 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
     // Reference: Iris.java Line 324 (new ShaderPack(...))
     try
     {
-        LogInfo(GetStaticSubsystemName(),
+        LogInfo(LogRenderer,
                 "Loading user ShaderPack from: {}", packPath.string().c_str());
 
         // Bug Fix (2025-10-19): Pass ShaderPack root directory, NOT "shaders/" subdirectory
@@ -484,13 +568,13 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
         // Teaching Note: Check both pointer and IsValid() for robustness
         if (!m_userShaderPack || !m_userShaderPack->IsValid())
         {
-            LogError(GetStaticSubsystemName(), "User ShaderPack loaded but validation failed");
+            LogError(LogRenderer, "User ShaderPack loaded but validation failed");
             m_userShaderPack.reset();
             return false;
         }
 
         // Step 6: Log success
-        LogInfo(GetStaticSubsystemName(),
+        LogInfo(LogRenderer,
                 "User ShaderPack loaded successfully: {}", packPath.string().c_str());
 
         // TODO (M2): Rebuild rendering resources with new ShaderPack
@@ -505,7 +589,7 @@ bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& pack
     {
         // Teaching Note: Iris catches all exceptions and shows user-friendly error
         // Reference: Iris.java Line 334-338 (handleException())
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "Exception loading user ShaderPack: {}", e.what());
         m_userShaderPack.reset();
         return false;
@@ -524,12 +608,12 @@ void RendererSubsystem::UnloadShaderPack()
 
     if (!hadUserPack && !hadDefaultPack)
     {
-        LogWarn(GetStaticSubsystemName(), "No ShaderPack to unload");
+        LogWarn(LogRenderer, "No ShaderPack to unload");
         return;
     }
 
     // ✅ IMPROVED: Clarify we're only unloading user ShaderPack
-    LogInfo(GetStaticSubsystemName(), "Unloading user ShaderPack (engine default remains)");
+    LogInfo(LogRenderer, "Unloading user ShaderPack (engine default remains)");
 
     // TODO (M2): Clean up rendering resources before unloading ShaderPack
     // Teaching Note: New architecture uses direct ShaderPack management
@@ -541,7 +625,7 @@ void RendererSubsystem::UnloadShaderPack()
     // ✅ Release User ShaderPack (if loaded)
     if (m_userShaderPack)
     {
-        LogInfo(GetStaticSubsystemName(), "Unloading user ShaderPack");
+        LogInfo(LogRenderer, "Unloading user ShaderPack");
         m_userShaderPack.reset();
     }
 
@@ -555,7 +639,7 @@ void RendererSubsystem::UnloadShaderPack()
     // - User ShaderPack: Unloaded here (m_userShaderPack.reset())
     // - Default ShaderPack: Persistent (unloaded only in Shutdown)
 
-    LogInfo(GetStaticSubsystemName(), "ShaderPack(s) unloaded successfully");
+    LogInfo(LogRenderer, "ShaderPack(s) unloaded successfully");
     // Note: m_defaultShaderPack remains valid (fallback layer)
 }
 
@@ -565,7 +649,7 @@ bool RendererSubsystem::ReloadShaderPack()
     // Teaching Note: Based on Iris.java::reload() implementation
     // Reference: Iris.java Line 556-571
 
-    LogInfo(GetStaticSubsystemName(), "Reloading ShaderPack (hot-reload)");
+    LogInfo(LogRenderer, "Reloading ShaderPack (hot-reload)");
 
     // Step 1: Get current ShaderPack path (before unloading)
     // Teaching Note: Iris uses SelectShaderPackPath() to resolve path priority
@@ -583,7 +667,7 @@ bool RendererSubsystem::ReloadShaderPack()
 
     if (success)
     {
-        LogInfo(GetStaticSubsystemName(), "ShaderPack reloaded successfully");
+        LogInfo(LogRenderer, "ShaderPack reloaded successfully");
 
         // TODO (Phase 5.4): Immediately rebuild pipeline for current dimension
         // Teaching Note: Iris re-creates pipeline IMMEDIATELY after reload
@@ -594,7 +678,7 @@ bool RendererSubsystem::ReloadShaderPack()
     }
     else
     {
-        LogError(GetStaticSubsystemName(), "Failed to reload ShaderPack");
+        LogError(LogRenderer, "Failed to reload ShaderPack");
 
         // TODO (Phase 6+): Implement fallback to engine default
         // Teaching Note: Iris calls setShadersDisabled() on failure
@@ -613,6 +697,36 @@ ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
 }
 
 //-----------------------------------------------------------------------------------------------
+// GBuffer配置API (Milestone 3.0 任务2)
+// Teaching Note: 提供运行时配置GBuffer colortex数量的能力，优化内存使用
+//-----------------------------------------------------------------------------------------------
+
+void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
+{
+    // 参数验证 - 使用RenderTargetManager的常量
+    constexpr int MIN = RenderTargetManager::MIN_COLOR_TEXTURES;
+    constexpr int MAX = RenderTargetManager::MAX_COLOR_TEXTURES;
+
+    if (colorTexCount < MIN || colorTexCount > MAX)
+    {
+        LogError(LogRenderer,
+                 "ConfigureGBuffer: colorTexCount {} out of range [{}, {}]. Using default 8.",
+                 colorTexCount, MIN, MAX);
+        colorTexCount = 8; // Milestone 3.0: 使用默认值8（平衡内存和功能）
+    }
+
+    // Milestone 3.0: 更新配置对象（从m_config改为m_configuration）
+    m_configuration.gbufferColorTexCount = colorTexCount;
+
+    // 计算内存优化百分比
+    float optimization = (1.0f - static_cast<float>(m_configuration.gbufferColorTexCount) / static_cast<float>(MAX)) * 100.0f;
+
+    LogInfo(LogRenderer,
+            "GBuffer configured: {} colortex (max: {}). Memory optimization: ~{:.1f}%",
+            m_configuration.gbufferColorTexCount, MAX, optimization);
+}
+
+//-----------------------------------------------------------------------------------------------
 // M2 灵活渲染接口实现 (Milestone 2)
 // Teaching Note: 提供高层API，封装DirectX 12复杂性
 // Reference: DX11Renderer.cpp中的类似方法
@@ -625,13 +739,13 @@ void RendererSubsystem::BeginCamera(const Camera& camera)
     // 1. 提取View和Projection矩阵
     // 2. 更新Camera Uniform Buffer（通过UniformManager）
     // 3. 对应Iris的setCamera()
-    LogWarn(GetStaticSubsystemName(), "BeginCamera: Not implemented yet (M2.1)");
+    LogWarn(LogRenderer, "BeginCamera: Not implemented yet (M2.1)");
 }
 
 void RendererSubsystem::EndCamera()
 {
     // TODO (M2.1): 实现Camera清理
-    LogWarn(GetStaticSubsystemName(), "EndCamera: Not implemented yet (M2.1)");
+    LogWarn(LogRenderer, "EndCamera: Not implemented yet (M2.1)");
 }
 
 D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned stride)
@@ -643,7 +757,7 @@ D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned str
 
     if (size == 0 || stride == 0)
     {
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "CreateVertexBuffer: Invalid parameters (size: {}, stride: {})",
                  size, stride);
         return nullptr;
@@ -654,13 +768,13 @@ D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned str
 
     if (!vertexBuffer)
     {
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "CreateVertexBuffer: Failed to create D12VertexBuffer (size: {}, stride: {})",
                  size, stride);
         return nullptr;
     }
 
-    LogInfo(GetStaticSubsystemName(),
+    LogInfo(LogRenderer,
             "CreateVertexBuffer: Successfully created D12VertexBuffer (size: {}, stride: {}, count: {})",
             size, stride, size / stride);
 
@@ -672,7 +786,7 @@ void RendererSubsystem::SetVertexBuffer(D12VertexBuffer* buffer, uint32_t slot)
 {
     if (!buffer)
     {
-        LogError(GetStaticSubsystemName(), "SetVertexBuffer: D12VertexBuffer is nullptr");
+        LogError(LogRenderer, "SetVertexBuffer: D12VertexBuffer is nullptr");
         return;
     }
 
@@ -684,7 +798,7 @@ void RendererSubsystem::SetVertexBuffer(D12VertexBuffer* buffer, uint32_t slot)
     // 委托给D3D12RenderSystem的底层API（D12VertexBuffer重载）
     D3D12RenderSystem::BindVertexBuffer(buffer, slot);
 
-    LogDebug(GetStaticSubsystemName(),
+    LogDebug(LogRenderer,
              "SetVertexBuffer: Bound D12VertexBuffer to slot {} (size: {}, stride: {}, count: {})",
              slot, buffer->GetSize(), buffer->GetStride(), buffer->GetVertexCount());
 }
@@ -693,7 +807,7 @@ void RendererSubsystem::SetIndexBuffer(D12IndexBuffer* buffer)
 {
     if (!buffer)
     {
-        LogError(GetStaticSubsystemName(), "SetIndexBuffer: D12IndexBuffer is nullptr");
+        LogError(LogRenderer, "SetIndexBuffer: D12IndexBuffer is nullptr");
         return;
     }
 
@@ -706,7 +820,7 @@ void RendererSubsystem::SetIndexBuffer(D12IndexBuffer* buffer)
     // 委托给D3D12RenderSystem的底层API（D12IndexBuffer重载）
     D3D12RenderSystem::BindIndexBuffer(buffer);
 
-    LogDebug(GetStaticSubsystemName(),
+    LogDebug(LogRenderer,
              "SetIndexBuffer: Bound D12IndexBuffer (size: {}, count: {}, format: {})",
              buffer->GetSize(),
              buffer->GetIndexCount(),
@@ -717,13 +831,13 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
 {
     if (!data || !buffer)
     {
-        LogError(GetStaticSubsystemName(), "UpdateBuffer: Invalid parameters (data or buffer is nullptr)");
+        LogError(LogRenderer, "UpdateBuffer: Invalid parameters (data or buffer is nullptr)");
         return;
     }
 
     if (size == 0)
     {
-        LogWarn(GetStaticSubsystemName(), "UpdateBuffer: Size is 0, nothing to update");
+        LogWarn(LogRenderer, "UpdateBuffer: Size is 0, nothing to update");
         return;
     }
 
@@ -736,7 +850,7 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
     // 检查越界
     if (offset + size > buffer->GetSize())
     {
-        LogError(GetStaticSubsystemName(),
+        LogError(LogRenderer,
                  "UpdateBuffer: Data exceeds buffer size (offset: {}, size: {}, buffer size: {})",
                  offset, size, buffer->GetSize());
         return;
@@ -746,7 +860,7 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
     void* mappedPtr = buffer->Map(nullptr);
     if (!mappedPtr)
     {
-        LogError(GetStaticSubsystemName(), "UpdateBuffer: Failed to map D12VertexBuffer");
+        LogError(LogRenderer, "UpdateBuffer: Failed to map D12VertexBuffer");
         return;
     }
 
@@ -757,7 +871,7 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
     D3D12_RANGE writtenRange = {offset, offset + size};
     buffer->Unmap(&writtenRange);
 
-    LogDebug(GetStaticSubsystemName(),
+    LogDebug(LogRenderer,
              "UpdateBuffer: Updated {} bytes at offset {} (total size: {})",
              size, offset, buffer->GetSize());
 }
@@ -766,7 +880,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
 {
     if (vertexCount == 0)
     {
-        LogWarn(GetStaticSubsystemName(), "Draw: vertexCount is 0, nothing to draw");
+        LogWarn(LogRenderer, "Draw: vertexCount is 0, nothing to draw");
         return;
     }
 
@@ -777,7 +891,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
 
     D3D12RenderSystem::Draw(vertexCount, startVertex);
 
-    LogDebug(GetStaticSubsystemName(),
+    LogDebug(LogRenderer,
              "Draw: Drew {} vertices starting from vertex {}",
              vertexCount, startVertex);
 }
@@ -786,7 +900,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
 {
     if (indexCount == 0)
     {
-        LogWarn(GetStaticSubsystemName(), "DrawIndexed: indexCount is 0, nothing to draw");
+        LogWarn(LogRenderer, "DrawIndexed: indexCount is 0, nothing to draw");
         return;
     }
 
@@ -797,7 +911,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
 
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
-    LogDebug(GetStaticSubsystemName(),
+    LogDebug(LogRenderer,
              "DrawIndexed: Drew {} indices starting from index {} with base vertex {}",
              indexCount, startIndex, baseVertex);
 }
@@ -808,7 +922,7 @@ void RendererSubsystem::DrawFullscreenQuad()
     // 1. 创建或使用缓存的全屏四边形VertexBuffer
     // 2. 绑定并绘制（6个顶点，2个三角形）
     // 教学要点：常用于后处理Pass
-    LogWarn(GetStaticSubsystemName(), "DrawFullscreenQuad: Not implemented yet (M2.3)");
+    LogWarn(LogRenderer, "DrawFullscreenQuad: Not implemented yet (M2.3)");
 }
 
 void RendererSubsystem::SetBlendMode(BlendMode mode)
@@ -818,7 +932,7 @@ void RendererSubsystem::SetBlendMode(BlendMode mode)
     // 1. 需要PSO支持（Graphics Pipeline State）
     // 2. 在Milestone 3.0 PSO系统实现后启用
     // 教学要点：DirectX 12的混合状态是PSO的一部分，不能动态修改
-    LogWarn(GetStaticSubsystemName(), "SetBlendMode: Not implemented yet (M2.4, requires PSO system)");
+    LogWarn(LogRenderer, "SetBlendMode: Not implemented yet (M2.4, requires PSO system)");
 }
 
 void RendererSubsystem::SetDepthMode(DepthMode mode)
@@ -828,5 +942,5 @@ void RendererSubsystem::SetDepthMode(DepthMode mode)
     // 1. 需要PSO支持（Graphics Pipeline State）
     // 2. 在Milestone 3.0 PSO系统实现后启用
     // 教学要点：DirectX 12的深度状态是PSO的一部分，不能动态修改
-    LogWarn(GetStaticSubsystemName(), "SetDepthMode: Not implemented yet (M2.4, requires PSO system)");
+    LogWarn(LogRenderer, "SetDepthMode: Not implemented yet (M2.4, requires PSO system)");
 }

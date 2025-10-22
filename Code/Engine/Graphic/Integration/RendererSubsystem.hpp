@@ -27,6 +27,8 @@
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 #include "../Shader/ShaderPack/ShaderPack.hpp"
+#include "RendererSubsystemConfig.hpp" // Milestone 3.0: 配置系统重构
+#include "Engine/Graphic/Target/RenderTargetManager.hpp"
 
 // 使用Enigma核心命名空间中的EngineSubsystem
 using namespace enigma::core;
@@ -65,67 +67,11 @@ namespace enigma::graphic
     {
     public:
         /**
-          * @brief Rendering Subsystem Configuration
-          * @details contains all parameters required to initialize the renderer
-          */
-        struct Configuration
-        {
-            uint32_t renderWidth             = 1920; ///< render resolution width
-            uint32_t renderHeight            = 1080; ///< Render resolution height
-            uint32_t maxFramesInFlight       = 3; ///< Maximum number of flight frames
-            bool     enableDebugLayer        = true; ///< DirectX 12 debug layer
-            bool     enableGPUValidation     = true; ///< GPU verification layer
-            bool     enableBindlessResources = true; ///< Enable Bindless resources
-
-            // ========================== ShaderPack Configuration (Phase 6.3) =========================
-            /**
-             * @brief Current ShaderPack name (empty = use engine default)
-             *
-             * - Empty string: Use ENGINE_DEFAULT_SHADERPACK_PATH
-             * - "PackName": Use USER_SHADERPACK_SEARCH_PATH/PackName
-             *
-             * Examples: "ComplementaryReimagined", "BSL", "Sildurs"
-             *
-             * Future Enhancement (Milestone 3.2+):
-             * - Load from GameConfig.xml (persistent user choice)
-             * - Hot-reload support via ReloadShaderPack() method
-             *
-             * Architecture Rationale:
-             * - User-configurable parameter → belongs in Configuration struct
-             * - Fixed paths (ENGINE_DEFAULT_PATH) → private constexpr (Line 500+)
-             * - Follows Iris design: IrisConfig::shaderPackName (configurable)
-             *   vs Iris::shaderpacksDirectory (fixed path)
-             */
-            std::string currentShaderPackName; ///< User-selected ShaderPack name
-            // ======================================================================================
-
-            // ========================== 渲染配置 (Milestone 2.6新增) =========================
-            Rgba8   defaultClearColor    = Rgba8::DEBUG_GREEN; ///< 默认清屏颜色，使用引擎Rgba8系统
-            float   defaultClearDepth    = 1.0f; ///< 默认深度清除值 (0.0-1.0, 1.0表示最远)
-            uint8_t defaultClearStencil  = 0; ///< 默认模板清除值 (0-255)
-            bool    enableAutoClearColor = true; ///< 是否在BeginFrame自动执行清屏
-            bool    enableAutoClearDepth = true; ///< 是否在BeginFrame自动清除深度缓冲
-            bool    enableShadowMapping  = false; ///< 是否启用阴影映射（后续Milestone实现）
-
-            // ========================== 窗口系统集成 =========================
-            Window* targetWindow = nullptr; ///< 目标窗口，用于SwapChain创建
-
-            // ========================== Immediate mode configuration =========================
-            bool   enableImmediateMode    = true; ///< Enable immediate mode rendering
-            size_t maxCommandsPerPhase    = 10000; ///< Maximum number of instructions per stage
-            bool   enablePhaseDetection   = true; ///< Enable automatic phase detection
-            bool   enableCommandProfiling = false; ///< Enable directive performance analysis
-
-            /**
-             * @brief default constructor
-             * @details Set default parameters suitable for teaching and development
-             */
-            Configuration() = default;
-        };
-
-        /**
          * @brief 渲染统计信息
          * @details 用于性能分析和调试的统计数据
+         *
+         * Milestone 3.0: Configuration已合并到RendererSubsystemConfig
+         * 不再使用内嵌Configuration结构体，统一使用独立的Config类
          */
         struct RenderStatistics
         {
@@ -166,8 +112,10 @@ namespace enigma::graphic
         /**
          * @brief 构造函数
          * @details 初始化基本成员，但不进行重型初始化工作
+         *
+         * Milestone 3.0: 参数类型从Configuration改为RendererSubsystemConfig
          */
-        explicit RendererSubsystem(Configuration& config);
+        explicit RendererSubsystem(RendererSubsystemConfig& config);
 
         /**
          * @brief 析构函数
@@ -499,13 +447,57 @@ namespace enigma::graphic
          */
         void SetDepthMode(DepthMode mode);
 
+        // ==================== GBuffer配置 (Milestone 3.0) ====================
+
+        /**
+         * @brief 配置GBuffer的colortex数量
+         * @param colorTexCount colortex数量，范围 [1, 16]
+         *
+         * @note 配置时机：
+         *   - 选项1（推荐）: 在Initialize()之前调用ConfigureGBuffer()
+         *   - 选项2: 在Initialize()时从配置文件读取并调用
+         *   - 选项3: 运行时动态调整（需要重新创建RenderTargetManager）
+         *
+         * @note 内存优化示例（1920x1080分辨率）：
+         *   - 4个colortex:  节省 ~99.4MB (75%)
+         *   - 8个colortex:  节省 ~66.3MB (50%)
+         *   - 12个colortex: 节省 ~33.2MB (25%)
+         *
+         * @warning 如果在RenderTargetManager已创建后调用，需要重新创建RenderTargetManager
+         */
+        void ConfigureGBuffer(int colorTexCount);
+
+        /**
+         * @brief 获取当前配置的GBuffer colortex数量
+         * @return int 当前数量 [1-16]
+         *
+         * Milestone 3.0: 从m_configuration读取配置值（不再使用m_config）
+         */
+        int GetGBufferColorTexCount() const { return m_configuration.gbufferColorTexCount; }
+
+        /**
+         * @brief 获取RenderTargetManager实例
+         * @return RenderTargetManager指针，如果未初始化返回nullptr
+         *
+         * Milestone 3.0任务4: 提供对RenderTargetManager的访问
+         * - 用于手动控制RT翻转状态
+         * - 用于查询Bindless索引
+         * - 用于生成Mipmap等高级操作
+         */
+        RenderTargetManager* GetRenderTargetManager() const noexcept
+        {
+            return m_renderTargetManager.get();
+        }
+
         // ==================== 配置和状态查询 ====================
 
         /**
          * @brief 获取当前配置
          * @return 当前的配置参数
+         *
+         * Milestone 3.0: 返回类型从Configuration改为RendererSubsystemConfig
          */
-        const Configuration& GetConfiguration() const noexcept { return m_configuration; }
+        const RendererSubsystemConfig& GetConfiguration() const noexcept { return m_configuration; }
 
         /**
          * @brief Get current loaded ShaderPack
@@ -832,10 +824,18 @@ namespace enigma::graphic
         /// 渲染指令队列 - immediate模式核心
         std::unique_ptr<RenderCommandQueue> m_renderCommandQueue;
 
+        // ==================== GBuffer管理组件 (Milestone 3.0任务4) ====================
+
+        /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
+        std::unique_ptr<RenderTargetManager> m_renderTargetManager;
+
         // ==================== 配置和状态 ====================
 
-        /// 子系统配置
-        Configuration m_configuration;
+        /// RendererSubsystem配置（Milestone 3.0: 配置系统重构完成）
+        /// - 合并了旧的内嵌Configuration结构体
+        /// - 从renderer.yml加载，包含所有14个配置参数
+        /// - 遵循"一个子系统一个配置文件"原则
+        RendererSubsystemConfig m_configuration;
 
         /// 渲染统计信息
         mutable RenderStatistics m_renderStatistics;
