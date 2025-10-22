@@ -222,6 +222,40 @@ namespace enigma::graphic
             return Builder();
         }
 
+        // ========================================================================
+        // 复合资源管理 - 重写基类方法 (Milestone 3.0 Bug Fix)
+        // ========================================================================
+
+        /**
+         * @brief 重写Upload()方法 - 复合资源模式
+         * @param commandList 命令列表（可选）
+         * @return 上传成功返回true
+         *
+         * 教学要点:
+         * 1. Composite模式: RenderTarget是复合资源，包含2个D12Texture子资源
+         * 2. 上传流程: 遍历子资源，调用每个子资源的Upload()
+         * 3. API一致性: 通过重写虚函数而不是添加特殊方法
+         * 4. 面向对象原则: 遵循Template Method模式
+         *
+         * 为什么重写Upload()而不是UploadToGPU():
+         * - Upload()是public接口，管理完整的上传流程
+         * - UploadToGPU()是protected，只负责具体的数据传输
+         * - 复合资源需要在外层管理子资源上传，而不是在内部实现
+         */
+        bool Upload(ID3D12GraphicsCommandList* commandList = nullptr) override;
+
+        /**
+         * @brief 重写RegisterBindless()方法 - 复合资源模式
+         * @return 返回主纹理的Bindless索引（与基类签名一致）
+         *
+         * 教学要点:
+         * 1. Composite模式: 遍历子资源，调用每个子资源的RegisterBindless()
+         * 2. RenderTarget自身不需要Bindless索引，只有内部纹理需要
+         * 3. 保持API一致性: 所有资源使用相同的注册接口
+         * 4. 返回值: 返回主纹理索引，允许外部代码获取Bindless索引
+         */
+        std::optional<uint32_t> RegisterBindless() override;
+
         /**
          * @brief 析构函数 - RAII自动管理资源
          *
@@ -463,6 +497,26 @@ namespace enigma::graphic
          * - 后续如需采样,通过ResourceBarrier转换到PIXEL_SHADER_RESOURCE
          */
         D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
+
+        /**
+         * @brief 重写D12Resource虚函数: RenderTarget不需要CPU数据
+         * @return 始终返回false (RenderTarget是输出纹理,无需CPU数据上传)
+         *
+         * 教学要点:
+         * 1. RenderTarget是GPU渲染输出目标,由GPU直接写入
+         * 2. 不同于Input Texture(贴图),RenderTarget无CPU数据需要上传
+         * 3. 重写此方法让基类Upload()跳过CPU数据检查
+         * 4. 对应Iris colortex0-15的架构设计
+         *
+         * Milestone 3.0 Bug Fix:
+         * - 问题: D12RenderTarget继承D12Resource而非D12Texture
+         * - 解决: 必须在D12RenderTarget中重写RequiresCPUData()
+         * - 效果: 允许Upload()成功完成,设置m_isUploaded = true
+         */
+        bool RequiresCPUData() const override
+        {
+            return false; // RenderTarget永远不需要CPU数据
+        }
 
     private:
         /**

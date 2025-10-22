@@ -9,27 +9,50 @@
 using namespace enigma::graphic;
 
 // ============================================================================
-// RenderTargetManager 构造函数 - 创建16个RenderTarget
+// RenderTargetManager 构造函数 - 创建动态数量的RenderTarget (Milestone 3.0)
 // ============================================================================
 
 RenderTargetManager::RenderTargetManager(
     int                                         baseWidth,
     int                                         baseHeight,
-    const std::array<RenderTargetSettings, 16>& rtSettings
+    const std::array<RenderTargetSettings, 16>& rtSettings,
+    int                                         colorTexCount
 )
     : m_baseWidth(baseWidth)
       , m_baseHeight(baseHeight)
       , m_settings(rtSettings)
       , m_flipState() // 默认构造 (所有RT初始状态: 读Main写Alt)
 {
-    // 参数验证
+    // 参数验证 - 尺寸
     if (baseWidth <= 0 || baseHeight <= 0)
     {
         throw std::invalid_argument("Base width and height must be greater than zero");
     }
 
-    // 遍历16个RT配置,使用Builder模式创建
-    for (int i = 0; i < 16; ++i)
+    // 参数验证 - colorTexCount范围 [1, 16]
+    if (colorTexCount < MIN_COLOR_TEXTURES || colorTexCount > MAX_COLOR_TEXTURES)
+    {
+        // 记录警告并修正为默认值
+        // LogError("RenderTargetManager",
+        //          "colorTexCount {} out of range [{}, {}]. Using default {}.",
+        //          colorTexCount, MIN_COLOR_TEXTURES, MAX_COLOR_TEXTURES, MAX_COLOR_TEXTURES);
+
+        // 修正为默认值（16个）
+        colorTexCount = MAX_COLOR_TEXTURES;
+    }
+
+    // 保存激活的colortex数量
+    m_activeColorTexCount = colorTexCount;
+
+    // LogInfo("RenderTargetManager",
+    //         "Initializing with {} active colortex (max: {})",
+    //         m_activeColorTexCount, MAX_COLOR_TEXTURES);
+
+    // 调整vector大小为激活数量（内存优化核心）
+    m_renderTargets.resize(m_activeColorTexCount);
+
+    // 遍历激活的RT配置，使用Builder模式创建
+    for (int i = 0; i < m_activeColorTexCount; ++i)
     {
         const auto& settings = rtSettings[i];
 
@@ -57,15 +80,37 @@ RenderTargetManager::RenderTargetManager(
         // 构建RT实例
         m_renderTargets[i] = rtBuilder.Build();
 
-        // 注册Bindless索引 (自动创建SRV描述符)
+        // Milestone 3.0 Bug Fix: Correct Bindless Registration Flow
+        // True Bindless Flow: Create() → Upload() → RegisterBindless()
+        //
+        // Why Upload() is required even for RenderTarget:
+        // - Upload() sets m_isUploaded = true flag (required by RegisterBindless safety check)
+        // - Upload() performs resource state transition (COMMON -> RENDER_TARGET)
+        // - UploadToGPU() returns true for RenderTarget (no actual data transfer needed)
+        //
+        // Educational Note:
+        // - RenderTarget is GPU output texture, no CPU data to upload
+        // - But Upload() still performs state management and flag setting
+        // - This follows Template Method pattern: base Upload() + virtual UploadToGPU()
+        m_renderTargets[i]->Upload();
         m_renderTargets[i]->RegisterBindless();
+
+        // LogInfo("RenderTargetManager",
+        //         "Created colortex{} ({}x{}, format: {})",
+        //         i, rtWidth, rtHeight, static_cast<int>(settings.format));
     }
 
+    // LogInfo("RenderTargetManager",
+    //         "✓ RenderTargetManager initialized with {}/{} active colortex",
+    //         m_activeColorTexCount, MAX_COLOR_TEXTURES);
+
     // 教学要点:
-    // 1. std::array<std::shared_ptr<D12RenderTarget>, 16>管理16个RT
-    // 2. Builder模式统一创建流程
-    // 3. widthScale/heightScale实现分辨率缩放 (例如: 0.5 = 半分辨率)
-    // 4. RegisterBindless()自动分配索引并创建SRV描述符
+    // 1. **动态数量支持**: std::vector<std::shared_ptr<D12RenderTarget>>管理1-16个RT
+    // 2. **参数验证**: colorTexCount范围检查 + 超出范围自动修正
+    // 3. **内存优化**: 仅创建激活数量的RT（例如4个节省75%内存）
+    // 4. **Builder模式**: 统一创建流程
+    // 5. **widthScale/heightScale**: 实现分辨率缩放 (例如: 0.5 = 半分辨率)
+    // 6. **RegisterBindless()**: 自动分配索引并创建SRV描述符
 }
 
 // ============================================================================
@@ -76,7 +121,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetManager::GetMainRTV(int rtIndex) const
 {
     if (!IsValidIndex(rtIndex))
     {
-        throw std::out_of_range("RenderTarget index out of range [0-15]");
+        // 更新错误信息：显示实际激活数量
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
     }
 
     return m_renderTargets[rtIndex]->GetMainRTV();
@@ -86,7 +134,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetManager::GetAltRTV(int rtIndex) const
 {
     if (!IsValidIndex(rtIndex))
     {
-        throw std::out_of_range("RenderTarget index out of range [0-15]");
+        // 更新错误信息：显示实际激活数量
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
     }
 
     return m_renderTargets[rtIndex]->GetAltRTV();
@@ -100,7 +151,10 @@ uint32_t RenderTargetManager::GetMainTextureIndex(int rtIndex) const
 {
     if (!IsValidIndex(rtIndex))
     {
-        throw std::out_of_range("RenderTarget index out of range [0-15]");
+        // 更新错误信息：显示实际激活数量
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
     }
 
     return m_renderTargets[rtIndex]->GetMainTextureIndex();
@@ -110,7 +164,10 @@ uint32_t RenderTargetManager::GetAltTextureIndex(int rtIndex) const
 {
     if (!IsValidIndex(rtIndex))
     {
-        throw std::out_of_range("RenderTarget index out of range [0-15]");
+        // 更新错误信息：显示实际激活数量
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
     }
 
     return m_renderTargets[rtIndex]->GetAltTextureIndex();
@@ -132,7 +189,8 @@ uint32_t RenderTargetManager::CreateRenderTargetsBuffer()
     RenderTargetsBuffer bufferData{};
 
     // 根据FlipState确定每个RT的读/写索引
-    for (int i = 0; i < 16; ++i)
+    // **Milestone 3.0更新**: 只遍历激活的colortex数量
+    for (int i = 0; i < m_activeColorTexCount; ++i)
     {
         bool isFlipped = m_flipState.IsFlipped(i);
 
@@ -148,6 +206,13 @@ uint32_t RenderTargetManager::CreateRenderTargetsBuffer()
             bufferData.readIndices[i]  = GetAltTextureIndex(i);
             bufferData.writeIndices[i] = GetMainTextureIndex(i);
         }
+    }
+
+    // 未激活的colortex索引填充为0（着色器访问时应避免使用）
+    for (int i = m_activeColorTexCount; i < MAX_COLOR_TEXTURES; ++i)
+    {
+        bufferData.readIndices[i]  = 0;
+        bufferData.writeIndices[i] = 0;
     }
 
     // 创建D12Buffer并上传到GPU
@@ -191,8 +256,9 @@ void RenderTargetManager::OnResize(int newBaseWidth, int newBaseHeight)
     m_baseWidth  = newBaseWidth;
     m_baseHeight = newBaseHeight;
 
-    // 遍历16个RT,调用ResizeIfNeeded()
-    for (int i = 0; i < 16; ++i)
+    // 遍历激活的RT，调用ResizeIfNeeded()
+    // **Milestone 3.0更新**: 只Resize激活的colortex
+    for (int i = 0; i < m_activeColorTexCount; ++i)
     {
         const auto& settings = m_settings[i];
 
@@ -216,12 +282,13 @@ void RenderTargetManager::OnResize(int newBaseWidth, int newBaseHeight)
     }
 
     // 教学要点:
-    // 1. ResizeIfNeeded()内部比较尺寸,仅在变化时执行Resize
-    // 2. D12RenderTarget::Resize()内部自动处理:
+    // 1. **动态数量优化**: 只Resize激活的colortex，未激活的不创建不Resize
+    // 2. ResizeIfNeeded()内部比较尺寸,仅在变化时执行Resize
+    // 3. D12RenderTarget::Resize()内部自动处理:
     //    - 释放旧纹理资源
     //    - 创建新纹理资源
     //    - 重新注册Bindless索引
-    // 3. widthScale/heightScale确保RT相对屏幕的缩放比例不变
+    // 4. widthScale/heightScale确保RT相对屏幕的缩放比例不变
 }
 
 // ============================================================================
@@ -236,8 +303,9 @@ void RenderTargetManager::GenerateMipmaps(ID3D12GraphicsCommandList* cmdList)
         throw std::invalid_argument("Command list cannot be null");
     }
 
-    // 遍历16个RenderTarget
-    for (int i = 0; i < 16; ++i)
+    // 遍历激活的RenderTarget
+    // **Milestone 3.0更新**: 只为激活的colortex生成Mipmap
+    for (int i = 0; i < m_activeColorTexCount; ++i)
     {
         // 检查是否启用Mipmap
         if (!m_settings[i].enableMipmap || !m_renderTargets[i])
@@ -261,10 +329,11 @@ void RenderTargetManager::GenerateMipmaps(ID3D12GraphicsCommandList* cmdList)
     }
 
     // 教学要点:
-    // 1. Mipmap生成通常在写入RenderTarget后调用
-    // 2. 对Main和Alt纹理都生成Mipmap，确保Ping-Pong双缓冲机制正常
-    // 3. GenerateMips()内部使用Compute Shader实现高效Mipmap生成
-    // 4. Mipmap提供多级细节纹理，减少远距离采样走样
+    // 1. **动态数量优化**: 只为激活的colortex生成Mipmap
+    // 2. Mipmap生成通常在写入RenderTarget后调用
+    // 3. 对Main和Alt纹理都生成Mipmap，确保Ping-Pong双缓冲机制正常
+    // 4. GenerateMips()内部使用Compute Shader实现高效Mipmap生成
+    // 5. Mipmap提供多级细节纹理，减少远距离采样走样
 }
 
 // ============================================================================
@@ -275,7 +344,12 @@ std::string RenderTargetManager::GetDebugInfo(int rtIndex) const
 {
     if (!IsValidIndex(rtIndex))
     {
-        return "Invalid RenderTarget index";
+        // 返回更详细的错误信息
+        std::ostringstream oss;
+        oss << "Invalid RenderTarget index: " << rtIndex << "\n";
+        oss << "Valid range: [0, " << m_activeColorTexCount << ")\n";
+        oss << "Active ColorTex: " << m_activeColorTexCount << " / " << MAX_COLOR_TEXTURES;
+        return oss.str();
     }
 
     const auto& rt        = m_renderTargets[rtIndex];
@@ -283,6 +357,7 @@ std::string RenderTargetManager::GetDebugInfo(int rtIndex) const
 
     std::ostringstream oss;
     oss << "=== RenderTarget " << rtIndex << " (colortex" << rtIndex << ") ===\n";
+    oss << "Status: Active (" << rtIndex + 1 << " / " << m_activeColorTexCount << ")\n";
     oss << "Flip State: " << (isFlipped ? "Flipped (Read Alt, Write Main)" : "Normal (Read Main, Write Alt)") << "\n";
     oss << "Main Texture Index: " << rt->GetMainTextureIndex() << "\n";
     oss << "Alt Texture Index: " << rt->GetAltTextureIndex() << "\n";
@@ -302,33 +377,54 @@ std::string RenderTargetManager::GetAllRenderTargetsInfo() const
     std::ostringstream oss;
     oss << "=== RenderTargetManager Overview ===\n";
     oss << "Base Resolution: " << m_baseWidth << "x" << m_baseHeight << "\n";
-    oss << "Total RenderTargets: 16\n\n";
+    oss << "Active ColorTex: " << m_activeColorTexCount << " / " << MAX_COLOR_TEXTURES << "\n\n";
 
     // 表格表头
-    oss << "Index | Name      | Resolution  | Format | Flip | Main Index | Alt Index\n";
-    oss << "------|-----------|-------------|--------|------|------------|-----------\n";
+    oss << "Index | Name      | Resolution  | Format | Flip | Main Index | Alt Index | Status\n";
+    oss << "------|-----------|-------------|--------|------|------------|-----------|--------\n";
 
-    for (int i = 0; i < 16; ++i)
+    // 遍历所有可能的colortex（包括未激活的）
+    for (int i = 0; i < MAX_COLOR_TEXTURES; ++i)
     {
-        const auto& rt       = m_renderTargets[i];
-        const auto& settings = m_settings[i];
+        // 检查是否激活
+        if (i < m_activeColorTexCount)
+        {
+            // 激活的colortex
+            const auto& rt       = m_renderTargets[i];
+            const auto& settings = m_settings[i];
 
-        int         rtWidth    = static_cast<int>(m_baseWidth * settings.widthScale);
-        int         rtHeight   = static_cast<int>(m_baseHeight * settings.heightScale);
-        bool        isFlipped  = m_flipState.IsFlipped(i);
-        std::string resolution = std::to_string(rtWidth) + "x" + std::to_string(rtHeight);
+            int         rtWidth    = static_cast<int>(m_baseWidth * settings.widthScale);
+            int         rtHeight   = static_cast<int>(m_baseHeight * settings.heightScale);
+            bool        isFlipped  = m_flipState.IsFlipped(i);
+            std::string resolution = std::to_string(rtWidth) + "x" + std::to_string(rtHeight);
 
-        char line[256];
-        sprintf_s(line, "%-5d | colortex%-1d | %-11s | %-6d | %-4s | %-10u | %-10u\n",
-                  i,
-                  i,
-                  resolution.c_str(),
-                  settings.format,
-                  isFlipped ? "Yes" : "No",
-                  rt->GetMainTextureIndex(),
-                  rt->GetAltTextureIndex()
-        );
-        oss << line;
+            char line[256];
+            sprintf_s(line, "%-5d | colortex%-1d | %-11s | %-6d | %-4s | %-10u | %-10u | Active\n",
+                      i,
+                      i,
+                      resolution.c_str(),
+                      settings.format,
+                      isFlipped ? "Yes" : "No",
+                      rt->GetMainTextureIndex(),
+                      rt->GetAltTextureIndex()
+            );
+            oss << line;
+        }
+        else
+        {
+            // 未激活的colortex
+            char line[256];
+            sprintf_s(line, "%-5d | colortex%-1d | %-11s | %-6s | %-4s | %-10s | %-10s | Inactive\n",
+                      i,
+                      i,
+                      "N/A",
+                      "N/A",
+                      "N/A",
+                      "N/A",
+                      "N/A"
+            );
+            oss << line;
+        }
     }
 
     return oss.str();

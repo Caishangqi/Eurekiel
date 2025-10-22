@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include <array>
+#include <vector> // Milestone 3.0: 支持动态colortex数量
 #include <memory>
 #include <cstdint>
 #include <d3d12.h>
@@ -39,42 +40,63 @@ namespace enigma::graphic
 
     /**
      * @class RenderTargetManager
-     * @brief 管理16个colortex RenderTarget实例 + BufferFlipState
+     * @brief 管理动态数量（1-16个）colortex RenderTarget实例 + BufferFlipState
      *
      * **Iris架构对应**:
      * - Iris: RenderTargets.java (16个colortex管理)
-     * - DX12: RenderTargetManager (相同职责)
+     * - DX12: RenderTargetManager (动态数量支持，内存优化)
      *
      * **核心职责**:
-     * 1. **RenderTarget生命周期管理** - 创建/销毁16个RT实例
+     * 1. **RenderTarget生命周期管理** - 创建/销毁动态数量的RT实例（1-16个）
      * 2. **BufferFlipState管理** - Main/Alt翻转状态追踪
      * 3. **Bindless索引查询** - 快速获取Main/Alt纹理索引
      * 4. **GPU常量缓冲上传** - RenderTargetsBuffer结构体生成
      * 5. **窗口尺寸变化响应** - 自动Resize所有RT
      *
-     * **内存布局优化**:
-     * - std::array<std::shared_ptr<D12RenderTarget>, 16> (128字节, 64位系统)
+     * **内存优化** (Milestone 3.0):
+     * - 动态colortex数量：支持1-16个（默认16个）
+     * - 内存节省示例（1920x1080, R8G8B8A8）:
+     *   - 16个colortex: ~132.6MB
+     *   - 4个colortex:  ~33.2MB（节省75%，约99.4MB）
+     * - std::vector动态管理，仅创建激活数量的RT
+     *
+     * **内存布局**:
+     * - std::vector<std::shared_ptr<D12RenderTarget>> (动态大小)
      * - BufferFlipState内部仅2字节 (std::bitset<16>)
-     * - 总计约150字节 (极致节省)
      */
     class RenderTargetManager
     {
     public:
+        // ========================================================================
+        // 常量定义 - colortex数量限制
+        // ========================================================================
+
+        static constexpr int MAX_COLOR_TEXTURES = 16; // 最大colortex数量（Iris兼容）
+        static constexpr int MIN_COLOR_TEXTURES = 1; // 最小colortex数量
+
         /**
-         * @brief 构造RenderTargetManager并创建16个RenderTarget
+         * @brief 构造RenderTargetManager并创建动态数量的RenderTarget
          * @param baseWidth 基准屏幕宽度
          * @param baseHeight 基准屏幕高度
-         * @param rtSettings 16个RT的配置数组
+         * @param rtSettings RT配置数组（最多16个）
+         * @param colorTexCount 实际激活的colortex数量（默认16个，范围[1,16]）
+         *
+         * **Milestone 3.0 新增参数**:
+         * - colorTexCount: 允许动态配置colortex数量，优化内存使用
+         *   - 例如：colorTexCount=4 时，只创建4个colortex（节省75%内存）
+         *   - 超出范围会自动修正并记录警告
          *
          * 教学要点:
          * - 使用Builder模式创建每个D12RenderTarget
          * - 自动注册Bindless索引 (调用RegisterBindless())
          * - 设置调试名称 (colorTexN)
+         * - 仅创建激活数量的RT实例（内存优化）
          */
         RenderTargetManager(
             int                                         baseWidth,
             int                                         baseHeight,
-            const std::array<RenderTargetSettings, 16>& rtSettings
+            const std::array<RenderTargetSettings, 16>& rtSettings,
+            int                                         colorTexCount = MAX_COLOR_TEXTURES
         );
 
         /**
@@ -238,24 +260,50 @@ namespace enigma::graphic
          */
         std::string GetAllRenderTargetsInfo() const;
 
+        // ========================================================================
+        // 动态colortex数量查询 - Milestone 3.0新增
+        // ========================================================================
+
+        /**
+         * @brief 获取当前激活的colortex数量
+         * @return int 激活数量 [1-16]
+         *
+         * 教学要点:
+         * - 用于着色器验证索引有效性
+         * - 用于调试信息输出
+         * - 用于动态遍历激活的RT
+         */
+        int GetActiveColorTexCount() const { return m_activeColorTexCount; }
+
     private:
         // ========================================================================
         // 私有成员
         // ========================================================================
 
-        std::array<std::shared_ptr<D12RenderTarget>, 16> m_renderTargets; // 16个RT实例
-        RenderTargetFlipState                            m_flipState; // Main/Alt翻转状态 (BufferFlipState<16>)
-        int                                              m_baseWidth; // 基准屏幕宽度
-        int                                              m_baseHeight; // 基准屏幕高度
-        std::array<RenderTargetSettings, 16>             m_settings; // RT配置缓存
+        // 动态colortex数组 - 支持1-16个colortex，优化内存使用（Milestone 3.0）
+        // 例如：配置4个colortex比16个节省约75%内存（~99.4MB @ 1920x1080）
+        std::vector<std::shared_ptr<D12RenderTarget>> m_renderTargets;
+
+        // 当前激活的colortex数量，范围 [1, 16]
+        int m_activeColorTexCount = MAX_COLOR_TEXTURES;
+
+        RenderTargetFlipState                m_flipState; // Main/Alt翻转状态 (BufferFlipState<16>)
+        int                                  m_baseWidth; // 基准屏幕宽度
+        int                                  m_baseHeight; // 基准屏幕高度
+        std::array<RenderTargetSettings, 16> m_settings; // RT配置缓存（最多16个）
 
         /**
          * @brief 验证rtIndex有效性 (内部辅助函数)
-         * @return true if valid [0-15]
+         * @return true if valid [0, m_activeColorTexCount)
+         *
+         * **Milestone 3.0更新**:
+         * - 原逻辑: [0, 16)
+         * - 新逻辑: [0, m_activeColorTexCount)
+         * - 确保索引在激活范围内
          */
         bool IsValidIndex(int rtIndex) const
         {
-            return rtIndex >= 0 && rtIndex < 16;
+            return rtIndex >= 0 && rtIndex < m_activeColorTexCount;
         }
 
         // ========================================================================

@@ -2,6 +2,8 @@
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Resource/GlobalDescriptorHeapManager.hpp"
 #include "../Resource/Texture/D12Texture.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
 using namespace enigma::graphic;
 
@@ -67,7 +69,10 @@ void D12RenderTarget::InitializeTextures(int width, int height)
     mainTexInfo.mipLevels = m_enableMipmap ? 0 : 1; // 0 = 自动生成所有Mip级别
     mainTexInfo.arraySize = 1;
     mainTexInfo.format    = m_format;
-    mainTexInfo.usage     = TextureUsage::ShaderResource; // RenderTarget可作为SRV采样
+    // Milestone 3.0 Bug Fix: RenderTarget必须同时支持RTV和SRV
+    // - RTV用于渲染输出 (OMSetRenderTargets)
+    // - SRV用于着色器采样 (历史帧读取/Ping-Pong渲染)
+    mainTexInfo.usage     = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
     mainTexInfo.debugName = (GetDebugName() + "_MainTex").c_str();
 
     m_mainTexture = std::make_shared<D12Texture>(mainTexInfo);
@@ -336,6 +341,124 @@ bool D12RenderTarget::FreeBindlessIndexInternal(BindlessIndexAllocator* allocato
 }
 
 // ============================================================================
+// 复合资源管理 - Upload和RegisterBindless重写 (Milestone 3.0 Bug Fix)
+// ============================================================================
+
+/**
+ * @brief 重写Upload()方法 - 复合资源模式
+ *
+ * 教学要点:
+ * 1. Composite模式: RenderTarget是复合资源，包含2个D12Texture子资源
+ * 2. 上传流程: 遍历子资源，调用每个子资源的Upload()
+ * 3. API一致性: 通过重写虚函数而不是添加特殊方法（如MarkAsUploaded）
+ * 4. 面向对象原则: 外层对象负责管理内部对象的生命周期
+ *
+ * 为什么之前的UploadToGPU()修复没有执行:
+ * - RenderTargetManager调用m_renderTargets[i]->Upload()
+ * - 这会调用基类D12Resource::Upload()
+ * - 基类Upload()在174行检查IsValid()失败（m_isValid = false）
+ * - 导致根本没有进入UploadToGPU()
+ *
+ * 正确的修复方案:
+ * - 重写Upload()，直接管理子资源上传
+ * - 不依赖基类的Upload()流程
+ * - 确保子资源的m_isUploaded正确设置
+ */
+bool D12RenderTarget::Upload(ID3D12GraphicsCommandList* commandList)
+{
+    UNUSED(commandList)
+
+    // Composite Resource Pattern: Upload all sub-resources
+    // RenderTarget包含2个D12Texture：m_mainTexture和m_altTexture
+    bool success = true;
+
+    // 1. 上传主纹理
+    // RenderTarget纹理不需要CPU数据，是GPU直接写入的输出纹理
+    // 但仍需调用Upload()来设置m_isUploaded标记，通过RegisterBindless()安全检查
+    if (m_mainTexture)
+    {
+        success &= m_mainTexture->Upload(commandList);
+    }
+
+    // 2. 上传替代纹理（Ping-Pong渲染）
+    if (m_altTexture)
+    {
+        success &= m_altTexture->Upload(commandList);
+    }
+
+    // 3. 标记外层容器为已上传
+    // 这样外层RenderTarget和内层Texture的m_isUploaded都为true
+    if (success)
+    {
+        m_isUploaded = true;
+    }
+
+    return success;
+}
+
+/**
+ * @brief 重写RegisterBindless()方法 - 复合资源模式
+ *
+ * 教学要点:
+ * 1. Composite模式: 遍历子资源，注册每个子资源到Bindless系统
+ * 2. RenderTarget自身不需要Bindless索引，只有内部纹理需要索引
+ * 3. 存储子资源索引: m_mainTextureIndex和m_altTextureIndex供着色器使用
+ * 4. 返回主纹理索引: 与基类签名一致，允许外部代码获取索引
+ *
+ * Bindless架构:
+ * - 主纹理和替代纹理各自注册到全局ResourceDescriptorHeap
+ * - HLSL通过索引访问: ResourceDescriptorHeap[mainTextureIndex]
+ * - 支持Ping-Pong双缓冲: Main/Alt交替读写
+ */
+std::optional<uint32_t> D12RenderTarget::RegisterBindless()
+{
+    // Composite Resource Pattern: Register all sub-resources
+
+    // 1. 注册主纹理到Bindless系统
+    if (m_mainTexture)
+    {
+        auto mainIndex = m_mainTexture->RegisterBindless();
+        if (mainIndex.has_value())
+        {
+            m_mainTextureIndex = mainIndex.value();
+        }
+        else
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "RegisterBindless: Failed to register main texture for '%s'",
+                           m_debugName.c_str());
+            return std::nullopt;
+        }
+    }
+
+    // 2. 注册替代纹理到Bindless系统
+    if (m_altTexture)
+    {
+        auto altIndex = m_altTexture->RegisterBindless();
+        if (altIndex.has_value())
+        {
+            m_altTextureIndex = altIndex.value();
+        }
+        else
+        {
+            core::LogError(RendererSubsystem::GetStaticSubsystemName(),
+                           "RegisterBindless: Failed to register alt texture for '%s'",
+                           m_debugName.c_str());
+            return std::nullopt;
+        }
+    }
+
+    // 3. 返回主纹理索引（与基类签名一致）
+    // 注意: RenderTarget本身不需要分配Bindless索引
+    // 只有内部纹理需要索引，RenderTarget作为容器管理这些索引
+    core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
+                   "RegisterBindless: RenderTarget '%s' registered (main=%u, alt=%u)",
+                   m_debugName.c_str(), m_mainTextureIndex, m_altTextureIndex);
+
+    return m_mainTextureIndex; // 返回主纹理索引
+}
+
+// ============================================================================
 // GPU资源上传 (重写D12Resource纯虚函数)
 // ============================================================================
 
@@ -346,17 +469,20 @@ bool D12RenderTarget::UploadToGPU(
     UNUSED(commandList)
     UNUSED(uploadContext)
 
-    // RenderTarget不需要上传初始数据
-    // 它是渲染输出目标,由GPU直接写入,不需要CPU数据上传
-
+    // Milestone 3.0 Bug Fix 最终方案:
+    //
+    // UploadToGPU()不再负责标记内部纹理的m_isUploaded
+    // 这个职责已移至Upload()重写方法中
+    //
     // 教学要点:
-    // 1. RenderTarget与Texture的区别:
-    //    - Texture: 需要上传贴图数据 (DDS/PNG等)
-    //    - RenderTarget: GPU直接渲染输出,无需CPU数据
-    // 2. 返回true表示"上传成功"(实际上无需上传)
-    // 3. 状态转换由基类Upload()处理
+    // 1. RenderTarget是复合资源，不需要实际的数据上传
+    // 2. 复合资源的Upload()重写方法负责管理子资源上传
+    // 3. UploadToGPU()仅用于Template Method模式的接口完整性
+    // 4. 真正的上传逻辑在Upload()重写中，调用子资源的Upload()
 
-    return true; // 无需上传,直接成功
+    // RenderTarget/DepthStencil纹理不需要实际上传（GPU直接写入）
+    // Upload()重写方法已正确处理子资源上传和标记设置
+    return true;
 }
 
 D3D12_RESOURCE_STATES D12RenderTarget::GetUploadDestinationState() const
