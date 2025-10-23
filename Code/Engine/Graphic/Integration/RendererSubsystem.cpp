@@ -63,6 +63,7 @@ void RendererSubsystem::Initialize()
 
     // 显示架构流程确认信息
     LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
+    g_theRendererSubsystem = this;
 }
 
 void RendererSubsystem::Startup()
@@ -694,6 +695,39 @@ ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
 {
     auto* cmdMgr = D3D12RenderSystem::GetCommandListManager();
     return cmdMgr ? cmdMgr->GetCommandQueue(CommandListManager::Type::Graphics) : nullptr;
+}
+
+//-----------------------------------------------------------------------------------------------
+// ImGui Integration Support (7 getter methods for IImGuiRenderContext)
+//-----------------------------------------------------------------------------------------------
+
+ID3D12GraphicsCommandList* RendererSubsystem::GetCurrentCommandList() const noexcept
+{
+    return D3D12RenderSystem::GetCurrentCommandList();
+}
+
+ID3D12DescriptorHeap* RendererSubsystem::GetSRVHeap() const noexcept
+{
+    auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+    return heapManager ? heapManager->GetCbvSrvUavHeap() : nullptr;
+}
+
+DXGI_FORMAT RendererSubsystem::GetRTVFormat() const noexcept
+{
+    // SwapChain后台缓冲区固定使用RGBA8格式
+    return DXGI_FORMAT_R8G8B8A8_UNORM;
+}
+
+uint32_t RendererSubsystem::GetFramesInFlight() const noexcept
+{
+    // 返回SwapChain缓冲区数量（通常为2或3）
+    // 默认为2（双缓冲），可从配置读取
+    return 2;
+}
+
+bool RendererSubsystem::IsInitialized() const noexcept
+{
+    return m_isInitialized;
 }
 
 //-----------------------------------------------------------------------------------------------

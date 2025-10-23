@@ -686,6 +686,45 @@ namespace enigma::graphic
          */
         ID3D12CommandQueue* GetCommandQueue() const noexcept;
 
+        // ============================================================
+        // ImGui Integration Support (7 getter methods for IImGuiRenderContext)
+        // ============================================================
+
+        /**
+         * @brief 获取当前命令列表
+         * @return 当前活动的命令列表指针
+         * @details 委托给D3D12RenderSystem::GetCurrentCommandList()
+         */
+        ID3D12GraphicsCommandList* GetCurrentCommandList() const noexcept;
+
+        /**
+         * @brief 获取SRV描述符堆
+         * @return SRV描述符堆指针
+         * @details 委托给GlobalDescriptorHeapManager::GetCbvSrvUavHeap()
+         */
+        ID3D12DescriptorHeap* GetSRVHeap() const noexcept;
+
+        /**
+         * @brief 获取RenderTarget格式
+         * @return RTV格式
+         * @details 返回SwapChain的后台缓冲区格式（固定为DXGI_FORMAT_R8G8B8A8_UNORM）
+         */
+        DXGI_FORMAT GetRTVFormat() const noexcept;
+
+        /**
+         * @brief 获取帧缓冲数量
+         * @return 帧缓冲数量（双缓冲或三缓冲）
+         * @details 返回SwapChain的缓冲区数量
+         */
+        uint32_t GetFramesInFlight() const noexcept;
+
+        /**
+         * @brief 检查是否已初始化
+         * @return true表示已初始化
+         * @details 检查m_isInitialized标志
+         */
+        bool IsInitialized() const noexcept;
+
     private:
         // ==================== ShaderPack Fixed Paths (Internal Constants) ====================
         /**
