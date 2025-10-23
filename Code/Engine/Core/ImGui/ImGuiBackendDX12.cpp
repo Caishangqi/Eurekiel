@@ -17,8 +17,9 @@ namespace enigma::core
     // 构造/析构
     //=============================================================================
 
-    ImGuiBackendDX12::ImGuiBackendDX12(IRenderer* renderer)
-        : m_device(nullptr)
+    ImGuiBackendDX12::ImGuiBackendDX12(IImGuiRenderContext* renderContext)
+        : m_renderContext(renderContext) // 保存指针
+          , m_device(nullptr)
           , m_commandQueue(nullptr)
           , m_srvHeap(nullptr)
           , m_commandList(nullptr)
@@ -27,25 +28,50 @@ namespace enigma::core
           , m_fontSrvCpuHandle{}
           , m_fontSrvGpuHandle{}
           , m_initialized(false)
+          , m_nextDescriptorIndex(0)
     {
-        // 从IRenderer获取DX12资源
-        if (renderer)
+        // 从IImGuiRenderContext获取DX12资源（需要类型转换）
+        if (renderContext)
         {
-            m_device            = renderer->GetD3D12Device();
-            m_commandQueue      = renderer->GetD3D12CommandQueue();
-            m_srvHeap           = renderer->GetD3D12SRVHeap();
-            m_commandList       = renderer->GetD3D12CommandList();
-            m_rtvFormat         = renderer->GetRTVFormat();
-            m_numFramesInFlight = renderer->GetNumFramesInFlight();
+            m_device            = static_cast<ID3D12Device*>(renderContext->GetDevice());
+            m_commandQueue      = static_cast<ID3D12CommandQueue*>(renderContext->GetCommandQueue());
+            m_srvHeap           = static_cast<ID3D12DescriptorHeap*>(renderContext->GetSRVHeap());
+            m_commandList       = static_cast<ID3D12GraphicsCommandList*>(renderContext->GetCommandList());
+            m_rtvFormat         = renderContext->GetRTVFormat();
+            m_numFramesInFlight = renderContext->GetNumFramesInFlight();
         }
 
-        DebuggerPrintf("[ImGuiBackendDX12] Constructor - Resources retrieved from IRenderer\n");
-        DebuggerPrintf("[ImGuiBackendDX12]   Device: %p\n", m_device);
-        DebuggerPrintf("[ImGuiBackendDX12]   CommandQueue: %p\n", m_commandQueue);
-        DebuggerPrintf("[ImGuiBackendDX12]   SRV Heap: %p\n", m_srvHeap);
-        DebuggerPrintf("[ImGuiBackendDX12]   Command List: %p\n", m_commandList);
-        DebuggerPrintf("[ImGuiBackendDX12]   RTV Format: %d\n", static_cast<int>(m_rtvFormat));
-        DebuggerPrintf("[ImGuiBackendDX12]   Frames in Flight: %u\n", m_numFramesInFlight);
+        // 检查关键资源（Device, CommandQueue, SRVHeap必须有效）
+        if (!m_device || !m_commandQueue || !m_srvHeap)
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Error: Missing critical DX12 resources\n");
+            DebuggerPrintf("[ImGuiBackendDX12]   Device: %p\n", m_device);
+            DebuggerPrintf("[ImGuiBackendDX12]   CommandQueue: %p\n", m_commandQueue);
+            DebuggerPrintf("[ImGuiBackendDX12]   SRV Heap: %p\n", m_srvHeap);
+        }
+        else
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Constructor - Resources retrieved from IImGuiRenderContext\n");
+            DebuggerPrintf("[ImGuiBackendDX12]   Device: %p\n", m_device);
+            DebuggerPrintf("[ImGuiBackendDX12]   CommandQueue: %p\n", m_commandQueue);
+            DebuggerPrintf("[ImGuiBackendDX12]   SRV Heap: %p\n", m_srvHeap);
+            DebuggerPrintf("[ImGuiBackendDX12]   RTV Format: %d\n", static_cast<int>(m_rtvFormat));
+            DebuggerPrintf("[ImGuiBackendDX12]   Frames in Flight: %u\n", m_numFramesInFlight);
+            DebuggerPrintf("[ImGuiBackendDX12]   Reserved SRV Slots: 0-%u (Total: %u)\n",
+                           IMGUI_DESCRIPTOR_RESERVE - 1, IMGUI_DESCRIPTOR_RESERVE);
+        }
+
+        // CommandList允许在构造时为nullptr（将在NewFrame()时动态获取）
+        if (!m_commandList)
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Warning: CommandList is nullptr during construction\n");
+            DebuggerPrintf("[ImGuiBackendDX12]   This is expected during Initialize phase\n");
+            DebuggerPrintf("[ImGuiBackendDX12]   CommandList will be retrieved dynamically in NewFrame()\n");
+        }
+        else
+        {
+            DebuggerPrintf("[ImGuiBackendDX12]   Command List: %p\n", m_commandList);
+        }
     }
 
     ImGuiBackendDX12::~ImGuiBackendDX12()
@@ -65,16 +91,23 @@ namespace enigma::core
     {
         DebuggerPrintf("[ImGuiBackendDX12] Initializing...\n");
 
-        // 1. 验证必需的资源
-        if (!m_device || !m_commandQueue || !m_srvHeap || !m_commandList)
+        // 1. 验证关键DX12资源（Device, CommandQueue, SRVHeap）
+        if (!m_device || !m_commandQueue || !m_srvHeap)
         {
-            DebuggerPrintf("[ImGuiBackendDX12] Error: Invalid DX12 resources\n");
+            DebuggerPrintf("[ImGuiBackendDX12] Error: Missing critical DX12 resources for initialization\n");
             DebuggerPrintf("[ImGuiBackendDX12]   Device: %p\n", m_device);
             DebuggerPrintf("[ImGuiBackendDX12]   CommandQueue: %p\n", m_commandQueue);
             DebuggerPrintf("[ImGuiBackendDX12]   SRV Heap: %p\n", m_srvHeap);
-            DebuggerPrintf("[ImGuiBackendDX12]   Command List: %p\n", m_commandList);
             return false;
         }
+
+        // CommandList允许为nullptr（在NewFrame()时动态获取）
+        if (!m_commandList)
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Info: CommandList is nullptr, will be retrieved in NewFrame()\n");
+        }
+
+        DebuggerPrintf("[ImGuiBackendDX12] Core resources validated successfully\n");
 
         // 2. 验证SRV Heap容量
         D3D12_DESCRIPTOR_HEAP_DESC heapDesc = m_srvHeap->GetDesc();
@@ -138,6 +171,19 @@ namespace enigma::core
             return;
         }
 
+        // 动态获取CommandList（每帧刷新）
+        // 在Initialize阶段CommandList可能为nullptr,这里确保获取最新的CommandList
+        if (m_renderContext)
+        {
+            m_commandList = static_cast<ID3D12GraphicsCommandList*>(m_renderContext->GetCommandList());
+        }
+
+        if (!m_commandList)
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Warning: CommandList is nullptr in NewFrame(), skipping ImGui rendering\n");
+            return; // 跳过本帧ImGui渲染
+        }
+
         // ImGui DX12后端NewFrame
         ImGui_ImplDX12_NewFrame();
     }
@@ -154,6 +200,28 @@ namespace enigma::core
         if (!drawData || drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f)
         {
             return; // 无效的绘制数据
+        }
+
+        // ========================================================================
+        // ✅ FIX (2025-10-22): 动态获取最新的CommandList（与NewFrame()保持一致）
+        // ========================================================================
+        // 问题原因: NewFrame()动态获取CommandList，但RenderDrawData()使用旧的m_commandList
+        // - 如果BeginFrame之前CommandList为nullptr，NewFrame()会跳过
+        // - 但RenderDrawData()仍然使用nullptr的m_commandList，导致崩溃
+        //
+        // 修复: 在RenderDrawData()时重新获取最新的CommandList
+        // - 确保每次渲染都使用当前帧的有效CommandList
+        // - 与NewFrame()的逻辑保持一致
+        // ========================================================================
+        if (m_renderContext)
+        {
+            m_commandList = static_cast<ID3D12GraphicsCommandList*>(m_renderContext->GetCommandList());
+        }
+
+        if (!m_commandList)
+        {
+            DebuggerPrintf("[ImGuiBackendDX12] Error: CommandList is nullptr in RenderDrawData(), skipping\n");
+            return;
         }
 
         // 2. 设置Descriptor Heaps
@@ -173,7 +241,7 @@ namespace enigma::core
     }
 
     //=============================================================================
-    // 描述符分配回调（静态方法）
+    // 描述符分配回调（静态方法 - 增量分配实现）
     //=============================================================================
 
     void ImGuiBackendDX12::SrvDescriptorAlloc(ImGui_ImplDX12_InitInfo*     info,
@@ -183,16 +251,35 @@ namespace enigma::core
         // 从InitInfo获取backend实例
         ImGuiBackendDX12* backend = static_cast<ImGuiBackendDX12*>(info->UserData);
 
-        // 使用SRV Heap的起始位置作为字体纹理的Descriptor
-        // 注意：实际应用中可能需要更复杂的Descriptor分配策略
+        // 检查是否超过预留范围（槽位0-99）
+        if (backend->m_nextDescriptorIndex >= IMGUI_DESCRIPTOR_RESERVE)
+        {
+            ERROR_AND_DIE("ImGui SRV Descriptor pool exhausted! Max reserved slots: 100");
+        }
+
+        // 获取描述符大小（用于计算偏移）
+        UINT descriptorSize = backend->m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        // 计算CPU句柄（起始位置 + 索引偏移）
         *out_cpu = backend->m_srvHeap->GetCPUDescriptorHandleForHeapStart();
+        out_cpu->ptr += backend->m_nextDescriptorIndex * descriptorSize;
+
+        // 计算GPU句柄（起始位置 + 索引偏移）
         *out_gpu = backend->m_srvHeap->GetGPUDescriptorHandleForHeapStart();
+        out_gpu->ptr += backend->m_nextDescriptorIndex * descriptorSize;
 
-        // 保存句柄供后续使用
-        backend->m_fontSrvCpuHandle = *out_cpu;
-        backend->m_fontSrvGpuHandle = *out_gpu;
+        // 保存第一次分配的句柄（字体纹理）
+        if (backend->m_nextDescriptorIndex == 0)
+        {
+            backend->m_fontSrvCpuHandle = *out_cpu;
+            backend->m_fontSrvGpuHandle = *out_gpu;
+        }
 
-        DebuggerPrintf("[ImGuiBackendDX12] Descriptor allocated for font texture\n");
+        DebuggerPrintf("[ImGuiBackendDX12] Descriptor allocated at slot %u (CPU: 0x%llx, GPU: 0x%llx)\n",
+                       backend->m_nextDescriptorIndex, out_cpu->ptr, out_gpu->ptr);
+
+        // 移动到下一个槽位
+        backend->m_nextDescriptorIndex++;
     }
 
     void ImGuiBackendDX12::SrvDescriptorFree(ImGui_ImplDX12_InitInfo*    info,
