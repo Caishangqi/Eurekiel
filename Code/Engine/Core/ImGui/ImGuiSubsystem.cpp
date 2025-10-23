@@ -1,4 +1,5 @@
 ﻿#include "ImGuiSubsystem.hpp"
+#include "IImGuiRenderContext.hpp"
 #include "../ErrorWarningAssert.hpp"
 #include "../StringUtils.hpp"
 #include "../../Window/Window.hpp"
@@ -9,9 +10,6 @@
 
 // ImGui后端实现
 #include <filesystem>
-
-#include "ImGuiBackendDX11.hpp"
-#include "ImGuiBackendDX12.hpp"  // Phase 1接口预留，Phase 2完整实现
 
 using namespace enigma::core;
 ImGuiSubsystem* g_theImGui = nullptr;
@@ -53,11 +51,9 @@ namespace enigma::core
             ERROR_AND_DIE("ImGuiSubsystem: Failed to initialize ImGui context")
         }
 
-        // 3. 创建渲染后端
-        if (!CreateBackend())
-        {
-            ERROR_AND_DIE("ImGuiSubsystem: Failed to create rendering backend")
-        }
+        // 3. Backend创建延迟到Startup()阶段
+        //    此时CommandList尚未创建,延迟到Startup确保资源完整
+        DebuggerPrintf("[ImGuiSubsystem] Backend creation deferred to Startup() phase\n");
 
         // 4. 创建并注册消息预处理器
         m_messagePreprocessor = std::make_unique<ImGuiMessagePreprocessor>();
@@ -66,14 +62,27 @@ namespace enigma::core
             m_config.targetWindow->RegisterMessagePreprocessor(m_messagePreprocessor.get());
         }
 
-        DebuggerPrintf("[ImGuiSubsystem] Initialized successfully with backend: %s\n", GetBackendName());
+        DebuggerPrintf("[ImGuiSubsystem] Initialized successfully (backend creation deferred)\n");
     }
 
     void ImGuiSubsystem::Startup()
     {
-        // 主启动阶段（预留）
-        // 在Initialize之后调用，所有子系统的Initialize都已完成
-        DebuggerPrintf("[ImGuiSubsystem] Startup completed\n");
+        DebuggerPrintf("[ImGuiSubsystem] Starting up...\n");
+
+        // 检查RenderContext是否就绪
+        if (!m_config.renderContext || !m_config.renderContext->IsReady())
+        {
+            ERROR_AND_DIE("ImGuiSubsystem: RenderContext is not ready in Startup()")
+        }
+
+        // 创建渲染后端（此时RendererSubsystem已经Initialize完成）
+        DebuggerPrintf("[ImGuiSubsystem] Creating rendering backend...\n");
+        if (!CreateBackend())
+        {
+            ERROR_AND_DIE("ImGuiSubsystem: Failed to create rendering backend in Startup()")
+        }
+
+        DebuggerPrintf("[ImGuiSubsystem] Startup completed with backend: %s\n", GetBackendName());
         g_theImGui = this;
     }
 
@@ -218,10 +227,10 @@ namespace enigma::core
 
     bool ImGuiSubsystem::ValidateConfig() const
     {
-        // 1. 检查Renderer引用
-        if (!m_config.renderer)
+        // 1. 检查RenderContext引用
+        if (!m_config.renderContext)
         {
-            DebuggerPrintf("[ImGuiSubsystem] Error: Renderer not specified\n");
+            DebuggerPrintf("[ImGuiSubsystem] Error: RenderContext not specified\n");
             return false;
         }
 
@@ -232,12 +241,10 @@ namespace enigma::core
             return false;
         }
 
-        // 3. 验证Renderer已就绪
-        if (!m_config.renderer->IsRendererReady())
-        {
-            DebuggerPrintf("[ImGuiSubsystem] Error: Renderer is not ready\n");
-            return false;
-        }
+        // 3. IsReady()检查推迟到Startup()阶段
+        //    Initialize()阶段只验证指针有效性,不检查资源就绪状态
+        //    (RenderContext在Initialize阶段可能尚未完成资源创建)
+        DebuggerPrintf("[ImGuiSubsystem] RenderContext pointer validated (readiness check deferred to Startup)\n");
 
         return true;
     }
@@ -356,54 +363,28 @@ namespace enigma::core
 
     bool ImGuiSubsystem::CreateBackend()
     {
-        // 从IRenderer获取后端类型
-        RendererBackend backendType = m_config.renderer->GetBackendType();
-        DebuggerPrintf("[ImGuiSubsystem] Creating backend for type: %d\n", static_cast<int>(backendType));
+        DebuggerPrintf("[ImGuiSubsystem] Creating backend via factory method...\n");
 
-        // 根据IRenderer的后端类型创建对应的ImGui后端
-        switch (backendType)
+        // 使用Context的工厂方法创建Backend（工厂方法模式）
+        m_backend = m_config.renderContext->CreateBackend();
+
+        if (!m_backend)
         {
-        case RendererBackend::DirectX11:
-            {
-                m_backend = std::make_unique<ImGuiBackendDX11>(m_config.renderer);
-                break;
-            }
-
-        case RendererBackend::DirectX12:
-            {
-                // Phase 2: 完整实现DX12渲染逻辑
-                m_backend = std::make_unique<ImGuiBackendDX12>(m_config.renderer);
-                break;
-            }
-
-        case RendererBackend::OpenGL:
-            {
-                DebuggerPrintf("[ImGuiSubsystem] Error: OpenGL backend not supported\n");
-                return false;
-            }
-
-        default:
-            {
-                DebuggerPrintf("[ImGuiSubsystem] Error: Unknown backend type\n");
-                return false;
-            }
+            DebuggerPrintf("[ImGuiSubsystem] Error: Failed to create backend\n");
+            return false;
         }
 
         // 初始化后端
-        if (m_backend && !m_backend->Initialize())
+        if (!m_backend->Initialize())
         {
             DebuggerPrintf("[ImGuiSubsystem] Error: Backend initialization failed\n");
             m_backend.reset();
             return false;
         }
 
-        if (m_backend)
-        {
-            DebuggerPrintf("[ImGuiSubsystem] Backend initialized: %s\n", m_backend->GetBackendName());
-            return true;
-        }
-
-        return false;
+        DebuggerPrintf("[ImGuiSubsystem] Backend created and initialized successfully: %s\n",
+                       m_backend->GetBackendName());
+        return true;
     }
 
     void ImGuiSubsystem::DestroyBackend()
