@@ -60,15 +60,25 @@ namespace enigma::graphic
     class BindlessIndexAllocator final
     {
     public:
-        // 索引范围常量（Milestone 2.8修正 - 匹配1M描述符堆容量）
-        // ⭐ 重要变更: 从2M总容量缩减至1M，匹配GlobalDescriptorHeapManager实际容量
-        // 原因: Buffer索引1M-2M超出描述符堆容量，导致CreateShaderResourceView失败
-        // 解决: 纹理500K + 缓冲区500K = 1M总容量，完全在描述符堆范围内
-        static constexpr uint32_t TEXTURE_INDEX_START = 0;
-        static constexpr uint32_t TEXTURE_INDEX_END   = 499'999; // ⭐ 从999,999缩减至499,999
-        static constexpr uint32_t BUFFER_INDEX_START  = 500'000; // ⭐ 从1,000,000改为500,000
-        static constexpr uint32_t BUFFER_INDEX_END    = 999'999; // ⭐ 从1,999,999改为999,999
-        static constexpr uint32_t INVALID_INDEX       = UINT32_MAX;
+        // 索引范围常量（Milestone 2.8修正 + ImGui预留槽位支持）
+        // ⭐ 槽位布局（1M描述符堆总容量）:
+        //    槽位 0-99:       ImGui预留（100个槽位，ImGuiBackendDX12使用）
+        //    槽位 100-499,999: Bindless纹理（499,900个槽位）
+        //    槽位 500,000-999,999: Bindless缓冲区（500,000个槽位）
+        //
+        // ⭐ Milestone 2.8历史: 从2M总容量缩减至1M，匹配GlobalDescriptorHeapManager实际容量
+        //    原因: Buffer索引1M-2M超出描述符堆容量，导致CreateShaderResourceView失败
+        //    解决: 纹理500K + 缓冲区500K = 1M总容量
+        //
+        // ⭐ ImGui预留槽位 (Task 6): ImGuiBackendDX12使用槽位0-99进行增量分配
+        //    冲突修复: TEXTURE_INDEX_START从0改为100，避免覆盖ImGui槽位
+        static constexpr uint32_t IMGUI_RESERVED_START = 0;
+        static constexpr uint32_t IMGUI_RESERVED_END   = 99; // ImGui预留100个槽位
+        static constexpr uint32_t TEXTURE_INDEX_START  = 100; // ⭐ 从0改为100（避免ImGui冲突）
+        static constexpr uint32_t TEXTURE_INDEX_END    = 499'999;
+        static constexpr uint32_t BUFFER_INDEX_START   = 500'000;
+        static constexpr uint32_t BUFFER_INDEX_END     = 999'999;
+        static constexpr uint32_t INVALID_INDEX        = UINT32_MAX;
 
         BindlessIndexAllocator();
         ~BindlessIndexAllocator() = default;
@@ -85,12 +95,13 @@ namespace enigma::graphic
 
         /**
          * @brief 分配纹理索引
-         * @return 成功返回索引(0-499999),失败返回INVALID_INDEX
+         * @return 成功返回索引(100-499999),失败返回INVALID_INDEX
          *
          * 教学要点:
          * 1. FreeList架构: O(1)常数时间分配
          * 2. 线程安全: std::lock_guard自动加锁
-         * 3. 容量检查: 达到500K上限时返回失败
+         * 3. 容量检查: 达到499.9K上限时返回失败
+         * 4. ImGui槽位保护: 纹理从100开始，避免覆盖槽位0-99
          */
         uint32_t AllocateTextureIndex();
 
@@ -102,11 +113,11 @@ namespace enigma::graphic
 
         /**
          * @brief 释放纹理索引
-         * @param index 要释放的索引(0-499999)
+         * @param index 要释放的索引(100-499999)
          * @return 成功返回true
          *
          * 教学要点:
-         * 1. 索引范围验证
+         * 1. 索引范围验证（拒绝ImGui预留区0-99）
          * 2. 重复释放检测（需额外检查，FreeList不提供）
          * 3. 统计信息更新
          */
