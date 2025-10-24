@@ -1,4 +1,4 @@
-#include "Generator.hpp"
+#include "TerrainGenerator.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::voxel

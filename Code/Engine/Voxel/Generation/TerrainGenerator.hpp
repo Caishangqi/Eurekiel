@@ -19,7 +19,7 @@ namespace enigma::voxel
      * Based on Minecraft's world generation system, this provides a flexible
      * interface for different terrain generation algorithms.
      */
-    class Generator : public IRegistrable
+    class TerrainGenerator : public IRegistrable
     {
     private:
         std::string      m_registryName;
@@ -30,7 +30,7 @@ namespace enigma::voxel
         /**
          * @brief Protected constructor requiring name for registration
          */
-        Generator(const std::string& registryName, const std::string& namespaceName = "engine")
+        TerrainGenerator(const std::string& registryName, const std::string& namespaceName = "engine")
             : m_registryName(registryName)
               , m_namespace(namespaceName)
               , m_resourceLocation(namespaceName, registryName)
@@ -38,7 +38,7 @@ namespace enigma::voxel
         }
 
     public:
-        ~Generator() override = default;
+        ~TerrainGenerator() override = default;
 
         // IRegistrable interface implementation
         const std::string& GetRegistryName() const override { return m_registryName; }
@@ -48,6 +48,8 @@ namespace enigma::voxel
          * @brief Get the ResourceLocation for this generator
          */
         const ResourceLocation& GetResourceLocation() const { return m_resourceLocation; }
+
+        /// Common Generation Methods
 
         /**
          * @brief Generate terrain data for a chunk
@@ -60,7 +62,13 @@ namespace enigma::voxel
          * @param chunkZ The chunk's Z coordinate in world chunk space
          * @param worldSeed The world generation seed for deterministic results
          */
-        virtual void GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkZ, uint32_t worldSeed) = 0;
+        [[maybe_unused]] virtual bool GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkZ, uint32_t worldSeed) = 0;
+
+        [[maybe_unused]] virtual bool GenerateTerrainShape(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
+
+        [[maybe_unused]] virtual bool ApplySurfaceRules(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
+
+        [[maybe_unused]] virtual bool GenerateFeatures(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
 
         /**
          * @brief Get the sea level for this generator
