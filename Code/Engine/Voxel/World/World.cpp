@@ -15,7 +15,7 @@ World::~World()
 {
 }
 
-World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<Generator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
+World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<TerrainGenerator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
 {
     // Create and initialize ChunkManager (follow NeoForge mode)
     m_chunkManager = std::make_unique<ChunkManager>(this);
@@ -302,7 +302,7 @@ void World::SetChunkActivationRange(int chunkDistance)
     LogInfo(LogWorld, "Set chunk activation range to %d chunks", chunkDistance);
 }
 
-void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::Generator> generator)
+void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator)
 {
     m_worldGenerator = std::move(generator);
     if (m_worldGenerator)
@@ -1085,6 +1085,16 @@ void World::ProcessCompletedChunkTasks()
         // Delete the task (caller is responsible for cleanup)
         delete task;
     }
+}
+
+bool World::RegenWorld() noexcept
+{
+    m_chunksWithPendingLoad.clear();
+    m_chunksWithPendingGenerate.clear();
+    m_chunksWithPendingSave.clear();
+
+    m_chunkManager->GetLoadedChunks().clear();
+    return true;
 }
 
 //-----------------------------------------------------------------------------------------------

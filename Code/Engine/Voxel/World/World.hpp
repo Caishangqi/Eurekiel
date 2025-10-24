@@ -8,7 +8,7 @@
 #include "../Chunk/GenerateChunkJob.hpp"
 #include "../Chunk/LoadChunkJob.hpp"
 #include "../Chunk/SaveChunkJob.hpp"
-#include "../Generation/Generator.hpp"
+#include "../Generation/TerrainGenerator.hpp"
 #include "ESFWorldStorage.hpp"
 #include "../../Math/Vec3.hpp"
 #include "../../Math/IntVec2.hpp"
@@ -43,7 +43,7 @@ namespace enigma::voxel
     class World : public IChunkGenerationCallback
     {
     public:
-        World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::Generator> generator);
+        World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
 
         World() = default;
         ~World() override;
@@ -82,7 +82,7 @@ namespace enigma::voxel
         std::unique_ptr<ChunkManager>& GetChunkManager();
 
         // World generation integration
-        void SetWorldGenerator(std::unique_ptr<enigma::voxel::Generator> generator);
+        void SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
 
         // Serialize the configuration interface
         void SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer);
@@ -106,6 +106,9 @@ namespace enigma::voxel
         // Process completed tasks from ScheduleSubsystem (uses global g_theSchedule)
         // Called automatically in Update() loop on main thread
         void ProcessCompletedChunkTasks();
+
+        /// Development Only Feature
+        [[maybe_unused]] bool RegenWorld() noexcept;
 
     private:
         //-------------------------------------------------------------------------------------------
@@ -165,7 +168,7 @@ namespace enigma::voxel
         int32_t m_chunkActivationRange = 16; // Activation range in chunks (from settings.yml)
 
         // World generation
-        std::unique_ptr<enigma::voxel::Generator> m_worldGenerator;
+        std::unique_ptr<enigma::voxel::TerrainGenerator> m_worldGenerator;
 
         // Serialize components
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
