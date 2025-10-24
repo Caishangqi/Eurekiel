@@ -5,6 +5,39 @@ namespace enigma::voxel
 {
     class DensityFunction;
 
+    /**
+     * NoiseRouter - Central registry for all named DensityFunctions in world generation
+     *
+     * Architecture: Minecraft 1.18+ noise routing system
+     *
+     * Purpose:
+     *   Provides centralized access to all noise sources used throughout the world
+     *   generation pipeline. Acts as a dependency injection container for density
+     *   functions, allowing different generation stages to query the same named
+     *   noise sources consistently.
+     *
+     * Responsibilities:
+     *   - Store references to all named DensityFunctions (climate, terrain, caves)
+     *   - Provide getter methods for accessing these functions
+     *   - Coordinate noise sampling across different generation stages
+     *
+     * What NoiseRouter does NOT do:
+     *   - Calculate terrain shaping parameters (that's TerrainShaper's job)
+     *   - Store intermediate computation results
+     *   - Manage biome selection logic (that's BiomeSource's job)
+     *
+     * Key members:
+     *   - Climate parameters: continentalness, erosion, temperature, humidity, weirdness
+     *   - Terrain density: finalDensity, initialDensityWithoutJaggedness
+     *   - Cave systems: barrierNoise, fluidLevel*, oreVein*
+     *   - Terrain features: peakAndValley (ridges), depth
+     *
+     * Data flow:
+     *   TerrainGenerator -> NoiseRouter (get climate params) -> TerrainShaper (calculate shaping)
+     *                    -> Apply formula: final = offset + (base + jagg) * factor
+     *
+     * Reference: net.minecraft.world.level.levelgen.NoiseRouter (Minecraft 1.18+)
+     */
     class NoiseRouter
     {
     public:
@@ -28,9 +61,27 @@ namespace enigma::voxel
         std::shared_ptr<DensityFunction> m_ridges;
         std::shared_ptr<DensityFunction> m_weirdness;
         std::shared_ptr<DensityFunction> m_depth;
-        std::shared_ptr<DensityFunction> m_offset;
-        std::shared_ptr<DensityFunction> m_factor;
-        std::shared_ptr<DensityFunction> m_jaggedness;
+
+        // Terrain shaping parameters (offset, factor, jaggedness) are NOT stored in NoiseRouter.
+        //
+        // In Minecraft 1.18+ architecture, these values are dynamically calculated by TerrainShaper
+        // based on climate parameters (continentalness, erosion, weirdness). They represent the
+        // OUTPUT of terrain shaping computation, not INPUT noise sources.
+        //
+        // Storing them as DensityFunctions here would:
+        // 1. Violate single responsibility principle (NoiseRouter = noise source registry)
+        // 2. Create circular dependency risks
+        // 3. Prevent dynamic calculation based on climate parameters
+        //
+        // Correct usage:
+        //   float c = noiseRouter->GetContinentalness(x, y, z);
+        //   float e = noiseRouter->GetErosion(x, y, z);
+        //   float w = noiseRouter->GetWeirdness(x, y, z);
+        //   float offset = terrainShaper->CalculateOffset(c, e, w);
+        //   float factor = terrainShaper->CalculateFactor(c, e, w);
+        //   float jaggedness = terrainShaper->CalculateJaggedness(c, e, w);
+        //
+        // See: Engine/Voxel/Generation/TerrainShaper.hpp
 
         // Biome selection parameters
         std::shared_ptr<DensityFunction> m_temperature;
