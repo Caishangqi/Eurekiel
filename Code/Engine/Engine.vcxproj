@@ -403,6 +403,7 @@
         <ClCompile Include="Voxel\Function\SplineDensityFunction.cpp"/>
         <ClCompile Include="Voxel\Function\YClampedGradientDensityFunction.cpp"/>
         <ClCompile Include="Voxel\Generation\TerrainGenerator.cpp"/>
+        <ClCompile Include="Voxel\Generation\TerrainShaper.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\FractalNoiseGenerator.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\NoiseGenerator.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\NoiseRouter.cpp"/>
@@ -918,6 +919,7 @@
         <ClInclude Include="Voxel\Chunk\LoadChunkJob.hpp" />
         <ClInclude Include="Voxel\Chunk\SaveChunkJob.hpp" />
         <ClInclude Include="Voxel\Generation\TerrainGenerator.hpp"/>
+        <ClInclude Include="Voxel\Generation\TerrainShaper.hpp"/>
         <ClInclude Include="Voxel\Property\Property.hpp" />
         <ClInclude Include="Voxel\Property\PropertyMap.hpp" />
         <ClInclude Include="Voxel\Property\PropertyRegistry.hpp" />
