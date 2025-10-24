@@ -1,6 +1,6 @@
 #pragma once
 #include "ChunkJob.hpp"
-#include "Engine/Voxel/Generation/Generator.hpp"
+#include "Engine/Voxel/Generation/TerrainGenerator.hpp"
 
 namespace enigma::voxel
 {
@@ -11,7 +11,7 @@ namespace enigma::voxel
     class GenerateChunkJob : public ChunkJob
     {
     public:
-        GenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk, Generator* generator, uint32_t worldSeed)
+        GenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk, TerrainGenerator* generator, uint32_t worldSeed)
             : ChunkJob(TaskTypeConstants::CHUNK_GEN, chunkCoords)
               , m_chunk(chunk)
               , m_generator(generator)
@@ -22,8 +22,8 @@ namespace enigma::voxel
         void Execute() override;
 
     private:
-        Chunk*     m_chunk; // Target chunk (owned by main thread, only worker reads/writes blocks)
-        Generator* m_generator; // Generator instance (thread-safe, stateless)
-        uint32_t   m_worldSeed; // World generation seed
+        Chunk*            m_chunk; // Target chunk (owned by main thread, only worker reads/writes blocks)
+        TerrainGenerator* m_generator; // TerrainGenerator instance (thread-safe, stateless)
+        uint32_t          m_worldSeed; // World generation seed
     };
 } // namespace enigma::voxel
