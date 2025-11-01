@@ -48,11 +48,13 @@
 #pragma once
 
 #include <array>
+#include <vector>
 #include <memory>
 #include <cstdint>
 #include <string>
 #include <d3d12.h>
 #include "Engine/Graphic/Target/D12DepthTexture.hpp"
+// DepthTextureConfig.hpp 已合并到 D12DepthTexture.hpp 中
 
 namespace enigma::graphic
 {
@@ -79,7 +81,7 @@ namespace enigma::graphic
     {
     public:
         /**
-         * @brief 构造DepthTextureManager并创建3个深度纹理
+         * @brief 构造DepthTextureManager并创建3个深度纹理（旧接口，保持兼容）
          * @param width 屏幕宽度
          * @param height 屏幕高度
          * @param depthFormat 深度格式（默认DEPTH24_STENCIL8）
@@ -93,6 +95,56 @@ namespace enigma::graphic
             int         width,
             int         height,
             DXGI_FORMAT depthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT
+        );
+
+        /**
+         * @brief 简单构造器 - 创建N个深度纹理，全部使用渲染分辨率
+         * @param renderWidth 渲染宽度
+         * @param renderHeight 渲染高度
+         * @param depthCount 深度纹理数量（默认3）
+         * 
+         * **M3.1新增 - 零配置使用**:
+         * - 自动创建N个深度纹理
+         * - 全部使用D32_FLOAT格式
+         * - 全部使用渲染分辨率
+         * - 语义化命名：depthtex0, depthtex1, ...
+         * 
+         * **使用示例**:
+         * ```cpp
+         * auto depthMgr = std::make_unique<DepthTextureManager>(1920, 1080, 3);
+         * // 创建3个深度纹理，全部1920x1080
+         * ```
+         */
+        DepthTextureManager(
+            int renderWidth,
+            int renderHeight,
+            int depthCount
+        );
+
+        /**
+         * @brief 灵活构造器 - 自定义配置深度纹理
+         * @param renderWidth 渲染宽度（depthtex0强制使用）
+         * @param renderHeight 渲染高度（depthtex0强制使用）
+         * @param additionalDepths 额外深度纹理配置（depthtex1-N）
+         * 
+         * **M3.1新增 - 自定义配置**:
+         * - depthtex0自动创建（固定=渲染分辨率）
+         * - depthtex1-N使用自定义配置
+         * - 支持不同分辨率和格式
+         * 
+         * **使用示例**:
+         * ```cpp
+         * std::vector<DepthTextureConfig> configs = {
+         *     DepthTexturePresets::HalfResolution(1920, 1080, "depthtex1"),
+         *     DepthTexturePresets::QuarterResolution(1920, 1080, "depthtex2")
+         * };
+         * auto depthMgr = std::make_unique<DepthTextureManager>(1920, 1080, configs);
+         * ```
+         */
+        DepthTextureManager(
+            int                                    renderWidth,
+            int                                    renderHeight,
+            const std::vector<DepthTextureConfig>& additionalDepths
         );
 
         /**
@@ -192,6 +244,73 @@ namespace enigma::graphic
         void CopyDepth(ID3D12GraphicsCommandList* cmdList, int srcIndex, int destIndex);
 
         // ========================================================================
+        // Milestone 4: 深度缓冲管理 - 切换和复制API
+        // ========================================================================
+
+        /**
+         * @brief 切换活动深度缓冲（depthtex0 ↔ depthtex1 ↔ depthtex2）
+         * @param newActiveIndex 新的活动深度缓冲索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 支持动态切换当前使用的深度纹理
+         * - 更新DSV绑定到新的深度纹理
+         * - 保持Iris语义不变（depthtex0/1/2）
+         *
+         * **使用场景**:
+         * - 多阶段渲染时切换不同的深度缓冲
+         * - 支持灵活的深度纹理管理策略
+         *
+         * 教学要点:
+         * - 理解活动深度缓冲的概念
+         * - 掌握DirectX 12的DSV切换机制
+         * - 索引范围验证的重要性
+         */
+        void SwitchDepthBuffer(int newActiveIndex);
+
+        /**
+         * @brief 复制深度纹理（通用接口）
+         * @param cmdList 命令列表
+         * @param srcIndex 源深度纹理索引 [0-2]
+         * @param dstIndex 目标深度纹理索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 提供公共的深度复制接口
+         * - 支持任意深度纹理之间的复制
+         * - 自动处理资源状态转换
+         *
+         * **使用场景**:
+         * - 除了CopyPreTranslucentDepth和CopyPreHandDepth外的自定义复制
+         * - 例如：depthtex1 → depthtex2
+         *
+         * **业务逻辑**:
+         * 1. 参数验证（范围[0-2]，不能相同）
+         * 2. 转换资源状态：DEPTH_WRITE → COPY_SOURCE/DEST
+         * 3. 执行CopyResource()
+         * 4. 恢复资源状态：COPY_SOURCE/DEST → DEPTH_WRITE
+         *
+         * 教学要点:
+         * - 理解DirectX 12的资源状态转换
+         * - 掌握ResourceBarrier的正确使用
+         * - 深度纹理复制的完整流程
+         */
+        void CopyDepthBuffer(int srcIndex, int dstIndex);
+
+        /**
+         * @brief 查询当前激活的深度缓冲索引
+         * @return 当前活动的深度缓冲索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 查询当前正在使用的深度纹理
+         * - 支持状态查询和调试
+         *
+         * 教学要点:
+         * - noexcept保证（简单getter）
+         * - 状态查询API的设计
+         */
+        int GetActiveDepthBufferIndex() const noexcept;
+
+
+        // ========================================================================
         // 窗口尺寸变化响应
         // ========================================================================
 
@@ -206,6 +325,52 @@ namespace enigma::graphic
          * - 重新注册Bindless索引
          */
         void OnResize(int newWidth, int newHeight);
+
+        // ========================================================================
+        // M3.1新增: 动态配置API
+        // ========================================================================
+
+        /**
+         * @brief 配置深度纹理数量
+         * @param count 深度纹理数量 [1-16]
+         * @throws std::out_of_range 如果count超出范围
+         * 
+         * **M3.1新增 - 动态调整数量**:
+         * - 支持运行时调整深度纹理数量
+         * - depthtex0始终存在（不可删除）
+         * - 新增深度纹理使用渲染分辨率
+         */
+        void ConfigureDepthTextures(int count);
+
+        /**
+         * @brief 设置指定深度纹理的分辨率
+         * @param index 深度纹理索引 [0-N]
+         * @param width 新宽度
+         * @param height 新高度
+         * @throws std::out_of_range 如果index超出范围
+         * @throws std::invalid_argument 如果尝试修改depthtex0
+         * @throws std::invalid_argument 如果width/height<=0
+         * 
+         * **M3.1新增 - 动态调整分辨率**:
+         * - depthtex0不可修改（强制=渲染分辨率）
+         * - depthtex1-N可自由调整
+         * - 重建纹理并更新GPU资源
+         */
+        void SetDepthTextureResolution(int index, int width, int height);
+
+        /**
+         * @brief 获取深度纹理数量
+         * @return 当前深度纹理数量
+         */
+        [[nodiscard]] int GetDepthTextureCount() const noexcept;
+
+        /**
+         * @brief 获取指定深度纹理的配置
+         * @param index 深度纹理索引
+         * @return 深度纹理配置
+         * @throws std::out_of_range 如果index超出范围
+         */
+        [[nodiscard]] DepthTextureConfig GetDepthTextureConfig(int index) const;
 
         // ========================================================================
         // 调试支持
@@ -225,17 +390,26 @@ namespace enigma::graphic
         // 私有成员
         // ========================================================================
 
-        std::array<std::shared_ptr<D12DepthTexture>, 3> m_depthTextures; // depthtex0/1/2
-        int                                             m_width; // 屏幕宽度
-        int                                             m_height; // 屏幕高度
-        DXGI_FORMAT                                     m_depthFormat; // 深度格式
+        // M3.1: 动态深度纹理数组
+        std::vector<std::shared_ptr<D12DepthTexture>> m_depthTextures; // depthtex0/1/2/...
+        std::vector<DepthTextureConfig>               m_depthConfigs; // 每个深度纹理的配置
+        int                                           m_renderWidth; // 渲染分辨率宽度
+        int                                           m_renderHeight; // 渲染分辨率高度
+
+        // 保留原有成员（兼容性）
+        int         m_width; // 屏幕宽度（废弃，使用m_renderWidth）
+        int         m_height; // 屏幕高度（废弃，使用m_renderHeight）
+        DXGI_FORMAT m_depthFormat; // 深度格式
+
+        // Milestone 4: 活动深度缓冲索引
+        int m_currentActiveDepthIndex = 0; // 当前激活的深度缓冲索引（默认0=depthtex0）
 
         /**
-         * @brief 验证索引有效性
+         * @brief 验证索引有效性（M3.1: 支持动态数组）
          */
         bool IsValidIndex(int index) const
         {
-            return index >= 0 && index < 3;
+            return index >= 0 && index < static_cast<int>(m_depthTextures.size());
         }
 
         // ========================================================================
