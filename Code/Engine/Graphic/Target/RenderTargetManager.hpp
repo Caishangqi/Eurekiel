@@ -6,33 +6,11 @@
 #include <cstdint>
 #include <d3d12.h>
 #include "Engine/Graphic/Target/BufferFlipState.hpp"
+#include "Engine/Graphic/Target/RTTypes.hpp" // 配置统一化重构: 使用RTConfig
 
 namespace enigma::graphic
 {
     class D12RenderTarget;
-
-    // ============================================================================
-    // RenderTargetSettings - 单个RenderTarget配置
-    // ============================================================================
-
-    /**
-     * @brief 单个RenderTarget的创建配置
-     *
-     * 对应Iris的RENDERTARGETS注释解析结果:
-     * - "RGBA8" → DXGI_FORMAT_R8G8B8A8_UNORM
-     * - "RGBA16F" → DXGI_FORMAT_R16G16B16A16_FLOAT
-     * - 尺寸相对屏幕的缩放因子
-     */
-    struct RenderTargetSettings
-    {
-        DXGI_FORMAT format            = DXGI_FORMAT_R8G8B8A8_UNORM; // RT格式
-        float       widthScale        = 1.0f; // 宽度相对屏幕的缩放 (0.5 = 半分辨率)
-        float       heightScale       = 1.0f; // 高度相对屏幕的缩放
-        bool        enableMipmap      = false; // 是否启用Mipmap (Milestone 3.0)
-        bool        allowLinearFilter = true; // 是否允许线性过滤
-        int         sampleCount       = 1; // MSAA采样数 (1 = 无MSAA)
-        const char* debugName         = "UnnamedRT"; // 调试名称
-    };
 
     // ============================================================================
     // RenderTargetManager - Iris兼容的16 RenderTarget集中管理器
@@ -78,7 +56,7 @@ namespace enigma::graphic
          * @brief 构造RenderTargetManager并创建动态数量的RenderTarget
          * @param baseWidth 基准屏幕宽度
          * @param baseHeight 基准屏幕高度
-         * @param rtSettings RT配置数组（最多16个）
+         * @param rtConfigs RT配置数组（最多16个）- 配置统一化重构: 使用RTConfig
          * @param colorTexCount 实际激活的colortex数量（默认16个，范围[1,16]）
          *
          * **Milestone 3.0 新增参数**:
@@ -93,10 +71,10 @@ namespace enigma::graphic
          * - 仅创建激活数量的RT实例（内存优化）
          */
         RenderTargetManager(
-            int                                         baseWidth,
-            int                                         baseHeight,
-            const std::array<RenderTargetSettings, 16>& rtSettings,
-            int                                         colorTexCount = MAX_COLOR_TEXTURES
+            int                             baseWidth,
+            int                             baseHeight,
+            const std::array<RTConfig, 16>& rtConfigs,
+            int                             colorTexCount = MAX_COLOR_TEXTURES
         );
 
         /**
@@ -151,16 +129,18 @@ namespace enigma::graphic
 
         /**
          * @brief 翻转指定RT的Main/Alt状态
-         * @param rtIndex RenderTarget索引 [0-15]
+         * @param rtIndex RenderTarget索引 [0, m_activeColorTexCount)
          *
          * 业务逻辑:
          * - 当前帧: 读Main写Alt → Flip() → 下一帧: 读Alt写Main
          * - 实现历史帧数据访问 (TAA, Motion Blur等技术需要)
+         *
+         * M6.2.2实现:
+         * - 边界检查：rtIndex必须在[0, m_activeColorTexCount)范围内
+         * - 调用m_flipState.Flip(rtIndex)执行翻转
+         * - 添加调试日志记录翻转操作
          */
-        void FlipRenderTarget(int rtIndex)
-        {
-            m_flipState.Flip(rtIndex);
-        }
+        void FlipRenderTarget(int rtIndex);
 
         /**
          * @brief 批量翻转所有RT (每帧结束时调用)
@@ -287,10 +267,10 @@ namespace enigma::graphic
         // 当前激活的colortex数量，范围 [1, 16]
         int m_activeColorTexCount = MAX_COLOR_TEXTURES;
 
-        RenderTargetFlipState                m_flipState; // Main/Alt翻转状态 (BufferFlipState<16>)
-        int                                  m_baseWidth; // 基准屏幕宽度
-        int                                  m_baseHeight; // 基准屏幕高度
-        std::array<RenderTargetSettings, 16> m_settings; // RT配置缓存（最多16个）
+        RenderTargetFlipState    m_flipState; // Main/Alt翻转状态 (BufferFlipState<16>)
+        int                      m_baseWidth; // 基准屏幕宽度
+        int                      m_baseHeight; // 基准屏幕高度
+        std::array<RTConfig, 16> m_settings; // RT配置缓存（最多16个）
 
         /**
          * @brief 验证rtIndex有效性 (内部辅助函数)

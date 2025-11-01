@@ -13,14 +13,14 @@ using namespace enigma::graphic;
 // ============================================================================
 
 RenderTargetManager::RenderTargetManager(
-    int                                         baseWidth,
-    int                                         baseHeight,
-    const std::array<RenderTargetSettings, 16>& rtSettings,
-    int                                         colorTexCount
+    int                             baseWidth,
+    int                             baseHeight,
+    const std::array<RTConfig, 16>& rtConfigs,
+    int                             colorTexCount
 )
     : m_baseWidth(baseWidth)
       , m_baseHeight(baseHeight)
-      , m_settings(rtSettings)
+      , m_settings(rtConfigs)
       , m_flipState() // 默认构造 (所有RT初始状态: 读Main写Alt)
 {
     // 参数验证 - 尺寸
@@ -54,11 +54,11 @@ RenderTargetManager::RenderTargetManager(
     // 遍历激活的RT配置，使用Builder模式创建
     for (int i = 0; i < m_activeColorTexCount; ++i)
     {
-        const auto& settings = rtSettings[i];
+        const auto& config = rtConfigs[i];
 
         // 计算当前RT的实际尺寸 (考虑widthScale/heightScale)
-        int rtWidth  = static_cast<int>(baseWidth * settings.widthScale);
-        int rtHeight = static_cast<int>(baseHeight * settings.heightScale);
+        int rtWidth  = static_cast<int>(baseWidth * config.widthScale);
+        int rtHeight = static_cast<int>(baseHeight * config.heightScale);
 
         // 确保尺寸至少为1x1 (防止0尺寸RT)
         rtWidth  = (rtWidth > 0) ? rtWidth : 1;
@@ -66,11 +66,11 @@ RenderTargetManager::RenderTargetManager(
 
         // 使用Builder模式创建D12RenderTarget
         auto rtBuilder = D12RenderTarget::Create()
-                         .SetFormat(settings.format)
+                         .SetFormat(config.format)
                          .SetDimensions(rtWidth, rtHeight)
-                         .SetLinearFilter(settings.allowLinearFilter)
-                         .SetSampleCount(settings.sampleCount)
-                         .EnableMipmap(settings.enableMipmap);
+                         .SetLinearFilter(config.allowLinearFilter)
+                         .SetSampleCount(config.sampleCount)
+                         .EnableMipmap(config.enableMipmap);
 
         // 设置调试名称 (例如: "colortex0")
         char debugName[32];
@@ -171,6 +171,28 @@ uint32_t RenderTargetManager::GetAltTextureIndex(int rtIndex) const
     }
 
     return m_renderTargets[rtIndex]->GetAltTextureIndex();
+}
+
+// ============================================================================
+// BufferFlipState管理 - Main/Alt翻转逻辑
+// ============================================================================
+
+void RenderTargetManager::FlipRenderTarget(int rtIndex)
+{
+    // 边界检查
+    if (!IsValidIndex(rtIndex))
+    {
+        char errorMsg[128];
+        sprintf_s(errorMsg, "FlipRenderTarget: rtIndex %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
+    }
+
+    // 执行翻转
+    m_flipState.Flip(rtIndex);
+
+    // 调试日志（注释掉，避免性能影响）
+    // LogDebug("RenderTargetManager", "FlipRenderTarget: rtIndex=%d, isFlipped=%d",
+    //          rtIndex, m_flipState.IsFlipped(rtIndex));
 }
 
 // ============================================================================
