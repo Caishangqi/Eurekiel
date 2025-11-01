@@ -839,11 +839,11 @@ namespace enigma::graphic
 
             // 记录成功创建的日志（调试用）
             core::LogInfo(LogRenderer,
-                          "Created D12DepthTexture: %s (%dx%d, Type: %d)",
+                          "Created D12DepthTexture: %s (%dx%d, Format: %d)",
                           createInfo.name.c_str(),
                           createInfo.width,
                           createInfo.height,
-                          static_cast<int>(createInfo.depthType));
+                          static_cast<int>(createInfo.depthFormat));
 
             return depthTexture;
         }

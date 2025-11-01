@@ -10,6 +10,7 @@
 
 // ⭐⭐⭐ 架构正确性: 使用D3D12RenderSystem静态API，遵循严格四层分层架构
 // Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem) → Layer 2 (D12Buffer) → Layer 1 (DX12 Native)
+#include "CustomImageIndexBuffer.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
 namespace enigma::graphic
@@ -19,7 +20,7 @@ namespace enigma::graphic
     // ========================================================================
 
     UniformManager::UniformManager()
-    // 初始化所有11个CPU端结构体 ⭐
+    // 初始化所有12个CPU端结构体 ⭐
         : m_rootConstants()
           , m_cameraAndPlayerUniforms()
           , m_playerStatusUniforms()
@@ -31,7 +32,9 @@ namespace enigma::graphic
           , m_matricesUniforms()
           , m_colorTargetsIndexBuffer()
           , m_depthTexturesIndexBuffer() // ⭐ 新增: depthtex0/1/2
-          , m_shadowBufferIndex() // ⭐ 新增: shadowcolor + shadowtex
+          , m_shadowColorIndexBuffer() // ⭐ 新增: shadowcolor0-7
+          , m_shadowTexturesIndexBuffer() // ⭐ 新增: shadowtex0/1
+          , m_customImageIndexBuffer() // ⭐ 新增: customImage0-15
           // GPU资源指针初始化为nullptr
           , m_cameraAndPlayerBuffer(nullptr)
           , m_playerStatusBuffer(nullptr)
@@ -43,7 +46,9 @@ namespace enigma::graphic
           , m_matricesBuffer(nullptr)
           , m_colorTargetsBuffer(nullptr) // ⭐ 统一命名: colortex0-15
           , m_depthTexturesBuffer(nullptr) // ⭐ 新增
-          , m_shadowBuffer(nullptr) // ⭐ 新增
+          , m_shadowColorBuffer(nullptr) // ⭐ 新增: shadowcolor0-7
+          , m_shadowTexturesBuffer(nullptr) // ⭐ 新增: shadowtex0/1
+          , m_customImageBuffer(nullptr) // ⭐ 新增: customImage0-15
           // 脏标记初始化为true (首次上传)
           , m_cameraAndPlayerDirty(true)
           , m_playerStatusDirty(true)
@@ -55,7 +60,9 @@ namespace enigma::graphic
           , m_matricesDirty(true)
           , m_renderTargetsDirty(true) // ⭐ 统一命名
           , m_depthTexturesDirty(true) // ⭐ 新增
-          , m_shadowDirty(true) // ⭐ 新增
+          , m_shadowColorDirty(true) // ⭐ 新增: shadowcolor0-7
+          , m_shadowTexturesDirty(true) // ⭐ 新增: shadowtex0/1
+          , m_customImageDirty(true) // ⭐ 新增: customImage0-15
     {
         // 构建字段映射表
         BuildFieldMap();
@@ -90,7 +97,9 @@ namespace enigma::graphic
         delete m_matricesBuffer;
         delete m_colorTargetsBuffer; // ⭐ 统一命名: colortex0-15
         delete m_depthTexturesBuffer; // ⭐ 新增
-        delete m_shadowBuffer; // ⭐ 新增
+        delete m_shadowColorBuffer; // ⭐ 新增: shadowcolor0-7
+        delete m_shadowTexturesBuffer; // ⭐ 新增: shadowtex0/1
+        delete m_customImageBuffer; // ⭐ 新增: customImage0-15
     }
 
     // ========================================================================
@@ -266,22 +275,41 @@ namespace enigma::graphic
         // Category 9: DepthTexturesIndexBuffer (3 fields)
         // ========================================================================
         // 教学要点: depthtex0/1/2 索引管理
-        m_fieldMap["depthtex0Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex0Index), sizeof(uint32_t)};
-        m_fieldMap["depthtex1Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex1Index), sizeof(uint32_t)};
-        m_fieldMap["depthtex2Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthtex2Index), sizeof(uint32_t)};
+        // 注意: DepthTexturesIndexBuffer 使用 depthTextureIndices[16] 数组
+        m_fieldMap["depthtex0Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthTextureIndices) + 0 * sizeof(uint32_t), sizeof(uint32_t)};
+        m_fieldMap["depthtex1Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthTextureIndices) + 1 * sizeof(uint32_t), sizeof(uint32_t)};
+        m_fieldMap["depthtex2Index"] = {9, offsetof(DepthTexturesIndexBuffer, depthTextureIndices) + 2 * sizeof(uint32_t), sizeof(uint32_t)};
 
         // ========================================================================
-        // Category 10: ShadowBufferIndex (18 fields)
+        // Category 10: ShadowColorIndexBuffer (2 fields) ⭐
         // ========================================================================
-        // 教学要点: shadowcolor0-7 + shadowtex0/1 索引管理
-        m_fieldMap["shadowColorReadIndices"]  = {10, offsetof(ShadowBufferIndex, shadowColorReadIndices), sizeof(uint32_t[8])};
-        m_fieldMap["shadowColorWriteIndices"] = {10, offsetof(ShadowBufferIndex, shadowColorWriteIndices), sizeof(uint32_t[8])};
-        m_fieldMap["shadowtex0Index"]         = {10, offsetof(ShadowBufferIndex, shadowtex0Index), sizeof(uint32_t)};
-        m_fieldMap["shadowtex1Index"]         = {10, offsetof(ShadowBufferIndex, shadowtex1Index), sizeof(uint32_t)};
+        // 教学要点: shadowcolor0-7 索引管理 (需要 Flip)
+        m_fieldMap["shadowColorReadIndices"]  = {10, offsetof(ShadowColorIndexBuffer, shadowColorReadIndices), sizeof(uint32_t[8])};
+        m_fieldMap["shadowColorWriteIndices"] = {10, offsetof(ShadowColorIndexBuffer, shadowColorWriteIndices), sizeof(uint32_t[8])};
+
+        // ========================================================================
+        // Category 11: ShadowTexturesIndexBuffer (2 fields) ⭐
+        // ========================================================================
+        // 教学要点: shadowtex0/1 索引管理 (无需 Flip)
+        m_fieldMap["shadowtex0Index"] = {11, offsetof(ShadowTexturesIndexBuffer, shadowtex0Index) + 0 * sizeof(uint32_t), sizeof(uint32_t)};
+        m_fieldMap["shadowtex1Index"] = {11, offsetof(ShadowTexturesIndexBuffer, shadowtex1Index) + 1 * sizeof(uint32_t), sizeof(uint32_t)};
+
+        // ========================================================================
+        // Category 12: CustomImageIndexBuffer (16 fields) ⭐
+        // ========================================================================
+        // 教学要点: customImage0-15 索引管理（自定义材质槽位）
+        // 注意: CustomImageIndexBuffer 使用 customImageIndices[16] 数组
+        for (int i = 0; i < 16; ++i)
+        {
+            std::string fieldName = "customImage" + std::to_string(i) + "Index";
+            size_t      offset    = offsetof(CustomImageIndexBuffer, customImageIndices) + static_cast<size_t>(i) * sizeof(uint32_t);
+            assert(offset <= UINT16_MAX && "CustomImageIndexBuffer offset exceeds uint16_t range");
+            m_fieldMap[fieldName] = {12, static_cast<uint16_t>(offset), sizeof(uint32_t)};
+        }
     }
 
     // ========================================================================
-    // CreateGPUBuffers() - 创建11个GPU StructuredBuffer ⭐
+    // CreateGPUBuffers() - 创建13个GPU StructuredBuffer ⭐
     // ========================================================================
 
     void UniformManager::CreateGPUBuffers()
@@ -371,12 +399,28 @@ namespace enigma::graphic
             "DepthTexturesIndexBuffer"
         ).release();
 
-        // Category 10: ShadowBufferIndex (80 bytes - shadowcolor + shadowtex) ⭐
-        m_shadowBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+        // Category 10: ShadowColorIndexBuffer (64 bytes - shadowcolor0-7) ⭐
+        m_shadowColorBuffer = D3D12RenderSystem::CreateStructuredBuffer(
             1,
-            sizeof(ShadowBufferIndex),
+            sizeof(ShadowColorIndexBuffer),
             nullptr,
-            "ShadowBufferIndex"
+            "ShadowColorIndexBuffer"
+        ).release();
+
+        // Category 11: ShadowTexturesIndexBuffer (16 bytes - shadowtex0/1) ⭐
+        m_shadowTexturesBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
+            sizeof(ShadowTexturesIndexBuffer),
+            nullptr,
+            "ShadowTexturesIndexBuffer"
+        ).release();
+
+        // Category 12: CustomImageIndexBuffer (256 bytes - customImage0-15) ⭐
+        m_customImageBuffer = D3D12RenderSystem::CreateStructuredBuffer(
+            1,
+            sizeof(CustomImageIndexBuffer),
+            nullptr,
+            "CustomImageIndexBuffer"
         ).release();
     }
 
@@ -399,14 +443,16 @@ namespace enigma::graphic
         auto index6 = m_renderingBuffer->RegisterBindless();
         auto index7 = m_matricesBuffer->RegisterBindless();
 
-        // 注册3个纹理系统 Index Buffers (Category 8-10) ⭐
+        // 注册5个纹理系统 Index Buffers (Category 8-12) ⭐
         auto index8  = m_colorTargetsBuffer->RegisterBindless(); // colortex0-15
         auto index9  = m_depthTexturesBuffer->RegisterBindless(); // depthtex0/1/2
-        auto index10 = m_shadowBuffer->RegisterBindless(); // shadowcolor + shadowtex
+        auto index10 = m_shadowColorBuffer->RegisterBindless(); // shadowcolor0-7
+        auto index11 = m_shadowTexturesBuffer->RegisterBindless(); // shadowtex0/1
+        auto index12 = m_customImageBuffer->RegisterBindless(); // customImage0-15 ⭐
 
         // 验证并存储索引到Root Constants
         if (!index0 || !index1 || !index2 || !index3 || !index4 ||
-            !index5 || !index6 || !index7 || !index8 || !index9 || !index10)
+            !index5 || !index6 || !index7 || !index8 || !index9 || !index10 || !index11 || !index12)
         {
             ERROR_AND_DIE("UniformManager::RegisterToBindlessSystem - Failed to register buffers to Bindless system");
         }
@@ -421,7 +467,9 @@ namespace enigma::graphic
         m_rootConstants.matricesBufferIndex          = *index7;
         m_rootConstants.colorTargetsBufferIndex      = *index8;
         m_rootConstants.depthTexturesBufferIndex     = *index9;
-        m_rootConstants.shadowBufferIndex            = *index10;
+        m_rootConstants.shadowColorBufferIndex       = *index10; // ⭐ 拆分: shadowcolor0-7
+        m_rootConstants.shadowTexturesBufferIndex    = *index11; // ⭐ 拆分: shadowtex0/1
+        m_rootConstants.customImageBufferIndex       = *index12; // ⭐ 新增: customImage0-15
 
         // 注意: noiseTextureIndex 不在这里注册,它是直接的纹理索引,由外部设置
         // 通过 SetNoiseTextureIndex() API 设置
@@ -446,10 +494,12 @@ namespace enigma::graphic
         m_renderingBuffer->UnregisterBindless();
         m_matricesBuffer->UnregisterBindless();
 
-        // 注销3个纹理系统 Index Buffers (Category 8-10) ⭐
+        // 注销5个纹理系统 Index Buffers (Category 8-12) ⭐
         m_colorTargetsBuffer->UnregisterBindless();
         m_depthTexturesBuffer->UnregisterBindless();
-        m_shadowBuffer->UnregisterBindless();
+        m_shadowColorBuffer->UnregisterBindless(); // ⭐ 拆分: shadowcolor0-7
+        m_shadowTexturesBuffer->UnregisterBindless(); // ⭐ 拆分: shadowtex0/1
+        m_customImageBuffer->UnregisterBindless(); // ⭐ 新增: customImage0-15
 
         // 注意: noiseTextureIndex 不需要注销,它是外部管理的纹理索引
     }
@@ -789,10 +839,71 @@ namespace enigma::graphic
     // SyncToGPU() - 执行所有Supplier并上传脏Buffer
     // ========================================================================
 
+    // ========================================================================
+    // CustomImageIndexBuffer 专用API ⭐
+    // ========================================================================
+
+    void UniformManager::UpdateCustomImageSlot(uint32_t slotIndex, uint32_t bindlessIndex)
+    {
+        // 教学要点: 设置指定槽位的Bindless纹理索引
+        // 参数验证
+        if (slotIndex >= 16)
+        {
+            ERROR_AND_DIE("UniformManager::UpdateCustomImageSlot - slotIndex must be in range [0-15], got: " + std::to_string(slotIndex));
+        }
+
+        // 更新CPU端数据
+        m_customImageIndexBuffer.customImageIndices[slotIndex] = bindlessIndex;
+
+        // 标记为脏，触发GPU上传
+        m_customImageDirty = true;
+    }
+
+    void UniformManager::SetCustomImageIndices(const uint32_t indices[16])
+    {
+        // 教学要点: 批量设置所有槽位的Bindless纹理索引
+        // 直接复制整个数组到CPU端数据
+        std::memcpy(m_customImageIndexBuffer.customImageIndices, indices, sizeof(uint32_t) * 16);
+
+        // 标记为脏，触发GPU上传
+        m_customImageDirty = true;
+    }
+
+    void UniformManager::ResetCustomImageSlots()
+    {
+        // 教学要点: 重置所有自定义材质槽位为无效索引（0）
+        // 用于场景切换或资源清理
+        for (int i = 0; i < 16; ++i)
+        {
+            m_customImageIndexBuffer.customImageIndices[i] = 0;
+        }
+
+        // 标记为脏，触发GPU上传
+        m_customImageDirty = true;
+    }
+
+    // ========================================================================
+    // ShadowColorIndexBuffer 专用API ⭐
+    // ========================================================================
+
+    void UniformManager::FlipShadowColor(const uint32_t mainIndices[8],
+                                         const uint32_t altIndices[8],
+                                         bool           useAlt)
+    {
+        // 教学要点: 只操作 shadowcolor0-7,不影响 shadowtex0/1
+        m_shadowColorIndexBuffer.Flip(mainIndices, altIndices, useAlt);
+        m_shadowColorDirty = true;
+    }
+
+    // ========================================================================
+    // ShadowTexturesIndexBuffer 专用API ⭐
+    // ========================================================================
+
     void UniformManager::SetShadowTexIndices(uint32_t shadowtex0, uint32_t shadowtex1)
     {
-        UNUSED(shadowtex0)
-        UNUSED(shadowtex1)
+        // 教学要点: 只操作 shadowtex0/1,不影响 shadowcolor0-7
+        m_shadowTexturesIndexBuffer.SetShadowTexIndices(shadowtex0, shadowtex1);
+        m_shadowTexturesDirty = true;
     }
 
     bool UniformManager::SyncToGPU()
@@ -830,7 +941,9 @@ namespace enigma::graphic
         case 7: return &m_matricesUniforms;
         case 8: return &m_colorTargetsIndexBuffer;
         case 9: return &m_depthTexturesIndexBuffer;
-        case 10: return &m_shadowBufferIndex;
+        case 10: return &m_shadowColorIndexBuffer; // ⭐ 拆分: shadowcolor0-7
+        case 11: return &m_shadowTexturesIndexBuffer; // ⭐ 拆分: shadowtex0/1
+        case 12: return &m_customImageIndexBuffer; // ⭐ 新增: customImage0-15
         default:
             ERROR_AND_DIE("UniformManager::GetCategoryDataPtr - Invalid categoryIndex: " + std::to_string(categoryIndex));
         }
@@ -864,7 +977,11 @@ namespace enigma::graphic
             break;
         case 9: m_depthTexturesDirty = true; // ⭐ 新增: depthtex0/1/2
             break;
-        case 10: m_shadowDirty = true; // ⭐ 新增: shadowcolor + shadowtex
+        case 10: m_shadowColorDirty = true; // ⭐ 拆分: shadowcolor0-7
+            break;
+        case 11: m_shadowTexturesDirty = true; // ⭐ 拆分: shadowtex0/1
+            break;
+        case 12: m_customImageDirty = true; // ⭐ 新增: customImage0-15
             break;
         default:
             ERROR_AND_DIE("UniformManager::MarkCategoryDirty - Invalid categoryIndex: " + std::to_string(categoryIndex));
@@ -992,15 +1109,37 @@ namespace enigma::graphic
             m_depthTexturesDirty = false;
         }
 
-        // Category 10: ShadowBufferIndex (80 bytes - shadowcolor + shadowtex) ⭐
-        if (m_shadowDirty)
+        // Category 10: ShadowColorIndexBuffer (64 bytes - shadowcolor0-7) ⭐
+        if (m_shadowColorDirty)
         {
-            m_shadowBuffer->SetInitialData(&m_shadowBufferIndex, sizeof(ShadowBufferIndex));
-            if (!m_shadowBuffer->Upload())
+            m_shadowColorBuffer->SetInitialData(&m_shadowColorIndexBuffer, sizeof(ShadowColorIndexBuffer));
+            if (!m_shadowColorBuffer->Upload())
             {
-                ERROR_AND_DIE("UniformManager: Failed to upload ShadowBuffer to GPU");
+                ERROR_AND_DIE("UniformManager: Failed to upload ShadowColorBuffer to GPU");
             }
-            m_shadowDirty = false;
+            m_shadowColorDirty = false;
+        }
+
+        // Category 11: ShadowTexturesIndexBuffer (16 bytes - shadowtex0/1) ⭐
+        if (m_shadowTexturesDirty)
+        {
+            m_shadowTexturesBuffer->SetInitialData(&m_shadowTexturesIndexBuffer, sizeof(ShadowTexturesIndexBuffer));
+            if (!m_shadowTexturesBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload ShadowTexturesBuffer to GPU");
+            }
+            m_shadowTexturesDirty = false;
+        }
+
+        // Category 11: CustomImageIndexBuffer (256 bytes - customImage0-15) ⭐
+        if (m_customImageDirty)
+        {
+            m_customImageBuffer->SetInitialData(&m_customImageIndexBuffer, sizeof(CustomImageIndexBuffer));
+            if (!m_customImageBuffer->Upload())
+            {
+                ERROR_AND_DIE("UniformManager: Failed to upload CustomImageBuffer to GPU");
+            }
+            m_customImageDirty = false;
         }
 
         return true;
@@ -1060,9 +1199,24 @@ namespace enigma::graphic
         return m_rootConstants.depthTexturesBufferIndex;
     }
 
-    uint32_t UniformManager::GetShadowBufferIndex() const
+    uint32_t UniformManager::GetShadowColorBufferIndex() const
     {
-        return m_rootConstants.shadowBufferIndex;
+        return m_rootConstants.shadowColorBufferIndex;
+    }
+
+    uint32_t UniformManager::GetShadowTexturesBufferIndex() const
+    {
+        return m_rootConstants.shadowTexturesBufferIndex;
+    }
+
+    uint32_t UniformManager::GetNoiseTextureIndex() const
+    {
+        return m_rootConstants.noiseTextureIndex;
+    }
+
+    uint32_t UniformManager::GetCustomImageBufferIndex() const
+    {
+        return m_rootConstants.customImageBufferIndex;
     }
 
     // ========================================================================
@@ -1071,7 +1225,7 @@ namespace enigma::graphic
 
     void UniformManager::Reset()
     {
-        // 重置所有11个CPU端结构体为默认值 ⭐
+        // 重置所有12个CPU端结构体为默认值 ⭐
         m_cameraAndPlayerUniforms   = CameraAndPlayerUniforms();
         m_playerStatusUniforms      = PlayerStatusUniforms();
         m_screenAndSystemUniforms   = ScreenAndSystemUniforms();
@@ -1082,9 +1236,11 @@ namespace enigma::graphic
         m_matricesUniforms          = MatricesUniforms();
         m_colorTargetsIndexBuffer   = ColorTargetsIndexBuffer();
         m_depthTexturesIndexBuffer  = DepthTexturesIndexBuffer(); // ⭐ 新增
-        m_shadowBufferIndex         = ShadowBufferIndex(); // ⭐ 新增
+        m_shadowColorIndexBuffer    = ShadowColorIndexBuffer(); // ⭐ 拆分: shadowcolor0-7
+        m_shadowTexturesIndexBuffer = ShadowTexturesIndexBuffer(); // ⭐ 拆分: shadowtex0/1
+        m_customImageIndexBuffer    = CustomImageIndexBuffer(); // ⭐ 新增
 
-        // 标记所有11个类别为脏 ⭐
+        // 标记所有12个类别为脏 ⭐
         m_cameraAndPlayerDirty   = true;
         m_playerStatusDirty      = true;
         m_screenAndSystemDirty   = true;
@@ -1095,7 +1251,9 @@ namespace enigma::graphic
         m_matricesDirty          = true;
         m_renderTargetsDirty     = true; // ⭐ 统一命名
         m_depthTexturesDirty     = true; // ⭐ 新增
-        m_shadowDirty            = true; // ⭐ 新增
+        m_shadowColorDirty       = true; // ⭐ 拆分: shadowcolor0-7
+        m_shadowTexturesDirty    = true; // ⭐ 拆分: shadowtex0/1
+        m_customImageDirty       = true; // ⭐ 新增
 
         // 清空Supplier列表
         m_uniformGetters.clear();

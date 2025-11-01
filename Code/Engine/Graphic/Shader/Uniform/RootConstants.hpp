@@ -221,23 +221,20 @@ namespace enigma::graphic
         uint32_t depthTexturesBufferIndex;
 
         /**
-         * @brief Shadow Buffer索引 ⭐ 激进合并设计
-         *
-         * 指向的Buffer包含（ShadowBufferIndex，80 bytes）:
-         * - shadowColorReadIndices[8]: shadowcolor0-7读取索引（Main或Alt）
-         * - shadowColorWriteIndices[8]: shadowcolor0-7写入索引（预留）
-         * - shadowtex0Index: 完整阴影深度
-         * - shadowtex1Index: 半透明前阴影深度
-         * - padding[2]: 对齐填充
-         *
-         * 教学要点:
-         * 1. 激进方案：合并shadowcolor（需要flip）+ shadowtex（固定）
-         * 2. 统一Shadow系统管理，减少Root Constants占用
-         * 3. shadowcolor支持Ping-Pong，shadowtex为只读
-         *
-         * 对应HLSL Offset: 10 (BindlessRootSignature::OFFSET_SHADOW_BUFFER_INDEX)
+         * @brief Shadow Color Buffer索引
+         * - shadowcolor0Index:
+         * - shadowcolor1Index:
+         * - to shadowsolor7Index:
          */
-        uint32_t shadowBufferIndex;
+        uint32_t shadowColorBufferIndex;
+
+        /**
+         * @brief Shadow Texture Buffer索引
+         * - shadowtex0Index:
+         * - shadowtex1Index:
+         * - shadowtex2Index:
+         */
+        uint32_t shadowTexturesBufferIndex;
 
         /**
          * @brief NoiseTexture直接索引
@@ -253,31 +250,34 @@ namespace enigma::graphic
          */
         uint32_t noiseTextureIndex;
 
-        // ===== 总计: 12 × 4 = 48 bytes =====
+        /**
+         * @brief CustomImage Index Buffer索引 ⭐ 自定义材质支持
+         *
+         * 指向的Buffer包含（CustomImageIndexBuffer，256 bytes）:
+         * - customImageIndices[16]: customImage0-15的Bindless索引
+         * - padding[48]: 对齐填充到256字节
+         *
+         * 教学要点:
+         * 1. 支持16个自定义材质槽位，用户可上传任意纹理
+         * 2. 通过UploadCustomTexture() API动态填充
+         * 3. HLSL端通过customImage0-15宏直接访问
+         * 4. 支持运行时动态更新和替换
+         *
+         * 对应HLSL Offset: 12 (新增，需要更新BindlessRootSignature.hpp)
+         */
+        uint32_t customImageBufferIndex;
+
+        // ===== 总计: 14 × 4 = 56 bytes =====
 
         /**
          * @brief 默认构造函数 - 初始化为0
          */
-        RootConstants()
-            : cameraAndPlayerBufferIndex(0)
-              , playerStatusBufferIndex(0)
-              , screenAndSystemBufferIndex(0)
-              , idBufferIndex(0)
-              , worldAndWeatherBufferIndex(0)
-              , biomeAndDimensionBufferIndex(0)
-              , renderingBufferIndex(0)
-              , matricesBufferIndex(0)
-              , colorTargetsBufferIndex(0)
-              , depthTexturesBufferIndex(0)
-              , shadowBufferIndex(0)
-              , noiseTextureIndex(0)
-        {
-        }
+        RootConstants();
     };
 
-    // 编译期验证: 确保结构体大小为48字节
-    static_assert(sizeof(RootConstants) == 48,
-                  "RootConstants must be exactly 48 bytes to match HLSL RootConstants cbuffer");
+    // 编译期验证: 确保结构体大小为56字节
+    static_assert(sizeof(RootConstants) == 56,
+                  "RootConstants must be exactly 56 bytes to match HLSL RootConstants cbuffer");
 
     // 编译期验证: 确保每个字段都是4字节对齐
     static_assert(alignof(RootConstants) == 4,

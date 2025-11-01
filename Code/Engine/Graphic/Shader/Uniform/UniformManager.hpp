@@ -18,7 +18,9 @@
 #include "RootConstants.hpp"
 #include "ColorTargetsIndexBuffer.hpp"      // ⭐ colortex0-15 (Main/Alt)
 #include "DepthTexturesIndexBuffer.hpp"      // ⭐ 新增 (depthtex0/1/2)
-#include "ShadowBufferIndex.hpp"             // ⭐ 新增 (shadowcolor0-7 + shadowtex0/1)
+#include "ShadowColorIndexBuffer.hpp"       // ⭐ 新增 (shadowcolor0-7)
+#include "ShadowTexturesIndexBuffer.hpp"     // ⭐ 新增 (shadowtex0/1)
+#include "CustomImageIndexBuffer.hpp"        // ⭐ 新增 自定义材质槽位 (customImage0-15)
 #include "CameraAndPlayerUniforms.hpp"
 #include "PlayerStatusUniforms.hpp"
 #include "ScreenAndSystemUniforms.hpp"
@@ -35,7 +37,7 @@ namespace enigma::graphic
      *
      * 核心架构设计 (基于 Iris 官方分类 + Bindless 优化 + 完整纹理支持):
      * 1. Root Constants = 48 bytes (12个uint32_t索引) ⭐
-     * 2. 11个 GPU 资源索引 (8个Uniform + 3个纹理Buffer + 1个直接纹理)
+     * 2. 12个 GPU 资源索引 (8个Uniform + 4个纹理Buffer + 1个直接纹理)
      * 3. 完整 Iris 纹理系统: colortex0-15 + depthtex0/1/2 + shadowcolor0-7 + shadowtex0/1 + noisetex
      * 4. **Fluent Builder + std::function Supplier模式** (模仿Iris设计) ⭐
      *
@@ -159,11 +161,11 @@ namespace enigma::graphic
          * @brief 构造函数 - RAII自动初始化 🔥
          *
          * 教学要点 (遵循RAII原则):
-         * 1. 初始化所有 11 个 CPU 端结构体为默认值 ⭐
+         * 1. 初始化所有 12 个 CPU 端结构体为默认值 ⭐
          * 2. 构建字段映射表 (unordered_map, BuildFieldMap())
-         * 3. 创建 11 个 GPU StructuredBuffer ⭐
+         * 3. 创建 12 个 GPU StructuredBuffer ⭐
          * 4. 上传初始数据到GPU
-         * 5. 注册到Bindless系统,获取 11 个索引并更新 Root Constants (48 bytes) ⭐
+         * 5. 注册到Bindless系统,获取 12 个索引并更新 Root Constants (48 bytes) ⭐
          * 6. 构造完成即可用,无需手动Initialize()
          *
          * RAII优势:
@@ -177,8 +179,8 @@ namespace enigma::graphic
          * @brief 析构函数 - RAII自动释放资源 🔥
          *
          * 教学要点:
-         * 1. 自动注销 11 个 Bindless 索引 ⭐
-         * 2. 释放 11 个 GPU StructuredBuffer ⭐
+         * 1. 自动注销 12 个 Bindless 索引 ⭐
+         * 2. 释放 12 个 GPU StructuredBuffer ⭐
          * 3. RAII原则 - 无需手动Shutdown(),自动资源管理
          */
         ~UniformManager();
@@ -421,6 +423,38 @@ namespace enigma::graphic
         void SetNoiseTextureIndex(uint32_t noiseIndex);
 
         // ========================================================================
+        // CustomImageIndexBuffer 专用 API ⭐ 自定义材质支持
+        // ========================================================================
+
+        /**
+         * @brief 更新自定义材质槽位索引 (customImage0-15)
+         * @param slotIndex 槽位索引 (0-15)
+         * @param bindlessIndex Bindless 索引
+         *
+         * 教学要点:
+         * 1. 支持16个自定义材质槽位，用户可上传任意纹理
+         * 2. 通过UploadCustomTexture() API调用此方法
+         * 3. HLSL端通过customImage0-15宏访问
+         * 4. 支持运行时动态更新
+         */
+        void UpdateCustomImageSlot(uint32_t slotIndex, uint32_t bindlessIndex);
+
+        /**
+         * @brief 批量设置多个自定义材质槽位
+         * @param indices 索引数组 (16个)
+         *
+         * 教学要点:
+         * - 一次性设置所有16个槽位
+         * - 常用于初始化或批量更新
+         */
+        void SetCustomImageIndices(const uint32_t indices[16]);
+
+        /**
+         * @brief 重置所有自定义材质槽位为无效索引
+         */
+        void ResetCustomImageSlots();
+
+        // ========================================================================
         // 批量同步接口
         // ========================================================================
 
@@ -430,8 +464,8 @@ namespace enigma::graphic
          *
          * 教学要点:
          * 1. 调用所有注册的Supplier获取最新值
-         * 2. 更新CPU端9个结构体
-         * 3. 检查9个脏标记,只上传被修改的Buffer
+         * 2. 更新CPU端12个结构体
+         * 3. 检查12个脏标记,只上传被修改的Buffer
          * 4. 性能优化: 避免不必要的GPU上传
          */
         bool SyncToGPU();
@@ -469,8 +503,10 @@ namespace enigma::graphic
          */
         uint32_t GetColorTargetsBufferIndex() const; // colortex0-15 (ColorTargetsIndexBuffer)
         uint32_t GetDepthTexturesBufferIndex() const; // depthtex0/1/2
-        uint32_t GetShadowBufferIndex() const; // shadowcolor0-7 + shadowtex0/1
+        uint32_t GetShadowColorBufferIndex() const; // shadowcolor0-7 (ShadowColorIndexBuffer) ⭐
+        uint32_t GetShadowTexturesBufferIndex() const; // shadowtex0/1 (ShadowTexturesIndexBuffer) ⭐
         uint32_t GetNoiseTextureIndex() const; // noisetex (直接纹理索引)
+        uint32_t GetCustomImageBufferIndex() const; // customImage0-15 (CustomImageIndexBuffer) ⭐ 自定义材质
 
         /**
          * @brief 重置为默认值
@@ -488,13 +524,13 @@ namespace enigma::graphic
          * @brief 字段信息 (unordered_map值类型)
          *
          * 教学要点:
-         * 1. categoryIndex: 0-10 (11个类别) ⭐
+         * 1. categoryIndex: 0-11 (12个类别) ⭐
          * 2. offset: 字段在结构体中的偏移量 (offsetof)
          * 3. size: 字段大小 (sizeof)
          */
         struct FieldInfo
         {
-            uint8_t  categoryIndex; // 0-10 (11个类别) ⭐
+            uint8_t  categoryIndex; // 0-11 (12个类别) ⭐
             uint16_t offset; // 字段偏移量
             uint16_t size; // 字段大小
         };
@@ -509,7 +545,7 @@ namespace enigma::graphic
          */
         struct UniformGetter
         {
-            uint8_t                    categoryIndex; // 0-10 ⭐
+            uint8_t                    categoryIndex; // 0-11 ⭐
             uint16_t                   offset; // 字段偏移量
             std::function<void(void*)> getter; // 通用getter,写入目标地址
         };
@@ -529,17 +565,17 @@ namespace enigma::graphic
         void BuildFieldMap();
 
         /**
-         * @brief 创建11个GPU StructuredBuffer (构造函数调用) ⭐
+         * @brief 创建12个GPU StructuredBuffer (构造函数调用) ⭐
          *
          * 教学要点:
          * 1. 使用D3D12RenderSystem::CreateStructuredBuffer()静态API
          * 2. 遵循严格四层架构，不直接调用DX12 API
-         * 3. 创建8个Uniform buffers + 3个纹理索引buffers
+         * 3. 创建8个Uniform buffers + 4个纹理索引buffers
          */
         void CreateGPUBuffers();
 
         /**
-         * @brief 注册11个Buffer到Bindless系统 (构造函数调用) ⭐
+         * @brief 注册12个Buffer到Bindless系统 (构造函数调用) ⭐
          *
          * 教学要点:
          * 1. 调用D12Buffer::RegisterBindless()获取Bindless索引
@@ -549,7 +585,7 @@ namespace enigma::graphic
         void RegisterToBindlessSystem();
 
         /**
-         * @brief 注销11个Buffer的Bindless索引 (析构函数调用) ⭐
+         * @brief 注销12个Buffer的Bindless索引 (析构函数调用) ⭐
          *
          * 教学要点:
          * 1. 调用D12Buffer::UnregisterBindless()释放索引
@@ -559,7 +595,7 @@ namespace enigma::graphic
 
         /**
          * @brief 注册通用Getter (Supplier模式核心)
-         * @param categoryIndex 类别索引 (0-10) ⭐
+         * @param categoryIndex 类别索引 (0-11) ⭐
          * @param offset 字段偏移量
          * @param getter 通用getter lambda
          */
@@ -578,14 +614,14 @@ namespace enigma::graphic
 
         /**
          * @brief 获取指定类别的CPU端数据指针
-         * @param categoryIndex 类别索引 (0-10) ⭐
+         * @param categoryIndex 类别索引 (0-11) ⭐
          * @return 指向结构体的void*指针
          */
         void* GetCategoryDataPtr(uint8_t categoryIndex);
 
         /**
          * @brief 标记指定类别为脏
-         * @param categoryIndex 类别索引 (0-10) ⭐
+         * @param categoryIndex 类别索引 (0-11) ⭐
          */
         void MarkCategoryDirty(uint8_t categoryIndex);
 
@@ -599,7 +635,7 @@ namespace enigma::graphic
         // 成员变量
         // ========================================================================
 
-        // CPU端数据 (11个结构体) ⭐
+        // CPU端数据 (12个结构体) ⭐
         RootConstants             m_rootConstants; // 48 bytes ⭐
         CameraAndPlayerUniforms   m_cameraAndPlayerUniforms; // ~112 bytes
         PlayerStatusUniforms      m_playerStatusUniforms; // ~80 bytes
@@ -611,9 +647,11 @@ namespace enigma::graphic
         MatricesUniforms          m_matricesUniforms; // 1152 bytes
         ColorTargetsIndexBuffer   m_colorTargetsIndexBuffer; // 128 bytes (colortex0-15)
         DepthTexturesIndexBuffer  m_depthTexturesIndexBuffer; // 16 bytes ⭐ (depthtex0/1/2)
-        ShadowBufferIndex         m_shadowBufferIndex; // 80 bytes ⭐ (shadowcolor + shadowtex)
+        ShadowColorIndexBuffer    m_shadowColorIndexBuffer; // 64 bytes ⭐ (shadowcolor0-7)
+        ShadowTexturesIndexBuffer m_shadowTexturesIndexBuffer; // 16 bytes ⭐ (shadowtex0/1)
+        CustomImageIndexBuffer    m_customImageIndexBuffer; // 256 bytes ⭐ (customImage0-15) 自定义材质
 
-        // GPU资源 (11个 StructuredBuffer) ⭐
+        // GPU资源 (12个 StructuredBuffer) ⭐
         class D12Buffer* m_cameraAndPlayerBuffer; // GPU端 CameraAndPlayerUniforms
         class D12Buffer* m_playerStatusBuffer; // GPU端 PlayerStatusUniforms
         class D12Buffer* m_screenAndSystemBuffer; // GPU端 ScreenAndSystemUniforms
@@ -624,9 +662,11 @@ namespace enigma::graphic
         class D12Buffer* m_matricesBuffer; // GPU端 MatricesUniforms
         class D12Buffer* m_colorTargetsBuffer; // GPU端 ColorTargetsIndexBuffer ⭐ (统一命名)
         class D12Buffer* m_depthTexturesBuffer; // GPU端 DepthTexturesIndexBuffer ⭐
-        class D12Buffer* m_shadowBuffer; // GPU端 ShadowBufferIndex ⭐
+        class D12Buffer* m_shadowColorBuffer; // GPU端 ShadowColorIndexBuffer ⭐
+        class D12Buffer* m_shadowTexturesBuffer; // GPU端 ShadowTexturesIndexBuffer ⭐
+        class D12Buffer* m_customImageBuffer; // GPU端 CustomImageIndexBuffer ⭐ 自定义材质
 
-        // 脏标记 (11个) ⭐
+        // 脏标记 (12个) ⭐
         bool m_cameraAndPlayerDirty;
         bool m_playerStatusDirty;
         bool m_screenAndSystemDirty;
@@ -637,7 +677,9 @@ namespace enigma::graphic
         bool m_matricesDirty;
         bool m_renderTargetsDirty; // ⭐ colortex0-15 (统一命名)
         bool m_depthTexturesDirty; // ⭐ depthtex0/1/2
-        bool m_shadowDirty; // ⭐ shadowcolor + shadowtex
+        bool m_shadowColorDirty; // ⭐ shadowcolor0-7
+        bool m_shadowTexturesDirty; // ⭐ shadowtex0/1
+        bool m_customImageDirty; // ⭐ customImage0-15 自定义材质
 
         // 字段映射表 (unordered_map, 只构建一次)
         std::unordered_map<std::string, FieldInfo> m_fieldMap;

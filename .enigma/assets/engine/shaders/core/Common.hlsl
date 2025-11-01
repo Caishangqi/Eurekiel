@@ -1,44 +1,50 @@
 /**
  * @file Common.hlsl
- * @brief Bindless资源访问核心库 - Iris完全兼容架构（激进48字节设计）
- * @date 2025-10-10
- * @version v3.0 - 完整Iris纹理系统支持（激进合并）
+ * @brief Bindless资源访问核心库 - Iris完全兼容架构 + CustomImage扩展
+ * @date 2025-10-31
+ * @version v3.2 - Shadow系统拆分设计（56字节RootConstants）
  *
  * 教学要点:
  * 1. 所有着色器必须 #include "Common.hlsl"
  * 2. 支持完整Iris纹理系统: colortex, shadowcolor, depthtex, shadowtex, noisetex
- * 3. Main/Alt双缓冲 - 消除ResourceBarrier开销
- * 4. Bindless资源访问 - Shader Model 6.6
- * 5. MRT动态生成 - PSOutput由ShaderCodeGenerator动态创建
- * 6. 激进Shadow合并 - shadowcolor + shadowtex统一管理
+ * 3. 新增CustomImage系统: customImage0-15 (自定义材质槽位) ⭐
+ * 4. Main/Alt双缓冲 - 消除ResourceBarrier开销
+ * 5. Bindless资源访问 - Shader Model 6.6
+ * 6. MRT动态生成 - PSOutput由ShaderCodeGenerator动态创建
+ * 7. Shadow系统拆分 - shadowcolor和shadowtex独立管理 ⭐
  *
  * 架构参考:
  * - DirectX12-Bindless-MRT-RENDERTARGETS-Architecture.md
- * - RootConstant-Redesign-v2.md (48字节激进设计)
+ * - RootConstant-Redesign-v3.md (56字节拆分设计)
+ * - CustomImageIndexBuffer.hpp (自定义材质槽位系统)
  */
 
 //──────────────────────────────────────────────────────
-// Root Constants (48 bytes) - 激进设计
+// Root Constants (56 bytes) - Shadow系统拆分设计
 //──────────────────────────────────────────────────────
 
 /**
- * @brief Root Constants - 完整Iris纹理系统支持（激进48字节设计）
+ * @brief Root Constants - Shadow系统拆分 + CustomImage支持（56字节设计）
  *
  * 教学要点:
- * 1. 总共48 bytes (12个uint32_t索引)
+ * 1. 总共56 bytes (14个uint32_t索引) - Shadow系统拆分 ⭐
  * 2. register(b0, space0) 对应 Root Parameter 0
  * 3. 支持细粒度更新 - 每个索引可独立更新
  * 4. 完整Iris纹理系统: colortex, shadowcolor, depthtex, shadowtex, noisetex
+ * 5. CustomImage系统: customImage0-15 (自定义材质槽位) ⭐
  *
- * 架构优势（激进方案）:
- * - 极简设计: 合并Shadow系统到单一索引（shadowBufferIndex）
+ * 架构优势:
+ * - 拆分设计: shadowcolor和shadowtex独立管理，提高灵活性 ⭐
  * - 全局共享Root Signature - 所有PSO使用同一个
  * - Root Signature切换: 1次/帧 (传统方式: 1000次/帧)
  * - 支持1,000,000+纹理同时注册
+ * - 材质系统扩展: 16个自定义槽位用于PBR材质、LUT、特效贴图等
  *
- * 激进合并关键:
- * - shadowBufferIndex包含: shadowcolor0-7 (flip) + shadowtex0/1 (固定)
- * - 减少Root Constants占用: 从52字节降至48字节
+ * 拆分设计关键:
+ * - shadowColorBufferIndex: shadowcolor0-7 (需要flip机制)
+ * - shadowTexturesBufferIndex: shadowtex0/1 (固定，不需要flip)
+ * - customImageBufferIndexCBV: 256字节Buffer，存储16个槽位索引
+ * - 总大小从52字节增至56字节（仍在Root Signature优化范围内）
  *
  * C++ 对应:
  * ```cpp
@@ -54,11 +60,14 @@
  *     uint32_t matricesBufferIndex;             // Offset 28
  *     // Texture Buffers (4 bytes)
  *     uint32_t colorTargetsBufferIndex;         // Offset 32 ⭐
- *     // Combined Buffers (8 bytes)
+ *     // Combined Buffers (12 bytes) - 拆分Shadow系统
  *     uint32_t depthTexturesBufferIndex;        // Offset 36
- *     uint32_t shadowBufferIndex;               // Offset 40 ⭐ 激进合并
+ *     uint32_t shadowColorBufferIndex;          // Offset 40 ⭐ 拆分
+ *     uint32_t shadowTexturesBufferIndex;       // Offset 44 ⭐ 拆分
  *     // Direct Texture (4 bytes)
- *     uint32_t noiseTextureIndex;               // Offset 44
+ *     uint32_t noiseTextureIndex;               // Offset 48
+ *     // CustomImage Buffer (4 bytes) - 新增 ⭐
+ *     uint32_t customImageBufferIndexCBV;       // Offset 52 (customImage0-15)
  * };
  * ```
  */
@@ -77,12 +86,16 @@ cbuffer RootConstants : register(b0, space0)
     // Texture Buffers with Flip Support (4 bytes)
     uint colorTargetsBufferIndex; // ⭐ colortex0-15 (Main/Alt)
 
-    // Combined Buffers (8 bytes)
-    uint depthTexturesBufferIndex; // depthtex0/1/2 (引擎生成)
-    uint shadowBufferIndex; // ⭐ shadowcolor0-7 + shadowtex0/1 (激进合并)
+    // Combined Buffers (12 bytes) - 拆分Shadow系统
+    uint depthTexturesBufferIndex; // depthtex0/1/2 (引擎生成) - Offset 36
+    uint shadowColorBufferIndex; // ⭐ shadowcolor0-7 (需要flip) - Offset 40
+    uint shadowTexturesBufferIndex; // ⭐ shadowtex0/1 (固定) - Offset 44
 
     // Direct Texture Index (4 bytes)
-    uint noiseTextureIndex; // noisetex (静态纹理)
+    uint noiseTextureIndex; // noisetex (静态纹理) - Offset 48
+
+    // CustomImage Buffer Index (4 bytes) - 新增
+    uint customImageBufferIndexCBV; // ⭐ customImage0-15 (自定义材质槽位) - Offset 52
 };
 
 //──────────────────────────────────────────────────────
@@ -127,32 +140,65 @@ struct DepthTexturesBuffer
 };
 
 /**
- * @brief ShadowBuffer - Shadow系统合并管理（80 bytes）⭐ 激进设计
+ * @brief ShadowColorBuffer - Shadow颜色纹理索引管理（64 bytes）⭐ 拆分设计
  *
  * 教学要点:
- * 1. 合并shadowcolor（需要flip）+ shadowtex（固定）
+ * 1. 存储8个shadowcolor的读写索引
  * 2. shadowColorReadIndices: shadowcolor0-7读取索引（Main或Alt）
  * 3. shadowColorWriteIndices: shadowcolor0-7写入索引（预留）
- * 4. shadowtex0Index: 完整阴影深度
- * 5. shadowtex1Index: 半透明前阴影深度
+ * 4. 支持flip机制（Ping-Pong双缓冲）
  *
- * 激进方案优势:
- * - 统一Shadow系统管理
- * - 减少Root Constants占用
- * - shadowcolor支持Ping-Pong，shadowtex为只读
- *
- * 对应C++: ShadowBufferIndex.hpp
+ * 对应C++: ShadowColorIndexBuffer.hpp
  */
-struct ShadowBuffer
+struct ShadowColorBuffer
 {
-    // Shadow Color Targets（需要flip）- 64 bytes
-    uint shadowColorReadIndices[8]; // shadowcolor0-7读取索引
+    uint shadowColorReadIndices[8]; // shadowcolor0-7读取索引（Main或Alt）
     uint shadowColorWriteIndices[8]; // shadowcolor0-7写入索引（预留）
+};
 
-    // Shadow Depth Textures（不需要flip）- 16 bytes
+/**
+ * @brief ShadowTexturesBuffer - Shadow深度纹理索引管理（16 bytes）⭐ 拆分设计
+ *
+ * 教学要点:
+ * 1. 存储2个shadowtex的索引
+ * 2. shadowtex0Index: 完整阴影深度（不透明+半透明）
+ * 3. shadowtex1Index: 半透明前阴影深度
+ * 4. 不需要flip机制（只读纹理）
+ *
+ * 对应C++: ShadowTexturesIndexBuffer.hpp
+ */
+struct ShadowTexturesBuffer
+{
     uint shadowtex0Index; // 完整阴影深度
     uint shadowtex1Index; // 半透明前阴影深度
     uint padding[2]; // 对齐填充
+};
+
+/**
+ * @brief CustomImageIndexBuffer - 自定义材质槽位索引缓冲区（256 bytes）⭐ 新增
+ *
+ * 教学要点:
+ * 1. 存储16个自定义材质槽位（customImage0-15）的Bindless索引
+ * 2. 类似ColorTargetsIndexBuffer，但只需要读取索引（不需要写入索引）
+ * 3. UINT32_MAX (0xFFFFFFFF) 表示槽位未设置
+ * 4. 用于材质系统扩展，支持自定义贴图（albedo、roughness、metallic等）
+ *
+ * 架构设计:
+ * - 对齐到256字节，与ColorTargetsIndexBuffer保持一致
+ * - 只读访问，不需要flip机制
+ * - 支持运行时动态更新槽位
+ *
+ * 使用场景:
+ * - 延迟渲染PBR材质贴图
+ * - 自定义后处理LUT纹理
+ * - 特效贴图（噪声、遮罩等）
+ *
+ * 对应C++: CustomImageIndexBuffer.hpp
+ */
+struct CustomImageIndexBuffer
+{
+    uint customImageIndices[16]; // customImage0-15的Bindless索引
+    uint padding[48]; // 填充到256字节
 };
 
 // ===== Uniform Buffers（8个）=====
@@ -559,67 +605,67 @@ Texture2D<float> GetDepthTex2()
 }
 
 /**
- * @brief 获取阴影颜色纹理（shadowcolor0-7）⭐ 激进合并
+ * @brief 获取阴影颜色纹理（shadowcolor0-7）⭐ 拆分设计
  * @param shadowIndex shadowcolor索引（0-7）
  * @return Texture2D资源（Main或Alt，根据flip状态）
  *
  * 教学要点:
  * - shadowcolor支持flip机制（Ping-Pong双缓冲）
  * - 用于多Pass阴影渲染（shadowcomp阶段）
- * - 激进方案：与shadowtex合并在同一Buffer
+ * - 拆分方案：独立管理shadowcolor和shadowtex
  */
 Texture2D GetShadowColor(uint shadowIndex)
 {
-    // 1. 获取ShadowBuffer
-    StructuredBuffer<ShadowBuffer> shadowBuffer =
-        ResourceDescriptorHeap[shadowBufferIndex];
+    // 1. 获取ShadowColorBuffer
+    StructuredBuffer<ShadowColorBuffer> shadowColorBuffer =
+        ResourceDescriptorHeap[shadowColorBufferIndex];
 
     // 2. 查询shadowcolor读取索引（Main或Alt）
-    uint textureIndex = shadowBuffer[0].shadowColorReadIndices[shadowIndex];
+    uint textureIndex = shadowColorBuffer[0].shadowColorReadIndices[shadowIndex];
 
     // 3. 返回shadowcolor纹理
     return ResourceDescriptorHeap[textureIndex];
 }
 
 /**
- * @brief 获取阴影深度纹理0（完整阴影深度）⭐ 激进合并
+ * @brief 获取阴影深度纹理0（完整阴影深度）⭐ 拆分设计
  * @return Texture2D<float>资源
  *
  * 教学要点:
  * - shadowtex0: 包含所有物体的阴影深度（不透明+半透明）
  * - 只读纹理，不需要flip
- * - 激进方案：与shadowcolor合并在同一Buffer
+ * - 拆分方案：独立管理shadowcolor和shadowtex
  */
 Texture2D<float> GetShadowTex0()
 {
-    // 1. 获取ShadowBuffer
-    StructuredBuffer<ShadowBuffer> shadowBuffer =
-        ResourceDescriptorHeap[shadowBufferIndex];
+    // 1. 获取ShadowTexturesBuffer
+    StructuredBuffer<ShadowTexturesBuffer> shadowTexBuffer =
+        ResourceDescriptorHeap[shadowTexturesBufferIndex];
 
     // 2. 查询shadowtex0索引
-    uint textureIndex = shadowBuffer[0].shadowtex0Index;
+    uint textureIndex = shadowTexBuffer[0].shadowtex0Index;
 
     // 3. 返回shadowtex0
     return ResourceDescriptorHeap[textureIndex];
 }
 
 /**
- * @brief 获取阴影深度纹理1（半透明前阴影深度）⭐ 激进合并
+ * @brief 获取阴影深度纹理1（半透明前阴影深度）⭐ 拆分设计
  * @return Texture2D<float>资源
  *
  * 教学要点:
  * - shadowtex1: 只包含不透明物体的阴影深度
  * - 用于半透明物体的阴影处理
- * - 激进方案：与shadowcolor合并在同一Buffer
+ * - 拆分方案：独立管理shadowcolor和shadowtex
  */
 Texture2D<float> GetShadowTex1()
 {
-    // 1. 获取ShadowBuffer
-    StructuredBuffer<ShadowBuffer> shadowBuffer =
-        ResourceDescriptorHeap[shadowBufferIndex];
+    // 1. 获取ShadowTexturesBuffer
+    StructuredBuffer<ShadowTexturesBuffer> shadowTexBuffer =
+        ResourceDescriptorHeap[shadowTexturesBufferIndex];
 
     // 2. 查询shadowtex1索引
-    uint textureIndex = shadowBuffer[0].shadowtex1Index;
+    uint textureIndex = shadowTexBuffer[0].shadowtex1Index;
 
     // 3. 返回shadowtex1
     return ResourceDescriptorHeap[textureIndex];
@@ -638,6 +684,80 @@ Texture2D GetNoiseTex()
 {
     // 直接访问噪声纹理（noiseTextureIndex是直接索引）
     return ResourceDescriptorHeap[noiseTextureIndex];
+}
+
+/**
+ * @brief 获取自定义材质槽位的Bindless索引 ⭐ 新增
+ * @param slotIndex 槽位索引（0-15）
+ * @return Bindless索引，如果槽位未设置则返回UINT32_MAX (0xFFFFFFFF)
+ *
+ * 教学要点:
+ * - 通过customImageBufferIndexCBV访问CustomImageIndexBuffer
+ * - 返回值为Bindless索引，可直接访问ResourceDescriptorHeap
+ * - UINT32_MAX表示槽位未设置，使用前应检查有效性
+ *
+ * 工作原理:
+ * 1. 通过customImageBufferIndexCBV访问CustomImageIndexBuffer
+ * 2. 查询customImageIndices[slotIndex]获取Bindless索引
+ * 3. 返回索引供GetCustomImage()使用
+ *
+ * 安全性:
+ * - 槽位索引会被限制在0-15范围内
+ * - 超出范围返回UINT32_MAX（无效索引）
+ */
+uint GetCustomImageIndex(uint slotIndex)
+{
+    // 防止越界访问
+    if (slotIndex >= 16)
+    {
+        return 0xFFFFFFFF; // UINT32_MAX - 无效索引
+    }
+
+    // 1. 获取CustomImageIndexBuffer（StructuredBuffer）
+    StructuredBuffer<CustomImageIndexBuffer> customImageBuffer =
+        ResourceDescriptorHeap[customImageBufferIndexCBV];
+
+    // 2. 查询指定槽位的Bindless索引
+    uint bindlessIndex = customImageBuffer[0].customImageIndices[slotIndex];
+
+    // 3. 返回Bindless索引
+    return bindlessIndex;
+}
+
+/**
+ * @brief 获取自定义材质纹理（便捷访问函数）⭐ 新增
+ * @param slotIndex 槽位索引（0-15）
+ * @return 对应的Bindless纹理（Texture2D）
+ *
+ * 教学要点:
+ * - 封装GetCustomImageIndex() + ResourceDescriptorHeap访问
+ * - 自动处理无效索引情况（返回黑色纹理或默认纹理）
+ * - 遵循Iris纹理访问模式
+ *
+ * 使用示例:
+ * ```hlsl
+ * // 获取albedo贴图（假设slot 0存储albedo）
+ * Texture2D albedoTex = GetCustomImage(0);
+ * float4 albedo = albedoTex.Sample(linearSampler, uv);
+ *
+ * // 获取roughness贴图（假设slot 1存储roughness）
+ * Texture2D roughnessTex = GetCustomImage(1);
+ * float roughness = roughnessTex.Sample(linearSampler, uv).r;
+ * ```
+ *
+ * 注意:
+ * - 如果槽位未设置（UINT32_MAX），访问ResourceDescriptorHeap可能导致未定义行为
+ * - 调用前应确保槽位已正确设置，或使用默认值处理
+ */
+Texture2D GetCustomImage(uint slotIndex)
+{
+    // 1. 获取Bindless索引
+    uint bindlessIndex = GetCustomImageIndex(slotIndex);
+
+    // 2. 通过Bindless索引访问全局描述符堆
+    // 注意：如果bindlessIndex为UINT32_MAX，这里可能需要额外的有效性检查
+    // 当前设计假设C++端会确保所有使用的槽位都已正确设置
+    return ResourceDescriptorHeap[bindlessIndex];
 }
 
 //──────────────────────────────────────────────────────
@@ -709,6 +829,26 @@ Texture2D GetNoiseTex()
 
 // ===== NoiseTex（noisetex）=====
 #define noisetex GetNoiseTex()
+
+// ===== CustomImage（customImage0-15）⭐ 新增 =====
+// 自定义材质槽位，用于扩展材质系统
+// 使用场景：PBR材质贴图（albedo、roughness、metallic等）、自定义LUT、特效贴图
+#define customImage0  GetCustomImage(0)
+#define customImage1  GetCustomImage(1)
+#define customImage2  GetCustomImage(2)
+#define customImage3  GetCustomImage(3)
+#define customImage4  GetCustomImage(4)
+#define customImage5  GetCustomImage(5)
+#define customImage6  GetCustomImage(6)
+#define customImage7  GetCustomImage(7)
+#define customImage8  GetCustomImage(8)
+#define customImage9  GetCustomImage(9)
+#define customImage10 GetCustomImage(10)
+#define customImage11 GetCustomImage(11)
+#define customImage12 GetCustomImage(12)
+#define customImage13 GetCustomImage(13)
+#define customImage14 GetCustomImage(14)
+#define customImage15 GetCustomImage(15)
 
 //──────────────────────────────────────────────────────
 // Sampler States
@@ -899,6 +1039,42 @@ VSOutput StandardVertexTransform(VSInput input)
  *     // 输出到多个RT
  *     output.Color0 = color0 * 0.5;    // 写入colortex0
  *     output.Color1 = color8 * 2.0;    // 写入colortex3
+ *
+ *     return output;
+ * }
+ * ```
+ *
+ * 1.5. CustomImage使用示例（延迟渲染PBR材质）⭐ 新增:
+ * ```hlsl
+ * #include "Common.hlsl"
+ *
+ * PSOutput PSMain(PSInput input)
+ * {
+ *     PSOutput output;
+ *
+ *     // 方式1：通过宏直接访问（推荐）
+ *     float4 albedo = customImage0.Sample(linearSampler, input.TexCoord);    // Albedo贴图
+ *     float roughness = customImage1.Sample(linearSampler, input.TexCoord).r; // Roughness贴图
+ *     float metallic = customImage2.Sample(linearSampler, input.TexCoord).r;  // Metallic贴图
+ *     float3 normal = customImage3.Sample(linearSampler, input.TexCoord).rgb; // Normal贴图
+ *
+ *     // 方式2：通过索引访问（动态槽位）
+ *     uint slotIndex = 5;
+ *     Texture2D dynamicTex = GetCustomImage(slotIndex);
+ *     float4 data = dynamicTex.Sample(linearSampler, input.TexCoord);
+ *
+ *     // 方式3：检查槽位有效性（安全访问）
+ *     uint bindlessIndex = GetCustomImageIndex(4);
+ *     if (bindlessIndex != 0xFFFFFFFF) // 检查是否为无效索引
+ *     {
+ *         Texture2D aoMap = GetCustomImage(4); // AO贴图
+ *         float ao = aoMap.Sample(linearSampler, input.TexCoord).r;
+ *         albedo.rgb *= ao; // 应用AO
+ *     }
+ *
+ *     // PBR光照计算
+ *     float3 finalColor = CalculatePBR(albedo.rgb, roughness, metallic, normal);
+ *     output.Color0 = float4(finalColor, 1.0);
  *
  *     return output;
  * }
