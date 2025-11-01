@@ -5,7 +5,15 @@
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
+#include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp" // Milestone 3.0: GBuffer配置API
+#include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
+#include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
+#include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
+#include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp" // Phase 3: Uniform管理器
+#include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
+#include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
 
 using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
@@ -209,32 +217,42 @@ void RendererSubsystem::Startup()
     {
         LogInfo(LogRenderer, "Creating RenderTargetManager...");
 
-        // Step 1: 准备RenderTargetSettings配置数组（16个）
+        // Step 1: 准备RTConfig配置数组（16个）
         // 参考Iris的colortex配置，使用RGBA16F（高精度）和RGBA8（辅助数据）
-        std::array<RenderTargetSettings, 16> rtSettings = {};
+        std::array<RTConfig, 16> rtConfigs = {};
 
         // colortex0-7: RGBA16F格式（高精度渲染，适合HDR/法线/位置等）
         for (int i = 0; i < 8; ++i)
         {
-            rtSettings[i].format            = DXGI_FORMAT_R16G16B16A16_FLOAT; // RGBA16F
-            rtSettings[i].widthScale        = 1.0f; // 全分辨率
-            rtSettings[i].heightScale       = 1.0f;
-            rtSettings[i].enableMipmap      = false; // Milestone 3.0: 默认关闭Mipmap
-            rtSettings[i].allowLinearFilter = true;
-            rtSettings[i].sampleCount       = 1; // 无MSAA
-            rtSettings[i].debugName         = "colortex"; // RenderTargetManager会自动追加索引
+            rtConfigs[i] = RTConfig::ColorTargetWithScale(
+                "colortex" + std::to_string(i), // name
+                1.0f, // widthScale - 全分辨率
+                1.0f, // heightScale
+                DXGI_FORMAT_R16G16B16A16_FLOAT, // format - RGBA16F
+                true, // enableFlipper
+                LoadAction::Clear, // loadAction
+                ClearValue::Color(Rgba8::BLACK), // clearValue
+                false, // enableMipmap - 默认关闭
+                true, // allowLinearFilter
+                1 // sampleCount - 无MSAA
+            );
         }
 
         // colortex8-15: RGBA8格式（辅助数据，节省内存）
         for (int i = 8; i < 16; ++i)
         {
-            rtSettings[i].format            = DXGI_FORMAT_R8G8B8A8_UNORM; // RGBA8
-            rtSettings[i].widthScale        = 1.0f;
-            rtSettings[i].heightScale       = 1.0f;
-            rtSettings[i].enableMipmap      = false;
-            rtSettings[i].allowLinearFilter = true;
-            rtSettings[i].sampleCount       = 1;
-            rtSettings[i].debugName         = "colortex"; // RenderTargetManager会自动追加索引
+            rtConfigs[i] = RTConfig::ColorTargetWithScale(
+                "colortex" + std::to_string(i), // name
+                1.0f, // widthScale
+                1.0f, // heightScale
+                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA8
+                true, // enableFlipper
+                LoadAction::Clear, // loadAction
+                ClearValue::Color(Rgba8::BLACK), // clearValue
+                false, // enableMipmap
+                true, // allowLinearFilter
+                1 // sampleCount
+            );
         }
 
         // Step 2: 从配置读取渲染尺寸和colortex数量
@@ -250,7 +268,7 @@ void RendererSubsystem::Startup()
         m_renderTargetManager = std::make_unique<RenderTargetManager>(
             baseWidth,
             baseHeight,
-            rtSettings,
+            rtConfigs,
             colorTexCount
         );
 
@@ -275,6 +293,124 @@ void RendererSubsystem::Startup()
                  "Failed to create RenderTargetManager: {}",
                  e.what());
         ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()).c_str());
+    }
+
+    // ==================== 创建UniformManager (Phase 3) ====================
+    // 初始化Uniform缓冲区管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
+    try
+    {
+        LogInfo(LogRenderer, "Creating UniformManager...");
+
+        // UniformManager构造函数会自动初始化所有Uniform Buffer
+        m_uniformManager = std::make_unique<UniformManager>();
+
+        LogInfo(LogRenderer, "UniformManager created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create UniformManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()).c_str());
+    }
+
+    // ==================== 创建ShadowColorManager (M6.1.5) ====================
+    try
+    {
+        LogInfo(LogRenderer, "Creating ShadowColorManager...");
+
+        std::array<RTConfig, 8> shadowColorConfigs = {};
+        for (int i = 0; i < 8; ++i)
+        {
+            shadowColorConfigs[i] = RTConfig::ColorTargetWithScale(
+                "shadowcolor" + std::to_string(i),
+                1.0f, 1.0f,
+                DXGI_FORMAT_R16G16B16A16_FLOAT,
+                true, LoadAction::Clear,
+                ClearValue::Color(Rgba8::BLACK),
+                false, true, 1
+            );
+        }
+
+        m_shadowColorManager = std::make_unique<ShadowColorManager>(shadowColorConfigs);
+        LogInfo(LogRenderer, "ShadowColorManager created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create ShadowColorManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("ShadowColorManager initialization failed! Error: %s", e.what()).c_str());
+    }
+
+    // ==================== 创建ShadowTargetManager (M6.1.5) ====================
+    try
+    {
+        LogInfo(LogRenderer, "Creating ShadowTargetManager...");
+
+        std::array<RTConfig, 2> shadowTexConfigs = {};
+        for (int i = 0; i < 2; ++i)
+        {
+            shadowTexConfigs[i] = RTConfig::DepthTargetWithScale(
+                "shadowtex" + std::to_string(i),
+                1.0f, 1.0f,
+                DXGI_FORMAT_D32_FLOAT,
+                LoadAction::Clear,
+                ClearValue::Depth(1.0f, 0),
+                1
+            );
+        }
+
+        m_shadowTargetManager = std::make_unique<ShadowTargetManager>(shadowTexConfigs);
+        LogInfo(LogRenderer, "ShadowTargetManager created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create ShadowTargetManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("ShadowTargetManager initialization failed! Error: %s", e.what()).c_str());
+    }
+
+    // ==================== 创建RenderTargetBinder (M6.1.5) ====================
+    try
+    {
+        LogInfo(LogRenderer, "Creating RenderTargetBinder...");
+
+        m_renderTargetBinder = std::make_unique<RenderTargetBinder>(
+            m_renderTargetManager.get(),
+            m_depthTextureManager.get(),
+            m_shadowColorManager.get(),
+            m_shadowTargetManager.get()
+        );
+
+        LogInfo(LogRenderer, "RenderTargetBinder created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create RenderTargetBinder: {}", e.what());
+        ERROR_AND_DIE(Stringf("RenderTargetBinder initialization failed! Error: %s", e.what()).c_str());
+    }
+
+    // ==================== 创建全屏三角形VB (M6.3) ====================
+    try
+    {
+        LogInfo(LogRenderer, "Creating fullscreen triangle VertexBuffer...");
+
+        Vec2 vertices[] = {
+            Vec2(-1.0f, -1.0f), // 左下
+            Vec2(3.0f, -1.0f), // 右下（超出屏幕）
+            Vec2(-1.0f, 3.0f) // 左上（超出屏幕）
+        };
+
+        m_fullscreenTriangleVB.reset(CreateVertexBuffer(sizeof(vertices), sizeof(Vec2)));
+        if (!m_fullscreenTriangleVB)
+        {
+            ERROR_AND_DIE("Failed to create fullscreen triangle VertexBuffer");
+        }
+
+        UpdateBuffer(m_fullscreenTriangleVB.get(), vertices, sizeof(vertices));
+
+        LogInfo(LogRenderer, "Fullscreen triangle VertexBuffer created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create fullscreen triangle VB: {}", e.what());
+        ERROR_AND_DIE(Stringf("Fullscreen triangle VB initialization failed! Error: %s", e.what()).c_str());
     }
 }
 
@@ -765,6 +901,69 @@ void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
 // Teaching Note: 提供高层API，封装DirectX 12复杂性
 // Reference: DX11Renderer.cpp中的类似方法
 //-----------------------------------------------------------------------------------------------
+// M6.2.1: UseProgram RT绑定（两种方式）
+//-----------------------------------------------------------------------------------------------
+
+void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs)
+{
+    if (!shaderProgram)
+    {
+        LogError(LogRenderer, "UseProgram: shaderProgram is nullptr");
+        return;
+    }
+
+    // 1. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
+    const auto& drawBuffers = rtOutputs.empty() ? shaderProgram->GetDirectives().GetDrawBuffers() : rtOutputs;
+
+    // 2. 如果drawBuffers非空，绑定RT（复用RenderTargetBinder）
+    if (!drawBuffers.empty() && m_renderTargetBinder)
+    {
+        std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
+        std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
+        m_renderTargetBinder->BindRenderTargets(rtTypes, indices);
+    }
+
+    // 3. 设置PSO和Root Signature（调用ShaderProgram.Use()）
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    shaderProgram->Use(cmdList);
+
+    // 4. 刷新RT绑定（延迟提交）
+    if (m_renderTargetBinder)
+    {
+        m_renderTargetBinder->FlushBindings(cmdList);
+    }
+}
+
+void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs)
+{
+    // TODO: 通过ShaderPackManager获取ShaderProgram指针
+    // 当前简化实现：直接从ShaderPack获取
+    const ShaderSource* shaderSource = GetShaderProgram(programId);
+    if (!shaderSource)
+    {
+        LogError(LogRenderer, "UseProgram(ProgramId): Failed to get ShaderSource for ProgramId");
+        return;
+    }
+
+    // TODO: 编译ShaderSource为ShaderProgram（M6.2后续任务）
+    // 当前暂时无法调用，等待ShaderProgram编译系统实现
+    LogWarn(LogRenderer, "UseProgram(ProgramId): ShaderProgram compilation not implemented yet");
+}
+
+//-----------------------------------------------------------------------------------------------
+// M6.2.3: FlipRenderTarget API
+//-----------------------------------------------------------------------------------------------
+
+void RendererSubsystem::FlipRenderTarget(int rtIndex)
+{
+    if (!m_renderTargetManager)
+    {
+        LogError(LogRenderer, "FlipRenderTarget: RenderTargetManager is nullptr");
+        return;
+    }
+
+    m_renderTargetManager->FlipRenderTarget(rtIndex);
+}
 
 void RendererSubsystem::BeginCamera(const Camera& camera)
 {
@@ -774,6 +973,120 @@ void RendererSubsystem::BeginCamera(const Camera& camera)
     // 2. 更新Camera Uniform Buffer（通过UniformManager）
     // 3. 对应Iris的setCamera()
     LogWarn(LogRenderer, "BeginCamera: Not implemented yet (M2.1)");
+}
+
+void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
+{
+    LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - Start setting camera parameters");
+
+    // 验证UniformManager是否已初始化
+    if (!m_uniformManager)
+    {
+        LogError(LogRenderer, "BeginCamera(EnigmaCamera): UniformManager is not initialized");
+        ERROR_AND_DIE("UniformManager is not initialized")
+    }
+
+    // 验证渲染系统是否准备就绪
+    if (!IsReadyForRendering())
+    {
+        LogError(LogRenderer, "BeginCamera(EnigmaCamera): The rendering system is not ready");
+        ERROR_AND_DIE("The rendering system is not ready")
+    }
+
+    try
+    {
+        // ========================================================================
+        // 1. 从EnigmaCamera读取数据并设置到UniformManager
+        // ========================================================================
+
+        // 设置相机位置 (cameraPosition - CameraAndPlayerUniforms)
+        m_uniformManager->Uniform3f("cameraPosition", camera.GetPosition());
+
+        // 设置相机相关矩阵 (MatricesUniforms)
+        // 数据流：EnigmaCamera → UniformManager → GPU
+
+        // GBuffer相关矩阵（延迟渲染主Pass）
+        Mat44 worldToCamera        = camera.GetWorldToCameraTransform();
+        Mat44 projectionMatrix     = camera.GetProjectionMatrix();
+        Mat44 viewProjectionMatrix = camera.GetViewProjectionMatrix();
+
+        // 设置GBuffer模型视图矩阵
+        m_uniformManager->UniformMat4("gbufferModelView", worldToCamera);
+
+        // 设置GBuffer投影矩阵
+        m_uniformManager->UniformMat4("gbufferProjection", projectionMatrix);
+
+        // 设置GBuffer投影逆矩阵
+        m_uniformManager->UniformMat4("gbufferProjectionInverse",
+                                      projectionMatrix.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+
+        // 设置GBuffer模型视图逆矩阵
+        m_uniformManager->UniformMat4("gbufferModelViewInverse",
+                                      worldToCamera.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+
+        // 设置当前模型视图矩阵（通用）
+        m_uniformManager->UniformMat4("modelViewMatrix", worldToCamera);
+
+        // 设置当前投影矩阵（通用）
+        m_uniformManager->UniformMat4("projectionMatrix", projectionMatrix);
+
+        // 设置当前投影逆矩阵（通用）
+        m_uniformManager->UniformMat4("projectionMatrixInverse",
+                                      projectionMatrix.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+
+        // 设置当前模型视图逆矩阵（通用）
+        m_uniformManager->UniformMat4("modelViewMatrixInverse",
+                                      worldToCamera.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+
+        // Shadow管理由Game侧负责，引擎侧只提供接口
+        // 理由：不是每个场景都需要shadow，且光照类型多样（sun light, point light, spot light等）
+        //
+        // 游戏侧使用方式：
+        // if (sceneHasSunLight) {
+        //     auto shadowMatrices = CalculateSunLightShadows(camera);
+        //     renderer->SetShadowMatrices(shadowMatrices.modelView, shadowMatrices.projection);
+        // } else {
+        //     renderer->ClearShadowMatrices();
+        // }
+
+
+        // ========================================================================
+        // 2. 设置视口（如果需要）
+        // ========================================================================
+
+        // TODO: 设置视口 - 需要根据EnigmaCamera的viewport设置
+        // 可能需要调用 D3D12RenderSystem::SetViewport() 或类似API
+
+        // ========================================================================
+        // 3. 上传数据到GPU
+        // ========================================================================
+
+        // 调用UniformManager的同步方法，将所有修改的数据上传到GPU
+        bool uploadSuccess = m_uniformManager->SyncToGPU();
+
+        if (!uploadSuccess)
+        {
+            LogError(LogRenderer, "BeginCamera(EnigmaCamera): Uniform数据同步到GPU失败");
+            return;
+        }
+
+        LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - 相机参数设置完成");
+        LogInfo(LogRenderer, "  - 相机位置: ({}, {}, {})",
+                camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
+        LogInfo(LogRenderer, "  - 相机模式: {}",
+                camera.IsPerspective() ? "透视投影" : "正交投影");
+
+        // TODO: 添加更多调试信息（如FOV、近平面、远平面等）
+        if (camera.IsPerspective())
+        {
+            LogInfo(LogRenderer, "  - FOV: {}°, 宽高比: {}",
+                    camera.GetPerspectiveFOV(), camera.GetPerspectiveAspect());
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "BeginCamera(EnigmaCamera): 异常 - {}", e.what());
+    }
 }
 
 void RendererSubsystem::EndCamera()
@@ -952,11 +1265,18 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
 
 void RendererSubsystem::DrawFullscreenQuad()
 {
-    // TODO (M2.3): 实现全屏四边形绘制
-    // 1. 创建或使用缓存的全屏四边形VertexBuffer
-    // 2. 绑定并绘制（6个顶点，2个三角形）
-    // 教学要点：常用于后处理Pass
-    LogWarn(LogRenderer, "DrawFullscreenQuad: Not implemented yet (M2.3)");
+    // M6.3: 全屏三角形技术（3个顶点覆盖整个屏幕）
+    // 教学要点：比四边形更高效（3个顶点 vs 6个顶点），业界标准做法
+    // VB已在Startup()中预创建，避免首帧卡顿
+
+    if (!m_fullscreenTriangleVB)
+    {
+        LogError(LogRenderer, "DrawFullscreenQuad: VB not initialized (call Startup first)");
+        return;
+    }
+
+    SetVertexBuffer(m_fullscreenTriangleVB.get());
+    Draw(3);
 }
 
 void RendererSubsystem::SetBlendMode(BlendMode mode)
@@ -977,4 +1297,168 @@ void RendererSubsystem::SetDepthMode(DepthMode mode)
     // 2. 在Milestone 3.0 PSO系统实现后启用
     // 教学要点：DirectX 12的深度状态是PSO的一部分，不能动态修改
     LogWarn(LogRenderer, "SetDepthMode: Not implemented yet (M2.4, requires PSO system)");
+}
+
+// ============================================================================
+// Milestone 4: 深度缓冲管理实现
+// ============================================================================
+
+void RendererSubsystem::SwitchDepthBuffer(int newActiveIndex)
+{
+    // 验证DepthTextureManager已初始化
+    if (!m_depthTextureManager)
+    {
+        LogError(LogRenderer, "SwitchDepthBuffer: DepthTextureManager not initialized");
+        return;
+    }
+
+    // 委托DepthTextureManager执行切换
+    try
+    {
+        m_depthTextureManager->SwitchDepthBuffer(newActiveIndex);
+
+        const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
+        LogInfo(LogRenderer, "Switched active depth buffer to {} (index {})",
+                depthNames[newActiveIndex], newActiveIndex);
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "SwitchDepthBuffer failed: {}", e.what());
+    }
+}
+
+void RendererSubsystem::CopyDepthBuffer(int srcIndex, int dstIndex)
+{
+    // 验证DepthTextureManager已初始化
+    if (!m_depthTextureManager)
+    {
+        LogError(LogRenderer, "CopyDepthBuffer: DepthTextureManager not initialized");
+        return;
+    }
+
+    // 委托DepthTextureManager执行复制（内部会获取CommandList）
+    try
+    {
+        m_depthTextureManager->CopyDepthBuffer(srcIndex, dstIndex);
+
+        const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
+        LogInfo(LogRenderer, "Copied depth buffer {} -> {}",
+                depthNames[srcIndex], depthNames[dstIndex]);
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "CopyDepthBuffer failed: {}", e.what());
+    }
+}
+
+int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
+{
+    // 验证DepthTextureManager已初始化
+    if (!m_depthTextureManager)
+    {
+        LogWarn(LogRenderer, "GetActiveDepthBufferIndex: DepthTextureManager not initialized, returning 0");
+        return 0; // 返回默认值
+    }
+
+    // 委托DepthTextureManager查询
+    return m_depthTextureManager->GetActiveDepthBufferIndex();
+}
+
+// ============================================================================
+// Phase 3: 自定义材质纹理上传 API 实现
+// ============================================================================
+
+void RendererSubsystem::UploadCustomTexture(uint8_t slotIndex, const std::shared_ptr<D12Texture>& texture)
+{
+    // 参数验证
+    if (slotIndex >= 16)
+    {
+        LogError(LogRenderer, "UploadCustomTexture: Slot index {} out of range [0-15]", slotIndex);
+        return;
+    }
+
+    if (!texture)
+    {
+        LogError(LogRenderer, "UploadCustomTexture: Texture pointer is null for slot {}", slotIndex);
+        return;
+    }
+
+    // 获取纹理的 Bindless 索引
+    uint32_t bindlessIndex = texture->GetBindlessIndex();
+    if (bindlessIndex == BindlessIndexAllocator::INVALID_INDEX)
+    {
+        LogError(LogRenderer,
+                 "UploadCustomTexture: Texture has invalid Bindless index for slot {}",
+                 slotIndex);
+        return;
+    }
+
+    // 委托 UniformManager 更新槽位
+    if (!m_uniformManager)
+    {
+        LogError(LogRenderer, "UploadCustomTexture: UniformManager not initialized");
+        return;
+    }
+
+    m_uniformManager->UpdateCustomImageSlot(slotIndex, bindlessIndex);
+
+    LogInfo(LogRenderer,
+            "UploadCustomTexture: Uploaded texture to slot {} (Bindless index: {})",
+            slotIndex, bindlessIndex);
+}
+
+void RendererSubsystem::UploadCustomTextures(const std::vector<std::pair<uint8_t, std::shared_ptr<D12Texture>>>& textures)
+{
+    if (textures.empty())
+    {
+        LogWarn(LogRenderer, "UploadCustomTextures: Empty texture list provided");
+        return;
+    }
+
+    LogInfo(LogRenderer, "UploadCustomTextures: Uploading {} textures", textures.size());
+
+    // 遍历并调用单个上传
+    for (const auto& [slotIndex, texture] : textures)
+    {
+        UploadCustomTexture(slotIndex, texture);
+    }
+
+    LogInfo(LogRenderer, "UploadCustomTextures: Batch upload completed");
+}
+
+void RendererSubsystem::ClearCustomTextureSlot(uint8_t slotIndex)
+{
+    // 参数验证
+    if (slotIndex >= 16)
+    {
+        LogError(LogRenderer, "ClearCustomTextureSlot: Slot index {} out of range [0-15]", slotIndex);
+        return;
+    }
+
+    // 委托 UniformManager 设置为无效索引
+    if (!m_uniformManager)
+    {
+        LogError(LogRenderer, "ClearCustomTextureSlot: UniformManager not initialized");
+        return;
+    }
+
+    m_uniformManager->UpdateCustomImageSlot(slotIndex, BindlessIndexAllocator::INVALID_INDEX);
+
+    LogInfo(LogRenderer, "ClearCustomTextureSlot: Clearing slot {}", slotIndex);
+}
+
+void RendererSubsystem::ResetCustomTextures()
+{
+    LogInfo(LogRenderer, "ResetCustomTextures: Resetting all 16 custom texture slots");
+
+    // 委托 UniformManager 重置所有槽位
+    if (!m_uniformManager)
+    {
+        LogError(LogRenderer, "ResetCustomTextures: UniformManager not initialized");
+        return;
+    }
+
+    m_uniformManager->ResetCustomImageSlots();
+
+    LogInfo(LogRenderer, "ResetCustomTextures: All custom texture slots reset");
 }

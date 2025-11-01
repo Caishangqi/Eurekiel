@@ -42,6 +42,7 @@ namespace enigma::graphic
     class ProgramSet;
     class D12VertexBuffer;
     class D12IndexBuffer;
+    class DepthTextureManager;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -310,6 +311,77 @@ namespace enigma::graphic
         // 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
 
         /**
+         * @brief 使用ShaderProgram并绑定RenderTarget（Mode A + Mode B）
+         * @param shaderProgram Shader程序指针
+         * @param rtOutputs RT输出索引列表（Mode A），为空时从DRAWBUFFERS读取
+         *
+         * @details
+         * M6.2核心API - 支持两种RT绑定模式：
+         * - Mode A: 参数指定RT输出 - UseProgram(program, {0,1,2,3})
+         * - Mode B: 显式绑定 - BindRenderTargets() + UseProgram(program)
+         *
+         * 实现逻辑：
+         * 1. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
+         * 2. 如果drawBuffers非空，调用RenderTargetBinder绑定RT
+         * 3. 调用ShaderProgram.Use()设置PSO和Root Signature
+         * 4. 调用RenderTargetBinder.FlushBindings()刷新RT绑定
+         *
+         * @code
+         * // Mode A示例：参数指定RT输出（适合简单场景）
+         * renderer->UseProgram(gbuffersProgram, {0, 1, 2, 3}); // 绑定colortex0-3
+         * renderer->DrawScene();
+         *
+         * // Mode B示例：显式绑定（适合复杂场景）
+         * renderer->BindRenderTargets({RTType::ColorTex, RTType::ColorTex}, {0, 1});
+         * renderer->UseProgram(gbuffersProgram); // 自动从DRAWBUFFERS读取
+         * renderer->DrawScene();
+         *
+         * // Flip示例：历史帧访问（TAA、Motion Blur）
+         * renderer->UseProgram(compositeProgram, {0}); // 写入colortex0
+         * renderer->DrawFullscreenQuad();
+         * renderer->FlipRenderTarget(0); // 翻转colortex0，下一帧读取历史数据
+         * @endcode
+         *
+         * 教学要点：
+         * - 理解DirectX 12的PSO（Pipeline State Object）是不可变的
+         * - 学习动态OMSetRenderTargets()的标准做法
+         * - 掌握Iris DRAWBUFFERS指令的解析和应用
+         */
+        void UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs = {});
+
+        /**
+         * @brief 使用ShaderProgram（ProgramId重载版本）
+         * @param programId Shader程序ID（从ShaderPack获取）
+         * @param rtOutputs RT输出索引列表（Mode A），为空时从DRAWBUFFERS读取
+         * 
+         * @details
+         * 便捷重载版本，通过ShaderPackManager自动获取ShaderProgram指针
+         * 内部调用UseProgram(ShaderProgram*, rtOutputs)
+         */
+        void UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs = {});
+
+        /**
+         * @brief 翻转指定RenderTarget的Main/Alt状态
+         * @param rtIndex RenderTarget索引 [0, activeColorTexCount)
+         *
+         * @details
+         * M6.2.3 - RenderTarget翻转API
+         *
+         * 业务逻辑：
+         * - 当前帧：读Main写Alt → Flip() → 下一帧：读Alt写Main
+         * - 实现历史帧数据访问（TAA、Motion Blur等技术需要）
+         *
+         * 实现：
+         * - 直接调用RenderTargetBinder->GetRenderTargetManager()->FlipRenderTarget(rtIndex)
+         * - 边界检查由RenderTargetManager内部处理
+         *
+         * 教学要点：
+         * - 理解双缓冲Ping-Pong机制
+         * - 学习历史帧数据在时序算法中的应用
+         */
+        void FlipRenderTarget(int rtIndex);
+
+        /**
          * @brief 开始Camera渲染
          * @param camera 要使用的相机
          *
@@ -319,6 +391,18 @@ namespace enigma::graphic
          * - 对应Iris的setCamera()
          */
         void BeginCamera(const class Camera& camera);
+
+        /**
+         * @brief 开始Camera渲染 - EnigmaCamera重载版本
+         * @param camera 要使用的EnigmaCamera
+         *
+         * 教学要点：
+         * - 从EnigmaCamera读取数据并设置到UniformManager
+         * - 数据流：EnigmaCamera → RendererSubsystem::BeginCamera → UniformManager → GPU
+         * - 调用UploadDirtyBuffersToGPU()确保数据上传到GPU
+         * - 设置视口等渲染状态
+         */
+        void BeginCamera(const class EnigmaCamera& camera);
 
         /**
          * @brief 结束Camera渲染
@@ -488,6 +572,70 @@ namespace enigma::graphic
         {
             return m_renderTargetManager.get();
         }
+
+        // ==================== Milestone 4: 深度缓冲管理 ====================
+
+        /**
+         * @brief 切换活动深度缓冲（depthtex0 ↔ depthtex1 ↔ depthtex2）
+         * @param newActiveIndex 新的活动深度缓冲索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 支持动态切换当前使用的深度纹理
+         * - 更新DSV绑定到新的深度纹理
+         * - 保持Iris语义不变（depthtex0/1/2）
+         *
+         * **使用场景**:
+         * - 多阶段渲染时切换不同的深度缓冲
+         * - 支持灵活的深度纹理管理策略
+         *
+         * 教学要点:
+         * - 理解活动深度缓冲的概念
+         * - 掌握DirectX 12的DSV切换机制
+         * - 委托DepthTextureManager执行实际操作
+         */
+        void SwitchDepthBuffer(int newActiveIndex);
+
+        /**
+         * @brief 复制深度纹理（通用接口）
+         * @param srcIndex 源深度纹理索引 [0-2]
+         * @param dstIndex 目标深度纹理索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 提供公共的深度复制接口
+         * - 支持任意深度纹理之间的复制
+         * - 自动处理资源状态转换
+         *
+         * **使用场景**:
+         * - TERRAIN_TRANSLUCENT前：CopyDepthBuffer(0, 1) // depthtex0 → depthtex1
+         * - HAND_SOLID前：CopyDepthBuffer(0, 2)          // depthtex0 → depthtex2
+         * - 自定义复制：CopyDepthBuffer(1, 2)            // depthtex1 → depthtex2
+         *
+         * **业务逻辑**:
+         * 1. 参数验证（范围[0-2]，不能相同）
+         * 2. 转换资源状态：DEPTH_WRITE → COPY_SOURCE/DEST
+         * 3. 执行CopyResource()
+         * 4. 恢复资源状态：COPY_SOURCE/DEST → DEPTH_WRITE
+         *
+         * 教学要点:
+         * - 理解DirectX 12的资源状态转换
+         * - 掌握ResourceBarrier的正确使用
+         * - 委托DepthTextureManager执行实际操作
+         */
+        void CopyDepthBuffer(int srcIndex, int dstIndex);
+
+        /**
+         * @brief 查询当前激活的深度缓冲索引
+         * @return 当前活动的深度缓冲索引 [0-2]
+         *
+         * **Milestone 4 新增功能**:
+         * - 查询当前正在使用的深度纹理
+         * - 支持状态查询和调试
+         *
+         * 教学要点:
+         * - noexcept保证（简单getter）
+         * - 状态查询API的设计
+         */
+        int GetActiveDepthBufferIndex() const noexcept;
 
         // ==================== 配置和状态查询 ====================
 
@@ -725,6 +873,103 @@ namespace enigma::graphic
          */
         bool IsInitialized() const noexcept;
 
+        // ==================== 自定义材质纹理上传 API (Phase 3) ====================
+
+        /**
+         * @brief 上传自定义纹理到指定槽位（槽位范围：0-15）
+         * @param slotIndex 材质槽位索引（必须 < 16）
+         * @param texture 要上传的纹理（必须有有效的 Bindless 索引）
+         *
+         * **Phase 3 新增功能**:
+         * - 支持应用层上传自定义材质纹理
+         * - 更新 CustomImageIndexBuffer 的指定槽位
+         * - 纹理在 HLSL 中通过 customImage0-15 访问
+         *
+         * **使用场景**:
+         * - 自定义材质系统
+         * - 动态纹理加载
+         * - 用户自定义着色器效果
+         *
+         * **HLSL 访问示例**:
+         * @code
+         * Texture2D customImage0 : register(t0, space2);
+         * float4 color = customImage0.Sample(sampler0, uv);
+         * @endcode
+         *
+         * 教学要点:
+         * - 理解 Bindless 纹理系统
+         * - 掌握应用层与着色器的数据传递
+         * - 委托 UniformManager 执行实际更新
+         */
+        void UploadCustomTexture(uint8_t slotIndex, const std::shared_ptr<class D12Texture>& texture);
+
+        /**
+         * @brief 批量上传多个自定义纹理
+         * @param textures 槽位-纹理对的列表
+         *
+         * **Phase 3 新增功能**:
+         * - 一次性上传多个自定义纹理
+         * - 内部调用单个上传方法
+         * - 减少重复的参数验证开销
+         *
+         * **使用示例**:
+         * @code
+         * std::vector<std::pair<uint8_t, std::shared_ptr<D12Texture>>> textures = {
+         *     {0, myAlbedoTexture},
+         *     {1, myNormalTexture},
+         *     {2, myRoughnessTexture}
+         * };
+         * renderer->UploadCustomTextures(textures);
+         * @endcode
+         *
+         * 教学要点:
+         * - 批量操作的设计模式
+         * - std::pair 的使用
+         * - 便捷 API 的设计思路
+         */
+        void UploadCustomTextures(const std::vector<std::pair<uint8_t, std::shared_ptr<class D12Texture>>>& textures);
+
+        /**
+         * @brief 清空指定槽位的纹理
+         * @param slotIndex 要清空的槽位索引
+         *
+         * **Phase 3 新增功能**:
+         * - 将指定槽位重置为无效索引
+         * - 用于释放不再使用的纹理槽位
+         * - 内部使用 INVALID_INDEX (UINT32_MAX)
+         *
+         * **使用场景**:
+         * - 材质卸载
+         * - 槽位复用
+         * - 内存优化
+         *
+         * 教学要点:
+         * - 资源生命周期管理
+         * - 无效索引的使用
+         * - 防御性编程（参数验证）
+         */
+        void ClearCustomTextureSlot(uint8_t slotIndex);
+
+        /**
+         * @brief 重置所有自定义纹理槽位
+         *
+         * **Phase 3 新增功能**:
+         * - 一次性清空所有16个槽位
+         * - 用于场景切换或资源重载
+         * - 委托 UniformManager 执行批量重置
+         *
+         * **使用场景**:
+         * - 场景切换
+         * - 材质系统重置
+         * - 内存清理
+         *
+         * 教学要点:
+         * - 批量操作的重要性
+         * - 场景管理最佳实践
+         * - RAII 思想的应用
+         */
+        void ResetCustomTextures();
+
     private:
         // ==================== ShaderPack Fixed Paths (Internal Constants) ====================
         /**
@@ -867,6 +1112,28 @@ namespace enigma::graphic
 
         /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
         std::unique_ptr<RenderTargetManager> m_renderTargetManager;
+
+        /// 深度纹理管理器 - 管理3个深度纹理 (Iris depthtex0/1/2)
+        std::unique_ptr<DepthTextureManager> m_depthTextureManager;
+
+        /// Shadow Color管理器 - 管理8个shadowcolor RenderTarget (Iris兼容)
+        std::unique_ptr<class ShadowColorManager> m_shadowColorManager;
+
+        /// Shadow Target管理器 - 管理2个shadowtex纹理 (Iris兼容)
+        std::unique_ptr<class ShadowTargetManager> m_shadowTargetManager;
+
+        /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
+        std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;
+
+        // ==================== 全屏绘制资源 (M6.3) ====================
+
+        /// 全屏三角形VertexBuffer - 用于后处理Pass和Present操作
+        std::unique_ptr<D12VertexBuffer> m_fullscreenTriangleVB;
+
+        // ==================== Uniform管理组件 (Phase 3) ====================
+
+        /// Uniform管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
+        std::unique_ptr<class UniformManager> m_uniformManager;
 
         // ==================== 配置和状态 ====================
 
