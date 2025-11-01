@@ -10,14 +10,14 @@ namespace enigma::graphic
      * @brief BindlessRootSignature类 - RENDERTARGETS混合架构Root Signature
      *
      * 教学要点:
-     * 1. 44 bytes Root Constants - 11个uint32_t索引，支持细粒度更新
+     * 1. 52 bytes Root Constants - 13个uint32_t索引，支持细粒度更新
      * 2. SM6.6 Bindless架构：移除所有Descriptor Table，全局堆直接索引
      * 3. 全局共享Root Signature：所有PSO使用同一个Root Signature
      * 4. 极致性能：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
      *
      * 架构对比:
      * - True Bindless (8 bytes): uniformBufferIndex + renderTargetIndicesBase
-     * - RENDERTARGETS混合架构 (44 bytes): 11个独立索引，支持Iris兼容性
+     * - 扩展RENDERTARGETS架构 (52 bytes): 13个独立索引，支持Iris兼容性 + 自定义材质
      *
      * 对应HLSL (Common.hlsl):
      * ```hlsl
@@ -32,14 +32,16 @@ namespace enigma::graphic
      *     uint matricesBufferIndex;              // Offset 28
      *     uint renderTargetsBufferIndex;         // Offset 32 ⭐ 关键
      *     uint depthTextureBufferIndex;          // Offset 36
-     *     uint customImageBufferIndex;           // Offset 40
+     *     uint shadowBufferIndex;                // Offset 40
+     *     uint noiseTextureIndex;                // Offset 44
+     *     uint customImageBufferIndex;        // Offset 48 ⭐ 自定义材质
      * };
      * ```
      *
      * Root Signature布局:
      * ```
-     * [Root Constants 11 DWORDs = 44 bytes]
-     * - 11个StructuredBuffer/Texture索引
+     * [Root Constants 13 DWORDs = 52 bytes]
+     * - 13个StructuredBuffer/Texture索引
      * - 支持部分更新 (SetGraphicsRoot32BitConstant)
      * ```
      *
@@ -67,16 +69,16 @@ namespace enigma::graphic
          * @brief Root Constants配置常量
          *
          * 教学要点:
-         * 1. RENDERTARGETS混合架构：44 bytes (11个uint32_t)
+         * 1. 扩展RENDERTARGETS架构：52 bytes (13个uint32_t)
          * 2. DX12限制：最多64 DWORDs（256字节）
          * 3. 对应Common.hlsl中的RootConstants定义
          *
          * 设计决策:
-         * - 44 bytes = 11 DWORDs 足够支持所有Iris Buffer索引
+         * - 52 bytes = 13 DWORDs 支持所有Iris Buffer索引 + 自定义材质
          * - 每个索引4字节，可独立更新（细粒度控制）
-         * - 预留空间：64 DWORDs - 11 = 53 DWORDs 可用于未来扩展
+         * - 预留空间：64 DWORDs - 13 = 51 DWORDs 可用于未来扩展
          */
-        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 11; // 11 DWORDs = 44 bytes
+        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 13; // 13 DWORDs = 52 bytes
         static constexpr uint32_t ROOT_CONSTANTS_SIZE_BYTES       = ROOT_CONSTANTS_NUM_32BIT_VALUES * 4;
 
         /**
@@ -112,7 +114,9 @@ namespace enigma::graphic
         static constexpr uint32_t OFFSET_MATRICES_BUFFER_INDEX            = 7; // Offset 28
         static constexpr uint32_t OFFSET_RENDER_TARGETS_BUFFER_INDEX      = 8; // Offset 32 ⭐ 关键
         static constexpr uint32_t OFFSET_DEPTH_TEXTURE_BUFFER_INDEX       = 9; // Offset 36
-        static constexpr uint32_t OFFSET_CUSTOM_IMAGE_BUFFER_INDEX        = 10; // Offset 40
+        static constexpr uint32_t OFFSET_SHADOW_BUFFER_INDEX              = 10; // Offset 40
+        static constexpr uint32_t OFFSET_NOISE_TEXTURE_INDEX              = 11; // Offset 44
+        static constexpr uint32_t OFFSET_CUSTOM_IMAGE_BUFFER_INDEX        = 12; // Offset 48 ⭐ 自定义材质
 
     public:
         /**
@@ -162,7 +166,7 @@ namespace enigma::graphic
          * rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
          * rootParameter.Constants.ShaderRegister = 0;  // b0
          * rootParameter.Constants.RegisterSpace = 0;   // space0
-         * rootParameter.Constants.Num32BitValues = 11; // 11 DWORDs = 44 bytes
+         * rootParameter.Constants.Num32BitValues = 13; // 13 DWORDs = 52 bytes
          * rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
          * ```
          */
