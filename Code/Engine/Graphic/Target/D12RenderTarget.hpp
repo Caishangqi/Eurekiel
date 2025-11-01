@@ -8,6 +8,8 @@
 #include <dxgi1_6.h>
 #include <stdexcept>
 
+#include "RTTypes.hpp"
+
 namespace enigma::graphic
 {
     /**
@@ -174,6 +176,38 @@ namespace enigma::graphic
             {
                 m_enableMipmap = enable;
                 return *this;
+            }
+
+            /**
+             * @brief 从RTConfig创建Builder (静态工厂方法)
+             * @param config RTConfig配置（包含绝对尺寸）
+             * @return 配置好的Builder实例
+             *
+             * 教学要点:
+             * - 直接字段映射，无需转换
+             * - 零开销抽象: inline静态方法
+             * - 对应ShadowColorManager等使用RTConfig的场景
+             *
+             * 配置映射:
+             * - config.name → SetName()
+             * - config.format → SetFormat()
+             * - config.width, config.height → SetDimensions()
+             * - config.enableMipmap → EnableMipmap()
+             * - config.allowLinearFilter → SetLinearFilter()
+             * - config.sampleCount → SetSampleCount()
+             *
+             * 注意: RTConfig的enableFlipper, loadAction, clearValue字段
+             *       不属于Builder职责，由外部管理
+             */
+            static Builder FromConfig(const struct RTConfig& config)
+            {
+                return Builder()
+                       .SetName(config.name)
+                       .SetFormat(config.format)
+                       .SetDimensions(config.width, config.height)
+                       .EnableMipmap(config.enableMipmap)
+                       .SetLinearFilter(config.allowLinearFilter)
+                       .SetSampleCount(config.sampleCount);
             }
 
             /**
