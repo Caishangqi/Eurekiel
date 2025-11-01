@@ -4,6 +4,8 @@
 #include "Vec3.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 
+EulerAngles EulerAngles::ZERO = EulerAngles(0, 0, 0);
+
 EulerAngles::EulerAngles(float yawDegrees, float pitchDegrees, float rollDegrees) : m_yawDegrees(yawDegrees), m_pitchDegrees(pitchDegrees), m_rollDegrees(rollDegrees)
 {
 }

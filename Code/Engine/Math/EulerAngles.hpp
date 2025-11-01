@@ -5,6 +5,8 @@ struct Vec3;
 
 struct EulerAngles
 {
+    static EulerAngles ZERO;
+
     EulerAngles() = default;
     EulerAngles(float yawDegrees, float pitchDegrees, float rollDegrees);
     explicit EulerAngles(const Vec3& vec3);
