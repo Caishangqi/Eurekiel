@@ -31,11 +31,11 @@ namespace enigma::graphic
           , m_name(createInfo.name)
           , m_width(createInfo.width)
           , m_height(createInfo.height)
-          , m_depthFormat(GetFormatFromDepthType(createInfo.depthType))
-          , m_depthType(createInfo.depthType)
+          , m_depthFormat(GetDXGIFormat(createInfo.depthFormat))
+          , m_format(createInfo.depthFormat)
           , m_clearDepth(createInfo.clearDepth)
           , m_clearStencil(createInfo.clearStencil)
-          , m_supportSampling(createInfo.depthType == DepthType::ShadowMap) // 只有阴影贴图支持采样
+          , m_supportSampling(createInfo.depthFormat == DepthFormat::D32_FLOAT) // D32_FLOAT 支持采样（对应旧 ShadowMap）
           , m_hasValidDSV(false)
           , m_hasValidSRV(false)
           , m_formattedDebugName() // 初始化格式化调试名称
@@ -58,8 +58,8 @@ namespace enigma::graphic
             return;
         }
 
-        // 3. 如果是阴影贴图，创建SRV - 对应Iris中可采样深度纹理
-        if (m_depthType == DepthType::ShadowMap)
+        // 3. 如果支持采样（D32_FLOAT格式），创建SRV - 对应Iris中可采样深度纹理
+        if (m_supportSampling)
         {
             CreateShaderResourceView();
         }
@@ -100,7 +100,7 @@ namespace enigma::graphic
           , m_width(other.m_width)
           , m_height(other.m_height)
           , m_depthFormat(other.m_depthFormat)
-          , m_depthType(other.m_depthType)
+          , m_format(other.m_format)
           , m_clearDepth(other.m_clearDepth)
           , m_clearStencil(other.m_clearStencil)
           , m_supportSampling(other.m_supportSampling)
@@ -139,7 +139,7 @@ namespace enigma::graphic
             m_width              = other.m_width;
             m_height             = other.m_height;
             m_depthFormat        = other.m_depthFormat;
-            m_depthType          = other.m_depthType;
+            m_format             = other.m_format;
             m_clearDepth         = other.m_clearDepth;
             m_clearStencil       = other.m_clearStencil;
             m_supportSampling    = other.m_supportSampling;
@@ -313,7 +313,7 @@ namespace enigma::graphic
 
         // DirectX 12 API: ID3D12GraphicsCommandList::ClearDepthStencilView()
         D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH;
-        if (m_depthType == DepthType::DepthStencil)
+        if (m_format == DepthFormat::D24_UNORM_S8_UINT) // 只有D24格式支持模板
         {
             clearFlags |= D3D12_CLEAR_FLAG_STENCIL;
         }
@@ -396,16 +396,16 @@ namespace enigma::graphic
             m_formattedDebugName += std::to_string(m_width) + "x" + std::to_string(m_height);
 
             // 添加深度格式信息
-            switch (m_depthType)
+            switch (m_format)
             {
-            case DepthType::DepthOnly:
-                m_formattedDebugName += ", D32F";
+            case DepthFormat::D32_FLOAT:
+                m_formattedDebugName += m_supportSampling ? ", D32F-Shadow" : ", D32F";
                 break;
-            case DepthType::DepthStencil:
+            case DepthFormat::D24_UNORM_S8_UINT:
                 m_formattedDebugName += ", D24S8";
                 break;
-            case DepthType::ShadowMap:
-                m_formattedDebugName += ", D32F-Shadow";
+            case DepthFormat::D16_UNORM:
+                m_formattedDebugName += ", D16";
                 break;
             default:
                 m_formattedDebugName += ", UnknownDepth";
@@ -434,18 +434,18 @@ namespace enigma::graphic
         info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height) + "\n";
         info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
 
-        // 深度类型信息
-        info += "  Depth Type: ";
-        switch (m_depthType)
+        // 深度格式信息
+        info += "  Depth Format: ";
+        switch (m_format)
         {
-        case DepthType::DepthOnly:
-            info += "32-bit Float Depth (D32_FLOAT)\n";
+        case DepthFormat::D32_FLOAT:
+            info += m_supportSampling ? "32-bit Float Depth (D32_FLOAT) - Shadow Map Support\n" : "32-bit Float Depth (D32_FLOAT)\n";
             break;
-        case DepthType::DepthStencil:
+        case DepthFormat::D24_UNORM_S8_UINT:
             info += "24-bit Depth + 8-bit Stencil (D24_UNORM_S8_UINT)\n";
             break;
-        case DepthType::ShadowMap:
-            info += "32-bit Float Shadow Map (D32_FLOAT)\n";
+        case DepthFormat::D16_UNORM:
+            info += "16-bit Depth (D16_UNORM)\n";
             break;
         default:
             info += "Unknown Depth Format\n";
@@ -508,19 +508,23 @@ namespace enigma::graphic
     // ==================== 静态辅助方法 ====================
 
     /**
-     * 将深度类型转换为DXGI格式
+     * 将深度格式转换为DXGI格式
+     *
+     * 注意: 方法从 GetFormatFromDepthType 重命名为 GetDXGIFormat
+     *       参数从 DepthType 改为 DepthFormat
      */
-    DXGI_FORMAT D12DepthTexture::GetFormatFromDepthType(DepthType depthType)
+    DXGI_FORMAT D12DepthTexture::GetDXGIFormat(DepthFormat format)
     {
-        switch (depthType)
+        switch (format)
         {
-        case DepthType::DepthOnly:
-        case DepthType::ShadowMap:
-            return DXGI_FORMAT_D32_FLOAT; // 32位浮点深度，高精度
-        case DepthType::DepthStencil:
-            return DXGI_FORMAT_D24_UNORM_S8_UINT; // 24位深度 + 8位模板，标准配置
+        case DepthFormat::D32_FLOAT:
+            return DXGI_FORMAT_D32_FLOAT; // 32位浮点深度，高精度（对应旧 DepthOnly 和 ShadowMap）
+        case DepthFormat::D24_UNORM_S8_UINT:
+            return DXGI_FORMAT_D24_UNORM_S8_UINT; // 24位深度 + 8位模板，标准配置（对应旧 DepthStencil）
+        case DepthFormat::D16_UNORM:
+            return DXGI_FORMAT_D16_UNORM; // 16位深度，性能优化
         default:
-            return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            return DXGI_FORMAT_D24_UNORM_S8_UINT; // 默认值
         }
     }
 
@@ -579,9 +583,9 @@ namespace enigma::graphic
 
         // 设置资源标志
         resourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL; // 允许作为深度模板
-        if (m_depthType == DepthType::ShadowMap)
+        if (m_supportSampling)
         {
-            // 阴影贴图需要支持着色器采样，不能设置DENY_SHADER_RESOURCE
+            // 支持采样的深度纹理需要着色器资源访问，不设置DENY_SHADER_RESOURCE
             // resourceDesc.Flags |= 额外标志；
         }
 
@@ -663,7 +667,7 @@ namespace enigma::graphic
      */
     bool D12DepthTexture::CreateShaderResourceView()
     {
-        if (m_depthType != DepthType::ShadowMap)
+        if (!m_supportSampling)
         {
             return true; // 不需要SRV
         }
