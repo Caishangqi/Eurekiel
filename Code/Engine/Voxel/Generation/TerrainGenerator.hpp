@@ -59,16 +59,16 @@ namespace enigma::voxel
          *
          * @param chunk The chunk to generate terrain for
          * @param chunkX The chunk's X coordinate in world chunk space
-         * @param chunkZ The chunk's Z coordinate in world chunk space
+         * @param chunkY The chunk's Y coordinate in world chunk space
          * @param worldSeed The world generation seed for deterministic results
          */
-        [[maybe_unused]] virtual bool GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkZ, uint32_t worldSeed) = 0;
+        [[maybe_unused]] virtual bool GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY, uint32_t worldSeed) = 0;
 
-        [[maybe_unused]] virtual bool GenerateTerrainShape(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
+        [[maybe_unused]] virtual bool GenerateTerrainShape(Chunk* chunk, int32_t chunkX, int32_t chunkY) = 0;
 
-        [[maybe_unused]] virtual bool ApplySurfaceRules(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
+        [[maybe_unused]] virtual bool ApplySurfaceRules(Chunk* chunk, int32_t chunkX, int32_t chunkY) = 0;
 
-        [[maybe_unused]] virtual bool GenerateFeatures(Chunk* chunk, int32_t chunkX, int32_t chunkZ) = 0;
+        [[maybe_unused]] virtual bool GenerateFeatures(Chunk* chunk, int32_t chunkX, int32_t chunkY) = 0;
 
         /**
          * @brief Get the sea level for this generator
@@ -165,5 +165,25 @@ namespace enigma::voxel
          * Default implementation returns a generic description.
          */
         virtual std::string GetDescription() const { return "World terrain generator"; }
+
+        /**
+         * @brief Get ground height at specific world position using noise calculation
+         * 
+         * This method calculates the ground height at a given (x, y) position by sampling
+         * the terrain generation noise without accessing chunk data. It is used by feature
+         * generators (like tree placement) to determine surface height for placement.
+         * 
+         * Thread-safe: Does not access chunk data, only uses noise calculations.
+         * 
+         * @param globalX World X coordinate
+         * @param globalY World Y coordinate (Z in Minecraft terms)
+         * @return Z coordinate of the highest solid block, or sea level if no solid block found
+         */
+        virtual int GetGroundHeightAt(int globalX, int globalY) const
+        {
+            UNUSED(globalX);
+            UNUSED(globalY);
+            return GetSeaLevel(); // Default implementation returns sea level
+        }
     };
 }
