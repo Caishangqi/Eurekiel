@@ -243,6 +243,7 @@
         <ClCompile Include="Graphic\Camera\CameraCreateInfo.cpp"/>
         <ClCompile Include="Graphic\Camera\EnigmaCamera.cpp"/>
         <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp"/>
+        <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp"/>
         <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp"/>
         <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp"/>
@@ -262,6 +263,7 @@
         <ClCompile Include="Graphic\Resource\CompiledShader.cpp"/>
         <ClCompile Include="Graphic\Resource\Texture\D12Texture.cpp" />
         <ClCompile Include="Graphic\Shader\Compiler\DXCCompiler.cpp" />
+        <ClCompile Include="Graphic\Shader\PSO\PSOManager.cpp"/>
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\AbsolutePackPath.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\FileNode.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\IncludeGraph.cpp" />
@@ -402,6 +404,7 @@
         <ClCompile Include="Voxel\Chunk\GenerateChunkJob.cpp" />
         <ClCompile Include="Voxel\Chunk\LoadChunkJob.cpp" />
         <ClCompile Include="Voxel\Chunk\SaveChunkJob.cpp" />
+        <ClCompile Include="Voxel\Feature\TreeStamp.cpp"/>
         <ClCompile Include="Voxel\Function\BinaryOperationDensityFunction.cpp"/>
         <ClCompile Include="Voxel\Function\ConstantDensityFunction.cpp"/>
         <ClCompile Include="Voxel\Function\DensityFunction.cpp"/>
@@ -410,6 +413,7 @@
         <ClCompile Include="Voxel\Function\YClampedGradientDensityFunction.cpp"/>
         <ClCompile Include="Voxel\Generation\TerrainGenerator.cpp"/>
         <ClCompile Include="Voxel\Generation\TerrainShaper.cpp"/>
+        <ClCompile Include="Voxel\Generation\TreeGenerator.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\FractalNoiseGenerator.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\NoiseGenerator.cpp"/>
         <ClCompile Include="Voxel\NoiseGenerator\NoiseRouter.cpp"/>
@@ -688,12 +692,14 @@
         <ClInclude Include="Core\ImGui\RendererImGuiContext.hpp"/>
         <ClInclude Include="Graphic\Camera\CameraCreateInfo.hpp"/>
         <ClInclude Include="Graphic\Camera\EnigmaCamera.hpp"/>
+        <ClInclude Include="Graphic\Core\EnigmaGraphicCommon.hpp"/>
         <ClInclude Include="Graphic\Core\Pipeline\ProgramArrayId.hpp"/>
         <ClInclude Include="Graphic\Core\RenderState.hpp"/>
         <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp"/>
         <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp"/>
         <ClInclude Include="Graphic\Resource\Buffer\D12IndexBuffer.hpp"/>
         <ClInclude Include="Graphic\Resource\Buffer\D12VertexBuffer.hpp"/>
+        <ClInclude Include="Graphic\Shader\PSO\PSOManager.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\CustomImageIndexBuffer.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\ShadowColorIndexBuffer.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp"/>
@@ -707,12 +713,14 @@
         <ClInclude Include="Voxel\Biome\BiomeSource.hpp"/>
         <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp"/>
         <ClInclude Include="Voxel\Climate\Climate.hpp"/>
+        <ClInclude Include="Voxel\Feature\TreeStamp.hpp"/>
         <ClInclude Include="Voxel\Function\BinaryOperationDensityFunction.hpp"/>
         <ClInclude Include="Voxel\Function\ConstantDensityFunction.hpp"/>
         <ClInclude Include="Voxel\Function\DensityFunction.hpp"/>
         <ClInclude Include="Voxel\Function\NoiseDensityFunction.hpp"/>
         <ClInclude Include="Voxel\Function\SplineDensityFunction.hpp"/>
         <ClInclude Include="Voxel\Function\YClampedGradientDensityFunction.hpp"/>
+        <ClInclude Include="Voxel\Generation\TreeGenerator.hpp"/>
         <ClInclude Include="Voxel\NoiseGenerator\FractalNoiseGenerator.hpp"/>
         <ClInclude Include="Voxel\NoiseGenerator\NoiseGenerator.hpp"/>
         <ClInclude Include="Voxel\NoiseGenerator\NoiseRouter.hpp"/>

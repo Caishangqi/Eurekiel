@@ -9,6 +9,8 @@
 #include <chrono>
 #include <ctime>
 
+#include "Engine/Voxel/Chunk/ChunkManager.hpp"
+
 namespace enigma::voxel
 {
     using namespace enigma::core;

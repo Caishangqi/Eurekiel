@@ -19,7 +19,6 @@
 #include <vector>
 #include <deque>
 #include <atomic>
-DECLARE_LOG_CATEGORY_EXTERN(LogWorld)
 
 namespace enigma::voxel
 {
@@ -107,9 +106,6 @@ namespace enigma::voxel
         // Called automatically in Update() loop on main thread
         void ProcessCompletedChunkTasks();
 
-        /// Development Only Feature
-        [[maybe_unused]] bool RegenWorld() noexcept;
-
     private:
         //-------------------------------------------------------------------------------------------
         // Phase 3: Async Task Management Methods
@@ -164,7 +160,7 @@ namespace enigma::voxel
         uint64_t                      m_worldSeed = 0; // World generation seed
 
         // Player position and chunk management
-        Vec3    m_playerPosition{0.0f, 0.0f, 128.0f}; // Current player position
+        Vec3    m_playerPosition{0.0f, 0.0f, 256.0f}; // Current player position
         int32_t m_chunkActivationRange = 16; // Activation range in chunks (from settings.yml)
 
         // World generation
@@ -209,8 +205,8 @@ namespace enigma::voxel
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading
         int m_maxGenerateJobs  = 1024; // Allow many generation jobs (CPU-bound, parallelizable)
-        int m_maxLoadJobs      = 64; // Increased for ESFS format (no file lock contention, SSD-friendly)
-        int m_maxSaveJobs      = 16; // Increased for better save throughput (lower priority than load)
+        int m_maxLoadJobs      = 512; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs      = 512; // Increased for better save throughput (lower priority than load)
         int m_maxMeshBuildJobs = 1024; // Async mesh building jobs (CPU-bound, player interaction needs fast response)
     };
 }

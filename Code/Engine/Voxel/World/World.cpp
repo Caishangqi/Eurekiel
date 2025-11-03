@@ -9,14 +9,15 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 using namespace enigma::voxel;
-DEFINE_LOG_CATEGORY(LogWorld)
 
 World::~World()
 {
 }
 
-World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<TerrainGenerator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
+World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
 {
+    using namespace enigma::voxel;
+
     // Create and initialize ChunkManager (follow NeoForge mode)
     m_chunkManager = std::make_unique<ChunkManager>(this);
     m_chunkManager->Initialize();
@@ -24,14 +25,14 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<T
     // Initialize the ESF storage system
     if (!InitializeWorldStorage(WORLD_SAVE_PATH))
     {
-        LogError(LogWorld, "Failed to initialize world storage system");
+        LogError("world", "Failed to initialize world storage system");
         ERROR_AND_DIE("Failed to initialize world storage system")
     }
-    LogInfo(LogWorld, "World storage system initialized in: %s", WORLD_SAVE_PATH);
+    LogInfo("world", "World storage system initialized in: %s", WORLD_SAVE_PATH);
 
     // Set up the world generator
     SetWorldGenerator(std::move(generator));
-    LogInfo(LogWorld, "World fully initialized with name: %s", m_worldName.c_str());
+    LogInfo("world", "World fully initialized with name: %s", m_worldName.c_str());
 }
 
 BlockState* World::GetBlockState(const BlockPos& pos)
@@ -122,7 +123,7 @@ void World::GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY)
 {
     if (chunk && m_worldGenerator && !chunk->IsGenerated())
     {
-        LogDebug(LogWorld, "Generating content for chunk (%d, %d)", chunkX, chunkY);
+        LogDebug("world", "Generating content for chunk (%d, %d)", chunkX, chunkY);
         m_worldGenerator->GenerateChunk(chunk, chunkX, chunkY, static_cast<uint32_t>(m_worldSeed));
         chunk->SetGenerated(true);
     }
@@ -189,7 +190,7 @@ void World::UpdateNearbyChunks()
 
     if (activatedThisFrame > 0)
     {
-        LogDebug(LogWorld, "Activated %d chunks this frame", activatedThisFrame);
+        LogDebug("world", "Activated %d chunks this frame", activatedThisFrame);
     }
 
     // Deactivate distant chunks (still synchronous for now - safe on main thread)
@@ -299,7 +300,7 @@ void World::SetChunkActivationRange(int chunkDistance)
     {
         m_chunkManager->SetActivationRange(chunkDistance);
     }
-    LogInfo(LogWorld, "Set chunk activation range to %d chunks", chunkDistance);
+    LogInfo("world", "Set chunk activation range to %d chunks", chunkDistance);
 }
 
 void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator)
@@ -309,7 +310,7 @@ void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> g
     {
         // Initialize the generator with world seed
         m_worldGenerator->Initialize(static_cast<uint32_t>(m_worldSeed));
-        LogInfo(LogWorld, "World generator set and initialized for world '%s'", m_worldName.c_str());
+        LogInfo("world", "World generator set and initialized for world '%s'", m_worldName.c_str());
     }
 }
 
@@ -323,13 +324,13 @@ void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> g
 void World::SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer)
 {
     m_chunkSerializer = std::move(serializer);
-    LogInfo(LogWorld, "Chunk serializer configured for world '%s'", m_worldName.c_str());
+    LogInfo("world", "Chunk serializer configured for world '%s'", m_worldName.c_str());
 }
 
 void World::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
 {
     m_chunkStorage = std::move(storage);
-    LogInfo(LogWorld, "Chunk storage configured for world '%s'", m_worldName.c_str());
+    LogInfo("world", "Chunk storage configured for world '%s'", m_worldName.c_str());
 }
 
 /**
@@ -362,20 +363,20 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
 
         if (!m_worldManager->CreateWorld(worldInfo))
         {
-            LogError(LogWorld, "Failed to create world '%s' at path '%s'", m_worldName.c_str(), m_worldPath.c_str());
+            LogError("world", "Failed to create world '%s' at path '%s'", m_worldName.c_str(), m_worldPath.c_str());
             return false;
         }
 
-        LogInfo(LogWorld, "Created new world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
+        LogInfo("world", "Created new world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
     }
     else
     {
-        LogInfo(LogWorld, "Found existing world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
+        LogInfo("world", "Found existing world '%s' at '%s'", m_worldName.c_str(), m_worldPath.c_str());
     }
 
     // Load ChunkStorageConfig from YAML
     ChunkStorageConfig config = ChunkStorageConfig::LoadFromYaml("");
-    LogInfo(LogWorld, "Loaded chunk storage config: %s", config.ToString().c_str());
+    LogInfo("world", "Loaded chunk storage config: %s", config.ToString().c_str());
 
     // Create chunk storage based on config format selection
     if (config.storageFormat == ChunkStorageFormat::ESFS)
@@ -397,7 +398,7 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
         auto esfsStorageForManager = std::make_unique<ESFSChunkStorage>(m_worldPath, config, serializerPtr);
         m_chunkManager->SetChunkStorage(std::move(esfsStorageForManager));
 
-        LogInfo(LogWorld, "World storage initialized with ESFS format (RLE compression)");
+        LogInfo("world", "World storage initialized with ESFS format (RLE compression)");
     }
     else if (config.storageFormat == ChunkStorageFormat::ESF)
     {
@@ -412,15 +413,15 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
         auto esfStorageForManager = std::make_unique<ESFChunkStorage>(m_worldPath);
         m_chunkManager->SetChunkStorage(std::move(esfStorageForManager));
 
-        LogInfo(LogWorld, "World storage initialized with ESF format (region files)");
+        LogInfo("world", "World storage initialized with ESF format (region files)");
     }
     else
     {
-        LogError(LogWorld, "Unknown storage format in config");
+        LogError("world", "Unknown storage format in config");
         return false;
     }
 
-    LogInfo(LogWorld, "World storage initialized for '%s'", m_worldName.c_str());
+    LogInfo("world", "World storage initialized for '%s'", m_worldName.c_str());
     return true;
 }
 
@@ -428,7 +429,7 @@ bool World::SaveWorld()
 {
     if (!m_worldManager)
     {
-        LogError(LogWorld, "Cannot save world '%s' - world manager not initialized", m_worldName.c_str());
+        LogError("world", "Cannot save world '%s' - world manager not initialized", m_worldName.c_str());
         return false;
     }
 
@@ -442,7 +443,7 @@ bool World::SaveWorld()
 
     if (!m_worldManager->SaveWorldInfo(worldInfo))
     {
-        LogError(LogWorld, "Failed to save world info for '%s'", m_worldName.c_str());
+        LogError("world", "Failed to save world info for '%s'", m_worldName.c_str());
         return false;
     }
 
@@ -450,11 +451,11 @@ bool World::SaveWorld()
     if (m_chunkManager)
     {
         size_t savedChunks = m_chunkManager->SaveAllModifiedChunks();
-        LogInfo(LogWorld, "Saved %zu modified chunks for world '%s'", savedChunks, m_worldName.c_str());
+        LogInfo("world", "Saved %zu modified chunks for world '%s'", savedChunks, m_worldName.c_str());
         m_chunkManager->FlushStorage();
     }
 
-    LogInfo(LogWorld, "World '%s' saved successfully", m_worldName.c_str());
+    LogInfo("world", "World '%s' saved successfully", m_worldName.c_str());
     return true;
 }
 
@@ -462,7 +463,7 @@ bool World::LoadWorld()
 {
     if (!m_worldManager)
     {
-        LogError(LogWorld, "Cannot load world '%s' - world manager not initialized", m_worldName.c_str());
+        LogError("world", "Cannot load world '%s' - world manager not initialized", m_worldName.c_str());
         return false;
     }
 
@@ -470,7 +471,7 @@ bool World::LoadWorld()
     ESFWorldManager::WorldInfo worldInfo;
     if (!m_worldManager->LoadWorldInfo(worldInfo))
     {
-        LogError(LogWorld, "Failed to load world info for '%s'", m_worldName.c_str());
+        LogError("world", "Failed to load world info for '%s'", m_worldName.c_str());
         return false;
     }
 
@@ -480,7 +481,7 @@ bool World::LoadWorld()
     m_playerPosition.y = static_cast<float>(worldInfo.spawnY);
     m_playerPosition.z = static_cast<float>(worldInfo.spawnZ);
 
-    LogInfo(LogWorld, "World '%s' loaded successfully (seed: %llu, spawn: %d,%d,%d)",
+    LogInfo("world", "World '%s' loaded successfully (seed: %llu, spawn: %d,%d,%d)",
             m_worldName.c_str(), m_worldSeed, worldInfo.spawnX, worldInfo.spawnY, worldInfo.spawnZ);
     return true;
 }
@@ -494,13 +495,13 @@ void World::CloseWorld()
     if (m_chunkStorage)
     {
         m_chunkStorage->Close();
-        LogInfo(LogWorld, "Chunk storage closed for world '%s'", m_worldName.c_str());
+        LogInfo("world", "Chunk storage closed for world '%s'", m_worldName.c_str());
     }
 
     // Reset the manager
     m_worldManager.reset();
 
-    LogInfo(LogWorld, "World '%s' closed", m_worldName.c_str());
+    LogInfo("world", "World '%s' closed", m_worldName.c_str());
 }
 
 //-------------------------------------------------------------------------------------------
@@ -524,7 +525,7 @@ void World::ActivateChunk(IntVec2 chunkCoords)
         chunk                      = newChunk.get();
         loadedChunks[packedCoords] = std::move(newChunk);
 
-        LogDebug(LogWorld, "Created empty chunk (%d, %d) for async activation", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Created empty chunk (%d, %d) for async activation", chunkCoords.x, chunkCoords.y);
     }
 
     // Transition from Inactive to CheckingDisk
@@ -532,31 +533,31 @@ void World::ActivateChunk(IntVec2 chunkCoords)
     if (currentState != ChunkState::Inactive)
     {
         // Chunk already being processed or active
-        LogDebug(LogWorld, "Chunk (%d, %d) already in state %d, skipping activation",
+        LogDebug("world", "Chunk (%d, %d) already in state %d, skipping activation",
                  chunkCoords.x, chunkCoords.y, static_cast<int>(currentState));
         return;
     }
 
     if (!chunk->TrySetState(ChunkState::Inactive, ChunkState::CheckingDisk))
     {
-        LogWarn(LogWorld, "Failed to transition chunk (%d, %d) to CheckingDisk state", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "Failed to transition chunk (%d, %d) to CheckingDisk state", chunkCoords.x, chunkCoords.y);
         return;
     }
 
-    LogDebug(LogWorld, "Chunk (%d, %d) transitioned to CheckingDisk", chunkCoords.x, chunkCoords.y);
+    LogDebug("world", "Chunk (%d, %d) transitioned to CheckingDisk", chunkCoords.x, chunkCoords.y);
 
     // Check if chunk exists on disk
     bool chunkExistsOnDisk = false;
     if (m_chunkStorage)
     {
         chunkExistsOnDisk = m_chunkStorage->ChunkExists(chunkCoords.x, chunkCoords.y);
-        LogDebug(LogWorld, "Chunk (%d, %d) disk check: %s",
+        LogDebug("world", "Chunk (%d, %d) disk check: %s",
                  chunkCoords.x, chunkCoords.y,
                  chunkExistsOnDisk ? "EXISTS" : "NOT_FOUND");
     }
     else
     {
-        LogDebug(LogWorld, "Chunk (%d, %d) no storage configured, will generate", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Chunk (%d, %d) no storage configured, will generate", chunkCoords.x, chunkCoords.y);
     }
 
     if (chunkExistsOnDisk)
@@ -565,7 +566,7 @@ void World::ActivateChunk(IntVec2 chunkCoords)
         if (chunk->TrySetState(ChunkState::CheckingDisk, ChunkState::PendingLoad))
         {
             m_pendingLoadQueue.push_back(chunkCoords);
-            LogDebug(LogWorld, "Chunk (%d, %d) added to load queue (size: %zu)",
+            LogDebug("world", "Chunk (%d, %d) added to load queue (size: %zu)",
                      chunkCoords.x, chunkCoords.y, m_pendingLoadQueue.size());
         }
     }
@@ -575,7 +576,7 @@ void World::ActivateChunk(IntVec2 chunkCoords)
         if (chunk->TrySetState(ChunkState::CheckingDisk, ChunkState::PendingGenerate))
         {
             m_pendingGenerateQueue.push_back(chunkCoords);
-            LogDebug(LogWorld, "Chunk (%d, %d) added to generate queue (size: %zu)",
+            LogDebug("world", "Chunk (%d, %d) added to generate queue (size: %zu)",
                      chunkCoords.x, chunkCoords.y, m_pendingGenerateQueue.size());
         }
     }
@@ -604,7 +605,7 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
         if (chunk->TrySetState(ChunkState::Active, ChunkState::PendingSave))
         {
             m_pendingSaveQueue.push_back(chunkCoords);
-            LogDebug(LogWorld, "Chunk (%d, %d) added to save queue (size: %zu)",
+            LogDebug("world", "Chunk (%d, %d) added to save queue (size: %zu)",
                      chunkCoords.x, chunkCoords.y, m_pendingSaveQueue.size());
         }
     }
@@ -618,7 +619,7 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
                 // Perform immediate unload on main thread
                 chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
                 m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
-                LogDebug(LogWorld, "Unloaded clean chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+                LogDebug("world", "Unloaded clean chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
             }
         }
     }
@@ -628,13 +629,13 @@ void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
 {
     if (!g_theSchedule)
     {
-        LogError(LogWorld, "Cannot submit GenerateChunkJob - g_theSchedule not initialized");
+        LogError("world", "Cannot submit GenerateChunkJob - g_theSchedule not initialized");
         return;
     }
 
     if (!m_worldGenerator)
     {
-        LogError(LogWorld, "Cannot submit GenerateChunkJob - WorldGenerator not set");
+        LogError("world", "Cannot submit GenerateChunkJob - WorldGenerator not set");
         return;
     }
 
@@ -653,20 +654,20 @@ void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
     int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
     m_chunksWithPendingGenerate.insert(packedCoords);
 
-    LogDebug(LogWorld, "Submitted GenerateChunkJob for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+    LogDebug("world", "Submitted GenerateChunkJob for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
 }
 
 void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
 {
     if (!g_theSchedule)
     {
-        LogError(LogWorld, "Cannot submit LoadChunkJob - g_theSchedule not initialized");
+        LogError("world", "Cannot submit LoadChunkJob - g_theSchedule not initialized");
         return;
     }
 
     if (!m_chunkStorage)
     {
-        LogError(LogWorld, "Cannot submit LoadChunkJob - ChunkStorage not set");
+        LogError("world", "Cannot submit LoadChunkJob - ChunkStorage not set");
         return;
     }
 
@@ -682,7 +683,7 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingLoad.insert(packedCoords);
 
-        LogDebug(LogWorld, "Submitted LoadChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Submitted LoadChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -698,24 +699,24 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingLoad.insert(packedCoords);
 
-        LogDebug(LogWorld, "Submitted LoadChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Submitted LoadChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
-    LogError(LogWorld, "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
+    LogError("world", "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
 }
 
 void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
 {
     if (!g_theSchedule)
     {
-        LogError(LogWorld, "Cannot submit SaveChunkJob - g_theSchedule not initialized");
+        LogError("world", "Cannot submit SaveChunkJob - g_theSchedule not initialized");
         return;
     }
 
     if (!m_chunkStorage)
     {
-        LogError(LogWorld, "Cannot submit SaveChunkJob - ChunkStorage not set");
+        LogError("world", "Cannot submit SaveChunkJob - ChunkStorage not set");
         return;
     }
 
@@ -731,7 +732,7 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
         int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingSave.insert(packedCoords);
 
-        LogDebug(LogWorld, "Submitted SaveChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Submitted SaveChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -747,11 +748,11 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
         int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingSave.insert(packedCoords);
 
-        LogDebug(LogWorld, "Submitted SaveChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Submitted SaveChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
-    LogError(LogWorld, "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
+    LogError("world", "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
 }
 
 void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
@@ -761,7 +762,7 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
 
     // Phase 4: Decrement active generate job counter
     m_activeGenerateJobs--;
-    LogDebug(LogWorld, "Generate job completed for chunk (%d, %d) - Active: %d/%d",
+    LogDebug("world", "Generate job completed for chunk (%d, %d) - Active: %d/%d",
              chunkCoords.x, chunkCoords.y,
              m_activeGenerateJobs.load(), m_maxGenerateJobs);
 
@@ -772,14 +773,14 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
     Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
-        LogWarn(LogWorld, "Chunk (%d, %d) no longer exists after generation", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "Chunk (%d, %d) no longer exists after generation", chunkCoords.x, chunkCoords.y);
         return;
     }
 
     // Check if job was cancelled
     if (job->IsCancelled())
     {
-        LogDebug(LogWorld, "GenerateChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "GenerateChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
         // Transition back to Inactive
         chunk->TrySetState(ChunkState::Generating, ChunkState::Inactive);
         return;
@@ -795,11 +796,11 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
         // No need to mark dirty - async system handles mesh building
         SubmitBuildMeshJob(chunk, TaskPriority::Normal);
 
-        LogDebug(LogWorld, "Chunk (%d, %d) generation completed, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Chunk (%d, %d) generation completed, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
     }
     else
     {
-        LogWarn(LogWorld, "Failed to transition chunk (%d, %d) to Active after generation", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "Failed to transition chunk (%d, %d) to Active after generation", chunkCoords.x, chunkCoords.y);
     }
 }
 
@@ -810,7 +811,7 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
 
     // Phase 4: Decrement active load job counter
     m_activeLoadJobs--;
-    LogDebug(LogWorld, "Load job completed for chunk (%d, %d) - Active: %d/%d",
+    LogDebug("world", "Load job completed for chunk (%d, %d) - Active: %d/%d",
              chunkCoords.x, chunkCoords.y,
              m_activeLoadJobs.load(), m_maxLoadJobs);
 
@@ -821,14 +822,14 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
     Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
-        LogWarn(LogWorld, "Chunk (%d, %d) no longer exists after load attempt", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "Chunk (%d, %d) no longer exists after load attempt", chunkCoords.x, chunkCoords.y);
         return;
     }
 
     // Check if job was cancelled
     if (job->IsCancelled())
     {
-        LogDebug(LogWorld, "LoadChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "LoadChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
         chunk->TrySetState(ChunkState::Loading, ChunkState::Inactive);
         return;
     }
@@ -844,22 +845,22 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
             // Submit normal-priority async mesh build job for loaded chunk
             SubmitBuildMeshJob(chunk, TaskPriority::Normal);
 
-            LogDebug(LogWorld, "Chunk (%d, %d) loaded successfully, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
+            LogDebug("world", "Chunk (%d, %d) loaded successfully, now Active (async mesh build submitted)", chunkCoords.x, chunkCoords.y);
         }
         else
         {
-            LogWarn(LogWorld, "Failed to transition chunk (%d, %d) to Active after load", chunkCoords.x, chunkCoords.y);
+            LogWarn("world", "Failed to transition chunk (%d, %d) to Active after load", chunkCoords.x, chunkCoords.y);
         }
     }
     else
     {
         // Phase 4: Load failed, add to generate queue instead of immediate submission
-        LogDebug(LogWorld, "Chunk (%d, %d) load failed, adding to generate queue", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Chunk (%d, %d) load failed, adding to generate queue", chunkCoords.x, chunkCoords.y);
 
         if (chunk->TrySetState(ChunkState::Loading, ChunkState::PendingGenerate))
         {
             m_pendingGenerateQueue.push_back(chunkCoords);
-            LogDebug(LogWorld, "Chunk (%d, %d) added to generate queue after load failure (size: %zu)",
+            LogDebug("world", "Chunk (%d, %d) added to generate queue after load failure (size: %zu)",
                      chunkCoords.x, chunkCoords.y, m_pendingGenerateQueue.size());
         }
     }
@@ -872,7 +873,7 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
 
     // Phase 4: Decrement active save job counter
     m_activeSaveJobs--;
-    LogDebug(LogWorld, "Save job completed for chunk (%d, %d) - Active: %d/%d",
+    LogDebug("world", "Save job completed for chunk (%d, %d) - Active: %d/%d",
              chunkCoords.x, chunkCoords.y,
              m_activeSaveJobs.load(), m_maxSaveJobs);
 
@@ -883,21 +884,21 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
     Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
-        LogDebug(LogWorld, "Chunk (%d, %d) no longer exists after save", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "Chunk (%d, %d) no longer exists after save", chunkCoords.x, chunkCoords.y);
         return;
     }
 
     // Check if job was cancelled
     if (job->IsCancelled())
     {
-        LogDebug(LogWorld, "SaveChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "SaveChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
         // Don't transition state if cancelled
         return;
     }
 
     // Save completed successfully
     chunk->SetModified(false); // Clear modified flag
-    LogDebug(LogWorld, "Chunk (%d, %d) saved successfully", chunkCoords.x, chunkCoords.y);
+    LogDebug("world", "Chunk (%d, %d) saved successfully", chunkCoords.x, chunkCoords.y);
 
     // Transition from Saving to PendingUnload -> Unloading -> Inactive
     if (chunk->TrySetState(ChunkState::Saving, ChunkState::PendingUnload))
@@ -906,7 +907,7 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
         {
             chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
             m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
-            LogDebug(LogWorld, "Chunk (%d, %d) unloaded after save", chunkCoords.x, chunkCoords.y);
+            LogDebug("world", "Chunk (%d, %d) unloaded after save", chunkCoords.x, chunkCoords.y);
         }
     }
 }
@@ -941,7 +942,7 @@ void World::ProcessJobQueues()
         {
             SubmitGenerateChunkJob(chunkCoords, chunk);
             m_activeGenerateJobs++; // Increment active counter
-            LogDebug(LogWorld, "Submitted generate job for chunk (%d, %d) - Active: %d/%d",
+            LogDebug("world", "Submitted generate job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeGenerateJobs.load(), m_maxGenerateJobs);
         }
@@ -971,7 +972,7 @@ void World::ProcessJobQueues()
         {
             SubmitLoadChunkJob(chunkCoords, chunk);
             m_activeLoadJobs++; // Increment active counter
-            LogDebug(LogWorld, "Submitted load job for chunk (%d, %d) - Active: %d/%d",
+            LogDebug("world", "Submitted load job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeLoadJobs.load(), m_maxLoadJobs);
         }
@@ -1001,7 +1002,7 @@ void World::ProcessJobQueues()
         {
             SubmitSaveChunkJob(chunkCoords, chunk);
             m_activeSaveJobs++; // Increment active counter
-            LogDebug(LogWorld, "Submitted save job for chunk (%d, %d) - Active: %d/%d",
+            LogDebug("world", "Submitted save job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeSaveJobs.load(), m_maxSaveJobs);
         }
@@ -1045,7 +1046,7 @@ void World::RemoveDistantJobs()
     // Log cancellations (only if any were removed)
     if (removedGenerate > 0 || removedLoad > 0 || removedSave > 0)
     {
-        LogDebug(LogWorld, "Removed distant jobs: %zu generate, %zu load, %zu save",
+        LogDebug("world", "Removed distant jobs: %zu generate, %zu load, %zu save",
                  removedGenerate, removedLoad, removedSave);
     }
 }
@@ -1087,16 +1088,6 @@ void World::ProcessCompletedChunkTasks()
     }
 }
 
-bool World::RegenWorld() noexcept
-{
-    m_chunksWithPendingLoad.clear();
-    m_chunksWithPendingGenerate.clear();
-    m_chunksWithPendingSave.clear();
-
-    m_chunkManager->GetLoadedChunks().clear();
-    return true;
-}
-
 //-----------------------------------------------------------------------------------------------
 // SubmitBuildMeshJob: Submit async mesh building job to ScheduleSubsystem
 //-----------------------------------------------------------------------------------------------
@@ -1104,7 +1095,7 @@ void World::SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority)
 {
     if (!chunk)
     {
-        LogError(LogWorld, "SubmitBuildMeshJob called with null chunk");
+        LogError("world", "SubmitBuildMeshJob called with null chunk");
         return;
     }
 
@@ -1118,7 +1109,7 @@ void World::SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority)
         int currentFrame = g_theApp->GetFrameNumber();
         if (currentFrame != lastLoggedFrame)
         {
-            LogDebug(LogWorld, "Mesh build job limit reached (%d/%d), skipping new jobs this frame",
+            LogDebug("world", "Mesh build job limit reached (%d/%d), skipping new jobs this frame",
                      m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
             lastLoggedFrame = currentFrame;
         }*/
@@ -1128,7 +1119,7 @@ void World::SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority)
     // PERFORMANCE: Remove per-job debug logging (causes 60% of AddTask time due to console I/O)
     // Only log high-priority jobs (player interaction) for debugging
     // const char* priorityStr = (priority == TaskPriority::High) ? "High" : "Normal";
-    // LogDebug(LogWorld, "Submitting BuildMeshJob for chunk (%d, %d) priority=%s - Active: %d/%d",
+    // LogDebug("world", "Submitting BuildMeshJob for chunk (%d, %d) priority=%s - Active: %d/%d",
     //          chunkCoords.x, chunkCoords.y, priorityStr,
     //          m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
 
@@ -1152,7 +1143,7 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     m_activeMeshBuildJobs--;
 
     // PERFORMANCE: Remove per-job debug logging (causes frame drops during mesh rebuild storms)
-    // LogDebug(LogWorld, "Mesh build job completed for chunk (%d, %d) - Active: %d/%d",
+    // LogDebug("world", "Mesh build job completed for chunk (%d, %d) - Active: %d/%d",
     //          chunkCoords.x, chunkCoords.y,
     //          m_activeMeshBuildJobs.load(), m_maxMeshBuildJobs);
 
@@ -1160,14 +1151,14 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     Chunk* chunk = job->GetChunk();
     if (!chunk)
     {
-        LogWarn(LogWorld, "BuildMeshJob chunk pointer is null for (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "BuildMeshJob chunk pointer is null for (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
     // Double-check chunk still exists in manager
     if (chunk != m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y))
     {
-        LogWarn(LogWorld, "Chunk (%d, %d) no longer matches after mesh build", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "Chunk (%d, %d) no longer matches after mesh build", chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -1175,7 +1166,7 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     if (job->IsCancelled())
     {
         // PERFORMANCE: Only log cancelled jobs (rare event)
-        LogDebug(LogWorld, "BuildMeshJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
+        LogDebug("world", "BuildMeshJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -1183,7 +1174,7 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     std::unique_ptr<ChunkMesh> newMesh = job->TakeMesh();
     if (!newMesh)
     {
-        LogWarn(LogWorld, "BuildMeshJob produced null mesh for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+        LogWarn("world", "BuildMeshJob produced null mesh for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -1194,7 +1185,7 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     chunk->SetMesh(std::move(newMesh));
 
     // PERFORMANCE: Remove per-job vertex count logging (use debug panel instead)
-    // LogDebug(LogWorld, "Mesh compiled and set for chunk (%d, %d) vertices=%d",
+    // LogDebug("world", "Mesh compiled and set for chunk (%d, %d) vertices=%d",
     //          chunkCoords.x, chunkCoords.y,
     //          chunk->GetMesh() ? (int)chunk->GetMesh()->GetOpaqueVertexCount() + chunk->GetMesh()->GetTransparentVertexCount() : 0);
 }
