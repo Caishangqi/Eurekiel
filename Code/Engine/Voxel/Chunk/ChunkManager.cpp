@@ -1,4 +1,6 @@
 ﻿#include "ChunkManager.hpp"
+
+#include "ChunkStorageConfig.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/TextureAtlas.hpp"
 #include "Engine/Core/Engine.hpp"
@@ -7,6 +9,7 @@
 #include "Engine/Renderer/Texture.hpp" // Add explicit include for Texture class
 using namespace enigma::voxel;
 
+DEFINE_LOG_CATEGORY(LogChunk);
 
 void ChunkManager::Initialize()
 {
@@ -20,21 +23,21 @@ void ChunkManager::Initialize()
             m_cachedBlocksAtlasTexture = blocksAtlas->GetAtlasTexture();
             if (m_cachedBlocksAtlasTexture)
             {
-                core::LogInfo(LogChunk, "ChunkManager: Cached blocks atlas texture successfully");
+                LogInfo(LogChunk, "ChunkManager: Cached blocks atlas texture successfully");
             }
             else
             {
-                core::LogWarn(LogChunk, "ChunkManager: Blocks atlas texture is null, will render without texture");
+                LogWarn(LogChunk, "ChunkManager: Blocks atlas texture is null, will render without texture");
             }
         }
         else
         {
-            core::LogWarn(LogChunk, "ChunkManager: No 'blocks' atlas found");
+            LogWarn(LogChunk, "ChunkManager: No 'blocks' atlas found");
         }
     }
     else
     {
-        core::LogError(LogChunk, "ChunkManager: ResourceSubsystem not available during initialization");
+        LogError(LogChunk, "ChunkManager: ResourceSubsystem not available during initialization");
     }
 }
 
@@ -52,7 +55,7 @@ ChunkManager::~ChunkManager()
         size_t savedCount = SaveAllModifiedChunks();
         if (savedCount > 0)
         {
-            core::LogInfo(LogChunk, "ChunkManager: Saved %zu modified chunks during shutdown", savedCount);
+            LogInfo(LogChunk, "ChunkManager: Saved %zu modified chunks during shutdown", savedCount);
         }
         FlushStorage();
     }
@@ -134,9 +137,6 @@ void ChunkManager::Render(IRenderer* renderer)
             renderer->BindTexture(nullptr);
             loaded_chunk.second->DebugDraw(renderer);
         }
-        // Call the chunk's Render method which handles coordinate transformation
-        // Note: Texture binding is now handled by ChunkManager, so we can optimize Chunk::Render
-        renderer->BindTexture(m_cachedBlocksAtlasTexture);
         if (loaded_chunk.second)
             loaded_chunk.second->Render(renderer);
     }
@@ -161,11 +161,11 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
         {
             if (SaveChunkToDisk(chunk))
             {
-                core::LogDebug(LogChunk, "Saved modified chunk (%d, %d) to disk", chunkX, chunkY);
+                LogDebug(LogChunk, "Saved modified chunk (%d, %d) to disk", chunkX, chunkY);
             }
             else
             {
-                core::LogWarn(LogChunk, "Failed to save modified chunk (%d, %d)", chunkX, chunkY);
+                LogWarn(LogChunk, "Failed to save modified chunk (%d, %d)", chunkX, chunkY);
             }
         }
 
@@ -176,7 +176,7 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
             chunk->SetMesh(nullptr);
         }
 
-        core::LogInfo(LogChunk, "Unloading chunk: %d, %d", chunkX, chunkY);
+        LogInfo(LogChunk, "Unloading chunk: %d, %d", chunkX, chunkY);
         m_loadedChunks.erase(it);
     }
 }
@@ -196,8 +196,8 @@ void ChunkManager::SetActivationRange(int32_t chunkDistance)
 {
     m_activationRange   = chunkDistance;
     m_deactivationRange = chunkDistance + 2; // Add buffer for deactivation
-    core::LogInfo(LogChunk, "Set activation range to %d chunks, deactivation range to %d chunks",
-                  m_activationRange, m_deactivationRange);
+    LogInfo(LogChunk, "Set activation range to %d chunks, deactivation range to %d chunks",
+            m_activationRange, m_deactivationRange);
 }
 
 void ChunkManager::SetDeactivationRange(int32_t chunkDistance)
@@ -367,7 +367,7 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
 
     if (!chunksToUnload.empty())
     {
-        core::LogDebug(LogChunk, "Unloaded %zu distant chunks", chunksToUnload.size());
+        LogDebug(LogChunk, "Unloaded %zu distant chunks", chunksToUnload.size());
     }
 }
 
@@ -375,20 +375,20 @@ void ChunkManager::UnloadDistantChunks(const Vec3& playerPos, int32_t maxDistanc
 void ChunkManager::SetChunkSerializer(std::unique_ptr<IChunkSerializer> serializer)
 {
     m_chunkSerializer = std::move(serializer);
-    core::LogInfo(LogChunk, "ChunkManager: Chunk serializer configured");
+    LogInfo(LogChunk, "ChunkManager: Chunk serializer configured");
 }
 
 void ChunkManager::SetChunkStorage(std::unique_ptr<IChunkStorage> storage)
 {
     m_chunkStorage = std::move(storage);
-    core::LogInfo(LogChunk, "ChunkManager: Chunk storage configured");
+    LogInfo(LogChunk, "ChunkManager: Chunk storage configured");
 }
 
 bool ChunkManager::SaveChunkToDisk(const Chunk* chunk)
 {
     if (!chunk || !m_chunkStorage || !m_chunkSerializer)
     {
-        core::LogWarn(LogChunk, "SaveChunkToDisk: Storage or serializer not configured");
+        LogWarn(LogChunk, "SaveChunkToDisk: Storage or serializer not configured");
         return false;
     }
 
@@ -401,7 +401,7 @@ bool ChunkManager::SaveChunkToDisk(const Chunk* chunk)
     }
     catch (const std::exception& e)
     {
-        core::LogError(LogChunk, "SaveChunkToDisk failed: %s", e.what());
+        LogError(LogChunk, "SaveChunkToDisk failed: %s", e.what());
         return false;
     }
 }
@@ -410,7 +410,7 @@ std::unique_ptr<Chunk> ChunkManager::LoadChunkFromDisk(int32_t chunkX, int32_t c
 {
     if (!m_chunkStorage || !m_chunkSerializer)
     {
-        core::LogWarn(LogChunk, "LoadChunkFromDisk: Storage or serializer not configured");
+        LogWarn(LogChunk, "LoadChunkFromDisk: Storage or serializer not configured");
         return nullptr;
     }
 
@@ -424,18 +424,18 @@ std::unique_ptr<Chunk> ChunkManager::LoadChunkFromDisk(int32_t chunkX, int32_t c
         auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
         if (m_chunkStorage->LoadChunk(chunkX, chunkY, chunk.get()))
         {
-            core::LogDebug(LogChunk, "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
+            LogDebug(LogChunk, "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
             return chunk;
         }
         else
         {
-            core::LogWarn(LogChunk, "Failed to load chunk (%d, %d) from disk", chunkX, chunkY);
+            LogWarn(LogChunk, "Failed to load chunk (%d, %d) from disk", chunkX, chunkY);
             return nullptr;
         }
     }
     catch (const std::exception& e)
     {
-        core::LogError(LogChunk, "LoadChunkFromDisk failed: %s", e.what());
+        LogError(LogChunk, "LoadChunkFromDisk failed: %s", e.what());
         return nullptr;
     }
 }
@@ -458,18 +458,18 @@ size_t ChunkManager::SaveAllModifiedChunks()
                 savedCount++;
                 int32_t chunkX, chunkY;
                 UnpackCoordinates(packedId, chunkX, chunkY);
-                core::LogDebug(LogChunk, "Saved modified chunk (%d, %d)", chunkX, chunkY);
+                LogDebug(LogChunk, "Saved modified chunk (%d, %d)", chunkX, chunkY);
             }
         }
     }
 
     if (savedCount > 0)
     {
-        core::LogInfo(LogChunk, "Saved %zu modified chunks to disk", savedCount);
+        LogInfo(LogChunkSave, "Saved %zu modified chunks to disk", savedCount);
     }
     else
     {
-        core::LogInfo(LogChunk, "No modified chunks to save (all chunks are unmodified)");
+        LogInfo(LogChunk, "No modified chunks to save (all chunks are unmodified)");
     }
 
     return savedCount;
@@ -482,11 +482,11 @@ void ChunkManager::FlushStorage()
         try
         {
             m_chunkStorage->Flush();
-            core::LogDebug(LogChunk, "Storage flushed successfully");
+            LogDebug(LogChunk, "Storage flushed successfully");
         }
         catch (const std::exception& e)
         {
-            core::LogError(LogChunk, "Failed to flush storage: %s", e.what());
+            LogError(LogChunk, "Failed to flush storage: %s", e.what());
         }
     }
 }

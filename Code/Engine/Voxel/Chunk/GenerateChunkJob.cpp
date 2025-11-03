@@ -20,8 +20,8 @@ namespace enigma::voxel
         }
 
         // Perform terrain generation
-        GUARANTEE_OR_DIE(m_generator != nullptr, "GenerateChunkJob: Generator is null");
-        GUARANTEE_OR_DIE(m_chunk != nullptr, "GenerateChunkJob: Chunk is null");
+        GUARANTEE_OR_DIE(m_generator != nullptr, "GenerateChunkJob: Generator is null")
+        GUARANTEE_OR_DIE(m_chunk != nullptr, "GenerateChunkJob: Chunk is null")
 
         m_generator->GenerateChunk(m_chunk, m_chunkCoords.x, m_chunkCoords.y, m_worldSeed);
 

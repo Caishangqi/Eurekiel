@@ -8,28 +8,25 @@
 #include <memory>
 #include <atomic>
 
-#include "Engine/Core/LogCategory/LogCategory.hpp"
 #include "Engine/Math/AABB3.hpp"
 #include "Engine/Math/IntVec2.hpp"
-
-DECLARE_LOG_CATEGORY_EXTERN(LogChunk)
 
 namespace enigma::voxel
 {
     /**
-     * @brief Represents a 16x16x128 section of the voxel world
+     * @brief Represents a 16x16x256 section of the voxel world (Modified 2025-11-02: Increased from 128 to 256)
      *
      * ARCHITECTURE IMPLEMENTATION:
      *
      * CORE DATA STRUCTURE:
-     * - Standard Minecraft-style 16x16 horizontal, 128 blocks vertical
+     * - Standard Minecraft-style 16x16 horizontal, 256 blocks vertical (Modified 2025-11-02)
      * - Block storage: Flat array with bit-optimized indexing
      * - Coordinate system: Local chunk coordinates (0-15) and world coordinates
      *
      * CONSTANTS:
      * - static constexpr int32_t CHUNK_SIZE_X/Y = 16;  // Horizontal size
-     * - static constexpr int32_t CHUNK_SIZE_Z = 128;   // Vertical size
-     * - static constexpr int32_t TOTAL_BLOCKS = 16 * 16 * 128 = 32768
+     * - static constexpr int32_t CHUNK_SIZE_Z = 256;   // Vertical size (Modified 2025-11-02)
+     * - static constexpr int32_t TOTAL_BLOCKS = 16 * 16 * 256 = 65536 (Modified 2025-11-02)
      *
      * MEMBER VARIABLES:
      * - IntVec2 m_chunkCoords;                         // Chunk coordinates (X, Y)
@@ -76,11 +73,11 @@ namespace enigma::voxel
         // Chunk dimensions and bit operations for performance optimization (Assignment 02 specification)
         static constexpr int32_t CHUNK_BITS_X = 4; // 2^4 = 16
         static constexpr int32_t CHUNK_BITS_Y = 4; // 2^4 = 16
-        static constexpr int32_t CHUNK_BITS_Z = 7; // 2^7 = 128
+        static constexpr int32_t CHUNK_BITS_Z = 8; // 2^8 = 256 (Modified 2025-11-02: Increased world height from 128 to 256)
 
         static constexpr int32_t CHUNK_SIZE_X     = 1 << CHUNK_BITS_X; // 16
         static constexpr int32_t CHUNK_SIZE_Y     = 1 << CHUNK_BITS_Y; // 16
-        static constexpr int32_t CHUNK_SIZE_Z     = 1 << CHUNK_BITS_Z; // 128
+        static constexpr int32_t CHUNK_SIZE_Z     = 1 << CHUNK_BITS_Z; // 256 (Modified 2025-11-02)
         static constexpr int32_t CHUNK_MAX_X      = CHUNK_SIZE_X - 1;
         static constexpr int32_t CHUNK_MAX_Y      = CHUNK_SIZE_Y - 1;
         static constexpr int32_t CHUNK_MAX_Z      = CHUNK_SIZE_Z - 1;

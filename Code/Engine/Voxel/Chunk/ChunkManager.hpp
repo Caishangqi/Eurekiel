@@ -11,7 +11,10 @@
 #include <condition_variable>
 #include <vector>
 
+#include "Engine/Core/LogCategory/LogCategory.hpp"
 #include "Engine/Renderer/Texture.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogChunk)
 
 namespace enigma::voxel
 {

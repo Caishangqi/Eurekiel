@@ -13,7 +13,7 @@
 #include "Engine/Voxel/Builtin/DefaultBlock.hpp"
 
 using namespace enigma::voxel;
-DEFINE_LOG_CATEGORY(LogChunk)
+
 // Optimized bit-shift coordinate to index conversion
 // Formula: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
 inline size_t Chunk::CoordsToIndex(int32_t x, int32_t y, int32_t z)
@@ -32,7 +32,7 @@ inline void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& 
 
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
-    core::LogInfo(LogChunk, "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
+    core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
     m_blocks.reserve(BLOCKS_PER_CHUNK * sizeof(BlockState*));
 
     auto  airBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "air");
@@ -66,7 +66,7 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
     /*
     if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z)
     {
-        core::LogError(LogChunk, "SetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
+        core::LogError("chunk", "SetBlock coordinates out of range: (%d,%d,%d)", x, y, z);
         return;
     }
     */
@@ -77,7 +77,7 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
     /*
     if (index >= m_blocks.size())
     {
-        core::LogError(LogChunk, "SetBlock calculated index %zu out of range (size: %zu)", index, m_blocks.size());
+        core::LogError("chunk", "SetBlock calculated index %zu out of range (size: %zu)", index, m_blocks.size());
         return;
     }*/
     m_blocks[index] = state;
@@ -118,11 +118,11 @@ void Chunk::RebuildMesh()
         m_mesh    = std::move(newMesh);
         m_isDirty = false;
 
-        core::LogInfo(LogChunk, "Chunk mesh rebuilt using ChunkMeshBuilder");
+        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshBuilder");
     }
     else
     {
-        core::LogError(LogChunk, "ChunkMeshBuilder failed to create mesh");
+        core::LogError("chunk", "ChunkMeshBuilder failed to create mesh");
 
         // Fallback: create an empty mesh
         if (!m_mesh)
@@ -361,7 +361,7 @@ void Chunk::Render(IRenderer* renderer) const
     renderer->SetModelConstants(modelToWorldTransform, Rgba8::WHITE);
 
     // Set rendering state
-    renderer->SetBlendMode(BlendMode::OPAQUE);
+    //renderer->SetBlendMode(BlendMode::OPAQUE);
 
     // Note: Texture binding is now handled by ChunkManager to avoid per-chunk queries
     // ChunkManager binds the blocks atlas texture once for all chunks (NeoForge pattern)
