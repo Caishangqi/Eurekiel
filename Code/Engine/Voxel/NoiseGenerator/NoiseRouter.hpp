@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <memory>
 
 namespace enigma::voxel
@@ -41,13 +41,45 @@ namespace enigma::voxel
     class NoiseRouter
     {
     public:
+        // 构造函数 - Constructor
+        NoiseRouter();
+
+        // Builder模式setter方法 - Builder pattern setters
+        void SetFinalDensity(std::shared_ptr<DensityFunction> func);
+        void SetInitialDensityWithoutJaggedness(std::shared_ptr<DensityFunction> func);
+        void SetContinentalness(std::shared_ptr<DensityFunction> func);
+        void SetErosion(std::shared_ptr<DensityFunction> func);
+        void SetTemperature(std::shared_ptr<DensityFunction> func);
+        void SetHumidity(std::shared_ptr<DensityFunction> func);
+        void SetWeirdness(std::shared_ptr<DensityFunction> func);
+        void SetPeakAndValley(std::shared_ptr<DensityFunction> func);
+        void SetRidges(std::shared_ptr<DensityFunction> func);
+        void SetDepth(std::shared_ptr<DensityFunction> func);
+        void SetBarrierNoise(std::shared_ptr<DensityFunction> func);
+        void SetFluidLevelFloodedness(std::shared_ptr<DensityFunction> func);
+        void SetFluidLevelSpread(std::shared_ptr<DensityFunction> func);
+        void SetLavaNoise(std::shared_ptr<DensityFunction> func);
+        void SetOreVeinA(std::shared_ptr<DensityFunction> func);
+        void SetOreVeinB(std::shared_ptr<DensityFunction> func);
+
+        // 现有的getter方法 - Existing getter methods
         float EvaluateFinalDensity(int x, int y, int z) const;
         float GetContinentalness(int x, int y, int z) const;
-
         float GetErosion(int x, int y, int z) const;
         float GetTemperature(int x, int y, int z) const;
         float GetHumidity(int x, int y, int z) const;
         float GetWeirdness(int x, int y, int z) const;
+
+        // 新增的getter方法 - New getter methods (for Climate system)
+        float GetPeakAndValley(int x, int y, int z) const;
+        float GetRidges(int x, int y, int z) const;
+        float GetDepth(int x, int y, int z) const;
+        float GetBarrierNoise(int x, int y, int z) const;
+        float GetFluidLevelFloodedness(int x, int y, int z) const;
+        float GetFluidLevelSpread(int x, int y, int z) const;
+        float GetLavaNoise(int x, int y, int z) const;
+        float GetOreVeinA(int x, int y, int z) const;
+        float GetOreVeinB(int x, int y, int z) const;
 
     protected:
         //Core terrain function
