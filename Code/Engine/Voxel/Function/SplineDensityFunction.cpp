@@ -3,8 +3,55 @@
 #include "Engine/Math/MathUtils.hpp"
 using namespace enigma::voxel;
 
-SplineDensityFunction::SplineDensityFunction(std::unique_ptr<DensityFunction> coordinateFunction, const std::vector<SplinePoint>& points, float minValue, float maxValue) :
-    m_coordinateFunction(std::move(coordinateFunction)), m_points(points), m_minValue(minValue), m_maxValue(maxValue)
+SplineDensityFunction::SplinePoint::SplinePoint()
+{
+}
+
+SplineDensityFunction::SplinePoint::~SplinePoint()
+{
+}
+
+SplineDensityFunction::SplinePoint::SplinePoint(SplinePoint&& other) noexcept
+    : location(other.location)
+      , value(other.value)
+      , derivative(other.derivative)
+      , nestedSpline(std::move(other.nestedSpline))
+{
+}
+
+SplineDensityFunction::SplinePoint& SplineDensityFunction::SplinePoint::operator=(SplinePoint&& other) noexcept
+{
+    if (this != &other)
+    {
+        location     = other.location;
+        value        = other.value;
+        derivative   = other.derivative;
+        nestedSpline = std::move(other.nestedSpline);
+    }
+    return *this;
+}
+
+bool SplineDensityFunction::SplinePoint::IsNested() const
+{
+    return nestedSpline != nullptr;
+}
+
+float SplineDensityFunction::SplinePoint::GetValue(float coordinateValue) const
+{
+    if (IsNested())
+    {
+        // Recursion: use coordinateValue to evaluate nested splines
+        return nestedSpline->EvaluateSpline(coordinateValue);
+    }
+    return value;
+}
+
+// Constructor: Accepts vector of SplinePoint by rvalue reference (&&) instead of const reference (&)
+// Rationale: SplinePoint contains std::unique_ptr member, making it move-only (copy constructor deleted)
+// std::vector<SplinePoint> cannot be copied, only moved
+// Using std::move() transfers ownership efficiently without copying
+SplineDensityFunction::SplineDensityFunction(std::unique_ptr<DensityFunction> coordinateFunction, std::vector<SplinePoint>&& points, float minValue, float maxValue) :
+    m_coordinateFunction(std::move(coordinateFunction)), m_points(std::move(points)), m_minValue(minValue), m_maxValue(maxValue)
 {
 }
 

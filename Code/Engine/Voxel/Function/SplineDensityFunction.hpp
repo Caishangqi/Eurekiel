@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "DensityFunction.hpp"
 using namespace enigma::core;
 
@@ -19,21 +19,22 @@ namespace enigma::voxel
             SplinePoint();
             ~SplinePoint();
 
-            bool IsNested() const
-            {
-                return nestedSpline != nullptr;
-            }
+            // Move constructor: Required for std::sort with unique_ptr member
+            // Transfers ownership of nestedSpline from source to destination
+            SplinePoint(SplinePoint&& other) noexcept;
+
+            // Move assignment operator: Required for std::sort with unique_ptr member
+            // Transfers ownership and handles self-assignment safely
+            SplinePoint& operator=(SplinePoint&& other) noexcept;
+
+            // Delete copy operations: unique_ptr makes copying impossible
+            SplinePoint(const SplinePoint&)            = delete;
+            SplinePoint& operator=(const SplinePoint&) = delete;
+
+            bool IsNested() const;
 
             // Get the actual value of the point (may require recursively evaluating nested splines)
-            float GetValue(float coordinateValue) const
-            {
-                if (IsNested())
-                {
-                    // Recursion: use coordinateValue to evaluate nested splines
-                    return nestedSpline->EvaluateSpline(coordinateValue);
-                }
-                return value;
-            }
+            float GetValue(float coordinateValue) const;
         };
 
     private:
@@ -43,7 +44,7 @@ namespace enigma::voxel
         float                            m_maxValue; // Output range limit
 
     public:
-        SplineDensityFunction(std::unique_ptr<DensityFunction> coordinateFunction, const std::vector<SplinePoint>& points, float minValue = -1000000.0f, float maxValue = 1000000.0f);
+        SplineDensityFunction(std::unique_ptr<DensityFunction> coordinateFunction, std::vector<SplinePoint>&& points, float minValue = -1000000.0f, float maxValue = 1000000.0f);
 
         float Evaluate(int x, int y, int z) const override;
 

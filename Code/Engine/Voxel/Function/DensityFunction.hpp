@@ -16,7 +16,7 @@ namespace enigma::voxel
 
         // Get Function MIN / MAX possible value
         virtual float GetMinValue() const { return std::numeric_limits<float>::lowest(); }
-        virtual float GetMaxValue() const { return std::numeric_limits<float>::max(); }
+        virtual float GetMaxValue() const { return (std::numeric_limits<float>::max)(); }
 
         // Debugging Name
         virtual std::string GetTypeName() const = 0;
