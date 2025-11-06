@@ -11,8 +11,8 @@ namespace enigma::graphic
     // ========================================================================
 
     std::string IncludeProcessor::Expand(
-        const IncludeGraph&     graph,
-        const AbsolutePackPath& startPath
+        const IncludeGraph& graph,
+        const ShaderPath&   startPath
     )
     {
         /**
@@ -33,7 +33,7 @@ namespace enigma::graphic
         }
 
         // Step 2: 初始化已访问集合
-        std::unordered_set<AbsolutePackPath> visited;
+        std::unordered_set<ShaderPath> visited;
 
         // Step 3: 调用递归展开（不包含 #line 指令）
         int currentLineNumber = 1; // 占位参数（不使用）
@@ -45,8 +45,8 @@ namespace enigma::graphic
     // ========================================================================
 
     std::string IncludeProcessor::ExpandWithLineDirectives(
-        const IncludeGraph&     graph,
-        const AbsolutePackPath& startPath
+        const IncludeGraph& graph,
+        const ShaderPath&   startPath
     )
     {
         /**
@@ -67,7 +67,7 @@ namespace enigma::graphic
         }
 
         // Step 2: 初始化已访问集合
-        std::unordered_set<AbsolutePackPath> visited;
+        std::unordered_set<ShaderPath> visited;
 
         // Step 3: 调用递归展开（包含 #line 指令）
         int currentLineNumber = 1;
@@ -78,9 +78,9 @@ namespace enigma::graphic
     // 批量展开实现
     // ========================================================================
 
-    std::unordered_map<AbsolutePackPath, std::string> IncludeProcessor::ExpandMultiple(
-        const IncludeGraph&                  graph,
-        const std::vector<AbsolutePackPath>& programPaths
+    std::unordered_map<ShaderPath, std::string> IncludeProcessor::ExpandMultiple(
+        const IncludeGraph&            graph,
+        const std::vector<ShaderPath>& programPaths
     )
     {
         /**
@@ -96,7 +96,7 @@ namespace enigma::graphic
          * - 因为不同程序可能需要相同的 Include 文件
          */
 
-        std::unordered_map<AbsolutePackPath, std::string> results;
+        std::unordered_map<ShaderPath, std::string> results;
 
         for (const auto& programPath : programPaths)
         {
@@ -123,11 +123,11 @@ namespace enigma::graphic
     // ========================================================================
 
     std::string IncludeProcessor::ExpandRecursive(
-        const IncludeGraph&                   graph,
-        const AbsolutePackPath&               currentPath,
-        std::unordered_set<AbsolutePackPath>& visited,
-        bool                                  includeLineDirectives,
-        int&                                  currentLineNumber
+        const IncludeGraph&             graph,
+        const ShaderPath&               currentPath,
+        std::unordered_set<ShaderPath>& visited,
+        bool                            includeLineDirectives,
+        int&                            currentLineNumber
     )
     {
         /**
@@ -188,7 +188,7 @@ namespace enigma::graphic
                     continue;
                 }
 
-                AbsolutePackPath includedPath = includeTargetOpt.value();
+                ShaderPath includedPath = includeTargetOpt.value();
 
                 // Step 5b: 递归展开被包含文件
                 std::string includedContent = ExpandRecursive(

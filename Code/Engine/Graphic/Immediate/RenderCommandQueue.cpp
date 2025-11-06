@@ -10,8 +10,8 @@ namespace enigma::graphic
 
         if (m_config.enableDebugLogging)
         {
-            enigma::core::LogInfo("RenderCommandQueue", "Initialized with config - MaxCommandsPerPhase: %d, EnablePhaseDetection: %s",
-                                  m_config.maxCommandsPerPhase, m_config.enablePhaseDetection);
+            enigma::core::LogInfo("RenderCommandQueue", "Initialized with config - MaxCommandsPerPhase: %zu, EnablePhaseDetection: %s",
+                                  m_config.maxCommandsPerPhase, m_config.enablePhaseDetection ? "true" : "false");
         }
     }
 

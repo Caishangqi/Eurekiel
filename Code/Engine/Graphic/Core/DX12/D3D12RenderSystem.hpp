@@ -335,6 +335,20 @@ namespace enigma::graphic
         static ID3D12Device* GetDevice() { return s_device.Get(); }
 
         /**
+         * @brief 获取当前BackBuffer的RTV句柄
+         * @return D3D12_CPU_DESCRIPTOR_HANDLE RTV句柄
+         * @note M6.3新增 - 用于Present API绑定RTV
+         */
+        static D3D12_CPU_DESCRIPTOR_HANDLE GetBackBufferRTV();
+
+        /**
+         * @brief 获取当前BackBuffer的Resource指针
+         * @return ID3D12Resource* BackBuffer资源指针
+         * @note M6.3新增 - 用于Present API执行CopyResource
+         */
+        static ID3D12Resource* GetBackBufferResource();
+
+        /**
          * 获取DXGI工厂接口
          * @return IDXGIFactory4指针，用于交换链创建
          */

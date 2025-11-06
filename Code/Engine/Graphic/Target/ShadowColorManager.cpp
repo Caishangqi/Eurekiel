@@ -94,8 +94,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LogError_F("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                       index, m_activeShadowColorCount);
+            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                      index, m_activeShadowColorCount);
             return nullptr;
         }
 
@@ -112,8 +112,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LogError_F("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                       index, m_activeShadowColorCount);
+            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                      index, m_activeShadowColorCount);
             return D3D12_CPU_DESCRIPTOR_HANDLE{0};
         }
 
@@ -125,8 +125,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LogError_F("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                       index, m_activeShadowColorCount);
+            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                      index, m_activeShadowColorCount);
             return D3D12_CPU_DESCRIPTOR_HANDLE{0};
         }
 
@@ -142,8 +142,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LogError_F("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                       index, m_activeShadowColorCount);
+            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                      index, m_activeShadowColorCount);
             return 0;
         }
 
@@ -155,8 +155,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LogError_F("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                       index, m_activeShadowColorCount);
+            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                      index, m_activeShadowColorCount);
             return 0;
         }
 

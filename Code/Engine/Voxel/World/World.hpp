@@ -93,6 +93,13 @@ namespace enigma::voxel
         bool LoadWorld();
         void CloseWorld();
 
+        //-------------------------------------------------------------------------------------------
+        // Phase 5: Graceful Shutdown Support
+        //-------------------------------------------------------------------------------------------
+        void PrepareShutdown(); // Stop accepting new tasks
+        void WaitForPendingTasks(); // Wait for existing tasks to complete
+        bool IsShuttingDown() const { return m_isShuttingDown.load(); }
+
         // Get world information
         const std::string& GetWorldName() const { return m_worldName; }
         uint64_t           GetWorldSeed() const { return m_worldSeed; }
@@ -208,5 +215,10 @@ namespace enigma::voxel
         int m_maxLoadJobs      = 512; // Increased for ESFS format (no file lock contention, SSD-friendly)
         int m_maxSaveJobs      = 512; // Increased for better save throughput (lower priority than load)
         int m_maxMeshBuildJobs = 1024; // Async mesh building jobs (CPU-bound, player interaction needs fast response)
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 5: Graceful Shutdown State
+        //-------------------------------------------------------------------------------------------
+        std::atomic<bool> m_isShuttingDown{false}; // Shutdown flag (thread-safe)
     };
 }

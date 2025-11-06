@@ -16,6 +16,10 @@
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 
+#pragma comment(lib,"d3d12.lib")
+#pragma comment(lib,"dxgi.lib")
+#pragma comment(lib,"d3dcompiler.lib")
+#pragma comment(lib,"dxguid.lib")
 
 namespace enigma::graphic
 {
@@ -935,6 +939,30 @@ namespace enigma::graphic
             return nullptr;
         }
         return s_commandListManager.get();
+    }
+
+    // ============================================================================
+    // M6.3: BackBuffer访问方法
+    // ============================================================================
+
+    D3D12_CPU_DESCRIPTOR_HANDLE D3D12RenderSystem::GetBackBufferRTV()
+    {
+        if (!s_swapChain)
+        {
+            LogWarn(LogRenderer, "GetBackBufferRTV: SwapChain not initialized");
+            return {};
+        }
+        return s_swapChainRTVs[s_currentBackBufferIndex];
+    }
+
+    ID3D12Resource* D3D12RenderSystem::GetBackBufferResource()
+    {
+        if (!s_swapChain)
+        {
+            LogWarn(LogRenderer, "GetBackBufferResource: SwapChain not initialized");
+            return nullptr;
+        }
+        return s_swapChainBuffers[s_currentBackBufferIndex].Get();
     }
 
     // ===== Internal implementation method =====

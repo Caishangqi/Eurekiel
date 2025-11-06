@@ -1,7 +1,7 @@
 moduleConfig:
   logger:
     dependencies:
-    globalLogLevel: ERROR
+    globalLogLevel: INFO
     enableFileLogging: true
     logDirectory: .enigma/logs
     latestLogFileName: latest.log

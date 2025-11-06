@@ -17,6 +17,9 @@
 // Forward declaration for g_theDevConsole (will be properly included later)
 extern DevConsole* g_theDevConsole;
 
+using namespace enigma::core;
+LoggerSubsystem* g_theLogger = nullptr;
+
 namespace enigma::core
 {
     LoggerSubsystem::LoggerSubsystem()
@@ -69,6 +72,8 @@ namespace enigma::core
 
         // Don't log during startup to avoid circular dependencies
         // Startup message will be logged after configuration is complete
+
+        g_theLogger = this;
     }
 
     void LoggerSubsystem::Shutdown()
@@ -88,6 +93,8 @@ namespace enigma::core
 
         // Clear all appenders
         RemoveAllAppenders();
+
+        g_theLogger = nullptr;
     }
 
     void LoggerSubsystem::Log(LogLevel level, const char* category, const char* message)

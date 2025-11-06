@@ -81,8 +81,14 @@ namespace enigma::voxel
         // Statistics and debugging
         size_t GetLoadedChunkCount() const { return m_loadedChunks.size(); }
 
+        // Delayed deletion management
+        void   MarkChunkForDeletion(Chunk* chunk); // Mark chunk for delayed deletion
+        void   ProcessPendingDeletions(); // Process delayed deletion queue
+        size_t GetPendingDeletionCount() const; // Get pending deletion count (debugging)
+
     private:
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks; // Loaded chunks by packed coordinates
+        std::vector<Chunk*>                                 m_pendingDeleteChunks; // Chunks pending delayed deletion
         bool                                                m_enableChunkDebug = false; // Enable debug drawing for chunks
 
         // Player position and chunk management (using BlockPos for consistency)

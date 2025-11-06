@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "AbsolutePackPath.hpp"
+#include "ShaderPath.hpp"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -39,7 +39,7 @@ namespace enigma::graphic
      * // 3: }
      *
      * auto node = FileNode::FromLines(
-     *     AbsolutePackPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl"),
+     *     ShaderPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl"),
      *     lines
      * );
      *
@@ -67,7 +67,7 @@ namespace enigma::graphic
          * - std::invalid_argument: 如果 path 不是有效的文件路径（必须有父目录）
          */
         static FileNode FromLines(
-            const AbsolutePackPath&         path,
+            const ShaderPath&               path,
             const std::vector<std::string>& lines
         );
 
@@ -79,7 +79,7 @@ namespace enigma::graphic
          * @brief 获取文件路径
          * @return Shader Pack 内部绝对路径
          */
-        const AbsolutePackPath& GetPath() const { return m_path; }
+        const ShaderPath& GetPath() const { return m_path; }
 
         /**
          * @brief 获取文件内容（按行）
@@ -95,7 +95,7 @@ namespace enigma::graphic
          * - Key: 行号（0-based）
          * - Value: #include 指令引用的文件绝对路径
          */
-        const std::unordered_map<int, AbsolutePackPath>& GetIncludes() const { return m_includes; }
+        const std::unordered_map<int, ShaderPath>& GetIncludes() const { return m_includes; }
 
         /**
          * @brief 检查指定行是否是 #include 指令
@@ -112,7 +112,7 @@ namespace enigma::graphic
          * @param lineNumber 行号（0-based）
          * @return 目标路径的 Optional（如果该行不是 #include 返回空）
          */
-        std::optional<AbsolutePackPath> GetIncludeTarget(int lineNumber) const
+        std::optional<ShaderPath> GetIncludeTarget(int lineNumber) const
         {
             auto it = m_includes.find(lineNumber);
             if (it != m_includes.end())
@@ -149,9 +149,9 @@ namespace enigma::graphic
          * - 不可变对象：所有成员都是 const
          */
         FileNode(
-            const AbsolutePackPath&                          path,
-            const std::vector<std::string>&                  lines,
-            const std::unordered_map<int, AbsolutePackPath>& includes
+            const ShaderPath&                          path,
+            const std::vector<std::string>&            lines,
+            const std::unordered_map<int, ShaderPath>& includes
         );
 
         /**
@@ -176,15 +176,15 @@ namespace enigma::graphic
          * - 相对路径解析（调用 AbsolutePackPath::Resolve()）
          * - 容错处理（允许缺少引号，但会正常处理）
          */
-        static std::unordered_map<int, AbsolutePackPath> FindIncludes(
-            const AbsolutePackPath&         currentDirectory,
+        static std::unordered_map<int, ShaderPath> FindIncludes(
+            const ShaderPath&               currentDirectory,
             const std::vector<std::string>& lines
         );
 
     private:
-        AbsolutePackPath                          m_path; // 文件路径（不可变）
-        std::vector<std::string>                  m_lines; // 文件内容（按行，不可变）
-        std::unordered_map<int, AbsolutePackPath> m_includes; // Include 映射（不可变）
+        ShaderPath                          m_path; // 文件路径（不可变）
+        std::vector<std::string>            m_lines; // 文件内容（按行，不可变）
+        std::unordered_map<int, ShaderPath> m_includes; // Include 映射（不可变）
 
         /**
          * 教学要点总结：

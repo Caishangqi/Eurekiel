@@ -1,4 +1,4 @@
-#include "ChunkMeshBuilder.hpp"
+﻿#include "ChunkMeshBuilder.hpp"
 #include "Chunk.hpp"
 #include "../../Registry/Block/Block.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -16,9 +16,17 @@ ChunkMeshBuilder::ChunkMeshBuilder()
 
 std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
 {
+    // ===== Phase 4: 入口状态检查（防护点1） =====
     if (!chunk)
     {
         core::LogWarn("ChunkMeshBuilder", "Attempted to build mesh for null chunk");
+        return nullptr;
+    }
+
+    ChunkState state = chunk->GetState();
+    if (state != ChunkState::Active && state != ChunkState::BuildingMesh)
+    {
+        core::LogDebug("ChunkMeshBuilder", "BuildMesh: chunk not in valid state (state=%s), aborting", chunk->GetStateName());
         return nullptr;
     }
 
@@ -78,6 +86,7 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
         {
             for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
+                if (chunk->GetState() != ChunkState::Active) return nullptr;
                 BlockState* blockState = chunk->GetBlock(x, y, z);
 
                 if (ShouldRenderBlock(blockState))
@@ -121,8 +130,15 @@ void ChunkMeshBuilder::RebuildMesh(Chunk* chunk)
 
 void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, Chunk* chunk)
 {
+    // ===== Phase 4: 关键位置状态验证（防护点2） =====
     if (!chunkMesh || !blockState)
     {
+        return;
+    }
+
+    if (!chunk || chunk->GetState() != ChunkState::Active)
+    {
+        core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk invalid or not Active, aborting");
         return;
     }
 
@@ -152,6 +168,13 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
     // Iterate through all faces of the block render mesh
     for (const auto& direction : allDirections)
     {
+        // ===== Phase 4: 面级别状态检查（防护点2.1） =====
+        if (chunk->GetState() != ChunkState::Active)
+        {
+            core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk state changed during face iteration, aborting");
+            return;
+        }
+
         // Assignment 2: Face culling - skip faces that are not visible
         if (!ShouldRenderFace(chunk, blockPos, direction))
         {
@@ -238,6 +261,13 @@ bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
 
 bool ChunkMeshBuilder::ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, Direction direction) const
 {
+    // ===== Phase 4: 当前chunk状态检查（防护点3.1） =====
+    if (!chunk || chunk->GetState() != ChunkState::Active)
+    {
+        core::LogDebug("ChunkMeshBuilder", "ShouldRenderFace: chunk invalid or not Active");
+        return false;
+    }
+
     // Assignment 2: Face culling implementation
     // A face should be rendered if the adjacent block in that direction is:
     // 1. Air (empty)
@@ -252,6 +282,14 @@ bool ChunkMeshBuilder::ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, 
         neighborPos.z < 0 || neighborPos.z >= Chunk::CHUNK_SIZE_Z)
     {
         return true; // Edge face, always render
+    }
+
+    // ===== Phase 4: 再次验证chunk状态（防护点3.2） =====
+    // 防止在GetNeighborPosition和GetBlock之间chunk被删除
+    if (chunk->GetState() != ChunkState::Active)
+    {
+        core::LogDebug("ChunkMeshBuilder", "ShouldRenderFace: chunk state changed, conservative render");
+        return true; // 保守渲染策略：状态无效时渲染面，避免视觉缺失
     }
 
     // If we have chunk reference, check the neighbor block

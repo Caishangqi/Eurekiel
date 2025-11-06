@@ -48,9 +48,9 @@ namespace enigma::graphic
     // ========================================================================
 
     FileNode::FileNode(
-        const AbsolutePackPath&                          path,
-        const std::vector<std::string>&                  lines,
-        const std::unordered_map<int, AbsolutePackPath>& includes
+        const ShaderPath&                          path,
+        const std::vector<std::string>&            lines,
+        const std::unordered_map<int, ShaderPath>& includes
     )
         : m_path(path)
           , m_lines(lines)
@@ -65,7 +65,7 @@ namespace enigma::graphic
     // ========================================================================
 
     FileNode FileNode::FromLines(
-        const AbsolutePackPath&         path,
+        const ShaderPath&               path,
         const std::vector<std::string>& lines
     )
     {
@@ -87,7 +87,7 @@ namespace enigma::graphic
             );
         }
 
-        AbsolutePackPath currentDirectory = parentOpt.value();
+        ShaderPath currentDirectory = parentOpt.value();
 
         // Step 2: 解析 Include 指令
         auto includes = FindIncludes(currentDirectory, lines);
@@ -100,8 +100,8 @@ namespace enigma::graphic
     // Include 解析实现
     // ========================================================================
 
-    std::unordered_map<int, AbsolutePackPath> FileNode::FindIncludes(
-        const AbsolutePackPath&         currentDirectory,
+    std::unordered_map<int, ShaderPath> FileNode::FindIncludes(
+        const ShaderPath&               currentDirectory,
         const std::vector<std::string>& lines
     )
     {
@@ -121,7 +121,7 @@ namespace enigma::graphic
          * - `#include Common.hlsl` (容错，缺少引号)
          */
 
-        std::unordered_map<int, AbsolutePackPath> foundIncludes;
+        std::unordered_map<int, ShaderPath> foundIncludes;
 
         for (int i = 0; i < static_cast<int>(lines.size()); ++i)
         {
@@ -169,7 +169,7 @@ namespace enigma::graphic
             // Step 5: 基于当前目录解析相对路径
             try
             {
-                AbsolutePackPath resolved = currentDirectory.Resolve(target);
+                ShaderPath resolved = currentDirectory.Resolve(target);
                 foundIncludes.insert({i, resolved}); // 使用 insert() 避免默认构造函数需求
             }
             catch (const std::exception&)

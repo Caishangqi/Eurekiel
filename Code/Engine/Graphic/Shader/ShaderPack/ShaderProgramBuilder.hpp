@@ -20,6 +20,7 @@
 #include "ShaderSource.hpp"
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp"
+#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 3: ShaderCompileOptions
 #include <memory>
 #include <optional>
 
@@ -94,6 +95,35 @@ namespace enigma::graphic
         );
 
         /**
+         * @brief 从 ShaderSource 构建着色器程序（支持自定义编译选项）
+         * @param source 着色器源码容器
+         * @param type 着色器类型 (对应 Iris ProgramId)
+         * @param customOptions 用户自定义编译选项
+         * @return BuildResult 包含编译后的着色器
+         *
+         * 教学要点:
+         * - Shrimp Task 3: 集成 ShaderCompileOptions
+         * - 支持用户自定义 Include 路径、宏定义、调试选项
+         * - 用户选项优先于默认选项
+         *
+         * 编译流程:
+         * 1. 验证 ShaderSource 是否有效
+         * 2. 合并默认编译选项和用户自定义选项
+         * 3. 使用合并后的选项编译所有着色器阶段
+         * 4. 返回 BuildResult
+         *
+         * 选项合并规则:
+         * - Include 路径: 用户路径 + 默认路径（追加）
+         * - 宏定义: 用户宏 + 默认宏（追加）
+         * - 调试选项: 用户选项覆盖默认选项
+         */
+        static BuildResult BuildProgram(
+            const ShaderSource&         source,
+            ShaderType                  type,
+            const ShaderCompileOptions& customOptions
+        );
+
+        /**
          * @brief 编译单个着色器阶段
          * @param source HLSL 源码字符串
          * @param stage 着色器阶段 (Vertex, Pixel, Geometry, Compute)
@@ -151,6 +181,31 @@ namespace enigma::graphic
         static DXCCompiler::CompileOptions ConfigureCompileOptions(
             const shader::ProgramDirectives& directives,
             ShaderStage                      stage
+        );
+
+        /**
+         * @brief 合并默认编译选项和用户自定义选项
+         * @param defaultOpts 默认编译选项（从 ProgramDirectives 生成）
+         * @param customOpts 用户自定义编译选项
+         * @return DXCCompiler::CompileOptions 合并后的编译选项
+         *
+         * 教学要点:
+         * - Shrimp Task 3: 选项合并策略
+         * - Include 路径采用追加方式（用户路径优先）
+         * - 宏定义采用追加方式（用户宏优先）
+         * - 调试选项采用覆盖方式（用户选项优先）
+         *
+         * 合并规则:
+         * 1. Include 路径: customOpts.includePaths + defaultOpts.includePaths
+         * 2. 宏定义: customOpts.defines + defaultOpts.defines
+         * 3. enableDebugInfo: customOpts 优先
+         * 4. enableOptimization: customOpts 优先
+         * 5. enable16BitTypes: customOpts 优先
+         * 6. enableBindless: customOpts 优先
+         */
+        static DXCCompiler::CompileOptions MergeCompileOptions(
+            const DXCCompiler::CompileOptions& defaultOpts,
+            const ShaderCompileOptions&        customOpts
         );
     };
 } // namespace enigma::graphic

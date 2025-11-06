@@ -123,6 +123,17 @@ namespace enigma::graphic
          */
         uint32_t GetAltTextureIndex(int rtIndex) const;
 
+        /**
+         * @brief 获取指定RT的格式
+         * @param rtIndex RenderTarget索引 [0-15]
+         * @return DXGI_FORMAT RT格式
+         *
+         * 教学要点:
+         * - 用于PSO创建时查询RT格式
+         * - 如果RT未创建，返回默认格式DXGI_FORMAT_R8G8B8A8_UNORM
+         */
+        DXGI_FORMAT GetRenderTargetFormat(int rtIndex) const;
+
         // ========================================================================
         // BufferFlipState管理 - Main/Alt翻转逻辑
         // ========================================================================

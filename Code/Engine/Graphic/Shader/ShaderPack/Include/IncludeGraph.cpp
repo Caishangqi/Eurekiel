@@ -1,5 +1,5 @@
 ﻿#include "IncludeGraph.hpp"
-#include <fstream>
+#include "Engine/Graphic/Shader/Common/FileSystemReader.hpp"
 #include <sstream>
 #include <queue>
 #include <algorithm>
@@ -7,49 +7,34 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // 构造函数实现 - BFS 构建依赖图
+    // 构造函数实现 - BFS 构建依赖图（依赖注入版本）
     // ========================================================================
 
     IncludeGraph::IncludeGraph(
-        const std::filesystem::path&         root,
-        const std::vector<AbsolutePackPath>& startingPaths
+        std::shared_ptr<IFileReader>   fileReader,
+        const std::vector<ShaderPath>& startingPaths
     )
+        : m_fileReader(std::move(fileReader))
     {
         /**
-         * 教学要点: BFS 构建 Include 依赖图
+         * 教学要点: BFS 构建 Include 依赖图 + 依赖注入
          *
          * 业务逻辑:
          * 1. 初始化队列和已访问集合
          * 2. 从起始路径开始 BFS 遍历
-         * 3. 对每个文件：读取内容 → 解析 #include → 加入队列
+         * 3. 对每个文件：使用IFileReader读取 → 解析 #include → 加入队列
          * 4. 处理读取失败（记录到 m_failures）
          * 5. 完成后检测循环依赖
          *
-         * 算法伪代码:
-         * ```
-         * queue = [startingPaths]
-         * visited = {}
-         *
-         * while queue is not empty:
-         *     path = queue.dequeue()
-         *     if path in visited: continue
-         *     visited.add(path)
-         *
-         *     try:
-         *         lines = ReadFile(path)
-         *         node = FileNode.FromLines(path, lines)
-         *         nodes[path] = node
-         *
-         *         for includedPath in node.GetIncludes():
-         *             queue.enqueue(includedPath)
-         *     catch:
-         *         failures[path] = error
-         * ```
+         * 依赖倒置原则:
+         * - 依赖IFileReader抽象接口，不依赖具体文件系统操作
+         * - 通过依赖注入获取文件读取器
+         * - 解耦文件读取逻辑，提高可测试性
          */
 
         // Step 1: 初始化队列和已访问集合
-        std::queue<AbsolutePackPath>         queue;
-        std::unordered_set<AbsolutePackPath> visited;
+        std::queue<ShaderPath>         queue;
+        std::unordered_set<ShaderPath> visited;
 
         // 将所有起始路径加入队列
         for (const auto& startPath : startingPaths)
@@ -60,7 +45,7 @@ namespace enigma::graphic
         // Step 2: BFS 遍历
         while (!queue.empty())
         {
-            AbsolutePackPath currentPath = queue.front();
+            ShaderPath currentPath = queue.front();
             queue.pop();
 
             // 检查是否已访问（避免重复读取）
@@ -71,19 +56,33 @@ namespace enigma::graphic
 
             visited.insert(currentPath);
 
-            // Step 3: 读取文件内容
+            // Step 3: 使用IFileReader读取文件内容
             try
             {
-                // 将 Shader Pack 路径转换为文件系统路径
-                std::filesystem::path filePath = currentPath.Resolved(root);
+                // 使用IFileReader接口读取文件
+                auto contentOpt = m_fileReader->ReadFile(currentPath);
 
-                // 读取文件内容（按行）
-                std::vector<std::string> lines = ReadFileLines(filePath);
+                if (!contentOpt)
+                {
+                    // 文件读取失败
+                    m_failures.insert({currentPath, "Failed to read file"});
+                    continue; // 继续处理其他文件
+                }
+
+                // 将文件内容按行分割
+                std::vector<std::string> lines;
+                std::istringstream       stream(*contentOpt);
+                std::string              line;
+
+                while (std::getline(stream, line))
+                {
+                    lines.push_back(line);
+                }
 
                 // 创建 FileNode（自动解析 #include）
                 FileNode node = FileNode::FromLines(currentPath, lines);
 
-                // 存储节点（使用 insert() 避免默认构造函数需求）
+                // 存储节点
                 m_nodes.insert({currentPath, node});
 
                 // Step 4: 将所有 Include 的文件加入队列
@@ -98,9 +97,8 @@ namespace enigma::graphic
             }
             catch (const std::exception& e)
             {
-                // 文件读取失败或解析失败，记录错误
-                m_failures.insert({currentPath, e.what()}); // 使用 insert() 保持代码一致性
-
+                // 解析失败，记录错误
+                m_failures.insert({currentPath, e.what()});
                 // 不中断构建，继续处理其他文件
             }
         }
@@ -110,44 +108,30 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 文件读取辅助函数
+    // 向后兼容构造函数 - 委托到依赖注入版本
     // ========================================================================
 
-    std::vector<std::string> IncludeGraph::ReadFileLines(const std::filesystem::path& filePath)
+    IncludeGraph::IncludeGraph(
+        const std::filesystem::path&   root,
+        const std::vector<ShaderPath>& startingPaths
+    )
+        : IncludeGraph(
+            std::make_shared<FileSystemReader>(root),
+            startingPaths
+        )
     {
         /**
-         * 教学要点: 文件读取（按行）
+         * 教学要点: 委托构造函数 + 向后兼容
          *
          * 业务逻辑:
-         * 1. 检查文件是否存在
-         * 2. 打开文件流
-         * 3. 按行读取到 vector<string>
-         * 4. 异常处理
+         * - 创建FileSystemReader并委托到新构造函数
+         * - 保持向后兼容，旧代码无需修改
+         *
+         * 设计原则:
+         * - 委托构造：避免代码重复
+         * - 向后兼容：保留旧接口
+         * - 过渡策略：逐步迁移到新接口
          */
-
-        // Step 1: 检查文件是否存在
-        if (!std::filesystem::exists(filePath))
-        {
-            throw std::runtime_error("File does not exist: " + filePath.string());
-        }
-
-        // Step 2: 打开文件流
-        std::ifstream file(filePath);
-        if (!file.is_open())
-        {
-            throw std::runtime_error("Failed to open file: " + filePath.string());
-        }
-
-        // Step 3: 按行读取
-        std::vector<std::string> lines;
-        std::string              line;
-
-        while (std::getline(file, line))
-        {
-            lines.push_back(line);
-        }
-
-        return lines;
     }
 
     // ========================================================================
@@ -164,25 +148,10 @@ namespace enigma::graphic
          * 2. 维护全局已检测集合（避免重复检测）
          * 3. 维护当前路径（path）和路径节点集合（visited）
          * 4. 如果检测到循环，抛出异常
-         *
-         * 算法伪代码:
-         * ```
-         * globalChecked = {}
-         *
-         * for each node in nodes:
-         *     if node in globalChecked: continue
-         *
-         *     path = []
-         *     visited = {}
-         *     if ExploreForCycles(node, path, visited):
-         *         throw error with cycle path
-         *
-         *     globalChecked.add(all nodes in path)
-         * ```
          */
 
         // 全局已检测集合（避免重复检测）
-        std::unordered_set<AbsolutePackPath> globalChecked;
+        std::unordered_set<ShaderPath> globalChecked;
 
         for (const auto& [nodePath, node] : m_nodes)
         {
@@ -193,10 +162,10 @@ namespace enigma::graphic
             }
 
             // 当前路径（用于报告循环路径）
-            std::vector<AbsolutePackPath> path;
+            std::vector<ShaderPath> path;
 
             // 当前路径中的节点集合（用于快速检测循环）
-            std::unordered_set<AbsolutePackPath> visited;
+            std::unordered_set<ShaderPath> visited;
 
             // 执行 DFS 探索
             if (ExploreForCycles(nodePath, path, visited))
@@ -228,9 +197,9 @@ namespace enigma::graphic
     }
 
     bool IncludeGraph::ExploreForCycles(
-        const AbsolutePackPath&               frontier,
-        std::vector<AbsolutePackPath>&        path,
-        std::unordered_set<AbsolutePackPath>& visited
+        const ShaderPath&               frontier,
+        std::vector<ShaderPath>&        path,
+        std::unordered_set<ShaderPath>& visited
     ) const
     {
         /**
@@ -242,27 +211,6 @@ namespace enigma::graphic
          * 2. 将节点加入路径和 visited 集合
          * 3. 对所有 Include 的文件递归探索
          * 4. 回溯：移除路径和 visited 中的节点
-         *
-         * 算法伪代码:
-         * ```
-         * function ExploreForCycles(node, path, visited):
-         *     if node in visited:
-         *         return true  // 检测到循环
-         *
-         *     path.add(node)
-         *     visited.add(node)
-         *
-         *     for each included in node.includes:
-         *         if included not in nodes:
-         *             continue  // 文件不存在，跳过
-         *
-         *         if ExploreForCycles(included, path, visited):
-         *             return true
-         *
-         *     path.remove(node)  // 回溯
-         *     visited.remove(node)
-         *     return false
-         * ```
          */
 
         // Step 1: 检查是否在当前路径中（循环检测）

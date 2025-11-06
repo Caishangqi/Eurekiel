@@ -173,6 +173,24 @@ uint32_t RenderTargetManager::GetAltTextureIndex(int rtIndex) const
     return m_renderTargets[rtIndex]->GetAltTextureIndex();
 }
 
+DXGI_FORMAT RenderTargetManager::GetRenderTargetFormat(int rtIndex) const
+{
+    if (!IsValidIndex(rtIndex))
+    {
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        // ERROR_RECOVERABLE(errorMsg);
+        return DXGI_FORMAT_R8G8B8A8_UNORM;
+    }
+
+    if (!m_renderTargets[rtIndex])
+    {
+        return DXGI_FORMAT_R8G8B8A8_UNORM;
+    }
+
+    return m_renderTargets[rtIndex]->GetFormat();
+}
+
 // ============================================================================
 // BufferFlipState管理 - Main/Alt翻转逻辑
 // ============================================================================

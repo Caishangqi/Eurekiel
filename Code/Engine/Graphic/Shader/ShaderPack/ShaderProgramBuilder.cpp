@@ -255,4 +255,213 @@ namespace enigma::graphic
 
         return options;
     }
+
+    // ========================================================================
+    // Shrimp Task 3: 编译选项合并
+    // ========================================================================
+
+    DXCCompiler::CompileOptions ShaderProgramBuilder::MergeCompileOptions(
+        const DXCCompiler::CompileOptions& defaultOpts,
+        const ShaderCompileOptions&        customOpts
+    )
+    {
+        DXCCompiler::CompileOptions merged = defaultOpts;
+
+        // 1. 合并 Include 路径（用户路径优先，追加到前面）
+        // 策略：用户路径 + 默认路径
+        std::vector<std::wstring> userIncludePaths = ShaderCompilationHelper::BuildIncludePaths(customOpts.includePaths);
+
+        // 将用户路径插入到默认路径之前
+        merged.includePaths.insert(
+            merged.includePaths.begin(),
+            userIncludePaths.begin(),
+            userIncludePaths.end()
+        );
+
+        // 2. 合并宏定义（用户宏优先，追加到前面）
+        // 策略：用户宏 + 默认宏
+        merged.defines.insert(
+            merged.defines.begin(),
+            customOpts.defines.begin(),
+            customOpts.defines.end()
+        );
+
+        // 3. 覆盖调试选项（用户选项优先）
+        // 如果用户启用了调试信息，则覆盖默认设置
+        if (customOpts.enableDebugInfo)
+        {
+            merged.enableDebugInfo = true;
+        }
+
+        // 如果用户禁用了优化，则覆盖默认设置
+        if (!customOpts.enableOptimization)
+        {
+            merged.enableOptimization = false;
+        }
+
+        // 4. 覆盖其他选项（用户选项优先）
+        // 注意：这些选项通常保持默认值，但如果用户明确设置，则覆盖
+        merged.enable16BitTypes = customOpts.enable16BitTypes;
+        merged.enableBindless   = customOpts.enableBindless;
+
+        return merged;
+    }
+
+    // ========================================================================
+    // Shrimp Task 3: 支持自定义编译选项的重载方法
+    // ========================================================================
+
+    ShaderProgramBuilder::BuildResult ShaderProgramBuilder::BuildProgram(
+        const ShaderSource&         source,
+        ShaderType                  type,
+        const ShaderCompileOptions& customOptions
+    )
+    {
+        UNUSED(type)
+        BuildResult result;
+
+        // 1. 验证 ShaderSource
+        if (!source.IsValid())
+        {
+            result.success      = false;
+            result.errorMessage = "ShaderSource is invalid: missing vertex or pixel shader source";
+            return result;
+        }
+
+        // 2. 获取默认编译选项（从 ProgramDirectives 生成）
+        DXCCompiler::CompileOptions defaultOpts = ConfigureCompileOptions(
+            source.GetDirectives(),
+            ShaderStage::Vertex // 使用 Vertex 作为默认阶段
+        );
+
+        // 3. 合并用户自定义选项
+        DXCCompiler::CompileOptions mergedOpts = MergeCompileOptions(defaultOpts, customOptions);
+
+        // 4. 编译顶点着色器（使用合并后的选项）
+        auto compiledVS        = std::make_unique<CompiledShader>();
+        compiledVS->stage      = ShaderStage::Vertex;
+        compiledVS->name       = source.GetName();
+        compiledVS->entryPoint = GetEntryPoint(ShaderStage::Vertex);
+        compiledVS->profile    = GetShaderProfile(ShaderStage::Vertex);
+        compiledVS->sourceCode = source.GetVertexSource();
+
+        mergedOpts.entryPoint = compiledVS->entryPoint;
+        mergedOpts.target     = compiledVS->profile;
+
+        DXCCompiler compiler;
+        if (!compiler.Initialize())
+        {
+            result.success      = false;
+            result.errorMessage = "Failed to initialize DXC compiler";
+            return result;
+        }
+
+        DXCCompiler::CompileResult vsResult = compiler.CompileShader(source.GetVertexSource(), mergedOpts);
+        compiledVS->success                 = vsResult.success;
+        compiledVS->errorMessage            = vsResult.errorMessage;
+        compiledVS->warningMessage          = vsResult.warningMessage;
+        compiledVS->bytecode                = std::move(vsResult.bytecode);
+
+        if (!compiledVS->IsValid())
+        {
+            result.success      = false;
+            result.errorMessage = "Failed to compile vertex shader: " + compiledVS->errorMessage;
+            return result;
+        }
+
+        result.vertexShader = std::move(compiledVS);
+
+        // 5. 编译像素着色器（使用合并后的选项）
+        auto compiledPS        = std::make_unique<CompiledShader>();
+        compiledPS->stage      = ShaderStage::Pixel;
+        compiledPS->name       = source.GetName();
+        compiledPS->entryPoint = GetEntryPoint(ShaderStage::Pixel);
+        compiledPS->profile    = GetShaderProfile(ShaderStage::Pixel);
+        compiledPS->sourceCode = source.GetPixelSource();
+
+        mergedOpts.entryPoint = compiledPS->entryPoint;
+        mergedOpts.target     = compiledPS->profile;
+
+        DXCCompiler::CompileResult psResult = compiler.CompileShader(source.GetPixelSource(), mergedOpts);
+        compiledPS->success                 = psResult.success;
+        compiledPS->errorMessage            = psResult.errorMessage;
+        compiledPS->warningMessage          = psResult.warningMessage;
+        compiledPS->bytecode                = std::move(psResult.bytecode);
+
+        if (!compiledPS->IsValid())
+        {
+            result.success      = false;
+            result.errorMessage = "Failed to compile pixel shader: " + compiledPS->errorMessage;
+            return result;
+        }
+
+        result.pixelShader = std::move(compiledPS);
+
+        // 6. 编译几何着色器（可选，使用合并后的选项）
+        if (source.HasGeometryShader())
+        {
+            auto compiledGS        = std::make_unique<CompiledShader>();
+            compiledGS->stage      = ShaderStage::Geometry;
+            compiledGS->name       = source.GetName();
+            compiledGS->entryPoint = GetEntryPoint(ShaderStage::Geometry);
+            compiledGS->profile    = GetShaderProfile(ShaderStage::Geometry);
+            compiledGS->sourceCode = source.GetGeometrySource().value();
+
+            mergedOpts.entryPoint = compiledGS->entryPoint;
+            mergedOpts.target     = compiledGS->profile;
+
+            DXCCompiler::CompileResult gsResult = compiler.CompileShader(source.GetGeometrySource().value(), mergedOpts);
+            compiledGS->success                 = gsResult.success;
+            compiledGS->errorMessage            = gsResult.errorMessage;
+            compiledGS->warningMessage          = gsResult.warningMessage;
+            compiledGS->bytecode                = std::move(gsResult.bytecode);
+
+            if (compiledGS->IsValid())
+            {
+                result.geometryShader = std::move(compiledGS);
+            }
+            else
+            {
+                std::cerr << "[ShaderProgramBuilder] Warning: Geometry shader compilation failed for "
+                    << source.GetName() << std::endl;
+            }
+        }
+
+        // 7. 编译计算着色器（可选，使用合并后的选项）
+        if (source.HasComputeShader())
+        {
+            auto compiledCS        = std::make_unique<CompiledShader>();
+            compiledCS->stage      = ShaderStage::Compute;
+            compiledCS->name       = source.GetName();
+            compiledCS->entryPoint = GetEntryPoint(ShaderStage::Compute);
+            compiledCS->profile    = GetShaderProfile(ShaderStage::Compute);
+            compiledCS->sourceCode = source.GetComputeSource().value();
+
+            mergedOpts.entryPoint = compiledCS->entryPoint;
+            mergedOpts.target     = compiledCS->profile;
+
+            DXCCompiler::CompileResult csResult = compiler.CompileShader(source.GetComputeSource().value(), mergedOpts);
+            compiledCS->success                 = csResult.success;
+            compiledCS->errorMessage            = csResult.errorMessage;
+            compiledCS->warningMessage          = csResult.warningMessage;
+            compiledCS->bytecode                = std::move(csResult.bytecode);
+
+            if (compiledCS->IsValid())
+            {
+                result.computeShader = std::move(compiledCS);
+            }
+            else
+            {
+                std::cerr << "[ShaderProgramBuilder] Warning: Compute shader compilation failed for "
+                    << source.GetName() << std::endl;
+            }
+        }
+
+        // 8. 存储 ProgramDirectives（从 ShaderSource 获取）
+        result.directives = source.GetDirectives();
+
+        // 9. 成功
+        result.success = true;
+        return result;
+    }
 } // namespace enigma::graphic

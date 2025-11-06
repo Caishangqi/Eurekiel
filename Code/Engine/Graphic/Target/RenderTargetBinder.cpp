@@ -6,6 +6,8 @@
 #include "Engine/Graphic/Target/ShadowColorManager.hpp"
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp"
 
+using namespace enigma::core;
+
 namespace enigma::graphic
 {
     // ============================================================================
@@ -52,8 +54,7 @@ namespace enigma::graphic
     {
         if (rtTypes.size() != indices.size())
         {
-            LogError_F("RenderTargetBinder", "rtTypes.size() (%zu) != indices.size() (%zu)",
-                       rtTypes.size(), indices.size());
+            LOG_ERROR("RenderTargetBinder", "rtTypes.size() (%zu) != indices.size() (%zu)", rtTypes.size(), indices.size());
             return;
         }
 
@@ -303,7 +304,7 @@ namespace enigma::graphic
             break;
 
         default:
-            LogError_F("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(type));
+            LOG_ERROR("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(type));
             break;
         }
 

@@ -99,14 +99,14 @@ namespace enigma::graphic::shader
          */
         enum class Type
         {
-            DRAWBUFFERS, ///< /* DRAWBUFFERS:01234567 */ - 指定片段着色器输出到哪些 RT
-            RENDERTARGETS, ///< /* RENDERTARGETS:0,1,2 */ - 同 DRAWBUFFERS，更现代的语法
-            BLEND, ///< /* BLEND:ADD */ - 混合模式 (ADD, MULTIPLY, SUBTRACT 等)
-            DEPTHTEST, ///< /* DEPTHTEST:GREATER */ - 深度测试模式 (LESS, GREATER, EQUAL 等)
-            CULLFACE, ///< /* CULLFACE:BACK */ - 面剔除模式 (NONE, FRONT, BACK)
-            DEPTHWRITE, ///< /* DEPTHWRITE:OFF */ - 深度写入开关 (ON, OFF)
-            ALPHATEST, ///< /* ALPHATEST:0.5 */ - Alpha 测试阈值 (0.0 - 1.0)
-            FORMAT ///< /* FORMAT:0:RGBA16F */ - RT 格式覆盖 (索引:格式)
+            DRAWBUFFERS, ///< // DRAWBUFFERS:01234567 - 指定片段着色器输出到哪些 RT
+            RENDERTARGETS, ///< // RENDERTARGETS:0,1,2 - 同 DRAWBUFFERS，更现代的语法
+            BLEND, ///< // BLEND:ADD - 混合模式 (ADD, MULTIPLY, SUBTRACT 等)
+            DEPTHTEST, ///< // DEPTHTEST:GREATER - 深度测试模式 (LESS, GREATER, EQUAL 等)
+            CULLFACE, ///< // CULLFACE:BACK - 面剔除模式 (NONE, FRONT, BACK)
+            DEPTHWRITE, ///< // DEPTHWRITE:OFF - 深度写入开关 (ON, OFF)
+            ALPHATEST, ///< // ALPHATEST:0.5 - Alpha 测试阈值 (0.0 - 1.0)
+            FORMAT ///< // FORMAT:0:RGBA16F - RT 格式覆盖 (索引:格式)
         };
 
         Type        type; ///< 指令类型

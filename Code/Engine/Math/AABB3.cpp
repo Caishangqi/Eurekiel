@@ -82,6 +82,32 @@ void AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsi
     aabb3.BuildVertices(outVerts, outIndices, color, uv);
 }
 
+std::vector<Vertex_PCUTBN> AABB3::GetVertices(const Rgba8& color, const AABB2& uv)
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    BuildVertices(vertices, indices, color, uv);
+    return vertices;
+}
+
+std::vector<Vertex_PCUTBN> AABB3::GetVertices(AABB3& aabb3, const Rgba8& color, const AABB2& uv)
+{
+    return aabb3.GetVertices(color, uv);
+}
+
+std::vector<unsigned int> AABB3::GetIndices()
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    BuildVertices(vertices, indices);
+    return indices;
+}
+
+std::vector<unsigned int> AABB3::GetIndices(AABB3& aabb3)
+{
+    return aabb3.GetIndices();
+}
+
 bool AABB3::IsPointInside(const Vec3& point) const
 {
     return (point.x >= m_mins.x && point.x <= m_maxs.x) &&

@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "IncludeGraph.hpp"
-#include "AbsolutePackPath.hpp"
+#include "ShaderPath.hpp"
 #include "FileNode.hpp"
 #include <string>
 #include <vector>
@@ -40,7 +40,7 @@ namespace enigma::graphic
      * IncludeGraph graph(root, startingPaths);
      *
      * // 展开着色器程序
-     * AbsolutePackPath programPath = AbsolutePackPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl");
+     * ShaderPath programPath = ShaderPath::FromAbsolutePath("/shaders/gbuffers_terrain.vs.hlsl");
      * std::string expandedCode = IncludeProcessor::Expand(graph, programPath);
      *
      * // 或者：保留行号映射（用于调试）
@@ -106,8 +106,8 @@ namespace enigma::graphic
          * - std::invalid_argument: 如果起始文件不在 IncludeGraph 中
          */
         static std::string Expand(
-            const IncludeGraph&     graph,
-            const AbsolutePackPath& startPath
+            const IncludeGraph& graph,
+            const ShaderPath&   startPath
         );
 
         /**
@@ -130,8 +130,8 @@ namespace enigma::graphic
          * - 发布阶段：使用 Expand（更小的文件大小）
          */
         static std::string ExpandWithLineDirectives(
-            const IncludeGraph&     graph,
-            const AbsolutePackPath& startPath
+            const IncludeGraph& graph,
+            const ShaderPath&   startPath
         );
 
         // ========================================================================
@@ -148,9 +148,9 @@ namespace enigma::graphic
          * - 批量处理优化（共享已访问集合）
          * - 适用于 ShaderPackLoader 批量加载场景
          */
-        static std::unordered_map<AbsolutePackPath, std::string> ExpandMultiple(
-            const IncludeGraph&                  graph,
-            const std::vector<AbsolutePackPath>& programPaths
+        static std::unordered_map<ShaderPath, std::string> ExpandMultiple(
+            const IncludeGraph&            graph,
+            const std::vector<ShaderPath>& programPaths
         );
 
     private:
@@ -195,11 +195,11 @@ namespace enigma::graphic
          * ```
          */
         static std::string ExpandRecursive(
-            const IncludeGraph&                   graph,
-            const AbsolutePackPath&               currentPath,
-            std::unordered_set<AbsolutePackPath>& visited,
-            bool                                  includeLineDirectives,
-            int&                                  currentLineNumber
+            const IncludeGraph&             graph,
+            const ShaderPath&               currentPath,
+            std::unordered_set<ShaderPath>& visited,
+            bool                            includeLineDirectives,
+            int&                            currentLineNumber
         );
 
         /**

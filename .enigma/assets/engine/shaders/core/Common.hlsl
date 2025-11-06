@@ -1,17 +1,28 @@
 /**
  * @file Common.hlsl
  * @brief Bindless资源访问核心库 - Iris完全兼容架构 + CustomImage扩展
- * @date 2025-10-31
- * @version v3.2 - Shadow系统拆分设计（56字节RootConstants）
+ * @date 2025-11-04
+ * @version v3.3 - 完整注释更新（T2-T10结构体文档化）
  *
  * 教学要点:
  * 1. 所有着色器必须 #include "Common.hlsl"
  * 2. 支持完整Iris纹理系统: colortex, shadowcolor, depthtex, shadowtex, noisetex
- * 3. 新增CustomImage系统: customImage0-15 (自定义材质槽位) ⭐
+ * 3. 新增CustomImage系统: customImage0-15 (自定义材质槽位)
  * 4. Main/Alt双缓冲 - 消除ResourceBarrier开销
  * 5. Bindless资源访问 - Shader Model 6.6
  * 6. MRT动态生成 - PSOutput由ShaderCodeGenerator动态创建
- * 7. Shadow系统拆分 - shadowcolor和shadowtex独立管理 ⭐
+ * 7. Shadow系统拆分设计 - shadowcolor和shadowtex独立Buffer管理
+ *
+ * 主要变更 (v3.3):
+ * - T2: IDData结构体完整Iris文档化（9个字段，entity/block/item ID系统）
+ * - T3: BiomeAndDimensionData结构体完整文档化（12个字段，生物群系+维度属性）
+ * - T4: RenderingData结构体完整文档化（17个字段，渲染阶段+雾参数+Alpha测试）
+ * - T5: WorldAndWeatherData结构体完整文档化（12个字段，太阳/月亮位置+天气系统）
+ * - T6: CameraAndPlayerData结构体完整文档化（相机位置+玩家状态）
+ * - T7: DepthTexturesBuffer结构体文档化（depthtex0/1/2语义说明）
+ * - T8: CustomImageIndexBuffer结构体文档化（自定义材质槽位系统）
+ * - T9: ShadowTexturesBuffer注释更新（独立Buffer管理，非"激进合并"）
+ * - T10: 宏定义注释更新（Iris兼容性+统一接口设计）
  *
  * 架构参考:
  * - DirectX12-Bindless-MRT-RENDERTARGETS-Architecture.md
@@ -27,14 +38,14 @@
  * @brief Root Constants - Shadow系统拆分 + CustomImage支持（56字节设计）
  *
  * 教学要点:
- * 1. 总共56 bytes (14个uint32_t索引) - Shadow系统拆分 ⭐
+ * 1. 总共56 bytes (14个uint32_t索引) - Shadow系统拆分
  * 2. register(b0, space0) 对应 Root Parameter 0
  * 3. 支持细粒度更新 - 每个索引可独立更新
  * 4. 完整Iris纹理系统: colortex, shadowcolor, depthtex, shadowtex, noisetex
- * 5. CustomImage系统: customImage0-15 (自定义材质槽位) ⭐
+ * 5. CustomImage系统: customImage0-15 (自定义材质槽位)
  *
  * 架构优势:
- * - 拆分设计: shadowcolor和shadowtex独立管理，提高灵活性 ⭐
+ * - 拆分设计: shadowcolor和shadowtex独立管理，提高灵活性
  * - 全局共享Root Signature - 所有PSO使用同一个
  * - Root Signature切换: 1次/帧 (传统方式: 1000次/帧)
  * - 支持1,000,000+纹理同时注册
@@ -59,14 +70,14 @@
  *     uint32_t renderingBufferIndex;            // Offset 24
  *     uint32_t matricesBufferIndex;             // Offset 28
  *     // Texture Buffers (4 bytes)
- *     uint32_t colorTargetsBufferIndex;         // Offset 32 ⭐
+ *     uint32_t colorTargetsBufferIndex;         // Offset 32
  *     // Combined Buffers (12 bytes) - 拆分Shadow系统
  *     uint32_t depthTexturesBufferIndex;        // Offset 36
- *     uint32_t shadowColorBufferIndex;          // Offset 40 ⭐ 拆分
- *     uint32_t shadowTexturesBufferIndex;       // Offset 44 ⭐ 拆分
+ *     uint32_t shadowColorBufferIndex;          // Offset 40 拆分
+ *     uint32_t shadowTexturesBufferIndex;       // Offset 44 拆分
  *     // Direct Texture (4 bytes)
  *     uint32_t noiseTextureIndex;               // Offset 48
- *     // CustomImage Buffer (4 bytes) - 新增 ⭐
+ *     // CustomImage Buffer (4 bytes) - 新增
  *     uint32_t customImageBufferIndexCBV;       // Offset 52 (customImage0-15)
  * };
  * ```
@@ -84,18 +95,18 @@ cbuffer RootConstants : register(b0, space0)
     uint matricesBufferIndex; // 矩阵数据
 
     // Texture Buffers with Flip Support (4 bytes)
-    uint colorTargetsBufferIndex; // ⭐ colortex0-15 (Main/Alt)
+    uint colorTargetsBufferIndex; // colortex0-15 (Main/Alt)
 
     // Combined Buffers (12 bytes) - 拆分Shadow系统
     uint depthTexturesBufferIndex; // depthtex0/1/2 (引擎生成) - Offset 36
-    uint shadowColorBufferIndex; // ⭐ shadowcolor0-7 (需要flip) - Offset 40
-    uint shadowTexturesBufferIndex; // ⭐ shadowtex0/1 (固定) - Offset 44
+    uint shadowColorBufferIndex; // shadowcolor0-7 (需要flip) - Offset 40
+    uint shadowTexturesBufferIndex; // shadowtex0/1 (固定) - Offset 44
 
     // Direct Texture Index (4 bytes)
     uint noiseTextureIndex; // noisetex (静态纹理) - Offset 48
 
     // CustomImage Buffer Index (4 bytes) - 新增
-    uint customImageBufferIndexCBV; // ⭐ customImage0-15 (自定义材质槽位) - Offset 52
+    uint customImageBufferIndexCBV; // customImage0-15 (自定义材质槽位) - Offset 52
 };
 
 //──────────────────────────────────────────────────────
@@ -120,27 +131,29 @@ struct RenderTargetsBuffer
 };
 
 /**
- * @brief DepthTexturesBuffer - depthtex0/1/2索引管理（16 bytes）
+ * @brief DepthTexturesBuffer - 深度纹理索引管理（64 bytes）M3.1版本
  *
  * 教学要点:
- * 1. 存储3个引擎生成的深度纹理索引
- * 2. 不需要flip机制（每帧独立生成）
- * 3. depthtex0: 完整深度（包含半透明+手部）
- * 4. depthtex1: 半透明前深度（no translucents）
- * 5. depthtex2: 手部前深度（no hand）
+ * 1. 支持1-16个深度纹理（动态配置）
+ * 2. 保持与Iris的向后兼容（depthtex0/1/2）
+ * 3. 不需要flip机制（每帧独立生成）
+ * 4. 固定64字节结构（16个uint索引）
+ *
+ * 索引语义（向后兼容Iris）:
+ * - depthTextureIndices[0] = depthtex0 (完整深度，包含半透明+手部)
+ * - depthTextureIndices[1] = depthtex1 (半透明前深度，no translucents)
+ * - depthTextureIndices[2] = depthtex2 (手部前深度，no hand)
+ * - depthTextureIndices[3-15] = 用户自定义深度纹理
  *
  * 对应C++: DepthTexturesIndexBuffer.hpp
  */
 struct DepthTexturesBuffer
 {
-    uint depthtex0Index; // 完整深度
-    uint depthtex1Index; // 半透明前深度
-    uint depthtex2Index; // 手部前深度
-    uint padding; // 对齐填充
+    uint depthTextureIndices[16]; // 最多16个深度纹理索引
 };
 
 /**
- * @brief ShadowColorBuffer - Shadow颜色纹理索引管理（64 bytes）⭐ 拆分设计
+ * @brief ShadowColorBuffer - Shadow颜色纹理索引管理（64 bytes）拆分设计
  *
  * 教学要点:
  * 1. 存储8个shadowcolor的读写索引
@@ -157,13 +170,19 @@ struct ShadowColorBuffer
 };
 
 /**
- * @brief ShadowTexturesBuffer - Shadow深度纹理索引管理（16 bytes）⭐ 拆分设计
+ * @brief ShadowTexturesBuffer - Shadow深度纹理索引管理（16 bytes）独立Buffer设计
  *
  * 教学要点:
- * 1. 存储2个shadowtex的索引
+ * 1. 独立Buffer管理shadowtex0/1（与shadowcolor分离）
  * 2. shadowtex0Index: 完整阴影深度（不透明+半透明）
  * 3. shadowtex1Index: 半透明前阴影深度
- * 4. 不需要flip机制（只读纹理）
+ * 4. 不需要flip机制（只读纹理，每帧固定）
+ * 5. 拆分设计优势：shadowcolor和shadowtex独立更新，提高灵活性
+ *
+ * 架构说明:
+ * - 独立Buffer: shadowTexturesBufferIndex (Root Constant Offset 44)
+ * - 与shadowColorBufferIndex分离（Offset 40）
+ * - 非"激进合并"，而是"拆分设计"以支持独立管理
  *
  * 对应C++: ShadowTexturesIndexBuffer.hpp
  */
@@ -175,7 +194,7 @@ struct ShadowTexturesBuffer
 };
 
 /**
- * @brief CustomImageIndexBuffer - 自定义材质槽位索引缓冲区（256 bytes）⭐ 新增
+ * @brief CustomImageIndexBuffer - 自定义材质槽位索引缓冲区（64 bytes）新增
  *
  * 教学要点:
  * 1. 存储16个自定义材质槽位（customImage0-15）的Bindless索引
@@ -184,7 +203,7 @@ struct ShadowTexturesBuffer
  * 4. 用于材质系统扩展，支持自定义贴图（albedo、roughness、metallic等）
  *
  * 架构设计:
- * - 对齐到256字节，与ColorTargetsIndexBuffer保持一致
+ * - 结构体大小：64字节（16个uint索引）
  * - 只读访问，不需要flip机制
  * - 支持运行时动态更新槽位
  *
@@ -198,55 +217,56 @@ struct ShadowTexturesBuffer
 struct CustomImageIndexBuffer
 {
     uint customImageIndices[16]; // customImage0-15的Bindless索引
-    uint padding[48]; // 填充到256字节
 };
 
 // ===== Uniform Buffers（8个）=====
 
 /**
  * @brief CameraAndPlayerBuffer - 相机和玩家数据（对应CameraAndPlayerUniforms.hpp）
+ *
+ * 教学要点:
+ * 1. 此结构体对应Iris "Camera and Player Model" Uniform分类
+ * 2. 存储在GPU StructuredBuffer，通过cameraAndPlayerBufferIndex访问
+ * 3. HLSL StructuredBuffer会自动处理float3的16字节对齐，无需手动padding
+ * 4. 所有字段名称、类型、语义与Iris官方文档完全一致
+ *
+ * Iris官方文档参考:
+ * https://shaders.properties/current/reference/uniforms/camera/
+ *
+ * @note float3在StructuredBuffer中自动16字节对齐
+ * @note int3在StructuredBuffer中自动16字节对齐
+ * @note 字段顺序与CameraAndPlayerUniforms.hpp完全一致
  */
 struct CameraAndPlayerData
 {
+    // 相机位置相关（Iris官方字段）
     float3 cameraPosition; // 相机世界位置
-    float  eyeAltitude; // 玩家高度
+    float  eyeAltitude; // 玩家高度（Y坐标）
 
-    float3 cameraPositionFract; // 相机位置小数部分
-    float  _padding1;
+    float3 cameraPositionFract; // 相机位置小数部分 [0,1) (Iris Exclusive)
+    int3   cameraPositionInt; // 相机位置整数部分 (Iris Exclusive)
 
-    int3  cameraPositionInt; // 相机位置整数部分
-    float _padding2;
-
+    // 上一帧相机位置（用于运动模糊、TAA等）
     float3 previousCameraPosition; // 上一帧相机位置
-    float  _padding3;
+    float3 previousCameraPositionFract; // 上一帧相机位置小数部分 (Iris Exclusive)
+    int3   previousCameraPositionInt; // 上一帧相机位置整数部分 (Iris Exclusive)
 
-    float3 previousCameraPositionFract; // 上一帧相机位置小数部分
-    float  _padding4;
+    // 玩家头部和视线相关（Iris Exclusive）
+    float3 eyePosition; // 玩家头部模型世界位置
+    float3 relativeEyePosition; // 头部到相机偏移 (cameraPosition - eyePosition)
+    float3 playerBodyVector; // 玩家身体朝向（世界对齐）当前Iris实现有bug
+    float3 playerLookVector; // 玩家头部朝向（世界对齐）
 
-    int3  previousCameraPositionInt; // 上一帧相机位置整数部分
-    float _padding5;
+    // 视图空间相关
+    float3 upPosition; // 视图空间上方向向量（长度100）
 
-    float3 eyePosition; // 玩家头部位置
-    float  _padding6;
+    // 光照相关
+    int2 eyeBrightness; // 玩家位置光照值 [0,240] (x:方块光, y:天空光)
+    int2 eyeBrightnessSmooth; // 平滑光照值 [0,240]
 
-    float3 relativeEyePosition; // 头部到相机偏移
-    float  _padding7;
-
-    float3 playerBodyVector; // 玩家身体朝向
-    float  _padding8;
-
-    float3 playerLookVector; // 玩家视线朝向
-    float  _padding9;
-
-    float3 upPosition; // 上方向向量（长度100）
-    float  _padding10;
-
-    int2 eyeBrightness; // 玩家位置光照值
-    int2 eyeBrightnessSmooth; // 平滑光照值
-
-    float  centerDepthSmooth; // 屏幕中心深度（平滑）
-    bool   firstPersonCamera; // 是否第一人称
-    float2 _padding11;
+    // 其他
+    float centerDepthSmooth; // 屏幕中心深度（平滑，用于自动对焦）
+    bool  firstPersonCamera; // 是否第一人称视角
 };
 
 /**
@@ -312,83 +332,546 @@ struct ScreenAndSystemData
 
 /**
  * @brief IDData - ID数据（对应IDUniforms.hpp）
- * 注意：需要读取IDUniforms.hpp确定确切字段
+ *
+ * Iris官方文档参考:
+ * https://shaders.properties/current/reference/uniforms/id/
+ *
+ * 教学要点:
+ * 1. 此结构体对应Iris "ID" Uniform分类
+ * 2. 字段顺序、类型与C++端IDUniforms.hpp完全一致
+ * 3. HLSL自动处理对齐，无需手动padding
+ * 4. 所有字段名称、类型、语义与Iris官方文档完全一致
+ *
+ * @note 字段数量: 9个
+ * @note 对齐方式: HLSL自动对齐（int=4字节，float3=16字节）
  */
 struct IDData
 {
-    int   entityId; // 实体ID
-    int   blockId; // 方块ID
-    int   renderStage; // 渲染阶段
-    float _padding;
+    /**
+     * @brief 当前实体ID
+     * @iris entityId
+     * 从entity.properties读取的实体ID
+     * 值为0表示没有entity.properties文件
+     * 值为65535表示实体不在entity.properties中
+     */
+    int entityId;
+
+    /**
+     * @brief 当前方块实体ID（Tile Entity）
+     * @iris blockEntityId
+     * 从block.properties读取的方块实体ID
+     * 值为0表示没有block.properties文件
+     * 值为65535表示方块实体不在block.properties中
+     */
+    int blockEntityId;
+
+    /**
+     * @brief 当前渲染的物品ID
+     * @iris currentRenderedItemId
+     * @tag Iris Exclusive
+     * 基于item.properties检测当前渲染的物品/护甲
+     * 类似heldItemId，但应用于当前渲染的物品而非手持物品
+     */
+    int currentRenderedItemId;
+
+    /**
+     * @brief 玩家选中的方块ID
+     * @iris currentSelectedBlockId
+     * @tag Iris Exclusive
+     * 从block.properties读取玩家准星指向方块的ID
+     * 值为0表示未选中方块或没有block.properties文件
+     */
+    int currentSelectedBlockId;
+
+    /**
+     * @brief 玩家选中方块的位置（玩家空间）
+     * @iris currentSelectedBlockPos
+     * @tag Iris Exclusive
+     * 相对于玩家的方块中心坐标
+     * 如果未选中方块，所有分量为-256.0
+     */
+    float3 currentSelectedBlockPos;
+
+    /**
+     * @brief 主手物品ID
+     * @iris heldItemId
+     * 从item.properties读取主手物品的ID
+     * 值为0表示没有item.properties文件
+     * 值为-1表示手持物品不在item.properties中（包括空手）
+     */
+    int heldItemId;
+
+    /**
+     * @brief 副手物品ID
+     * @iris heldItemId2
+     * 从item.properties读取副手物品的ID
+     * 值为0表示没有item.properties文件
+     * 值为-1表示手持物品不在item.properties中（包括空手）
+     */
+    int heldItemId2;
+
+    /**
+     * @brief 主手物品的光照强度
+     * @iris heldBlockLightValue
+     * @range [0,15]
+     * 主手物品的发光等级（如火把=14）
+     * 原版方块范围0-15，某些模组方块可能更高
+     * 注意：如果oldHandLight未设置为false，此值取双手中光照最高的
+     */
+    int heldBlockLightValue;
+
+    /**
+     * @brief 副手物品的光照强度
+     * @iris heldBlockLightValue2
+     * @range [0,15]
+     * 副手物品的发光等级
+     * 原版方块范围0-15，某些模组方块可能更高
+     */
+    int heldBlockLightValue2;
 };
 
 /**
  * @brief WorldAndWeatherData - 世界和天气数据（对应WorldAndWeatherUniforms.hpp）
- * 注意：需要读取WorldAndWeatherUniforms.hpp确定确切字段
+ *
+ * Iris官方文档参考:
+ * https://shaders.properties/current/reference/uniforms/world/
+ *
+ * 教学要点:
+ * 1. 此结构体对应Iris "World/Weather" Uniform分类
+ * 2. 字段顺序、类型与C++端WorldAndWeatherUniforms.hpp完全一致
+ * 3. HLSL自动处理对齐，无需手动padding
+ * 4. 所有字段名称、类型、语义与Iris官方文档完全一致
+ *
+ * @note 字段数量: 12个
+ * @note 对齐方式: HLSL自动对齐（int=4字节，float=4字节，float3=16字节，float4=16字节）
  */
 struct WorldAndWeatherData
 {
-    int   worldTime; // 世界时间
-    int   worldDay; // 世界天数
-    int   moonPhase; // 月相
-    float sunAngle; // 太阳角度
+    /**
+     * @brief 太阳位置（视图空间）
+     * @iris sunPosition
+     * @range 长度为100
+     * 视图空间中的太阳方向向量，长度固定为100
+     */
+    float3 sunPosition;
 
-    float shadowAngle; // 阴影角度
-    float rainStrength; // 雨强度
-    float wetness; // 湿度
-    float thunderStrength; // 雷电强度
+    /**
+     * @brief 月亮位置（视图空间）
+     * @iris moonPosition
+     * @range 长度为100
+     * 视图空间中的月亮方向向量，长度固定为100
+     */
+    float3 moonPosition;
 
-    float3 sunPosition; // 太阳位置
-    float  _padding1;
+    /**
+     * @brief 阴影光源位置（视图空间）
+     * @iris shadowLightPosition
+     * @range 长度为100
+     * 指向太阳或月亮（取决于哪个更高），用于阴影计算
+     */
+    float3 shadowLightPosition;
 
-    float3 moonPosition; // 月亮位置
-    float  _padding2;
+    /**
+     * @brief 太阳角度
+     * @iris sunAngle
+     * @range [0,1]
+     * 0.0=日出, 0.25=正午, 0.5=日落, 0.75=午夜
+     */
+    float sunAngle;
 
-    float3 shadowLightPosition; // 阴影光源位置
-    float  _padding3;
+    /**
+     * @brief 阴影角度
+     * @iris shadowAngle
+     * @range [0,0.5]
+     * 阴影光源（太阳或月亮）的角度，范围0-0.5
+     */
+    float shadowAngle;
 
-    float3 upVector; // 上方向向量
-    float  _padding4;
+    /**
+     * @brief 月相
+     * @iris moonPhase
+     * @range [0,7]
+     * 0=满月, 1-3=渐亏月, 4=新月, 5-7=渐盈月
+     */
+    int moonPhase;
+
+    /**
+     * @brief 雨强度
+     * @iris rainStrength
+     * @range [0,1]
+     * 当前降雨强度，0=无雨，1=最大雨量
+     */
+    float rainStrength;
+
+    /**
+     * @brief 湿度
+     * @iris wetness
+     * @range [0,1]
+     * rainStrength随时间平滑后的值，用于雨后湿润效果
+     */
+    float wetness;
+
+    /**
+     * @brief 雷暴强度
+     * @iris thunderStrength
+     * @range [0,1]
+     * @tag Iris Exclusive
+     * 当前雷暴强度，Iris独有特性
+     */
+    float thunderStrength;
+
+    /**
+     * @brief 闪电位置
+     * @iris lightningBoltPosition
+     * @tag Iris Exclusive
+     * xyz: 闪电击中的世界坐标
+     * w: 闪电强度（0表示无闪电）
+     */
+    float4 lightningBoltPosition;
+
+    /**
+     * @brief 游戏内时间
+     * @iris worldTime
+     * @range [0, 23999]
+     * Minecraft一天24000 ticks
+     * 0=早上6点, 6000=正午, 12000=傍晚6点, 18000=午夜
+     */
+    int worldTime;
+
+    /**
+     * @brief 游戏内天数
+     * @iris worldDay
+     * 从世界创建开始的天数，每24000 ticks增加1
+     */
+    int worldDay;
 };
 
 /**
- * @brief BiomeAndDimensionData - 生物群系和维度数据（对应BiomeAndDimensionUniforms.hpp）
- * 注意：需要读取BiomeAndDimensionUniforms.hpp确定确切字段
+ * @brief BiomeAndDimensionData - 生物群系和维度数据
+ *
+ * 对应 C++ 端: BiomeAndDimensionUniforms.hpp
+ * Iris 官方文档: https://shaders.properties/current/reference/uniforms/biome/
+ *
+ * 教学要点:
+ * 1. 此结构体包含 Iris "Biome and Dimension" Uniform 分类的所有字段
+ * 2. 字段顺序和类型必须与 C++ 端完全一致（GPU StructuredBuffer 要求）
+ * 3. 使用 int 而非 bool（HLSL StructuredBuffer 对齐问题）
+ * 4. 所有字段名称严格遵循 Iris 官方规范（使用下划线命名）
+ *
+ * @note 共 12 个字段，无手动 padding
+ * @note 字段顺序: biome → biome_category → biome_precipitation → rainfall → temperature
+ *                → ambientLight → bedrockLevel → cloudHeight → hasCeiling → hasSkylight
+ *                → heightLimit → logicalHeightLimit
  */
 struct BiomeAndDimensionData
 {
-    float temperature; // 温度
-    float rainfall; // 降雨量
-    float humidity; // 湿度
-    int   biomeId; // 生物群系ID
+    // ========================================================================
+    // Biome Uniforms (OptiFine Custom Uniforms / Iris)
+    // ========================================================================
 
-    int   dimensionId; // 维度ID（0=主世界，-1=下界，1=末地）
-    bool  hasCeiling; // 是否有天花板
-    bool  hasSkylight; // 是否有天空光
-    float _padding;
+    /**
+     * @brief 生物群系ID
+     * @iris biome
+     * @tag OptiFine CU / Iris
+     * 玩家当前所在生物群系的唯一ID
+     */
+    int biome;
+
+    /**
+     * @brief 生物群系类别
+     * @iris biome_category
+     * @tag OptiFine CU / Iris
+     * 生物群系的大类分类（CAT_NONE, CAT_TAIGA, CAT_EXTREME_HILLS 等）
+     */
+    int biome_category;
+
+    /**
+     * @brief 降水类型
+     * @iris biome_precipitation
+     * @range 0=无降水, 1=雨, 2=雪
+     * @tag OptiFine CU / Iris
+     */
+    int biome_precipitation;
+
+    /**
+     * @brief 生物群系降雨量
+     * @iris rainfall
+     * @range [0,1]
+     * @tag OptiFine CU / Iris
+     * 生物群系的降雨属性（0=干旱，1=多雨）
+     */
+    float rainfall;
+
+    /**
+     * @brief 生物群系温度
+     * @iris temperature
+     * @range [-0.7, 2.0] (原版Minecraft)
+     * @tag OptiFine CU / Iris
+     * 影响降水形式（雨/雪）和植被颜色
+     */
+    float temperature;
+
+    // ========================================================================
+    // Dimension Uniforms (Iris Exclusive)
+    // ========================================================================
+
+    /**
+     * @brief 环境光照等级
+     * @iris ambientLight
+     * @tag Iris Exclusive
+     * 当前维度的环境光属性
+     */
+    float ambientLight;
+
+    /**
+     * @brief 基岩层高度
+     * @iris bedrockLevel
+     * @tag Iris Exclusive
+     * 当前维度的基岩层地板Y坐标（1.18+ 主世界为 -64）
+     */
+    int bedrockLevel;
+
+    /**
+     * @brief 云层高度
+     * @iris cloudHeight
+     * @tag Iris Exclusive
+     * 原版云层的Y坐标，无云维度为 NaN
+     */
+    float cloudHeight;
+
+    /**
+     * @brief 是否有天花板
+     * @iris hasCeiling
+     * @tag Iris Exclusive
+     * 1=有顶（下界），0=无顶（主世界、末地）
+     * @note 使用 int 而非 bool（HLSL StructuredBuffer 对齐要求）
+     */
+    int hasCeiling;
+
+    /**
+     * @brief 是否有天空光
+     * @iris hasSkylight
+     * @tag Iris Exclusive
+     * 1=有天空光（主世界、末地），0=无天空光（下界）
+     * @note 使用 int 而非 bool（HLSL StructuredBuffer 对齐要求）
+     */
+    int hasSkylight;
+
+    /**
+     * @brief 世界高度限制
+     * @iris heightLimit
+     * @tag Iris Exclusive
+     * 最低方块和最高方块之间的高度差（1.18+ 主世界为 384）
+     */
+    int heightLimit;
+
+    /**
+     * @brief 逻辑高度限制
+     * @iris logicalHeightLimit
+     * @tag Iris Exclusive
+     * 维度的逻辑高度（紫颂果生长、下界传送门传送的最大高度）
+     */
+    int logicalHeightLimit;
 };
 
 /**
- * @brief RenderingData - 渲染数据（对应RenderingUniforms.hpp）
- * 注意：需要读取RenderingUniforms.hpp确定确切字段
+ * @brief RenderingData - 渲染相关数据（对应RenderingUniforms.hpp）
+ *
+ * Iris官方文档参考:
+ * https://shaders.properties/current/reference/uniforms/rendering/
+ *
+ * 教学要点:
+ * 1. 此结构体对应Iris "Rendering" Uniform分类
+ * 2. 存储在GPU StructuredBuffer，通过renderingBufferIndex访问
+ * 3. 包含裁剪面、渲染阶段、Alpha测试、混合模式、雾参数等
+ * 4. 所有字段名称严格遵循Iris官方规范
+ * 5. 字段顺序必须与C++端RenderingUniforms.hpp完全一致
+ * 6. Vec3/Vec4自动16字节对齐，无需手动padding
+ *
+ * HLSL访问示例:
+ * ```hlsl
+ * StructuredBuffer<RenderingData> renderingBuffer =
+ *     ResourceDescriptorHeap[renderingBufferIndex];
+ * float nearPlane = renderingBuffer[0].near;
+ * float alphaTestRef = renderingBuffer[0].alphaTestRef;
+ * float3 fogColor = renderingBuffer[0].fogColor;
+ * ```
  */
 struct RenderingData
 {
-    float fogStart; // 雾起始距离
-    float fogEnd; // 雾结束距离
-    float fogDensity; // 雾密度
-    int   fogMode; // 雾模式
+    /**
+     * @brief 近裁剪面距离
+     * @iris near
+     * @value 0.05
+     * 相机近裁剪面的距离，除非被模组修改，通常固定为 0.05
+     */
+    float near;
 
-    float3 fogColor; // 雾颜色
-    float  _padding1;
+    /**
+     * @brief 当前渲染距离（方块）
+     * @iris far
+     * @range (0, +∞)
+     * 当前渲染距离设置（方块数）
+     * 注意：这不是远裁剪面距离（实际约为 far * 4.0）
+     */
+    float far;
 
-    float3 skyColor; // 天空颜色
-    float  _padding2;
+    /**
+     * @brief Alpha测试参考值
+     * @iris alphaTestRef
+     * @range [0,1]
+     * Alpha < alphaTestRef的像素被丢弃
+     * 用于镂空纹理（如树叶、玻璃）
+     * 通常为 0.1，但可通过 alphaTest 指令修改
+     * 推荐使用此 uniform 而非硬编码值
+     *
+     * HLSL使用示例:
+     * if (albedoOut.a < alphaTestRef) discard;
+     */
+    float alphaTestRef;
 
-    int   renderStage; // 当前渲染阶段
-    bool  isMainHand; // 是否主手
-    bool  isOffHand; // 是否副手
-    float _padding3;
+    /**
+     * @brief 区块偏移（模型空间）
+     * @iris chunkOffset
+     * 当前渲染地块的模型空间偏移
+     * 用于大世界渲染的精度优化
+     * 与 vaPosition 结合获取模型空间位置:
+     *   float3 model_pos = vaPosition + chunkOffset;
+     * 非地形渲染时为全 0
+     * 兼容性配置文件下为全 0
+     * Vec3自动16字节对齐
+     */
+    float3 chunkOffset;
+
+    /**
+     * @brief 实体染色颜色
+     * @iris entityColor
+     * @range [0,1]
+     * rgb: 染色颜色
+     * a: 混合因子
+     * 应用方式:
+     *   color.rgb = lerp(color.rgb, entityColor.rgb, entityColor.a);
+     * Vec4自动16字节对齐
+     */
+    float4 entityColor;
+
+    /**
+     * @brief Alpha混合函数
+     * @iris blendFunc
+     * 当前程序的Alpha混合函数乘数（由 blend.<program> 指令定义）
+     * x: 源RGB混合因子
+     * y: 目标RGB混合因子
+     * z: 源Alpha混合因子
+     * w: 目标Alpha混合因子
+     *
+     * 取值含义（LWJGL常量）:
+     * - GL_ZERO = 0
+     * - GL_ONE = 1
+     * - GL_SRC_COLOR = 768
+     * - GL_ONE_MINUS_SRC_COLOR = 769
+     * - GL_SRC_ALPHA = 770
+     * - GL_ONE_MINUS_SRC_ALPHA = 771
+     * - GL_DST_ALPHA = 772
+     * - GL_ONE_MINUS_DST_ALPHA = 773
+     * - GL_DST_COLOR = 774
+     * - GL_ONE_MINUS_DST_COLOR = 775
+     * - GL_SRC_ALPHA_SATURATE = 776
+     * IntVec4自动16字节对齐
+     */
+    int4 blendFunc;
+
+    /**
+     * @brief 纹理图集大小
+     * @iris atlasSize
+     * 纹理图集的尺寸（像素）
+     * 仅在纹理图集绑定时有值
+     * 未绑定时返回 (0, 0)
+     */
+    int2 atlasSize;
+
+    /**
+     * @brief 当前渲染阶段
+     * @iris renderStage
+     * 当前几何体的"渲染阶段"
+     * 比 gbuffer 程序更细粒度地标识几何体类型
+     * 应与 Iris 定义的预处理器宏比较（如 MC_RENDER_STAGE_TERRAIN_SOLID）
+     */
+    int renderStage;
+
+    /**
+     * @brief 地平线雾颜色
+     * @iris fogColor
+     * @range [0,1]
+     * 原版游戏用于天空渲染和雾效的地平线雾颜色
+     * 可能受生物群系、时间、视角影响
+     * Vec3自动16字节对齐
+     */
+    float3 fogColor;
+
+    /**
+     * @brief 上层天空颜色
+     * @iris skyColor
+     * @range [0,1]
+     * 原版游戏用于天空渲染的上层天空颜色
+     * 可能受生物群系、时间影响
+     * 不受视角影响（与 fogColor 的区别）
+     * Vec3自动16字节对齐
+     */
+    float3 skyColor;
+
+    /**
+     * @brief 相对雾密度
+     * @iris fogDensity
+     * @range [0.0, 1.0]
+     * 原版雾的相对密度
+     * 基于当前生物群系、天气、流体（水/熔岩/积雪）等
+     * 0.0 = 最低密度，1.0 = 最高密度
+     */
+    float fogDensity;
+
+    /**
+     * @brief 雾起始距离（方块）
+     * @iris fogStart
+     * @range [0, +∞)
+     * 原版雾的起始距离
+     * 基于当前生物群系、天气、流体等
+     */
+    float fogStart;
+
+    /**
+     * @brief 雾结束距离（方块）
+     * @iris fogEnd
+     * @range [0, +∞)
+     * 原版雾的结束距离
+     * 基于当前生物群系、天气、流体等
+     */
+    float fogEnd;
+
+    /**
+     * @brief 雾模式
+     * @iris fogMode
+     * @range 2048, 2049, 9729
+     * 原版雾的类型（基于生物群系、天气、流体等）
+     * 决定雾强度随距离的衰减函数
+     *
+     * 取值含义（LWJGL常量）:
+     * - GL_EXP = 2048: 指数雾
+     * - GL_EXP2 = 2049: 平方指数雾
+     * - GL_LINEAR = 9729: 线性雾
+     */
+    int fogMode;
+
+    /**
+     * @brief 雾形状
+     * @iris fogShape
+     * @range 0, 1
+     * 原版雾的形状（基于生物群系、天气、流体、洞穴等）
+     *
+     * 取值含义:
+     * - 0: 球形雾
+     * - 1: 柱形雾
+     */
+    int fogShape;
 };
 
 /**
@@ -555,8 +1038,8 @@ Texture2D<float> GetDepthTex0()
     StructuredBuffer<DepthTexturesBuffer> depthBuffer =
         ResourceDescriptorHeap[depthTexturesBufferIndex];
 
-    // 2. 查询depthtex0索引
-    uint textureIndex = depthBuffer[0].depthtex0Index;
+    // 2. 查询depthtex0索引（数组索引0）
+    uint textureIndex = depthBuffer[0].depthTextureIndices[0];
 
     // 3. 返回深度纹理
     return ResourceDescriptorHeap[textureIndex];
@@ -576,8 +1059,8 @@ Texture2D<float> GetDepthTex1()
     StructuredBuffer<DepthTexturesBuffer> depthBuffer =
         ResourceDescriptorHeap[depthTexturesBufferIndex];
 
-    // 2. 查询depthtex1索引
-    uint textureIndex = depthBuffer[0].depthtex1Index;
+    // 2. 查询depthtex1索引（数组索引1）
+    uint textureIndex = depthBuffer[0].depthTextureIndices[1];
 
     // 3. 返回深度纹理
     return ResourceDescriptorHeap[textureIndex];
@@ -597,15 +1080,15 @@ Texture2D<float> GetDepthTex2()
     StructuredBuffer<DepthTexturesBuffer> depthBuffer =
         ResourceDescriptorHeap[depthTexturesBufferIndex];
 
-    // 2. 查询depthtex2索引
-    uint textureIndex = depthBuffer[0].depthtex2Index;
+    // 2. 查询depthtex2索引（数组索引2）
+    uint textureIndex = depthBuffer[0].depthTextureIndices[2];
 
     // 3. 返回深度纹理
     return ResourceDescriptorHeap[textureIndex];
 }
 
 /**
- * @brief 获取阴影颜色纹理（shadowcolor0-7）⭐ 拆分设计
+ * @brief 获取阴影颜色纹理（shadowcolor0-7）拆分设计
  * @param shadowIndex shadowcolor索引（0-7）
  * @return Texture2D资源（Main或Alt，根据flip状态）
  *
@@ -628,46 +1111,40 @@ Texture2D GetShadowColor(uint shadowIndex)
 }
 
 /**
- * @brief 获取阴影深度纹理0（完整阴影深度）⭐ 拆分设计
+ * @brief 获取阴影深度纹理（统一接口）拆分设计
+ * @param index 阴影纹理索引（0或1）
  * @return Texture2D<float>资源
  *
  * 教学要点:
- * - shadowtex0: 包含所有物体的阴影深度（不透明+半透明）
+ * - shadowtex0 (index=0): 包含所有物体的阴影深度（不透明+半透明）
+ * - shadowtex1 (index=1): 只包含不透明物体的阴影深度
  * - 只读纹理，不需要flip
  * - 拆分方案：独立管理shadowcolor和shadowtex
- */
-Texture2D<float> GetShadowTex0()
-{
-    // 1. 获取ShadowTexturesBuffer
-    StructuredBuffer<ShadowTexturesBuffer> shadowTexBuffer =
-        ResourceDescriptorHeap[shadowTexturesBufferIndex];
-
-    // 2. 查询shadowtex0索引
-    uint textureIndex = shadowTexBuffer[0].shadowtex0Index;
-
-    // 3. 返回shadowtex0
-    return ResourceDescriptorHeap[textureIndex];
-}
-
-/**
- * @brief 获取阴影深度纹理1（半透明前阴影深度）⭐ 拆分设计
- * @return Texture2D<float>资源
+ * - 统一接口风格：与GetRenderTarget(uint)保持一致
  *
- * 教学要点:
- * - shadowtex1: 只包含不透明物体的阴影深度
- * - 用于半透明物体的阴影处理
- * - 拆分方案：独立管理shadowcolor和shadowtex
+ * 架构优势:
+ * - 统一的访问模式，减少代码重复
+ * - 支持动态索引访问（循环、条件判断）
+ * - 保持向后兼容性（通过宏定义）
  */
-Texture2D<float> GetShadowTex1()
+Texture2D<float> GetShadowTex(int index)
 {
     // 1. 获取ShadowTexturesBuffer
     StructuredBuffer<ShadowTexturesBuffer> shadowTexBuffer =
         ResourceDescriptorHeap[shadowTexturesBufferIndex];
 
-    // 2. 查询shadowtex1索引
-    uint textureIndex = shadowTexBuffer[0].shadowtex1Index;
+    // 2. 根据索引查询对应的shadowtex索引
+    uint textureIndex;
+    if (index == 0)
+    {
+        textureIndex = shadowTexBuffer[0].shadowtex0Index;
+    }
+    else // index == 1
+    {
+        textureIndex = shadowTexBuffer[0].shadowtex1Index;
+    }
 
-    // 3. 返回shadowtex1
+    // 3. 返回对应的shadowtex
     return ResourceDescriptorHeap[textureIndex];
 }
 
@@ -687,7 +1164,7 @@ Texture2D GetNoiseTex()
 }
 
 /**
- * @brief 获取自定义材质槽位的Bindless索引 ⭐ 新增
+ * @brief 获取自定义材质槽位的Bindless索引 新增
  * @param slotIndex 槽位索引（0-15）
  * @return Bindless索引，如果槽位未设置则返回UINT32_MAX (0xFFFFFFFF)
  *
@@ -725,7 +1202,7 @@ uint GetCustomImageIndex(uint slotIndex)
 }
 
 /**
- * @brief 获取自定义材质纹理（便捷访问函数）⭐ 新增
+ * @brief 获取自定义材质纹理（便捷访问函数）新增
  * @param slotIndex 槽位索引（0-15）
  * @return 对应的Bindless纹理（Texture2D）
  *
@@ -768,10 +1245,17 @@ Texture2D GetCustomImage(uint slotIndex)
  * @brief Iris Shader完全兼容宏定义
  *
  * 教学要点:
- * 1. 支持完整Iris纹理系统：colortex, shadowcolor, depthtex, shadowtex, noisetex
- * 2. 宏自动映射到对应的Get函数
+ * 1. 支持完整Iris纹理系统：colortex, shadowcolor, depthtex, shadowtex, noisetex, customImage
+ * 2. 宏自动映射到对应的Get函数（统一接口设计）
  * 3. 零学习成本移植Iris Shader Pack
  * 4. Main/Alt自动处理，无需手动管理双缓冲
+ * 5. Shadow系统拆分：shadowcolor和shadowtex独立Buffer管理
+ *
+ * 统一接口设计:
+ * - GetRenderTarget(uint index): colortex0-15统一访问
+ * - GetShadowColor(uint index): shadowcolor0-7统一访问
+ * - GetShadowTex(int index): shadowtex0/1统一访问
+ * - GetCustomImage(uint index): customImage0-15统一访问
  *
  * 示例:
  * ```hlsl
@@ -787,6 +1271,9 @@ Texture2D GetCustomImage(uint slotIndex)
  *
  * // 噪声纹理（noisetex）
  * float4 noise = noisetex.Sample(linearSampler, uv);
+ *
+ * // 自定义材质槽位（customImage0-15）
+ * float4 albedo = customImage0.Sample(linearSampler, uv);
  * ```
  */
 
@@ -813,7 +1300,9 @@ Texture2D GetCustomImage(uint slotIndex)
 #define depthtex1  GetDepthTex1()
 #define depthtex2  GetDepthTex2()
 
-// ===== ShadowColor（shadowcolor0-7）⭐ 激进合并 =====
+// ===== ShadowColor（shadowcolor0-7）独立Buffer管理 =====
+// 通过shadowColorBufferIndex访问ShadowColorBuffer
+// 支持flip机制（Ping-Pong双缓冲）
 #define shadowcolor0 GetShadowColor(0)
 #define shadowcolor1 GetShadowColor(1)
 #define shadowcolor2 GetShadowColor(2)
@@ -823,14 +1312,17 @@ Texture2D GetCustomImage(uint slotIndex)
 #define shadowcolor6 GetShadowColor(6)
 #define shadowcolor7 GetShadowColor(7)
 
-// ===== ShadowTex（shadowtex0/1）⭐ 激进合并 =====
-#define shadowtex0 GetShadowTex0()
-#define shadowtex1 GetShadowTex1()
+// ===== ShadowTex（shadowtex0/1）独立Buffer + 统一接口 =====
+// 通过shadowTexturesBufferIndex访问ShadowTexturesBuffer
+// 使用统一的GetShadowTex(int index)接口，保持Iris兼容性
+// 只读纹理，不需要flip机制
+#define shadowtex0 GetShadowTex(0)
+#define shadowtex1 GetShadowTex(1)
 
 // ===== NoiseTex（noisetex）=====
 #define noisetex GetNoiseTex()
 
-// ===== CustomImage（customImage0-15）⭐ 新增 =====
+// ===== CustomImage（customImage0-15）新增 =====
 // 自定义材质槽位，用于扩展材质系统
 // 使用场景：PBR材质贴图（albedo、roughness、metallic等）、自定义LUT、特效贴图
 #define customImage0  GetCustomImage(0)
@@ -875,7 +1367,7 @@ SamplerState shadowSampler : register(s2); // 阴影比较采样器
 //──────────────────────────────────────────────────────
 
 /**
- * ❌ 不在Common.hlsl中定义固定的PSOutput！
+ * 不在Common.hlsl中定义固定的PSOutput！
  * + PSOutput由ShaderCodeGenerator动态生成
  *
  * 原因:
@@ -1044,7 +1536,7 @@ VSOutput StandardVertexTransform(VSInput input)
  * }
  * ```
  *
- * 1.5. CustomImage使用示例（延迟渲染PBR材质）⭐ 新增:
+ * 1.5. CustomImage使用示例（延迟渲染PBR材质）新增:
  * ```hlsl
  * #include "Common.hlsl"
  *

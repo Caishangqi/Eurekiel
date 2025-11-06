@@ -152,9 +152,44 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
 {
     int64_t chunkPackID = PackCoordinates(chunkX, chunkY);
     auto    it          = m_loadedChunks.find(chunkPackID);
-    if (it != m_loadedChunks.end())
+    if (it == m_loadedChunks.end())
     {
-        Chunk* chunk = it->second.get();
+        return; // Chunk not loaded
+    }
+
+    Chunk* chunk = it->second.get();
+
+    // ===== Phase 4: 指针有效性检查（崩溃防护点1） =====
+    // 防止访问已被 worker 线程删除的 chunk
+    if (!chunk)
+    {
+        LogWarn(LogChunk,
+                "Chunk (%d, %d) pointer is null during unload, cleanup map entry",
+                chunkX, chunkY);
+        m_loadedChunks.erase(it);
+        return;
+    }
+
+    // ===== Phase 4: 状态安全读取（崩溃防护点2） =====
+    // 在访问 chunk 状态前再次验证指针（双重保险）
+    ChunkState currentState = chunk->GetState();
+
+    // Core logic: distinguish between Generating and other states
+    if (currentState == ChunkState::Generating)
+    {
+        // Currently generating: use delayed deletion
+        LogDebug(LogChunk, "Chunk (%d, %d) is generating, marking for delayed deletion", chunkX, chunkY);
+        chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
+
+        // Transfer ownership to raw pointer for delayed deletion
+        Chunk* rawChunk = it->second.release();
+        m_loadedChunks.erase(it);
+        MarkChunkForDeletion(rawChunk);
+    }
+    else
+    {
+        // Other states: immediate deletion (preserve original behavior)
+        LogDebug(LogChunk, "Chunk (%d, %d) safe to unload immediately (state: %d)", chunkX, chunkY, (int)currentState);
 
         // Save chunk if modified and storage is configured
         if (chunk && chunk->NeedsMeshRebuild() && m_chunkStorage && m_chunkSerializer)
@@ -172,12 +207,12 @@ void ChunkManager::UnloadChunk(int32_t chunkX, int32_t chunkY)
         // Cleanup VBO resources to prevent GPU leaks
         if (chunk && chunk->GetMesh())
         {
-            // Simply clear the mesh pointer, let the unique_ptr handle cleanup
             chunk->SetMesh(nullptr);
         }
 
-        LogInfo(LogChunk, "Unloading chunk: %d, %d", chunkX, chunkY);
+        chunk->TrySetState(currentState, ChunkState::Inactive);
         m_loadedChunks.erase(it);
+        // unique_ptr will automatically delete the chunk
     }
 }
 
@@ -489,4 +524,95 @@ void ChunkManager::FlushStorage()
             LogError(LogChunk, "Failed to flush storage: %s", e.what());
         }
     }
+}
+
+// ============================================================================
+// Delayed Deletion Management Implementation
+// ============================================================================
+
+void ChunkManager::MarkChunkForDeletion(Chunk* chunk)
+{
+    if (chunk == nullptr)
+    {
+        LogError(LogChunk, "Attempted to mark null chunk for deletion");
+        return;
+    }
+
+    // Check if chunk is already in the pending deletion queue
+    auto it = std::find(m_pendingDeleteChunks.begin(), m_pendingDeleteChunks.end(), chunk);
+    if (it != m_pendingDeleteChunks.end())
+    {
+        LogWarn(LogChunk, "Chunk (%d, %d) already in pending deletion queue",
+                chunk->GetChunkX(), chunk->GetChunkZ());
+        return;
+    }
+
+    m_pendingDeleteChunks.push_back(chunk);
+    LogDebug(LogChunk, "Marked chunk (%d, %d) for deletion, queue size: %zu",
+             chunk->GetChunkX(), chunk->GetChunkZ(), m_pendingDeleteChunks.size());
+}
+
+void ChunkManager::ProcessPendingDeletions()
+{
+    if (m_pendingDeleteChunks.empty())
+    {
+        return;
+    }
+
+    std::vector<Chunk*> remainingChunks;
+    int                 deletedCount = 0;
+
+    for (Chunk* chunk : m_pendingDeleteChunks)
+    {
+        // ===== Phase 4: 空指针检查（崩溃防护点3） =====
+        // 防止处理空指针或已删除的 chunk
+        if (!chunk)
+        {
+            LogWarn(LogChunk,
+                    "Found null chunk in pending deletion queue, skipping");
+            continue;
+        }
+
+        ChunkState state = chunk->GetState();
+
+        // Safe to delete if Inactive or PendingUnload (worker thread finished)
+        if (state == ChunkState::Inactive || state == ChunkState::PendingUnload)
+        {
+            int32_t chunkX = chunk->GetChunkX();
+            int32_t chunkZ = chunk->GetChunkZ();
+
+            // Cleanup VBO resources to prevent GPU leaks
+            if (chunk->GetMesh())
+            {
+                chunk->SetMesh(nullptr);
+            }
+
+            // Delete the chunk object
+            delete chunk;
+            deletedCount++;
+
+            LogDebug(LogChunk, "Safely deleted chunk (%d, %d)", chunkX, chunkZ);
+        }
+        else
+        {
+            // Still generating: keep for next frame
+            remainingChunks.push_back(chunk);
+            LogWarn(LogChunk, "Chunk (%d, %d) still in state %d, defer deletion",
+                    chunk->GetChunkX(), chunk->GetChunkZ(), static_cast<int>(state));
+        }
+    }
+
+    // Update pending deletion queue
+    m_pendingDeleteChunks = std::move(remainingChunks);
+
+    if (deletedCount > 0)
+    {
+        LogDebug(LogChunk, "Processed deletions: %d deleted, %zu remaining",
+                 deletedCount, m_pendingDeleteChunks.size());
+    }
+}
+
+size_t ChunkManager::GetPendingDeletionCount() const
+{
+    return m_pendingDeleteChunks.size();
 }

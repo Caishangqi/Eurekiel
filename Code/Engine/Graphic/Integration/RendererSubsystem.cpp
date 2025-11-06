@@ -3,20 +3,46 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Core/Yaml.hpp" // Milestone 3.0 任务3: YAML配置读取
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Core/StringUtils.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp" // Milestone 3.0: GBuffer配置API
+#include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
 #include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
 #include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp" // Phase 3: Uniform管理器
+#include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
+#include "Engine/Graphic/Shader/ShaderPack/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
+#include "Engine/Graphic/Shader/ShaderPack/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
+#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
+#include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
+#include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
+#include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp" // Shrimp Task 2: DXC编译器
+#include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
+#include "Engine/Graphic/Integration/RendererHelper.hpp" // 阶段2.4: RendererHelper工具类
 
 using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
+
+#pragma region Lifecycle Management
+void RendererSubsystem::RenderStatistics::Reset()
+{
+    drawCalls            = 0;
+    trianglesRendered    = 0;
+    activeShaderPrograms = 0;
+
+    // 重置immediate模式统计
+    commandsPerPhase.clear();
+    totalCommandsSubmitted = 0;
+    totalCommandsExecuted  = 0;
+    averageCommandTime     = 0.0f;
+}
 
 // Milestone 3.0: 构造函数参数类型从Configuration改为RendererSubsystemConfig
 RendererSubsystem::RendererSubsystem(RendererSubsystemConfig& config)
@@ -68,6 +94,30 @@ void RendererSubsystem::Initialize()
 
     m_isInitialized = true;
     LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully through RendererSubsystem");
+
+    // 创建PSOManager
+    m_psoManager = std::make_unique<PSOManager>();
+    LogInfo(LogRenderer, "PSOManager created successfully");
+
+    // ==================== 初始化ShaderCache (Shrimp Task) ====================
+    // 创建ShaderCache并注册ProgramId映射
+    m_shaderCache = std::make_unique<ShaderCache>();
+
+    // 注册91个ProgramId映射（使用ProgramIdToSourceName函数）
+    std::unordered_map<ProgramId, std::string> programIdMappings;
+    for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
+    {
+        ProgramId   id   = static_cast<ProgramId>(i);
+        std::string name = ProgramIdToSourceName(id);
+        if (name != "unknown")
+        {
+            programIdMappings[id] = name;
+        }
+    }
+
+    m_shaderCache->RegisterProgramIds(programIdMappings);
+    LogInfo(LogRenderer, "ShaderCache initialized with %zu ProgramId mappings",
+            m_shaderCache->GetProgramIdCount());
 
     // 显示架构流程确认信息
     LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
@@ -147,8 +197,10 @@ void RendererSubsystem::Startup()
 
         if (!m_defaultShaderPack || !m_defaultShaderPack->IsValid())
         {
+            LogError("Engine default ShaderPack loaded but validation failed! Path: %s",
+                     engineDefaultPath.string().c_str());
             ERROR_AND_DIE(Stringf("Engine default ShaderPack loaded but validation failed! Path: %s",
-                engineDefaultPath.string().c_str()).c_str());
+                engineDefaultPath.string().c_str()))
         }
 
         LogInfo(LogRenderer,
@@ -156,15 +208,18 @@ void RendererSubsystem::Startup()
     }
     catch (const std::exception& e)
     {
+        LogError("Failed to load engine default ShaderPack! Path: %s, Error: %s",
+                 engineDefaultPath.string().c_str(), e.what());
         ERROR_AND_DIE(Stringf("Failed to load engine default ShaderPack! Path: %s, Error: %s",
-            engineDefaultPath.string().c_str(), e.what()).c_str());
+            engineDefaultPath.string().c_str(), e.what()))
     }
 
     // Step 4: Verify at least one ShaderPack is available
     // Teaching Note: m_defaultShaderPack is always required, m_userShaderPack is optional
     if (!m_defaultShaderPack)
     {
-        ERROR_AND_DIE("Both user and engine default ShaderPacks failed to load!");
+        LogError(LogRenderer, "Both user and engine default ShaderPacks failed to load!");
+        ERROR_AND_DIE("Both user and engine default ShaderPacks failed to load!")
     }
 
     // Step 5: Log final ShaderPack system status
@@ -172,6 +227,39 @@ void RendererSubsystem::Startup()
             "ShaderPack system initialized (User: {}, Default: {})",
             m_userShaderPack ? "+" : "-",
             m_defaultShaderPack ? "+" : "-");
+
+    // Step 6: 从引擎默认ShaderPack加载ShaderSource到ShaderCache (Shrimp Task)
+    // 缓存默认ProgramSet的ShaderSource
+    if (m_shaderCache && m_defaultShaderPack)
+    {
+        size_t totalSourcesCached = 0;
+
+        // 获取默认ProgramSet（world0）
+        const ProgramSet* programSet = m_defaultShaderPack->GetProgramSet();
+        if (programSet)
+        {
+            // 获取所有单一程序（ProgramId对应的ShaderSource）
+            const auto& singlePrograms = programSet->GetPrograms();
+            for (const auto& [id, source] : singlePrograms)
+            {
+                if (source && source->IsValid())
+                {
+                    std::string name = m_shaderCache->GetProgramName(id);
+                    if (!name.empty())
+                    {
+                        // 使用空deleter从unique_ptr创建shared_ptr（不转移所有权）
+                        m_shaderCache->CacheSource(name, std::shared_ptr<ShaderSource>(source.get(), [](ShaderSource*)
+                        {
+                        }));
+                        ++totalSourcesCached;
+                    }
+                }
+            }
+        }
+
+        LogInfo(LogRenderer, "ShaderCache: Loaded %zu ShaderSources from engine default ShaderPack",
+                totalSourcesCached);
+    }
 
     // TODO (M2): Initialize flexible rendering architecture
     // Teaching Note: New architecture (BeginFrame/Render/EndFrame + 60+ API)
@@ -292,7 +380,7 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer,
                  "Failed to create RenderTargetManager: {}",
                  e.what());
-        ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()).c_str());
+        ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建UniformManager (Phase 3) ====================
@@ -309,7 +397,7 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create UniformManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()).c_str());
+        ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建ShadowColorManager (M6.1.5) ====================
@@ -320,9 +408,10 @@ void RendererSubsystem::Startup()
         std::array<RTConfig, 8> shadowColorConfigs = {};
         for (int i = 0; i < 8; ++i)
         {
-            shadowColorConfigs[i] = RTConfig::ColorTargetWithScale(
+            shadowColorConfigs[i] = RTConfig::ColorTarget(
                 "shadowcolor" + std::to_string(i),
-                1.0f, 1.0f,
+                m_configuration.renderWidth,
+                m_configuration.renderHeight,
                 DXGI_FORMAT_R16G16B16A16_FLOAT,
                 true, LoadAction::Clear,
                 ClearValue::Color(Rgba8::BLACK),
@@ -336,7 +425,7 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create ShadowColorManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("ShadowColorManager initialization failed! Error: %s", e.what()).c_str());
+        ERROR_AND_DIE(Stringf("ShadowColorManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建ShadowTargetManager (M6.1.5) ====================
@@ -347,13 +436,13 @@ void RendererSubsystem::Startup()
         std::array<RTConfig, 2> shadowTexConfigs = {};
         for (int i = 0; i < 2; ++i)
         {
-            shadowTexConfigs[i] = RTConfig::DepthTargetWithScale(
+            shadowTexConfigs[i] = RTConfig::DepthTarget(
                 "shadowtex" + std::to_string(i),
-                1.0f, 1.0f,
-                DXGI_FORMAT_D32_FLOAT,
+                m_configuration.renderWidth,
+                m_configuration.renderHeight,
+                DXGI_FORMAT_D32_FLOAT, true,
                 LoadAction::Clear,
-                ClearValue::Depth(1.0f, 0),
-                1
+                ClearValue::Depth(1.0f, 0)
             );
         }
 
@@ -363,7 +452,7 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create ShadowTargetManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("ShadowTargetManager initialization failed! Error: %s", e.what()).c_str());
+        ERROR_AND_DIE(Stringf("ShadowTargetManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建RenderTargetBinder (M6.1.5) ====================
@@ -382,8 +471,7 @@ void RendererSubsystem::Startup()
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create RenderTargetBinder: {}", e.what());
-        ERROR_AND_DIE(Stringf("RenderTargetBinder initialization failed! Error: %s", e.what()).c_str());
+        LogError(LogRenderer, "Failed to create RenderTargetBinder: %s", e.what());
     }
 
     // ==================== 创建全屏三角形VB (M6.3) ====================
@@ -400,7 +488,7 @@ void RendererSubsystem::Startup()
         m_fullscreenTriangleVB.reset(CreateVertexBuffer(sizeof(vertices), sizeof(Vec2)));
         if (!m_fullscreenTriangleVB)
         {
-            ERROR_AND_DIE("Failed to create fullscreen triangle VertexBuffer");
+            LogError(LogRenderer, "Failed to create fullscreen triangle VertexBuffer");
         }
 
         UpdateBuffer(m_fullscreenTriangleVB.get(), vertices, sizeof(vertices));
@@ -410,7 +498,7 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create fullscreen triangle VB: {}", e.what());
-        ERROR_AND_DIE(Stringf("Fullscreen triangle VB initialization failed! Error: %s", e.what()).c_str());
+        ERROR_AND_DIE(Stringf("Fullscreen triangle VB initialization failed! Error: %s", e.what()))
     }
 }
 
@@ -430,62 +518,9 @@ void RendererSubsystem::Shutdown()
 }
 
 // TODO: M2 - 移除PreparePipeline，实现新的灵活渲染接口
+#pragma endregion
 
-const ShaderSource* RendererSubsystem::GetShaderSource(ProgramId id) const noexcept
-{
-    // Delegate to GetShaderProgram() for dual ShaderPack fallback (Phase 5.2)
-    // Teaching Note: GetShaderProgram() handles user -> default fallback automatically
-    return GetShaderProgram(id, "world0");
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// Get shader program with dual ShaderPack fallback mechanism (Phase 5.2 - 2025-10-19)
-// Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
-//
-// Teaching Note:
-// - KISS principle: Simple 3-step lookup, no complex file copying
-// - In-memory fallback: Check user pack first, then engine default
-// - Iris-compatible: Matches NewWorldRenderingPipeline::getShaderProgram() behavior
-// - User ShaderPack can partially override engine defaults
-//----------------------------------------------------------------------------------------------------------------------
-const ShaderSource* RendererSubsystem::GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept
-{
-    // Priority 1: Try user ShaderPack first (if loaded)
-    if (m_userShaderPack)
-    {
-        const ProgramSet* userProgramSet = m_userShaderPack->GetProgramSet(dimension);
-        if (userProgramSet)
-        {
-            std::optional<const ShaderSource*> userSource = userProgramSet->Get(id);
-            if (userSource && *userSource && (*userSource)->IsValid())
-            {
-                // User shader found and valid - use it
-                return *userSource;
-            }
-        }
-    }
-
-    // Priority 2: Fallback to engine default ShaderPack (always loaded)
-    if (m_defaultShaderPack)
-    {
-        const ProgramSet* defaultProgramSet = m_defaultShaderPack->GetProgramSet(dimension);
-        if (defaultProgramSet)
-        {
-            std::optional<const ShaderSource*> defaultSource = defaultProgramSet->Get(id);
-            if (defaultSource && *defaultSource && (*defaultSource)->IsValid())
-            {
-                // Engine default shader found - use as fallback
-                return *defaultSource;
-            }
-        }
-    }
-
-    // Priority 3: Complete failure - program not found in both packs
-    // Teaching Note: Return nullptr (caller should handle gracefully)
-    // Iris behavior: Returns null and logs error in NewWorldRenderingPipeline::getShaderProgram()
-    return nullptr;
-}
-
+#pragma region Shader Compilation
 /**
  * @brief 检查渲染系统是否准备好进行渲染
  * @return 如果D3D12RenderSystem已初始化且设备可用则返回true
@@ -579,34 +614,6 @@ void RendererSubsystem::RenderFrame()
 }
 
 //-----------------------------------------------------------------------------------------------
-std::filesystem::path RendererSubsystem::SelectShaderPackPath() const
-{
-    // Priority 1: User selected pack (from config file or future GUI)
-    if (!m_currentPackName.empty())
-    {
-        std::filesystem::path userPackPath =
-            std::filesystem::path(USER_SHADERPACK_SEARCH_PATH) / m_currentPackName;
-
-        if (std::filesystem::exists(userPackPath))
-        {
-            // User pack found, use it
-            return userPackPath;
-        }
-
-        // User pack not found, log warning and fall back
-        LogWarn(LogRenderer,
-                "User ShaderPack '{}' not found at '{}', falling back to engine default",
-                m_currentPackName.c_str(),
-                userPackPath.string().c_str());
-    }
-
-    // Priority 2: Engine default pack (always exists after build)
-    // Teaching Note:
-    // - Engine assets are copied from Engine/.enigma/ to Run/.enigma/ during build
-    // - This ensures the default pack is always available
-    return std::filesystem::path(ENGINE_DEFAULT_SHADERPACK_PATH);
-}
-
 //-----------------------------------------------------------------------------------------------
 void RendererSubsystem::EndFrame()
 {
@@ -637,6 +644,337 @@ void RendererSubsystem::EndFrame()
     // - WorldRenderingPhase 执行
     // - 当前简化版本只负责委托，业务逻辑在 D3D12RenderSystem
 }
+#pragma endregion
+
+#pragma region ShaderPack Management
+RenderCommandQueue* RendererSubsystem::GetRenderCommandQueue() const noexcept
+{
+    return m_renderCommandQueue.get();
+}
+
+//-----------------------------------------------------------------------------------------------
+// Shrimp Task 2: CreateShaderProgramFromFiles 核心 API
+// Teaching Note: 独立着色器编译接口，解决 Game.cpp:28 的 TODO 问题
+//-----------------------------------------------------------------------------------------------
+
+std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
+    const std::filesystem::path& vsPath,
+    const std::filesystem::path& psPath,
+    const std::string&           programName
+)
+{
+    // 使用 WithCommonInclude() 配置（自动包含 Common.hlsl）
+    return CreateShaderProgramFromFiles(
+        vsPath,
+        psPath,
+        programName,
+        ShaderCompileOptions::WithCommonInclude()
+    );
+}
+
+std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
+    const std::string&          vsSource,
+    const std::string&          psSource,
+    const std::string&          programName,
+    const ShaderCompileOptions& options
+)
+{
+    LogInfo(LogRenderer, "Compiling shader program from source: {}", programName.c_str());
+
+    // ========================================================================
+    // Step 1: 创建 ShaderSource（自动解析 ProgramDirectives）
+    // ========================================================================
+    ShaderSource shaderSource(
+        programName,
+        vsSource,
+        psSource,
+        "", // geometrySource（可选）
+        "", // hullSource（可选）
+        "", // domainSource（可选）
+        "", // computeSource（可选）
+        nullptr // parent（可为 nullptr）
+    );
+
+    // ========================================================================
+    // Step 2: 验证 ShaderSource
+    // ========================================================================
+    if (!shaderSource.IsValid())
+    {
+        LogError(LogRenderer, "Invalid ShaderSource (missing VS or PS): %s",
+                 programName.c_str());
+        ERROR_AND_DIE(Stringf("Invalid ShaderSource (missing VS or PS): %s",
+            programName.c_str()))
+    }
+
+    if (!shaderSource.HasNonEmptySource())
+    {
+        LogError(LogRenderer, "ShaderSource contains only whitespace: %s",
+                 programName.c_str());
+        ERROR_AND_DIE(Stringf("ShaderSource contains only whitespace: %s",
+            programName.c_str()))
+    }
+
+    // ========================================================================
+    // Step 3: 使用 ShaderProgramBuilder 编译（Shrimp Task 3: 支持自定义编译选项）
+    // ========================================================================
+    auto buildResult = ShaderProgramBuilder::BuildProgram(
+        shaderSource,
+        ShaderType::GBuffers_Terrain,
+        options // ⭐ 传递用户自定义编译选项
+    );
+
+    if (!buildResult.success)
+    {
+        LogError(LogRenderer, "Failed to build shader program: %s\nError: %s",
+                 programName.c_str(),
+                 buildResult.errorMessage.c_str());
+        ERROR_AND_DIE(Stringf("Failed to build shader program: %s\nError: %s",
+            programName.c_str(),
+            buildResult.errorMessage.c_str()))
+    }
+
+    // ========================================================================
+    // Step 4: 检查缓存 (Shrimp Task)
+    // ========================================================================
+    if (m_shaderCache && m_shaderCache->HasProgram(programName))
+    {
+        LogWarn(LogRenderer, "ShaderProgram '%s' already exists in cache, returning cached version",
+                programName.c_str());
+        return m_shaderCache->GetProgram(programName);
+    }
+
+    // ========================================================================
+    // Step 5: 创建 ShaderProgram
+    // ========================================================================
+    auto program = std::make_shared<ShaderProgram>();
+    program->Create(
+        std::move(*buildResult.vertexShader),
+        std::move(*buildResult.pixelShader),
+        buildResult.geometryShader ? std::make_optional(std::move(*buildResult.geometryShader)) : std::nullopt,
+        ShaderType::GBuffers_Terrain,
+        buildResult.directives // 使用解析后的 Directives
+    );
+
+    // ========================================================================
+    // Step 6: 缓存 ShaderProgram (Shrimp Task)
+    // ========================================================================
+    if (m_shaderCache)
+    {
+        m_shaderCache->CacheProgram(programName, program);
+        LogInfo(LogRenderer, "ShaderProgram '%s' cached successfully", programName.c_str());
+    }
+
+    LogInfo(LogRenderer, "Successfully compiled shader program from source: {}", programName.c_str());
+    return program;
+}
+
+std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
+    const std::filesystem::path& vsPath,
+    const std::filesystem::path& psPath,
+    const std::string&           programName,
+    const ShaderCompileOptions&  options
+)
+{
+    // ========================================================================
+    // Step 1: 读取着色器源码
+    // ========================================================================
+    auto vsSourceOpt = ShaderCompilationHelper::ReadShaderSourceFromFile(vsPath);
+    if (!vsSourceOpt)
+    {
+        LogError(LogRenderer, "Failed to read vertex shader file: %s",
+                 vsPath.string().c_str());
+        ERROR_AND_DIE(Stringf("Failed to read vertex shader file: %s",
+            vsPath.string().c_str()))
+    }
+
+    auto psSourceOpt = ShaderCompilationHelper::ReadShaderSourceFromFile(psPath);
+    if (!psSourceOpt)
+    {
+        LogError(LogRenderer, "Failed to read pixel shader file: %s",
+                 psPath.string().c_str());
+        ERROR_AND_DIE(Stringf("Failed to read pixel shader file: %s",
+            psPath.string().c_str()))
+    }
+
+    std::string vsSource = *vsSourceOpt;
+    std::string psSource = *psSourceOpt;
+
+    // ========================================================================
+    // Step 2: 自动检测是否包含#include指令
+    // ========================================================================
+    bool hasIncludes = (vsSource.find("#include") != std::string::npos) ||
+        (psSource.find("#include") != std::string::npos);
+
+    // ========================================================================
+    // Step 3: 如果包含#include，使用Include系统展开
+    // ========================================================================
+    if (hasIncludes)
+    {
+        LogInfo(LogRenderer, "Detected #include directives in shader files, using Include system");
+
+        try
+        {
+            // 3.1 确定根目录（从shader文件路径推断）
+            std::filesystem::path rootPath = ShaderIncludeHelper::DetermineRootPath(vsPath);
+            LogDebug(LogRenderer, "Include system root path: {}", rootPath.string().c_str());
+
+            // 3.2 构建IncludeGraph（从文件系统）
+            std::vector<std::string> shaderFiles = {
+                vsPath.filename().string(),
+                psPath.filename().string()
+            };
+
+            auto graph = ShaderIncludeHelper::BuildFromFiles(rootPath, shaderFiles);
+            if (!graph)
+            {
+                LogError(LogRenderer, "Failed to build IncludeGraph for shader files");
+                ERROR_AND_DIE("Failed to build IncludeGraph for shader files")
+            }
+
+            // 3.3 检查Include构建失败
+            if (!graph->GetFailures().empty())
+            {
+                LogWarn(LogRenderer, "IncludeGraph has {} failures:", graph->GetFailures().size());
+                for (const auto& [path, error] : graph->GetFailures())
+                {
+                    LogWarn(LogRenderer, "  - {}: {}", path.GetPathString().c_str(), error.c_str());
+                }
+            }
+
+            // 3.4 展开VS源码
+            ShaderPath vsShaderPath = ShaderPath::FromAbsolutePath("/" + vsPath.filename().string());
+            if (graph->HasNode(vsShaderPath))
+            {
+                vsSource = ShaderIncludeHelper::ExpandShaderSource(
+                    *graph,
+                    vsShaderPath,
+                    options.enableDebugInfo // 调试模式使用LineDirectives
+                );
+                LogDebug(LogRenderer, "Expanded VS source with Include system ({} bytes)", vsSource.size());
+            }
+            else
+            {
+                LogWarn(LogRenderer, "VS file not found in IncludeGraph, using original source");
+            }
+
+            // 3.5 展开PS源码
+            ShaderPath psShaderPath = ShaderPath::FromAbsolutePath("/" + psPath.filename().string());
+            if (graph->HasNode(psShaderPath))
+            {
+                psSource = ShaderIncludeHelper::ExpandShaderSource(
+                    *graph,
+                    psShaderPath,
+                    options.enableDebugInfo // 调试模式使用LineDirectives
+                );
+                LogDebug(LogRenderer, "Expanded PS source with Include system ({} bytes)", psSource.size());
+            }
+            else
+            {
+                LogWarn(LogRenderer, "PS file not found in IncludeGraph, using original source");
+            }
+        }
+        catch (const std::exception& e)
+        {
+            LogError(LogRenderer, "Include system expansion failed: ", e.what());
+            ERROR_AND_DIE(Stringf("Include system expansion failed: %s", e.what()))
+        }
+    }
+    else
+    {
+        LogDebug(LogRenderer, "No #include directives detected, using original shader source");
+    }
+
+    // ========================================================================
+    // Step 4: 提取程序名称（如果未提供）
+    // ========================================================================
+    std::string finalProgramName = programName.empty()
+                                       ? ShaderCompilationHelper::ExtractProgramNameFromPath(vsPath)
+                                       : programName;
+
+    // ========================================================================
+    // Step 5: 调用CreateShaderProgramFromSource编译
+    // ========================================================================
+    return CreateShaderProgramFromSource(
+        vsSource,
+        psSource,
+        finalProgramName,
+        options
+    );
+}
+
+//-----------------------------------------------------------------------------------------------
+// ShaderPack Query and Fallback (Phase 5.2)
+//-----------------------------------------------------------------------------------------------
+
+const ShaderSource* RendererSubsystem::GetShaderSource(ProgramId id) const noexcept
+{
+    // Delegate to GetShaderProgram() for dual ShaderPack fallback (Phase 5.2)
+    // Teaching Note: GetShaderProgram() handles user -> default fallback automatically
+    return GetShaderProgram(id, "world0");
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Get shader program with dual ShaderPack fallback mechanism (Phase 5.2 - 2025-10-19)
+// Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
+//
+// Teaching Note:
+// - KISS principle: Simple 3-step lookup, no complex file copying
+// - In-memory fallback: Check user pack first, then engine default
+// - Iris-compatible: Matches NewWorldRenderingPipeline::getShaderProgram() behavior
+// - User ShaderPack can partially override engine defaults
+//----------------------------------------------------------------------------------------------------------------------
+const ShaderSource* RendererSubsystem::GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept
+{
+    // Priority 1: Try user ShaderPack first (if loaded)
+    if (m_userShaderPack)
+    {
+        const ProgramSet* userProgramSet = m_userShaderPack->GetProgramSet(dimension);
+        if (userProgramSet)
+        {
+            std::optional<const ShaderSource*> userSource = userProgramSet->Get(id);
+            if (userSource && *userSource && (*userSource)->IsValid())
+            {
+                // User shader found and valid - use it
+                return *userSource;
+            }
+        }
+    }
+
+    // Priority 2: Fallback to engine default ShaderPack (always loaded)
+    if (m_defaultShaderPack)
+    {
+        const ProgramSet* defaultProgramSet = m_defaultShaderPack->GetProgramSet(dimension);
+        if (defaultProgramSet)
+        {
+            std::optional<const ShaderSource*> defaultSource = defaultProgramSet->Get(id);
+            if (defaultSource && *defaultSource && (*defaultSource)->IsValid())
+            {
+                // Engine default shader found - use as fallback
+                return *defaultSource;
+            }
+        }
+    }
+
+    // Priority 3: Complete failure - program not found in both packs
+    // Teaching Note: Return nullptr (caller should handle gracefully)
+    // Iris behavior: Returns null and logs error in NewWorldRenderingPipeline::getShaderProgram()
+    return nullptr;
+}
+
+//-----------------------------------------------------------------------------------------------
+// GetShaderProgram(ProgramId) - 从ShaderCache获取编译后的ShaderProgram (Shrimp Task)
+//-----------------------------------------------------------------------------------------------
+std::shared_ptr<ShaderProgram> RendererSubsystem::GetShaderProgram(ProgramId id)
+{
+    if (!m_shaderCache)
+    {
+        LogError(LogRenderer, "ShaderCache not initialized");
+        return nullptr;
+    }
+
+    // 从ShaderCache获取ShaderProgram（支持ProgramId查找）
+    return m_shaderCache->GetProgram(id);
+}
 
 //-----------------------------------------------------------------------------------------------
 // ShaderPack Lifecycle Management (Phase 5.2)
@@ -647,139 +985,30 @@ void RendererSubsystem::EndFrame()
 bool RendererSubsystem::LoadShaderPack(const std::string& packPath)
 {
     // Teaching Note: Public interface - converts string to filesystem::path
-    // Delegates to private LoadShaderPackInternal() for actual loading
-    return LoadShaderPackInternal(std::filesystem::path(packPath));
+    // Delegates to ShaderPackHelper for actual loading
+    auto result = ShaderPackHelper::LoadShaderPackFromPath(std::filesystem::path(packPath), m_shaderCache.get());
+    return result != nullptr;
 }
 
-bool RendererSubsystem::LoadShaderPackInternal(const std::filesystem::path& packPath)
-{
-    // Teaching Note: Based on Iris.java::loadExternalShaderpack() implementation
-    // Reference: Iris.java Line 248-348
-    // Phase 5.2: Load user ShaderPack only (engine default ShaderPack remains unchanged)
-
-    // Step 1: Unload existing user ShaderPack (if any)
-    // Teaching Note: Only unload user pack, keep engine default pack intact
-    if (m_userShaderPack)
-    {
-        LogInfo(LogRenderer, "Unloading previous user ShaderPack before attempting new load");
-        m_userShaderPack.reset();
-    }
-
-    // Step 2: Validate path exists
-    if (!std::filesystem::exists(packPath))
-    {
-        LogError(LogRenderer,
-                 "ShaderPack path does not exist: {}", packPath.string().c_str());
-        return false;
-    }
-
-    // Step 3: Validate ShaderPack structure (has "shaders/" subdirectory)
-    // Bug Fix (2025-10-19): This validation is redundant
-    // ShaderPack constructor will validate and error out if shaders/ directory is missing
-    // Teaching Note: Iris uses isValidShaderpack() to check for "shaders/" directory
-    // Reference: Iris.java Line 467-506
-    std::filesystem::path shadersDir = packPath / "shaders";
-    if (!std::filesystem::exists(shadersDir) || !std::filesystem::is_directory(shadersDir))
-    {
-        LogError(LogRenderer,
-                 "Invalid ShaderPack structure - missing 'shaders/' directory: {}",
-                 packPath.string().c_str());
-        return false;
-    }
-
-    // Step 4: Load new user ShaderPack
-    // Teaching Note: Iris constructs ShaderPack with path, user options, and environment defines
-    // Reference: Iris.java Line 324 (new ShaderPack(...))
-    try
-    {
-        LogInfo(LogRenderer,
-                "Loading user ShaderPack from: {}", packPath.string().c_str());
-
-        // Bug Fix (2025-10-19): Pass ShaderPack root directory, NOT "shaders/" subdirectory
-        // ShaderPack constructor expects the root directory containing "shaders/" folder
-        // It will internally append "shaders/" when accessing files
-        // Previous bug: Passing shadersDir caused path duplication (.../shaders/shaders/...)
-        m_userShaderPack = std::make_unique<ShaderPack>(packPath);
-
-        // Step 5: Validate ShaderPack loaded successfully
-        // Teaching Note: Check both pointer and IsValid() for robustness
-        if (!m_userShaderPack || !m_userShaderPack->IsValid())
-        {
-            LogError(LogRenderer, "User ShaderPack loaded but validation failed");
-            m_userShaderPack.reset();
-            return false;
-        }
-
-        // Step 6: Log success
-        LogInfo(LogRenderer,
-                "User ShaderPack loaded successfully: {}", packPath.string().c_str());
-
-        // TODO (M2): Rebuild rendering resources with new ShaderPack
-        // Teaching Note: New architecture doesn't need PipelineManager
-        // - m_userShaderPack已更新（自动生效）
-        // - GetShaderProgram()会自动使用新的user pack
-        // - M2实现时：重新编译PSOs（如果需要）
-
-        return true;
-    }
-    catch (const std::exception& e)
-    {
-        // Teaching Note: Iris catches all exceptions and shows user-friendly error
-        // Reference: Iris.java Line 334-338 (handleException())
-        LogError(LogRenderer,
-                 "Exception loading user ShaderPack: {}", e.what());
-        m_userShaderPack.reset();
-        return false;
-    }
-}
-
-//-----------------------------------------------------------------------------------------------
 void RendererSubsystem::UnloadShaderPack()
 {
-    // Teaching Note: Based on Iris.java::destroyEverything() implementation
-    // Reference: Iris.java Line 576-593
-    // Phase 5.2: Dual ShaderPack system - unload both user and default packs
-
-    bool hadUserPack    = (m_userShaderPack != nullptr);
-    bool hadDefaultPack = (m_defaultShaderPack != nullptr);
-
-    if (!hadUserPack && !hadDefaultPack)
-    {
-        LogWarn(LogRenderer, "No ShaderPack to unload");
-        return;
-    }
-
-    // ✅ IMPROVED: Clarify we're only unloading user ShaderPack
-    LogInfo(LogRenderer, "Unloading user ShaderPack (engine default remains)");
-
-    // TODO (M2): Clean up rendering resources before unloading ShaderPack
-    // Teaching Note: New architecture uses direct ShaderPack management
-    // - Release PSOs (Pipeline State Objects) - M2实现时
-    // - Clear shader program references
-    // - Unbind all descriptor heap slots (Bindless resources)
-    // - No PipelineManager (旧架构已删除)
-
-    // ✅ Release User ShaderPack (if loaded)
-    if (m_userShaderPack)
-    {
-        LogInfo(LogRenderer, "Unloading user ShaderPack");
-        m_userShaderPack.reset();
-    }
-
-    // ✅ FIXED (Phase 5.2 - Bug Fix 2025-10-19): Do NOT unload engine default ShaderPack
-    // Teaching Note: Engine default ShaderPack is PERSISTENT across user pack changes
-    // - It provides fallback shader programs when user pack is not loaded
-    // - Only destroyed during Shutdown() (engine termination)
-    // - Iris equivalent: Default internal shaders always available
-    //
-    // Dual ShaderPack Architecture:
-    // - User ShaderPack: Unloaded here (m_userShaderPack.reset())
-    // - Default ShaderPack: Persistent (unloaded only in Shutdown)
-
-    LogInfo(LogRenderer, "ShaderPack(s) unloaded successfully");
-    // Note: m_defaultShaderPack remains valid (fallback layer)
 }
 
+// 阶段2.3: LoadShaderPackInternal, UnloadShaderPack, SelectShaderPackPath已移至ShaderPackHelper
+#pragma endregion
+
+#pragma region Rendering API
+// TODO: M2 - 实现60+ API灵活渲染接口
+// BeginCamera/EndCamera, UseProgram, DrawVertexBuffer等
+// 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
+#pragma endregion
+
+#pragma region RenderTarget Management
+// TODO: M2 - 实现RenderTarget管理接口
+// ConfigureGBuffer, FlipRenderTarget, SwitchDepthBuffer等
+#pragma endregion
+
+#pragma region State Management
 //-----------------------------------------------------------------------------------------------
 bool RendererSubsystem::ReloadShaderPack()
 {
@@ -790,7 +1019,12 @@ bool RendererSubsystem::ReloadShaderPack()
 
     // Step 1: Get current ShaderPack path (before unloading)
     // Teaching Note: Iris uses SelectShaderPackPath() to resolve path priority
-    std::filesystem::path currentPath = SelectShaderPackPath();
+    std::string selectedPath = ShaderPackHelper::SelectShaderPackPath(
+        m_currentPackName,
+        m_configuration.shaderPackSearchPath,
+        m_configuration.engineDefaultShaderPackPath
+    );
+    std::filesystem::path currentPath(selectedPath);
 
     // Step 2: Unload current ShaderPack
     // Teaching Note: Iris calls destroyEverything() first
@@ -800,7 +1034,8 @@ bool RendererSubsystem::ReloadShaderPack()
     // Step 3: Reload from same path
     // Teaching Note: Iris calls loadShaderpack() after destruction
     // Reference: Iris.java Line 564
-    bool success = LoadShaderPackInternal(currentPath);
+    auto result  = ShaderPackHelper::LoadShaderPackFromPath(currentPath, m_shaderCache.get());
+    bool success = result != nullptr;
 
     if (success)
     {
@@ -873,27 +1108,36 @@ bool RendererSubsystem::IsInitialized() const noexcept
 
 void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
 {
-    // 参数验证 - 使用RenderTargetManager的常量
-    constexpr int MIN = RenderTargetManager::MIN_COLOR_TEXTURES;
+    // 阶段3.3: 使用RenderTargetHelper进行配置验证
     constexpr int MAX = RenderTargetManager::MAX_COLOR_TEXTURES;
 
-    if (colorTexCount < MIN || colorTexCount > MAX)
+    // 1. 验证RT配置
+    auto validationResult = RenderTargetHelper::ValidateRTConfiguration(colorTexCount, MAX);
+    if (!validationResult.isValid)
     {
-        LogError(LogRenderer,
-                 "ConfigureGBuffer: colorTexCount {} out of range [{}, {}]. Using default 8.",
-                 colorTexCount, MIN, MAX);
-        colorTexCount = 8; // Milestone 3.0: 使用默认值8（平衡内存和功能）
+        LogError(LogRenderer, "Invalid RT config: {}", validationResult.errorMessage.c_str());
+        colorTexCount = 8; // 使用默认值8
+        LogWarn(LogRenderer, "Using default colorTexCount: 8");
     }
 
-    // Milestone 3.0: 更新配置对象（从m_config改为m_configuration）
+    // 2. 计算内存使用量
+    size_t memoryUsage = RenderTargetHelper::CalculateRTMemoryUsage(
+        m_configuration.renderWidth,
+        m_configuration.renderHeight,
+        colorTexCount,
+        DXGI_FORMAT_R8G8B8A8_UNORM
+    );
+
+    // 3. 更新配置对象
     m_configuration.gbufferColorTexCount = colorTexCount;
 
-    // 计算内存优化百分比
-    float optimization = (1.0f - static_cast<float>(m_configuration.gbufferColorTexCount) / static_cast<float>(MAX)) * 100.0f;
+    // 4. 计算内存优化百分比
+    float optimization = (1.0f - static_cast<float>(colorTexCount) / static_cast<float>(MAX)) * 100.0f;
 
+    // 5. 输出配置信息
     LogInfo(LogRenderer,
-            "GBuffer configured: {} colortex (max: {}). Memory optimization: ~{:.1f}%",
-            m_configuration.gbufferColorTexCount, MAX, optimization);
+            "GBuffer configured: {} colortex (max: {}). Memory: {:.2f} MB. Optimization: ~{:.1f}%",
+            colorTexCount, MAX, memoryUsage / (1024.0f * 1024.0f), optimization);
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -923,11 +1167,46 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         m_renderTargetBinder->BindRenderTargets(rtTypes, indices);
     }
 
-    // 3. 设置PSO和Root Signature（调用ShaderProgram.Use()）
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    shaderProgram->Use(cmdList);
+    // 3. 获取当前RT格式（从RenderTargetManager）
+    DXGI_FORMAT rtFormats[8] = {};
+    if (m_renderTargetManager)
+    {
+        for (size_t i = 0; i < drawBuffers.size() && i < 8; ++i)
+        {
+            rtFormats[i] = m_renderTargetManager->GetRenderTargetFormat(static_cast<int>(drawBuffers[i]));
+        }
+    }
 
-    // 4. 刷新RT绑定（延迟提交）
+    // 4. 获取深度格式（暂时硬编码为D32_FLOAT）
+    DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT;
+
+    // 5. 调用PSOManager::GetOrCreatePSO获取PSO
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "UseProgram: CommandList is nullptr");
+        return;
+    }
+
+    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
+        shaderProgram.get(),
+        rtFormats,
+        depthFormat,
+        m_currentBlendMode,
+        m_currentDepthMode
+    );
+
+    if (!pso)
+    {
+        LogError(LogRenderer, "UseProgram: Failed to get or create PSO");
+        return;
+    }
+
+    // 6. 设置PSO和Root Signature
+    cmdList->SetPipelineState(pso);
+    cmdList->SetGraphicsRootSignature(shaderProgram->GetRootSignature());
+
+    // 7. 刷新RT绑定（延迟提交）
     if (m_renderTargetBinder)
     {
         m_renderTargetBinder->FlushBindings(cmdList);
@@ -938,7 +1217,7 @@ void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32
 {
     // TODO: 通过ShaderPackManager获取ShaderProgram指针
     // 当前简化实现：直接从ShaderPack获取
-    const ShaderSource* shaderSource = GetShaderProgram(programId);
+    const ShaderSource* shaderSource = GetShaderProgram(programId, "world0");
     if (!shaderSource)
     {
         LogError(LogRenderer, "UseProgram(ProgramId): Failed to get ShaderSource for ProgramId");
@@ -963,16 +1242,6 @@ void RendererSubsystem::FlipRenderTarget(int rtIndex)
     }
 
     m_renderTargetManager->FlipRenderTarget(rtIndex);
-}
-
-void RendererSubsystem::BeginCamera(const Camera& camera)
-{
-    UNUSED(camera);
-    // TODO (M2.1): 实现Camera设置
-    // 1. 提取View和Projection矩阵
-    // 2. 更新Camera Uniform Buffer（通过UniformManager）
-    // 3. 对应Iris的setCamera()
-    LogWarn(LogRenderer, "BeginCamera: Not implemented yet (M2.1)");
 }
 
 void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
@@ -1089,8 +1358,9 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
     }
 }
 
-void RendererSubsystem::EndCamera()
+void RendererSubsystem::EndCamera(const EnigmaCamera& camera)
 {
+    UNUSED(camera);
     // TODO (M2.1): 实现Camera清理
     LogWarn(LogRenderer, "EndCamera: Not implemented yet (M2.1)");
 }
@@ -1279,24 +1549,82 @@ void RendererSubsystem::DrawFullscreenQuad()
     Draw(3);
 }
 
+// ============================================================================
+// M6.3: Present RT输出API
+// ============================================================================
+
+void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalProgram,
+                                          const std::vector<uint32_t>&   inputRTs)
+{
+    if (!finalProgram)
+    {
+        LogError(LogRenderer, "PresentWithShader: finalProgram is nullptr");
+        return;
+    }
+
+    auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
+    auto cmdList       = D3D12RenderSystem::GetCurrentCommandList();
+
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "PresentWithShader: CommandList is nullptr");
+        return;
+    }
+
+    // 核心：绑定BackBuffer为RTV（Shader输出目标）
+    // 教学要点：OMSetRenderTargets决定Shader的SV_Target输出位置
+    cmdList->OMSetRenderTargets(1, &backBufferRTV, FALSE, nullptr);
+
+    // 输入纹理（colortex0-15）通过Bindless自动访问：
+    // - ColorTargetsIndexBuffer已包含所有colortex的Bindless索引
+    // - Shader通过索引直接访问：allTextures[colorTargets.readIndices[0]]
+    // - 无需手动绑定SRV（Bindless架构优势）
+    // inputRTs参数保留用于未来的验证或优化
+    UNUSED(inputRTs);
+
+    UseProgram(finalProgram);
+    DrawFullscreenQuad();
+
+    LogDebug(LogRenderer, "PresentWithShader: Rendered to BackBuffer");
+}
+
+void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
+{
+    // TODO: 实现需要RenderTargetManager提供GetColorTexture()方法
+    UNUSED(rtIndex);
+    UNUSED(rtType);
+    LogWarn(LogRenderer, "PresentRenderTarget: Not implemented yet (需要RenderTargetManager::GetColorTexture())");
+}
+
+void RendererSubsystem::PresentCustomTexture(std::shared_ptr<D12Texture> texture)
+{
+    // TODO: 实现需要完善资源访问机制
+    UNUSED(texture);
+    LogWarn(LogRenderer, "PresentCustomTexture: Not implemented yet (需要完善资源访问机制)");
+}
+
 void RendererSubsystem::SetBlendMode(BlendMode mode)
 {
-    UNUSED(mode);
-    // TODO (M2.4): 实现BlendMode设置
-    // 1. 需要PSO支持（Graphics Pipeline State）
-    // 2. 在Milestone 3.0 PSO系统实现后启用
-    // 教学要点：DirectX 12的混合状态是PSO的一部分，不能动态修改
-    LogWarn(LogRenderer, "SetBlendMode: Not implemented yet (M2.4, requires PSO system)");
+    // 避免重复设置
+    if (m_currentBlendMode == mode)
+    {
+        return;
+    }
+
+    m_currentBlendMode = mode;
+    LogDebug(LogRenderer, "SetBlendMode: Blend mode updated to {}", static_cast<int>(mode));
 }
 
 void RendererSubsystem::SetDepthMode(DepthMode mode)
 {
-    UNUSED(mode);
-    // TODO (M2.4): 实现DepthMode设置
-    // 1. 需要PSO支持（Graphics Pipeline State）
-    // 2. 在Milestone 3.0 PSO系统实现后启用
-    // 教学要点：DirectX 12的深度状态是PSO的一部分，不能动态修改
-    LogWarn(LogRenderer, "SetDepthMode: Not implemented yet (M2.4, requires PSO system)");
+    // 避免重复设置
+    if (m_currentDepthMode == mode)
+    {
+        return;
+    }
+
+    m_currentDepthMode = mode;
+    LogDebug(LogRenderer, "SetDepthMode: Depth mode updated to {}", static_cast<int>(mode));
 }
 
 // ============================================================================
@@ -1462,3 +1790,98 @@ void RendererSubsystem::ResetCustomTextures()
 
     LogInfo(LogRenderer, "ResetCustomTextures: All custom texture slots reset");
 }
+
+// ========================================================================
+// 即时缓冲区管理辅助方法
+// ========================================================================
+// 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至RendererHelper
+
+// ========================================================================
+// DrawVertexArray - 即时数据非索引绘制
+// ========================================================================
+
+void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
+{
+    DrawVertexArray(vertices.data(), vertices.size());
+}
+
+void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
+{
+    if (!vertices || count == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex data");
+        return;
+    }
+
+    size_t requiredSize = count * sizeof(Vertex);
+    RendererHelper::EnsureBufferSize(m_immediateVBO, requiredSize, 64 * 1024, sizeof(Vertex), "ImmediateVBO");
+
+    void* mappedData = m_immediateVBO->Map();
+    memcpy(mappedData, vertices, requiredSize);
+    m_immediateVBO->Unmap();
+
+    SetVertexBuffer(m_immediateVBO.get());
+    Draw(static_cast<uint32_t>(count), 0);
+}
+
+// ========================================================================
+// DrawVertexArray - 即时数据索引绘制
+// ========================================================================
+
+void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices)
+{
+    DrawVertexArray(vertices.data(), vertices.size(), indices.data(), indices.size());
+}
+
+void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
+{
+    if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data");
+        return;
+    }
+
+    size_t vertexSize = vertexCount * sizeof(Vertex);
+    size_t indexSize  = indexCount * sizeof(unsigned);
+
+    RendererHelper::EnsureBufferSize(m_immediateVBO, vertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
+    RendererHelper::EnsureBufferSize(m_immediateIBO, indexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
+
+    void* vertexData = m_immediateVBO->Map();
+    memcpy(vertexData, vertices, vertexSize);
+    m_immediateVBO->Unmap();
+
+    void* indexData = m_immediateIBO->Map();
+    memcpy(indexData, indices, indexSize);
+    m_immediateIBO->Unmap();
+
+    SetVertexBuffer(m_immediateVBO.get());
+    SetIndexBuffer(m_immediateIBO.get());
+    DrawIndexed(static_cast<uint32_t>(indexCount), 0, 0);
+}
+
+void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount)
+{
+    if (!vbo || vertexCount == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer or count");
+        return;
+    }
+
+    SetVertexBuffer(vbo.get());
+    Draw(static_cast<uint32_t>(vertexCount), 0);
+}
+
+void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo, size_t indexCount)
+{
+    if (!vbo || !ibo || indexCount == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer, index buffer or count");
+        return;
+    }
+
+    SetVertexBuffer(vbo.get());
+    SetIndexBuffer(ibo.get());
+    DrawIndexed(static_cast<uint32_t>(indexCount), 0, 0);
+}
+#pragma endregion

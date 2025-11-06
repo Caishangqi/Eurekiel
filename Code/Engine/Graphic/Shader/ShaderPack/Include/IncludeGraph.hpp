@@ -1,8 +1,9 @@
 ﻿#pragma once
 
-#include "AbsolutePackPath.hpp"
+#include "ShaderPath.hpp"
 #include "FileNode.hpp"
 #include "FileIncludeException.hpp"
+#include "Engine/Graphic/Shader/Common/IFileReader.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -74,28 +75,52 @@ namespace enigma::graphic
     {
     public:
         /**
-         * @brief 构建 Include 依赖图（BFS + 循环检测）
-         * @param root Shader Pack 根目录（文件系统路径）
+         * @brief 构建 Include 依赖图（BFS + 循环检测）- 依赖注入版本
+         * @param fileReader 文件读取器接口（依赖注入）
          * @param startingPaths 起始路径列表（着色器程序文件）
          *
          * 教学要点：
+         * - 依赖倒置原则：依赖抽象（IFileReader）而非具体实现
          * - BFS 算法：使用队列遍历依赖树
-         * - 自动读取文件：从文件系统加载 .hlsl 文件
          * - 循环检测：构建完成后自动调用 DetectCycle()
          *
          * 业务逻辑：
          * 1. 初始化队列和已访问集合
          * 2. 从起始路径开始 BFS 遍历
-         * 3. 对每个文件：读取内容 → 解析 #include → 加入队列
+         * 3. 对每个文件：使用 IFileReader 读取 → 解析 #include → 加入队列
          * 4. 处理读取失败（记录到 m_failures）
          * 5. 完成后检测循环依赖
          *
          * 异常：
          * - std::runtime_error: 如果检测到循环依赖
+         *
+         * @code
+         * auto fileReader = std::make_shared<ShaderPackReader>(packRoot);
+         * IncludeGraph graph(fileReader, startingPaths);
+         * @endcode
          */
         IncludeGraph(
-            const std::filesystem::path&         root,
-            const std::vector<AbsolutePackPath>& startingPaths
+            std::shared_ptr<IFileReader>   fileReader,
+            const std::vector<ShaderPath>& startingPaths
+        );
+
+        /**
+         * @brief 构建 Include 依赖图（BFS + 循环检测）- 向后兼容版本
+         * @param root Shader Pack 根目录（文件系统路径）
+         * @param startingPaths 起始路径列表（着色器程序文件）
+         *
+         * 教学要点：
+         * - 向后兼容：保留旧接口，内部创建 FileSystemReader
+         * - 委托构造：调用新的依赖注入构造函数
+         *
+         * @deprecated 推荐使用依赖注入版本的构造函数
+         *
+         * 异常：
+         * - std::runtime_error: 如果检测到循环依赖
+         */
+        IncludeGraph(
+            const std::filesystem::path&   root,
+            const std::vector<ShaderPath>& startingPaths
         );
 
         // ========================================================================
@@ -106,20 +131,20 @@ namespace enigma::graphic
          * @brief 获取所有成功加载的文件节点
          * @return 路径 → 节点映射
          */
-        const std::unordered_map<AbsolutePackPath, FileNode>& GetNodes() const { return m_nodes; }
+        const std::unordered_map<ShaderPath, FileNode>& GetNodes() const { return m_nodes; }
 
         /**
          * @brief 获取所有加载失败的文件
          * @return 路径 → 错误消息映射
          */
-        const std::unordered_map<AbsolutePackPath, std::string>& GetFailures() const { return m_failures; }
+        const std::unordered_map<ShaderPath, std::string>& GetFailures() const { return m_failures; }
 
         /**
          * @brief 检查指定文件是否已加载
          * @param path 文件路径（Shader Pack 内部路径）
          * @return true 如果文件已成功加载
          */
-        bool HasNode(const AbsolutePackPath& path) const
+        bool HasNode(const ShaderPath& path) const
         {
             return m_nodes.find(path) != m_nodes.end();
         }
@@ -129,7 +154,7 @@ namespace enigma::graphic
          * @param path 文件路径
          * @return 节点的 Optional（如果文件未加载返回空）
          */
-        std::optional<FileNode> GetNode(const AbsolutePackPath& path) const
+        std::optional<FileNode> GetNode(const ShaderPath& path) const
         {
             auto it = m_nodes.find(path);
             if (it != m_nodes.end())
@@ -154,14 +179,6 @@ namespace enigma::graphic
         }
 
     private:
-        /**
-         * @brief 读取文件内容（按行）
-         * @param filePath 文件系统路径
-         * @return 文件内容（按行存储）
-         * @throws std::runtime_error: 如果文件读取失败
-         */
-        static std::vector<std::string> ReadFileLines(const std::filesystem::path& filePath);
-
         /**
          * @brief 检测依赖图中的循环依赖
          *
@@ -212,22 +229,24 @@ namespace enigma::graphic
          * ```
          */
         bool ExploreForCycles(
-            const AbsolutePackPath&               frontier,
-            std::vector<AbsolutePackPath>&        path,
-            std::unordered_set<AbsolutePackPath>& visited
+            const ShaderPath&               frontier,
+            std::vector<ShaderPath>&        path,
+            std::unordered_set<ShaderPath>& visited
         ) const;
 
     private:
-        std::unordered_map<AbsolutePackPath, FileNode>    m_nodes; // 成功加载的节点
-        std::unordered_map<AbsolutePackPath, std::string> m_failures; // 加载失败的文件
+        std::shared_ptr<IFileReader>                m_fileReader; // 文件读取器（依赖注入）
+        std::unordered_map<ShaderPath, FileNode>    m_nodes; // 成功加载的节点
+        std::unordered_map<ShaderPath, std::string> m_failures; // 加载失败的文件
 
         /**
          * 教学要点总结：
-         * 1. **BFS 构建依赖图**：队列 + 已访问集合，单次文件读取
-         * 2. **DFS 循环检测**：路径回溯 + visited 集合，O(V+E) 复杂度
-         * 3. **错误处理**：失败文件记录到 m_failures，不中断构建
-         * 4. **性能优化**：每个文件只读取一次，延迟处理 Include
-         * 5. **图论应用**：有向图表示依赖关系，经典算法应用
+         * 1. **依赖倒置原则**：依赖IFileReader抽象接口，解耦文件读取逻辑
+         * 2. **BFS 构建依赖图**：队列 + 已访问集合，单次文件读取
+         * 3. **DFS 循环检测**：路径回溯 + visited 集合，O(V+E) 复杂度
+         * 4. **错误处理**：失败文件记录到 m_failures，不中断构建
+         * 5. **性能优化**：每个文件只读取一次，延迟处理 Include
+         * 6. **图论应用**：有向图表示依赖关系，经典算法应用
          */
     };
 } // namespace enigma::graphic

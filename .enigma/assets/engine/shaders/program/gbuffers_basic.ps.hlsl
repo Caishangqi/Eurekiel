@@ -18,7 +18,7 @@
  * - 可通过 ShaderDirectiveParser 解析
  */
 
-#include "Common.hlsl"
+#include "../core/Common.hlsl"
 
 /**
  * @brief 像素着色器主函数

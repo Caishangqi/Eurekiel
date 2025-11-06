@@ -99,7 +99,7 @@ namespace enigma::graphic
          * @param indices 对应的索引数组
          * @param depthType 深度纹理类型（默认DepthTex）
          * @param depthIndex 深度纹理索引（默认0）
-         * @param useAlt 是否使用Alt纹理（仅对支持Flipper的RT有效，默认false）
+         * @param useAlt 是否使用Alt纹理（仅对支持Flipper的RT有效，true）
          * @param loadAction 加载动作（Load/Clear/DontCare，默认Load）
          * @param clearValues RTV清空值数组（可选，与rtTypes对应）
          * @param depthClearValue 深度清空值（可选，默认1.0深度+0模板）
@@ -128,7 +128,7 @@ namespace enigma::graphic
             const std::vector<int>&        indices,
             RTType                         depthType       = RTType::DepthTex,
             int                            depthIndex      = 0,
-            bool                           useAlt          = false,
+            bool                           useAlt          = true,
             LoadAction                     loadAction      = LoadAction::Load,
             const std::vector<ClearValue>& clearValues     = {},
             const ClearValue&              depthClearValue = ClearValue::Depth(1.0f, 0)
@@ -152,7 +152,7 @@ namespace enigma::graphic
             int               rtIndex,
             RTType            depthType       = RTType::DepthTex,
             int               depthIndex      = 0,
-            bool              useAlt          = false,
+            bool              useAlt          = true,
             LoadAction        loadAction      = LoadAction::Load,
             const ClearValue& clearValue      = ClearValue::Color(Rgba8::BLACK),
             const ClearValue& depthClearValue = ClearValue::Depth(1.0f, 0)

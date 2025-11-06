@@ -1,11 +1,19 @@
 #include "GenerateChunkJob.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::voxel
 {
     void GenerateChunkJob::Execute()
     {
-        // Safety check: ensure chunk is still in Generating state
+        // Phase 1 Safety Check: Null pointer validation (prevent access to freed memory)
+        if (!m_chunk || !m_generator)
+        {
+            // Chunk or generator was destroyed, abort silently to prevent crash
+            return;
+        }
+
+        // Phase 2 Safety Check: Verify chunk state before accessing
         ChunkState currentState = m_chunk->GetState();
         if (currentState != ChunkState::Generating)
         {
@@ -19,11 +27,27 @@ namespace enigma::voxel
             return;
         }
 
-        // Perform terrain generation
-        GUARANTEE_OR_DIE(m_generator != nullptr, "GenerateChunkJob: Generator is null")
-        GUARANTEE_OR_DIE(m_chunk != nullptr, "GenerateChunkJob: Chunk is null")
-
-        m_generator->GenerateChunk(m_chunk, m_chunkCoords.x, m_chunkCoords.y, m_worldSeed);
+        // Phase 3 Safety Check: Exception protection for terrain generation
+        // Wrap the generation call in try-catch to prevent crashes from unexpected errors
+        try
+        {
+            if (m_chunk->GetState() != ChunkState::Generating) return;
+            m_generator->GenerateChunk(m_chunk, m_chunkCoords.x, m_chunkCoords.y, m_worldSeed);
+        }
+        catch (const std::exception& e)
+        {
+            // Log error but don't crash - allow graceful degradation
+            LogError("GenerateChunkJob", "Exception during chunk generation (%d, %d): %s",
+                     m_chunkCoords.x, m_chunkCoords.y, e.what());
+            return;
+        }
+        catch (...)
+        {
+            // Catch any other exceptions (non-std::exception types)
+            LogError("GenerateChunkJob", "Unknown exception during chunk generation (%d, %d)",
+                     m_chunkCoords.x, m_chunkCoords.y);
+            return;
+        }
 
         // Check cancellation after generation (before final state transition)
         if (IsCancelled())

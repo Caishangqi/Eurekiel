@@ -27,7 +27,10 @@
 #include "../Immediate/RenderCommand.hpp"
 #include "../Immediate/RenderCommandQueue.hpp"
 #include "../Shader/ShaderPack/ShaderPack.hpp"
-#include "RendererSubsystemConfig.hpp" // Milestone 3.0: 配置系统重构
+#include "../Shader/ShaderCache.hpp"
+#include "RendererSubsystemConfig.hpp"
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
+#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp"
 
 // 使用Enigma核心命名空间中的EngineSubsystem
@@ -43,6 +46,7 @@ namespace enigma::graphic
     class D12VertexBuffer;
     class D12IndexBuffer;
     class DepthTextureManager;
+    class PSOManager;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -89,27 +93,15 @@ namespace enigma::graphic
             uint64_t                                totalCommandsSubmitted = 0; ///< 提交的总指令数量
             uint64_t                                totalCommandsExecuted  = 0; ///< 已执行的总指令数量
             float                                   averageCommandTime     = 0.0f; ///< 平均指令执行时间(微秒)
-            WorldRenderingPhase                     currentPhase           = WorldRenderingPhase::NONE; ///< 当前渲染阶段
 
             /**
              * @brief 重置统计信息
              */
-            void Reset()
-            {
-                drawCalls            = 0;
-                trianglesRendered    = 0;
-                activeShaderPrograms = 0;
-
-                // 重置immediate模式统计
-                commandsPerPhase.clear();
-                totalCommandsSubmitted = 0;
-                totalCommandsExecuted  = 0;
-                averageCommandTime     = 0.0f;
-                currentPhase           = WorldRenderingPhase::NONE;
-            }
+            void Reset();
         };
 
     public:
+#pragma region Lifecycle Management
         /**
          * @brief 构造函数
          * @details 初始化基本成员，但不进行重型初始化工作
@@ -195,9 +187,9 @@ namespace enigma::graphic
          * - 学习GPU/CPU同步的重要性
          */
         void EndFrame() override;
+#pragma endregion
 
-        // ==================== Immediate模式渲染接口 - 用户友好API ====================
-
+#pragma region ShaderPack Management
         /**
          * @brief 获取渲染指令队列
          * @return RenderCommandQueue指针，如果未初始化返回nullptr
@@ -205,111 +197,231 @@ namespace enigma::graphic
          * 提供对immediate模式渲染指令队列的访问
          * 用户可以通过此接口提交自定义渲染指令
          */
-        RenderCommandQueue* GetRenderCommandQueue() const noexcept
-        {
-            return m_renderCommandQueue.get();
-        }
+        RenderCommandQueue* GetRenderCommandQueue() const noexcept;
 
         /**
-         * @brief 提交绘制指令到指定阶段
-         * @param command 要执行的绘制指令
-         * @param phase 目标渲染阶段
-         * @param debugTag 调试标签，用于性能分析
-         * @return 成功返回true
-         * @details 
-         * immediate模式的核心接口，支持按阶段分类存储
+         * @brief 通过ProgramId获取ShaderProgram（新增重载）
+         * @param id 程序ID
+         * @return std::shared_ptr<ShaderProgram> ShaderProgram智能指针（未找到返回nullptr）
+         *
+         * 教学要点:
+         * - 从ShaderCache获取ShaderProgram
+         * - 支持ProgramId查找
+         * - 向后兼容：保持现有API不变
          */
-        bool SubmitRenderCommand(RenderCommandPtr command, WorldRenderingPhase phase, const std::string& debugTag = "");
+        std::shared_ptr<ShaderProgram> GetShaderProgram(ProgramId id);
+
+
+        const ShaderSource* GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept;
+        /**
+         * @brief Load a ShaderPack from the specified path
+         * @param packPath Path to the ShaderPack directory
+         * @return true if loaded successfully, false otherwise
+         *
+         * Teaching Note:
+         * - Based on Iris.java::loadExternalShaderpack() implementation
+         * - Validates ShaderPack structure before loading
+         * - Unloads previous ShaderPack if any
+         * - Triggers pipeline rebuild after successful load
+         */
+        bool LoadShaderPack(const std::string& packPath);
 
         /**
-         * @brief 提交绘制指令（自动检测阶段）
-         * @param command 要执行的绘制指令
-         * @param debugTag 调试标签
-         * @return 成功返回true
-         * @details 使用PhaseDetector自动判断指令应该归属的阶段
+         * @brief Unload the currently loaded ShaderPack
+         *
+         * Teaching Note:
+         * - Based on Iris.java::resetShaderPack() implementation
+         * - Safely releases ShaderPack resources
+         * - Resets to engine default state
+         * - Triggers pipeline rebuild
          */
-        bool SubmitRenderCommand(RenderCommandPtr command, const std::string& debugTag = "");
+        void UnloadShaderPack();
+#pragma endregion
 
+#pragma region Shader Compilation
         /**
-         * @brief 设置当前渲染阶段
-         * @param phase Iris渲染阶段
-         * @details 
-         * 用于自动Phase检测和状态管理
-         * 影响指令验证和性能分析
+         * @brief 从文件编译着色器程序（便捷API）
+         * @param vsPath 顶点着色器文件路径
+         * @param psPath 像素着色器文件路径
+         * @param programName 程序名称（可选，默认从文件名提取）
+         * @return 编译成功返回 ShaderProgram 智能指针，失败返回 nullptr
+         * 
+         * @details 使用标准流程：HLSL 文件 → ShaderSource → ShaderProgramBuilder → ShaderProgram
+         *          自动解析 ProgramDirectives（DRAWBUFFERS、BLEND 等）
+         * 
+         * 功能：
+         * - 自动读取 HLSL 文件
+         * - 自动解析 ProgramDirectives（`// DRAWBUFFERS:0157` 等）
+         * - 自动包含 Common.hlsl（引擎核心路径）
+         * - 使用默认编译选项（优化开启，调试信息关闭）
+         * - 自动推导入口点（VSMain, PSMain）
+         * - 自动推导目标版本（vs_6_6, ps_6_6）
+         * 
+         * 编译流程：
+         * 1. 读取 HLSL 文件内容
+         * 2. 创建 ShaderSource 对象（自动解析 Directives）
+         * 3. 创建 ShaderProgramBuilder
+         * 4. 调用 DXC 编译器生成字节码
+         * 5. 返回 ShaderProgram 对象
+         * 
+         * 错误处理：
+         * - 文件不存在 → 返回 nullptr，记录错误日志
+         * - 编译失败 → 返回 nullptr，记录编译错误
+         * - Directives 解析失败 → 使用默认值，记录警告
+         * 
+         * 使用示例：
+         * @code
+         * // 基本用法（推荐）
+         * auto program = g_theRendererSubsystem->CreateShaderProgramFromFiles(
+         *     "shaders/gbuffers_basic.vs.hlsl",
+         *     "shaders/gbuffers_basic.ps.hlsl"
+         * );
+         * if (program) {
+         *     // 使用 program 进行渲染
+         *     g_theRendererSubsystem->UseProgram(program);
+         * }
+         * 
+         * // 指定程序名称
+         * auto program2 = g_theRendererSubsystem->CreateShaderProgramFromFiles(
+         *     "shaders/test.vert.hlsl",
+         *     "shaders/test.frag.hlsl",
+         *     "TestProgram"
+         * );
+         * @endcode
+         * 
+         * 教学要点：
+         * - 理解从文件到 ShaderProgram 的完整流程
+         * - 学习 ProgramDirectives 的自动解析
+         * - 掌握错误处理的最佳实践
+         * 
+         * @note 着色器文件中的注释指令必须放在文件顶部
+         * @see CreateShaderProgramFromSource, ShaderSource, ShaderProgramBuilder
          */
-        void SetCurrentRenderPhase(WorldRenderingPhase phase);
-
-        /**
-         * @brief 获取当前渲染阶段
-         * @return 当前的Iris渲染阶段
-         */
-        WorldRenderingPhase GetCurrentRenderPhase() const;
-
-        /**
-         * @brief 获取指定阶段的指令数量
-         * @param phase 渲染阶段
-         * @return 指令数量
-         */
-        size_t GetCommandCount(WorldRenderingPhase phase) const;
-
-        /**
-         * @brief immediate模式便捷绘制接口 - DrawIndexed
-         * @param indexCount 索引数量
-         * @param phase 渲染阶段
-         * @param startIndexLocation 起始索引位置
-         * @param baseVertexLocation 基础顶点位置
-         * @return 成功返回true
-         * @details 直接创建并提交DrawIndexed指令的便捷方法
-         */
-        bool DrawIndexed(
-            uint32_t            indexCount,
-            WorldRenderingPhase phase,
-            uint32_t            startIndexLocation = 0,
-            int32_t             baseVertexLocation = 0
+        std::shared_ptr<ShaderProgram> CreateShaderProgramFromFiles(
+            const std::filesystem::path& vsPath,
+            const std::filesystem::path& psPath,
+            const std::string&           programName = ""
         );
 
         /**
-         * @brief immediate模式便捷绘制接口 - DrawInstanced
-         * @param vertexCountPerInstance 每实例顶点数
-         * @param instanceCount 实例数量
-         * @param phase 渲染阶段
-         * @param startVertexLocation 起始顶点位置
-         * @param startInstanceLocation 起始实例位置
-         * @return 成功返回true
+         * @brief 从文件编译着色器程序（高级API，支持自定义编译选项）
+         * @param vsPath 顶点着色器文件路径
+         * @param psPath 像素着色器文件路径
+         * @param programName 程序名称
+         * @param options 编译选项（优化级别、调试信息、宏定义等）
+         * @return 编译成功返回 ShaderProgram 智能指针，失败返回 nullptr
+         * 
+         * @details 高级版本，支持完全自定义编译选项
+         * 
+         * 功能：
+         * - 支持自定义优化级别（O0/O1/O2/O3）
+         * - 支持调试信息开关（PDB 生成）
+         * - 支持自定义宏定义（如 ENABLE_SHADOWS=1）
+         * - 支持自定义入口点（非标准 VSMain/PSMain）
+         * - 支持自定义目标版本（vs_6_0 到 vs_6_6）
+         * - 支持自定义 Include 路径
+         * 
+         * 使用示例：
+         * @code
+         * // 调试模式编译（带调试信息，无优化）
+         * ShaderCompileOptions debugOptions = ShaderCompileOptions::Debug();
+         * auto program = g_theRendererSubsystem->CreateShaderProgramFromFiles(
+         *     "shaders/test.vs.hlsl",
+         *     "shaders/test.ps.hlsl",
+         *     "TestProgram",
+         *     debugOptions
+         * );
+         * 
+         * // 自定义宏定义
+         * ShaderCompileOptions customOptions = ShaderCompileOptions::Default();
+         * customOptions.defines["ENABLE_SHADOWS"] = "1";
+         * customOptions.defines["MAX_LIGHTS"] = "8";
+         * auto program2 = g_theRendererSubsystem->CreateShaderProgramFromFiles(
+         *     "shaders/lighting.vs.hlsl",
+         *     "shaders/lighting.ps.hlsl",
+         *     "LightingProgram",
+         *     customOptions
+         * );
+         * @endcode
+         * 
+         * 教学要点：
+         * - 理解编译选项对性能和调试的影响
+         * - 学习宏定义在着色器中的应用
+         * - 掌握调试和发布版本的编译策略
+         * 
+         * @see ShaderCompileOptions, CreateShaderProgramFromFiles
          */
-        bool DrawInstanced(
-            uint32_t            vertexCountPerInstance,
-            uint32_t            instanceCount,
-            WorldRenderingPhase phase,
-            uint32_t            startVertexLocation   = 0,
-            uint32_t            startInstanceLocation = 0
+        std::shared_ptr<ShaderProgram> CreateShaderProgramFromFiles(
+            const std::filesystem::path& vsPath,
+            const std::filesystem::path& psPath,
+            const std::string&           programName,
+            const ShaderCompileOptions&  options
         );
+        const ShaderSource* GetShaderSource(ProgramId id) const noexcept;
 
         /**
-         * @brief immediate模式便捷绘制接口 - DrawIndexedInstanced
-         * @param indexCountPerInstance 每实例索引数
-         * @param instanceCount 实例数量
-         * @param phase 渲染阶段
-         * @param startIndexLocation 起始索引位置
-         * @param baseVertexLocation 基础顶点位置
-         * @param startInstanceLocation 起始实例位置
-         * @return 成功返回true
+         * @brief 从源码字符串编译着色器程序（核心实现）
+         * @param vsSource 顶点着色器源码字符串
+         * @param psSource 像素着色器源码字符串
+         * @param programName 程序名称
+         * @param options 编译选项（可选，默认使用 Default 配置）
+         * @return 编译成功返回 ShaderProgram 智能指针，失败返回 nullptr
+         * 
+         * @details 使用标准流程：ShaderSource → ShaderProgramBuilder → ShaderProgram
+         *          自动解析 ProgramDirectives（DRAWBUFFERS、BLEND 等）
+         * 
+         * 功能：
+         * - 直接从内存中的源码字符串编译
+         * - 自动解析 ProgramDirectives（`// DRAWBUFFERS:0157` 等）
+         * - 支持自定义编译选项
+         * - 自动推导入口点和目标版本
+         * 
+         * 使用示例：
+         * @code
+         * // 从字符串编译（适合动态生成的着色器）
+         * std::string vsSource = R"(
+         *     // DRAWBUFFERS:01
+         *     struct VSInput { float3 pos : POSITION; };
+         *     struct VSOutput { float4 pos : SV_Position; };
+         *     VSOutput VSMain(VSInput input) {
+         *         VSOutput output;
+         *         output.pos = float4(input.pos, 1.0);
+         *         return output;
+         *     }
+         * )";
+         * 
+         * std::string psSource = R"(
+         *     struct PSOutput { float4 color : SV_Target0; };
+         *     PSOutput PSMain() {
+         *         PSOutput output;
+         *         output.color = float4(1, 0, 0, 1);
+         *         return output;
+         *     }
+         * )";
+         * 
+         * auto program = g_theRendererSubsystem->CreateShaderProgramFromSource(
+         *     vsSource,
+         *     psSource,
+         *     "DynamicProgram"
+         * );
+         * @endcode
+         * 
+         * 教学要点：
+         * - 理解从源码到字节码的编译流程
+         * - 学习 ProgramDirectives 的解析机制
+         * - 掌握动态着色器生成的技巧
+         * 
+         * @see CreateShaderProgramFromFiles, ShaderSource, ShaderProgramBuilder
          */
-        bool DrawIndexedInstanced(
-            uint32_t            indexCountPerInstance,
-            uint32_t            instanceCount,
-            WorldRenderingPhase phase,
-            uint32_t            startIndexLocation    = 0,
-            int32_t             baseVertexLocation    = 0,
-            uint32_t            startInstanceLocation = 0
+        std::shared_ptr<ShaderProgram> CreateShaderProgramFromSource(
+            const std::string&          vsSource,
+            const std::string&          psSource,
+            const std::string&          programName,
+            const ShaderCompileOptions& options = ShaderCompileOptions::Default()
         );
+#pragma endregion
 
-        // ==================== M2 灵活渲染接口 ====================
-
-        // TODO: M2 - 实现60+ API灵活渲染接口
-        // BeginCamera/EndCamera, UseProgram, DrawVertexBuffer等
-        // 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
-
+#pragma region Rendering API
         /**
          * @brief 使用ShaderProgram并绑定RenderTarget（Mode A + Mode B）
          * @param shaderProgram Shader程序指针
@@ -382,17 +494,6 @@ namespace enigma::graphic
         void FlipRenderTarget(int rtIndex);
 
         /**
-         * @brief 开始Camera渲染
-         * @param camera 要使用的相机
-         *
-         * 教学要点：
-         * - 设置View-Projection矩阵
-         * - 更新Camera相关的Uniform Buffer
-         * - 对应Iris的setCamera()
-         */
-        void BeginCamera(const class Camera& camera);
-
-        /**
          * @brief 开始Camera渲染 - EnigmaCamera重载版本
          * @param camera 要使用的EnigmaCamera
          *
@@ -411,7 +512,7 @@ namespace enigma::graphic
          * - 清理Camera状态
          * - 对应Iris的endCamera()
          */
-        void EndCamera();
+        void EndCamera(const EnigmaCamera& camera);
 
         /**
          * @brief 创建VertexBuffer
@@ -502,6 +603,86 @@ namespace enigma::graphic
          */
         void DrawIndexed(uint32_t indexCount, uint32_t startIndex = 0, int32_t baseVertex = 0);
 
+        // ========================================================================
+        // 即时顶点绘制API - 双模式支持
+        // ========================================================================
+
+        /**
+         * @brief 绘制顶点数组（即时数据模式 - vector版本）
+         * @param vertices 顶点数组
+         *
+         * 教学要点：
+         * - 即时数据模式：从CPU内存直接绘制
+         * - 自动管理：内部使用临时缓冲区（m_immediateVBO）
+         * - 性能权衡：适合少量、动态变化的几何体
+         * - 参考DX11Renderer::DrawVertexArray实现
+         */
+        void DrawVertexArray(const std::vector<Vertex>& vertices);
+
+        /**
+         * @brief 绘制顶点数组（即时数据模式 - 指针版本）
+         * @param vertices 顶点指针
+         * @param count 顶点数量
+         *
+         * 教学要点：
+         * - 底层实现：vector版本调用此方法
+         * - 数据上传：Map缓冲区 → 复制数据 → Unmap
+         * - 缓冲区管理：自动扩展（2倍增长策略）
+         */
+        void DrawVertexArray(const Vertex* vertices, size_t count);
+
+        /**
+         * @brief 绘制索引顶点数组（即时数据模式 - vector版本）
+         * @param vertices 顶点数组
+         * @param indices 索引数组
+         *
+         * 教学要点：
+         * - 索引绘制：减少顶点重复，节省内存
+         * - 双缓冲区：同时管理VBO和IBO
+         * - 适用场景：网格、UI、调试几何体
+         */
+        void DrawVertexArray(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices);
+
+        /**
+         * @brief 绘制索引顶点数组（即时数据模式 - 指针版本）
+         * @param vertices 顶点指针
+         * @param vertexCount 顶点数量
+         * @param indices 索引指针
+         * @param indexCount 索引数量
+         *
+         * 教学要点：
+         * - 完整实现：vector版本调用此方法
+         * - 数据验证：检查指针有效性和数量
+         * - 错误处理：使用ERROR_RECOVERABLE记录错误
+         */
+        void DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount);
+
+        /**
+         * @brief 绘制顶点缓冲区（缓冲区句柄模式 - 非索引）
+         * @param vbo 顶点缓冲区智能指针
+         * @param vertexCount 顶点数量
+         *
+         * 教学要点：
+         * - 缓冲区句柄模式：使用用户管理的缓冲区
+         * - 生命周期：用户负责缓冲区创建和销毁
+         * - 性能优势：避免每帧上传数据
+         * - 适用场景：静态或低频更新的几何体
+         */
+        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount);
+
+        /**
+         * @brief 绘制顶点缓冲区（缓冲区句柄模式 - 索引）
+         * @param vbo 顶点缓冲区智能指针
+         * @param ibo 索引缓冲区智能指针
+         * @param indexCount 索引数量
+         *
+         * 教学要点：
+         * - 完整缓冲区绘制：VBO + IBO
+         * - 智能指针：自动管理资源生命周期
+         * - 参考DX11Renderer::DrawVertexIndexed实现
+         */
+        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo, size_t indexCount);
+
         /**
          * @brief 绘制全屏四边形
          *
@@ -510,6 +691,180 @@ namespace enigma::graphic
          * - 自动管理顶点数据
          */
         void DrawFullscreenQuad();
+
+        /**
+         * @brief 使用Shader处理后输出到BackBuffer（M6.3核心API）
+         * @param finalProgram final阶段Shader（如色调映射、后处理）
+         * @param inputRTs 输入RT索引列表（保留参数，Bindless架构下自动访问）
+         * 
+         * @details
+         * **Iris对应关系**：
+         * - 对应Iris的final.fsh语义
+         * - 执行最终屏幕输出前的后处理（色调映射、Bloom、DOF等）
+         * - 输出到gl_FragColor（等价于我们的BackBuffer）
+         * 
+         * **常见使用场景**：
+         * 1. 色调映射（Tone Mapping）：HDR→LDR转换
+         * 2. 后处理效果：Bloom、DOF、Motion Blur、Vignette
+         * 3. 颜色校正：Gamma校正、色彩分级
+         * 4. 抗锯齿：FXAA、SMAA后处理
+         * 
+         * **输入（读取colortex）**：
+         * - Bindless架构：colortex索引已在ColorTargetsIndexBuffer中
+         * - Shader自动访问：allTextures[colorTargets.readIndices[0]]
+         * - 无需手动绑定SRV（与传统架构不同）
+         * 
+         * **输出（写入BackBuffer）**：
+         * - OMSetRenderTargets(backBufferRTV) 指定输出目标
+         * - Shader的SV_Target输出到BackBuffer（不是colortex）
+         * 
+         * **执行流程**：
+         * 1. 绑定BackBuffer为RTV（输出目标）
+         * 2. UseProgram(finalProgram)设置PSO
+         * 3. DrawFullscreenQuad()绘制
+         * 
+         * @code
+         * // 基础用法：Iris final.fsh等价实现
+         * auto finalProgram = GetShaderProgram(ProgramId::FINAL);
+         * renderer->PresentWithShader(finalProgram); // Shader自动读取colortex0-15
+         * 
+         * // 完整示例：色调映射 + Gamma校正
+         * renderer->BeginFrame();
+         * // ... 渲染场景到colortex0 ...
+         * auto finalProgram = GetShaderProgram(ProgramId::FINAL);
+         * renderer->PresentWithShader(finalProgram); // 后处理并输出到屏幕
+         * renderer->EndFrame(); // Present到屏幕
+         * @endcode
+         * 
+         * **教学要点**：
+         * - 理解Bindless架构的自动纹理访问机制
+         * - 学习DirectX 12的OMSetRenderTargets()动态绑定
+         * - 掌握全屏后处理的标准流程
+         * - 理解Iris final.fsh在延迟渲染管线中的作用
+         * 
+         * **注意事项**：
+         * - BackBuffer格式固定为DXGI_FORMAT_R8G8B8A8_UNORM
+         * - finalProgram必须输出到SV_Target0
+         * - 确保在EndFrame()之前调用（Present之前）
+         * 
+         * @note inputRTs参数保留用于未来的验证或优化，当前Bindless架构下无需显式绑定
+         */
+        void PresentWithShader(std::shared_ptr<ShaderProgram> finalProgram,
+                               const std::vector<uint32_t>&   inputRTs = {0});
+
+        /**
+         * @brief 直接拷贝RT到BackBuffer（M6.3便捷API）
+         * @param rtIndex RT索引 [0, activeColorTexCount)
+         * @param rtType RT类型（默认ColorTex，可选ShadowColor/DepthTex）
+         * 
+         * @details
+         * **使用场景**：
+         * 1. 快速调试：直接查看任意RT内容（GBuffer、Shadow、Depth等）
+         * 2. 简单输出：无需后处理的场景（如UI渲染结果）
+         * 3. 性能测试：跳过Shader开销，测试纯拷贝性能
+         * 
+         * **实现方式**：
+         * - 使用ID3D12GraphicsCommandList::CopyResource()执行GPU拷贝
+         * - 比PresentWithShader()更快（无Shader开销）
+         * - 但无法进行后处理（色调映射、Gamma校正等）
+         * 
+         * **执行流程**：
+         * 1. 参数验证（rtIndex范围检查）
+         * 2. 资源状态转换（RT→COPY_SOURCE, BackBuffer→COPY_DEST）
+         * 3. CopyResource()执行GPU拷贝
+         * 4. 恢复资源状态
+         * 
+         * @code
+         * // 基础用法：输出colortex0到屏幕
+         * renderer->PresentRenderTarget(0); // 最简单的输出方式
+         * 
+         * // 调试用法：查看GBuffer内容
+         * renderer->PresentRenderTarget(1); // 查看colortex1（如法线）
+         * renderer->PresentRenderTarget(2); // 查看colortex2（如深度）
+         * 
+         * // 输出Shadow Map
+         * renderer->PresentRenderTarget(0, RTType::ShadowColor);
+         * @endcode
+         * 
+         * **教学要点**：
+         * - 理解DirectX 12的CopyResource()操作
+         * - 学习资源状态转换（Resource Barrier）的重要性
+         * - 掌握调试渲染管线的技巧
+         * 
+         * **注意事项**：
+         * - RT和BackBuffer必须格式兼容（都是R8G8B8A8_UNORM）
+         * - 分辨率必须一致，否则拷贝失败
+         * - 不执行任何后处理（直接拷贝原始数据）
+         * 
+         * **性能对比**：
+         * - PresentRenderTarget(): ~0.1ms（纯拷贝）
+         * - PresentWithShader(): ~0.5-2ms（含Shader执行）
+         */
+        void PresentRenderTarget(int rtIndex, RTType rtType = RTType::ColorTex);
+
+        /**
+         * @brief 拷贝自定义纹理到BackBuffer（M6.3高级API）
+         * @param texture 任意D12Texture（必须非空）
+         * 
+         * @details
+         * **使用场景**：
+         * 1. 输出非RT纹理：加载的PNG/JPG图片、视频帧
+         * 2. 截图功能：输出保存的截图纹理到屏幕
+         * 3. 高级自定义输出：动态生成的纹理、计算着色器结果
+         * 4. 纹理预览：在编辑器中预览任意纹理
+         * 
+         * **与其他API的区别**：
+         * - PresentRenderTarget(): 输入来自RenderTargetManager（GBuffer）
+         * - PresentCustomTexture(): 输入来自任意D12Texture（最灵活）
+         * - PresentWithShader(): 使用Shader处理（支持后处理）
+         * 
+         * **实现方式**：
+         * - 使用ID3D12GraphicsCommandList::CopyResource()执行GPU拷贝
+         * - 资源状态假设：texture初始状态为PIXEL_SHADER_RESOURCE
+         * - 拷贝后恢复原始状态，不影响后续使用
+         * 
+         * **执行流程**：
+         * 1. 参数验证（texture非空检查）
+         * 2. 资源状态转换（texture→COPY_SOURCE, BackBuffer→COPY_DEST）
+         * 3. CopyResource()执行GPU拷贝
+         * 4. 恢复资源状态
+         * 
+         * @code
+         * // 基础用法：输出加载的图片
+         * auto splashScreen = LoadTexture("splash.png");
+         * renderer->PresentCustomTexture(splashScreen);
+         * 
+         * // 截图功能：输出保存的截图
+         * auto screenshot = CaptureScreenshot();
+         * renderer->PresentCustomTexture(screenshot); // 显示截图预览
+         * 
+         * // 视频播放：输出视频帧
+         * auto videoFrame = videoPlayer->GetCurrentFrame();
+         * renderer->PresentCustomTexture(videoFrame);
+         * 
+         * // 计算着色器结果：输出UAV纹理
+         * auto computeResult = RunComputeShader();
+         * renderer->PresentCustomTexture(computeResult);
+         * @endcode
+         * 
+         * **教学要点**：
+         * - 理解DirectX 12的资源状态管理
+         * - 学习灵活的纹理输出架构设计
+         * - 掌握CopyResource()的正确使用
+         * 
+         * **注意事项**：
+         * - texture必须与BackBuffer格式兼容（R8G8B8A8_UNORM）
+         * - 分辨率必须一致（1920x1080等）
+         * - texture初始状态假设为PIXEL_SHADER_RESOURCE
+         * - 不执行任何后处理（直接拷贝）
+         * 
+         * **典型应用**：
+         * - 游戏启动画面（Splash Screen）
+         * - 截图预览系统
+         * - 视频播放器
+         * - 纹理编辑器预览
+         */
+        void PresentCustomTexture(std::shared_ptr<D12Texture> texture);
 
         /**
          * @brief 设置混合模式
@@ -530,8 +885,9 @@ namespace enigma::graphic
          * - 对应OpenGL的glDepthFunc
          */
         void SetDepthMode(DepthMode mode);
+#pragma endregion
 
-        // ==================== GBuffer配置 (Milestone 3.0) ====================
+#pragma region RenderTarget Management
 
         /**
          * @brief 配置GBuffer的colortex数量
@@ -636,8 +992,9 @@ namespace enigma::graphic
          * - 状态查询API的设计
          */
         int GetActiveDepthBufferIndex() const noexcept;
+#pragma endregion
 
-        // ==================== 配置和状态查询 ====================
+#pragma region State Management
 
         /**
          * @brief 获取当前配置
@@ -647,122 +1004,6 @@ namespace enigma::graphic
          */
         const RendererSubsystemConfig& GetConfiguration() const noexcept { return m_configuration; }
 
-        /**
-         * @brief Get current loaded ShaderPack
-         * @return Pointer to ShaderPack, or nullptr if not loaded
-         *
-         * Usage Example:
-         * @code
-         * const ShaderPack* pack = g_theRenderer->GetShaderPack();
-         * if (pack && pack->IsValid()) {
-         *     const ShaderProgram* program = pack->GetProgram(ProgramId::GBUFFERS_TERRAIN);
-         * }
-         * @endcode
-         *
-         * Teaching Note:
-         * - Returns const pointer (read-only access, prevents accidental modification)
-         * - Check for nullptr before use (defensive programming)
-         * - Iris equivalent: IrisRenderingPipeline::getShaderPack()
-         */
-        const ShaderPack* GetShaderPack() const noexcept { return m_userShaderPack ? m_userShaderPack.get() : m_defaultShaderPack.get(); }
-
-        /**
-         * @brief Get user ShaderPack (may be nullptr if not loaded)
-         *
-         * Returns the user-loaded ShaderPack without fallback to engine default.
-         * Use this when you need to check if a user ShaderPack is currently loaded.
-         *
-         * @return Pointer to user ShaderPack, or nullptr if not loaded
-         *
-         * @note Dual ShaderPack Architecture:
-         * - GetShaderPack() returns user or default (never nullptr)
-         * - GetUserShaderPack() returns only user pack (may be nullptr)
-         * - GetDefaultShaderPack() returns engine default (never nullptr after Startup)
-         *
-         * Teaching Note:
-         * - Used in unit tests to verify user ShaderPack lifecycle
-         * - Enables precise testing of LoadShaderPack()/UnloadShaderPack() behavior
-         * - Does not trigger fallback mechanism (unlike GetShaderPack())
-         */
-        const ShaderPack* GetUserShaderPack() const noexcept { return m_userShaderPack.get(); }
-
-        /**
-         * @brief Get engine default ShaderPack (always valid after Startup)
-         *
-         * Returns the engine default ShaderPack which is loaded during Startup() and
-         * remains loaded throughout the application lifetime.
-         *
-         * @return Pointer to engine default ShaderPack (never nullptr after Startup)
-         *
-         * @note Dual ShaderPack Architecture:
-         * - Loaded once in Startup() from ENGINE_DEFAULT_SHADERPACK_PATH
-         * - Never unloaded (persistent for entire application lifetime)
-         * - Used as fallback when user ShaderPack is not loaded
-         *
-         * Teaching Note:
-         * - Guarantees shader system always has valid shaders (defensive programming)
-         * - Prevents crashes from missing user shader packs
-         * - Follows Null Object pattern (always provide valid default)
-         */
-        const ShaderPack* GetDefaultShaderPack() const noexcept { return m_defaultShaderPack.get(); }
-
-        /**
-         * @brief Shortcut to get ShaderSource by ProgramId
-         * @param id Program identifier (e.g., ProgramId::GBUFFERS_TERRAIN)
-         * @return Pointer to ShaderSource, or nullptr if pack not loaded or program not found
-         *
-         * Usage Example:
-         * @code
-         * const ShaderSource* terrain = g_theRenderer->GetShaderSource(ProgramId::GBUFFERS_TERRAIN);
-         * if (terrain && terrain->IsValid()) {
-         *     // Compile to ShaderProgram (Phase 5.4+)
-         *     // Use shader source
-         * }
-         * @endcode
-         *
-         * Teaching Note:
-         * - Returns shader source code (not compiled program yet)
-         * - Phase 5.1-5.3: Only ShaderPack lifecycle implemented
-         * - Phase 5.4+: Add compilation system (ShaderSource → ShaderProgram)
-         * - Convenience wrapper to avoid repeated null checks
-         * - Follows Facade pattern (simplifies common operations)
-         *
-         * Architecture:
-         * - ShaderPack::GetProgramSet() → ProgramSet*
-         * - ProgramSet::GetRaw(id) → ShaderSource*
-         *
-         * Iris equivalent: NewWorldRenderingPipeline::getShaderProgram()
-         */
-        const ShaderSource* GetShaderSource(ProgramId id) const noexcept;
-
-        /**
-         * @brief Get shader program with dual ShaderPack fallback mechanism (Phase 5.2)
-         * @param id Program identifier (e.g., ProgramId::GBUFFERS_TERRAIN)
-         * @param dimension Dimension name (default: "world0", supports "world-1", "world1", etc.)
-         * @return Pointer to ShaderSource, or nullptr if not found in both packs
-         *
-         * Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
-         *
-         * Usage Example:
-         * @code
-         * const ShaderSource* terrain = g_theRenderer->GetShaderProgram(ProgramId::GBUFFERS_TERRAIN);
-         * if (terrain && terrain->IsValid()) {
-         *     // Use shader (will automatically fallback to engine default if user pack missing)
-         * }
-         * @endcode
-         *
-         * Teaching Note:
-         * - Implements in-memory fallback (KISS principle, no file copying)
-         * - User ShaderPack can partially override engine defaults
-         * - Engine default ShaderPack always loaded (guaranteed fallback)
-         * - Iris-compatible architecture (NewWorldRenderingPipeline behavior)
-         *
-         * Architecture (Milestone 3.0 Phase 5.2 - 2025-10-19):
-         * - m_userShaderPack (Priority 1): User-downloaded shader packs
-         * - m_defaultShaderPack (Priority 2): Engine built-in shaders
-         * - Returns first valid ShaderSource found in priority order
-         */
-        const ShaderSource* GetShaderProgram(ProgramId id, const std::string& dimension = "world0") const noexcept;
 
         /**
          * @brief 获取渲染统计信息
@@ -779,40 +1020,15 @@ namespace enigma::graphic
          * @return true表示可以进行渲染
          */
         bool IsReadyForRendering() const noexcept;
+#pragma endregion
 
-        // ==================== Shader Pack管理接口 ====================
-
-        /**
-         * @brief 加载Shader Pack
-         * @param packPath Shader Pack文件路径
-         * @return true表示加载成功
-         * @details 
-         * 支持运行时Shader Pack切换，用于：
-         * - 不同视觉风格的切换
-         * - Shader开发和调试
-         * - 性能测试
-         */
-        bool LoadShaderPack(const std::string& packPath);
-
-        /**
-         * @brief 卸载当前Shader Pack
-         * @details 回退到默认渲染管线
-         */
-        void UnloadShaderPack();
-
+    public:
         /**
          * @brief 重新加载当前Shader Pack
          * @return true表示重新加载成功
          * @details 用于Shader开发期间的热重载
          */
         bool ReloadShaderPack();
-
-        /**
-         * @brief 启用/禁用Shader Pack热重载
-         * @param enable true表示启用文件监控
-         * @details 开发模式下自动检测Shader文件变化并重新加载
-         */
-        void EnableShaderHotReload(bool enable);
 
         // ==================== 调试和开发支持 ====================
 
@@ -1051,35 +1267,10 @@ namespace enigma::graphic
 
         // ==================== 内部初始化方法 ====================
 
-        /**
-         * @brief ShaderPack path selection logic
-         * @return Selected ShaderPack path (user pack or engine default)
-         * @details
-         * Priority 1: User selected pack (from m_currentPackName)
-         * Priority 2: Engine default pack (fallback)
-         *
-         * Teaching Note:
-         * - Implements fallback mechanism for ShaderPack loading
-         * - Returns std::filesystem::path for robust path handling
-         * - Logs warning if user pack not found
-         */
-        std::filesystem::path SelectShaderPackPath() const;
-
         // ==================== ShaderPack Lifecycle Management ====================
 
-        /**
-         * @brief Load ShaderPack from specified path (private overload)
-         * @param packPath Path to ShaderPack directory
-         * @return true if loaded successfully, false otherwise
-         *
-         * Teaching Note:
-         * - Private overload for internal use (filesystem::path parameter)
-         * - Public interface uses std::string parameter for user convenience
-         * - Implements actual loading logic
-         *
-         * Implementation in RendererSubsystem.cpp
-         */
-        bool LoadShaderPackInternal(const std::filesystem::path& packPath);
+        // 阶段2.3: SelectShaderPackPath, LoadShaderPackInternal已移至ShaderPackHelper
+        // 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至RendererHelper
 
         // =========================================================================
 
@@ -1103,10 +1294,20 @@ namespace enigma::graphic
         std::unique_ptr<ShaderPack> m_userShaderPack; // User ShaderPack (may be null)
         std::unique_ptr<ShaderPack> m_defaultShaderPack; // Engine default ShaderPack (always valid)
 
+        /// ShaderCache管理器 - 统一管理ShaderSource和ShaderProgram缓存 (Shrimp Task)
+        /// 职责: 缓存ShaderSource（持久存储）和ShaderProgram（可清理），支持ProgramId和字符串双重索引
+        std::unique_ptr<ShaderCache> m_shaderCache;
+
         // ==================== Immediate模式渲染组件 ====================
 
         /// 渲染指令队列 - immediate模式核心
         std::unique_ptr<RenderCommandQueue> m_renderCommandQueue;
+
+        /// 即时顶点缓冲区 - 用于DrawVertexArray即时数据模式
+        std::shared_ptr<D12VertexBuffer> m_immediateVBO;
+
+        /// 即时索引缓冲区 - 用于DrawVertexArray索引绘制
+        std::shared_ptr<D12IndexBuffer> m_immediateIBO;
 
         // ==================== GBuffer管理组件 (Milestone 3.0任务4) ====================
 
@@ -1134,6 +1335,17 @@ namespace enigma::graphic
 
         /// Uniform管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
         std::unique_ptr<class UniformManager> m_uniformManager;
+
+        // ==================== PSO管理组件 ====================
+
+        /// PSO管理器 - 动态创建和缓存PSO
+        std::unique_ptr<PSOManager> m_psoManager;
+
+        /// 当前混合模式
+        BlendMode m_currentBlendMode = BlendMode::Opaque;
+
+        /// 当前深度模式
+        DepthMode m_currentDepthMode = DepthMode::Enabled;
 
         // ==================== 配置和状态 ====================
 

@@ -220,6 +220,28 @@ namespace enigma::graphic
          */
         std::string currentShaderPackName;
 
+        /**
+         * @brief 用户ShaderPack搜索路径
+         *
+         * 默认值: "" (空字符串)
+         *
+         * 教学要点:
+         * - ShaderPack路径管理: 用户可指定自定义ShaderPack目录
+         * - 路径解析顺序: 用户包 → 引擎默认包
+         */
+        std::string shaderPackSearchPath;
+
+        /**
+         * @brief 引擎默认ShaderPack路径
+         *
+         * 默认值: "" (空字符串)
+         *
+         * 教学要点:
+         * - Fallback机制: 当用户ShaderPack缺失时使用引擎默认包
+         * - 引擎内置资源: 确保渲染系统始终有可用的ShaderPack
+         */
+        std::string engineDefaultShaderPackPath;
+
         // ==================== 清屏配置 ====================
 
         /**
@@ -383,6 +405,24 @@ namespace enigma::graphic
          * @note 合并自Configuration::enableCommandProfiling
          */
         bool enableCommandProfiling = false;
+
+        /**
+         * @brief 即时缓冲区最大大小限制
+         *
+         * 默认值: 16MB
+         *
+         * 教学要点:
+         * - 内存保护: 防止即时缓冲区无限增长
+         * - 性能权衡: 16MB足够大多数场景（约250K顶点）
+         * - 参考Unity: Unity的动态缓冲区也有类似限制
+         *
+         * 使用场景:
+         * - DrawVertexArray: 即时数据模式的缓冲区管理
+         * - 动态扩展: 缓冲区按需扩展，但不超过此限制
+         *
+         * @note 参考商业引擎调查：Unity和Unreal都有缓冲区大小限制
+         */
+        static constexpr size_t MAX_IMMEDIATE_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
 
         // ==================== 未来扩展配置 (Milestone 3.X+) ====================
 

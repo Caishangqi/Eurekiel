@@ -114,6 +114,8 @@ void ResourceSubsystem::Startup()
         std::cout << "[ResourceSubsystem] Startup complete. Found "
             << m_resourceIndex.size() << " resources." << '\n';
     }
+
+    g_theResource = this; // Assign to global pointer
 }
 
 void ResourceSubsystem::Shutdown()
@@ -160,6 +162,8 @@ void ResourceSubsystem::Shutdown()
     {
         std::cout << "[ResourceSubsystem] Shutdown complete." << '\n';
     }
+
+    g_theResource = nullptr; // Assign to global pointer
 }
 
 void ResourceSubsystem::Update()
@@ -576,7 +580,7 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     }
 
     // Read data
-    auto data                        = provider->ReadResource(location);
+    auto data = provider->ReadResource(location);
     m_perfStats.bytesLoadedThisFrame += data.size();
 
     if (m_config.logResourceLoads)

@@ -37,6 +37,7 @@ extern enigma::resource::ResourceSubsystem* g_theResource;
 extern enigma::core::ImGuiSubsystem*        g_theImGui;
 extern enigma::core::ScheduleSubsystem*     g_theSchedule;
 extern enigma::graphic::RendererSubsystem*  g_theRendererSubsystem;
+extern enigma::core::LoggerSubsystem*       g_theLogger;
 
 #define UNUSED(x) (void)(x);
 #define STATIC static

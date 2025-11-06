@@ -21,8 +21,12 @@ public:
     }
 
     // Verts
-    AABB3       BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
-    static void BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, AABB3& aabb3, const Rgba8& color, const AABB2& uv);
+    AABB3                             BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
+    static void                       BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigned>& outIndices, AABB3& aabb3, const Rgba8& color, const AABB2& uv);
+    std::vector<Vertex_PCUTBN>        GetVertices(const Rgba8& color = Rgba8::WHITE, const AABB2& uv = AABB2::ZERO_TO_ONE);
+    static std::vector<Vertex_PCUTBN> GetVertices(AABB3& aabb3, const Rgba8& color, const AABB2& uv);
+    std::vector<unsigned>             GetIndices();
+    static std::vector<unsigned>      GetIndices(AABB3& aabb3);
 
     // Accessors (const methods)
     bool              IsPointInside(const Vec3& point) const;

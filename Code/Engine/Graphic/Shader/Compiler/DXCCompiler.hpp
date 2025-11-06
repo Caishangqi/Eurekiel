@@ -31,7 +31,7 @@
 // Include 系统集成 (Week 7 - Milestone 3.0)
 #include "Engine/Graphic/Shader/ShaderPack/Include/IncludeGraph.hpp"
 #include "Engine/Graphic/Shader/ShaderPack/Include/IncludeProcessor.hpp"
-#include "Engine/Graphic/Shader/ShaderPack/Include/AbsolutePackPath.hpp"
+#include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp"
 
 namespace enigma::graphic
 {

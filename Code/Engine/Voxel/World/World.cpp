@@ -265,6 +265,21 @@ void World::Update(float deltaTime)
 
     // Update ChunkManager
     m_chunkManager->Update(deltaTime);
+
+    // Phase 2: Process pending chunk deletions (delayed deletion mechanism)
+    // This ensures chunks marked for deletion are safely removed on the main thread
+    if (m_chunkManager != nullptr)
+    {
+        m_chunkManager->ProcessPendingDeletions();
+
+#ifdef ENGINE_DEBUG_RENDER
+        size_t pendingCount = m_chunkManager->GetPendingDeletionCount();
+        if (pendingCount > 0)
+        {
+            LogDebug("world", "Pending deletions: %zu", pendingCount);
+        }
+#endif
+    }
 }
 
 void World::Render(IRenderer* renderer)
@@ -592,6 +607,36 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
 
     ChunkState currentState = chunk->GetState();
 
+    // Phase 2.1: Handle PendingGenerate and Generating states during deactivation
+    if (currentState == ChunkState::PendingGenerate)
+    {
+        // Remove from pending generate queue
+        auto it = std::find(m_pendingGenerateQueue.begin(), m_pendingGenerateQueue.end(), chunkCoords);
+        if (it != m_pendingGenerateQueue.end())
+        {
+            m_pendingGenerateQueue.erase(it);
+            LogDebug("world", "Removed chunk (%d, %d) from generate queue", chunkCoords.x, chunkCoords.y);
+        }
+
+        // Transition to Inactive and unload
+        chunk->TrySetState(ChunkState::PendingGenerate, ChunkState::Inactive);
+        m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
+    if (currentState == ChunkState::Generating)
+    {
+        // Mark for unload (job will check this state)
+        chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
+
+        // Remove from pending tracking
+        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        m_chunksWithPendingGenerate.erase(packedCoords);
+
+        LogDebug("world", "Marked generating chunk (%d, %d) for unload", chunkCoords.x, chunkCoords.y);
+        return;
+    }
+
     // Only deactivate Active chunks
     if (currentState != ChunkState::Active)
     {
@@ -627,6 +672,13 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
 
 void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
 {
+    // ===== Phase 5: Shutdown保护（防护点1） =====
+    if (m_isShuttingDown.load())
+    {
+        LogDebug("world", "SubmitGenerateChunkJob rejected: world is shutting down");
+        return;
+    }
+
     if (!g_theSchedule)
     {
         LogError("world", "Cannot submit GenerateChunkJob - g_theSchedule not initialized");
@@ -783,6 +835,17 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
         LogDebug("world", "GenerateChunkJob for chunk (%d, %d) was cancelled", chunkCoords.x, chunkCoords.y);
         // Transition back to Inactive
         chunk->TrySetState(ChunkState::Generating, ChunkState::Inactive);
+        return;
+    }
+
+    // Phase 2.2: Check if chunk was marked for unload during generation
+    ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::PendingUnload)
+    {
+        LogDebug("world", "Chunk (%d, %d) was marked for unload, skipping activation", chunkCoords.x, chunkCoords.y);
+        chunk->TrySetState(ChunkState::PendingUnload, ChunkState::Unloading);
+        chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
+        m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -1188,4 +1251,74 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     // LogDebug("world", "Mesh compiled and set for chunk (%d, %d) vertices=%d",
     //          chunkCoords.x, chunkCoords.y,
     //          chunk->GetMesh() ? (int)chunk->GetMesh()->GetOpaqueVertexCount() + chunk->GetMesh()->GetTransparentVertexCount() : 0);
+}
+
+//-------------------------------------------------------------------------------------------
+// Phase 5: Graceful Shutdown Implementation
+//-------------------------------------------------------------------------------------------
+
+void World::PrepareShutdown()
+{
+    LogInfo("world", "Preparing graceful shutdown: stopping new task submissions");
+    m_isShuttingDown.store(true);
+
+    // Log current pending task counts for debugging
+    LogInfo("world", "Pending tasks at shutdown: Generate=%zu, Load=%zu, Save=%zu",
+            m_chunksWithPendingGenerate.size(),
+            m_chunksWithPendingLoad.size(),
+            m_chunksWithPendingSave.size());
+}
+
+void World::WaitForPendingTasks()
+{
+    LogInfo("world", "Waiting for %zu pending chunk generation tasks to complete...",
+            m_chunksWithPendingGenerate.size());
+
+
+    // Wait for all generation tasks to complete
+    int maxRetries = 100; // 5 seconds timeout (50ms * 100)
+    while (!m_chunksWithPendingGenerate.empty() && maxRetries > 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        maxRetries--;
+
+        // Log progress every second (20 iterations)
+        if (maxRetries % 20 == 0)
+        {
+            LogInfo("world", "Still waiting... %zu generation tasks remaining",
+                    m_chunksWithPendingGenerate.size());
+        }
+    }
+
+    if (!m_chunksWithPendingGenerate.empty())
+    {
+        LogWarn("world", "Shutdown timeout: %zu generation tasks still pending after 5 seconds",
+                m_chunksWithPendingGenerate.size());
+    }
+    else
+    {
+        LogInfo("world", "All chunk generation tasks completed successfully");
+    }
+
+    // Also wait for load/save tasks (usually faster)
+    if (!m_chunksWithPendingLoad.empty() || !m_chunksWithPendingSave.empty())
+    {
+        LogInfo("world", "Waiting for load/save tasks: Load=%zu, Save=%zu",
+                m_chunksWithPendingLoad.size(),
+                m_chunksWithPendingSave.size());
+
+        maxRetries = 40; // 2 seconds timeout for disk I/O
+        while ((!m_chunksWithPendingLoad.empty() || !m_chunksWithPendingSave.empty()) && maxRetries > 0)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            maxRetries--;
+        }
+
+        if (!m_chunksWithPendingLoad.empty() || !m_chunksWithPendingSave.empty())
+        {
+            LogWarn("world", "Some load/save tasks timed out: Load=%zu, Save=%zu",
+                    m_chunksWithPendingLoad.size(),
+                    m_chunksWithPendingSave.size());
+        }
+    }
 }

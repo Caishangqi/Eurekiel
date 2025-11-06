@@ -18,7 +18,7 @@ namespace enigma::core
     struct ImGuiSubsystemConfig
     {
         // ImGui渲染上下文接口（提供ImGui所需的DirectX资源访问）
-        IImGuiRenderContext* renderContext = nullptr;
+        std::shared_ptr<IImGuiRenderContext> renderContext = nullptr;
 
         // 通用配置
         Window* targetWindow      = nullptr;

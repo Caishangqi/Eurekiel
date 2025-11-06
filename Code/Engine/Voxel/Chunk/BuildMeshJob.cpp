@@ -25,6 +25,7 @@ void BuildMeshJob::Execute()
     // CPU-intensive mesh building (1-5ms per chunk)
     // This is thread-safe: only reads chunk block data
     ChunkMeshBuilder builder;
+    if (m_chunk->GetState() == ChunkState::Inactive) return;
     m_resultMesh = builder.BuildMesh(m_chunk);
 
     core::LogInfo("BuildMeshJob",

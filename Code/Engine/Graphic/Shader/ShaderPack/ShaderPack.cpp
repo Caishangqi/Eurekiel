@@ -1,6 +1,7 @@
 ﻿#include "ShaderPack.hpp"
-#include "Include/AbsolutePackPath.hpp"
+#include "Include/ShaderPath.hpp"
 #include "Include/ShaderPackSourceNames.hpp"
+#include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -125,8 +126,9 @@ namespace enigma::graphic
 
         // ========================================================================
         // Step 2: 构建 IncludeGraph（BFS 加载所有依赖）+ Phase 1
+        // + 使用 ShaderIncludeHelper 统一接口构建 IncludeGraph
         // ========================================================================
-        m_includeGraph = std::make_unique<IncludeGraph>(m_root, startingPaths);
+        m_includeGraph = ShaderIncludeHelper::BuildFromShaderPack(m_root, startingPaths);
 
         // ========================================================================
         // Step 3: 解析 ShaderProperties（读取 shaders.properties）+ Phase 0.5
