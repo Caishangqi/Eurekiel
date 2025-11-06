@@ -92,7 +92,7 @@ namespace enigma::graphic
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyQueue; // 复制命令队列 (智能指针)
 
         // 同步对象 (本类负责围栏管理)
-        // ⭐ Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
+        // [IMPORTANT] Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
         // 教学要点: Microsoft官方最佳实践 - 避免多队列共享Fence导致的竞态条件
         // 参考: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
         Microsoft::WRL::ComPtr<ID3D12Fence> m_graphicsFence      = nullptr; // Graphics队列Fence (智能指针)
@@ -101,7 +101,7 @@ namespace enigma::graphic
         Microsoft::WRL::ComPtr<ID3D12Fence> m_computeFence      = nullptr; // Compute队列Fence (智能指针)
         uint64_t                            m_computeFenceValue = 0; // Compute围栏值
 
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_copyFence      = nullptr; // Copy队列Fence (智能指针) ⭐ 核心修复
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_copyFence      = nullptr; // Copy队列Fence (智能指针) [IMPORTANT] 核心修复
         uint64_t                            m_copyFenceValue = 0; // Copy围栏值
 
         HANDLE m_fenceEvent = nullptr; // 围栏事件句柄 (三个Fence共享)

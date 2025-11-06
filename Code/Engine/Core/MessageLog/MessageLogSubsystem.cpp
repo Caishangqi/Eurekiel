@@ -52,7 +52,7 @@ namespace enigma::core
         // 检测~键切换窗口
         if (m_ui && g_theInput)
         {
-            if (g_theInput->WasKeyJustPressed(m_ui->GetConfig().toggleKey))
+            if (g_theInput->WasKeyJustPressed((unsigned char)m_ui->GetConfig().toggleKey))
             {
                 m_ui->ToggleWindow();
             }

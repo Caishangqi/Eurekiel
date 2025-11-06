@@ -16,7 +16,7 @@
  * const bool shadowcolor0Clear = false;
  * ```
  *
- * ⚠️ 占位符警告:
+ * [WARNING] 占位符警告:
  * - 这是临时占位符，提供ShadowRenderTargetManager所需的最小接口
  * - 完整实现需要解析shaders.properties中的shadow配置
  * - 后续需要实现: Parse()方法、更多shadow配置字段
@@ -44,7 +44,7 @@ namespace enigma::graphic
      * - 存储从shaders.properties解析的阴影配置
      * - 影响shadowcolor格式、过滤模式、分辨率等
      *
-     * ⚠️ 占位符状态:
+     * [WARNING] 占位符状态:
      * - 当前提供默认值，未实现解析逻辑
      * - shadowcolor0-7统一配置（简化实现）
      * - 后续需要支持per-buffer配置
@@ -143,7 +143,7 @@ namespace enigma::graphic
          * @param index shadowcolor索引 [0-7]
          * @return DXGI_FORMAT
          *
-         * ⚠️ 占位符实现: 所有shadowcolor使用统一格式
+         * [WARNING] 占位符实现: 所有shadowcolor使用统一格式
          * 完整实现需要: std::array<DXGI_FORMAT, 8> shadowColorFormats
          */
         DXGI_FORMAT GetShadowColorFormat(int index) const;
@@ -179,7 +179,7 @@ namespace enigma::graphic
         bool ShouldShadowColorClearEveryFrame(int index) const;
 
         /**
-         * @brief 从shaders.properties解析阴影配置（⚠️ 未实现 - 占位符）
+         * @brief 从shaders.properties解析阴影配置（[WARNING] 未实现 - 占位符）
          * @param propertiesContent shaders.properties文件内容
          * @return 解析后的PackShadowDirectives
          *

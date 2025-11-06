@@ -1446,7 +1446,7 @@ namespace enigma::graphic
         // TODO (性能优化): 改为异步fence管理，支持2-3帧并行
         s_commandListManager->WaitForFence(fenceValue);
 
-        // ⭐ 5. 显式回收已完成的CommandList
+        // [IMPORTANT] 5. 显式回收已完成的CommandList
         // 教学要点：WaitForFence只负责等待GPU完成，不负责回收CommandList
         // 需要显式调用UpdateCompletedCommandLists将完成的CommandList移回available队列
         //
@@ -1530,7 +1530,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // ✅ 资源状态管理 - 由调用者负责
+        // [OK] 资源状态管理 - 由调用者负责
         //
         // Bug Fix (2025-10-21 最终修复): ClearRenderTarget 不负责状态转换
         //
@@ -1579,7 +1579,7 @@ namespace enigma::graphic
     // ===== SwapChain管理API实现 （基于A/A/A决策）=====
 
     /**
-     * ⭐ DirectX 12官方最佳实践：SwapChain Buffer状态管理
+     * [IMPORTANT] DirectX 12官方最佳实践：SwapChain Buffer状态管理
      *
      * 关键发现（基于Microsoft DirectX 12 SDK d3d12.h）：
      *
@@ -1725,7 +1725,7 @@ namespace enigma::graphic
 
         LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
 
-        // ⭐ DirectX 12官方最佳实践：无需显式初始化SwapChain buffer状态
+        // [IMPORTANT] DirectX 12官方最佳实践：无需显式初始化SwapChain buffer状态
         //
         // 理由（基于Microsoft DirectX 12 SDK官方定义）：
         // 1. D3D12_RESOURCE_STATE_PRESENT == D3D12_RESOURCE_STATE_COMMON == 0

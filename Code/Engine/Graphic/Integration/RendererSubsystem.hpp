@@ -1004,6 +1004,17 @@ namespace enigma::graphic
          */
         const RendererSubsystemConfig& GetConfiguration() const noexcept { return m_configuration; }
 
+        /**
+         * @brief 获取配置的shader入口点名称
+         * @return const std::string& 入口点名称（如 "main" 或 "VSMain"）
+         * 
+         * 教学要点:
+         * - 配置访问: 提供对配置项的便捷访问
+         * - Iris兼容: 默认值为 "main"（Iris标准）
+         * - 编译流程: 用于shader编译时指定入口点
+         */
+        const std::string& GetShaderEntryPoint() const noexcept { return m_configuration.shaderEntryPoint; }
+
 
         /**
          * @brief 获取渲染统计信息

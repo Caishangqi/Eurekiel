@@ -23,8 +23,8 @@ namespace enigma::graphic
          * @return 所有着色器程序文件的 Shader Pack 内部路径列表
          *
          * **教学要点**:
-         * - ✅ 使用 recursive_directory_iterator 递归扫描所有子目录
-         * - ✅ 计算相对路径并保留子目录结构（world0/, program/ 等）
+         * - [OK] 使用 recursive_directory_iterator 递归扫描所有子目录
+         * - [OK] 计算相对路径并保留子目录结构（world0/, program/ 等）
          * - 扫描所有 .vs.hlsl 和 .ps.hlsl 文件
          * - 转换为 Shader Pack 内部路径（/shaders/子目录/文件名）
          * - 这些路径作为 IncludeGraph 的起始节点
@@ -45,7 +45,7 @@ namespace enigma::graphic
             }
 
             // ========================================================================
-            // ✅ 修复：使用递归迭代器扫描所有子目录
+            // [FIX] 修复：使用递归迭代器扫描所有子目录
             // ========================================================================
             for (const auto& entry : std::filesystem::recursive_directory_iterator(shadersDir))
             {
@@ -64,15 +64,15 @@ namespace enigma::graphic
 
                 if (isVertexShader || isPixelShader)
                 {
-                    // ✅ 计算相对于 shaders/ 的相对路径
+                    // [OK] 计算相对于 shaders/ 的相对路径
                     std::filesystem::path relativePath = std::filesystem::relative(path, shadersDir);
 
-                    // ✅ 转换为 Unix 风格路径（/ 分隔符）
+                    // [OK] 转换为 Unix 风格路径（/ 分隔符）
                     std::string packPath = "/shaders/" + relativePath.generic_string();
 
                     startingPaths.push_back(AbsolutePackPath::FromAbsolutePath(packPath));
 
-                    // ✅ 添加调试日志
+                    // [OK] 添加调试日志
                     DebuggerPrintf("[ShaderPack] ScanStartingPaths: Found shader '%s'\n", packPath.c_str());
                 }
             }
@@ -82,7 +82,7 @@ namespace enigma::graphic
     } // namespace detail
 
     // ========================================================================
-    // ShaderPack 构造函数实现（协调器模式）⭐
+    // ShaderPack 构造函数实现（协调器模式）[IMPORTANT]
     // ========================================================================
 
     ShaderPack::ShaderPack(const std::filesystem::path& root)
@@ -94,8 +94,8 @@ namespace enigma::graphic
          * 初始化顺序至关重要：
          * 1. IncludeGraph 不依赖任何子系统（先初始化）+ Phase 1
          * 2. ShaderProperties 不依赖 IncludeGraph（可并行）+ Phase 0.5
-         * 3. ShaderPackOptions 依赖 IncludeGraph 和 ShaderProperties（后初始化）⚠️ Phase 2
-         * 4. ProgramSet 依赖 IncludeGraph 和 ShaderProperties（最后初始化）⚠️ Phase 3-4
+         * 3. ShaderPackOptions 依赖 IncludeGraph 和 ShaderProperties（后初始化）[WARNING] Phase 2
+         * 4. ProgramSet 依赖 IncludeGraph 和 ShaderProperties（最后初始化）[WARNING] Phase 3-4
          *
          * **路径处理修复 (2025-10-14)**:
          * - 使用 std::filesystem::absolute() 将相对路径转换为绝对路径
@@ -364,7 +364,7 @@ namespace enigma::graphic
     std::string ShaderPack::DetectBaseProgramDirectory() const
     {
         // ========================================================================
-        // 步骤 1: 检测 world0 目录（最高优先级）⭐⭐⭐
+        // 步骤 1: 检测 world0 目录（最高优先级）[PRIORITY-HIGH]
         // ========================================================================
         std::filesystem::path world0Dir = m_root / "shaders" / "world0";
         if (std::filesystem::exists(world0Dir))
@@ -374,7 +374,7 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // 步骤 2: 检测 program 目录（次高优先级）⭐
+        // 步骤 2: 检测 program 目录（次高优先级）[PRIORITY-MEDIUM]
         // ========================================================================
         std::filesystem::path programDir = m_root / "shaders" / "program";
         if (std::filesystem::exists(programDir))
@@ -422,7 +422,7 @@ namespace enigma::graphic
         std::string           dimensionPrefix = "/shaders/" + dimensionName + "/";
 
         // ========================================================================
-        // Step 2: 检查维度目录是否存在（优先级最高）⭐⭐⭐
+        // Step 2: 检查维度目录是否存在（优先级最高）[PRIORITY-HIGH]
         // ========================================================================
         bool hasDimensionOverride = std::filesystem::exists(dimensionDir);
 
@@ -436,7 +436,7 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // Step 2.5: 检测 program/ 目录是否存在（优先级中等）⭐
+        // Step 2.5: 检测 program/ 目录是否存在（优先级中等）[PRIORITY-MEDIUM]
         // ========================================================================
         std::filesystem::path programDir    = m_root / "shaders" / "program";
         bool                  hasProgramDir = std::filesystem::exists(programDir);
@@ -452,7 +452,7 @@ namespace enigma::graphic
         auto programSet = std::make_unique<ProgramSet>();
 
         // ========================================================================
-        // Step 4: 加载所有单一程序（47 个 ProgramId）⭐⭐⭐
+        // Step 4: 加载所有单一程序（47 个 ProgramId）[IMPORTANT]
         // 实现完整的三级 Fallback Chain（Iris 标准）
         // ========================================================================
         for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
@@ -463,7 +463,7 @@ namespace enigma::graphic
             bool foundProgram = false;
 
             // ====================================================================
-            // 优先级 1: 维度覆盖目录（shaders/worldX/）⭐⭐⭐
+            // 优先级 1: 维度覆盖目录（shaders/worldX/）[PRIORITY-HIGH]
             // ====================================================================
             if (hasDimensionOverride)
             {
@@ -490,7 +490,7 @@ namespace enigma::graphic
                     {
                         DebuggerPrintf("[ShaderPack] Warning: '%s' has 0 lines (empty file) in dimension directory, trying next fallback\n",
                                        sourceName.c_str());
-                        // ✅ 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
+                        // [OK] 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
                     }
                     else
                     {
@@ -513,19 +513,19 @@ namespace enigma::graphic
                         {
                             DebuggerPrintf("[ShaderPack] Warning: '%s' failed IsValid() check in dimension directory, trying next fallback\n",
                                            sourceName.c_str());
-                            // ✅ 不设置foundProgram，继续到下一级Fallback
+                            // [OK] 不设置foundProgram，继续到下一级Fallback
                         }
                         // + 第三层：HasNonEmptySource()检查（严格内容验证）
                         else if (!shaderSource->HasNonEmptySource())
                         {
                             DebuggerPrintf("[ShaderPack] Warning: '%s' has no non-whitespace content in dimension directory, trying next fallback\n",
                                            sourceName.c_str());
-                            // ✅ 不设置foundProgram，继续到下一级Fallback
+                            // [OK] 不设置foundProgram，继续到下一级Fallback
                         }
                         else
                         {
                             // + 所有验证通过，注册着色器
-                            // ✅ 先获取行数（在move之前）
+                            // [OK] 先获取行数（在move之前）
                             size_t vsLineCount = shaderSource->GetVertexLineCount();
                             size_t psLineCount = shaderSource->GetPixelLineCount();
 
@@ -545,7 +545,7 @@ namespace enigma::graphic
             }
 
             // ====================================================================
-            // 优先级 2: program/ 目录回退（shaders/program/）⭐⭐
+            // 优先级 2: program/ 目录回退（shaders/program/）[PRIORITY-MEDIUM]
             // ====================================================================
             if (!foundProgram && hasProgramDir)
             {
@@ -571,7 +571,7 @@ namespace enigma::graphic
                     {
                         DebuggerPrintf("[ShaderPack] Warning: '%s' has 0 lines (empty file) in program/ directory, trying next fallback\n",
                                        sourceName.c_str());
-                        // ✅ 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
+                        // [OK] 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
                     }
                     else
                     {
@@ -594,19 +594,19 @@ namespace enigma::graphic
                         {
                             DebuggerPrintf("[ShaderPack] Warning: '%s' failed IsValid() check in program/ directory, trying next fallback\n",
                                            sourceName.c_str());
-                            // ✅ 不设置foundProgram，继续到下一级Fallback
+                            // [OK] 不设置foundProgram，继续到下一级Fallback
                         }
                         // + 第三层：HasNonEmptySource()检查（严格内容验证）
                         else if (!shaderSource->HasNonEmptySource())
                         {
                             DebuggerPrintf("[ShaderPack] Warning: '%s' has no non-whitespace content in program/ directory, trying next fallback\n",
                                            sourceName.c_str());
-                            // ✅ 不设置foundProgram，继续到下一级Fallback
+                            // [OK] 不设置foundProgram，继续到下一级Fallback
                         }
                         else
                         {
                             // + 所有验证通过，注册着色器
-                            // ✅ 先获取行数（在move之前）
+                            // [OK] 先获取行数（在move之前）
                             size_t vsLineCount = shaderSource->GetVertexLineCount();
                             size_t psLineCount = shaderSource->GetPixelLineCount();
 
@@ -625,7 +625,7 @@ namespace enigma::graphic
             }
 
             // ====================================================================
-            // 优先级 3: shaders/ 根目录回退 ⭐
+            // 优先级 3: shaders/ 根目录回退 [PRIORITY-LOW]
             // ====================================================================
             if (!foundProgram)
             {
@@ -684,7 +684,7 @@ namespace enigma::graphic
                         else
                         {
                             // + 所有验证通过，注册着色器
-                            // ✅ 先获取行数（在move之前）
+                            // [OK] 先获取行数（在move之前）
                             size_t vsLineCount = shaderSource->GetVertexLineCount();
                             size_t psLineCount = shaderSource->GetPixelLineCount();
 
@@ -713,7 +713,7 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // Step 5: 加载程序数组（6 个 ProgramArrayId）⭐⭐⭐
+        // Step 5: 加载程序数组（6 个 ProgramArrayId）[IMPORTANT]
         // 实现完整的三级 Fallback Chain（Iris 标准）
         // ========================================================================
         for (int arrayIdx = 0; arrayIdx < static_cast<int>(ProgramArrayId::COUNT); ++arrayIdx)
@@ -729,7 +729,7 @@ namespace enigma::graphic
                 bool foundProgram = false;
 
                 // ================================================================
-                // 优先级 1: 维度覆盖目录（shaders/worldX/）⭐⭐⭐
+                // 优先级 1: 维度覆盖目录（shaders/worldX/）[PRIORITY-HIGH]
                 // ================================================================
                 if (hasDimensionOverride)
                 {
@@ -753,7 +753,7 @@ namespace enigma::graphic
                         {
                             DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has 0 lines (empty file) in dimension directory, trying next fallback\n",
                                            programName.c_str(), slotIndex);
-                            // ✅ 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
+                            // [OK] 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
                         }
                         else
                         {
@@ -776,19 +776,19 @@ namespace enigma::graphic
                             {
                                 DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] failed IsValid() check in dimension directory, trying next fallback\n",
                                                programName.c_str(), slotIndex);
-                                // ✅ 不设置foundProgram，继续到下一级Fallback
+                                // [OK] 不设置foundProgram，继续到下一级Fallback
                             }
                             // + 第三层：HasNonEmptySource()检查（严格内容验证）
                             else if (!shaderSource->HasNonEmptySource())
                             {
                                 DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has no non-whitespace content in dimension directory, trying next fallback\n",
                                                programName.c_str(), slotIndex);
-                                // ✅ 不设置foundProgram，继续到下一级Fallback
+                                // [OK] 不设置foundProgram，继续到下一级Fallback
                             }
                             else
                             {
                                 // + 所有验证通过，注册着色器
-                                // ✅ 先获取行数（在move之前）
+                                // [OK] 先获取行数（在move之前）
                                 size_t vsLineCount = shaderSource->GetVertexLineCount();
                                 size_t psLineCount = shaderSource->GetPixelLineCount();
 
@@ -809,7 +809,7 @@ namespace enigma::graphic
                 }
 
                 // ================================================================
-                // 优先级 2: program/ 目录回退（shaders/program/）⭐⭐
+                // 优先级 2: program/ 目录回退（shaders/program/）[PRIORITY-MEDIUM]
                 // ================================================================
                 if (!foundProgram && hasProgramDir)
                 {
@@ -833,7 +833,7 @@ namespace enigma::graphic
                         {
                             DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has 0 lines (empty file) in program/ directory, trying next fallback\n",
                                            programName.c_str(), slotIndex);
-                            // ✅ 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
+                            // [OK] 不设置foundProgram，让代码继续执行到下一个if块（不使用continue）
                         }
                         else
                         {
@@ -856,19 +856,19 @@ namespace enigma::graphic
                             {
                                 DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] failed IsValid() check in program/ directory, trying next fallback\n",
                                                programName.c_str(), slotIndex);
-                                // ✅ 不设置foundProgram，继续到下一级Fallback
+                                // [OK] 不设置foundProgram，继续到下一级Fallback
                             }
                             // + 第三层：HasNonEmptySource()检查（严格内容验证）
                             else if (!shaderSource->HasNonEmptySource())
                             {
                                 DebuggerPrintf("[ShaderPack] Warning: Array '%s'[%d] has no non-whitespace content in program/ directory, trying next fallback\n",
                                                programName.c_str(), slotIndex);
-                                // ✅ 不设置foundProgram，继续到下一级Fallback
+                                // [OK] 不设置foundProgram，继续到下一级Fallback
                             }
                             else
                             {
                                 // + 所有验证通过，注册着色器
-                                // ✅ 先获取行数（在move之前）
+                                // [OK] 先获取行数（在move之前）
                                 size_t vsLineCount = shaderSource->GetVertexLineCount();
                                 size_t psLineCount = shaderSource->GetPixelLineCount();
 
@@ -888,7 +888,7 @@ namespace enigma::graphic
                 }
 
                 // ================================================================
-                // 优先级 3: shaders/ 根目录回退 ⭐
+                // 优先级 3: shaders/ 根目录回退 [PRIORITY-LOW]
                 // ================================================================
                 if (!foundProgram)
                 {
@@ -945,7 +945,7 @@ namespace enigma::graphic
                             else
                             {
                                 // + 所有验证通过，注册着色器
-                                // ✅ 先获取行数（在move之前）
+                                // [OK] 先获取行数（在move之前）
                                 size_t vsLineCount = shaderSource->GetVertexLineCount();
                                 size_t psLineCount = shaderSource->GetPixelLineCount();
 

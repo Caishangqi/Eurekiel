@@ -154,6 +154,7 @@ namespace enigma::graphic
         bool                               enableOptimization = true; ///< 是否启用优化 (-O3)
         bool                               enable16BitTypes   = true; ///< 是否启用 16-bit 类型
         bool                               enableBindless     = true; ///< 是否启用 Bindless 支持 (SM 6.6)
+        std::string                        entryPoint; ///< 着色器入口点名称（空字符串=使用默认值，"main"=Iris兼容）
         std::vector<std::string>           defines; ///< 编译宏定义 (例: "USE_BINDLESS=1")
         std::vector<std::filesystem::path> includePaths; ///< Include 搜索路径（用户完全控制）
 
@@ -392,15 +393,18 @@ namespace enigma::graphic
          * @brief 将ShaderCompileOptions转换为DXCCompiler::CompileOptions
          * @param opts 高层编译选项
          * @param stage 着色器阶段 (用于确定target)
+         * @param configuredEntryPoint 配置的入口点（空字符串=使用默认值）
          * @return DXCCompiler::CompileOptions DXC编译器选项
          *
          * 教学要点:
          * - 适配器模式 (Adapter Pattern)
          * - 抽象层设计：隐藏DXC编译器的复杂性
          * - 配置转换：高层API → 底层API
+         * - 配置驱动：支持自定义入口点
          *
          * 转换规则:
          * - stage → target (Vertex → "vs_6_6", Pixel → "ps_6_6", etc.)
+         * - configuredEntryPoint → entryPoint (优先使用配置值)
          * - enableDebugInfo → enableDebugInfo
          * - enableOptimization → enableOptimization
          * - enable16BitTypes → enable16BitTypes
@@ -415,21 +419,25 @@ namespace enigma::graphic
          * opts.defines.push_back("USE_BINDLESS=1");
          * opts.includePaths.push_back("shaders/lib");
          *
-         * auto dxcOpts = ShaderCompilationHelper::ConvertToCompilerOptions(opts, ShaderStage::Vertex);
-         * // dxcOpts.target = "vs_6_6"
-         * // dxcOpts.entryPoint = "VSMain"
-         * // dxcOpts.enableDebugInfo = true
-         * // dxcOpts.defines = {"USE_BINDLESS=1"}
-         * // dxcOpts.includePaths = {L"F:/project/shaders/lib"}
+         * // 使用配置的入口点（Iris兼容）
+         * auto dxcOpts1 = ShaderCompilationHelper::ConvertToCompilerOptions(opts, ShaderStage::Vertex, "main");
+         * // dxcOpts1.target = "vs_6_6"
+         * // dxcOpts1.entryPoint = "main"
+         * 
+         * // 使用默认入口点（向后兼容）
+         * auto dxcOpts2 = ShaderCompilationHelper::ConvertToCompilerOptions(opts, ShaderStage::Vertex);
+         * // dxcOpts2.target = "vs_6_6"
+         * // dxcOpts2.entryPoint = "VSMain"
          * @endcode
          *
          * 注意事项:
-         * - ⚠️ entryPoint 根据 stage 自动设置 (VSMain, PSMain, etc.)
+         * - ⚠️ entryPoint 优先使用 configuredEntryPoint，空字符串时使用默认值
          * - ⚠️ target 根据 stage 自动设置 (vs_6_6, ps_6_6, etc.)
          */
         static DXCCompiler::CompileOptions ConvertToCompilerOptions(
             const ShaderCompileOptions& opts,
-            ShaderStage                 stage
+            ShaderStage                 stage,
+            const std::string&          configuredEntryPoint = ""
         );
 
     private:
@@ -456,13 +464,26 @@ namespace enigma::graphic
         /**
          * @brief 根据ShaderStage获取入口点名称
          * @param stage 着色器阶段
-         * @return std::string 入口函数名 (例: "VSMain", "PSMain")
-         *
+         * @param configuredEntryPoint 配置的入口点（空字符串=使用默认值）
+         * @return std::string 入口函数名
+         * 
          * 教学要点:
-         * - 标准化入口点命名
-         * - 所有着色器遵循统一约定
+         * - 配置驱动: 优先使用配置的入口点
+         * - 向后兼容: 空字符串时使用默认值（VSMain/PSMain）
+         * - Iris兼容: 配置为 "main" 时完全兼容Iris
+         * 
+         * 使用示例:
+         * @code
+         * // 使用配置的入口点（Iris兼容）
+         * std::string entry1 = GetEntryPoint(ShaderStage::Vertex, "main");
+         * // entry1 = "main"
+         * 
+         * // 使用默认入口点（向后兼容）
+         * std::string entry2 = GetEntryPoint(ShaderStage::Vertex, "");
+         * // entry2 = "VSMain"
+         * @endcode
          *
-         * 映射关系:
+         * 映射关系（默认值）:
          * - ShaderStage::Vertex → "VSMain"
          * - ShaderStage::Pixel → "PSMain"
          * - ShaderStage::Compute → "CSMain"
@@ -470,6 +491,9 @@ namespace enigma::graphic
          * - ShaderStage::Hull → "HSMain"
          * - ShaderStage::Domain → "DSMain"
          */
-        static std::string GetEntryPoint(ShaderStage stage);
+        static std::string GetEntryPoint(
+            ShaderStage        stage,
+            const std::string& configuredEntryPoint = ""
+        );
     };
 } // namespace enigma::graphic

@@ -242,6 +242,41 @@ namespace enigma::graphic
          */
         std::string engineDefaultShaderPackPath;
 
+        // ==================== Shader编译配置 ====================
+
+        /**
+         * @brief Shader入口点名称（全局统一）
+         * 
+         * 默认值: "main" (Iris兼容)
+         * 
+         * 教学要点:
+         * - Iris兼容性: Iris使用 "main" 作为入口点（GLSL标准）
+         * - 简化配置: 所有shader阶段使用相同入口点
+         * - 用户友好: 符合GLSL/HLSL习惯
+         * - 配置驱动: 避免硬编码，提高灵活性
+         * 
+         * 使用场景:
+         * - Iris ShaderPack: 使用 "main" (默认值)
+         * - 自定义Shader: 可配置为 "VSMain"/"PSMain" (DirectX风格)
+         * - 测试Shader: 可配置为任意名称
+         * 
+         * 架构设计:
+         * - 全局配置: 所有shader阶段使用相同入口点（简化配置）
+         * - 可扩展性: 未来可扩展为每个阶段独立配置
+         * - 默认值合理: "main" 符合GLSL标准，Iris完全兼容
+         * 
+         * YAML配置示例:
+         * @code{.yaml}
+         * shader:
+         *   entryPoint: "main"  # Iris兼容（默认）
+         *   # entryPoint: "VSMain"  # DirectX风格
+         * @endcode
+         * 
+         * @note 参考Iris: 所有shader使用 "main()" 作为入口点
+         * @see ShaderCompilationHelper::GetEntryPoint() - 使用此配置
+         */
+        std::string shaderEntryPoint = "main";
+
         // ==================== 清屏配置 ====================
 
         /**

@@ -19,7 +19,7 @@
  * - 需要纹理但不需要光照的场景
  */
 
-#include "Common.hlsl"
+#include "../core/Common.hlsl"
 
 /**
  * @brief 顶点着色器主函数
@@ -38,4 +38,5 @@ VSOutput main(VSInput input)
     // - 颜色解包
     // - UV 坐标传递 (关键: 供像素着色器使用)
     return StandardVertexTransform(input);
+    //
 }

@@ -42,7 +42,6 @@ namespace enigma::graphic::test
         if (!vsResult.success)
         {
             ERROR_AND_DIE(Stringf("[TestPSO] Failed to compile Vertex Shader: %s", vsResult.errorMessage.c_str()).c_str());
-            return nullptr;
         }
 
         DebuggerPrintf("[TestPSO] Vertex Shader compiled successfully (%zu bytes)\n",
@@ -68,7 +67,6 @@ namespace enigma::graphic::test
         {
             ERROR_AND_DIE(Stringf("[TestPSO] Failed to compile Pixel Shader: %s",
                 psResult.errorMessage.c_str()).c_str());
-            return nullptr;
         }
 
         DebuggerPrintf("[TestPSO] Pixel Shader compiled successfully (%zu bytes)\n",
@@ -93,7 +91,6 @@ namespace enigma::graphic::test
         if (!psoDesc.pRootSignature)
         {
             ERROR_AND_DIE("[TestPSO] Bindless RootSignature is null!");
-            return nullptr;
         }
 
         // Shader字节码
@@ -147,7 +144,6 @@ namespace enigma::graphic::test
         if (!pso)
         {
             ERROR_AND_DIE("[TestPSO] Failed to create Graphics PSO!");
-            return nullptr;
         }
 
         DebuggerPrintf("[TestPSO] Graphics PSO created successfully!\n");

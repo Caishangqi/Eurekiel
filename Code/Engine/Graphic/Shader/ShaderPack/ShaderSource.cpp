@@ -29,7 +29,7 @@ namespace enigma::graphic
           , m_vertexSource(vertexSource)
           , m_pixelSource(pixelSource)
           , m_parent(parent)
-    // ❌ 不要在成员初始化列表中初始化 m_directives
+    // [NO] 不要在成员初始化列表中初始化 m_directives
     // 因为 ProgramDirectives 构造函数需要访问 *this，而此时对象还未完全构造
     // 正确做法：使用默认构造函数，然后在构造函数体内重新赋值
     {

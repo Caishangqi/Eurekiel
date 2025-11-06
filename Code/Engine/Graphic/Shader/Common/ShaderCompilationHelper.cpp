@@ -114,13 +114,14 @@ namespace enigma::graphic
 
     DXCCompiler::CompileOptions ShaderCompilationHelper::ConvertToCompilerOptions(
         const ShaderCompileOptions& opts,
-        ShaderStage                 stage
+        ShaderStage                 stage,
+        const std::string&          configuredEntryPoint
     )
     {
         DXCCompiler::CompileOptions dxcOpts;
 
-        // 设置入口点和目标
-        dxcOpts.entryPoint = GetEntryPoint(stage);
+        // 使用配置的入口点
+        dxcOpts.entryPoint = GetEntryPoint(stage, configuredEntryPoint);
         dxcOpts.target     = GetShaderProfile(stage);
 
         // 复制编译选项
@@ -159,6 +160,7 @@ namespace enigma::graphic
     {
         ShaderCompileOptions opts;
         opts.includePaths.push_back(ShaderCompilationHelper::GetEngineShaderCorePath());
+        opts.entryPoint = "main"; // ⭐ Iris兼容：使用 "main" 作为入口点
         return opts;
     }
 
@@ -185,8 +187,18 @@ namespace enigma::graphic
         }
     }
 
-    std::string ShaderCompilationHelper::GetEntryPoint(ShaderStage stage)
+    std::string ShaderCompilationHelper::GetEntryPoint(
+        ShaderStage        stage,
+        const std::string& configuredEntryPoint
+    )
     {
+        // 如果配置了入口点，直接使用（所有阶段统一）
+        if (!configuredEntryPoint.empty())
+        {
+            return configuredEntryPoint;
+        }
+
+        // Fallback: 使用默认入口点（向后兼容）
         switch (stage)
         {
         case ShaderStage::Vertex:

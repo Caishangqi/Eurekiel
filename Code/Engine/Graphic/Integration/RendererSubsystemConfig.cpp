@@ -79,6 +79,21 @@ namespace enigma::graphic
         // YAML路径: shaderpack.name
         result.currentShaderPackName = yamlOpt->GetString("shaderpack.name", "");
 
+        // 步骤5.5: 解析Shader编译配置
+        // YAML路径: shader.entryPoint
+        result.shaderEntryPoint = yamlOpt->GetString("shader.entryPoint", "main");
+
+        // 参数验证: 入口点名称不能为空
+        if (result.shaderEntryPoint.empty())
+        {
+            LogWarn("RendererSubsystemConfig",
+                    "shader.entryPoint is empty. Using default 'main'.");
+            result.shaderEntryPoint = "main";
+        }
+
+        LogInfo("RendererSubsystemConfig",
+                "Shader entry point: %s", result.shaderEntryPoint.c_str());
+
         // 步骤6: 解析GBuffer配置
         // YAML路径: gbuffer.colorTexCount
         result.gbufferColorTexCount = yamlOpt->GetInt("gbuffer.colorTexCount", 8);
@@ -87,7 +102,7 @@ namespace enigma::graphic
         if (result.gbufferColorTexCount < 1 || result.gbufferColorTexCount > 16)
         {
             LogWarn("RendererSubsystemConfig",
-                    "gbuffer.colorTexCount {} out of range [1, 16]. Using default 8.",
+                    "gbuffer.colorTexCount %d out of range [1, 16]. Using default 8.",
                     result.gbufferColorTexCount);
             result.gbufferColorTexCount = 8; // 回退到默认值
         }

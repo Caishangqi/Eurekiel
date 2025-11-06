@@ -388,7 +388,8 @@ void DepthTextureManager::SwitchDepthBuffer(int newActiveIndex)
     }
 
     // 更新活动索引
-    int oldIndex              = m_currentActiveDepthIndex;
+    int oldIndex = m_currentActiveDepthIndex;
+    UNUSED(oldIndex)
     m_currentActiveDepthIndex = newActiveIndex;
 
     // 日志记录

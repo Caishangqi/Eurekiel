@@ -10,8 +10,8 @@
  *
  * 职责边界:
  * - + 解析字符串 → CommentDirective (中间数据)
- * - ❌ 不存储数据 (由 ProgramDirectives 负责)
- * - ❌ 不做数据转换 (由 ProgramDirectives 负责)
+ * - [NO] 不存储数据 (由 ProgramDirectives 负责)
+ * - [NO] 不做数据转换 (由 ProgramDirectives 负责)
  *
  * 对应 Iris:
  * - net.irisshaders.iris.shaderpack.parsing.CommentDirectiveParser
@@ -63,20 +63,20 @@
  * @endcode
  *
  * 错误类比:
- * ❌ 不要这样设计:
+ * [BAD] 不要这样设计:
  * @code
  * class CommentDirectiveParser {
- *     std::string value;  // ❌ Parser 不应该存储数据
+ *     std::string value;  // [BAD] Parser 不应该存储数据
  *
  *     static CommentDirectiveParser Parse(const std::string& source) {
  *         CommentDirectiveParser result;
- *         result.value = extractData(source);  // ❌ 混合职责
+ *         result.value = extractData(source);  // [BAD] 混合职责
  *         return result;
  *     }
  * };
  * @endcode
  *
- * + 正确设计:
+ * [GOOD] 正确设计:
  * @code
  * class CommentDirectiveParser {
  *     // 禁止实例化

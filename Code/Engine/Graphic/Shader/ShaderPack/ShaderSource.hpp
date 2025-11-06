@@ -48,8 +48,8 @@ namespace enigma::graphic
      * - 支持 Tessellation (Hull/Domain Shader)
      *
      * DirectX 12 着色器管线:
-     * - Vertex Shader (VS) - 必需 ⭐
-     * - Pixel Shader (PS) - 必需 ⭐
+     * - Vertex Shader (VS) - 必需 [REQUIRED]
+     * - Pixel Shader (PS) - 必需 [REQUIRED]
      * - Geometry Shader (GS) - 可选
      * - Hull Shader (HS) - 可选 (对应 Iris tessControl)
      * - Domain Shader (DS) - 可选 (对应 Iris tessEval)

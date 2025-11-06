@@ -618,7 +618,7 @@ void RendererSubsystem::RenderFrame()
 void RendererSubsystem::EndFrame()
 {
     // ========================================================================
-    // ✅ SIMPLIFIED (2025-10-21): 简单委托给 D3D12RenderSystem
+    // [OK] SIMPLIFIED (2025-10-21): 简单委托给 D3D12RenderSystem
     // ========================================================================
     // 职责: 结束帧渲染，提交 GPU 命令并呈现画面
     // - 不再包含 Phase 管理逻辑（已移除）
@@ -663,12 +663,18 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     const std::string&           programName
 )
 {
-    // 使用 WithCommonInclude() 配置（自动包含 Common.hlsl）
+    // ✅ 修复：创建配置并传递入口点
+    ShaderCompileOptions options = ShaderCompileOptions::WithCommonInclude();
+    options.entryPoint           = m_configuration.shaderEntryPoint; // 传递配置的入口点
+
+    LogDebug(LogRenderer, "Using configured entry point: {}",
+             options.entryPoint.c_str());
+
     return CreateShaderProgramFromFiles(
         vsPath,
         psPath,
         programName,
-        ShaderCompileOptions::WithCommonInclude()
+        options
     );
 }
 
@@ -679,7 +685,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
     const ShaderCompileOptions& options
 )
 {
-    LogInfo(LogRenderer, "Compiling shader program from source: {}", programName.c_str());
+    LogInfo(LogRenderer, "Compiling shader program from source: %s", programName.c_str());
 
     // ========================================================================
     // Step 1: 创建 ShaderSource（自动解析 ProgramDirectives）

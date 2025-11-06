@@ -203,7 +203,7 @@ namespace enigma::core
         }
 
         // ========================================================================
-        // ✅ FIX (2025-10-22): 动态获取最新的CommandList（与NewFrame()保持一致）
+        // [FIX] (2025-10-22): 动态获取最新的CommandList（与NewFrame()保持一致）
         // ========================================================================
         // 问题原因: NewFrame()动态获取CommandList，但RenderDrawData()使用旧的m_commandList
         // - 如果BeginFrame之前CommandList为nullptr，NewFrame()会跳过

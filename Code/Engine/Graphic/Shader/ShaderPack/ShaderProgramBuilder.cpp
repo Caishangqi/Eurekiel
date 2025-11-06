@@ -185,15 +185,17 @@ namespace enigma::graphic
 
     std::string ShaderProgramBuilder::GetEntryPoint(ShaderStage stage)
     {
-        // 标准化入口点命名
+        // ✅ 修复：使用 "main" 作为默认入口点（Iris兼容）
+        // 注意：此函数现在主要用于向后兼容
+        // 推荐使用配置系统指定入口点
         switch (stage)
         {
-        case ShaderStage::Vertex: return "VSMain";
-        case ShaderStage::Pixel: return "PSMain";
-        case ShaderStage::Geometry: return "GSMain";
-        case ShaderStage::Compute: return "CSMain";
-        case ShaderStage::Hull: return "HSMain";
-        case ShaderStage::Domain: return "DSMain";
+        case ShaderStage::Vertex: return "main"; // ✅ Iris兼容
+        case ShaderStage::Pixel: return "main"; // ✅ Iris兼容
+        case ShaderStage::Geometry: return "main"; // ✅ Iris兼容
+        case ShaderStage::Compute: return "main"; // ✅ Iris兼容
+        case ShaderStage::Hull: return "main"; // ✅ Iris兼容
+        case ShaderStage::Domain: return "main"; // ✅ Iris兼容
         default:
             ERROR_AND_DIE("Unknown ShaderStage")
         }
@@ -304,6 +306,16 @@ namespace enigma::graphic
         merged.enable16BitTypes = customOpts.enable16BitTypes;
         merged.enableBindless   = customOpts.enableBindless;
 
+        // 5. 合并入口点（用户入口点优先）
+        // 教学要点:
+        // - 配置优先级: 用户配置 > 默认配置
+        // - 空值检查: 只有非空时才覆盖
+        // - Iris兼容: 支持用户配置 "main" 作为入口点
+        if (!customOpts.entryPoint.empty())
+        {
+            merged.entryPoint = customOpts.entryPoint;
+        }
+
         return merged;
     }
 
@@ -319,6 +331,11 @@ namespace enigma::graphic
     {
         UNUSED(type)
         BuildResult result;
+
+        // 调试日志：验证入口点配置传递
+        std::cout << "[ShaderProgramBuilder] Building shader program: " << source.GetName() << std::endl;
+        std::cout << "[ShaderProgramBuilder] Custom entry point: "
+            << (customOptions.entryPoint.empty() ? "<empty>" : customOptions.entryPoint) << std::endl;
 
         // 1. 验证 ShaderSource
         if (!source.IsValid())
@@ -337,13 +354,22 @@ namespace enigma::graphic
         // 3. 合并用户自定义选项
         DXCCompiler::CompileOptions mergedOpts = MergeCompileOptions(defaultOpts, customOptions);
 
+        // 调试日志：验证合并后的入口点
+        std::cout << "[ShaderProgramBuilder] Merged entry point: " << mergedOpts.entryPoint << std::endl;
+
         // 4. 编译顶点着色器（使用合并后的选项）
-        auto compiledVS        = std::make_unique<CompiledShader>();
-        compiledVS->stage      = ShaderStage::Vertex;
-        compiledVS->name       = source.GetName();
-        compiledVS->entryPoint = GetEntryPoint(ShaderStage::Vertex);
+        auto compiledVS   = std::make_unique<CompiledShader>();
+        compiledVS->stage = ShaderStage::Vertex;
+        compiledVS->name  = source.GetName();
+        // ✅ 修复：优先使用配置的入口点，如果为空则使用默认值 "main"（Iris兼容）
+        compiledVS->entryPoint = !mergedOpts.entryPoint.empty()
+                                     ? mergedOpts.entryPoint
+                                     : "main";
         compiledVS->profile    = GetShaderProfile(ShaderStage::Vertex);
         compiledVS->sourceCode = source.GetVertexSource();
+
+        // 日志记录：验证入口点配置
+        std::cout << "[ShaderProgramBuilder] VS entry point: " << compiledVS->entryPoint << std::endl;
 
         mergedOpts.entryPoint = compiledVS->entryPoint;
         mergedOpts.target     = compiledVS->profile;
@@ -372,12 +398,18 @@ namespace enigma::graphic
         result.vertexShader = std::move(compiledVS);
 
         // 5. 编译像素着色器（使用合并后的选项）
-        auto compiledPS        = std::make_unique<CompiledShader>();
-        compiledPS->stage      = ShaderStage::Pixel;
-        compiledPS->name       = source.GetName();
-        compiledPS->entryPoint = GetEntryPoint(ShaderStage::Pixel);
+        auto compiledPS   = std::make_unique<CompiledShader>();
+        compiledPS->stage = ShaderStage::Pixel;
+        compiledPS->name  = source.GetName();
+        // ✅ 修复：优先使用配置的入口点，如果为空则使用默认值 "main"（Iris兼容）
+        compiledPS->entryPoint = !mergedOpts.entryPoint.empty()
+                                     ? mergedOpts.entryPoint
+                                     : "main";
         compiledPS->profile    = GetShaderProfile(ShaderStage::Pixel);
         compiledPS->sourceCode = source.GetPixelSource();
+
+        // 日志记录：验证入口点配置
+        std::cout << "[ShaderProgramBuilder] PS entry point: " << compiledPS->entryPoint << std::endl;
 
         mergedOpts.entryPoint = compiledPS->entryPoint;
         mergedOpts.target     = compiledPS->profile;

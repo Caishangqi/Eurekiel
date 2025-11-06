@@ -30,8 +30,8 @@ namespace enigma::graphic
      * 3. **统一访问**: 提供子系统的统一访问接口
      *
      * **架构对比**:
-     * - ❌ **旧设计 (Loader 模式)**: ShaderPackLoader 负责加载 + 持有数据（职责混合）
-     * - + **新设计 (Coordinator 模式)**: ShaderPack 只负责协调子系统，加载逻辑分散到各子系统
+     * - [OLD] **旧设计 (Loader 模式)**: ShaderPackLoader 负责加载 + 持有数据（职责混合）
+     * - [NEW] **新设计 (Coordinator 模式)**: ShaderPack 只负责协调子系统，加载逻辑分散到各子系统
      *
      * **子系统职责分离**:
      * - **IncludeGraph**: 管理 #include 依赖图（BFS 构建 + 循环检测）
@@ -42,21 +42,21 @@ namespace enigma::graphic
      * **初始化顺序**（构造函数协调）:
      * 1. 扫描起始路径（着色器程序文件）
      * 2. 构建 IncludeGraph（BFS 加载所有依赖）
-     * 3. 解析 ShaderProperties（读取配置文件）⚠️ Phase 2-3 实现
-     * 4. 创建 ShaderPackOptions（基于前两者）⚠️ Phase 5 实现
-     * 5. 加载 ProgramSet（基于 IncludeGraph 和 ShaderProperties）⚠️ Phase 4 实现
+     * 3. 解析 ShaderProperties（读取配置文件）[WARNING] Phase 2-3 实现
+     * 4. 创建 ShaderPackOptions（基于前两者）[WARNING] Phase 5 实现
+     * 5. 加载 ProgramSet（基于 IncludeGraph 和 ShaderProperties）[WARNING] Phase 4 实现
      *
      * **Iris 源码参考**:
      * - ShaderPack.java（数据容器 + 协调器）
      * - ProgramSet.java（程序集管理）
      * - IncludeGraph.java（依赖图构建）
      *
-     * **Phase 1 实现范围** ⭐:
-     * - + 重命名 ShaderPackLoader → ShaderPack
-     * - + 添加子系统成员变量（IncludeGraph, ShaderProperties, ShaderPackOptions, ProgramSet）
-     * - + 重构构造函数（协调器模式）
-     * - + 添加访问器方法
-     * - ⚠️ 子系统初始化（IncludeGraph 完整实现，其他子系统为空壳）
+     * **Phase 1 实现范围** [IMPORTANT]:
+     * - [DONE] 重命名 ShaderPackLoader → ShaderPack
+     * - [DONE] 添加子系统成员变量（IncludeGraph, ShaderProperties, ShaderPackOptions, ProgramSet）
+     * - [DONE] 重构构造函数（协调器模式）
+     * - [DONE] 添加访问器方法
+     * - [WARNING] 子系统初始化（IncludeGraph 完整实现，其他子系统为空壳）
      */
     class ShaderPack
     {
@@ -68,9 +68,9 @@ namespace enigma::graphic
          * **初始化流程**（协调所有子系统）:
          * 1. 扫描起始路径（shaders/ 目录下的所有 .vs.hlsl 和 .ps.hlsl 文件）
          * 2. 构建 IncludeGraph（BFS 加载所有依赖）
-         * 3. 解析 ShaderProperties（读取 shaders.properties）⚠️ Phase 2-3 实现
-         * 4. 创建 ShaderPackOptions（基于 IncludeGraph 和 ShaderProperties）⚠️ Phase 5 实现
-         * 5. 加载 ProgramSet（基于 IncludeGraph 和 ShaderProperties）⚠️ Phase 4 实现
+         * 3. 解析 ShaderProperties（读取 shaders.properties）[WARNING] Phase 2-3 实现
+         * 4. 创建 ShaderPackOptions（基于 IncludeGraph 和 ShaderProperties）[WARNING] Phase 5 实现
+         * 5. 加载 ProgramSet（基于 IncludeGraph 和 ShaderProperties）[WARNING] Phase 4 实现
          *
          * **教学要点**:
          * - 协调器模式：构造函数负责协调所有子系统的初始化顺序
@@ -78,9 +78,9 @@ namespace enigma::graphic
          * - 错误处理：任何子系统初始化失败都会记录，但不会中断后续初始化
          *
          * **Phase 1 实施范围**:
-         * - + 扫描起始路径
-         * - + 初始化 IncludeGraph
-         * - ⚠️ 其他子系统创建空对象（Phase 2-5 填充实现）
+         * - [DONE] 扫描起始路径
+         * - [DONE] 初始化 IncludeGraph
+         * - [WARNING] 其他子系统创建空对象（Phase 2-5 填充实现）
          */
         explicit ShaderPack(const std::filesystem::path& root);
 
@@ -120,7 +120,7 @@ namespace enigma::graphic
          * @brief 获取 Shader Pack 配置
          * @return ShaderProperties 引用（保证非空）
          *
-         * **使用场景** ⚠️ Phase 2-3 实现:
+         * **使用场景** [WARNING] Phase 2-3 实现:
          * - 查询全局指令（如 shadowMapResolution）
          * - 查询程序指令（如混合模式、深度测试）
          * - 查询 RT 格式配置
@@ -131,14 +131,14 @@ namespace enigma::graphic
          * @brief 获取 Shader Pack 选项
          * @return ShaderPackOptions 引用（保证非空）
          *
-         * **使用场景** ⚠️ Phase 5 实现:
+         * **使用场景** [WARNING] Phase 5 实现:
          * - 查询用户可配置的选项
          * - 处理选项变更事件
          */
         const ShaderPackOptions& GetOptions() const { return *m_options; }
 
         /**
-         * @brief 获取指定维度的 ProgramSet（字符串模式 - 推荐）⭐
+         * @brief 获取指定维度的 ProgramSet（字符串模式 - 推荐）[RECOMMENDED]
          * @param dimensionName 维度名称字符串（如 "world0", "world1", "world99"）
          * @return ProgramSet 指针，如果不存在则自动创建（延迟加载）
          *
@@ -189,8 +189,8 @@ namespace enigma::graphic
          * **验证逻辑**:
          * - IncludeGraph 加载成功（无循环依赖）
          * - IncludeGraph 没有致命错误
-         * - ShaderProperties 解析成功 ⚠️ Phase 2-3
-         * - ProgramSet 至少加载了 Basic 程序 ⚠️ Phase 4
+         * - ShaderProperties 解析成功 [WARNING] Phase 2-3
+         * - ProgramSet 至少加载了 Basic 程序 [WARNING] Phase 4
          */
         bool IsValid() const;
 
@@ -204,8 +204,8 @@ namespace enigma::graphic
          * @return 目录名称（"world0", "program", 或 ""）
          *
          * **检测优先级（遵循 Iris 标准）**：
-         * 1. **world0/** - 如果存在，使用主世界作为默认 ⭐⭐⭐
-         * 2. **program/** - 如果存在，使用专用程序目录 ⭐
+         * 1. **world0/** - 如果存在，使用主世界作为默认 [PRIORITY-HIGH]
+         * 2. **program/** - 如果存在，使用专用程序目录 [PRIORITY-MEDIUM]
          * 3. **""** (空字符串) - 回退到 shaders/ 根目录
          *
          * **教学要点**：
@@ -259,6 +259,6 @@ namespace enigma::graphic
         std::unordered_map<std::string, std::unique_ptr<ProgramSet>> m_programSets;
 
         // 移除旧的单 ProgramSet 成员（已被 m_programSets 取代）
-        // std::unique_ptr<ProgramSet> m_programSet; // ❌ 删除
+        // std::unique_ptr<ProgramSet> m_programSet; // [REMOVED] 删除
     };
 } // namespace enigma::graphic
