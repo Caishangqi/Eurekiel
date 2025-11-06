@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "Engine/Core/Logger/Logger.hpp"
+using namespace enigma::core;
 
 namespace enigma::graphic
 {
@@ -38,7 +39,7 @@ namespace enigma::graphic
         // 创建ShadowColor渲染目标
         CreateShadowColors();
 
-        LOG_INFO_F("ShadowColorManager", "Created with %d active ShadowColors", m_activeShadowColorCount);
+        LogInfo("ShadowColorManager", "Created with %d active ShadowColors", m_activeShadowColorCount);
     }
 
     // ============================================================================
@@ -81,8 +82,8 @@ namespace enigma::graphic
             m_shadowColors.push_back(mainRT);
             m_shadowColors.push_back(altRT);
 
-            LOG_DEBUG_F("ShadowColorManager", "Created ShadowColor[%d]: %dx%d, Format: %d",
-                        i, config.width, config.height, static_cast<int>(config.format));
+            LogError("ShadowColorManager", "Created ShadowColor[%d]: %dx%d, Format: %d",
+                     i, config.width, config.height, static_cast<int>(config.format));
         }
     }
 
@@ -94,8 +95,7 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                      index, m_activeShadowColorCount);
+            LogError("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)", index, m_activeShadowColorCount);
             return nullptr;
         }
 
@@ -112,8 +112,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                      index, m_activeShadowColorCount);
+            LogError("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                     index, m_activeShadowColorCount);
             return D3D12_CPU_DESCRIPTOR_HANDLE{0};
         }
 
@@ -125,8 +125,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                      index, m_activeShadowColorCount);
+            LogError("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                     index, m_activeShadowColorCount);
             return D3D12_CPU_DESCRIPTOR_HANDLE{0};
         }
 
@@ -142,8 +142,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                      index, m_activeShadowColorCount);
+            LogError("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                     index, m_activeShadowColorCount);
             return 0;
         }
 
@@ -155,8 +155,8 @@ namespace enigma::graphic
     {
         if (!IsValidIndex(index))
         {
-            LOG_ERROR("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
-                      index, m_activeShadowColorCount);
+            LogError("ShadowColorManager", "Invalid index: %d, valid range: [0, %d)",
+                     index, m_activeShadowColorCount);
             return 0;
         }
 
@@ -218,8 +218,8 @@ namespace enigma::graphic
             createInfo.debugName    = "ShadowColorBuffer";
 
             m_gpuBuffer = std::make_unique<D12Buffer>(createInfo);
-            LOG_INFO_F("ShadowColorManager", "Created ShadowColorBuffer, Bindless index: %u",
-                       m_gpuBuffer->GetBindlessIndex());
+            LogInfo("ShadowColorManager", "Created ShadowColorBuffer, Bindless index: %u",
+                    m_gpuBuffer->GetBindlessIndex());
         }
         else
         {
@@ -244,7 +244,7 @@ namespace enigma::graphic
         m_baseWidth  = newBaseWidth;
         m_baseHeight = newBaseHeight;
 
-        LOG_INFO_F("ShadowColorManager", "Resizing ShadowColors to %dx%d", newBaseWidth, newBaseHeight);
+        LogInfo("ShadowColorManager", "Resizing ShadowColors to %dx%d", newBaseWidth, newBaseHeight);
 
         // 重新创建所有ShadowColor（因为尺寸可能基于baseWidth/baseHeight）
         for (int i = 0; i < m_activeShadowColorCount; ++i)
@@ -264,8 +264,8 @@ namespace enigma::graphic
             // {
             //     altRT->ResizeIfNeeded(config.width, config.height);
             // }
-            LOG_DEBUG_F("ShadowColorManager", "Resized ShadowColor[%d] to %dx%d",
-                        i, config.width, config.height);
+            LogError("ShadowColorManager", "Resized ShadowColor[%d] to %dx%d",
+                     i, config.width, config.height);
         }
 
         // 重新创建GPU Buffer

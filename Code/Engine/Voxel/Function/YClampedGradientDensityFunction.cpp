@@ -1,5 +1,6 @@
 ﻿#include "YClampedGradientDensityFunction.hpp"
 
+#include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Math/MathUtils.hpp"
 using namespace enigma::voxel;
 
@@ -9,6 +10,8 @@ YClampedGradientDensityFunction::YClampedGradientDensityFunction(int fromY, int 
 
 float YClampedGradientDensityFunction::Evaluate(int x, int y, int z) const
 {
+    UNUSED(x);
+    UNUSED(z);
     // Step 1: Clamp Y to within the range
     int clampedY = (int)GetClamped((float)y, (float)m_fromY, (float)m_toY);
 

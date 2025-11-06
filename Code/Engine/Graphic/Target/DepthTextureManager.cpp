@@ -394,7 +394,7 @@ void DepthTextureManager::SwitchDepthBuffer(int newActiveIndex)
     // 日志记录
     const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
     // TODO: 添加日志系统后启用
-    // LOG_INFO("DepthTextureManager: Switched depth buffer from {} to {}",
+    // LogInfo("DepthTextureManager: Switched depth buffer from {} to {}",
     //          depthNames[oldIndex], depthNames[newActiveIndex]);
 }
 
@@ -416,7 +416,7 @@ void DepthTextureManager::CopyDepthBuffer(
     // 日志记录
     const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
     // TODO: 添加日志系统后启用
-    // LOG_INFO("DepthTextureManager: Copied depth buffer {} -> {}",
+    // LogInfo("DepthTextureManager: Copied depth buffer {} -> {}",
     //          depthNames[srcIndex], depthNames[dstIndex]);
 }
 

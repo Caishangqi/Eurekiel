@@ -818,10 +818,18 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
             std::filesystem::path rootPath = ShaderIncludeHelper::DetermineRootPath(vsPath);
             LogDebug(LogRenderer, "Include system root path: {}", rootPath.string().c_str());
 
-            // 3.2 构建IncludeGraph（从文件系统）
+            // 3.2 将相对路径转换为绝对路径
+            std::filesystem::path vsAbsPath = std::filesystem::absolute(vsPath);
+            std::filesystem::path psAbsPath = std::filesystem::absolute(psPath);
+
+            // 3.3 计算相对于根目录的路径
+            std::filesystem::path vsRelPath = std::filesystem::relative(vsAbsPath, rootPath);
+            std::filesystem::path psRelPath = std::filesystem::relative(psAbsPath, rootPath);
+
+            // 3.4 构建IncludeGraph（使用完整相对路径，添加前导斜杠）
             std::vector<std::string> shaderFiles = {
-                vsPath.filename().string(),
-                psPath.filename().string()
+                "/" + vsRelPath.generic_string(),
+                "/" + psRelPath.generic_string()
             };
 
             auto graph = ShaderIncludeHelper::BuildFromFiles(rootPath, shaderFiles);
@@ -842,7 +850,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
             }
 
             // 3.4 展开VS源码
-            ShaderPath vsShaderPath = ShaderPath::FromAbsolutePath("/" + vsPath.filename().string());
+            ShaderPath vsShaderPath = ShaderPath::FromAbsolutePath("/" + vsRelPath.generic_string());
             if (graph->HasNode(vsShaderPath))
             {
                 vsSource = ShaderIncludeHelper::ExpandShaderSource(
@@ -858,7 +866,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
             }
 
             // 3.5 展开PS源码
-            ShaderPath psShaderPath = ShaderPath::FromAbsolutePath("/" + psPath.filename().string());
+            ShaderPath psShaderPath = ShaderPath::FromAbsolutePath("/" + psRelPath.generic_string());
             if (graph->HasNode(psShaderPath))
             {
                 psSource = ShaderIncludeHelper::ExpandShaderSource(
@@ -1215,6 +1223,7 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
 
 void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs)
 {
+    UNUSED(rtOutputs);
     // TODO: 通过ShaderPackManager获取ShaderProgram指针
     // 当前简化实现：直接从ShaderPack获取
     const ShaderSource* shaderSource = GetShaderProgram(programId, "world0");

@@ -670,7 +670,12 @@ namespace enigma::core
 
             // Filter categories (based on search box)
             std::string searchLower = m_categorySearchBuffer;
-            std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(), ::tolower);
+            std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(),
+                           [](unsigned char c)
+                           {
+                               int result = std::tolower(c);
+                               return static_cast<char>(static_cast<unsigned char>(result));
+                           });
 
             UpdateCategoryCounts();
 
@@ -718,8 +723,8 @@ namespace enigma::core
         // ========================================
         // Box Selection: Start detection (in empty space)
         // ========================================
-        ImGuiIO& io = ImGui::GetIO();
-        const bool isCtrlHeld = io.KeyCtrl;
+        ImGuiIO&   io          = ImGui::GetIO();
+        const bool isCtrlHeld  = io.KeyCtrl;
         const bool isShiftHeld = io.KeyShift;
 
         // Detect box selection start (left click in window)
@@ -728,9 +733,9 @@ namespace enigma::core
             // Only start box select if clicking on empty space (not on a Selectable)
             // We'll check this by seeing if mouse was over any Selectable later
             // For now, mark as potentially starting box select
-            m_isBoxSelecting = true;
-            m_boxSelectStart = ImGui::GetMousePos();
-            m_boxSelectEnd = m_boxSelectStart;
+            m_isBoxSelecting   = true;
+            m_boxSelectStart   = ImGui::GetMousePos();
+            m_boxSelectEnd     = m_boxSelectStart;
             m_boxSelectScrollY = ImGui::GetScrollY(); // Save scroll position at start
             // Save initial state: if Ctrl is held, we're adding to selection; otherwise start fresh
             if (isCtrlHeld)
@@ -752,18 +757,18 @@ namespace enigma::core
 
             // Calculate scroll offset since box selection started
             float currentScrollY = ImGui::GetScrollY();
-            float scrollDelta = currentScrollY - m_boxSelectScrollY;
+            float scrollDelta    = currentScrollY - m_boxSelectScrollY;
 
             // Draw selection rectangle (adjusted for scroll)
             ImDrawList* drawList = ImGui::GetWindowDrawList();
             // Adjust box coordinates by scroll delta
             ImVec2 adjustedStart = ImVec2(m_boxSelectStart.x, m_boxSelectStart.y - scrollDelta);
-            ImVec2 adjustedEnd = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
+            ImVec2 adjustedEnd   = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
 
             ImVec2 rectMin = ImVec2(ImMin(adjustedStart.x, adjustedEnd.x),
-                                     ImMin(adjustedStart.y, adjustedEnd.y));
+                                    ImMin(adjustedStart.y, adjustedEnd.y));
             ImVec2 rectMax = ImVec2(ImMax(adjustedStart.x, adjustedEnd.x),
-                                     ImMax(adjustedStart.y, adjustedEnd.y));
+                                    ImMax(adjustedStart.y, adjustedEnd.y));
 
             // Draw border and filled rectangle
             drawList->AddRect(rectMin, rectMax, IM_COL32(100, 150, 255, 255), 0.0f, 0, 2.0f);
@@ -846,9 +851,9 @@ namespace enigma::core
         {
             // Calculate box selection rectangle (normalized)
             ImVec2 rectMin = ImVec2(ImMin(m_boxSelectStart.x, m_boxSelectEnd.x),
-                                     ImMin(m_boxSelectStart.y, m_boxSelectEnd.y));
+                                    ImMin(m_boxSelectStart.y, m_boxSelectEnd.y));
             ImVec2 rectMax = ImVec2(ImMax(m_boxSelectStart.x, m_boxSelectEnd.x),
-                                     ImMax(m_boxSelectStart.y, m_boxSelectEnd.y));
+                                    ImMax(m_boxSelectStart.y, m_boxSelectEnd.y));
 
             // For each visible item during rendering, we'll check if it's in the box
             // and add to itemsInBoxSelection
@@ -877,9 +882,9 @@ namespace enigma::core
 
                 // Create display text: "[HH:MM:SS] LogGame: Game initialized successfully"
                 std::string displayText = Stringf("[%s] %s: %s",
-                                                   msg.timestamp.c_str(),
-                                                   msg.category.c_str(),
-                                                   msg.message.c_str());
+                                                  msg.timestamp.c_str(),
+                                                  msg.category.c_str(),
+                                                  msg.message.c_str());
 
                 // Apply selection highlight colors
                 if (isSelected)
@@ -929,7 +934,7 @@ namespace enigma::core
                         // Shift+Click: Range selection
                         // Keep existing selection and add range from m_lastClickedIndex to current item
                         int startIdx = ImMin(m_lastClickedIndex, i);
-                        int endIdx = ImMax(m_lastClickedIndex, i);
+                        int endIdx   = ImMax(m_lastClickedIndex, i);
 
                         // Don't clear selection - preserve existing selections
                         // SelectRange will add to current selection
@@ -1213,7 +1218,8 @@ namespace enigma::core
         m_selectedMessageIndices.erase(
             std::remove_if(m_selectedMessageIndices.begin(),
                            m_selectedMessageIndices.end(),
-                           [this](int idx) {
+                           [this](int idx)
+                           {
                                return idx < 0 || idx >= static_cast<int>(m_filteredIndices.size());
                            }),
             m_selectedMessageIndices.end());
@@ -1359,8 +1365,8 @@ namespace enigma::core
             return;
 
         // Get the selected message
-        size_t msgIndex = m_filteredIndices[m_selectedMessageIndex];
-        const DisplayMessage& msg = m_allMessages[msgIndex];
+        size_t                msgIndex = m_filteredIndices[m_selectedMessageIndex];
+        const DisplayMessage& msg      = m_allMessages[msgIndex];
 
         // Build text to copy
         std::string textToCopy;
@@ -1457,23 +1463,24 @@ namespace enigma::core
 
     bool MessageLogUI::IsMessageInBoxSelection(int index, const ImVec2& itemMin, const ImVec2& itemMax) const
     {
+        UNUSED(index);
         // Calculate scroll offset since box selection started
         float currentScrollY = ImGui::GetScrollY();
-        float scrollDelta = currentScrollY - m_boxSelectScrollY;
+        float scrollDelta    = currentScrollY - m_boxSelectScrollY;
 
         // Adjust box start position by scroll delta
         ImVec2 adjustedStart = ImVec2(m_boxSelectStart.x, m_boxSelectStart.y - scrollDelta);
-        ImVec2 adjustedEnd = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
+        ImVec2 adjustedEnd   = ImVec2(m_boxSelectEnd.x, m_boxSelectEnd.y);
 
         // Calculate box selection rectangle (normalized)
         ImVec2 rectMin = ImVec2(ImMin(adjustedStart.x, adjustedEnd.x),
-                                 ImMin(adjustedStart.y, adjustedEnd.y));
+                                ImMin(adjustedStart.y, adjustedEnd.y));
         ImVec2 rectMax = ImVec2(ImMax(adjustedStart.x, adjustedEnd.x),
-                                 ImMax(adjustedStart.y, adjustedEnd.y));
+                                ImMax(adjustedStart.y, adjustedEnd.y));
 
         // Check if item rectangle intersects with selection rectangle
         return !(itemMax.x < rectMin.x || itemMin.x > rectMax.x ||
-                 itemMax.y < rectMin.y || itemMin.y > rectMax.y);
+            itemMax.y < rectMin.y || itemMin.y > rectMax.y);
     }
 
     // ================================================================================================

@@ -36,7 +36,7 @@ namespace enigma::core
         RegisterCategory(LogInput.GetName(), "Input", Rgba8(200, 200, 255, 255));
         RegisterCategory(LogTemp.GetName(), "Temp", Rgba8(200, 200, 200, 255));
 
-        DebuggerPrintf("[MessageLogSubsystem] Initialized with UI\n");
+        DebuggerPrintf("%s", "[MessageLogSubsystem] Initialized with UI\n");
     }
 
     void MessageLogSubsystem::Startup()
@@ -77,7 +77,7 @@ namespace enigma::core
         std::lock_guard<std::mutex> lock(m_categoryMutex);
         m_categories.clear();
 
-        DebuggerPrintf("[MessageLogSubsystem] Shutdown completed\n");
+        DebuggerPrintf("%s", "[MessageLogSubsystem] Shutdown completed\n");
     }
 
     //-------------------------------------------------------------------------
@@ -196,7 +196,7 @@ namespace enigma::core
         if (m_ui)
         {
             // 转换LogLevel到字符串
-            std::string levelStr = LogLevelToString(message.level);
+            std::string levelStr(LogLevelToString(message.level));
             m_ui->AddMessage(message.category, levelStr, message.message);
         }
     }

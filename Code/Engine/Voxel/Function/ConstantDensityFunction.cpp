@@ -1,4 +1,6 @@
 ﻿#include "ConstantDensityFunction.hpp"
+
+#include "Engine/Core/EngineCommon.hpp"
 using namespace enigma::voxel;
 
 ConstantDensityFunction::ConstantDensityFunction(float value) : m_value(value)
@@ -7,6 +9,9 @@ ConstantDensityFunction::ConstantDensityFunction(float value) : m_value(value)
 
 float ConstantDensityFunction::Evaluate(int x, int y, int z) const
 {
+    UNUSED(x);
+    UNUSED(y);
+    UNUSED(z);
     return m_value;
 }
 

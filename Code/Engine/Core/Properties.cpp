@@ -148,7 +148,7 @@ namespace enigma::core
         }
 
         std::string value = it->second;
-        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
         if (value == "true" || value == "1" || value == "yes" || value == "on")
         {
