@@ -27,8 +27,6 @@
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp" // Shrimp Task 2: DXC编译器
 #include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
-
-using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 #pragma region Lifecycle Management

@@ -200,8 +200,8 @@ void DebugRenderWorld(const Camera& camera)
             {
                 debugRenderConfig.m_renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_BACK);
                 debugRenderConfig.m_renderer->BindTexture(nullptr);
-                debugRenderConfig.m_renderer->SetBlendMode(BlendMode::ALPHA);
-                debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_ONLY_ALWAYS);
+                debugRenderConfig.m_renderer->SetBlendMode(blend_mode::ALPHA);
+                debugRenderConfig.m_renderer->SetDepthMode(depth_mode::READ_ONLY_ALWAYS);
                 Rgba8         originColor    = debugRenderPropObject->vertices[0].m_color;
                 unsigned char newR           = static_cast<unsigned char>(static_cast<float>(originColor.r) * 0.8f);
                 unsigned char newG           = static_cast<unsigned char>(static_cast<float>(originColor.g) * 0.8f);
@@ -217,14 +217,14 @@ void DebugRenderWorld(const Camera& camera)
                 {
                     vertex.m_color = originColor;
                 }
-                debugRenderConfig.m_renderer->SetBlendMode(BlendMode::OPAQUE);
-                debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_WRITE_LESS_EQUAL);
+                debugRenderConfig.m_renderer->SetBlendMode(blend_mode::OPAQUE);
+                debugRenderConfig.m_renderer->SetDepthMode(depth_mode::READ_WRITE_LESS_EQUAL);
                 debugRenderConfig.m_renderer->DrawVertexArray(debugRenderPropObject->vertices);
                 break;
             }
         case DebugRenderMode::USE_DEPTH:
             debugRenderConfig.m_renderer->BindTexture(nullptr);
-            debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_WRITE_LESS_EQUAL);
+            debugRenderConfig.m_renderer->SetDepthMode(depth_mode::READ_WRITE_LESS_EQUAL);
             if (debugRenderPropObject->m_isWired)
             {
                 debugRenderConfig.m_renderer->SetRasterizerMode(RasterizerMode::WIREFRAME_CULL_BACK);
@@ -265,8 +265,8 @@ void DebugRenderScreen(const Camera& camera)
         ERROR_AND_DIE("DebugRenderScreen: renderer is null")
     debugRenderConfig.m_renderer->BeginCamera(camera);
     debugRenderConfig.m_renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_BACK);
-    debugRenderConfig.m_renderer->SetBlendMode(BlendMode::OPAQUE);
-    debugRenderConfig.m_renderer->SetDepthMode(DepthMode::READ_WRITE_LESS_EQUAL);
+    debugRenderConfig.m_renderer->SetBlendMode(blend_mode::OPAQUE);
+    debugRenderConfig.m_renderer->SetDepthMode(depth_mode::READ_WRITE_LESS_EQUAL);
 
     debugRenderConfig.m_renderer->BindTexture(&debugBitmapFont->GetTexture());
     float                   currentHeight = camera.m_orthographicTopRight.y;

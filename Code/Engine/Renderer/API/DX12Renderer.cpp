@@ -1175,7 +1175,7 @@ void DX12Renderer::SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int
     // @note: This function is not implemented in the provided code
 }
 
-void DX12Renderer::SetBlendMode(BlendMode mode)
+void DX12Renderer::SetBlendMode(blend_mode mode)
 {
     m_currentBlendMode             = mode;
     m_pendingRenderState.blendMode = mode;
@@ -1188,7 +1188,7 @@ void DX12Renderer::SetRasterizerMode(RasterizerMode mode)
     m_pendingRenderState.rasterizerMode = mode;
 }
 
-void DX12Renderer::SetDepthMode(DepthMode mode)
+void DX12Renderer::SetDepthMode(depth_mode mode)
 {
     m_currentDepthMode             = mode;
     m_pendingRenderState.depthMode = mode;
@@ -1851,20 +1851,20 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
     switch (state.blendMode)
     {
     /// Use the alpha value of the source pixel to determine the degree of blending. The formula is: FinalColor = SrcColor * SrcAlpha + DestColor * (1 - SrcAlpha)
-    case BlendMode::ALPHA:
+    case blend_mode::ALPHA:
         blendDesc.RenderTarget[0].BlendEnable = TRUE;
         blendDesc.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA; // Multiply the source color by the source alpha
         blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA; // Multiply the destination color by (1-source Alpha)
         blendDesc.RenderTarget[0].BlendOp   = D3D12_BLEND_OP_ADD; // Add
         break;
     /// This mode makes the color brighter and is often used for light effects, flames, explosions, etc. The formula is: FinalColor = SrcColor * SrcAlpha + DestColor * 1
-    case BlendMode::ADDITIVE:
+    case blend_mode::ADDITIVE:
         blendDesc.RenderTarget[0].BlendEnable = TRUE;
         blendDesc.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA; // Multiply the source color by the source alpha
         blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE; // Multiply the destination color by 1 (keep same)
         blendDesc.RenderTarget[0].BlendOp   = D3D12_BLEND_OP_ADD; // Add
         break;
-    case BlendMode::OPAQUE:
+    case blend_mode::OPAQUE:
         blendDesc.RenderTarget[0].BlendEnable = FALSE;
         break;
     default:
@@ -1877,25 +1877,25 @@ ComPtr<ID3D12PipelineState> DX12Renderer::CreatePipelineStateForRenderState(cons
     switch (state.depthMode)
     {
     // Disable depth testing completely
-    case DepthMode::DISABLED:
+    case depth_mode::DISABLED:
         depthStencilDesc.DepthEnable = FALSE; // Do not write depth
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Not write depth
         depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS; // Always pass (even if disabled)
         break;
     // Enable depth test, but don't write, always pass
-    case DepthMode::READ_ONLY_ALWAYS:
+    case depth_mode::READ_ONLY_ALWAYS:
         depthStencilDesc.DepthEnable = TRUE;
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
         depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS; // Always pass
         break;
     // Enable depth test, do not write, pass when less than or equal to
-    case DepthMode::READ_ONLY_LESS_EQUAL:
+    case depth_mode::READ_ONLY_LESS_EQUAL:
         depthStencilDesc.DepthEnable = TRUE;
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // Not write depth
         depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL; // Pass if less than or equal to
         break;
     // Standard depth test: read and write, pass if less than or equal
-    case DepthMode::READ_WRITE_LESS_EQUAL:
+    case depth_mode::READ_WRITE_LESS_EQUAL:
         depthStencilDesc.DepthEnable = TRUE;
         depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; // Write Depth
         depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL; // Pass if less than or equal to

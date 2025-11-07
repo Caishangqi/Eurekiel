@@ -56,9 +56,9 @@ using Microsoft::WRL::ComPtr;
  */
 struct RenderState
 {
-    BlendMode      blendMode      = BlendMode::ALPHA;
+    blend_mode     blendMode      = blend_mode::ALPHA;
     RasterizerMode rasterizerMode = RasterizerMode::SOLID_CULL_NONE;
-    DepthMode      depthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
+    depth_mode     depthMode      = depth_mode::READ_WRITE_LESS_EQUAL;
     Shader*        shader         = nullptr; // Bind Shader
 
     // Add sampler state array, support up to 16 slots
@@ -227,9 +227,9 @@ public:
     void SetFrameConstants(const FrameConstants& frameConstants) override;
     void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) override;
 
-    void SetBlendMode(BlendMode) override;
+    void SetBlendMode(blend_mode) override;
     void SetRasterizerMode(RasterizerMode) override;
-    void SetDepthMode(DepthMode) override;
+    void SetDepthMode(depth_mode) override;
     void SetSamplerMode(SamplerMode, int slot = 0) override;
 
     void DrawVertexArray(int n, const Vertex_PCU* v) override;

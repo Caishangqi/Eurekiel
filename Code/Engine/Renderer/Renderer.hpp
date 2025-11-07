@@ -92,9 +92,9 @@ public:
     void            BindConstantBuffer(int slot, ConstantBuffer* cbo);
 
     void SetStatesIfChanged(); // Check whether the blend mode is changed, if so, update directX OMSetBlendState()
-    void SetBlendMode(BlendMode blendMode);
+    void SetBlendMode(blend_mode blendMode);
     void SetRasterizerMode(RasterizerMode rasterizerMode);
-    void SetDepthMode(DepthMode depthMode);
+    void SetDepthMode(depth_mode depthMode);
     void SetSamplerMode(SamplerMode samplerMode);
 
     void SetModelConstants(const Mat44& modelToWorldTransform = Mat44(), const Rgba8& modelColor = Rgba8::WHITE);
@@ -125,9 +125,9 @@ protected:
     ConstantBuffer* m_lightCBO         = nullptr;
     ConstantBuffer* m_perFrameCBO      = nullptr;
     // Blend
-    ID3D11BlendState* m_blendState                                      = nullptr;
-    BlendMode         m_desiredBlendMode                                = BlendMode::ALPHA;
-    ID3D11BlendState* m_blendStates[static_cast<int>(BlendMode::COUNT)] = {};
+    ID3D11BlendState* m_blendState                                       = nullptr;
+    blend_mode        m_desiredBlendMode                                 = blend_mode::ALPHA;
+    ID3D11BlendState* m_blendStates[static_cast<int>(blend_mode::COUNT)] = {};
     // Sampler
     ID3D11SamplerState* m_samplerState                                        = nullptr;
     SamplerMode         m_desiredSamplerMode                                  = SamplerMode::POINT_CLAMP;
@@ -137,11 +137,11 @@ protected:
     RasterizerMode         m_desiredRasterizerMode                                     = RasterizerMode::SOLID_CULL_BACK;
     ID3D11RasterizerState* m_rasterizerStates[static_cast<int>(RasterizerMode::COUNT)] = {};
     // Depth
-    ID3D11Texture2D*         m_depthStencilTexture                                    = nullptr;
-    ID3D11DepthStencilView*  m_depthStencilDSV                                        = nullptr;
-    DepthMode                m_desiredDepthMode                                       = DepthMode::READ_WRITE_LESS_EQUAL;
-    ID3D11DepthStencilState* m_depthStencilStates[static_cast<int>(DepthMode::COUNT)] = {};
-    ID3D11DepthStencilState* m_depthStencilState                                      = nullptr;
+    ID3D11Texture2D*         m_depthStencilTexture                                     = nullptr;
+    ID3D11DepthStencilView*  m_depthStencilDSV                                         = nullptr;
+    depth_mode               m_desiredDepthMode                                        = depth_mode::READ_WRITE_LESS_EQUAL;
+    ID3D11DepthStencilState* m_depthStencilStates[static_cast<int>(depth_mode::COUNT)] = {};
+    ID3D11DepthStencilState* m_depthStencilState                                       = nullptr;
 
 #if defined(ENGINE_DEBUG_RENDER)
     void* m_dxgiDebug       = nullptr;

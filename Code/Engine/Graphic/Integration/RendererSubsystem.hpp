@@ -35,6 +35,7 @@
 
 // 使用Enigma核心命名空间中的EngineSubsystem
 using namespace enigma::core;
+using namespace enigma::graphic;
 
 namespace enigma::graphic
 {

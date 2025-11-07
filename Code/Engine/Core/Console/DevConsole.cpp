@@ -481,7 +481,7 @@ void DevConsole::Render(const AABB2& bounds, IRenderer* rendererOverride) const
     if (m_mode == DevConsoleMode::OPEN_FULL)
     {
         m_config.renderer->SetRasterizerMode(RasterizerMode::SOLID_CULL_NONE);
-        m_config.renderer->SetBlendMode(BlendMode::ALPHA);
+        m_config.renderer->SetBlendMode(blend_mode::ALPHA);
         g_theRenderer->BeginCamera(*m_config.m_camera);
         Render_OpenFull(bounds, *rendererOverride, *rendererOverride->CreateOrGetBitmapFont(m_fontFullPath.c_str()), 1);
         g_theRenderer->EndCamera(*m_config.m_camera);

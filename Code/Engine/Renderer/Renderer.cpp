@@ -170,20 +170,20 @@ void Renderer::Startup()
     blendDesc.RenderTarget[0].DestBlendAlpha        = blendDesc.RenderTarget[0].DestBlend;
     blendDesc.RenderTarget[0].BlendOpAlpha          = blendDesc.RenderTarget[0].BlendOp;
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::OPAQUE)]);
+    hr                                              = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(blend_mode::OPAQUE)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:OPAQUE failed.")
     // Alpha state
     blendDesc.RenderTarget[0].SrcBlend  = D3D11_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-    hr                                  = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::ALPHA)]);
+    hr                                  = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(blend_mode::ALPHA)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:ALPHA failed.")
 
     // Additive state
     blendDesc.RenderTarget[0].SrcBlend  = D3D11_BLEND_ONE;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
-    hr                                  = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(BlendMode::ADDITIVE)]);
+    hr                                  = m_device->CreateBlendState(&blendDesc, &m_blendStates[static_cast<int>(blend_mode::ADDITIVE)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateBlendState for BlendMode:ADDITIVE failed.")
 
@@ -239,7 +239,7 @@ void Renderer::Startup()
     }
 
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc = {};
-    hr                                        = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::DISABLED)]);
+    hr                                        = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(depth_mode::DISABLED)]);
 
     if (!SUCCEEDED(hr))
     {
@@ -248,18 +248,18 @@ void Renderer::Startup()
     depthStencilDesc.DepthEnable    = true;
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
     depthStencilDesc.DepthFunc      = D3D11_COMPARISON_ALWAYS;
-    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_ONLY_ALWAYS)]);
+    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(depth_mode::READ_ONLY_ALWAYS)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateDepthStencilState for DepthMode::READ_ONLY_ALWAYS failed.")
 
     depthStencilDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-    hr                         = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_ONLY_LESS_EQUAL)]);
+    hr                         = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(depth_mode::READ_ONLY_LESS_EQUAL)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateDepthStencilState for DepthMode::READ_ONLY_LESS_EQUAL failed.")
 
     depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
     depthStencilDesc.DepthFunc      = D3D11_COMPARISON_LESS_EQUAL;
-    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(DepthMode::READ_WRITE_LESS_EQUAL)]);
+    hr                              = m_device->CreateDepthStencilState(&depthStencilDesc, &m_depthStencilStates[static_cast<int>(depth_mode::READ_WRITE_LESS_EQUAL)]);
 
 
     /// 
@@ -678,7 +678,7 @@ void Renderer::BindTexture(Texture* texture, int slot)
     /// 
 }
 
-void Renderer::SetBlendMode(BlendMode blendMode)
+void Renderer::SetBlendMode(blend_mode blendMode)
 {
     /// OpenGL
     /*if (blendMode == BlendMode::ALPHA) // enum class BlendMode, defined near top of Renderer.hpp
@@ -705,7 +705,7 @@ void Renderer::SetRasterizerMode(RasterizerMode rasterizerMode)
     m_desiredRasterizerMode = rasterizerMode;
 }
 
-void Renderer::SetDepthMode(DepthMode depthMode)
+void Renderer::SetDepthMode(depth_mode depthMode)
 {
     m_desiredDepthMode = depthMode;
 }

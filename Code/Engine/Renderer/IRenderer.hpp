@@ -60,7 +60,7 @@ struct RenderConfig
     RendererBackend m_backend       = RendererBackend::DirectX11;
 };
 
-enum class BlendMode
+enum class blend_mode
 {
     ADDITIVE,
     ALPHA,
@@ -84,7 +84,7 @@ enum class RasterizerMode
     COUNT = 4
 };
 
-enum class DepthMode
+enum class depth_mode
 {
     DISABLED,
     READ_ONLY_ALWAYS,
@@ -189,9 +189,9 @@ public:
     virtual void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) = 0;
 
     // State setters
-    virtual void SetBlendMode(BlendMode mode) = 0;
+    virtual void SetBlendMode(blend_mode mode) = 0;
     virtual void SetRasterizerMode(RasterizerMode mode) = 0;
-    virtual void SetDepthMode(DepthMode mode) = 0;
+    virtual void SetDepthMode(depth_mode mode) = 0;
     virtual void SetSamplerMode(SamplerMode mode, int slot = 0) = 0;
 
     // Resource creation
@@ -324,9 +324,9 @@ public:
 
 protected:
     // These are part of the interface contract, all implementations require
-    BlendMode      m_currentBlendMode      = BlendMode::ALPHA;
+    blend_mode     m_currentBlendMode      = blend_mode::ALPHA;
     RasterizerMode m_currentRasterizerMode = RasterizerMode::SOLID_CULL_BACK;
-    DepthMode      m_currentDepthMode      = DepthMode::READ_WRITE_LESS_EQUAL;
+    depth_mode     m_currentDepthMode      = depth_mode::READ_WRITE_LESS_EQUAL;
     SamplerMode    m_currentSamplerMode    = SamplerMode::POINT_CLAMP;
 
 protected:
