@@ -497,3 +497,25 @@ D3D12_RESOURCE_STATES D12RenderTarget::GetUploadDestinationState() const
 
     return D3D12_RESOURCE_STATE_RENDER_TARGET;
 }
+
+// ============================================================================
+// DirectX 12资源访问 (底层资源指针获取)
+// ============================================================================
+
+ID3D12Resource* D12RenderTarget::GetMainTextureResource() const
+{
+    if (m_mainTexture)
+    {
+        return m_mainTexture->GetResource();
+    }
+    return nullptr;
+}
+
+ID3D12Resource* D12RenderTarget::GetAltTextureResource() const
+{
+    if (m_altTexture)
+    {
+        return m_altTexture->GetResource();
+    }
+    return nullptr;
+}

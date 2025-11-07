@@ -410,6 +410,28 @@ namespace enigma::graphic
          */
         D3D12_CPU_DESCRIPTOR_HANDLE GetAltSRV() const { return m_altSRV; }
 
+        /**
+         * @brief 获取主纹理的底层DirectX 12资源指针
+         * @return ID3D12Resource*裸指针，如果主纹理不存在则返回nullptr
+         *
+         * 教学要点:
+         * - 提供对底层DX12资源的直接访问
+         * - 用于需要原生DX12 API的场景（如资源屏障、复制操作）
+         * - 空指针安全：自动检查m_mainTexture是否有效
+         */
+        ID3D12Resource* GetMainTextureResource() const;
+
+        /**
+         * @brief 获取替代纹理的底层DirectX 12资源指针
+         * @return ID3D12Resource*裸指针，如果替代纹理不存在则返回nullptr
+         *
+         * 教学要点:
+         * - 提供对底层DX12资源的直接访问
+         * - 支持Ping-Pong渲染中的资源操作
+         * - 空指针安全：自动检查m_altTexture是否有效
+         */
+        ID3D12Resource* GetAltTextureResource() const;
+
         // ========================================================================
         // 尺寸管理 (对应Iris resize方法)
         // ========================================================================
