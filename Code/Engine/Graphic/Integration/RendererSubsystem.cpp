@@ -10,6 +10,7 @@
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp" // Milestone 3.0: GBuffer配置API
 #include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
+#include "Engine/Graphic/Target/D12RenderTarget.hpp" // D12RenderTarget类定义
 #include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
 #include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
@@ -1605,10 +1606,179 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
 
 void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
 {
-    // TODO: 实现需要RenderTargetManager提供GetColorTexture()方法
-    UNUSED(rtIndex);
-    UNUSED(rtType);
-    LogWarn(LogRenderer, "PresentRenderTarget: Not implemented yet (需要RenderTargetManager::GetColorTexture())");
+    // ========================================================================
+    // Step 1: 参数验证
+    // ========================================================================
+
+    // 1.1 验证rtType（仅支持RTType::ColorTex）
+    if (rtType != RTType::ColorTex)
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, sizeof(errorMsg),
+                  "PresentRenderTarget: Unsupported RTType (%d), only ColorTex is supported",
+                  static_cast<int>(rtType));
+        LogWarn(LogRenderer, errorMsg);
+        return;
+    }
+
+    // 1.2 验证m_renderTargetManager指针非空
+    if (!m_renderTargetManager)
+    {
+        LogError(LogRenderer, "PresentRenderTarget: RenderTargetManager is null");
+        return;
+    }
+
+    // 1.3 验证rtIndex范围 [0, gbufferColorTexCount)
+    const int colorTexCount = m_configuration.gbufferColorTexCount;
+    if (rtIndex < 0 || rtIndex >= colorTexCount)
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, sizeof(errorMsg),
+                  "PresentRenderTarget: rtIndex %d out of range [0, %d)",
+                  rtIndex, colorTexCount);
+        LogError(LogRenderer, errorMsg);
+        return;
+    }
+
+    // ========================================================================
+    // Step 2: 获取RenderTarget实例
+    // ========================================================================
+
+    std::shared_ptr<D12RenderTarget> renderTarget = nullptr;
+    try
+    {
+        renderTarget = m_renderTargetManager->GetRenderTarget(rtIndex);
+    }
+    catch (const std::exception& e)
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, sizeof(errorMsg),
+                  "PresentRenderTarget: Failed to get RenderTarget %d: %s",
+                  rtIndex, e.what());
+        LogError(LogRenderer, errorMsg);
+        return;
+    }
+
+    // 2.1 检查返回值是否有效
+    if (!renderTarget)
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, sizeof(errorMsg),
+                  "PresentRenderTarget: RenderTarget %d is null",
+                  rtIndex);
+        LogError(LogRenderer, errorMsg);
+        return;
+    }
+
+    // ========================================================================
+    // Step 3: 根据FlipState选择Main或Alt纹理
+    // ========================================================================
+
+    ID3D12Resource* sourceRT  = nullptr;
+    bool            isFlipped = m_renderTargetManager->IsFlipped(rtIndex);
+
+    // BufferFlipState逻辑：
+    // - IsFlipped() == false: 使用Main纹理（默认状态）
+    // - IsFlipped() == true:  使用Alt纹理（翻转后状态）
+    if (!isFlipped)
+    {
+        sourceRT = renderTarget->GetMainTextureResource();
+    }
+    else
+    {
+        sourceRT = renderTarget->GetAltTextureResource();
+    }
+
+    // 3.1 验证源纹理资源
+    if (!sourceRT)
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, sizeof(errorMsg),
+                  "PresentRenderTarget: Source texture resource is null (rtIndex=%d, isFlipped=%d)",
+                  rtIndex, isFlipped ? 1 : 0);
+        LogError(LogRenderer, errorMsg);
+        return;
+    }
+
+    // ========================================================================
+    // Step 4: 获取BackBuffer资源
+    // ========================================================================
+
+    ID3D12Resource* backBuffer = D3D12RenderSystem::GetBackBufferResource();
+    if (!backBuffer)
+    {
+        LogError(LogRenderer, "PresentRenderTarget: BackBuffer resource is null");
+        return;
+    }
+
+    // ========================================================================
+    // Step 5: 获取CommandList
+    // ========================================================================
+
+    ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "PresentRenderTarget: CommandList is null");
+        return;
+    }
+
+    // ========================================================================
+    // Step 6: 创建资源屏障数组
+    // ========================================================================
+    // 参考 DepthTextureManager.cpp:338-365 的实现模式
+
+    D3D12_RESOURCE_BARRIER barriers[2];
+
+    // barriers[0]: sourceRT (RENDER_TARGET → COPY_SOURCE)
+    barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[0].Transition.pResource   = sourceRT;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    // barriers[1]: backBuffer (RENDER_TARGET → COPY_DEST)
+    barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barriers[1].Transition.pResource   = backBuffer;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    // ========================================================================
+    // Step 7: 执行GPU拷贝
+    // ========================================================================
+
+    // 7.1 转换资源状态
+    cmdList->ResourceBarrier(2, barriers);
+
+    // 7.2 执行拷贝
+    cmdList->CopyResource(backBuffer, sourceRT);
+
+    // ========================================================================
+    // Step 8: 恢复资源状态
+    // ========================================================================
+
+    // 交换 StateBefore 和 StateAfter
+    // barriers[0]: COPY_SOURCE → RENDER_TARGET
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    // barriers[1]: COPY_DEST → RENDER_TARGET
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    cmdList->ResourceBarrier(2, barriers);
+
+    // ========================================================================
+    // Step 9: 输出日志
+    // ========================================================================
+
+    char successMsg[256];
+    sprintf_s(successMsg, sizeof(successMsg),
+              "PresentRenderTarget: Successfully copied colortex%d (%s texture) to BackBuffer",
+              rtIndex, isFlipped ? "Alt" : "Main");
+    LogInfo(LogRenderer, successMsg);
 }
 
 void RendererSubsystem::PresentCustomTexture(std::shared_ptr<D12Texture> texture)

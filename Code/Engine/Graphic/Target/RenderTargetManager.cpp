@@ -191,6 +191,17 @@ DXGI_FORMAT RenderTargetManager::GetRenderTargetFormat(int rtIndex) const
     return m_renderTargets[rtIndex]->GetFormat();
 }
 
+std::shared_ptr<D12RenderTarget> RenderTargetManager::GetRenderTarget(int rtIndex) const
+{
+    if (rtIndex < 0 || rtIndex >= m_activeColorTexCount)
+    {
+        char errorMsg[128];
+        sprintf_s(errorMsg, "RenderTarget index %d out of range [0, %d)", rtIndex, m_activeColorTexCount);
+        throw std::out_of_range(errorMsg);
+    }
+    return m_renderTargets[rtIndex];
+}
+
 // ============================================================================
 // BufferFlipState管理 - Main/Alt翻转逻辑
 // ============================================================================

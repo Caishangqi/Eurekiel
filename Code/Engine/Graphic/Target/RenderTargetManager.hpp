@@ -134,6 +134,20 @@ namespace enigma::graphic
          */
         DXGI_FORMAT GetRenderTargetFormat(int rtIndex) const;
 
+        /**
+         * @brief 获取指定索引的RenderTarget实例
+         * @param rtIndex RenderTarget索引 [0, m_activeColorTexCount)
+         * @return std::shared_ptr<D12RenderTarget> RenderTarget智能指针
+         * @throws std::out_of_range 如果索引超出有效范围
+         *
+         * 教学要点:
+         * - 返回智能指针，符合项目智能指针管理原则
+         * - 使用m_activeColorTexCount进行动态范围检查
+         * - const方法，不修改对象状态
+         * - 抛出标准异常std::out_of_range
+         */
+        std::shared_ptr<D12RenderTarget> GetRenderTarget(int rtIndex) const;
+
         // ========================================================================
         // BufferFlipState管理 - Main/Alt翻转逻辑
         // ========================================================================
