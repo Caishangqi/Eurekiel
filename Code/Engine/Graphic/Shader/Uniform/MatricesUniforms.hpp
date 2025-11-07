@@ -218,6 +218,47 @@ namespace enigma::graphic
         alignas(16) Mat44 textureMatrix;
 
         /**
+         * @brief 模型矩阵 - 模型到世界空间变换
+         * @type mat4
+         * @iris modelMatrix (Iris扩展)
+         *
+         * 教学要点:
+         * - 将模型局部空间（model/object space）转换到世界空间（world space）
+         * - Iris扩展字段，用于支持延迟渲染中的物体变换
+         * - 在延迟渲染管线中，用于后处理Pass重建世界空间位置
+         * - 与modelViewMatrix的关系: modelViewMatrix = viewMatrix * modelMatrix
+         *
+         * HLSL使用示例:
+         * ```hlsl
+         * // 将模型空间位置转换到世界空间
+         * float4 worldPos = mul(modelMatrix, float4(localPos, 1.0));
+         * ```
+         *
+         * @note 这是Iris扩展字段，原版Iris可能不包含此字段
+         */
+        alignas(16) Mat44 modelMatrix;
+
+        /**
+         * @brief 模型逆矩阵 - 世界到模型空间变换
+         * @type mat4
+         * @iris modelMatrixInverse (Iris扩展)
+         *
+         * 教学要点:
+         * - 将世界空间转换回模型局部空间
+         * - 用于将世界空间向量/位置变换到模型空间进行计算
+         * - 常用于物体空间的后处理效果（例如物体空间的法线贴图）
+         *
+         * HLSL使用示例:
+         * ```hlsl
+         * // 将世界空间位置转换到模型空间
+         * float4 localPos = mul(modelMatrixInverse, float4(worldPos, 1.0));
+         * ```
+         *
+         * @note 这是Iris扩展字段，原版Iris可能不包含此字段
+         */
+        alignas(16) Mat44 modelMatrixInverse;
+
+        /**
          * @brief 默认构造函数 - 初始化为单位矩阵
          */
         MatricesUniforms()
@@ -237,15 +278,18 @@ namespace enigma::graphic
               , projectionMatrixInverse(Mat44::IDENTITY)
               , normalMatrix(Mat44::IDENTITY)
               , textureMatrix(Mat44::IDENTITY)
+              , modelMatrix(Mat44::IDENTITY)
+              , modelMatrixInverse(Mat44::IDENTITY)
         {
         }
     };
 #pragma warning(pop)
 
     // 编译期验证: 检查结构体大小
-    // 16个Mat44矩阵 × 64字节 = 1024字节 (严格遵循Iris官方规范)
-    static_assert(sizeof(MatricesUniforms) == 16 * 64,
-                  "MatricesUniforms must contain exactly 16 Mat44 matrices (1024 bytes)");
+    // 18个Mat44矩阵 × 64字节 = 1152字节
+    // 包含Iris官方16个矩阵 + 2个扩展矩阵 (modelMatrix, modelMatrixInverse)
+    static_assert(sizeof(MatricesUniforms) == 18 * 64,
+                  "MatricesUniforms must contain exactly 18 Mat44 matrices (1152 bytes)");
 
     // 编译期验证: 确保不超过合理大小限制（2KB）
     static_assert(sizeof(MatricesUniforms) <= 2048,

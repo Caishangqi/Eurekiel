@@ -897,6 +897,8 @@ struct MatricesData
     float4x4 projectionMatrixInverse; // 当前投影逆矩阵
     float4x4 normalMatrix; // 法线矩阵（3x3存储在4x4中）
     float4x4 textureMatrix; // 纹理矩阵
+    float4x4 modelMatrix; // 模型矩阵（模型空间→世界空间，Iris扩展）
+    float4x4 modelMatrixInverse; // 模型逆矩阵（世界空间→模型空间，Iris扩展）
 };
 
 //──────────────────────────────────────────────────────
@@ -1341,6 +1343,92 @@ Texture2D GetCustomImage(uint slotIndex)
 #define customImage13 GetCustomImage(13)
 #define customImage14 GetCustomImage(14)
 #define customImage15 GetCustomImage(15)
+
+//──────────────────────────────────────────────────────
+// Iris兼容矩阵宏（Matrices Uniforms）
+//──────────────────────────────────────────────────────
+
+/**
+ * @brief Iris矩阵Uniform完全兼容宏定义
+ *
+ * 教学要点:
+ * 1. 所有矩阵宏通过GetMatricesData()统一访问
+ * 2. 自动映射到MatricesBuffer[0]的对应字段
+ * 3. 零学习成本移植Iris Shader Pack
+ * 4. 支持完整Iris矩阵系统：GBuffer、Shadow、通用矩阵
+ *
+ * 使用示例:
+ * ```hlsl
+ * // 顶点变换（GBuffer Pass）
+ * float4 viewPos = mul(float4(worldPos, 1.0), gbufferModelView);
+ * float4 clipPos = mul(viewPos, gbufferProjection);
+ *
+ * // 模型空间到世界空间变换（Iris扩展）
+ * float4 worldPos = mul(float4(localPos, 1.0), modelMatrix);
+ *
+ * // 法线变换
+ * float3 viewNormal = mul(float4(normal, 0.0), normalMatrix).xyz;
+ * ```
+ *
+ * 架构优势:
+ * - 统一访问接口：所有矩阵通过单个Buffer访问
+ * - 自动缓存优化：GPU会缓存频繁访问的MatricesBuffer[0]
+ * - Iris完全兼容：字段名称和语义与Iris官方文档一致
+ */
+
+// ===== 辅助宏：获取MatricesBuffer =====
+// 注意：这是内部实现细节，用户Shader应直接使用下面的矩阵宏
+#define MatricesBuffer GetMatricesData()
+
+// ===== GBuffer矩阵（主渲染Pass）=====
+#define gbufferModelView              MatricesBuffer.gbufferModelView
+#define gbufferModelViewInverse       MatricesBuffer.gbufferModelViewInverse
+#define gbufferProjection             MatricesBuffer.gbufferProjection
+#define gbufferProjectionInverse      MatricesBuffer.gbufferProjectionInverse
+#define gbufferPreviousModelView      MatricesBuffer.gbufferPreviousModelView
+#define gbufferPreviousProjection     MatricesBuffer.gbufferPreviousProjection
+
+// ===== Shadow矩阵（阴影Pass）=====
+#define shadowModelView               MatricesBuffer.shadowModelView
+#define shadowModelViewInverse        MatricesBuffer.shadowModelViewInverse
+#define shadowProjection              MatricesBuffer.shadowProjection
+#define shadowProjectionInverse       MatricesBuffer.shadowProjectionInverse
+
+// ===== 通用矩阵（当前几何体）=====
+#define modelViewMatrix               MatricesBuffer.modelViewMatrix
+#define modelViewMatrixInverse        MatricesBuffer.modelViewMatrixInverse
+#define projectionMatrix              MatricesBuffer.projectionMatrix
+#define projectionMatrixInverse       MatricesBuffer.projectionMatrixInverse
+#define normalMatrix                  MatricesBuffer.normalMatrix
+#define textureMatrix                 MatricesBuffer.textureMatrix
+
+// ===== Iris扩展矩阵（模型到世界空间变换）=====
+/**
+ * @brief 模型到世界空间变换矩阵
+ * @iris modelMatrix (Iris扩展)
+ *
+ * 教学要点:
+ * - 将模型局部空间转换到世界空间
+ * - 用于延迟渲染中的位置重建
+ * - 与modelViewMatrix的关系: modelViewMatrix = viewMatrix * modelMatrix
+ *
+ * 使用场景:
+ * - 延迟渲染后处理Pass需要重建世界空间位置
+ * - 物体空间效果（如程序化纹理）需要世界坐标
+ * - 粒子系统、体积雾等需要世界空间计算的效果
+ */
+#define modelMatrix                   MatricesBuffer.modelMatrix
+
+/**
+ * @brief 世界到模型空间变换矩阵
+ * @iris modelMatrixInverse (Iris扩展)
+ *
+ * 教学要点:
+ * - 将世界空间转换回模型局部空间
+ * - 用于物体空间的后处理效果
+ * - 常用于物体空间法线贴图、程序化着色
+ */
+#define modelMatrixInverse            MatricesBuffer.modelMatrixInverse
 
 //──────────────────────────────────────────────────────
 // Sampler States
