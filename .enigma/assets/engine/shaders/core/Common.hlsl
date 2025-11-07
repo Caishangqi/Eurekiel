@@ -1556,30 +1556,31 @@ VSOutput StandardVertexTransform(VSInput input)
 {
     VSOutput output;
 
-    // 1. 获取矩阵数据
-    MatricesData matrices = GetMatricesData();
-
-    // 2. 顶点位置变换: 模型空间 → 视图空间 → 裁剪空间
-    float4 worldPos = float4(input.Position, 1.0);
-    float4 viewPos  = mul(worldPos, matrices.gbufferModelView);
-    float4 clipPos  = mul(viewPos, matrices.gbufferProjection);
+    // 1. 顶点位置变换: 局部空间 → 世界空间 → 视图空间 → 裁剪空间
+    // [FIX] 直接使用宏定义，不通过matrices.访问
+    float4 localPos = float4(input.Position, 1.0);
+    float4 worldPos = mul(modelMatrix, localPos); // 直接用modelMatrix宏
+    float4 viewPos  = mul(gbufferModelView, worldPos); // 直接用gbufferModelView宏
+    float4 clipPos  = mul(gbufferProjection, viewPos); // 直接用gbufferProjection宏
 
     output.Position = clipPos;
     output.WorldPos = worldPos.xyz;
 
-    // 3. 颜色解包（uint → float4）
+    // 2. 颜色解包（uint → float4）
     output.Color = UnpackRgba8(input.Color);
 
-    // 4. 传递纹理坐标
+    // 3. 传递纹理坐标
     output.TexCoord = input.TexCoord;
 
-    // 5. 法线变换（使用 normalMatrix 的 3x3 部分）
-    float3 transformedNormal = mul(float4(input.Normal, 0.0), matrices.normalMatrix).xyz;
+    // 4. 法线变换（使用 normalMatrix 的 3x3 部分）
+    // [FIX] 直接使用normalMatrix宏
+    float3 transformedNormal = mul(normalMatrix, float4(input.Normal, 0.0)).xyz;
     output.Normal            = normalize(transformedNormal);
 
-    // 6. 传递切线和副切线（用于法线贴图）
-    float3 transformedTangent   = mul(float4(input.Tangent, 0.0), matrices.gbufferModelView).xyz;
-    float3 transformedBitangent = mul(float4(input.Bitangent, 0.0), matrices.gbufferModelView).xyz;
+    // 5. 传递切线和副切线（用于法线贴图）
+    // [FIX] 直接使用gbufferModelView宏
+    float3 transformedTangent   = mul(gbufferModelView, float4(input.Tangent, 0.0)).xyz;
+    float3 transformedBitangent = mul(gbufferModelView, float4(input.Bitangent, 0.0)).xyz;
     output.Tangent              = normalize(transformedTangent);
     output.Bitangent            = normalize(transformedBitangent);
 

@@ -84,6 +84,7 @@ struct Mat44
     /// will be both slower and more complex.
     const Mat44 GetOrthonormalInverse() const;
     const Mat44 GetInverse() const;
+    const Mat44 GetTranspose();
 
     Vec4 GetIBasis4D() const;
     Vec4 GetJBasis4D() const;

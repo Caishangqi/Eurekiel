@@ -354,6 +354,13 @@ const Mat44 Mat44::GetInverse() const
     return GetOrthonormalInverse();
 }
 
+const Mat44 Mat44::GetTranspose()
+{
+    Mat44 temp = *this;
+    temp.Transpose();
+    return temp;
+}
+
 void Mat44::SetTranslation2D(const Vec2& translationXY)
 {
     m_values[Tx] = translationXY.x;
