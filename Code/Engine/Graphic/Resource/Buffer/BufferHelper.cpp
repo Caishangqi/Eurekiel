@@ -1,4 +1,4 @@
-﻿#include "RendererHelper.hpp"
+﻿#include "BufferHelper.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
@@ -12,7 +12,7 @@ using enigma::graphic::D12IndexBuffer;
 using enigma::graphic::RendererSubsystemConfig;
 using namespace enigma::core;
 
-void RendererHelper::EnsureBufferSize(
+void BufferHelper::EnsureBufferSize(
     std::shared_ptr<D12VertexBuffer>& buffer,
     size_t                            requiredSize,
     size_t                            minSize,
@@ -36,11 +36,11 @@ void RendererHelper::EnsureBufferSize(
             debugName
         );
 
-        LogInfo(LogRenderer, "RendererHelper: Created/Resized VertexBuffer '{}' to {} bytes", debugName, newSize);
+        LogInfo(LogRenderer, "BufferHelper: Created/Resized VertexBuffer '{}' to {} bytes", debugName, newSize);
     }
 }
 
-void RendererHelper::EnsureBufferSize(
+void BufferHelper::EnsureBufferSize(
     std::shared_ptr<D12IndexBuffer>& buffer,
     size_t                           requiredSize,
     size_t                           minSize,
@@ -63,6 +63,6 @@ void RendererHelper::EnsureBufferSize(
             debugName
         );
 
-        LogInfo(LogRenderer, "RendererHelper: Created/Resized IndexBuffer '{}' to {} bytes", debugName, newSize);
+        LogInfo(LogRenderer, "BufferHelper: Created/Resized IndexBuffer '{}' to {} bytes", debugName, newSize);
     }
 }

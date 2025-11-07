@@ -26,7 +26,7 @@
 #include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp" // Shrimp Task 2: DXC编译器
 #include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
-#include "Engine/Graphic/Integration/RendererHelper.hpp" // 阶段2.4: RendererHelper工具类
+#include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
 
 using namespace enigma::graphic;
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
@@ -1979,7 +1979,7 @@ void RendererSubsystem::ResetCustomTextures()
 // ========================================================================
 // 即时缓冲区管理辅助方法
 // ========================================================================
-// 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至RendererHelper
+// 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至BufferHelper [REFACTOR 2025-01-06]
 
 // ========================================================================
 // DrawVertexArray - 即时数据非索引绘制
@@ -1999,7 +1999,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     }
 
     size_t requiredSize = count * sizeof(Vertex);
-    RendererHelper::EnsureBufferSize(m_immediateVBO, requiredSize, 64 * 1024, sizeof(Vertex), "ImmediateVBO");
+    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredSize, 64 * 1024, sizeof(Vertex), "ImmediateVBO");
 
     void* mappedData = m_immediateVBO->Map();
     memcpy(mappedData, vertices, requiredSize);
@@ -2029,8 +2029,8 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     size_t vertexSize = vertexCount * sizeof(Vertex);
     size_t indexSize  = indexCount * sizeof(unsigned);
 
-    RendererHelper::EnsureBufferSize(m_immediateVBO, vertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
-    RendererHelper::EnsureBufferSize(m_immediateIBO, indexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
+    BufferHelper::EnsureBufferSize(m_immediateVBO, vertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
+    BufferHelper::EnsureBufferSize(m_immediateIBO, indexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
 
     void* vertexData = m_immediateVBO->Map();
     memcpy(vertexData, vertices, vertexSize);

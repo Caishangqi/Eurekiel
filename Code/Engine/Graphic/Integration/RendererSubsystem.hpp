@@ -1281,7 +1281,7 @@ namespace enigma::graphic
         // ==================== ShaderPack Lifecycle Management ====================
 
         // 阶段2.3: SelectShaderPackPath, LoadShaderPackInternal已移至ShaderPackHelper
-        // 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至RendererHelper
+        // 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至BufferHelper [REFACTOR 2025-01-06]
 
         // =========================================================================
 

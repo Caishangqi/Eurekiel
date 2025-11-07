@@ -10,10 +10,15 @@ namespace enigma::graphic
 }
 
 /**
- * @class RendererHelper
- * @brief 渲染器辅助工具类 - 提供Buffer管理等通用功能
+ * @class BufferHelper
+ * @brief Buffer管理辅助工具类 - 提供Buffer延迟创建和动态扩容功能
+ * 
+ * [REFACTOR] 2025-01-06: 从RendererHelper重命名为BufferHelper
+ * - 职责单一化：专注于Buffer管理
+ * - 位置优化：移动到Graphic/Resource/Buffer/目录
+ * - 架构合规：符合资源管理层架构设计
  */
-class RendererHelper
+class BufferHelper
 {
 public:
     /**
