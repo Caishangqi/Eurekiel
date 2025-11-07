@@ -1114,6 +1114,133 @@ namespace enigma::graphic
         return pso;
     }
 
+    // ===== ResourceBarrier统一管理API实现 =====
+
+    void D3D12RenderSystem::TransitionResource(
+        ID3D12GraphicsCommandList* cmdList,
+        ID3D12Resource*            resource,
+        D3D12_RESOURCE_STATES      stateBefore,
+        D3D12_RESOURCE_STATES      stateAfter,
+        const char*                debugName
+    )
+    {
+        // [REQUIRED] 参数验证
+        if (!cmdList)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] TransitionResource failed: cmdList is nullptr");
+            return;
+        }
+
+        if (!resource)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] TransitionResource failed: resource is nullptr");
+            return;
+        }
+
+        // [OPTIMIZATION] 状态相同检查 - 避免不必要的转换
+        if (stateBefore == stateAfter)
+        {
+            core::LogWarn(LogRenderer,
+                          "[ResourceBarrier] TransitionResource skipped: stateBefore == stateAfter (0x%X), resource: %s",
+                          stateBefore, debugName ? debugName : "Unknown");
+            return;
+        }
+
+        // [OK] 构造ResourceBarrier
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = resource;
+        barrier.Transition.StateBefore = stateBefore;
+        barrier.Transition.StateAfter  = stateAfter;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        // [OK] 执行ResourceBarrier
+        try
+        {
+            cmdList->ResourceBarrier(1, &barrier);
+
+            // [DONE] 详细日志记录
+            if (debugName)
+            {
+                core::LogInfo(LogRenderer,
+                              "[ResourceBarrier] Transitioned '%s': 0x%X -> 0x%X",
+                              debugName, stateBefore, stateAfter);
+            }
+            else
+            {
+                core::LogInfo(LogRenderer,
+                              "[ResourceBarrier] Transitioned resource: 0x%X -> 0x%X",
+                              stateBefore, stateAfter);
+            }
+        }
+        catch (...)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] Exception during TransitionResource for '%s'",
+                           debugName ? debugName : "Unknown");
+        }
+    }
+
+    void D3D12RenderSystem::TransitionResources(
+        ID3D12GraphicsCommandList* cmdList,
+        D3D12_RESOURCE_BARRIER*    barriers,
+        UINT                       numBarriers,
+        const char*                debugContext
+    )
+    {
+        // [REQUIRED] 参数验证
+        if (!cmdList)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] TransitionResources failed: cmdList is nullptr");
+            return;
+        }
+
+        if (!barriers)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] TransitionResources failed: barriers is nullptr");
+            return;
+        }
+
+        if (numBarriers == 0)
+        {
+            core::LogWarn(LogRenderer,
+                          "[ResourceBarrier] TransitionResources called with numBarriers = 0, context: %s",
+                          debugContext ? debugContext : "Unknown");
+            return;
+        }
+
+        // [OK] 执行批量ResourceBarrier
+        try
+        {
+            cmdList->ResourceBarrier(numBarriers, barriers);
+
+            // [DONE] 批量转换日志
+            if (debugContext)
+            {
+                core::LogInfo(LogRenderer,
+                              "[ResourceBarrier] Batch transition completed: %u barriers, context: '%s'",
+                              numBarriers, debugContext);
+            }
+            else
+            {
+                core::LogInfo(LogRenderer,
+                              "[ResourceBarrier] Batch transition completed: %u barriers",
+                              numBarriers);
+            }
+        }
+        catch (...)
+        {
+            core::LogError(LogRenderer,
+                           "[ResourceBarrier] Exception during TransitionResources, context: '%s', numBarriers: %u",
+                           debugContext ? debugContext : "Unknown", numBarriers);
+        }
+    }
+
     // ===== Buffer管理API实现 - 细粒度操作 (Milestone M2新增) =====
 
     void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)

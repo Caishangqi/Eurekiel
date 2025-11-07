@@ -693,6 +693,102 @@ namespace enigma::graphic
             const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc
         );
 
+        // ===== ResourceBarrier统一管理API =====
+
+        /**
+         * @brief 转换单个资源的状态
+         *
+         * 统一的资源状态转换API，封装DirectX 12 ResourceBarrier调用。
+         * 提供参数验证、日志记录和错误处理，简化上层代码的资源状态管理。
+         *
+         * 教学要点:
+         * 1. 资源状态转换是DirectX 12的核心概念，用于同步GPU操作
+         * 2. 状态转换必须在资源被使用前执行，确保GPU正确访问资源
+         * 3. 性能影响：状态转换有开销，应避免不必要的转换（相同状态会自动跳过）
+         * 4. 调试支持：debugName参数在PIX/RenderDoc中显示，便于性能分析
+         *
+         * 常见状态转换场景:
+         * - 渲染目标: RENDER_TARGET <-> PIXEL_SHADER_RESOURCE
+         * - 深度缓冲: DEPTH_WRITE <-> COPY_SOURCE/PIXEL_SHADER_RESOURCE
+         * - 纹理上传: COPY_DEST -> PIXEL_SHADER_RESOURCE
+         * - Present: RENDER_TARGET -> PRESENT
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::ResourceBarrier()
+         *
+         * @param cmdList 命令列表，用于记录ResourceBarrier指令（不能为nullptr）
+         * @param resource 要转换的资源（不能为nullptr）
+         * @param stateBefore 转换前的资源状态
+         * @param stateAfter 转换后的资源状态
+         * @param debugName 调试名称（可选），用于日志和性能分析工具
+         *
+         * 使用示例:
+         * @code
+         * // 将渲染目标转换为可着色器读取状态
+         * D3D12RenderSystem::TransitionResource(
+         *     cmdList,
+         *     renderTarget->GetResource(),
+         *     D3D12_RESOURCE_STATE_RENDER_TARGET,
+         *     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+         *     "MainColorTexture"
+         * );
+         * @endcode
+         */
+        static void TransitionResource(
+            ID3D12GraphicsCommandList* cmdList,
+            ID3D12Resource*            resource,
+            D3D12_RESOURCE_STATES      stateBefore,
+            D3D12_RESOURCE_STATES      stateAfter,
+            const char*                debugName = nullptr
+        );
+
+        /**
+         * @brief 批量转换多个资源的状态
+         *
+         * 批量资源状态转换API，用于一次性转换多个资源。
+         * 相比多次调用TransitionResource()，批量转换可以减少API调用开销，提升性能。
+         *
+         * 教学要点:
+         * 1. 批量转换是性能优化的重要手段，减少GPU同步点
+         * 2. 适用于需要同时转换多个资源的场景（如G-Buffer、深度纹理等）
+         * 3. DirectX 12支持一次ResourceBarrier调用处理多个资源
+         * 4. debugContext参数标记整个批次，便于性能分析
+         *
+         * 常见使用场景:
+         * - G-Buffer转换: 多个渲染目标 RENDER_TARGET -> PIXEL_SHADER_RESOURCE
+         * - 深度复制: 同时转换源和目标深度纹理状态
+         * - 阴影贴图: 多个级联阴影贴图状态转换
+         *
+         * DirectX 12 API:
+         * - ID3D12GraphicsCommandList::ResourceBarrier()
+         *
+         * @param cmdList 命令列表，用于记录ResourceBarrier指令（不能为nullptr）
+         * @param barriers ResourceBarrier数组（不能为nullptr）
+         * @param numBarriers Barrier数量（必须 > 0）
+         * @param debugContext 调试上下文（可选），描述这批转换的目的
+         *
+         * 使用示例:
+         * @code
+         * // 批量转换G-Buffer纹理状态
+         * D3D12_RESOURCE_BARRIER barriers[4];
+         * for (int i = 0; i < 4; ++i) {
+         *     barriers[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+         *     barriers[i].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+         *     barriers[i].Transition.pResource = gbufferTextures[i]->GetResource();
+         *     barriers[i].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+         *     barriers[i].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+         *     barriers[i].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+         * }
+         * D3D12RenderSystem::TransitionResources(cmdList, barriers, 4, "GBuffer->ShaderResource");
+         * @endcode
+         */
+        static void TransitionResources(
+            ID3D12GraphicsCommandList* cmdList,
+            D3D12_RESOURCE_BARRIER*    barriers,
+            UINT                       numBarriers,
+            const char*                debugContext = nullptr
+        );
+
         // ===== Immediate模式渲染API (Milestone 2.6新增) =====
 
         /**
