@@ -350,7 +350,7 @@ void DepthTextureManager::CopyDepth(
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-    cmdList->ResourceBarrier(2, barriers);
+    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "DepthTexture::CopyDepth::PreCopy");
 
     // 2. 复制深度纹理
     cmdList->CopyResource(destResource, srcResource);
@@ -362,7 +362,7 @@ void DepthTextureManager::CopyDepth(
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
-    cmdList->ResourceBarrier(2, barriers);
+    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "DepthTexture::CopyDepth::PostCopy");
 }
 
 // ============================================================================

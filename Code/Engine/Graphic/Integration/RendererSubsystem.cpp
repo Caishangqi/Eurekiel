@@ -1750,7 +1750,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     // ========================================================================
 
     // 7.1 转换资源状态
-    cmdList->ResourceBarrier(2, barriers);
+    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PreCopy");
 
     // 7.2 执行拷贝
     cmdList->CopyResource(backBuffer, sourceRT);
@@ -1768,7 +1768,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-    cmdList->ResourceBarrier(2, barriers);
+    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PostCopy");
 
     // ========================================================================
     // Step 9: 输出日志

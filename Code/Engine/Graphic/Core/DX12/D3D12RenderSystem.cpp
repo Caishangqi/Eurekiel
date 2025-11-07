@@ -1399,15 +1399,9 @@ namespace enigma::graphic
             return false;
         }
 
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource   = currentBackBuffer;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-        s_currentGraphicsCommandList->ResourceBarrier(1, &barrier);
+        TransitionResource(s_currentGraphicsCommandList, currentBackBuffer,
+                           D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                           "SwapChain BackBuffer");
 
         // 3. 清除渲染目标（使用当前CommandList）
         auto currentRTV = GetCurrentSwapChainRTV();
@@ -1538,15 +1532,9 @@ namespace enigma::graphic
             return false;
         }
 
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource   = currentBackBuffer;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-        s_currentGraphicsCommandList->ResourceBarrier(1, &barrier);
+        TransitionResource(s_currentGraphicsCommandList, currentBackBuffer,
+                           D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT,
+                           "SwapChain BackBuffer");
 
         // 3. 执行CommandList（通过CommandListManager）
         // 教学要点：ExecuteCommandList会关闭CommandList并提交到GPU队列
