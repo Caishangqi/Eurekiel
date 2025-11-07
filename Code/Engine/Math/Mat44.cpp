@@ -349,6 +349,11 @@ const Mat44 Mat44::GetOrthonormalInverse() const
     return inv;
 }
 
+const Mat44 Mat44::GetInverse() const
+{
+    return GetOrthonormalInverse();
+}
+
 void Mat44::SetTranslation2D(const Vec2& translationXY)
 {
     m_values[Tx] = translationXY.x;

@@ -83,6 +83,7 @@ struct Mat44
     /// A full general-case matrix inversion function that works with non-orthonormal matrices can be added later, but it
     /// will be both slower and more complex.
     const Mat44 GetOrthonormalInverse() const;
+    const Mat44 GetInverse() const;
 
     Vec4 GetIBasis4D() const;
     Vec4 GetJBasis4D() const;

@@ -1101,6 +1101,19 @@ namespace enigma::graphic
          */
         bool IsInitialized() const noexcept;
 
+        /**
+         * @brief 获取Uniform管理器
+         * @return UniformManager指针，用于上传Uniform数据
+         * @details 
+         * 提供对UniformManager的访问，允许Game层上传modelMatrix等Uniform数据
+         * 
+         * 教学要点:
+         * - 引擎-Game层接口设计
+         * - 返回原始指针供Game层使用（引擎内部使用unique_ptr管理）
+         * - 用于上传变换矩阵、材质参数等Uniform数据
+         */
+        class UniformManager* GetUniformManager() const noexcept { return m_uniformManager.get(); }
+
         // ==================== 自定义材质纹理上传 API (Phase 3) ====================
 
         /**
