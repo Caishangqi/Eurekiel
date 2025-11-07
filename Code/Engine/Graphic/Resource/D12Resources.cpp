@@ -264,15 +264,8 @@ namespace enigma::graphic
         }
 
         // 6. 资源状态转换: 当前状态 → COPY_DEST
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barrier.Transition.pResource   = m_resource;
-        barrier.Transition.StateBefore = m_currentState;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-        commandList->ResourceBarrier(1, &barrier);
+        D3D12RenderSystem::TransitionResource(commandList, m_resource, m_currentState,
+                                              D3D12_RESOURCE_STATE_COPY_DEST, m_debugName.c_str());
 
         // 7. 调用子类实现的上传逻辑
         bool uploadSuccess = UploadToGPU(commandList, uploadContext);
@@ -286,10 +279,10 @@ namespace enigma::graphic
 
         // 8. 资源状态转换: COPY_DEST → 目标状态
         D3D12_RESOURCE_STATES targetState = GetUploadDestinationState();
-        barrier.Transition.StateBefore    = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter     = targetState;
 
-        commandList->ResourceBarrier(1, &barrier);
+        D3D12RenderSystem::TransitionResource(commandList, m_resource,
+                                              D3D12_RESOURCE_STATE_COPY_DEST, targetState,
+                                              m_debugName.c_str());
 
         // 9. 执行命令列表并同步等待完成
         uint64_t fenceValue = cmdListManager->ExecuteCommandList(commandList);
