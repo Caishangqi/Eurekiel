@@ -40,6 +40,11 @@ DepthTextureManager::DepthTextureManager(
         throw std::out_of_range("Depth count must be in range [1-3]");
     }
 
+    // [FIX] 预分配vector空间，避免越界访问
+    // 与ConfigureDepthTextures()保持一致的vector操作模式
+    m_depthTextures.reserve(depthCount);
+    m_depthConfigs.reserve(depthCount);
+
     // 创建激活的深度纹理
     for (int i = 0; i < depthCount; ++i)
     {
@@ -71,8 +76,9 @@ DepthTextureManager::DepthTextureManager(
             0 // clearStencil
         );
 
+        // [FIX] 使用push_back代替下标访问，避免越界
         // 创建D12DepthTexture（DSV自动创建）
-        m_depthTextures[i] = std::make_shared<D12DepthTexture>(createInfo);
+        m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
     }
 }
 
