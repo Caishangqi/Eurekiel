@@ -103,7 +103,7 @@ namespace enigma::graphic
 
         ++m_totalBindCalls;
 
-        LogError("RenderTargetBinder", "BindRenderTargets: %zu RTVs, LoadAction=%d, Hash=0x%08X",
+        LogDebug("RenderTargetBinder", "BindRenderTargets: %zu RTVs, LoadAction=%d, Hash=0x%08X",
                  m_pendingState.rtvHandles.size(), static_cast<int>(loadAction), m_pendingState.stateHash);
     }
 
@@ -141,14 +141,13 @@ namespace enigma::graphic
 
         BindRenderTargets(rtTypes, indices, RTType::DepthTex, 0, false);
 
-        LOG_DEBUG("RenderTargetBinder", "BindGBuffer: 4 ColorTex + 1 DepthTex");
+        LogDebug("RenderTargetBinder", "BindGBuffer: 4 ColorTex + 1 DepthTex");
     }
 
     void RenderTargetBinder::BindShadowPass(int shadowIndex, int depthIndex)
     {
         BindSingleRenderTarget(RTType::ShadowColor, shadowIndex, RTType::DepthTex, depthIndex, false);
-
-        LogError("RenderTargetBinder", "BindShadowPass: ShadowColor[%d] + DepthTex[%d]",
+        LogDebug("RenderTargetBinder", "BindShadowPass: ShadowColor[%d] + DepthTex[%d]",
                  shadowIndex, depthIndex);
     }
 
@@ -156,7 +155,7 @@ namespace enigma::graphic
     {
         BindSingleRenderTarget(RTType::ColorTex, colorIndex, RTType::DepthTex, 0, false);
 
-        LogError("RenderTargetBinder", "BindCompositePass: ColorTex[%d]", colorIndex);
+        LogDebug("RenderTargetBinder", "BindCompositePass: ColorTex[%d]", colorIndex);
     }
 
     void RenderTargetBinder::ClearBindings()
@@ -164,7 +163,7 @@ namespace enigma::graphic
         m_pendingState.Reset();
         m_currentState.Reset();
 
-        LOG_DEBUG("RenderTargetBinder", "ClearBindings: All bindings cleared");
+        LogDebug("RenderTargetBinder", "ClearBindings: All bindings cleared");
     }
 
     // ============================================================================
@@ -186,7 +185,7 @@ namespace enigma::graphic
         if (newHash == m_currentState.stateHash && newHash != 0)
         {
             ++m_cacheHitCount;
-            LogError("RenderTargetBinder", "FlushBindings: Cache HIT (Hash=0x%08X), skipping OMSetRenderTargets",
+            LogDebug("RenderTargetBinder", "FlushBindings: Cache HIT (Hash=0x%08X), skipping OMSetRenderTargets",
                      newHash);
             return; // 早期退出优化
         }
@@ -219,7 +218,7 @@ namespace enigma::graphic
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
 
-        LogError("RenderTargetBinder", "FlushBindings: OMSetRenderTargets called (%u RTVs, Hash=0x%08X)",
+        LogDebug("RenderTargetBinder", "FlushBindings: OMSetRenderTargets called (%u RTVs, Hash=0x%08X)",
                  numRTVs, newHash);
 
         // 执行Clear操作（如果LoadAction为Clear）
@@ -258,7 +257,7 @@ namespace enigma::graphic
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
 
-        LogError("RenderTargetBinder", "ForceFlushBindings: OMSetRenderTargets called (%u RTVs, forced)",
+        LogDebug("RenderTargetBinder", "ForceFlushBindings: OMSetRenderTargets called (%u RTVs, forced)",
                  numRTVs);
 
         // 执行Clear操作（如果LoadAction为Clear）
@@ -369,7 +368,7 @@ namespace enigma::graphic
             // - ClearRenderTargetView是底层操作，通常不需要额外封装
             cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-            LogError("RenderTargetBinder", "Cleared RTV[%zu] to color (%f, %f, %f, %f)",
+            LogDebug("RenderTargetBinder", "Cleared RTV[%zu] to color (%f, %f, %f, %f)",
                      i, clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
         }
 
@@ -392,7 +391,7 @@ namespace enigma::graphic
                 nullptr
             );
 
-            LogError("RenderTargetBinder", "Cleared DSV to depth=%f, stencil=%u",
+            LogDebug("RenderTargetBinder", "Cleared DSV to depth=%f, stencil=%u",
                      m_pendingState.depthClearValue.depthStencil.depth,
                      m_pendingState.depthClearValue.depthStencil.stencil);
         }
