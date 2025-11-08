@@ -12,6 +12,7 @@
 #include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
 #include "Engine/Graphic/Target/D12RenderTarget.hpp" // D12RenderTarget类定义
 #include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
+#include "Engine/Graphic/Target/D12DepthTexture.hpp" // [TEMPORARY] 临时深度缓冲
 #include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
@@ -380,6 +381,38 @@ void RendererSubsystem::Startup()
                  "Failed to create RenderTargetManager: {}",
                  e.what());
         ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()))
+    }
+
+    // ==================== [TEMPORARY] 创建临时深度缓冲 - 修复 DSV 为 nullptr 问题 ====================
+    // TODO: 待 DepthTextureManager API 设计完成后，用完整的 DepthTextureManager 替换此临时方案
+    // 教学要点：这是临时方案，避免过度设计，优先保证渲染正常工作
+    try
+    {
+        LogInfo(LogRenderer, "Creating temporary depth buffer...");
+
+        // 使用 D12DepthTexture 创建深度纹理
+        // 格式：DXGI_FORMAT_D32_FLOAT（32位浮点深度）
+        // 分辨率：与窗口一致
+        DepthTextureCreateInfo depthInfo(
+            "TempDepthBuffer", // name
+            m_configuration.renderWidth, // width
+            m_configuration.renderHeight, // height
+            DepthFormat::D32_FLOAT, // depthFormat - 最高精度
+            1.0f, // clearDepth
+            0 // clearStencil
+        );
+
+        m_tempDepthTexture = std::make_shared<D12DepthTexture>(depthInfo);
+
+        LogInfo(LogRenderer,
+                "Temporary depth buffer created successfully: %dx%d, DXGI_FORMAT_D32_FLOAT",
+                m_configuration.renderWidth,
+                m_configuration.renderHeight);
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create temporary depth buffer: %s", e.what());
+        ERROR_AND_DIE(Stringf("Temporary depth buffer creation failed! Error: %s", e.what()))
     }
 
     // ==================== 创建UniformManager (Phase 3) ====================
