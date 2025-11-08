@@ -2004,6 +2004,16 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     m_immediateVBO->Unmap();
 
     SetVertexBuffer(m_immediateVBO.get());
+
+    // [FIX] Set Primitive Topology
+    // Teaching points: DirectX 12 requires that Primitive Topology must be set before Draw is called.
+    // Otherwise it will trigger D3D12 ERROR: COMMAND_LIST_DRAW_INVALID_PRIMITIVETOPOLOGY
+    ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (cmdList)
+    {
+        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
     Draw(static_cast<uint32_t>(count), 0);
 }
 
