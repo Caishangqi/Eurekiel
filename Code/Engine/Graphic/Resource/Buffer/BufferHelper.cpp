@@ -28,6 +28,14 @@ void BufferHelper::EnsureBufferSize(
                              ? (std::min)((std::max)(requiredSize, buffer->GetSize() * 2), RendererSubsystemConfig::MAX_IMMEDIATE_BUFFER_SIZE)
                              : (std::max)(requiredSize, minSize);
 
+        // [FIX] Make sure newSize is a multiple of stride (aligned upward)
+        //Teaching points: D12VertexBuffer constructor requires size % stride == 0
+        // For example: stride=60, newSize=65536 → 65580 (1093 * 60) after alignment
+        if (newSize % stride != 0)
+        {
+            newSize = ((newSize + stride - 1) / stride) * stride;
+        }
+
         // 创建新缓冲区
         buffer = std::make_shared<D12VertexBuffer>(
             newSize,
@@ -54,6 +62,15 @@ void BufferHelper::EnsureBufferSize(
         size_t newSize = buffer
                              ? (std::min)((std::max)(requiredSize, buffer->GetSize() * 2), RendererSubsystemConfig::MAX_IMMEDIATE_BUFFER_SIZE)
                              : (std::max)(requiredSize, minSize);
+
+        // [FIX] 确保 newSize 是索引大小的倍数（向上对齐）
+        // 教学要点：D12IndexBuffer 构造函数要求 size % indexSize == 0
+        // Uint32 索引大小为 4 字节
+        constexpr size_t indexSize = sizeof(uint32_t); // 4 bytes for Uint32
+        if (newSize % indexSize != 0)
+        {
+            newSize = ((newSize + indexSize - 1) / indexSize) * indexSize;
+        }
 
         // 创建新缓冲区
         buffer = std::make_shared<D12IndexBuffer>(
