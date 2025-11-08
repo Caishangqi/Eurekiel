@@ -265,42 +265,6 @@ namespace enigma::graphic
          */
         void PerformClearOperations(ID3D12GraphicsCommandList* cmdList);
 
-        /**
-         * @brief 执行资源状态转换（内部方法）
-         * @param cmdList 命令列表指针
-         *
-         * 教学要点:
-         * - 在OMSetRenderTargets之前执行资源状态转换
-         * - RTV: PIXEL_SHADER_RESOURCE -> RENDER_TARGET
-         * - DSV: PIXEL_SHADER_RESOURCE -> DEPTH_WRITE
-         * - 批量转换所有资源，减少API调用开销
-         * - 修复Bug #538: Resource state (0x80) invalid for OMSetRenderTargets
-         */
-        void PerformResourceStateTransitions(ID3D12GraphicsCommandList* cmdList);
-
-        /**
-         * @brief 从RTV句柄获取底层资源（内部方法）
-         * @param rtvHandle RTV句柄
-         * @return ID3D12Resource指针，失败返回nullptr
-         *
-         * 教学要点:
-         * - 遍历所有Manager查找匹配的RTV句柄
-         * - 支持RenderTargetManager和ShadowColorManager
-         * - 用于资源状态转换
-         */
-        ID3D12Resource* GetResourceFromRTVHandle(const D3D12_CPU_DESCRIPTOR_HANDLE& rtvHandle) const;
-
-        /**
-         * @brief 从DSV句柄获取底层资源（内部方法）
-         * @param dsvHandle DSV句柄
-         * @return ID3D12Resource指针，失败返回nullptr
-         *
-         * 教学要点:
-         * - 查找DepthTextureManager中匹配的DSV句柄
-         * - 用于深度纹理资源状态转换
-         */
-        ID3D12Resource* GetResourceFromDSVHandle(const D3D12_CPU_DESCRIPTOR_HANDLE& dsvHandle) const;
-
         // ========================================================================
         // 内部数据结构
         // ========================================================================

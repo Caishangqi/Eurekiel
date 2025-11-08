@@ -649,8 +649,23 @@ namespace enigma::graphic
      */
     D3D12_RESOURCE_STATES D12Texture::GetInitialState(TextureUsage usage)
     {
-        // 根据主要用途确定初始状态
-        if (HasFlag(usage, TextureUsage::UnorderedAccess))
+        // [FIX] Bug #538/#527 - 根据主要用途确定初始状态
+        // 教学要点:
+        // - RenderTarget和DepthStencil必须优先检查
+        // - 初始状态必须匹配首次使用场景，避免不必要的状态转换
+        // - 检查顺序很重要：从最具体到最通用
+
+        if (HasFlag(usage, TextureUsage::RenderTarget))
+        {
+            // RenderTarget的首次使用通常是OMSetRenderTargets
+            return D3D12_RESOURCE_STATE_RENDER_TARGET;
+        }
+        else if (HasFlag(usage, TextureUsage::DepthStencil))
+        {
+            // DepthStencil的首次使用通常是深度写入
+            return D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        }
+        else if (HasFlag(usage, TextureUsage::UnorderedAccess))
         {
             return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         }
@@ -664,6 +679,7 @@ namespace enigma::graphic
         }
         else
         {
+            // 默认为ShaderResource状态
             return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         }
     }
