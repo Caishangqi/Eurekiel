@@ -1342,11 +1342,6 @@ namespace enigma::graphic
         /// 深度纹理管理器 - 管理3个深度纹理 (Iris depthtex0/1/2)
         std::unique_ptr<DepthTextureManager> m_depthTextureManager;
 
-        // [TEMPORARY] 临时深度缓冲，待 DepthTextureManager 设计完成后删除
-        // TODO: 设计完整的 DepthTextureManager API 和测试框架
-        // 使用 D12DepthTexture 而不是 D12Texture
-        std::shared_ptr<D12DepthTexture> m_tempDepthTexture;
-
         /// Shadow Color管理器 - 管理8个shadowcolor RenderTarget (Iris兼容)
         std::unique_ptr<class ShadowColorManager> m_shadowColorManager;
 
