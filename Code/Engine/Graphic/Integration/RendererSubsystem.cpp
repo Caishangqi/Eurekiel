@@ -315,10 +315,10 @@ void RendererSubsystem::Startup()
                 "colortex" + std::to_string(i), // name
                 1.0f, // widthScale - 全分辨率
                 1.0f, // heightScale
-                DXGI_FORMAT_R16G16B16A16_FLOAT, // format - RGBA16F
+                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA16F
                 true, // enableFlipper
                 LoadAction::Clear, // loadAction
-                ClearValue::Color(Rgba8::BLACK), // clearValue
+                ClearValue::Color(Rgba8::DEBUG_GREEN), // clearValue
                 false, // enableMipmap - 默认关闭
                 true, // allowLinearFilter
                 1 // sampleCount - 无MSAA
