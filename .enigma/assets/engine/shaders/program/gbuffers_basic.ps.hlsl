@@ -21,23 +21,43 @@
 #include "../core/Common.hlsl"
 
 /**
+ * @brief 像素着色器输出结构体 - 多RT输出
+ *
+ * [TEMPORARY TEST] 临时测试配置 - 输出到colortex4-7
+ * 正常情况下应该输出到colortex0-3 (GBuffer标准配置)
+ */
+struct PSOutput
+{
+    float4 color0 : SV_Target0; // colortex4 - 主颜色 (Albedo)
+    float4 color1 : SV_Target1; // colortex5 - 预留
+    float4 color2 : SV_Target2; // colortex6 - 预留
+    float4 color3 : SV_Target3; // colortex7 - 预留
+};
+
+/**
  * @brief 像素着色器主函数
  * @param input 像素输入 (PSInput from Common.hlsli)
- * @return float4 - 最终颜色 (RGBA)
+ * @return PSOutput - 多RT输出
  *
  * 教学要点:
- * 1. 直接返回插值后的顶点颜色
- * 2. 无需纹理采样 (gbuffers_basic 不使用纹理)
- * 3. 无光照计算 (延迟渲染在 Deferred 阶段处理)
- * 4. KISS 原则 - 最简单的像素着色器实现
+ * 1. 多RT输出需要定义结构体，每个成员对应一个SV_Target
+ * 2. SV_Target索引对应OMSetRenderTargets绑定的RTV数组索引
+ * 3. 当前配置：输出到colortex4-7 (测试用途)
+ * 4. 正常配置：应该输出到colortex0-3 (GBuffer标准)
  */
-float4 main(PSInput input) : SV_Target0
+PSOutput main(PSInput input)
 {
-    // 直接返回顶点颜色
-    // - 颜色已经在顶点着色器中从 uint 解包为 float4
-    // - 硬件自动对颜色进行插值
-    // - 无需任何额外计算
-    return input.Color;
+    PSOutput output;
+
+    // [IMPORTANT] 主颜色输出到第一个RT (colortex4)
+    output.color0 = input.Color;
+
+    // [TEST] 其他RT输出测试数据
+    output.color1 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
+    output.color2 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
+    output.color3 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
+
+    return output;
 }
 
 /**
