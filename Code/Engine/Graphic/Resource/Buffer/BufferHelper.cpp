@@ -44,7 +44,7 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        LogInfo(LogRenderer, "BufferHelper: Created/Resized VertexBuffer '{}' to {} bytes", debugName, newSize);
+        LogInfo(LogRenderer, "BufferHelper: Created/Resized VertexBuffer '%s' to %d bytes", debugName, newSize);
     }
 }
 

@@ -797,7 +797,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
         LogInfo(LogRenderer, "ShaderProgram '%s' cached successfully", programName.c_str());
     }
 
-    LogInfo(LogRenderer, "Successfully compiled shader program from source: {}", programName.c_str());
+    LogInfo(LogRenderer, "Successfully compiled shader program from source: %s", programName.c_str());
     return program;
 }
 
@@ -1377,26 +1377,26 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
 
         if (!uploadSuccess)
         {
-            LogError(LogRenderer, "BeginCamera(EnigmaCamera): Uniform数据同步到GPU失败");
+            LogError(LogRenderer, "BeginCamera(EnigmaCamera): Synchronization of Uniform data to GPU failed");
             return;
         }
 
-        LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - 相机参数设置完成");
-        LogInfo(LogRenderer, "  - 相机位置: ({}, {}, {})",
+        LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - Camera parameter settings are completed");
+        LogInfo(LogRenderer, " - Camera position: (%f, %f, %f)",
                 camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
-        LogInfo(LogRenderer, "  - 相机模式: {}",
-                camera.IsPerspective() ? "透视投影" : "正交投影");
+        LogInfo(LogRenderer, " - Camera mode: %s",
+                camera.IsPerspective() ? "Perspective projection" : "Orthogonal projection");
 
         // TODO: 添加更多调试信息（如FOV、近平面、远平面等）
         if (camera.IsPerspective())
         {
-            LogInfo(LogRenderer, "  - FOV: {}°, 宽高比: {}",
+            LogInfo(LogRenderer, " - FOV: %f degrees, aspect ratio: %f",
                     camera.GetPerspectiveFOV(), camera.GetPerspectiveAspect());
         }
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "BeginCamera(EnigmaCamera): 异常 - {}", e.what());
+        LogError(LogRenderer, "BeginCamera(EnigmaCamera): Exception - %s", e.what());
     }
 }
 
