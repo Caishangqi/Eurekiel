@@ -5,6 +5,9 @@
 #include "Engine/Graphic/Target/DepthTextureManager.hpp"
 #include "Engine/Graphic/Target/ShadowColorManager.hpp"
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp"
+#include "Engine/Graphic/Target/D12RenderTarget.hpp"
+#include "Engine/Graphic/Target/D12DepthTexture.hpp"
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
 using namespace enigma::core;
 
@@ -189,6 +192,13 @@ namespace enigma::graphic
                      newHash);
             return; // 早期退出优化
         }
+
+        // [FIX] 资源状态转换 - 在OMSetRenderTargets之前执行
+        // 教学要点:
+        // - DirectX 12要求资源状态必须匹配使用场景
+        // - RTV需要RENDER_TARGET状态，DSV需要DEPTH_WRITE状态
+        // - 必须在OMSetRenderTargets之前转换状态
+        PerformResourceStateTransitions(cmdList);
 
         // 状态变化，调用D3D12 API
         UINT numRTVs = static_cast<UINT>(m_pendingState.rtvHandles.size());
@@ -395,5 +405,141 @@ namespace enigma::graphic
                      m_pendingState.depthClearValue.depthStencil.depth,
                      m_pendingState.depthClearValue.depthStencil.stencil);
         }
+    }
+
+    void RenderTargetBinder::PerformResourceStateTransitions(ID3D12GraphicsCommandList* cmdList)
+    {
+        if (!cmdList)
+        {
+            LogError("RenderTargetBinder", "PerformResourceStateTransitions: cmdList is null");
+            return;
+        }
+
+        // [FIX] Bug #538 资源状态转换修复
+        // 教学要点:
+        // - DirectX 12要求资源状态必须匹配使用场景
+        // - RTV需要RENDER_TARGET状态，DSV需要DEPTH_WRITE状态
+        // - 使用D3D12RenderSystem::TransitionResource()统一管理状态转换
+
+        // 转换所有RTV资源状态: PIXEL_SHADER_RESOURCE -> RENDER_TARGET
+        for (size_t i = 0; i < m_pendingState.rtvHandles.size(); ++i)
+        {
+            const auto& rtvHandle = m_pendingState.rtvHandles[i];
+
+            // 从RTV句柄获取底层资源
+            ID3D12Resource* resource = GetResourceFromRTVHandle(rtvHandle);
+            if (!resource)
+            {
+                LOG_WARN_F("RenderTargetBinder", "Failed to get resource from RTV[%zu]", i);
+                continue;
+            }
+
+            // 使用D3D12RenderSystem的统一状态转换API
+            D3D12RenderSystem::TransitionResource(
+                cmdList,
+                resource,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                "RenderTargetBinder::RTV"
+            );
+        }
+
+        // 转换DSV资源状态: PIXEL_SHADER_RESOURCE -> DEPTH_WRITE
+        if (m_pendingState.dsvHandle.ptr != 0)
+        {
+            ID3D12Resource* depthResource = GetResourceFromDSVHandle(m_pendingState.dsvHandle);
+            if (depthResource)
+            {
+                // 使用D3D12RenderSystem的统一状态转换API
+                D3D12RenderSystem::TransitionResource(
+                    cmdList,
+                    depthResource,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                    D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    "RenderTargetBinder::DSV"
+                );
+            }
+            else
+            {
+                LOG_WARN("RenderTargetBinder", "Failed to get resource from DSV");
+            }
+        }
+
+        LogDebug("RenderTargetBinder", "Performed resource state transitions for %zu RTVs + %d DSV",
+                 m_pendingState.rtvHandles.size(), m_pendingState.dsvHandle.ptr != 0 ? 1 : 0);
+    }
+
+    ID3D12Resource* RenderTargetBinder::GetResourceFromRTVHandle(const D3D12_CPU_DESCRIPTOR_HANDLE& rtvHandle) const
+    {
+        // [TODO] 实现从RTV句柄获取底层资源的逻辑
+        // 教学要点:
+        // - 需要遍历所有Manager，根据RTV句柄匹配对应的资源
+        // - 这是一个查找操作，可能需要优化（例如使用缓存）
+
+        // 尝试从RenderTargetManager查找
+        if (m_rtManager)
+        {
+            for (int i = 0; i < 16; ++i)
+            {
+                auto mainRTV = m_rtManager->GetMainRTV(i);
+                auto altRTV  = m_rtManager->GetAltRTV(i);
+
+                if (mainRTV.ptr == rtvHandle.ptr || altRTV.ptr == rtvHandle.ptr)
+                {
+                    auto rt = m_rtManager->GetRenderTarget(i);
+                    if (rt)
+                    {
+                        return rt->GetResource();
+                    }
+                }
+            }
+        }
+
+        // 尝试从ShadowColorManager查找
+        if (m_shadowColorManager)
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                auto mainRTV = m_shadowColorManager->GetMainRTV(i);
+                auto altRTV  = m_shadowColorManager->GetAltRTV(i);
+
+                if (mainRTV.ptr == rtvHandle.ptr || altRTV.ptr == rtvHandle.ptr)
+                {
+                    auto shadowColor = m_shadowColorManager->GetShadowColor(i);
+                    if (shadowColor)
+                    {
+                        return shadowColor->GetResource();
+                    }
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
+    ID3D12Resource* RenderTargetBinder::GetResourceFromDSVHandle(const D3D12_CPU_DESCRIPTOR_HANDLE& dsvHandle) const
+    {
+        // [TODO] 实现从DSV句柄获取底层资源的逻辑
+        // 教学要点:
+        // - 只需要查找DepthTextureManager
+
+        if (m_depthManager)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                auto dsv = m_depthManager->GetDSV(i);
+
+                if (dsv.ptr == dsvHandle.ptr)
+                {
+                    auto depthTex = m_depthManager->GetDepthTexture(i);
+                    if (depthTex)
+                    {
+                        return depthTex->GetResource();
+                    }
+                }
+            }
+        }
+
+        return nullptr;
     }
 } // namespace enigma::graphic
