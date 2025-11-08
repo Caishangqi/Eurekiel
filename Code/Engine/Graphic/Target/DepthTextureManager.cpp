@@ -13,210 +13,66 @@
 using namespace enigma::graphic;
 
 // ============================================================================
-// DepthTextureManager 构造函数 - 创建3个深度纹理
+// DepthTextureManager 统一构造函数 - 与RenderTargetManager保持一致
 // ============================================================================
 
 DepthTextureManager::DepthTextureManager(
-    int         width,
-    int         height,
-    DXGI_FORMAT depthFormat
+    int                                      baseWidth,
+    int                                      baseHeight,
+    const std::array<DepthTextureConfig, 3>& depthConfigs,
+    int                                      depthCount
 )
-    : m_width(width)
-      , m_height(height)
-      , m_depthFormat(depthFormat)
-{
-    // 参数验证
-    if (width <= 0 || height <= 0)
-    {
-        throw std::invalid_argument("Width and height must be greater than zero");
-    }
-
-    // 深度格式验证
-    if (depthFormat != DXGI_FORMAT_D24_UNORM_S8_UINT &&
-        depthFormat != DXGI_FORMAT_D32_FLOAT &&
-        depthFormat != DXGI_FORMAT_D32_FLOAT_S8X24_UINT &&
-        depthFormat != DXGI_FORMAT_D16_UNORM)
-    {
-        throw std::invalid_argument("Invalid depth format. Must be a valid depth/stencil format.");
-    }
-
-    // 创建3个深度纹理 (depthtex0/1/2)
-    const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
-
-    // 根据格式确定深度格式
-    DepthFormat enigmaDepthFormat = DepthFormat::D24_UNORM_S8_UINT; // 默认D24_UNORM_S8_UINT
-    if (depthFormat == DXGI_FORMAT_D32_FLOAT || depthFormat == DXGI_FORMAT_D16_UNORM)
-    {
-        enigmaDepthFormat = DepthFormat::D32_FLOAT;
-    }
-
-    for (int i = 0; i < 3; ++i)
-    {
-        // 使用DepthTextureCreateInfo创建深度纹理
-        DepthTextureCreateInfo createInfo(
-            depthNames[i], // name
-            static_cast<uint32_t>(width), // width
-            static_cast<uint32_t>(height), // height
-            enigmaDepthFormat, // depthFormat
-            1.0f, // clearDepth
-            0 // clearStencil
-        );
-
-        // 创建D12DepthTexture（DSV自动创建）
-        m_depthTextures[i] = std::make_shared<D12DepthTexture>(createInfo);
-    }
-
-    // M3.1: 初始化渲染分辨率
-    m_renderWidth  = width;
-    m_renderHeight = height;
-
-    // M3.1: 保存配置信息
-    for (int i = 0; i < 3; ++i)
-    {
-        DepthTextureConfig config;
-        config.width        = width;
-        config.height       = height;
-        config.format       = DepthFormat::D32_FLOAT;
-        config.semanticName = depthNames[i];
-        m_depthConfigs.push_back(config);
-    }
-}
-
-// ============================================================================
-// M3.1: 新增构造函数 - 简单构造器（N个全分辨率深度纹理）
-// ============================================================================
-
-DepthTextureManager::DepthTextureManager(
-    int renderWidth,
-    int renderHeight,
-    int depthCount
-)
-    : m_renderWidth(renderWidth)
-      , m_renderHeight(renderHeight)
-      , m_width(renderWidth)
-      , m_height(renderHeight)
+    : m_renderWidth(baseWidth)
+      , m_renderHeight(baseHeight)
+      , m_width(baseWidth)
+      , m_height(baseHeight)
       , m_depthFormat(DXGI_FORMAT_D32_FLOAT)
 {
-    // 参数验证
-    if (renderWidth <= 0 || renderHeight <= 0)
+    // 参数验证 - 尺寸
+    if (baseWidth <= 0 || baseHeight <= 0)
     {
-        throw std::invalid_argument("Render width and height must be greater than zero");
+        throw std::invalid_argument("Base width and height must be greater than zero");
     }
 
-    if (depthCount < 1 || depthCount > 16)
+    // 参数验证 - depthCount范围 [1, 3]
+    if (depthCount < 1 || depthCount > 3)
     {
-        throw std::out_of_range("Depth count must be in range [1-16]");
+        throw std::out_of_range("Depth count must be in range [1-3]");
     }
 
-    // 创建N个深度纹理（全部使用渲染分辨率）
-    m_depthTextures.reserve(depthCount);
-    m_depthConfigs.reserve(depthCount);
-
+    // 创建激活的深度纹理
     for (int i = 0; i < depthCount; ++i)
     {
-        std::string name = "depthtex" + std::to_string(i);
-
-        // 保存配置
-        DepthTextureConfig config1;
-        config1.width        = renderWidth;
-        config1.height       = renderHeight;
-        config1.format       = DepthFormat::D32_FLOAT;
-        config1.semanticName = name;
-        m_depthConfigs.push_back(config1);
-
-        // 创建深度纹理
-        DepthTextureCreateInfo createInfo(
-            name.c_str(),
-            static_cast<uint32_t>(renderWidth),
-            static_cast<uint32_t>(renderHeight),
-            DepthFormat::D32_FLOAT,
-            1.0f,
-            0
-        );
-
-        m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
-    }
-}
-
-// ============================================================================
-// M3.1: 新增构造函数 - 灵活构造器（自定义配置）
-// ============================================================================
-
-DepthTextureManager::DepthTextureManager(
-    int                                    renderWidth,
-    int                                    renderHeight,
-    const std::vector<DepthTextureConfig>& additionalDepths
-)
-    : m_renderWidth(renderWidth)
-      , m_renderHeight(renderHeight)
-      , m_width(renderWidth)
-      , m_height(renderHeight)
-      , m_depthFormat(DXGI_FORMAT_D32_FLOAT)
-{
-    // 参数验证
-    if (renderWidth <= 0 || renderHeight <= 0)
-    {
-        throw std::invalid_argument("Render width and height must be greater than zero");
-    }
-
-    if (additionalDepths.size() > 15)
-    {
-        throw std::out_of_range("Additional depths count must not exceed 15 (total 16 with depthtex0)");
-    }
-
-    // 1. 创建depthtex0（强制使用渲染分辨率）
-    DepthTextureConfig config2;
-    config2.width        = renderWidth;
-    config2.height       = renderHeight;
-    config2.format       = DepthFormat::D32_FLOAT;
-    config2.semanticName = "depthtex0";
-    m_depthConfigs.push_back(config2);
-
-    DepthTextureCreateInfo depthtex0Info(
-        "depthtex0",
-        static_cast<uint32_t>(renderWidth),
-        static_cast<uint32_t>(renderHeight),
-        DepthFormat::D32_FLOAT,
-        1.0f,
-        0
-    );
-
-    m_depthTextures.push_back(std::make_shared<D12DepthTexture>(depthtex0Info));
-
-    // 2. 创建额外深度纹理（depthtex1-N）
-    for (size_t i = 0; i < additionalDepths.size(); ++i)
-    {
-        const auto& config = additionalDepths[i];
+        const auto& config = depthConfigs[i];
 
         // 验证配置
         if (!config.IsValid())
         {
             throw std::invalid_argument(
-                "Invalid depth texture config at index " + std::to_string(i + 1)
+                "Invalid depth texture config at index " + std::to_string(i)
             );
         }
 
         // 保存配置
-        m_depthConfigs.push_back(config);
-
-        // 根据DepthFormat转换为DepthType
-        DepthFormat depthFormat = DepthFormat::D32_FLOAT;
-        if (config.format == DepthFormat::D24_UNORM_S8_UINT)
-        {
-            depthFormat = DepthFormat::D24_UNORM_S8_UINT;
-        }
+        DepthTextureConfig savedConfig;
+        savedConfig.width        = config.width;
+        savedConfig.height       = config.height;
+        savedConfig.format       = config.format;
+        savedConfig.semanticName = config.semanticName;
+        m_depthConfigs.push_back(savedConfig);
 
         // 创建深度纹理
         DepthTextureCreateInfo createInfo(
             config.semanticName.c_str(),
             static_cast<uint32_t>(config.width),
             static_cast<uint32_t>(config.height),
-            depthFormat,
-            1.0f,
-            0
+            config.format,
+            1.0f, // clearDepth
+            0 // clearStencil
         );
 
-        m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
+        // 创建D12DepthTexture（DSV自动创建）
+        m_depthTextures[i] = std::make_shared<D12DepthTexture>(createInfo);
     }
 }
 
@@ -399,7 +255,7 @@ void DepthTextureManager::SwitchDepthBuffer(int newActiveIndex)
     //          depthNames[oldIndex], depthNames[newActiveIndex]);
 }
 
-void DepthTextureManager::CopyDepthBuffer(
+void DepthTextureManager::CopyDepth(
     int srcIndex,
     int dstIndex
 )

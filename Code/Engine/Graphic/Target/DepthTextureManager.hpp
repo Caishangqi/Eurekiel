@@ -81,70 +81,41 @@ namespace enigma::graphic
     {
     public:
         /**
-         * @brief 构造DepthTextureManager并创建3个深度纹理（旧接口，保持兼容）
-         * @param width 屏幕宽度
-         * @param height 屏幕高度
-         * @param depthFormat 深度格式（默认DEPTH24_STENCIL8）
-         *
+         * @brief 统一构造器 - 与RenderTargetManager保持一致的设计模式
+         * @param baseWidth 基础宽度（渲染分辨率）
+         * @param baseHeight 基础高度（渲染分辨率）
+         * @param depthConfigs 深度纹理配置数组（std::array<DepthTextureConfig, 3>）
+         * @param depthCount 激活的深度纹理数量（1-3，默认3）
+         * 
+         * **设计原则**:
+         * - 与RenderTargetManager构造函数签名保持一致
+         * - 使用std::array<DepthTextureConfig, 3>而非RTConfig
+         * - 支持动态激活数量（depthCount参数）
+         * - 配置数组固定大小，简化内存管理
+         * 
+         * **使用示例**:
+         * ```cpp
+         * std::array<DepthTextureConfig, 3> depthConfigs = {};
+         * for (int i = 0; i < 3; ++i)
+         * {
+         *     depthConfigs[i].width = 1920;
+         *     depthConfigs[i].height = 1080;
+         *     depthConfigs[i].format = DepthFormat::D32_FLOAT;
+         *     depthConfigs[i].semanticName = "depthtex" + std::to_string(i);
+         * }
+         * auto depthMgr = std::make_unique<DepthTextureManager>(1920, 1080, depthConfigs, 3);
+         * ```
+         * 
          * 教学要点:
-         * - 使用D12Texture创建可采样深度纹理
-         * - 自动创建DSV描述符
-         * - 注册Bindless索引供Shader采样
+         * - 统一Manager构造函数设计模式
+         * - std::array固定大小，编译期优化
+         * - depthCount控制实际激活数量
          */
         DepthTextureManager(
-            int         width,
-            int         height,
-            DXGI_FORMAT depthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT
-        );
-
-        /**
-         * @brief 简单构造器 - 创建N个深度纹理，全部使用渲染分辨率
-         * @param renderWidth 渲染宽度
-         * @param renderHeight 渲染高度
-         * @param depthCount 深度纹理数量（默认3）
-         * 
-         * **M3.1新增 - 零配置使用**:
-         * - 自动创建N个深度纹理
-         * - 全部使用D32_FLOAT格式
-         * - 全部使用渲染分辨率
-         * - 语义化命名：depthtex0, depthtex1, ...
-         * 
-         * **使用示例**:
-         * ```cpp
-         * auto depthMgr = std::make_unique<DepthTextureManager>(1920, 1080, 3);
-         * // 创建3个深度纹理，全部1920x1080
-         * ```
-         */
-        DepthTextureManager(
-            int renderWidth,
-            int renderHeight,
-            int depthCount
-        );
-
-        /**
-         * @brief 灵活构造器 - 自定义配置深度纹理
-         * @param renderWidth 渲染宽度（depthtex0强制使用）
-         * @param renderHeight 渲染高度（depthtex0强制使用）
-         * @param additionalDepths 额外深度纹理配置（depthtex1-N）
-         * 
-         * **M3.1新增 - 自定义配置**:
-         * - depthtex0自动创建（固定=渲染分辨率）
-         * - depthtex1-N使用自定义配置
-         * - 支持不同分辨率和格式
-         * 
-         * **使用示例**:
-         * ```cpp
-         * std::vector<DepthTextureConfig> configs = {
-         *     DepthTexturePresets::HalfResolution(1920, 1080, "depthtex1"),
-         *     DepthTexturePresets::QuarterResolution(1920, 1080, "depthtex2")
-         * };
-         * auto depthMgr = std::make_unique<DepthTextureManager>(1920, 1080, configs);
-         * ```
-         */
-        DepthTextureManager(
-            int                                    renderWidth,
-            int                                    renderHeight,
-            const std::vector<DepthTextureConfig>& additionalDepths
+            int                                      baseWidth,
+            int                                      baseHeight,
+            const std::array<DepthTextureConfig, 3>& depthConfigs,
+            int                                      depthCount = 3
         );
 
         /**
@@ -293,7 +264,7 @@ namespace enigma::graphic
          * - 掌握ResourceBarrier的正确使用
          * - 深度纹理复制的完整流程
          */
-        void CopyDepthBuffer(int srcIndex, int dstIndex);
+        void CopyDepth(int srcIndex, int dstIndex);
 
         /**
          * @brief 查询当前激活的深度缓冲索引
