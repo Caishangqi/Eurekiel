@@ -427,6 +427,7 @@ namespace enigma::graphic
          * @brief 使用ShaderProgram并绑定RenderTarget（Mode A + Mode B）
          * @param shaderProgram Shader程序指针
          * @param rtOutputs RT输出索引列表（Mode A），为空时从DRAWBUFFERS读取
+         * @param depthIndex 深度纹理索引（默认0，范围0-2）
          *
          * @details
          * M6.2核心API - 支持两种RT绑定模式：
@@ -449,6 +450,9 @@ namespace enigma::graphic
          * renderer->UseProgram(gbuffersProgram); // 自动从DRAWBUFFERS读取
          * renderer->DrawScene();
          *
+         * // 使用depthtex1进行深度测试
+         * renderer->UseProgram(gbuffersProgram, {0, 1, 2, 3}, 1);
+         *
          * // Flip示例：历史帧访问（TAA、Motion Blur）
          * renderer->UseProgram(compositeProgram, {0}); // 写入colortex0
          * renderer->DrawFullscreenQuad();
@@ -460,7 +464,7 @@ namespace enigma::graphic
          * - 学习动态OMSetRenderTargets()的标准做法
          * - 掌握Iris DRAWBUFFERS指令的解析和应用
          */
-        void UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs = {});
+        void UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs = {}, int depthIndex = 0);
 
         /**
          * @brief 使用ShaderProgram（ProgramId重载版本）
@@ -953,7 +957,7 @@ namespace enigma::graphic
         void SwitchDepthBuffer(int newActiveIndex);
 
         /**
-         * @brief 复制深度纹理（通用接口）
+         * @brief 复制深度纹理（推荐使用）
          * @param srcIndex 源深度纹理索引 [0-2]
          * @param dstIndex 目标深度纹理索引 [0-2]
          *
@@ -963,9 +967,9 @@ namespace enigma::graphic
          * - 自动处理资源状态转换
          *
          * **使用场景**:
-         * - TERRAIN_TRANSLUCENT前：CopyDepthBuffer(0, 1) // depthtex0 → depthtex1
-         * - HAND_SOLID前：CopyDepthBuffer(0, 2)          // depthtex0 → depthtex2
-         * - 自定义复制：CopyDepthBuffer(1, 2)            // depthtex1 → depthtex2
+         * - TERRAIN_TRANSLUCENT前：CopyDepth(0, 1) // depthtex0 → depthtex1
+         * - HAND_SOLID前：CopyDepth(0, 2)          // depthtex0 → depthtex2
+         * - 自定义复制：CopyDepth(1, 2)            // depthtex1 → depthtex2
          *
          * **业务逻辑**:
          * 1. 参数验证（范围[0-2]，不能相同）
@@ -978,7 +982,16 @@ namespace enigma::graphic
          * - 掌握ResourceBarrier的正确使用
          * - 委托DepthTextureManager执行实际操作
          */
-        void CopyDepthBuffer(int srcIndex, int dstIndex);
+        void CopyDepth(int srcIndex, int dstIndex);
+
+        /**
+         * @brief 复制深度纹理（已弃用，请使用CopyDepth）
+         * @param srcIndex 源深度纹理索引 [0-2]
+         * @param dstIndex 目标深度纹理索引 [0-2]
+         * @deprecated 使用CopyDepth代替
+         */
+        [[deprecated("Use CopyDepth instead")]]
+
 
         /**
          * @brief 查询当前激活的深度缓冲索引
@@ -993,6 +1006,33 @@ namespace enigma::graphic
          * - 状态查询API的设计
          */
         int GetActiveDepthBufferIndex() const noexcept;
+
+        /**
+         * @brief 绑定渲染目标组合（支持指定深度纹理索引）
+         * @param rtTypes RT类型数组（ColorTex, ShadowColor等）
+         * @param indices 对应的索引数组
+         * @param depthType 深度纹理类型（默认DepthTex）
+         * @param depthIndex 深度纹理索引（默认0，范围0-2）
+         *
+         * 教学要点:
+         * - 转发到RenderTargetBinder::BindRenderTargets
+         * - 支持灵活指定深度纹理索引（depthtex0/1/2）
+         * - 使用默认参数保持向后兼容
+         *
+         * 使用示例:
+         * ```cpp
+         * // 绑定ColorTex0-3到GBuffer，使用depthtex1
+         * std::vector<RTType> rtTypes = {RTType::ColorTex, RTType::ColorTex, RTType::ColorTex, RTType::ColorTex};
+         * std::vector<int> indices = {0, 1, 2, 3};
+         * renderer->BindRenderTargets(rtTypes, indices, RTType::DepthTex, 1);
+         * ```
+         */
+        void BindRenderTargets(
+            const std::vector<RTType>& rtTypes,
+            const std::vector<int>&    indices,
+            RTType                     depthType  = RTType::DepthTex,
+            int                        depthIndex = 0
+        );
 #pragma endregion
 
 #pragma region State Management

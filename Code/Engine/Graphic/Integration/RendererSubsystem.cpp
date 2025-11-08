@@ -399,6 +399,34 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()))
     }
 
+    // ==================== 创建DepthTextureManager ====================
+    try
+    {
+        LogInfo(LogRenderer, "Creating DepthTextureManager...");
+
+        std::array<DepthTextureConfig, 3> depthConfigs = {};
+        for (int i = 0; i < 3; ++i)
+        {
+            depthConfigs[i].width        = m_configuration.renderWidth;
+            depthConfigs[i].height       = m_configuration.renderHeight;
+            depthConfigs[i].format       = DepthFormat::D32_FLOAT;
+            depthConfigs[i].semanticName = "depthtex" + std::to_string(i);
+        }
+
+        m_depthTextureManager = std::make_unique<DepthTextureManager>(
+            m_configuration.renderWidth,
+            m_configuration.renderHeight,
+            depthConfigs,
+            3
+        );
+        LogInfo(LogRenderer, "DepthTextureManager created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create DepthTextureManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("DepthTextureManager initialization failed! Error: %s", e.what()))
+    }
+
     // ==================== 创建ShadowColorManager (M6.1.5) ====================
     try
     {
@@ -1161,7 +1189,7 @@ void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
 // M6.2.1: UseProgram RT绑定（两种方式）
 //-----------------------------------------------------------------------------------------------
 
-void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs)
+void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs, int depthIndex)
 {
     if (!shaderProgram)
     {
@@ -1177,7 +1205,7 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     {
         std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
         std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
-        m_renderTargetBinder->BindRenderTargets(rtTypes, indices);
+        m_renderTargetBinder->BindRenderTargets(rtTypes, indices, RTType::DepthTex, depthIndex);
     }
 
     // 3. 获取当前RT格式（从RenderTargetManager）
@@ -1838,7 +1866,23 @@ void RendererSubsystem::SwitchDepthBuffer(int newActiveIndex)
     }
 }
 
-void RendererSubsystem::CopyDepthBuffer(int srcIndex, int dstIndex)
+void RendererSubsystem::BindRenderTargets(
+    const std::vector<RTType>& rtTypes,
+    const std::vector<int>&    indices,
+    RTType                     depthType,
+    int                        depthIndex
+)
+{
+    if (!m_renderTargetBinder)
+    {
+        LogError(LogRenderer, "BindRenderTargets: RenderTargetBinder not initialized");
+        return;
+    }
+
+    m_renderTargetBinder->BindRenderTargets(rtTypes, indices, depthType, depthIndex);
+}
+
+void RendererSubsystem::CopyDepth(int srcIndex, int dstIndex)
 {
     // 验证DepthTextureManager已初始化
     if (!m_depthTextureManager)
@@ -1850,7 +1894,7 @@ void RendererSubsystem::CopyDepthBuffer(int srcIndex, int dstIndex)
     // 委托DepthTextureManager执行复制（内部会获取CommandList）
     try
     {
-        m_depthTextureManager->CopyDepthBuffer(srcIndex, dstIndex);
+        m_depthTextureManager->CopyDepth(srcIndex, dstIndex);
 
         const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
         LogInfo(LogRenderer, "Copied depth buffer {} -> {}",
