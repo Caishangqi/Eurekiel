@@ -1335,20 +1335,6 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
         m_uniformManager->UniformMat4("cameraToRenderTransform", cameraToRender); // Camera → Render
         m_uniformManager->UniformMat4("gbufferProjection", projectionMatrix); // Render → Clip
 
-        // [DIAGNOSTIC] 打印矩阵值来诊断顶点输出为零的问题
-        LogInfo(LogRenderer, "[DIAG] gbufferModelView: [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f]",
-                worldToCamera.Ix, worldToCamera.Iy, worldToCamera.Iz, worldToCamera.Iw,
-                worldToCamera.Jx, worldToCamera.Jy, worldToCamera.Jz, worldToCamera.Jw,
-                worldToCamera.Kx, worldToCamera.Ky, worldToCamera.Kz, worldToCamera.Kw,
-                worldToCamera.Tx, worldToCamera.Ty, worldToCamera.Tz, worldToCamera.Tw);
-        LogInfo(LogRenderer, "[DIAG] gbufferProjection: [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f]",
-                projectionMatrix.Ix, projectionMatrix.Iy, projectionMatrix.Iz, projectionMatrix.Iw,
-                projectionMatrix.Jx, projectionMatrix.Jy, projectionMatrix.Jz, projectionMatrix.Jw,
-                projectionMatrix.Kx, projectionMatrix.Ky, projectionMatrix.Kz, projectionMatrix.Kw,
-                projectionMatrix.Tx, projectionMatrix.Ty, projectionMatrix.Tz, projectionMatrix.Tw);
-        LogInfo(LogRenderer, "[DIAG] Camera Position: (%.2f, %.2f, %.2f)",
-                camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
-
         // 设置GBuffer投影逆矩阵
         m_uniformManager->UniformMat4("gbufferProjectionInverse",
                                       projectionMatrix.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()

@@ -11,6 +11,8 @@
 // ⭐⭐⭐ 架构正确性: 使用D3D12RenderSystem静态API，遵循严格四层分层架构
 // Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem) → Layer 2 (D12Buffer) → Layer 1 (DX12 Native)
 #include "CustomImageIndexBuffer.hpp"
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
 namespace enigma::graphic
@@ -473,6 +475,15 @@ namespace enigma::graphic
         m_rootConstants.shadowColorBufferIndex       = *index10; // ⭐ 拆分: shadowcolor0-7
         m_rootConstants.shadowTexturesBufferIndex    = *index11; // ⭐ 拆分: shadowtex0/1
         m_rootConstants.customImageBufferIndex       = *index12; // ⭐ 新增: customImage0-15
+
+        // [DIAGNOSTIC] 验证matricesBufferIndex正确注册
+        /*LogInfo(LogRenderer,
+                "[UniformManager] RegisterToBindlessSystem完成 - matricesBufferIndex = %u",
+                m_rootConstants.matricesBufferIndex);
+
+        GUARANTEE_OR_DIE(m_rootConstants.matricesBufferIndex != 0 &&
+                         m_rootConstants.matricesBufferIndex != 0xFFFFFFFF,
+                         Stringf("matricesBufferIndex注册失败: 0x%08X", m_rootConstants.matricesBufferIndex));*/
 
         // 注意: noiseTextureIndex 不在这里注册,它是直接的纹理索引,由外部设置
         // 通过 SetNoiseTextureIndex() API 设置
