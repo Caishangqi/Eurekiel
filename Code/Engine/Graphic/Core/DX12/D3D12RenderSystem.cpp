@@ -440,6 +440,7 @@ namespace enigma::graphic
         createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
         createInfo.initialData  = initialData;
         createInfo.debugName    = debugName;
+        createInfo.byteStride   = elementSize;
 
         return CreateBuffer(createInfo);
     }
