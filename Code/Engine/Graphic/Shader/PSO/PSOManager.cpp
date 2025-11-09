@@ -340,7 +340,7 @@ namespace enigma::graphic
     {
         rasterDesc.FillMode              = D3D12_FILL_MODE_SOLID;
         rasterDesc.CullMode              = D3D12_CULL_MODE_BACK;
-        rasterDesc.FrontCounterClockwise = FALSE;
+        rasterDesc.FrontCounterClockwise = TRUE; // [FIX] 使用逆时针绕序（OpenGL/Iris标准）
         rasterDesc.DepthBias             = 0;
         rasterDesc.DepthBiasClamp        = 0.0f;
         rasterDesc.SlopeScaledDepthBias  = 0.0f;

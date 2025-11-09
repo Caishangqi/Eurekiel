@@ -649,7 +649,7 @@ namespace enigma::graphic
         auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
         if (!heapManager)
         {
-            LogError(LogRender, "[D12DepthTexture] Failed to get GlobalDescriptorHeapManager for '%s'", m_name.c_str());
+            LogError(LogRenderer, "[D12DepthTexture] Failed to get GlobalDescriptorHeapManager for '%s'", m_name.c_str());
             return false;
         }
 
@@ -657,7 +657,7 @@ namespace enigma::graphic
         auto dsvAlloc = heapManager->AllocateDsv();
         if (!dsvAlloc.isValid)
         {
-            LogError(LogRender, "[D12DepthTexture] Failed to allocate DSV for '%s'", m_name.c_str());
+            LogError(LogRenderer, "[D12DepthTexture] Failed to allocate DSV for '%s'", m_name.c_str());
             return false;
         }
 
@@ -674,7 +674,7 @@ namespace enigma::graphic
         auto device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
-            LogError("[D12DepthTexture] Failed to get D3D12 device for '%s'", m_name.c_str());
+            LogError(LogRenderer, "[D12DepthTexture] Failed to get D3D12 device for '%s'", m_name.c_str());
             return false;
         }
 
@@ -706,7 +706,7 @@ namespace enigma::graphic
             break;
         }
 
-        LogInfo(LogRender, "[D12DepthTexture] Created DSV for '%s': %ux%u, Format=%s",
+        LogInfo(LogRenderer, "[D12DepthTexture] Created DSV for '%s': %ux%u, Format=%s",
                 m_name.c_str(),
                 m_width,
                 m_height,
