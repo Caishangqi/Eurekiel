@@ -556,7 +556,7 @@ namespace enigma::graphic
          * 3. 直接索引标志：D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
          * 4. 性能优化：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
          */
-        static ID3D12RootSignature* GetBindlessRootSignature();
+        static BindlessRootSignature* GetBindlessRootSignature();
 
         // ===== Buffer管理API - 细粒度操作 (Milestone M2新增) =====
 

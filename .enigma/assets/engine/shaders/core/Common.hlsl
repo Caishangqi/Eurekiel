@@ -881,6 +881,7 @@ struct MatricesData
 {
     float4x4 gbufferModelView; // GBuffer模型视图矩阵
     float4x4 gbufferModelViewInverse; // GBuffer模型视图逆矩阵
+    float4x4 cameraToRenderTransform; // [NEW] 相机到渲染坐标系转换（Camera → Render）
     float4x4 gbufferProjection; // GBuffer投影矩阵
     float4x4 gbufferProjectionInverse; // GBuffer投影逆矩阵
     float4x4 gbufferPreviousModelView; // 上一帧GBuffer模型视图矩阵
@@ -990,8 +991,7 @@ RenderingData GetRenderingData()
  */
 MatricesData GetMatricesData()
 {
-    StructuredBuffer<MatricesData> buffer =
-        ResourceDescriptorHeap[matricesBufferIndex];
+    StructuredBuffer<MatricesData> buffer = ResourceDescriptorHeap[matricesBufferIndex];
     return buffer[0];
 }
 
@@ -1387,6 +1387,7 @@ Texture2D GetCustomImage(uint slotIndex)
 #define gbufferProjectionInverse      MatricesBuffer.gbufferProjectionInverse
 #define gbufferPreviousModelView      MatricesBuffer.gbufferPreviousModelView
 #define gbufferPreviousProjection     MatricesBuffer.gbufferPreviousProjection
+#define cameraToRenderTransform       MatricesBuffer.cameraToRenderTransform
 
 // ===== Shadow矩阵（阴影Pass）=====
 #define shadowModelView               MatricesBuffer.shadowModelView
@@ -1556,33 +1557,34 @@ VSOutput StandardVertexTransform(VSInput input)
 {
     VSOutput output;
 
-    // 1. 顶点位置变换: 局部空间 → 世界空间 → 视图空间 → 裁剪空间
-    // [FIX] 列主序矩阵：向量在前，矩阵在后
-    float4 localPos = float4(input.Position, 1.0);
-    float4 worldPos = mul(localPos, modelMatrix); // 向量 * 矩阵
-    float4 viewPos  = mul(worldPos, gbufferModelView); // 向量 * 矩阵
-    float4 clipPos  = mul(viewPos, gbufferProjection); // 向量 * 矩阵
+    // [CRITICAL FIX] 直接使用宏访问，但只调用一次GetMatricesData()
+    // 通过临时变量避免重复Buffer读取
+    float4x4 _modelMat    = modelMatrix;
+    float4x4 _viewMat     = gbufferModelView;
+    float4x4 _camToRender = cameraToRenderTransform;
+    float4x4 _projMat     = gbufferProjection;
+    float4x4 _normalMat   = normalMatrix;
+
+    // 1. 顶点位置变换
+    float4 localPos  = float4(input.Position, 1.0);
+    float4 worldPos  = mul(modelMatrix, localPos);
+    float4 cameraPos = mul(gbufferModelView, worldPos);
+    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    //float4 clipPos   = mul(gbufferProjection, renderPos);
+
+    float4 clipPos = mul(localPos, gbufferProjection);
 
     output.Position = clipPos;
     output.WorldPos = worldPos.xyz;
-
-    // 2. 颜色传递（float4）
-    output.Color = input.Color;
-
-    // 3. 传递纹理坐标
+    output.Color    = input.Color;
     output.TexCoord = input.TexCoord;
 
-    // 4. 法线变换（使用 normalMatrix 的 3x3 部分）
-    // [FIX] 列主序矩阵：向量在前
-    float3 transformedNormal = mul(float4(input.Normal, 0.0), normalMatrix).xyz;
-    output.Normal            = normalize(transformedNormal);
+    // 4. 法线变换
+    output.Normal = normalize(mul(float4(input.Normal, 0.0), _normalMat).xyz);
 
-    // 5. 传递切线和副切线（用于法线贴图）
-    // [FIX] 列主序矩阵：向量在前
-    float3 transformedTangent   = mul(float4(input.Tangent, 0.0), gbufferModelView).xyz;
-    float3 transformedBitangent = mul(float4(input.Bitangent, 0.0), gbufferModelView).xyz;
-    output.Tangent              = normalize(transformedTangent);
-    output.Bitangent            = normalize(transformedBitangent);
+    // 5. 切线和副切线
+    output.Tangent   = normalize(mul(float4(input.Tangent, 0.0), _viewMat).xyz);
+    output.Bitangent = normalize(mul(float4(input.Bitangent, 0.0), _viewMat).xyz);
 
     return output;
 }

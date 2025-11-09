@@ -1081,12 +1081,13 @@ namespace enigma::graphic
         return s_globalDescriptorHeapManager.get();
     }
 
-    ID3D12RootSignature* D3D12RenderSystem::GetBindlessRootSignature()
+    BindlessRootSignature* D3D12RenderSystem::GetBindlessRootSignature()
     {
         if (!s_bindlessRootSignature)
             return nullptr;
-        return s_bindlessRootSignature->GetRootSignature();
+        return s_bindlessRootSignature.get();
     }
+
 
     // ===== PSO创建API实现 (Milestone 3.0新增) =====
 
