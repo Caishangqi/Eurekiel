@@ -78,7 +78,7 @@ namespace enigma::graphic
          * - 每个索引4字节，可独立更新（细粒度控制）
          * - 预留空间：64 DWORDs - 13 = 51 DWORDs 可用于未来扩展
          */
-        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 13; // 13 DWORDs = 52 bytes
+        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 14; // 13 DWORDs = 52 bytes
         static constexpr uint32_t ROOT_CONSTANTS_SIZE_BYTES       = ROOT_CONSTANTS_NUM_32BIT_VALUES * 4;
 
         /**
