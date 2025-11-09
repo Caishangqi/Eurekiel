@@ -1557,22 +1557,12 @@ VSOutput StandardVertexTransform(VSInput input)
 {
     VSOutput output;
 
-    // [CRITICAL FIX] 直接使用宏访问，但只调用一次GetMatricesData()
-    // 通过临时变量避免重复Buffer读取
-    float4x4 _modelMat    = modelMatrix;
-    float4x4 _viewMat     = gbufferModelView;
-    float4x4 _camToRender = cameraToRenderTransform;
-    float4x4 _projMat     = gbufferProjection;
-    float4x4 _normalMat   = normalMatrix;
-
     // 1. 顶点位置变换
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
     float4 cameraPos = mul(gbufferModelView, worldPos);
     float4 renderPos = mul(cameraToRenderTransform, cameraPos);
-    //float4 clipPos   = mul(gbufferProjection, renderPos);
-
-    float4 clipPos = mul(localPos, gbufferProjection);
+    float4 clipPos   = mul(gbufferProjection, renderPos);
 
     output.Position = clipPos;
     output.WorldPos = worldPos.xyz;
@@ -1580,11 +1570,11 @@ VSOutput StandardVertexTransform(VSInput input)
     output.TexCoord = input.TexCoord;
 
     // 4. 法线变换
-    output.Normal = normalize(mul(float4(input.Normal, 0.0), _normalMat).xyz);
+    output.Normal = normalize(mul(float4(input.Normal, 0.0), normalMatrix).xyz);
 
     // 5. 切线和副切线
-    output.Tangent   = normalize(mul(float4(input.Tangent, 0.0), _viewMat).xyz);
-    output.Bitangent = normalize(mul(float4(input.Bitangent, 0.0), _viewMat).xyz);
+    output.Tangent   = normalize(mul(float4(input.Tangent, 0.0), gbufferModelView).xyz);
+    output.Bitangent = normalize(mul(float4(input.Bitangent, 0.0), gbufferModelView).xyz);
 
     return output;
 }
