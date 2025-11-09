@@ -23,6 +23,7 @@ namespace enigma::graphic
           , m_memoryAccess(createInfo.memoryAccess)
           , m_mappedData(nullptr)
           , m_formattedDebugName() // 初始化格式化调试名称
+          , m_byteStride(createInfo.byteStride)
     {
         // 教学注释：验证输入参数的有效性
         assert(createInfo.size > 0 && "Buffer size must be greater than 0");
@@ -489,9 +490,12 @@ namespace enigma::graphic
             srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_BUFFER;
             srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             srvDesc.Buffer.FirstElement             = 0;
-            srvDesc.Buffer.NumElements              = static_cast<UINT>(GetSize() / 4); // 假设每个元素4字节
-            srvDesc.Buffer.StructureByteStride      = 4; // 结构体步长（字节）
-            srvDesc.Buffer.Flags                    = D3D12_BUFFER_SRV_FLAG_NONE;
+            size_t stride                           = m_byteStride > 0 ? m_byteStride : 4;
+            if (stride <= 0)
+                LogWarn("D12Buffer", "Buffer stride is not setting which is set to default stride %zu", stride);
+            srvDesc.Buffer.NumElements         = static_cast<UINT>(GetSize() / stride);
+            srvDesc.Buffer.StructureByteStride = static_cast<UINT>(stride);
+            srvDesc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
 
             // 在全局描述符堆的Bindless索引位置创建SRV
             heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());

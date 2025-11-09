@@ -65,9 +65,10 @@ namespace enigma::graphic
         MemoryAccess memoryAccess; // Memory access mode
         const void*  initialData; // Initial data pointer (can be nullptr)
         const char*  debugName; // Debug name (corresponding to Iris' GLDebug.nameObject)
+        size_t       byteStride; // [NEW] StructuredBuffer element size (bytes)
 
         // 默认构造
-        BufferCreateInfo() : size(0), usage(BufferUsage::Default), memoryAccess(MemoryAccess::GPUOnly), initialData(nullptr), debugName(nullptr)
+        BufferCreateInfo() : size(0), usage(BufferUsage::Default), memoryAccess(MemoryAccess::GPUOnly), initialData(nullptr), debugName(nullptr), byteStride(0)
         {
         }
     };
@@ -230,6 +231,7 @@ namespace enigma::graphic
         MemoryAccess        m_memoryAccess; // 内存访问模式
         void*               m_mappedData; // 映射的CPU内存指针
         mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
+        size_t              m_byteStride; // StructuredBuffer元素大小（字节）
 
         /**
          * 内部方法：创建DirectX 12资源
