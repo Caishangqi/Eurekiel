@@ -56,13 +56,43 @@ namespace enigma::graphic
         alignas(16) Mat44 gbufferModelViewInverse;
 
         /**
+         * @brief 相机到渲染坐标系转换矩阵
+         * @type mat4
+         * @custom cameraToRenderTransform
+         *
+         * 教学要点:
+         * - 将相机空间（camera space）转换到渲染坐标系（render space）
+         * - 用于游戏坐标系到DirectX坐标系的转换
+         * - 旧API中的 CameraToRenderTransform 矩阵
+         * - 通常为坐标轴重映射矩阵（例如：Y-up → Z-up）
+         *
+         * 变换链:
+         * Model → World (modelMatrix)
+         * World → Camera (gbufferModelView)
+         * Camera → Render (cameraToRenderTransform) ← [THIS]
+         * Render → Clip (gbufferProjection)
+         *
+         * HLSL使用示例:
+         * ```hlsl
+         * float4 worldPos = mul(localPos, modelMatrix);
+         * float4 cameraPos = mul(worldPos, gbufferModelView);
+         * float4 renderPos = mul(cameraPos, cameraToRenderTransform); // [ADD THIS]
+         * float4 clipPos = mul(renderPos, gbufferProjection);
+         * ```
+         *
+         * @note 这是自定义扩展字段，用于支持旧API的4阶段变换链
+         */
+        alignas(16) Mat44 cameraToRenderTransform;
+
+        /**
          * @brief GBuffer投影矩阵
          * @type mat4
          * @iris gbufferProjection
          *
          * 教学要点:
-         * - 将视图空间转换到裁剪空间（clip space）
+         * - 将渲染空间转换到裁剪空间（clip space）
          * - 包含透视除法参数
+         * - 注意：在添加 cameraToRenderTransform 后，此矩阵作用于渲染空间而非相机空间
          */
         alignas(16) Mat44 gbufferProjection;
 
@@ -264,6 +294,7 @@ namespace enigma::graphic
         MatricesUniforms()
             : gbufferModelView(Mat44::IDENTITY)
               , gbufferModelViewInverse(Mat44::IDENTITY)
+              , cameraToRenderTransform(Mat44::IDENTITY) // [NEW] 相机到渲染坐标系转换
               , gbufferProjection(Mat44::IDENTITY)
               , gbufferProjectionInverse(Mat44::IDENTITY)
               , gbufferPreviousModelView(Mat44::IDENTITY)
@@ -286,10 +317,10 @@ namespace enigma::graphic
 #pragma warning(pop)
 
     // 编译期验证: 检查结构体大小
-    // 18个Mat44矩阵 × 64字节 = 1152字节
-    // 包含Iris官方16个矩阵 + 2个扩展矩阵 (modelMatrix, modelMatrixInverse)
-    static_assert(sizeof(MatricesUniforms) == 18 * 64,
-                  "MatricesUniforms must contain exactly 18 Mat44 matrices (1152 bytes)");
+    // 19个Mat44矩阵 × 64字节 = 1216字节
+    // 包含Iris官方16个矩阵 + 3个扩展矩阵 (cameraToRenderTransform, modelMatrix, modelMatrixInverse)
+    static_assert(sizeof(MatricesUniforms) == 19 * 64,
+                  "MatricesUniforms must contain exactly 19 Mat44 matrices (1216 bytes)");
 
     // 编译期验证: 确保不超过合理大小限制（2KB）
     static_assert(sizeof(MatricesUniforms) <= 2048,
