@@ -4,6 +4,8 @@
 
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::graphic
 {
@@ -643,22 +645,73 @@ namespace enigma::graphic
      */
     bool D12DepthTexture::CreateDepthStencilView()
     {
-        // TODO: 实现DSV创建
-        // 需要从D3D12RenderSystem获取DSV描述符堆并创建DSV
-        //
-        // 伪代码:
-        // auto device = D3D12RenderSystem::GetDevice();
-        // auto dsvHeap = D3D12RenderSystem::GetDSVDescriptorHeap();
-        // m_dsvHandle = D3D12RenderSystem::AllocateDSVDescriptor();
-        //
-        // D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        // dsvDesc.Format = m_depthFormat;
-        // dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-        // dsvDesc.Texture2D.MipSlice = 0;
-        //
-        // device->CreateDepthStencilView(GetResource(), &dsvDesc, m_dsvHandle);
+        // 1. 获取全局描述符堆管理器并分配DSV句柄
+        auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+        if (!heapManager)
+        {
+            LogError(LogRender, "[D12DepthTexture] Failed to get GlobalDescriptorHeapManager for '%s'", m_name.c_str());
+            return false;
+        }
 
-        // 临时实现：标记为已创建
+        // 分配DSV描述符
+        auto dsvAlloc = heapManager->AllocateDsv();
+        if (!dsvAlloc.isValid)
+        {
+            LogError(LogRender, "[D12DepthTexture] Failed to allocate DSV for '%s'", m_name.c_str());
+            return false;
+        }
+
+        m_dsvHandle = dsvAlloc.cpuHandle;
+
+        // 2. 配置DSV描述符
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format                        = m_depthFormat;
+        dsvDesc.ViewDimension                 = D3D12_DSV_DIMENSION_TEXTURE2D;
+        dsvDesc.Flags                         = D3D12_DSV_FLAG_NONE;
+        dsvDesc.Texture2D.MipSlice            = 0;
+
+        // 3. 创建DSV
+        auto device = D3D12RenderSystem::GetDevice();
+        if (!device)
+        {
+            LogError("[D12DepthTexture] Failed to get D3D12 device for '%s'", m_name.c_str());
+            return false;
+        }
+
+        heapManager->CreateDepthStencilView(
+            device,
+            GetResource(),
+            &dsvDesc,
+            dsvAlloc.heapIndex
+        );
+
+        // 4. 设置有效标志
+        m_hasValidDSV = true;
+
+        // 5. 添加成功日志
+        const char* formatStr = "";
+        switch (m_format)
+        {
+        case DepthFormat::D32_FLOAT:
+            formatStr = "D32_FLOAT";
+            break;
+        case DepthFormat::D24_UNORM_S8_UINT:
+            formatStr = "D24_UNORM_S8_UINT";
+            break;
+        case DepthFormat::D16_UNORM:
+            formatStr = "D16_UNORM";
+            break;
+        default:
+            formatStr = "UNKNOWN";
+            break;
+        }
+
+        LogInfo(LogRender, "[D12DepthTexture] Created DSV for '%s': %ux%u, Format=%s",
+                m_name.c_str(),
+                m_width,
+                m_height,
+                formatStr);
+
         return true;
     }
 
