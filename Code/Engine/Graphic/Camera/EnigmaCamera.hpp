@@ -250,26 +250,6 @@ namespace enigma::graphic
         // ========================================================================
 
         CameraCreateInfo m_createInfo; // 创建配置信息
-        mutable bool     m_matricesDirty = true; // 矩阵是否需要重新计算
-
-        // 缓存的矩阵（性能优化）
-        mutable Mat44 m_cachedWorldToCamera = Mat44::IDENTITY;
-        mutable Mat44 m_cachedCameraToWorld = Mat44::IDENTITY;
-        mutable Mat44 m_cachedProjection    = Mat44::IDENTITY;
-
-        // ========================================================================
-        // 私有辅助函数
-        // ========================================================================
-
-        /**
-         * @brief 计算所有缓存的矩阵
-         */
-        void CalculateMatrices() const;
-
-        /**
-         * @brief 标记矩阵为脏
-         */
-        void MarkMatricesDirty() { m_matricesDirty = true; }
 
         // 禁用拷贝构造和赋值（遵循RAII原则）
         EnigmaCamera(const EnigmaCamera&)            = delete;
