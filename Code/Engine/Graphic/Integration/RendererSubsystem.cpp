@@ -1247,7 +1247,14 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     cmdList->SetPipelineState(pso);
     cmdList->SetGraphicsRootSignature(shaderProgram->GetRootSignature());
 
-    // 7. 刷新RT绑定（延迟提交）
+    // 7. 上传Root Constants到GPU
+    auto* bindlessRootSig = D3D12RenderSystem::GetBindlessRootSignature();
+    if (bindlessRootSig && m_uniformManager)
+    {
+        bindlessRootSig->SetRootConstants(cmdList, m_uniformManager->GetRootConstants(), 14, 0);
+    }
+
+    // 8. 刷新RT绑定（延迟提交）
     if (m_renderTargetBinder)
     {
         m_renderTargetBinder->FlushBindings(cmdList);
@@ -1316,16 +1323,31 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
         // 设置相机相关矩阵 (MatricesUniforms)
         // 数据流：EnigmaCamera → UniformManager → GPU
 
-        // GBuffer相关矩阵（延迟渲染主Pass）
-        Mat44 worldToCamera        = camera.GetWorldToCameraTransform();
-        Mat44 projectionMatrix     = camera.GetProjectionMatrix();
-        Mat44 viewProjectionMatrix = camera.GetViewProjectionMatrix();
+        // GBuffer相关矩阵（延迟渲染主Pass）- 完整4矩阵变换链
+        Mat44 cameraToWorld    = camera.GetCameraToWorldTransform(); // Camera → World (逆矩阵)
+        Mat44 worldToCamera    = camera.GetWorldToCameraTransform(); // World → Camera
+        Mat44 cameraToRender   = camera.GetCameraToRenderTransform(); // Camera → Render (坐标系转换)
+        Mat44 projectionMatrix = camera.GetProjectionMatrix(); // Render → Clip
 
-        // 设置GBuffer模型视图矩阵
-        m_uniformManager->UniformMat4("gbufferModelView", worldToCamera);
+        // 上传4个核心矩阵（与旧API DX12Renderer.cpp:650-654一致）
+        m_uniformManager->UniformMat4("gbufferModelViewInverse", cameraToWorld); // [NEW] Camera → World
+        m_uniformManager->UniformMat4("gbufferModelView", worldToCamera); // World → Camera
+        m_uniformManager->UniformMat4("cameraToRenderTransform", cameraToRender); // Camera → Render
+        m_uniformManager->UniformMat4("gbufferProjection", projectionMatrix); // Render → Clip
 
-        // 设置GBuffer投影矩阵
-        m_uniformManager->UniformMat4("gbufferProjection", projectionMatrix);
+        // [DIAGNOSTIC] 打印矩阵值来诊断顶点输出为零的问题
+        LogInfo(LogRenderer, "[DIAG] gbufferModelView: [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f]",
+                worldToCamera.Ix, worldToCamera.Iy, worldToCamera.Iz, worldToCamera.Iw,
+                worldToCamera.Jx, worldToCamera.Jy, worldToCamera.Jz, worldToCamera.Jw,
+                worldToCamera.Kx, worldToCamera.Ky, worldToCamera.Kz, worldToCamera.Kw,
+                worldToCamera.Tx, worldToCamera.Ty, worldToCamera.Tz, worldToCamera.Tw);
+        LogInfo(LogRenderer, "[DIAG] gbufferProjection: [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f] / [%.2f, %.2f, %.2f, %.2f]",
+                projectionMatrix.Ix, projectionMatrix.Iy, projectionMatrix.Iz, projectionMatrix.Iw,
+                projectionMatrix.Jx, projectionMatrix.Jy, projectionMatrix.Jz, projectionMatrix.Jw,
+                projectionMatrix.Kx, projectionMatrix.Ky, projectionMatrix.Kz, projectionMatrix.Kw,
+                projectionMatrix.Tx, projectionMatrix.Ty, projectionMatrix.Tz, projectionMatrix.Tw);
+        LogInfo(LogRenderer, "[DIAG] Camera Position: (%.2f, %.2f, %.2f)",
+                camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
 
         // 设置GBuffer投影逆矩阵
         m_uniformManager->UniformMat4("gbufferProjectionInverse",

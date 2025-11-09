@@ -45,7 +45,7 @@ namespace enigma::graphic
         m_directives = directives;
 
         // 4. 获取全局 Bindless Root Signature
-        ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature();
+        ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
         if (!rootSig)
         {
             ERROR_AND_DIE("Failed to get Bindless Root Signature")

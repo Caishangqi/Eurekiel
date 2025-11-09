@@ -264,6 +264,7 @@ namespace enigma::graphic
         m_fieldMap["textureMatrix"]             = {7, offsetof(MatricesUniforms, textureMatrix), sizeof(Mat44)};
         m_fieldMap["modelMatrix"]               = {7, offsetof(MatricesUniforms, modelMatrix), sizeof(Mat44)};
         m_fieldMap["modelMatrixInverse"]        = {7, offsetof(MatricesUniforms, modelMatrixInverse), sizeof(Mat44)};
+        m_fieldMap["cameraToRenderTransform"]   = {7, offsetof(MatricesUniforms, cameraToRenderTransform), sizeof(Mat44)};
 
         // ========================================================================
         // Category 8: ColorTargetsIndexBuffer (2 fields)

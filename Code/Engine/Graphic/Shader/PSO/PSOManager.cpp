@@ -111,7 +111,7 @@ namespace enigma::graphic
     Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOManager::CreatePSO(const PSOKey& key)
     {
         // 1. 获取Root Signature
-        ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature();
+        ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
         if (!rootSig)
         {
             ERROR_RECOVERABLE("Failed to get Bindless Root Signature");

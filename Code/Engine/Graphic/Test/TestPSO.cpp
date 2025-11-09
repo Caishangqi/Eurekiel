@@ -87,7 +87,7 @@ namespace enigma::graphic::test
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 
         // Root Signature (使用全局Bindless RootSignature)
-        psoDesc.pRootSignature = D3D12RenderSystem::GetBindlessRootSignature();
+        psoDesc.pRootSignature = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
         if (!psoDesc.pRootSignature)
         {
             ERROR_AND_DIE("[TestPSO] Bindless RootSignature is null!");
