@@ -1205,7 +1205,20 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     {
         std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
         std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
-        m_renderTargetBinder->BindRenderTargets(rtTypes, indices, RTType::DepthTex, depthIndex);
+
+        // [FIX] 使用LoadAction::Clear清除深度缓冲
+        LoadAction              loadAction      = LoadAction::Clear;
+        ClearValue              depthClearValue = ClearValue::Depth(1.0f, 0); // 深度1.0（远平面）
+        std::vector<ClearValue> clearValues(drawBuffers.size(), ClearValue::Color(Rgba8::BLACK));
+
+        m_renderTargetBinder->BindRenderTargets(
+            rtTypes, indices,
+            RTType::DepthTex, depthIndex,
+            false, // useAlt
+            loadAction, // [FIX] 清除RT和深度缓冲
+            clearValues, // 颜色清除值
+            depthClearValue // [FIX] 深度清除值1.0
+        );
     }
 
     // 3. 获取当前RT格式（从RenderTargetManager）
@@ -1257,7 +1270,10 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     // 8. 刷新RT绑定（延迟提交）
     if (m_renderTargetBinder)
     {
-        m_renderTargetBinder->FlushBindings(cmdList);
+        // [FIX] 使用ForceFlushBindings强制刷新RTV绑定
+        // 原因: BeginFrame可能重置RTV为SwapChain Buffer，导致状态缓存失效
+        // 解决: 跳过Hash检查，强制调用OMSetRenderTargets
+        m_renderTargetBinder->ForceFlushBindings(cmdList);
     }
 }
 
