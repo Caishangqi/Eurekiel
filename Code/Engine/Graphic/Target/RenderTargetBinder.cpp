@@ -67,6 +67,9 @@ namespace enigma::graphic
         // 设置LoadAction
         m_pendingState.loadAction = loadAction;
 
+        // [FIX] 保存useAlt标志
+        m_pendingState.useAlt = useAlt;
+
         // 填充RTV句柄和ClearValue
         m_pendingState.rtvHandles.reserve(rtTypes.size());
         m_pendingState.clearValues.reserve(rtTypes.size());

@@ -128,7 +128,7 @@ namespace enigma::graphic
             const std::vector<int>&        indices,
             RTType                         depthType       = RTType::DepthTex,
             int                            depthIndex      = 0,
-            bool                           useAlt          = true,
+            bool                           useAlt          = false, // [FIX] 默认使用Main纹理而非Alt纹理
             LoadAction                     loadAction      = LoadAction::Load,
             const std::vector<ClearValue>& clearValues     = {},
             const ClearValue&              depthClearValue = ClearValue::Depth(1.0f, 0)
@@ -285,6 +285,7 @@ namespace enigma::graphic
             ClearValue                               depthClearValue; ///< DSV清空值
             LoadAction                               loadAction; ///< 加载动作
             uint32_t                                 stateHash; ///< 状态Hash值
+            bool                                     useAlt; ///< [FIX] 是否使用Alt纹理标志
 
             /// 默认构造
             BindingState()
@@ -292,6 +293,7 @@ namespace enigma::graphic
                   , depthClearValue(ClearValue::Depth(1.0f, 0))
                   , loadAction(LoadAction::Load)
                   , stateHash(0)
+                  , useAlt(false)
             {
             }
 
@@ -312,6 +314,7 @@ namespace enigma::graphic
                     hash ^= static_cast<uint32_t>(rtv.ptr & 0xFFFFFFFF);
                 }
                 hash ^= static_cast<uint32_t>(dsvHandle.ptr & 0xFFFFFFFF);
+                hash ^= (useAlt ? 0x80000000 : 0); // [FIX] 包含useAlt标志
                 return hash;
             }
 
@@ -326,6 +329,7 @@ namespace enigma::graphic
                 depthClearValue = ClearValue::Depth(1.0f, 0);
                 loadAction      = LoadAction::Load;
                 stateHash       = 0;
+                useAlt          = false; // [FIX] 重置useAlt标志
             }
         };
 
