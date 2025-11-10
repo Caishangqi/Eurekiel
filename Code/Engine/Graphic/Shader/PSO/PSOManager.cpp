@@ -161,19 +161,25 @@ namespace enigma::graphic
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
         // 2.7 渲染目标格式（使用key.rtFormats，修复硬编码问题）
-        psoDesc.NumRenderTargets = 0;
+        // [FIX] 先遍历所有RT，找到最后一个非UNKNOWN的索引
+        UINT lastValidRTIndex = 0;
         for (UINT i = 0; i < 8; ++i)
         {
             if (key.rtFormats[i] != DXGI_FORMAT_UNKNOWN)
             {
-                psoDesc.RTVFormats[i]    = key.rtFormats[i];
-                psoDesc.NumRenderTargets = i + 1;
+                psoDesc.RTVFormats[i] = key.rtFormats[i];
+                lastValidRTIndex      = i; // [FIX] 记录最后一个有效RT的索引
             }
             else
             {
                 psoDesc.RTVFormats[i] = DXGI_FORMAT_UNKNOWN;
             }
         }
+
+        // [FIX] NumRenderTargets = 最后一个有效RT索引 + 1
+        psoDesc.NumRenderTargets = lastValidRTIndex + 1;
+
+        // Fallback: 如果没有任何RT，使用默认配置
         if (psoDesc.NumRenderTargets == 0)
         {
             psoDesc.NumRenderTargets = 1;
