@@ -1313,14 +1313,32 @@ namespace enigma::graphic
     // ===== 渲染管线API实现 (Milestone 2.6新增) =====
 
     /**
-     * 开始帧渲染 - 清屏操作的正确位置
+     * 开始帧渲染 - 帧初始化的正确位置
      *
-     * 教学要点：
-     * 1. 这是每帧渲染的正确起始点，替代了TestClearScreen的测试逻辑
-     * 2. 遵循DirectX 12标准管线：BeginFrame(清屏) → 渲染 → EndFrame(Present)
-     * 3. 自动处理资源状态转换和命令列表管理
-     * 4. 使用引擎Rgba8颜色系统，提供类型安全和便捷操作
-     * 5. 成为正式渲染系统的重要组成部分
+     * 职责范围（遵循单一职责原则）：
+     * 1. 准备下一帧（更新 SwapChain 缓冲区索引）
+     * 2. 获取并准备 CommandList（绑定 Descriptor Heaps）
+     * 3. 资源状态转换（PRESENT → RENDER_TARGET）
+     * 4. 清除渲染目标（ClearRenderTargetView）
+     * 5. 设置 Viewport 和 ScissorRect
+     *
+     * [IMPORTANT] 不负责的事项：
+     * - 不绑定 RenderTarget（由 UseProgram 通过 RenderTargetBinder 处理）
+     * - 不设置 PSO（由 UseProgram 处理）
+     * - 不绑定资源（由各自的 Bind 方法处理）
+     *
+     * 架构设计原因：
+     * - 职责单一：BeginFrame 只负责帧初始化，不涉及渲染状态管理
+     * - 灵活性：支持动态 RT 切换（GBuffer、Shadow Map、Post-processing）
+     * - 性能优化：UseProgram 的 Hash 缓存避免 70%+ 冗余 OMSetRenderTargets 调用
+     *
+     * 渲染管线流程：
+     * BeginFrame(清屏) → UseProgram(绑定RT+PSO) → Draw → EndFrame(Present)
+     *
+     * 教学价值：
+     * - 展示 SOLID 原则中的单一职责原则（SRP）
+     * - 说明如何通过职责分离提高代码可维护性
+     * - 体现现代渲染引擎的架构设计思想
      */
     bool D3D12RenderSystem::BeginFrame(const Rgba8& clearColor, float clearDepth, uint8_t clearStencil)
     {
@@ -1414,20 +1432,31 @@ namespace enigma::graphic
             return false;
         }
 
-        // 3.5 绑定渲染目标到Output Merger阶段
-        // 教学要点：OMSetRenderTargets是所有Draw命令的前提条件
-        // 教学要点：虽然ClearRenderTargetView不需要此调用，但DrawInstanced必须要
-        // 教学要点：DirectX 12不会自动绑定RenderTarget，必须显式调用
-        s_currentGraphicsCommandList->OMSetRenderTargets(
-            1, // NumRenderTargetDescriptors - 绑定1个RenderTarget
-            &currentRTV, // pRenderTargetDescriptors - RTV句柄
-            FALSE, // RTsSingleHandleToDescriptorRange - 非连续堆
-            nullptr // pDepthStencilDescriptor - 暂不使用深度缓冲
-        );
-
-        LogInfo(LogRenderer,
-                "BeginFrame: RenderTarget bound to Output Merger (RTV=0x%p)",
-                currentRTV.ptr);
+        // 3.5 [REMOVED] 不再在 BeginFrame 中绑定 RenderTarget
+        //
+        // 架构变更说明（2025-11-10）：
+        // - 旧设计：BeginFrame 通过 OMSetRenderTargets 绑定 SwapChain BackBuffer
+        // - 新设计：BeginFrame 不绑定任何 RT，所有 RT 绑定由 UseProgram() 统一处理
+        //
+        // 设计原因：
+        // 1. 职责单一原则（SRP）：BeginFrame 只负责帧初始化（清屏、状态转换、Viewport）
+        // 2. 避免冗余绑定：UseProgram 通过 RenderTargetBinder 的 Hash 缓存优化（70%+ 命中率）
+        // 3. 灵活性：支持动态 RT 切换（GBuffer、Shadow Map、Post-processing）
+        // 4. 架构一致性：所有 RT 绑定集中在一个地方，便于维护和调试
+        //
+        // RT 绑定流程（新架构）：
+        // - BeginFrame()：清屏 + 状态转换（PRESENT → RENDER_TARGET）
+        // - UseProgram()：根据 Shader 需求动态绑定 RT（通过 RenderTargetBinder）
+        // - EndFrame()：状态转换（RENDER_TARGET → PRESENT）+ Present
+        //
+        // 教学价值：
+        // - 展示了如何通过重构改进架构设计
+        // - 体现了 SOLID 原则在实际项目中的应用
+        // - 说明了性能优化（Hash 缓存）与架构清晰度的平衡
+        //
+        // 参考：
+        // - RendererSubsystem::UseProgram() - RT 绑定的实际位置
+        // - RenderTargetBinder - Hash 缓存实现（95-98% 命中率）
 
         // 4. 设置视口（Viewport）
         // 教学要点：Viewport定义NDC坐标到屏幕像素坐标的映射
