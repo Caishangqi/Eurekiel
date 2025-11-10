@@ -365,11 +365,6 @@ namespace enigma::graphic
 
         // 清空格式化名称，让GetDebugName()重新生成
         m_formattedDebugName.clear();
-
-        // TODO: 设置DSV和SRV描述符的调试名称
-        // 这需要等待描述符管理器实现后添加
-        // if (m_hasValidDSV) { /* 设置DSV调试名称 */ }
-        // if (m_hasValidSRV) { /* 设置SRV调试名称 */ }
     }
 
     /**

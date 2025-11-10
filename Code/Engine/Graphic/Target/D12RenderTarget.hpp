@@ -620,33 +620,4 @@ namespace enigma::graphic
         // Builder需要访问私有构造函数
         friend class Builder;
     };
-
-    // ============================================================================
-    // 📖 使用示例 (对应Iris使用模式)
-    // ============================================================================
-    /*
-
-    // Iris Java代码风格:
-    // RenderTarget colorTarget = RenderTarget.builder()
-    //     .setName("colorTarget0")
-    //     .setInternalFormat(InternalTextureFormat.RGBA8)
-    //     .setDimensions(1920, 1080)
-    //     .build();
-
-    // 对应的DirectX 12 C++代码:
-    auto colorTarget = D12RenderTarget::Create()
-        .SetName("colorTarget0")
-        .SetFormat(DXGI_FORMAT_R8G8B8A8_UNORM)
-        .SetDimensions(1920, 1080)
-        .SetLinearFilter(true)
-        .Build();
-
-    // 访问纹理 (对应Iris getMainTexture()):
-    auto mainTex = colorTarget->GetMainTexture();
-    auto altTex = colorTarget->GetAltTexture();
-
-    // 调整尺寸 (对应Iris resize):
-    colorTarget->ResizeIfNeeded(2560, 1440);
-
-    */
 } // namespace enigma::graphic

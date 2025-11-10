@@ -1576,6 +1576,13 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     // - 委托给D3D12RenderSystem的底层DrawIndexed API
     // - 对应OpenGL的glDrawElements
 
+    // [FIX] 设置图元拓扑为三角形列表
+    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (cmdList)
+    {
+        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
     LogDebug(LogRenderer,

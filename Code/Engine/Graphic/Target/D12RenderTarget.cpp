@@ -72,14 +72,22 @@ void D12RenderTarget::InitializeTextures(int width, int height)
     // Milestone 3.0 Bug Fix: RenderTarget必须同时支持RTV和SRV
     // - RTV用于渲染输出 (OMSetRenderTargets)
     // - SRV用于着色器采样 (历史帧读取/Ping-Pong渲染)
-    mainTexInfo.usage     = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
-    mainTexInfo.debugName = (GetDebugName() + "_MainTex").c_str();
+    mainTexInfo.usage = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
+
+    // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
+    // Bug: (GetDebugName() + "_MainTex").c_str() 返回的指针在表达式结束后立即悬垂
+    // Fix: 使用局部std::string变量延长临时对象生命周期
+    std::string mainTexDebugName = GetDebugName() + "_MainTex";
+    mainTexInfo.debugName        = mainTexDebugName.c_str();
 
     m_mainTexture = std::make_shared<D12Texture>(mainTexInfo);
 
     // 创建替代纹理 (对应Iris altTexture - 用于Ping-Pong渲染)
     TextureCreateInfo altTexInfo = mainTexInfo;
-    altTexInfo.debugName         = (GetDebugName() + "_AltTex").c_str();
+
+    // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
+    std::string altTexDebugName = GetDebugName() + "_AltTex";
+    altTexInfo.debugName        = altTexDebugName.c_str();
 
     m_altTexture = std::make_shared<D12Texture>(altTexInfo);
 
@@ -281,7 +289,7 @@ std::string D12RenderTarget::GetDebugInfo() const
               "  Alt Texture Index: %u\n"
               "  Bindless Registered: %s\n"
               "  Valid: %s",
-              m_debugName.c_str(),
+              m_debugName,
               m_width, m_height,
               m_format,
               m_sampleCount,
@@ -426,7 +434,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Failed to register main texture for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             return std::nullopt;
         }
     }
@@ -443,7 +451,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Failed to register alt texture for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             return std::nullopt;
         }
     }
@@ -453,7 +461,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
     // 只有内部纹理需要索引，RenderTarget作为容器管理这些索引
     core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                    "RegisterBindless: RenderTarget '%s' registered (main=%u, alt=%u)",
-                   m_debugName.c_str(), m_mainTextureIndex, m_altTextureIndex);
+                   m_debugName, m_mainTextureIndex, m_altTextureIndex);
 
     return m_mainTextureIndex; // 返回主纹理索引
 }

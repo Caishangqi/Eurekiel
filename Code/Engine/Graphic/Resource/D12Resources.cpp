@@ -147,7 +147,7 @@ namespace enigma::graphic
 
         core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                        "SetInitialData: Cached %zu bytes for '%s'",
-                       dataSize, m_debugName.c_str());
+                       dataSize, m_debugName);
     }
 
     /**
@@ -169,7 +169,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: No CPU data for '%s'. Call SetInitialData() first.",
-                           m_debugName.c_str());
+                           m_debugName);
             return false;
         }
 
@@ -178,7 +178,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: Resource '%s' is invalid",
-                           m_debugName.c_str());
+                           m_debugName);
             return false;
         }
 
@@ -193,7 +193,7 @@ namespace enigma::graphic
             m_isUploaded = true;
             core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
                           "Upload: Successfully marked '%s' as uploaded (no CPU data required)",
-                          m_debugName.c_str());
+                          m_debugName);
             return true;
         }
 
@@ -220,7 +220,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: Failed to create UploadContext for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             return false;
         }
 
@@ -249,14 +249,14 @@ namespace enigma::graphic
         uint32_t executingBefore = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
                       "Upload[%s]: BEFORE Acquire - Available=%u, Executing=%u",
-                      m_debugName.c_str(), availableBefore, executingBefore);
+                      m_debugName, availableBefore, executingBefore);
 
         auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Graphics, "ResourceUpload");
         if (!commandList)
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: Failed to acquire Graphics command list for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "  Available Graphics Lists: %u, Executing: %u",
                            availableBefore, executingBefore);
@@ -264,8 +264,7 @@ namespace enigma::graphic
         }
 
         // 6. 资源状态转换: 当前状态 → COPY_DEST
-        D3D12RenderSystem::TransitionResource(commandList, m_resource, m_currentState,
-                                              D3D12_RESOURCE_STATE_COPY_DEST, m_debugName.c_str());
+        D3D12RenderSystem::TransitionResource(commandList, m_resource, m_currentState, D3D12_RESOURCE_STATE_COPY_DEST, m_debugName.c_str());
 
         // 7. 调用子类实现的上传逻辑
         bool uploadSuccess = UploadToGPU(commandList, uploadContext);
@@ -273,7 +272,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "Upload: UploadToGPU failed for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             return false;
         }
 
@@ -291,14 +290,14 @@ namespace enigma::graphic
         // 9.5. 立即回收已完成的命令列表 - 确保资源池化正确运作
         // 教学要点: WaitForFence() 只等待GPU完成，不会自动回收命令列表
         // UpdateCompletedCommandLists() 检查围栏值，将完成的命令列表放回可用队列
-        // 这是 DirectX 12 命令列表池化的正确实践 ⭐⭐⭐
+        // 这是 DirectX 12 命令列表池化的正确实践
 
         // 🔍 DEBUG: 在回收前检查状态
         uint32_t availableBeforeRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
         uint32_t executingBeforeRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
                       "Upload[%s]: BEFORE Recycle - Available=%u, Executing=%u",
-                      m_debugName.c_str(), availableBeforeRecycle, executingBeforeRecycle);
+                      m_debugName, availableBeforeRecycle, executingBeforeRecycle);
 
         cmdListManager->UpdateCompletedCommandLists();
 
@@ -307,7 +306,7 @@ namespace enigma::graphic
         uint32_t executingAfterRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(RendererSubsystem::GetStaticSubsystemName(),
                       "Upload[%s]: AFTER Recycle - Available=%u, Executing=%u (Recycled=%u)",
-                      m_debugName.c_str(), availableAfterRecycle, executingAfterRecycle,
+                      m_debugName, availableAfterRecycle, executingAfterRecycle,
                       availableAfterRecycle - availableBeforeRecycle);
 
         // 10. 更新资源状态和上传标记
@@ -316,7 +315,7 @@ namespace enigma::graphic
 
         core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                        "Upload: Successfully uploaded '%s' (%zu bytes)",
-                       m_debugName.c_str(), GetCPUDataSize());
+                       m_debugName, GetCPUDataSize());
 
         return true;
     }
@@ -343,7 +342,7 @@ namespace enigma::graphic
         {
             core::LogWarn(RendererSubsystem::GetStaticSubsystemName(),
                           "RegisterBindless: Resource '%s' is already registered (index=%u)",
-                          m_debugName.c_str(), m_bindlessIndex);
+                          m_debugName, m_bindlessIndex);
             return std::nullopt;
         }
 
@@ -354,7 +353,7 @@ namespace enigma::graphic
                            "RegisterBindless: SAFETY VIOLATION - Resource '%s' not uploaded yet!\n"
                            "  True Bindless Flow: Create() → Upload() → RegisterBindless()\n"
                            "  Please call Upload() before RegisterBindless()",
-                           m_debugName.c_str());
+                           m_debugName);
             return std::nullopt;
         }
 
@@ -363,7 +362,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Resource '%s' is invalid",
-                           m_debugName.c_str());
+                           m_debugName);
             return std::nullopt;
         }
 
@@ -388,7 +387,7 @@ namespace enigma::graphic
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Failed to allocate index for '%s'",
-                           m_debugName.c_str());
+                           m_debugName);
             return std::nullopt;
         }
 
@@ -400,7 +399,7 @@ namespace enigma::graphic
 
         core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                        "RegisterBindless: Resource '%s' registered (index=%u)",
-                       m_debugName.c_str(), index);
+                       m_debugName, index);
 
         return index;
     }
@@ -440,14 +439,14 @@ namespace enigma::graphic
         {
             core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                            "UnregisterBindless: Resource '%s' unregistered (index=%u)",
-                           m_debugName.c_str(), m_bindlessIndex);
+                           m_debugName, m_bindlessIndex);
             ClearBindlessIndex();
         }
         else
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "UnregisterBindless: Failed to free index %u for '%s'",
-                           m_bindlessIndex, m_debugName.c_str());
+                           m_bindlessIndex, m_debugName);
         }
 
         return success;
