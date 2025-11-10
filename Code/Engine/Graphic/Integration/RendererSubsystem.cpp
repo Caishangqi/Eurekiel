@@ -1279,8 +1279,7 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
 
 void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs)
 {
-    UNUSED(rtOutputs);
-    // TODO: 通过ShaderPackManager获取ShaderProgram指针
+    UNUSED(rtOutputs)
     // 当前简化实现：直接从ShaderPack获取
     const ShaderSource* shaderSource = GetShaderProgram(programId, "world0");
     if (!shaderSource)

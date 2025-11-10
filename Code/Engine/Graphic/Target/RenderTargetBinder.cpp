@@ -308,15 +308,18 @@ namespace enigma::graphic
         case RTType::DepthTex:
             // DepthTex不应该作为RTV使用
             LOG_WARN("RenderTargetBinder", "DepthTex cannot be used as RTV");
+            ERROR_RECOVERABLE("DepthTex cannot be used as RTV")
             break;
 
         case RTType::ShadowTex:
             // ShadowTex是只读纹理，不能作为RTV使用
             LOG_WARN("RenderTargetBinder", "ShadowTex cannot be used as RTV (read-only texture)");
+            ERROR_RECOVERABLE("ShadowTex cannot be used as RTV (read-only texture)")
             break;
 
         default:
             LogError("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(type));
+            ERROR_RECOVERABLE("Unknown RTType")
             break;
         }
 
@@ -333,8 +336,8 @@ namespace enigma::graphic
         // 其他类型不能作为DSV使用
         if (type != RTType::DepthTex)
         {
-            LOG_WARN_F("RenderTargetBinder", "Only DepthTex can be used as DSV, got type=%d",
-                       static_cast<int>(type));
+            LogWarn("RenderTargetBinder", "Only DepthTex can be used as DSV, got type=%d", static_cast<int>(type));
+            ERROR_RECOVERABLE("Only DepthTex can be used as DSV")
         }
 
         return D3D12_CPU_DESCRIPTOR_HANDLE{0};
@@ -345,7 +348,7 @@ namespace enigma::graphic
         if (!cmdList)
         {
             LogError("RenderTargetBinder", "PerformClearOperations: cmdList is null");
-            return;
+            ERROR_AND_DIE("PerformClearOperations: cmdList is null")
         }
 
         // 根据LoadAction决定是否执行Clear操作
