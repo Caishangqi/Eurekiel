@@ -53,9 +53,9 @@ PSOutput main(PSInput input)
     output.color0 = input.Color;
 
     // [TEST] 其他RT输出测试数据
-    output.color1 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
-    output.color2 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
-    output.color3 = float4(0.0, 0.0, 0.0, 1.0); // 黑色
+    output.color1 = input.Color; // 黑色
+    output.color2 = input.Color; // 黑色
+    output.color3 = input.Color; // 黑色
 
     return output;
 }
