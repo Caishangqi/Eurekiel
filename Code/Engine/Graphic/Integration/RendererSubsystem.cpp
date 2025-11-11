@@ -1519,7 +1519,7 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
 
         // [TODO] 设置相机位置 (cameraPosition - CameraAndPlayerUniforms)
         // CameraAndPlayerUniforms 尚未注册到UniformManager，暂时保留旧API
-        m_uniformManager->Uniform3f("cameraPosition", camera.GetPosition());
+        // m_uniformManager->Uniform3f("cameraPosition", camera.GetPosition());
 
         // ========================================================================
         // 2. [REFACTORED] 使用新的UploadBuffer API上传Camera矩阵
@@ -2121,105 +2121,6 @@ int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
 
     // 委托DepthTextureManager查询
     return m_depthTextureManager->GetActiveDepthBufferIndex();
-}
-
-// ============================================================================
-// Phase 3: 自定义材质纹理上传 API 实现
-// ============================================================================
-
-void RendererSubsystem::UploadCustomTexture(uint8_t slotIndex, const std::shared_ptr<D12Texture>& texture)
-{
-    // 参数验证
-    if (slotIndex >= 16)
-    {
-        LogError(LogRenderer, "UploadCustomTexture: Slot index {} out of range [0-15]", slotIndex);
-        return;
-    }
-
-    if (!texture)
-    {
-        LogError(LogRenderer, "UploadCustomTexture: Texture pointer is null for slot {}", slotIndex);
-        return;
-    }
-
-    // 获取纹理的 Bindless 索引
-    uint32_t bindlessIndex = texture->GetBindlessIndex();
-    if (bindlessIndex == BindlessIndexAllocator::INVALID_INDEX)
-    {
-        LogError(LogRenderer,
-                 "UploadCustomTexture: Texture has invalid Bindless index for slot {}",
-                 slotIndex);
-        return;
-    }
-
-    // 委托 UniformManager 更新槽位
-    if (!m_uniformManager)
-    {
-        LogError(LogRenderer, "UploadCustomTexture: UniformManager not initialized");
-        return;
-    }
-
-    m_uniformManager->UpdateCustomImageSlot(slotIndex, bindlessIndex);
-
-    LogInfo(LogRenderer,
-            "UploadCustomTexture: Uploaded texture to slot {} (Bindless index: {})",
-            slotIndex, bindlessIndex);
-}
-
-void RendererSubsystem::UploadCustomTextures(const std::vector<std::pair<uint8_t, std::shared_ptr<D12Texture>>>& textures)
-{
-    if (textures.empty())
-    {
-        LogWarn(LogRenderer, "UploadCustomTextures: Empty texture list provided");
-        return;
-    }
-
-    LogInfo(LogRenderer, "UploadCustomTextures: Uploading {} textures", textures.size());
-
-    // 遍历并调用单个上传
-    for (const auto& [slotIndex, texture] : textures)
-    {
-        UploadCustomTexture(slotIndex, texture);
-    }
-
-    LogInfo(LogRenderer, "UploadCustomTextures: Batch upload completed");
-}
-
-void RendererSubsystem::ClearCustomTextureSlot(uint8_t slotIndex)
-{
-    // 参数验证
-    if (slotIndex >= 16)
-    {
-        LogError(LogRenderer, "ClearCustomTextureSlot: Slot index {} out of range [0-15]", slotIndex);
-        return;
-    }
-
-    // 委托 UniformManager 设置为无效索引
-    if (!m_uniformManager)
-    {
-        LogError(LogRenderer, "ClearCustomTextureSlot: UniformManager not initialized");
-        return;
-    }
-
-    m_uniformManager->UpdateCustomImageSlot(slotIndex, BindlessIndexAllocator::INVALID_INDEX);
-
-    LogInfo(LogRenderer, "ClearCustomTextureSlot: Clearing slot {}", slotIndex);
-}
-
-void RendererSubsystem::ResetCustomTextures()
-{
-    LogInfo(LogRenderer, "ResetCustomTextures: Resetting all 16 custom texture slots");
-
-    // 委托 UniformManager 重置所有槽位
-    if (!m_uniformManager)
-    {
-        LogError(LogRenderer, "ResetCustomTextures: UniformManager not initialized");
-        return;
-    }
-
-    m_uniformManager->ResetCustomImageSlots();
-
-    LogInfo(LogRenderer, "ResetCustomTextures: All custom texture slots reset");
 }
 
 // ========================================================================
