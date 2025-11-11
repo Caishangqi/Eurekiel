@@ -289,7 +289,6 @@
         <ClCompile Include="Graphic\Shader\ShaderPack\ShaderProgramBuilder.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\ShaderSource.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderPack\ProgramSet.cpp" />
-        <ClCompile Include="Graphic\Shader\Uniform\RootConstants.cpp"/>
         <ClCompile Include="Graphic\Shader\Uniform\UniformManager.cpp" />
         <ClCompile Include="Graphic\Target\D12DepthTexture.cpp" />
         <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
@@ -829,7 +828,6 @@
         <ClInclude Include="Graphic\Shader\Uniform\PlayerStatusUniforms.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\RenderingUniforms.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\ColorTargetsIndexBuffer.hpp" />
-        <ClInclude Include="Graphic\Shader\Uniform\RootConstants.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\ScreenAndSystemUniforms.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\UniformManager.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\WorldAndWeatherUniforms.hpp" />

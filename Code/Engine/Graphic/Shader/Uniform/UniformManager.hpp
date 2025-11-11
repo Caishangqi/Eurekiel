@@ -8,29 +8,6 @@
 #include <memory>
 #include <typeindex>
 
-#include "Engine/Math/Vec2.hpp"
-#include "Engine/Math/Vec3.hpp"
-#include "Engine/Math/Vec4.hpp"
-#include "Engine/Math/Mat44.hpp"
-#include "Engine/Math/IntVec2.hpp"
-#include "Engine/Math/IntVec3.hpp"
-#include "Engine/Math/IntVec4.hpp"
-
-// 引入 Uniform 结构体 (48 bytes Root Constants 架构)
-#include "RootConstants.hpp"
-#include "ColorTargetsIndexBuffer.hpp"      //  colortex0-15 (Main/Alt)
-#include "DepthTexturesIndexBuffer.hpp"      //  新增 (depthtex0/1/2)
-#include "ShadowColorIndexBuffer.hpp"       //  新增 (shadowcolor0-7)
-#include "ShadowTexturesIndexBuffer.hpp"     //  新增 (shadowtex0/1)
-#include "CustomImageIndexBuffer.hpp"        //  新增 自定义材质槽位 (customImage0-15)
-#include "CameraAndPlayerUniforms.hpp"
-// [REMOVED] #include "PlayerStatusUniforms.hpp"  // 已被 PerObjectUniforms 替代
-#include "ScreenAndSystemUniforms.hpp"
-#include "IDUniforms.hpp"
-#include "WorldAndWeatherUniforms.hpp"
-#include "BiomeAndDimensionUniforms.hpp"
-#include "RenderingUniforms.hpp"
-#include "MatricesUniforms.hpp"
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
