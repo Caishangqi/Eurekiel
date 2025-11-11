@@ -7,116 +7,106 @@
 namespace enigma::graphic
 {
     /**
-     * @brief BindlessRootSignature类 - RENDERTARGETS混合架构Root Signature
+     * @brief BindlessRootSignature类 - Root CBV架构Root Signature
      *
      * 教学要点:
-     * 1. 52 bytes Root Constants - 13个uint32_t索引，支持细粒度更新
-     * 2. SM6.6 Bindless架构：移除所有Descriptor Table，全局堆直接索引
+     * 1. Root CBV架构 - 14个Root Descriptor (b0-b13)，性能最优
+     * 2. SM6.6 Bindless架构：移除Descriptor Table，全局堆直接索引
      * 3. 全局共享Root Signature：所有PSO使用同一个Root Signature
-     * 4. 极致性能：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
+     * 4. 30 DWORDs预算：28 (Root CBV) + 1 (Root Constants) + 1 (Descriptor Table预留)
      *
-     * 架构对比:
-     * - True Bindless (8 bytes): uniformBufferIndex + renderTargetIndicesBase
-     * - 扩展RENDERTARGETS架构 (52 bytes): 13个独立索引，支持Iris兼容性 + 自定义材质
+     * Root Signature布局 (30 DWORDs = 46.9% budget):
+     * ```
+     * Slot 0-13:  Root CBV (28 DWORDs, 2 DWORDs each)
+     *   - b0:  CameraAndPlayerUniforms
+     *   - b1:  ScreenUniforms
+     *   - b2:  IdUniforms
+     *   - b3:  WorldUniforms
+     *   - b4:  BiomeUniforms
+     *   - b5:  RenderingUniforms
+     *   - b6:  RenderTargetsIndexBuffer
+     *   - b7:  MatricesUniforms [PHASE 1 ACTIVE]
+     *   - b8:  DepthTexturesIndexBuffer
+     *   - b9:  ShadowUniforms
+     *   - b10: [Reserved]
+     *   - b11: ColorTargetsIndexBuffer
+     *   - b12: ShadowColorIndexBuffer
+     *   - b13: PlayerUniforms
+     * Slot 14:    Root Constants (1 DWORD) - NoiseTexture index (b14 space1)
+     * Slot 15:    Descriptor Table预留 (1 DWORD) - Custom Buffer
+     * ```
      *
-     * 对应HLSL (Common.hlsl):
+     * 对应HLSL:
      * ```hlsl
-     * cbuffer RootConstants : register(b0, space0) {
-     *     uint cameraAndPlayerBufferIndex;       // Offset 0
-     *     uint playerStatusBufferIndex;          // Offset 4
-     *     uint screenAndSystemBufferIndex;       // Offset 8
-     *     uint idBufferIndex;                    // Offset 12
-     *     uint worldAndWeatherBufferIndex;       // Offset 16
-     *     uint biomeAndDimensionBufferIndex;     // Offset 20
-     *     uint renderingBufferIndex;             // Offset 24
-     *     uint matricesBufferIndex;              // Offset 28
-     *     uint renderTargetsBufferIndex;         // Offset 32 ⭐ 关键
-     *     uint depthTextureBufferIndex;          // Offset 36
-     *     uint shadowBufferIndex;                // Offset 40
-     *     uint noiseTextureIndex;                // Offset 44
-     *     uint customImageBufferIndex;        // Offset 48 ⭐ 自定义材质
+     * cbuffer Matrices : register(b7) {
+     *     MatricesUniforms matrices;
+     * };
+     * cbuffer RootConstants : register(b14, space1) {
+     *     uint noiseTextureIndex;
      * };
      * ```
      *
-     * Root Signature布局:
-     * ```
-     * [Root Constants 13 DWORDs = 52 bytes]
-     * - 13个StructuredBuffer/Texture索引
-     * - 支持部分更新 (SetGraphicsRoot32BitConstant)
-     * ```
+     * 架构优势:
+     * - Root CBV性能最优（GPU硬件优化路径）
+     * - 无需offset参数，Shader代码简化
+     * - 避免StructuredBuffer覆写Bug
      *
-     * HLSL Bindless访问示例:
-     * ```hlsl
-     * // 获取RenderTarget（Main/Alt自动处理）
-     * Texture2D GetRenderTarget(uint rtIndex) {
-     *     StructuredBuffer<RenderTargetsBuffer> rtBuffer =
-     *         ResourceDescriptorHeap[renderTargetsBufferIndex];
-     *     uint textureIndex = rtBuffer[0].readIndices[rtIndex];
-     *     return ResourceDescriptorHeap[textureIndex];
-     * }
-     *
-     * // Iris兼容宏
-     * #define colortex0 GetRenderTarget(0)
-     * float4 color = colortex0.Sample(linearSampler, uv);
-     * ```
-     *
-     * @note 这是RENDERTARGETS混合架构的核心组件，全局唯一，所有PSO共享
+     * @note Phase 1只激活Slot 7 (Matrices)，其他Slot预留
      */
     class BindlessRootSignature final
     {
     public:
         /**
-         * @brief Root Constants配置常量
+         * @brief Root Signature布局枚举 (30 DWORDs总预算)
          *
          * 教学要点:
-         * 1. 扩展RENDERTARGETS架构：52 bytes (13个uint32_t)
-         * 2. DX12限制：最多64 DWORDs（256字节）
-         * 3. 对应Common.hlsl中的RootConstants定义
+         * 1. Root CBV: 每个占用2 DWORDs (64位GPU虚拟地址)
+         * 2. Root Constants: 每个DWORD占用1 DWORD
+         * 3. Descriptor Table: 占用1 DWORD (GPU Heap偏移)
+         * 4. DX12限制：最多64 DWORDs（256字节）
          *
-         * 设计决策:
-         * - 52 bytes = 13 DWORDs 支持所有Iris Buffer索引 + 自定义材质
-         * - 每个索引4字节，可独立更新（细粒度控制）
-         * - 预留空间：64 DWORDs - 13 = 51 DWORDs 可用于未来扩展
+         * Phase 1实现:
+         * - 激活Slot 7 (MatricesUniforms)
+         * - 保留其他13个Root CBV槽位
+         * - 预算使用: 30/64 DWORDs (46.9%)
          */
-        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 14; // 13 DWORDs = 52 bytes
-        static constexpr uint32_t ROOT_CONSTANTS_SIZE_BYTES       = ROOT_CONSTANTS_NUM_32BIT_VALUES * 4;
+        enum RootParameterIndex : uint32_t
+        {
+            // Root CBV槽位 (Slot 0-13, 28 DWORDs)
+            ROOT_CBV_CAMERA_AND_PLAYER = 0, // b0  - CameraAndPlayerUniforms
+            ROOT_CBV_SCREEN = 1, // b1  - ScreenUniforms
+            ROOT_CBV_ID = 2, // b2  - IdUniforms
+            ROOT_CBV_WORLD = 3, // b3  - WorldUniforms
+            ROOT_CBV_BIOME = 4, // b4  - BiomeUniforms
+            ROOT_CBV_RENDERING = 5, // b5  - RenderingUniforms
+            ROOT_CBV_RENDER_TARGETS = 6, // b6  - RenderTargetsIndexBuffer
+            ROOT_CBV_MATRICES = 7, // b7  - MatricesUniforms [PHASE 1]
+            ROOT_CBV_DEPTH_TEXTURES = 8, // b8  - DepthTexturesIndexBuffer
+            ROOT_CBV_SHADOW = 9, // b9  - ShadowUniforms
+            ROOT_CBV_RESERVED_10 = 10, // b10 - [Reserved]
+            ROOT_CBV_COLOR_TARGETS = 11, // b11 - ColorTargetsIndexBuffer
+            ROOT_CBV_SHADOW_COLOR = 12, // b12 - ShadowColorIndexBuffer
+            ROOT_CBV_PLAYER = 13, // b13 - PlayerUniforms
+
+            // 其他Root Parameters
+            ROOT_CONSTANTS_NOISE_TEXTURE = 14, // b14 space1 - NoiseTexture index (1 DWORD)
+            ROOT_DESCRIPTOR_TABLE_CUSTOM = 15, // 预留Custom Buffer (1 DWORD)
+
+            ROOT_PARAMETER_COUNT = 16
+        };
 
         /**
-         * @brief Root Parameter索引常量
+         * @brief Root Constants配置
          */
-        static constexpr uint32_t ROOT_PARAMETER_INDEX_CONSTANTS = 0; // 唯一的Root Parameter
+        static constexpr uint32_t ROOT_CONSTANTS_NUM_32BIT_VALUES = 1; // NoiseTexture index
+        static constexpr uint32_t ROOT_CONSTANTS_SIZE_BYTES       = 4; // 1 DWORD = 4 bytes
 
         /**
-         * @brief Root Constants字段偏移量（DWORD单位）
-         *
-         * 教学要点:
-         * 1. 每个索引占用1个DWORD（4字节）
-         * 2. 偏移量用于SetGraphicsRoot32BitConstant细粒度更新
-         * 3. 完全对应Common.hlsl中的RootConstants字段顺序
-         *
-         * 使用示例:
-         * ```cpp
-         * // 只更新renderTargetsBufferIndex
-         * cmdList->SetGraphicsRoot32BitConstant(
-         *     ROOT_PARAMETER_INDEX_CONSTANTS,
-         *     rtBufferIndex,
-         *     OFFSET_RENDER_TARGETS_BUFFER_INDEX
-         * );
-         * ```
+         * @brief Root Signature预算统计
          */
-        static constexpr uint32_t OFFSET_CAMERA_AND_PLAYER_BUFFER_INDEX   = 0; // Offset 0
-        static constexpr uint32_t OFFSET_PLAYER_STATUS_BUFFER_INDEX       = 1; // Offset 4
-        static constexpr uint32_t OFFSET_SCREEN_AND_SYSTEM_BUFFER_INDEX   = 2; // Offset 8
-        static constexpr uint32_t OFFSET_ID_BUFFER_INDEX                  = 3; // Offset 12
-        static constexpr uint32_t OFFSET_WORLD_AND_WEATHER_BUFFER_INDEX   = 4; // Offset 16
-        static constexpr uint32_t OFFSET_BIOME_AND_DIMENSION_BUFFER_INDEX = 5; // Offset 20
-        static constexpr uint32_t OFFSET_RENDERING_BUFFER_INDEX           = 6; // Offset 24
-        static constexpr uint32_t OFFSET_MATRICES_BUFFER_INDEX            = 7; // Offset 28
-        static constexpr uint32_t OFFSET_RENDER_TARGETS_BUFFER_INDEX      = 8; // Offset 32 ⭐ 关键
-        static constexpr uint32_t OFFSET_DEPTH_TEXTURE_BUFFER_INDEX       = 9; // Offset 36
-        static constexpr uint32_t OFFSET_SHADOW_BUFFER_INDEX              = 10; // Offset 40
-        static constexpr uint32_t OFFSET_NOISE_TEXTURE_INDEX              = 11; // Offset 44
-        static constexpr uint32_t OFFSET_CUSTOM_IMAGE_BUFFER_INDEX        = 12; // Offset 48 ⭐ 自定义材质
+        static constexpr uint32_t ROOT_SIGNATURE_DWORD_COUNT = 30; // 28 + 1 + 1
+        static constexpr uint32_t ROOT_SIGNATURE_MAX_DWORDS  = 64; // DX12限制
+        static constexpr float    ROOT_SIGNATURE_BUDGET_USED = 46.9f; // 30/64 = 46.9%
 
     public:
         /**
@@ -233,24 +223,42 @@ namespace enigma::graphic
          * @brief 设置单个32位Root Constant
          * @param commandList 命令列表
          * @param value 32位值
-         * @param offset 偏移量（32位值单位，使用OFFSET_*常量）
+         * @param offset 偏移量（32位值单位，默认0）
          *
          * 教学要点: 优化的单值设置，避免memcpy开销
          *
          * 使用示例:
          * ```cpp
-         * // 只更新renderTargetsBufferIndex
-         * rootSignature->SetRootConstant32Bit(
-         *     cmdList,
-         *     rtBufferIndex,
-         *     BindlessRootSignature::OFFSET_RENDER_TARGETS_BUFFER_INDEX
-         * );
+         * // 设置NoiseTexture索引
+         * rootSignature->SetRootConstant32Bit(cmdList, noiseTextureIndex);
          * ```
          */
         void SetRootConstant32Bit(
             ID3D12GraphicsCommandList* commandList,
             uint32_t                   value,
-            uint32_t                   offset) const;
+            uint32_t                   offset = 0) const;
+
+        /**
+         * @brief 绑定Root CBV到指定槽位
+         * @param commandList 命令列表
+         * @param slot Root Parameter索引 (使用RootParameterIndex枚举)
+         * @param bufferLocation Buffer的GPU虚拟地址
+         *
+         * 教学要点:
+         * 1. Root CBV直接绑定GPU虚拟地址，无需Descriptor Heap
+         * 2. 性能最优 - GPU硬件优化路径
+         * 3. Phase 1只使用Slot 7 (Matrices)
+         *
+         * 使用示例:
+         * ```cpp
+         * D3D12_GPU_VIRTUAL_ADDRESS gpuAddr = buffer->GetGPUVirtualAddress();
+         * rootSignature->SetRootCBV(cmdList, ROOT_CBV_MATRICES, gpuAddr);
+         * ```
+         */
+        void SetRootCBV(
+            ID3D12GraphicsCommandList* commandList,
+            RootParameterIndex         slot,
+            D3D12_GPU_VIRTUAL_ADDRESS  bufferLocation) const;
 
     private:
         // Root Signature对象

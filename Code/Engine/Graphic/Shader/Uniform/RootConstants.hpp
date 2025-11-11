@@ -25,7 +25,7 @@ namespace enigma::graphic
      *    - shadowBuffer: shadowcolor0-7（阴影渲染，flip部分）
      * 2. 不需要Flip的纹理（只读或引擎生成）:
      *    - depthTextures: depthtex0/1/2（引擎渲染过程生成）
-     *    - shadowBuffer: shadowtex0/1（阴影深度，固定部分）⭐
+     *    - shadowBuffer: shadowtex0/1（阴影深度，固定部分）
      *    - noiseTexture: 静态噪声纹理（RGB8, 256×256）
      *
      * 激进方案关键:
@@ -47,11 +47,11 @@ namespace enigma::graphic
      *     uint matricesBufferIndex;              // Offset 28
      *
      *     // Texture Buffers with Flip Support (4 bytes)
-     *     uint colorTargetsBufferIndex;          // Offset 32 ⭐ colortex0-15
+     *     uint colorTargetsBufferIndex;          // Offset 32  colortex0-15
      *
      *     // Combined Buffers (8 bytes)
      *     uint depthTexturesBufferIndex;         // Offset 36 (depthtex0/1/2)
-     *     uint shadowBufferIndex;                // Offset 40 ⭐ shadowcolor0-7 + shadowtex0/1（激进合并）
+     *     uint shadowBufferIndex;                // Offset 40  shadowcolor0-7 + shadowtex0/1（激进合并）
      *
      *     // Direct Texture Index (4 bytes)
      *     uint noiseTextureIndex;                // Offset 44 (直接纹理索引)
@@ -64,7 +64,7 @@ namespace enigma::graphic
      * constants.cameraAndPlayerBufferIndex = 10;
      * constants.colorTargetsBufferIndex = 25;        // ColorTargetsIndexBuffer (128 bytes)
      * constants.depthTexturesBufferIndex = 26;       // DepthTexturesIndexBuffer (16 bytes)
-     * constants.shadowBufferIndex = 27;              // ShadowBufferIndex (80 bytes) ⭐ 合并
+     * constants.shadowBufferIndex = 27;              // ShadowBufferIndex (80 bytes)  合并
      * constants.noiseTextureIndex = 5000;            // 直接指向noise texture
      *
      * // 完整更新
@@ -187,7 +187,7 @@ namespace enigma::graphic
         uint32_t matricesBufferIndex;
 
         /**
-         * @brief ColorTargets Buffer索引 ⭐ 主渲染核心
+         * @brief ColorTargets Buffer索引  主渲染核心
          *
          * 指向的Buffer包含（ColorTargetsIndexBuffer，128 bytes）:
          * - readIndices[16]: colortex0-15读取索引（Main或Alt）
@@ -251,7 +251,7 @@ namespace enigma::graphic
         uint32_t noiseTextureIndex;
 
         /**
-         * @brief CustomImage Index Buffer索引 ⭐ 自定义材质支持
+         * @brief CustomImage Index Buffer索引  自定义材质支持
          *
          * 指向的Buffer包含（CustomImageIndexBuffer，256 bytes）:
          * - customImageIndices[16]: customImage0-15的Bindless索引

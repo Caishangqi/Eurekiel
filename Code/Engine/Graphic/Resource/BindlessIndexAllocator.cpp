@@ -16,7 +16,7 @@ namespace enigma::graphic
         // ====================================================================
 
         // 1. 纹理FreeList: 初始化为 [0, 1, 2, ..., 499999] (500K容量)
-        // ⭐ Milestone 2.8修正: 从1M缩减至500K，匹配描述符堆容量
+        //  Milestone 2.8修正: 从1M缩减至500K，匹配描述符堆容量
         constexpr uint32_t textureCapacity = TEXTURE_INDEX_END - TEXTURE_INDEX_START + 1;
         m_textureFreeList.reserve(textureCapacity);
         for (uint32_t i = 0; i < textureCapacity; ++i)
@@ -25,7 +25,7 @@ namespace enigma::graphic
         }
 
         // 2. 缓冲区FreeList: 初始化为 [500000, 500001, ..., 999999] (500K容量)
-        // ⭐ Milestone 2.8修正: 索引范围改为500K-1M，避免超出描述符堆容量
+        //  Milestone 2.8修正: 索引范围改为500K-1M，避免超出描述符堆容量
         constexpr uint32_t bufferCapacity = BUFFER_INDEX_END - BUFFER_INDEX_START + 1;
         m_bufferFreeList.reserve(bufferCapacity);
         for (uint32_t i = 0; i < bufferCapacity; ++i)

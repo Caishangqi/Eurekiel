@@ -48,14 +48,13 @@ struct PSOutput
 PSOutput main(PSInput input)
 {
     PSOutput output;
-
     // [IMPORTANT] 主颜色输出到第一个RT (colortex4)
-    output.color0 = input.Color;
+    output.color0 = input.Color * modelColor;
 
     // [TEST] 其他RT输出测试数据
-    output.color1 = input.Color;
-    output.color2 = input.Color;
-    output.color3 = input.Color;
+    output.color1 = input.Color * modelColor;
+    output.color2 = input.Color * modelColor;
+    output.color3 = input.Color * modelColor;
 
     return output;
 }

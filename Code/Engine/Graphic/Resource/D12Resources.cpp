@@ -221,7 +221,7 @@ namespace enigma::graphic
         }
 
         // 5. 获取Graphics Command List（而非Copy）
-        // ⭐ Milestone 2.8 修复: 使用Graphics Command List上传资源
+        //  Milestone 2.8 修复: 使用Graphics Command List上传资源
         //
         // 教学要点 - 为什么使用Graphics而非Copy？
         // 1. Copy Command List只支持有限的资源状态: COMMON, COPY_SOURCE, COPY_DEST

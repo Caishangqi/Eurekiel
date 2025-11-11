@@ -718,6 +718,7 @@
         <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackHelper.hpp"/>
         <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackReader.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\CustomImageIndexBuffer.hpp"/>
+        <ClInclude Include="Graphic\Shader\Uniform\PerObjectUniforms.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\ShadowColorIndexBuffer.hpp"/>
         <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp"/>
         <!-- DepthTextureConfig.hpp 已合并到 D12DepthTexture.hpp 中 -->

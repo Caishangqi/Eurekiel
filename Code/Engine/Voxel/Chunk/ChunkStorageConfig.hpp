@@ -4,15 +4,10 @@
 
 #include "Engine/Core/LogCategory/LogCategory.hpp"
 DECLARE_LOG_CATEGORY_EXTERN(LogChunkSave)
+using namespace enigma::core;
 
 namespace enigma::voxel
 {
-    // Forward declaration
-    namespace core
-    {
-        class YamlConfiguration;
-    }
-
     /**
      * @brief Chunk save strategy configuration
      */

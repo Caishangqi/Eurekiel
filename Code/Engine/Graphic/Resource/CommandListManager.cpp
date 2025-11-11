@@ -191,7 +191,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
      * 2. GPU执行完命令后，将围栏设置为该值
      * 3. CPU可以查询围栏当前值，判断GPU是否完成了特定批次的命令
      *
-     * ⭐ Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
+     *  Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
      * Microsoft最佳实践: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
      *
      * 为什么需要三个独立Fence:
@@ -220,7 +220,7 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     }
     m_computeFence->SetName(L"Enigma Compute Queue Fence");
 
-    // 创建Copy队列的Fence ⭐ 核心修复
+    // 创建Copy队列的Fence  核心修复
     m_copyFenceValue = 0;
     hr               = device->CreateFence(m_copyFenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_copyFence));
     if (FAILED(hr))
@@ -318,7 +318,7 @@ void CommandListManager::Shutdown()
 
     // 第1步: 等待所有GPU操作完成 - 确保没有资源正在使用中
     // 教学要点: 在释放任何DirectX资源之前，必须确保GPU已完成所有相关操作
-    // ⭐ Milestone 2.8: 等待所有三个队列完成
+    //  Milestone 2.8: 等待所有三个队列完成
     if (m_fenceEvent)
     {
         // 等待Graphics队列
@@ -401,7 +401,7 @@ void CommandListManager::Shutdown()
 /**
  * @brief 等待GPU完成所有命令
  *
- * ⭐ Milestone 2.8: 等待所有三个队列的Fence完成
+ *  Milestone 2.8: 等待所有三个队列的Fence完成
  */
 bool CommandListManager::WaitForGPU(uint32_t timeoutMs)
 {
@@ -820,7 +820,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     ID3D12CommandList* commandLists[] = {commandList};
     queue->ExecuteCommandLists(1, commandLists);
 
-    // ⭐ Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
+    //  Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
     // 教学要点: 每个队列使用独立的Fence避免竞态条件
     uint64_t&    fenceValue = GetFenceValueByType(wrapper->type);
     ID3D12Fence* fence      = GetFenceByType(wrapper->type);
@@ -851,7 +851,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     // 添加到执行中列表
     m_executingLists.push_back(wrapper);
 
-    return fenceValue; // ⭐ Milestone 2.8: 返回对应队列的Fence值
+    return fenceValue; //  Milestone 2.8: 返回对应队列的Fence值
 }
 
 /**
@@ -859,7 +859,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
  *
  * 教学要点: 批量提交可以减少API调用开销
  *
- * ⭐ Milestone 2.8: 重构为支持三个独立Fence
+ *  Milestone 2.8: 重构为支持三个独立Fence
  * - 验证所有命令列表为同一类型
  * - 使用对应类型的Fence和队列
  */
@@ -889,7 +889,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
             return 0;
         }
 
-        // ⭐ Milestone 2.8: 验证所有命令列表类型一致
+        //  Milestone 2.8: 验证所有命令列表类型一致
         if (firstWrapper)
         {
             batchType    = wrapper->type;
@@ -915,7 +915,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         wrappers.push_back(wrapper);
     }
 
-    // ⭐ Milestone 2.8: 获取对应类型的命令队列
+    //  Milestone 2.8: 获取对应类型的命令队列
     ID3D12CommandQueue* queue = GetCommandQueue(batchType);
     if (!queue)
     {
@@ -928,7 +928,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     // 批量提交
     queue->ExecuteCommandLists(count, reinterpret_cast<ID3D12CommandList* const*>(commandLists));
 
-    // ⭐ Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
+    //  Milestone 2.8: 根据Type选择对应的Fence对象和Fence值
     uint64_t&    fenceValue = GetFenceValueByType(batchType);
     ID3D12Fence* fence      = GetFenceByType(batchType);
 
@@ -959,7 +959,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         m_executingLists.push_back(wrapper);
     }
 
-    return fenceValue; // ⭐ Milestone 2.8: 返回对应队列的Fence值
+    return fenceValue; //  Milestone 2.8: 返回对应队列的Fence值
 }
 
 // ========================================================================
@@ -971,7 +971,7 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
  *
  * 教学要点: CPU等待GPU完成特定命令批次的机制
  *
- * ⭐ Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
+ *  Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
  *
  * Microsoft文档: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
  */
@@ -982,7 +982,7 @@ bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
         return false;
     }
 
-    // ⭐ Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
+    //  Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
     // 教学要点: 通过wrapper->type确定应该等待哪个Fence
     CommandListWrapper* wrapper = FindWrapperByFenceValue(fenceValue);
 
@@ -1049,13 +1049,13 @@ bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
 /**
  * @brief 检查围栏值是否已完成
  *
- * ⭐ Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
+ *  Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
  *
  * 教学要点: 与WaitForFence()类似,需要智能查找对应的Fence
  */
 bool CommandListManager::IsFenceCompleted(uint64_t fenceValue) const
 {
-    // ⭐ Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
+    //  Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
     // 注意: 这里需要通过const_cast访问非const方法FindWrapperByFenceValue()
     CommandListWrapper* wrapper = const_cast<CommandListManager*>(this)->FindWrapperByFenceValue(fenceValue);
 
@@ -1097,7 +1097,7 @@ bool CommandListManager::IsFenceCompleted(uint64_t fenceValue) const
 /**
  * @brief 获取当前已完成的围栏值
  *
- * ⭐ Milestone 2.8: 返回三个Fence中的最小完成值 - 最保守的完成值
+ *  Milestone 2.8: 返回三个Fence中的最小完成值 - 最保守的完成值
  *
  * 教学要点: 返回最小值确保这是"所有队列都完成"的安全值
  * - 如果返回最大值,可能某些队列还未完成
@@ -1149,7 +1149,7 @@ uint64_t CommandListManager::GetCompletedFenceValue() const
  * 2. 线程安全设计，支持多线程环境
  * 3. 这是DirectX 12资源池化的核心机制
  *
- * ⭐ Milestone 2.8: 检查每个wrapper对应的Fence - 三个独立Fence架构
+ *  Milestone 2.8: 检查每个wrapper对应的Fence - 三个独立Fence架构
  */
 void CommandListManager::UpdateCompletedCommandLists()
 {
@@ -1169,7 +1169,7 @@ void CommandListManager::UpdateCompletedCommandLists()
 
     size_t recycledCount = 0;
 
-    // ⭐ Milestone 2.8: 显示所有三个Fence的状态
+    //  Milestone 2.8: 显示所有三个Fence的状态
     enigma::core::LogInfo(LogRenderer,
                           "GPU Fence Status - Graphics: %llu/%llu, Compute: %llu/%llu, Copy: %llu/%llu",
                           m_graphicsFence ? m_graphicsFence->GetCompletedValue() : 0, m_graphicsFenceValue,
@@ -1182,7 +1182,7 @@ void CommandListManager::UpdateCompletedCommandLists()
     {
         CommandListWrapper* wrapper = *it;
 
-        // ⭐ Milestone 2.8: 根据wrapper->type获取对应的Fence
+        //  Milestone 2.8: 根据wrapper->type获取对应的Fence
         ID3D12Fence* fence = GetFenceByType(wrapper->type);
         if (!fence)
         {

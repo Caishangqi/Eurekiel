@@ -160,7 +160,7 @@ namespace enigma::graphic
     {
         ShaderCompileOptions opts;
         opts.includePaths.push_back(ShaderCompilationHelper::GetEngineShaderCorePath());
-        opts.entryPoint = "main"; // ⭐ Iris兼容：使用 "main" 作为入口点
+        opts.entryPoint = "main"; //  Iris兼容：使用 "main" 作为入口点
         return opts;
     }
 

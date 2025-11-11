@@ -16,6 +16,8 @@
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp" // Phase 3: Uniform管理器
+#include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
+#include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
@@ -392,6 +394,120 @@ void RendererSubsystem::Startup()
         m_uniformManager = std::make_unique<UniformManager>();
 
         LogInfo(LogRenderer, "UniformManager created successfully");
+
+        // ==================== 注册Matrices Ring Buffer (Phase 1) ====================
+        // 注册MatricesUniforms为PerObject Buffer, 分配10000 draws
+        // 教学要点:
+        // 1. MatricesUniforms原始大小1152字节, 对齐后1280字节
+        // 2. 10000 × 1280 = 12.8 MB (对现代GPU微不足道)
+        // 3. 这是Phase 1唯一的PerObject Buffer
+        m_uniformManager->RegisterBuffer<MatricesUniforms>(
+            UpdateFrequency::PerObject,
+            10000 // maxDrawsPerFrame
+        );
+
+        LogInfo(LogRenderer, "Matrices Ring Buffer allocated: 10000 × 1280 bytes = 12.8 MB");
+
+        // 验证Buffer分配成功
+        auto* state = m_uniformManager->GetBufferStateBySlot(7); // Matrices在slot 7
+        if (state == nullptr)
+        {
+            LogError(LogRenderer, "Failed to get Matrices buffer state at slot 7");
+            ERROR_AND_DIE("Failed to get Matrices buffer state at slot 7")
+        }
+
+        // 验证所有字段
+        if (state->gpuBuffer == nullptr)
+        {
+            LogError(LogRenderer, "Matrices GPU buffer is null");
+            ERROR_AND_DIE("Matrices GPU buffer is null")
+        }
+
+        if (state->mappedData == nullptr)
+        {
+            LogError(LogRenderer, "Matrices mapped data is null");
+            ERROR_AND_DIE("Matrices mapped data is null")
+        }
+
+        if (state->elementSize != 1280)
+        {
+            LogError(LogRenderer, "Matrices element size mismatch: expected 1280, got %zu", state->elementSize);
+            ERROR_AND_DIE(Stringf("Matrices element size mismatch: expected 1280, got %zu", state->elementSize))
+        }
+
+        if (state->maxCount != 10000)
+        {
+            LogError(LogRenderer, "Matrices max count mismatch: expected 10000, got %zu", state->maxCount);
+            ERROR_AND_DIE(Stringf("Matrices max count mismatch: expected 10000, got %zu", state->maxCount))
+        }
+
+        // 验证GPU Address非空
+        D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = state->gpuBuffer->GetGPUVirtualAddress();
+        if (gpuAddress == 0)
+        {
+            LogError(LogRenderer, "Matrices GPU address is zero");
+            ERROR_AND_DIE("Matrices GPU address is zero")
+        }
+
+        LogInfo(LogRenderer, "Matrices Buffer verified: GPU Address = 0x%llx", gpuAddress);
+
+        // ==================== 注册 PerObjectUniforms Ring Buffer ====================
+        // 注册 PerObjectUniforms 为 PerObject Buffer, 分配 10000 draws
+        // 教学要点:
+        // 1. PerObjectUniforms 原始大小 128 字节（2个Mat44），对齐后 256 字节
+        // 2. 10000 × 256 = 2.5 MB（合理的内存开销）
+        // 3. 这是第二个 PerObject Buffer（第一个是 MatricesUniforms）
+        m_uniformManager->RegisterBuffer<PerObjectUniforms>(
+            UpdateFrequency::PerObject,
+            10000 // maxDrawsPerFrame，与 Matrices 保持一致
+        );
+
+        LogInfo(LogRenderer, "PerObject Ring Buffer allocated: 10000 × 256 bytes = 2.5 MB");
+
+        // 验证 Buffer 分配成功（需要先确定实际的 slot 号）
+        // 注意：slot 号可能不是 13，需要通过 TypeId 查询
+        auto* perObjState = m_uniformManager->GetBufferStateBySlot(1);
+
+        if (perObjState == nullptr)
+        {
+            LogError(LogRenderer, "Failed to get PerObjectUniforms buffer state");
+            ERROR_AND_DIE("Failed to get PerObjectUniforms buffer state")
+        }
+
+        // 验证关键字段
+        if (perObjState->gpuBuffer == nullptr)
+        {
+            LogError(LogRenderer, "PerObjectUniforms GPU buffer is null");
+            ERROR_AND_DIE("PerObjectUniforms GPU buffer is null")
+        }
+
+        if (perObjState->mappedData == nullptr)
+        {
+            LogError(LogRenderer, "PerObjectUniforms mapped data is null");
+            ERROR_AND_DIE("PerObjectUniforms mapped data is null")
+        }
+
+        if (perObjState->elementSize != 256)
+        {
+            LogError(LogRenderer, "PerObjectUniforms element size mismatch: expected 256, got %zu", perObjState->elementSize);
+            ERROR_AND_DIE(Stringf("PerObjectUniforms element size mismatch: expected 256, got %zu", perObjState->elementSize))
+        }
+
+        if (perObjState->maxCount != 10000)
+        {
+            LogError(LogRenderer, "PerObjectUniforms max count mismatch: expected 10000, got %zu", perObjState->maxCount);
+            ERROR_AND_DIE(Stringf("PerObjectUniforms max count mismatch: expected 10000, got %zu", perObjState->maxCount))
+        }
+
+        // 验证 GPU Address 非零
+        D3D12_GPU_VIRTUAL_ADDRESS perObjGpuAddr = perObjState->gpuBuffer->GetGPUVirtualAddress();
+        if (perObjGpuAddr == 0)
+        {
+            LogError(LogRenderer, "PerObjectUniforms GPU address is zero");
+            ERROR_AND_DIE("PerObjectUniforms GPU address is zero")
+        }
+
+        LogInfo(LogRenderer, "PerObjectUniforms Buffer verified: GPU Address = 0x%llx", perObjGpuAddr);
     }
     catch (const std::exception& e)
     {
@@ -593,6 +709,14 @@ void RendererSubsystem::BeginFrame()
     m_currentVertexOffset = 0;
     m_currentIndexOffset  = 0;
 
+    // [NEW] 重置Draw计数 (Phase 1: Ring Buffer管理)
+    // 教学要点: 每帧开始时重置计数器,配合Ring Buffer实现索引管理
+    if (m_uniformManager)
+    {
+        m_uniformManager->ResetDrawCount();
+        LogDebug(LogRenderer, "BeginFrame - Draw count reset to 0");
+    }
+
     // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
     D3D12RenderSystem::PrepareNextFrame();
     LogDebug(LogRenderer, "BeginFrame - D3D12 next frame prepared");
@@ -787,7 +911,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
     auto buildResult = ShaderProgramBuilder::BuildProgram(
         shaderSource,
         ShaderType::GBuffers_Terrain,
-        options // ⭐ 传递用户自定义编译选项
+        options //  传递用户自定义编译选项
     );
 
     if (!buildResult.success)
@@ -1321,12 +1445,11 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     cmdList->SetPipelineState(pso);
     cmdList->SetGraphicsRootSignature(shaderProgram->GetRootSignature());
 
-    // 7. 上传Root Constants到GPU
-    auto* bindlessRootSig = D3D12RenderSystem::GetBindlessRootSignature();
-    if (bindlessRootSig && m_uniformManager)
-    {
-        bindlessRootSig->SetRootConstants(cmdList, m_uniformManager->GetRootConstants(), 14, 0);
-    }
+    // 7. [REMOVED] 旧代码: SetRootConstants(14个值) - 已废弃
+    // 架构变更: 所有Uniform Buffers现在通过Root CBV绑定
+    // - 11个Uniform Buffers: 使用 SetGraphicsRootConstantBufferView (Slot 0-10)
+    // - NoiseTexture: 单独使用 SetRootConstants (1个uint32, Slot 14)
+    // 详见: DrawVertexArray() 第2322行的 SetGraphicsRootConstantBufferView 实现
 
     // 8. 刷新RT绑定（延迟提交）
     if (m_renderTargetBinder)
@@ -1394,45 +1517,47 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
         // 1. 从EnigmaCamera读取数据并设置到UniformManager
         // ========================================================================
 
-        // 设置相机位置 (cameraPosition - CameraAndPlayerUniforms)
+        // [TODO] 设置相机位置 (cameraPosition - CameraAndPlayerUniforms)
+        // CameraAndPlayerUniforms 尚未注册到UniformManager，暂时保留旧API
         m_uniformManager->Uniform3f("cameraPosition", camera.GetPosition());
 
-        // 设置相机相关矩阵 (MatricesUniforms)
-        // 数据流：EnigmaCamera → UniformManager → GPU
+        // ========================================================================
+        // 2. [REFACTORED] 使用新的UploadBuffer API上传Camera矩阵
+        // ========================================================================
+        // 重构说明：
+        // - 旧API: 使用 UniformMat4() 逐个上传矩阵，然后调用 SyncToGPU()
+        // - 新API: 使用 UploadBuffer<MatricesUniforms>() 一次性上传所有矩阵数据
+        // - 优点: 类型安全、减少API调用、自动同步
+        // - 配合: Geometry::Render 使用新API上传Model矩阵，两者共同填充MatricesUniforms
 
-        // GBuffer相关矩阵（延迟渲染主Pass）- 完整4矩阵变换链
+        // 读取Camera矩阵
         Mat44 cameraToWorld    = camera.GetCameraToWorldTransform(); // Camera → World (逆矩阵)
         Mat44 worldToCamera    = camera.GetWorldToCameraTransform(); // World → Camera
         Mat44 cameraToRender   = camera.GetCameraToRenderTransform(); // Camera → Render (坐标系转换)
         Mat44 projectionMatrix = camera.GetProjectionMatrix(); // Render → Clip
 
-        // 上传4个核心矩阵（与旧API DX12Renderer.cpp:650-654一致）
-        m_uniformManager->UniformMat4("gbufferModelViewInverse", cameraToWorld); // [NEW] Camera → World
-        m_uniformManager->UniformMat4("gbufferModelView", worldToCamera); // World → Camera
-        m_uniformManager->UniformMat4("cameraToRenderTransform", cameraToRender); // Camera → Render
-        m_uniformManager->UniformMat4("gbufferProjection", projectionMatrix); // Render → Clip
+        // 计算逆矩阵
+        Mat44 worldToCameraInverse    = worldToCamera.GetOrthonormalInverse();
+        Mat44 projectionMatrixInverse = projectionMatrix.GetOrthonormalInverse();
 
-        // 设置GBuffer投影逆矩阵
-        m_uniformManager->UniformMat4("gbufferProjectionInverse",
-                                      projectionMatrix.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+        // 填充MatricesUniforms的Camera相关字段
+        MatricesUniforms matData;
 
-        // 设置GBuffer模型视图逆矩阵
-        m_uniformManager->UniformMat4("gbufferModelViewInverse",
-                                      worldToCamera.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+        // GBuffer相关矩阵（延迟渲染主Pass）- 完整4矩阵变换链
+        matData.gbufferModelView         = worldToCamera; // World → Camera
+        matData.gbufferModelViewInverse  = cameraToWorld; // Camera → World
+        matData.cameraToRenderTransform  = cameraToRender; // Camera → Render
+        matData.gbufferProjection        = projectionMatrix; // Render → Clip
+        matData.gbufferProjectionInverse = projectionMatrixInverse; // Clip → Render
 
-        // 设置当前模型视图矩阵（通用）
-        m_uniformManager->UniformMat4("modelViewMatrix", worldToCamera);
+        // 通用矩阵（当前几何体 - 默认使用相同的Camera矩阵）
+        matData.modelViewMatrix         = worldToCamera;
+        matData.modelViewMatrixInverse  = worldToCameraInverse;
+        matData.projectionMatrix        = projectionMatrix;
+        matData.projectionMatrixInverse = projectionMatrixInverse;
 
-        // 设置当前投影矩阵（通用）
-        m_uniformManager->UniformMat4("projectionMatrix", projectionMatrix);
-
-        // 设置当前投影逆矩阵（通用）
-        m_uniformManager->UniformMat4("projectionMatrixInverse",
-                                      projectionMatrix.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
-
-        // 设置当前模型视图逆矩阵（通用）
-        m_uniformManager->UniformMat4("modelViewMatrixInverse",
-                                      worldToCamera.GetOrthonormalInverse()); // 使用Mat44::GetOrthonormalInverse()
+        // 上传到GPU（新API - 类型安全，自动同步）
+        m_uniformManager->UploadBuffer<MatricesUniforms>(matData);
 
         // Shadow管理由Game侧负责，引擎侧只提供接口
         // 理由：不是每个场景都需要shadow，且光照类型多样（sun light, point light, spot light等）
@@ -1447,24 +1572,11 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
 
 
         // ========================================================================
-        // 2. 设置视口（如果需要）
+        // 3. 设置视口（如果需要）
         // ========================================================================
 
         // TODO: 设置视口 - 需要根据EnigmaCamera的viewport设置
         // 可能需要调用 D3D12RenderSystem::SetViewport() 或类似API
-
-        // ========================================================================
-        // 3. 上传数据到GPU
-        // ========================================================================
-
-        // 调用UniformManager的同步方法，将所有修改的数据上传到GPU
-        bool uploadSuccess = m_uniformManager->SyncToGPU();
-
-        if (!uploadSuccess)
-        {
-            LogError(LogRenderer, "BeginCamera(EnigmaCamera): Synchronization of Uniform data to GPU failed");
-            return;
-        }
 
         LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - Camera parameter settings are completed");
         LogInfo(LogRenderer, " - Camera position: (%f, %f, %f)",
@@ -2165,19 +2277,18 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
     // ========================================================================
-    // [REFACTOR 2025-01-06] Persistent Mapping + Per-Frame Append策略
+    // [PHASE 1] Ring Buffer Root CBV架构 - DrawVertexArray集成
     // ========================================================================
-    // 修复cube覆盖bug：
-    // - [REMOVED] Map/Unmap调用（改用persistent mapping）
-    // - [NEW] 使用m_currentVertexOffset/m_currentIndexOffset追加数据
-    // - [FIX] baseVertex计算正确（offset / sizeof(Vertex)）
-    // - [FIX] startIndex计算正确（offset / sizeof(unsigned)）
+    // 新增功能:
+    // 1. [NEW] Delayed Fill逻辑 (自动填充未更新数据)
+    // 2. [NEW] Root CBV绑定 (设置Slot 7为Matrices Buffer地址)
+    // 3. [NEW] Draw计数递增 (Ring Buffer索引管理)
     // ========================================================================
-    // 教学要点：
-    // - DirectX 12 Persistent Mapping优势：避免每次Map/Unmap开销
-    // - Per-Frame Append策略：允许同一帧多次DrawVertexArray
-    // - baseVertex参数：告诉GPU从哪个顶点索引开始读取
-    // - offset管理：确保数据不被覆盖（关键）
+    // 教学要点:
+    // - Delayed Fill避免内存浪费 (只复制最后值,无需预填10000份)
+    // - Root CBV性能优势 (硬件优化路径,比Bindless更快)
+    // - Ring Buffer索引: currentDrawCount % maxCount
+    // - GPU地址计算: baseAddress + index × elementSize
     // ========================================================================
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
@@ -2185,6 +2296,45 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data");
         return;
     }
+
+    // ========================================================================
+    // Phase 1: Delayed Fill for Matrices
+    // ========================================================================
+    // 教学要点:
+    // 1. 检查当前索引是否已更新过
+    // 2. 如果未更新,复制最后一次更新的值 (Delayed Fill)
+    // 3. 避免内存浪费: 只在需要时复制,而非预填10000份
+    // ========================================================================
+    auto* matricesState = m_uniformManager->GetBufferStateBySlot(7);
+    if (matricesState)
+    {
+        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % matricesState->maxCount;
+
+        // 如果当前索引未更新过,复制最后一次更新的值
+        if (matricesState->lastUpdatedIndex != currentIndex)
+        {
+            void* destPtr = matricesState->GetDataAt(currentIndex);
+            memcpy(destPtr, matricesState->lastUpdatedValue.data(),
+                   matricesState->elementSize);
+
+            LogDebug(LogRenderer, "Delayed Fill: Matrices[%zu] copied from last value", currentIndex);
+        }
+    }
+
+    auto* perObjState = m_uniformManager->GetBufferStateBySlot(1);
+    if (perObjState)
+    {
+        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % perObjState->maxCount;
+        if (perObjState->lastUpdatedIndex != currentIndex)
+        {
+            void* destPtr = perObjState->GetDataAt(currentIndex);
+            memcpy(destPtr, perObjState->lastUpdatedValue.data(),
+                   perObjState->elementSize);
+
+            LogDebug(LogRenderer, "Delayed Fill: Matrices[%zu] copied from last value", currentIndex);
+        }
+    }
+
 
     size_t vertexSize = vertexCount * sizeof(Vertex);
     size_t indexSize  = indexCount * sizeof(unsigned);
@@ -2223,12 +2373,64 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
+    // ========================================================================
+    // Phase 2: Set Root CBV for Matrices (Slot 7)
+    // ========================================================================
+    // 教学要点:
+    // 1. 计算GPU虚拟地址: baseAddress + index × elementSize
+    // 2. 调用SetGraphicsRootConstantBufferView绑定Root CBV
+    // 3. ROOT_CBV_MATRICES = 7 (来自BindlessRootSignature.hpp)
+    // 4. 必须在DrawIndexed之前绑定,否则GPU读取错误数据
+    // ========================================================================
+    if (matricesState)
+    {
+        size_t                    currentIndex = m_uniformManager->GetCurrentDrawCount() % matricesState->maxCount;
+        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   =
+            matricesState->gpuBuffer->GetGPUVirtualAddress() +
+            currentIndex * matricesState->elementSize;
+
+        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        if (cmdList)
+        {
+            cmdList->SetGraphicsRootConstantBufferView(
+                7, // ROOT_CBV_MATRICES = 7
+                cbvAddress
+            );
+
+            LogDebug(LogRenderer, "Set Root CBV Matrices: Address=0x%llx, Index=%zu", cbvAddress, currentIndex);
+        }
+    }
+
+    if (perObjState)
+    {
+        size_t                    currentIndex  = m_uniformManager->GetCurrentDrawCount() % perObjState->maxCount;
+        D3D12_GPU_VIRTUAL_ADDRESS perObjAddress =
+            perObjState->gpuBuffer->GetGPUVirtualAddress() +
+            currentIndex * perObjState->elementSize;
+        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        cmdList->SetGraphicsRootConstantBufferView(1, perObjAddress);
+    }
+
+
     // [CHANGED] 使用累积的offset计算baseVertex和startIndex
     // baseVertex: 顶点索引 = 字节offset / sizeof(Vertex)
     // startIndex: 索引数组起始位置 = 字节offset / sizeof(unsigned)
     uint32_t baseVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
     uint32_t startIndex = static_cast<uint32_t>(m_currentIndexOffset / sizeof(unsigned));
     DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
+
+    // ========================================================================
+    // Phase 3: Increment Draw Count
+    // ========================================================================
+    // 教学要点:
+    // 1. 每次Draw Call后递增计数
+    // 2. 配合Ring Buffer实现索引管理
+    // 3. 下一次Draw Call会使用新的索引 (currentIndex + 1) % maxCount
+    // ========================================================================
+    if (m_uniformManager)
+    {
+        m_uniformManager->IncrementDrawCount();
+    }
 
     // [NEW] 更新offset（追加数据）
     m_currentVertexOffset += vertexSize;
