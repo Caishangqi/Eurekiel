@@ -1,5 +1,6 @@
 ﻿#include "BufferHelper.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Core/StringUtils.hpp" // Task 4: Stringf for error messages
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystemConfig.hpp"
@@ -44,7 +45,14 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        LogInfo(LogRenderer, "BufferHelper: Created/Resized VertexBuffer '%s' to %d bytes", debugName, newSize);
+        // [FIX] Task 4 (2025-01-06): Persistent mapping for immediate buffers
+        // 教学要点：Upload heap buffer必须在创建后立即persistent map，以支持per-frame append策略
+        // 这确保GetPersistentMappedData()返回有效指针，避免DrawVertexArray中的ERROR_RECOVERABLE
+        void* mappedPtr = buffer->MapPersistent();
+        GUARANTEE_OR_DIE(mappedPtr != nullptr,
+                         Stringf("BufferHelper: Failed to persistent map VertexBuffer '%s'", debugName).c_str());
+
+        LogInfo(LogRenderer, "BufferHelper: Created/Resized VertexBuffer '%s' to %d bytes (persistent mapped)", debugName, newSize);
     }
 }
 
@@ -80,6 +88,13 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        LogInfo(LogRenderer, "BufferHelper: Created/Resized IndexBuffer '{}' to {} bytes", debugName, newSize);
+        // [FIX] Task 4 (2025-01-06): Persistent mapping for immediate buffers
+        // 教学要点：Upload heap buffer必须在创建后立即persistent map，以支持per-frame append策略
+        // 这确保GetPersistentMappedData()返回有效指针，避免DrawVertexArray中的ERROR_RECOVERABLE
+        void* mappedPtr = buffer->MapPersistent();
+        GUARANTEE_OR_DIE(mappedPtr != nullptr,
+                         Stringf("BufferHelper: Failed to persistent map IndexBuffer '%s'", debugName).c_str());
+
+        LogInfo(LogRenderer, "BufferHelper: Created/Resized IndexBuffer '%s' to %zu bytes (persistent mapped)", debugName, newSize);
     }
 }

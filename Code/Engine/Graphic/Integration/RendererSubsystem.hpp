@@ -934,6 +934,34 @@ namespace enigma::graphic
             return m_renderTargetManager.get();
         }
 
+        /**
+         * @brief 获取当前帧vertex buffer写入offset
+         * @return 当前offset（字节单位）
+         * 
+         * @details
+         * 用于实现Per-Frame Append策略，追踪单帧内immediate buffer的写入位置
+         * 每次DrawVertexArray调用后应更新此offset以避免数据覆盖
+         * 
+         * 教学要点：
+         * - 理解persistent mapping的offset管理
+         * - 掌握单帧内多次Draw的数据追加机制
+         */
+        size_t GetCurrentVertexOffset() const noexcept { return m_currentVertexOffset; }
+
+        /**
+         * @brief 获取当前帧index buffer写入offset
+         * @return 当前offset（字节单位）
+         * 
+         * @details
+         * 用于实现Per-Frame Append策略，追踪单帧内immediate buffer的写入位置
+         * 每次DrawVertexArray调用后应更新此offset以避免数据覆盖
+         * 
+         * 教学要点：
+         * - 理解persistent mapping的offset管理
+         * - 掌握单帧内多次Draw的数据追加机制
+         */
+        size_t GetCurrentIndexOffset() const noexcept { return m_currentIndexOffset; }
+
         // ==================== Milestone 4: 深度缓冲管理 ====================
 
         /**
@@ -1373,6 +1401,13 @@ namespace enigma::graphic
 
         /// 即时索引缓冲区 - 用于DrawVertexArray索引绘制
         std::shared_ptr<D12IndexBuffer> m_immediateIBO;
+
+        // [NEW] Per-Frame offset管理（Per-Frame Append策略）
+        /// 当前帧vertex buffer写入offset（字节单位）- 用于追踪单帧内immediate buffer的写入位置
+        size_t m_currentVertexOffset = 0;
+
+        /// 当前帧index buffer写入offset（字节单位）- 用于追踪单帧内immediate buffer的写入位置
+        size_t m_currentIndexOffset = 0;
 
         // ==================== GBuffer管理组件 (Milestone 3.0任务4) ====================
 

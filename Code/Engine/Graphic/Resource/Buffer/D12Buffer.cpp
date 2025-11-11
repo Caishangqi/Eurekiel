@@ -8,6 +8,7 @@
 #include "Engine/Graphic/Resource/UploadContext.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Renderer/API/DX12Renderer.hpp"
 
 namespace enigma::graphic
 {
@@ -66,6 +67,9 @@ namespace enigma::graphic
      */
     D12Buffer::~D12Buffer()
     {
+        // [NEW] 如果有持久映射，先取消持久映射
+        UnmapPersistent();
+
         // 如果当前有映射，先取消映射
         if (m_mappedData)
         {
@@ -85,9 +89,14 @@ namespace enigma::graphic
           , m_memoryAccess(other.m_memoryAccess)
           , m_mappedData(other.m_mappedData)
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
+          , m_byteStride(other.m_byteStride)
+          , m_persistentMappedData(other.m_persistentMappedData) // [NEW] 转移持久映射指针
+          , m_isPersistentlyMapped(other.m_isPersistentlyMapped) // [NEW] 转移持久映射状态
     {
         // 清空源对象
-        other.m_mappedData = nullptr;
+        other.m_mappedData           = nullptr;
+        other.m_persistentMappedData = nullptr; // [NEW] 清空源对象的持久映射指针
+        other.m_isPersistentlyMapped = false; // [NEW] 清空源对象的持久映射状态
     }
 
     /**
@@ -97,6 +106,9 @@ namespace enigma::graphic
     {
         if (this != &other)
         {
+            // [NEW] 释放当前的持久映射
+            UnmapPersistent();
+
             // 释放当前资源
             if (m_mappedData)
             {
@@ -107,13 +119,18 @@ namespace enigma::graphic
             D12Resource::operator=(std::move(other));
 
             // 移动D12Buffer特有成员
-            m_usage              = other.m_usage;
-            m_memoryAccess       = other.m_memoryAccess;
-            m_mappedData         = other.m_mappedData;
-            m_formattedDebugName = std::move(other.m_formattedDebugName);
+            m_usage                = other.m_usage;
+            m_memoryAccess         = other.m_memoryAccess;
+            m_mappedData           = other.m_mappedData;
+            m_formattedDebugName   = std::move(other.m_formattedDebugName);
+            m_byteStride           = other.m_byteStride;
+            m_persistentMappedData = other.m_persistentMappedData; // [NEW] 转移持久映射指针
+            m_isPersistentlyMapped = other.m_isPersistentlyMapped; // [NEW] 转移持久映射状态
 
             // 清空源对象
-            other.m_mappedData = nullptr;
+            other.m_mappedData           = nullptr;
+            other.m_persistentMappedData = nullptr; // [NEW] 清空源对象的持久映射指针
+            other.m_isPersistentlyMapped = false; // [NEW] 清空源对象的持久映射状态
         }
         return *this;
     }
@@ -168,6 +185,90 @@ namespace enigma::graphic
         // writtenRange: 指定CPU修改的内存范围（可为nullptr表示整个范围）
         resource->Unmap(0, writtenRange);
         m_mappedData = nullptr;
+    }
+
+    /**
+     * [NEW] 持久映射CPU内存（DirectX 12推荐模式）
+     * 教学要点:
+     * 1. 只有UPLOAD堆的缓冲区才能持久映射
+     * 2. 使用CD3DX12_RANGE(0,0)表示CPU不读取，只写入
+     * 3. 整个生命周期保持映射状态，避免反复Map/Unmap开销
+     * 4. 重复调用返回同一指针，避免重复映射
+     */
+    void* D12Buffer::MapPersistent()
+    {
+        // 如果已经持久映射，直接返回缓存的指针
+        if (m_isPersistentlyMapped)
+        {
+            return m_persistentMappedData;
+        }
+
+        auto* resource = GetResource();
+        if (!resource)
+        {
+            core::LogError("D12Buffer", "MapPersistent: Resource is null");
+            return nullptr;
+        }
+
+        // 只有CPU可访问的缓冲区才能持久映射
+        if (m_memoryAccess != MemoryAccess::CPUToGPU && m_memoryAccess != MemoryAccess::CPUWritable)
+        {
+            core::LogError("D12Buffer",
+                           "MapPersistent: Only UPLOAD heap buffers (CPUToGPU/CPUWritable) can be persistently mapped");
+            return nullptr;
+        }
+
+        // 使用CD3DX12_RANGE(0,0)表示CPU不读取
+        // 这是DirectX 12的最佳实践，避免缓存同步开销
+        CD3DX12_RANGE readRange(0, 0);
+        HRESULT       hr = resource->Map(0, &readRange, &m_persistentMappedData);
+
+        if (FAILED(hr))
+        {
+            core::LogError("D12Buffer", "MapPersistent: Failed to persistent map buffer");
+            m_persistentMappedData = nullptr;
+            return nullptr;
+        }
+
+        m_isPersistentlyMapped = true;
+
+        core::LogDebug("D12Buffer",
+                       "MapPersistent: Successfully mapped buffer '%s' at address 0x%p",
+                       GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
+                       m_persistentMappedData);
+
+        return m_persistentMappedData;
+    }
+
+    /**
+     * [NEW] 取消持久映射
+     * 教学要点:
+     * 1. 在析构函数中调用，确保资源正确释放
+     * 2. 检查状态标志，避免重复Unmap
+     * 3. 清空指针和状态标志，防止悬空指针
+     */
+    void D12Buffer::UnmapPersistent()
+    {
+        // 如果未持久映射，无需操作
+        if (!m_isPersistentlyMapped)
+        {
+            return;
+        }
+
+        auto* resource = GetResource();
+        if (resource)
+        {
+            // 取消映射（writtenRange=nullptr表示整个范围都被写入）
+            resource->Unmap(0, nullptr);
+
+            core::LogDebug("D12Buffer",
+                           "UnmapPersistent: Unmapped buffer '%s'",
+                           GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+        }
+
+        // 清空状态
+        m_persistentMappedData = nullptr;
+        m_isPersistentlyMapped = false;
     }
 
     /**

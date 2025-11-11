@@ -589,6 +589,10 @@ void RendererSubsystem::BeginFrame()
     // - 帧内优化 vs 跨帧优化（跨帧缓存是错误的设计）
     // ========================================================================
 
+    // [NEW] 重置immediate buffer offset（Per-Frame Append策略）
+    m_currentVertexOffset = 0;
+    m_currentIndexOffset  = 0;
+
     // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
     D3D12RenderSystem::PrepareNextFrame();
     LogDebug(LogRenderer, "BeginFrame - D3D12 next frame prepared");
@@ -2160,6 +2164,22 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
+    // ========================================================================
+    // [REFACTOR 2025-01-06] Persistent Mapping + Per-Frame Append策略
+    // ========================================================================
+    // 修复cube覆盖bug：
+    // - [REMOVED] Map/Unmap调用（改用persistent mapping）
+    // - [NEW] 使用m_currentVertexOffset/m_currentIndexOffset追加数据
+    // - [FIX] baseVertex计算正确（offset / sizeof(Vertex)）
+    // - [FIX] startIndex计算正确（offset / sizeof(unsigned)）
+    // ========================================================================
+    // 教学要点：
+    // - DirectX 12 Persistent Mapping优势：避免每次Map/Unmap开销
+    // - Per-Frame Append策略：允许同一帧多次DrawVertexArray
+    // - baseVertex参数：告诉GPU从哪个顶点索引开始读取
+    // - offset管理：确保数据不被覆盖（关键）
+    // ========================================================================
+
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
         ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data");
@@ -2169,20 +2189,50 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     size_t vertexSize = vertexCount * sizeof(Vertex);
     size_t indexSize  = indexCount * sizeof(unsigned);
 
-    BufferHelper::EnsureBufferSize(m_immediateVBO, vertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
-    BufferHelper::EnsureBufferSize(m_immediateIBO, indexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
+    // [CHANGED] 计算所需总空间（当前offset + 新数据）
+    size_t requiredVertexSize = m_currentVertexOffset + vertexSize;
+    size_t requiredIndexSize  = m_currentIndexOffset + indexSize;
 
-    void* vertexData = m_immediateVBO->Map();
-    memcpy(vertexData, vertices, vertexSize);
-    m_immediateVBO->Unmap();
+    // 确保buffer足够大（可能触发resize）
+    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize,
+                                   static_cast<size_t>(64 * 1024),
+                                   sizeof(Vertex), "ImmediateVBO");
+    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize,
+                                   static_cast<size_t>(64 * 1024),
+                                   "ImmediateIBO");
 
-    void* indexData = m_immediateIBO->Map();
-    memcpy(indexData, indices, indexSize);
-    m_immediateIBO->Unmap();
+    // [CHANGED] 使用persistent mapped pointer，从当前offset开始写入
+    void* vertexMappedData = m_immediateVBO->GetPersistentMappedData();
+    if (!vertexMappedData)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped");
+        return;
+    }
+    // [FIX] 追加到当前offset，而非覆盖offset 0
+    memcpy(static_cast<char*>(vertexMappedData) + m_currentVertexOffset, vertices, vertexSize);
+
+    void* indexMappedData = m_immediateIBO->GetPersistentMappedData();
+    if (!indexMappedData)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: ImmediateIBO not persistently mapped");
+        return;
+    }
+    // [FIX] 追加到当前offset，而非覆盖offset 0
+    memcpy(static_cast<char*>(indexMappedData) + m_currentIndexOffset, indices, indexSize);
 
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
-    DrawIndexed(static_cast<uint32_t>(indexCount), 0, 0);
+
+    // [CHANGED] 使用累积的offset计算baseVertex和startIndex
+    // baseVertex: 顶点索引 = 字节offset / sizeof(Vertex)
+    // startIndex: 索引数组起始位置 = 字节offset / sizeof(unsigned)
+    uint32_t baseVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
+    uint32_t startIndex = static_cast<uint32_t>(m_currentIndexOffset / sizeof(unsigned));
+    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
+
+    // [NEW] 更新offset（追加数据）
+    m_currentVertexOffset += vertexSize;
+    m_currentIndexOffset += indexSize;
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount)
