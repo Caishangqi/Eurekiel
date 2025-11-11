@@ -420,10 +420,10 @@ namespace enigma::graphic
          * ```
          */
         void CreateShaderResourceView(
-            ID3D12Device* device,
-            ID3D12Resource* resource,
+            ID3D12Device*                          device,
+            ID3D12Resource*                        resource,
             const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,
-            uint32_t index);
+            uint32_t                               index);
 
         /**
          * @brief 在指定索引创建Constant Buffer View
@@ -432,9 +432,9 @@ namespace enigma::graphic
          * @param index 全局索引（由BindlessIndexAllocator分配）
          */
         void CreateConstantBufferView(
-            ID3D12Device* device,
+            ID3D12Device*                          device,
             const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,
-            uint32_t index);
+            uint32_t                               index);
 
         /**
          * @brief 在指定索引创建Unordered Access View
@@ -444,11 +444,11 @@ namespace enigma::graphic
          * @param index 全局索引（由BindlessIndexAllocator分配）
          */
         void CreateUnorderedAccessView(
-            ID3D12Device* device,
-            ID3D12Resource* resource,
-            ID3D12Resource* counterResource,
+            ID3D12Device*                           device,
+            ID3D12Resource*                         resource,
+            ID3D12Resource*                         counterResource,
             const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,
-            uint32_t index);
+            uint32_t                                index);
 
         /**
          * @brief 在指定索引创建Render Target View
@@ -460,10 +460,10 @@ namespace enigma::graphic
          * 教学要点: RTV不在全局Bindless堆中，有独立的RTV堆
          */
         void CreateRenderTargetView(
-            ID3D12Device* device,
-            ID3D12Resource* resource,
+            ID3D12Device*                        device,
+            ID3D12Resource*                      resource,
             const D3D12_RENDER_TARGET_VIEW_DESC* desc,
-            uint32_t index);
+            uint32_t                             index);
 
         /**
          * @brief 在指定索引创建Depth Stencil View
@@ -475,10 +475,10 @@ namespace enigma::graphic
          * 教学要点: DSV不在全局Bindless堆中，有独立的DSV堆
          */
         void CreateDepthStencilView(
-            ID3D12Device* device,
-            ID3D12Resource* resource,
+            ID3D12Device*                        device,
+            ID3D12Resource*                      resource,
             const D3D12_DEPTH_STENCIL_VIEW_DESC* desc,
-            uint32_t index);
+            uint32_t                             index);
 
         // ========================================================================
         // 描述符堆容量和数量查询接口 (BindlessResourceManager依赖)

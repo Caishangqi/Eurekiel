@@ -120,8 +120,8 @@ namespace enigma::graphic
 
     private:
         Microsoft::WRL::ComPtr<ID3D12Resource> m_uploadBuffer; // Upload Heap资源
-        void*                                  m_mappedData;    // CPU映射指针
-        size_t                                 m_uploadSize;    // Upload Heap大小
+        void*                                  m_mappedData; // CPU映射指针
+        size_t                                 m_uploadSize; // Upload Heap大小
 
         // 禁用拷贝和赋值（Upload Heap不应被拷贝）
         UploadContext(const UploadContext&)            = delete;

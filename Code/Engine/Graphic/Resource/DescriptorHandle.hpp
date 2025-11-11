@@ -29,11 +29,12 @@ namespace enigma::graphic
     {
         // Declare non-member swap function as friend to allow access to private Swap method
         friend void swap(DescriptorHandle& lhs, DescriptorHandle& rhs) noexcept;
+
     private:
         // 核心数据
         GlobalDescriptorHeapManager::DescriptorAllocation m_allocation; // 描述符分配信息
         std::weak_ptr<GlobalDescriptorHeapManager>        m_heapManager; // 堆管理器弱引用 (避免循环依赖)
-        bool                                        m_ownsResource; // 是否拥有资源所有权
+        bool                                              m_ownsResource; // 是否拥有资源所有权
 
     public:
         /**

@@ -15,8 +15,8 @@ DescriptorHandle::DescriptorHandle() noexcept
 
 DescriptorHandle::DescriptorHandle(const GlobalDescriptorHeapManager::DescriptorAllocation& allocation, std::shared_ptr<GlobalDescriptorHeapManager> heapManager) noexcept
     : m_allocation(allocation)
-    , m_heapManager(heapManager)
-    , m_ownsResource(true)
+      , m_heapManager(heapManager)
+      , m_ownsResource(true)
 {
     // 教学注释: 创建时默认拥有资源所有权
     // 析构时会自动调用堆管理器的释放方法
@@ -153,7 +153,7 @@ GlobalDescriptorHeapManager::DescriptorAllocation DescriptorHandle::Detach() noe
 bool DescriptorHandle::operator==(const DescriptorHandle& other) const noexcept
 {
     return m_allocation.cpuHandle.ptr == other.m_allocation.cpuHandle.ptr &&
-           m_allocation.heapIndex == other.m_allocation.heapIndex;
+        m_allocation.heapIndex == other.m_allocation.heapIndex;
 }
 
 bool DescriptorHandle::operator!=(const DescriptorHandle& other) const noexcept
@@ -215,8 +215,8 @@ DescriptorHandle DescriptorHandle::CreateInvalid() noexcept
 DescriptorHandle DescriptorHandle::CreateNonOwning(
     const GlobalDescriptorHeapManager::DescriptorAllocation& allocation) noexcept
 {
-    auto handle = DescriptorHandle();
-    handle.m_allocation = allocation;
+    auto handle           = DescriptorHandle();
+    handle.m_allocation   = allocation;
     handle.m_ownsResource = false;
     return handle;
 }
@@ -252,7 +252,7 @@ void DescriptorHandle::SafeRelease() noexcept
         break;
     default:
         enigma::core::LogError("DescriptorHandle", "SafeRelease: Unknown heap type %d",
-                              static_cast<int>(m_allocation.heapType));
+                               static_cast<int>(m_allocation.heapType));
         break;
     }
 
@@ -262,8 +262,8 @@ void DescriptorHandle::SafeRelease() noexcept
 
 void DescriptorHandle::MoveFrom(DescriptorHandle&& other) noexcept
 {
-    m_allocation = std::move(other.m_allocation);
-    m_heapManager = std::move(other.m_heapManager);
+    m_allocation   = std::move(other.m_allocation);
+    m_heapManager  = std::move(other.m_heapManager);
     m_ownsResource = other.m_ownsResource;
 
     other.m_allocation.Reset();

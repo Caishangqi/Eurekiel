@@ -432,7 +432,7 @@ namespace enigma::graphic
         void* mappedData = gpuBuffer->MapPersistent();
         if (!mappedData)
         {
-            core::LogError(core::LogRenderer, "Failed to map buffer: %s", typeid(T).name());
+            LogError(core::LogRenderer, "Failed to map buffer: %s", typeid(T).name());
             delete gpuBuffer;
             return;
         }

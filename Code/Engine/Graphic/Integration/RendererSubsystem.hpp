@@ -1307,14 +1307,12 @@ namespace enigma::graphic
         /// 即时索引缓冲区 - 用于DrawVertexArray索引绘制
         std::shared_ptr<D12IndexBuffer> m_immediateIBO;
 
-        // [NEW] Per-Frame offset管理（Per-Frame Append策略）
-        /// 当前帧vertex buffer写入offset（字节单位）- 用于追踪单帧内immediate buffer的写入位置
+        // [NEW] Per-Frame offset management (Per-Frame Append strategy)
+        /// Current frame vertex buffer writing offset (byte unit) - used to track the writing position of the immediate buffer within a single frame
         size_t m_currentVertexOffset = 0;
 
-        /// 当前帧index buffer写入offset（字节单位）- 用于追踪单帧内immediate buffer的写入位置
+        /// Current frame index buffer writing offset (byte unit) - used to track the writing position of the immediate buffer within a single frame
         size_t m_currentIndexOffset = 0;
-
-        // ==================== GBuffer管理组件 (Milestone 3.0任务4) ====================
 
         /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
         std::unique_ptr<RenderTargetManager> m_renderTargetManager;

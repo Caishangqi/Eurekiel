@@ -10,10 +10,8 @@
 
 //  架构正确性: 使用D3D12RenderSystem静态API，遵循严格四层分层架构
 // Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem) → Layer 2 (D12Buffer) → Layer 1 (DX12 Native)
-#include "CustomImageIndexBuffer.hpp"
 #include "MatricesUniforms.hpp"
 #include "PerObjectUniforms.hpp"
-#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 

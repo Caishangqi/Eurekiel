@@ -589,15 +589,15 @@ void GlobalDescriptorHeapManager::SetDescriptorHeaps(ID3D12GraphicsCommandList* 
  * 3. 职责分离：BindlessIndexAllocator管理索引，GlobalDescriptorHeapManager管理堆
  */
 void GlobalDescriptorHeapManager::CreateShaderResourceView(
-    ID3D12Device* device,
-    ID3D12Resource* resource,
+    ID3D12Device*                          device,
+    ID3D12Resource*                        resource,
     const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,
-    uint32_t index)
+    uint32_t                               index)
 {
     if (!m_initialized || !m_cbvSrvUavHeap)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateShaderResourceView: not initialized");
+                       "CreateShaderResourceView: not initialized");
         return;
     }
 
@@ -605,8 +605,8 @@ void GlobalDescriptorHeapManager::CreateShaderResourceView(
     if (index >= m_cbvSrvUavCapacity)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateShaderResourceView: index %u out of range (capacity: %u)",
-                      index, m_cbvSrvUavCapacity);
+                       "CreateShaderResourceView: index %u out of range (capacity: %u)",
+                       index, m_cbvSrvUavCapacity);
         return;
     }
 
@@ -617,29 +617,29 @@ void GlobalDescriptorHeapManager::CreateShaderResourceView(
     device->CreateShaderResourceView(resource, desc, cpuHandle);
 
     core::LogInfo("GlobalDescriptorHeapManager",
-                 "CreateShaderResourceView: created at index %u", index);
+                  "CreateShaderResourceView: created at index %u", index);
 }
 
 /**
  * @brief 在指定索引创建Constant Buffer View
  */
 void GlobalDescriptorHeapManager::CreateConstantBufferView(
-    ID3D12Device* device,
+    ID3D12Device*                          device,
     const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,
-    uint32_t index)
+    uint32_t                               index)
 {
     if (!m_initialized || !m_cbvSrvUavHeap)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateConstantBufferView: not initialized");
+                       "CreateConstantBufferView: not initialized");
         return;
     }
 
     if (index >= m_cbvSrvUavCapacity)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateConstantBufferView: index %u out of range (capacity: %u)",
-                      index, m_cbvSrvUavCapacity);
+                       "CreateConstantBufferView: index %u out of range (capacity: %u)",
+                       index, m_cbvSrvUavCapacity);
         return;
     }
 
@@ -647,31 +647,31 @@ void GlobalDescriptorHeapManager::CreateConstantBufferView(
     device->CreateConstantBufferView(desc, cpuHandle);
 
     core::LogInfo("GlobalDescriptorHeapManager",
-                 "CreateConstantBufferView: created at index %u", index);
+                  "CreateConstantBufferView: created at index %u", index);
 }
 
 /**
  * @brief 在指定索引创建Unordered Access View
  */
 void GlobalDescriptorHeapManager::CreateUnorderedAccessView(
-    ID3D12Device* device,
-    ID3D12Resource* resource,
-    ID3D12Resource* counterResource,
+    ID3D12Device*                           device,
+    ID3D12Resource*                         resource,
+    ID3D12Resource*                         counterResource,
     const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,
-    uint32_t index)
+    uint32_t                                index)
 {
     if (!m_initialized || !m_cbvSrvUavHeap)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateUnorderedAccessView: not initialized");
+                       "CreateUnorderedAccessView: not initialized");
         return;
     }
 
     if (index >= m_cbvSrvUavCapacity)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateUnorderedAccessView: index %u out of range (capacity: %u)",
-                      index, m_cbvSrvUavCapacity);
+                       "CreateUnorderedAccessView: index %u out of range (capacity: %u)",
+                       index, m_cbvSrvUavCapacity);
         return;
     }
 
@@ -679,7 +679,7 @@ void GlobalDescriptorHeapManager::CreateUnorderedAccessView(
     device->CreateUnorderedAccessView(resource, counterResource, desc, cpuHandle);
 
     core::LogInfo("GlobalDescriptorHeapManager",
-                 "CreateUnorderedAccessView: created at index %u", index);
+                  "CreateUnorderedAccessView: created at index %u", index);
 }
 
 /**
@@ -688,23 +688,23 @@ void GlobalDescriptorHeapManager::CreateUnorderedAccessView(
  * 教学要点: RTV使用独立的堆，不在全局Bindless CBV_SRV_UAV堆中
  */
 void GlobalDescriptorHeapManager::CreateRenderTargetView(
-    ID3D12Device* device,
-    ID3D12Resource* resource,
+    ID3D12Device*                        device,
+    ID3D12Resource*                      resource,
     const D3D12_RENDER_TARGET_VIEW_DESC* desc,
-    uint32_t index)
+    uint32_t                             index)
 {
     if (!m_initialized || !m_rtvHeap)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateRenderTargetView: not initialized");
+                       "CreateRenderTargetView: not initialized");
         return;
     }
 
     if (index >= m_rtvCapacity)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateRenderTargetView: index %u out of range (capacity: %u)",
-                      index, m_rtvCapacity);
+                       "CreateRenderTargetView: index %u out of range (capacity: %u)",
+                       index, m_rtvCapacity);
         return;
     }
 
@@ -712,7 +712,7 @@ void GlobalDescriptorHeapManager::CreateRenderTargetView(
     device->CreateRenderTargetView(resource, desc, cpuHandle);
 
     core::LogInfo("GlobalDescriptorHeapManager",
-                 "CreateRenderTargetView: created at index %u", index);
+                  "CreateRenderTargetView: created at index %u", index);
 }
 
 /**
@@ -721,23 +721,23 @@ void GlobalDescriptorHeapManager::CreateRenderTargetView(
  * 教学要点: DSV使用独立的堆，不在全局Bindless CBV_SRV_UAV堆中
  */
 void GlobalDescriptorHeapManager::CreateDepthStencilView(
-    ID3D12Device* device,
-    ID3D12Resource* resource,
+    ID3D12Device*                        device,
+    ID3D12Resource*                      resource,
     const D3D12_DEPTH_STENCIL_VIEW_DESC* desc,
-    uint32_t index)
+    uint32_t                             index)
 {
     if (!m_initialized || !m_dsvHeap)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateDepthStencilView: not initialized");
+                       "CreateDepthStencilView: not initialized");
         return;
     }
 
     if (index >= m_dsvCapacity)
     {
         core::LogError("GlobalDescriptorHeapManager",
-                      "CreateDepthStencilView: index %u out of range (capacity: %u)",
-                      index, m_dsvCapacity);
+                       "CreateDepthStencilView: index %u out of range (capacity: %u)",
+                       index, m_dsvCapacity);
         return;
     }
 
@@ -745,7 +745,7 @@ void GlobalDescriptorHeapManager::CreateDepthStencilView(
     device->CreateDepthStencilView(resource, desc, cpuHandle);
 
     core::LogInfo("GlobalDescriptorHeapManager",
-                 "CreateDepthStencilView: created at index %u", index);
+                  "CreateDepthStencilView: created at index %u", index);
 }
 
 /**
