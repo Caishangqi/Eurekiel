@@ -1,6 +1,6 @@
-﻿// 教学要点: Windows头文件预处理宏，必须在所有头文件之前定义
-#define WIN32_LEAN_AND_MEAN  //  减少Windows.h包含内容，加速编译并避免冲突
-#define NOMINMAX             //  防止Windows.h定义min/max宏，避免与std::min/max冲突
+﻿// Windows头文件预处理宏
+#define WIN32_LEAN_AND_MEAN  // 减少Windows.h包含内容
+#define NOMINMAX             // 防止Windows.h定义min/max宏
 
 #include "UniformManager.hpp"
 
@@ -8,10 +8,7 @@
 
 #include <cstring>
 
-//  架构正确性: 使用D3D12RenderSystem静态API，遵循严格四层分层架构
-// Layer 4 (UniformManager) → Layer 3 (D3D12RenderSystem) → Layer 2 (D12Buffer) → Layer 1 (DX12 Native)
-#include "MatricesUniforms.hpp"
-#include "PerObjectUniforms.hpp"
+// 遵循四层架构: UniformManager → D3D12RenderSystem → D12Buffer → DX12 Native
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
@@ -30,68 +27,58 @@ namespace enigma::graphic
             return currentIndex % maxCount;
         case UpdateFrequency::PerPass:
         case UpdateFrequency::PerFrame:
-            return 0; // 单索引
+            return 0; // single index
         default:
             return 0;
         }
     }
 
-    // ========================================================================
-    // 构造函数 - RAII自动初始化
-    // ========================================================================
     UniformManager::UniformManager()
     {
     }
-
-    // ========================================================================
-    // 析构函数 - RAII自动释放
-    // ========================================================================
 
     UniformManager::~UniformManager()
     {
     }
 
-    // ========================================================================
-    // GetBufferStateBySlot() - 根据Root Slot查找Buffer状态 (Phase 1)
-    // ========================================================================
+    bool UniformManager::IsSlotRegistered(uint32_t slot) const
+    {
+        return m_slotToTypeMap.find(slot) != m_slotToTypeMap.end();
+    }
+
+    const std::vector<uint32_t>& UniformManager::GetSlotsByFrequency(UpdateFrequency frequency) const
+    {
+        static const std::vector<uint32_t> emptyVector;
+
+        auto it = m_frequencyToSlotsMap.find(frequency);
+        if (it != m_frequencyToSlotsMap.end())
+        {
+            return it->second;
+        }
+
+        return emptyVector;
+    }
 
     PerObjectBufferState* UniformManager::GetBufferStateBySlot(uint32_t rootSlot)
     {
-        // Phase 1: 硬编码Slot到TypeId映射
-        // 已实现: Slot 7 (MatricesUniforms), Slot 13 (PerObjectUniforms)
-        if (rootSlot == 7)
+        // 查找slot是否已注册
+        auto slotIt = m_slotToTypeMap.find(rootSlot);
+        if (slotIt == m_slotToTypeMap.end())
         {
-            // Slot 7 → MatricesUniforms
-            std::type_index typeId = std::type_index(typeid(MatricesUniforms));
-            auto            it     = m_perObjectBuffers.find(typeId);
-            if (it != m_perObjectBuffers.end())
-            {
-                return &it->second;
-            }
-        }
-        else if (rootSlot == 1)
-        {
-            // Slot 1 → PerObjectUniforms
-            std::type_index typeId = std::type_index(typeid(PerObjectUniforms));
-            auto            it     = m_perObjectBuffers.find(typeId);
-            if (it != m_perObjectBuffers.end())
-            {
-                return &it->second;
-            }
+            return nullptr; // Slot未注册，静默返回
         }
 
-        // Phase 2 TODO: 扩展到所有14个Slot
-        // Slot 0: CameraAndPlayerUniforms
-        // Slot 1: PerObjectUniforms  (已实现)
-        // Slot 2: ScreenAndSystemUniforms
-        // Slot 3: IDUniforms
-        // Slot 4: WorldAndWeatherUniforms
-        // Slot 5: BiomeAndDimensionUniforms
-        // Slot 6: RenderingUniforms
-        // Slot 7: MatricesUniforms (已实现)
-        // Slot 8-12: 纹理Buffer (ColorTargets, DepthTextures等)
+        // 获取TypeId并查找BufferState
+        std::type_index typeId   = slotIt->second;
+        auto            bufferIt = m_perObjectBuffers.find(typeId);
+        if (bufferIt != m_perObjectBuffers.end())
+        {
+            return &bufferIt->second;
+        }
 
-
+        // TypeId已注册但Buffer未创建（异常情况）
+        LogWarn("UniformManager", "Slot %u registered but buffer not created for TypeId: %s", rootSlot, typeId.name());
+        ERROR_RECOVERABLE(Stringf("Slot %u registered but buffer not created for TypeId: %s", rootSlot, typeId.name()));
         return nullptr;
     }
 } // namespace enigma::graphic

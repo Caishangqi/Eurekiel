@@ -11,6 +11,7 @@
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 
 namespace enigma::graphic
@@ -19,19 +20,13 @@ namespace enigma::graphic
     class D12Buffer;
 
     /**
-     * @brief UpdateFrequency - Buffer更新频率分类 
+     * @brief Buffer更新频率分类，决定Ring Buffer大小和内存分配策略
      *
-     * 教学要点:
-     * 1. 根据更新频率优化内存分配策略
-     * 2. PerObject需要Ring Buffer × 10000 (最高频率)
-     * 3. PerPass需要Ring Buffer × 20 (中等频率)
-     * 4. PerFrame和Static无需Ring Buffer × 1 (低频率)
-     *
-     * 使用场景:
-     * - PerObject: MatricesUniforms (每次Draw更新)
-     * - PerPass: ColorTargets, DepthTextures, ShadowColor (每个Pass更新)
-     * - PerFrame: 其余10个Buffer (每帧更新一次)
-     * - Static: 静态数据 (几乎不更新)
+     * 频率决定Buffer容量:
+     * - PerObject: 10000个元素 (每次Draw更新)
+     * - PerPass: 20个元素 (每个Pass更新)
+     * - PerFrame: 1个元素 (每帧更新)
+     * - Static: 1个元素 (静态数据)
      */
     enum class UpdateFrequency
     {
@@ -42,23 +37,13 @@ namespace enigma::graphic
     };
 
     /**
-     * @brief PerObjectBufferState - Ring Buffer管理状态 
+     * @brief Ring Buffer管理状态
      *
-     * 教学要点:
-     * 1. **256字节对齐**: elementSize = (sizeof(T) + 255) & ~255
-     * 2. **持久映射**: mappedData避免每次Map/Unmap开销
-     * 3. **Delayed Fill**: lastUpdatedValue缓存最后更新值,避免内存浪费
-     * 4. **Ring Buffer索引**: currentIndex % maxCount实现循环覆写
-     *
-     * 内存布局示例:
-     * - MatricesUniforms: elementSize=1280 bytes (对齐后), maxCount=10000
-     * - 总大小: 1280 × 10000 = 12.8 MB
-     *
-     * 使用流程:
-     * 1. 构造时创建GPU Buffer并持久映射
-     * 2. 每次UploadBuffer()调用GetCurrentIndex()获取写入位置
-     * 3. 使用GetDataAt(index)获取写入地址
-     * 4. 更新lastUpdatedValue和lastUpdatedIndex
+     * 关键特性:
+     * - 256字节对齐: elementSize按D3D12要求对齐
+     * - 持久映射: mappedData指针持续有效，避免Map/Unmap开销
+     * - Delayed Fill: lastUpdatedValue缓存值，检测重复上传
+     * - Ring Buffer: currentIndex循环使用maxCount个槽位
      */
     struct PerObjectBufferState
     {
@@ -75,304 +60,176 @@ namespace enigma::graphic
          * @brief 获取指定索引的数据地址
          * @param index 索引值
          * @return 指向数据的void*指针
-         *
-         * 教学要点: 使用指针算术,跳过index个elementSize字节
          */
         void* GetDataAt(size_t index);
 
         /**
          * @brief 获取当前应该使用的索引
-         * @return 当前索引值
-         *
-         * 教学要点:
-         * - PerObject: 使用Ring Buffer,返回 currentIndex % maxCount
-         * - 其他频率: 单索引,始终返回0
+         * @return PerObject频率返回currentIndex % maxCount，其他频率返回0
          */
         size_t GetCurrentIndex() const;
     };
 
     /**
-     * @brief Uniform管理器 - 完整 Iris 纹理系统架构 (48 bytes Root Constants) 🔥
+     * @brief Uniform管理器 - 基于SM6.6 Bindless架构的Constant Buffer管理
      *
-     * 核心架构设计 (基于 Iris 官方分类 + Bindless 优化 + 完整纹理支持):
-     * 1. Root Constants = 48 bytes (12个uint32_t索引) 
-     * 2. 12个 GPU 资源索引 (8个Uniform + 4个纹理Buffer + 1个直接纹理)
-     * 3. 完整 Iris 纹理系统: colortex0-15 + depthtex0/1/2 + shadowcolor0-7 + shadowtex0/1 + noisetex
-     * 4. **Fluent Builder + std::function Supplier模式** (模仿Iris设计) 
+     * 架构特性:
+     * - 使用TypeId作为Key，类型安全的Buffer注册和上传
+     * - Ring Buffer支持高频更新（PerObject可达10000次/帧）
+     * - 持久映射减少CPU开销
+     * - 按UpdateFrequency自动分类和绑定
+     * - 支持slot 0-14引擎保留，slot >=15用户自定义
      *
-     * 教学要点:
-     * 1. SM6.6 Bindless架构: Root Signature极简化,无Descriptor Table
-     * 2. 48字节限制: D3D12_MAX_ROOT_COST = 64 DWORDS (256 bytes总预算, Root Constants占18.75%)
-     * 3. Supplier模式: 使用std::function懒加载,按需自动获取最新值
-     * 4. Fluent Builder: 链式调用,代码优雅紧凑
-     * 5. 激进合并方案: ShadowBuffer 合并 shadowcolor + shadowtex (80 bytes buffer, 4 bytes 索引)
-     *
-     * Iris官方分类 (https://shaders.properties/current/reference/uniforms/overview/):
-     * - Camera/Player Uniforms      (CameraAndPlayerUniforms)
-     * - Player Status Uniforms      (PlayerStatusUniforms)
-     * - Screen/System Uniforms      (ScreenAndSystemUniforms)
-     * - ID Uniforms                 (IDUniforms)
-     * - World/Weather Uniforms      (WorldAndWeatherUniforms)
-     * - Biome/Dimension Uniforms    (BiomeAndDimensionUniforms)
-     * - Rendering Uniforms          (RenderingUniforms)
-     * - Matrices                    (MatricesUniforms)
-     *
-     * 性能优势:
-     * - Root Signature切换: 从1000次/帧降至1次/帧 (99.9%优化)
-     * - 资源容量: 从数千提升至1,000,000+ (100倍提升)
-     * - Supplier按需执行: 只在SyncToGPU()时调用,避免无效计算
-     * - unordered_map查找: O(1)常数时间,只在注册时执行一次
-     *
-     * 使用流程 (两种模式):
-     *
-     * **模式1: 引擎内部使用 - Supplier自动拉取** 🔥
+     * 使用示例:
      * ```cpp
-     * // RAII: 构造即初始化,无需手动Initialize()
-     * UniformManager uniformMgr;
+     * // 注册Buffer
+     * uniformMgr->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerObject);
+     * uniformMgr->RegisterBuffer<CameraAndPlayerUniforms>(0, UpdateFrequency::PerFrame);
      *
-     * // Fluent Builder注册Supplier (引擎内部组件可访问系统状态)
-     * uniformMgr
-     *     .Uniform3f("cameraPosition", []() { return CameraSystem::GetPosition(); })
-     *     .Uniform2i("eyeBrightness", []() { return PlayerSystem::GetEyeBrightness(); })
-     *     .Uniform1f("rainStrength", []() { return WeatherSystem::GetRainStrength(); })
-     *     .UniformMat4("gbufferModelView", []() { return CameraSystem::GetModelViewMatrix(); });
+     * // 上传数据
+     * MatricesUniforms matrices;
+     * matrices.gbufferModelView = viewMatrix;
+     * uniformMgr->UploadBuffer(matrices);
      *
-     * // 每帧调用SyncToGPU(),自动执行所有Supplier并上传到GPU
-     * uniformMgr.SyncToGPU();
-     * ```
-     *
-     * **模式2: 游戏侧使用 - 直接值推送** 🔥
-     * ```cpp
-     * // RAII: 构造即初始化
-     * UniformManager uniformMgr;
-     *
-     * // 游戏侧直接推送数据 (完全解耦,无需访问引擎内部系统)
-     * uniformMgr
-     *     .Uniform3f("cameraPosition", Vec3(1.0f, 2.0f, 3.0f))
-     *     .Uniform1f("rainStrength", 0.8f)
-     *     .Uniform1i("worldTime", 6000)
-     *     .UniformMat4("gbufferModelView", myViewMatrix);
-     *
-     * // 直接值模式已标记脏,SyncToGPU()只上传脏Buffer (无Supplier调用)
-     * uniformMgr.SyncToGPU();
-     * ```
-     *
-     * **混合模式: 两种方式可以同时使用** 🔥
-     * ```cpp
-     * uniformMgr
-     *     // 引擎内部自动拉取
-     *     .Uniform1f("frameTimeCounter", []() { return Clock::GetTime(); })
-     *     // 游戏侧主动推送
-     *     .Uniform3f("cameraPosition", gameCamera.GetPosition())
-     *     .Uniform1f("rainStrength", gameWeather.GetRainStrength());
-     *
-     * uniformMgr.SyncToGPU();
-     * ```
-     *
-     * // 传递到GPU (只需48字节Root Constants) 
-     * bindlessRootSignature->SetRootConstants(
-     *     commandList,
-     *     uniformMgr.GetRootConstants(),
-     *     12,  // 12 DWORDs 
-     *     0    // 偏移量0
-     * );
-     * ```
-     *
-     * HLSL访问示例:
-     * ```hlsl
-     * cbuffer RootConstants : register(b0, space0)
+     * // 自动绑定所有PerObject Buffer
+     * auto& slots = uniformMgr->GetSlotsByFrequency(UpdateFrequency::PerObject);
+     * for (uint32_t slot : slots)
      * {
-     *     // Uniform Buffers (32 bytes)
-     *     uint cameraAndPlayerBufferIndex;      // Offset 0
-     *     uint playerStatusBufferIndex;         // Offset 4
-     *     uint screenAndSystemBufferIndex;      // Offset 8
-     *     uint idBufferIndex;                   // Offset 12
-     *     uint worldAndWeatherBufferIndex;      // Offset 16
-     *     uint biomeAndDimensionBufferIndex;    // Offset 20
-     *     uint renderingBufferIndex;            // Offset 24
-     *     uint matricesBufferIndex;             // Offset 28
-     *
-     *     // Texture Buffers (12 bytes) 
-     *     uint colorTargetsBufferIndex;         // Offset 32 (colortex0-15)
-     *     uint depthTexturesBufferIndex;        // Offset 36 (depthtex0/1/2)
-     *     uint shadowBufferIndex;               // Offset 40 (shadowcolor0-7 + shadowtex0/1)
-     *
-     *     // Direct Texture (4 bytes) 
-     *     uint noiseTextureIndex;               // Offset 44 (noisetex)
-     * };
-     *
-     * // Uniform访问示例
-     * StructuredBuffer<CameraAndPlayerUniforms> cameraBuffer =
-     *     ResourceDescriptorHeap[cameraAndPlayerBufferIndex];
-     * float3 cameraPos = cameraBuffer[0].cameraPosition;
-     *
-     * // 纹理访问示例 (通过 Common.hlsl 宏)
-     * Texture2D colortex0 = GetRenderTarget(0);  // 自动处理 Main/Alt
-     * Texture2D<float> depthtex0 = GetDepthTex0();
-     * Texture2D shadowcolor0 = GetShadowColor(0);
-     * Texture2D noisetex = ResourceDescriptorHeap[noiseTextureIndex];
+     *     auto* state = uniformMgr->GetBufferStateBySlot(slot);
+     *     // 绑定Root CBV...
+     * }
      * ```
      */
     class UniformManager
     {
     public:
         /**
-         * @brief 构造函数 - RAII自动初始化 🔥
+         * @brief 构造函数 - RAII自动初始化
          *
-         * 教学要点 (遵循RAII原则):
-         * 1. 初始化所有 12 个 CPU 端结构体为默认值 
-         * 2. 构建字段映射表 (unordered_map, BuildFieldMap())
-         * 3. 创建 12 个 GPU StructuredBuffer 
-         * 4. 上传初始数据到GPU
-         * 5. 注册到Bindless系统,获取 12 个索引并更新 Root Constants (48 bytes) 
-         * 6. 构造完成即可用,无需手动Initialize()
-         *
-         * RAII优势:
-         * - 资源获取即初始化 (Resource Acquisition Is Initialization)
-         * - 异常安全: 构造失败会抛出异常,析构函数保证清理
-         * - 避免"未初始化"状态: 对象创建完成就处于可用状态
+         * 对象创建完成即可用，无需手动Initialize()
          */
         UniformManager();
 
         /**
-         * @brief 析构函数 - RAII自动释放资源 🔥
+         * @brief 析构函数 - RAII自动释放资源
          *
-         * 教学要点:
-         * 1. 自动注销 12 个 Bindless 索引 
-         * 2. 释放 12 个 GPU StructuredBuffer 
-         * 3. RAII原则 - 无需手动Shutdown(),自动资源管理
+         * 自动清理所有GPU Buffer和映射内存
          */
         ~UniformManager();
 
         /**
-         * @brief 根据Root Slot获取Buffer状态 (Phase 1: Public API)
-         * @param rootSlot Root Signature Slot编号 (0-13)
+         * @brief 根据Root Slot获取Buffer状态
+         * @param rootSlot Root Signature Slot编号
          * @return 对应的PerObjectBufferState指针，未找到返回nullptr
          *
-         * 教学要点:
-         * 1. DrawVertexArray需要访问此方法获取Matrices Buffer状态
-         * 2. Phase 1只实现Slot 7 (Matrices)
-         * 3. Phase 2会扩展到所有14个Slot
-         *
-         * 使用场景:
-         * - Delayed Fill: 检查当前索引是否已更新
-         * - Root CBV绑定: 计算GPU虚拟地址
+         * 用于DrawVertexArray获取Buffer状态并计算GPU虚拟地址
          */
         PerObjectBufferState* GetBufferStateBySlot(uint32_t rootSlot);
 
         // ========================================================================
-        // TypeId-based Buffer注册和上传API (Phase 1)  [PUBLIC]
+        // TypeId-based Buffer registration and upload API [PUBLIC]
         // ========================================================================
 
         /**
-         * @brief 注册类型化Buffer - 类型安全API
+         * @brief 注册类型化Buffer
          * @tparam T Buffer数据类型 (例如: MatricesUniforms)
+         * @param registerSlot Root Signature Slot编号 (0-14引擎保留, >=15用户自定义)
          * @param frequency Buffer更新频率
          * @param maxDraws PerObject模式的最大Draw数量 (默认10000)
          *
-         * 教学要点:
-         * 1. 使用std::type_index作为Key,实现类型安全
-         * 2. 自动计算256字节对齐: (sizeof(T) + 255) & ~255
-         * 3. 根据UpdateFrequency分配合理Buffer大小:
-         *    - PerObject: maxDraws (默认10000)
-         *    - PerPass: 20 (保守估计)
-         *    - PerFrame/Static: 1
-         * 4. 使用D12Buffer创建Upload Heap并持久映射
-         * 5. 防止重复注册 (同一类型只能注册一次)
+         * 创建GPU Buffer并持久映射，自动计算256字节对齐大小。
+         * 根据frequency分配容量：PerObject=maxDraws, PerPass=20, PerFrame/Static=1
          *
-         * 使用示例:
-         * ```cpp
-         * uniformMgr->RegisterBuffer<MatricesUniforms>(UpdateFrequency::PerObject);
-         * uniformMgr->RegisterBuffer<CameraAndPlayerUniforms>(UpdateFrequency::PerFrame);
-         * ```
+         * @note 防止重复注册，同一类型或slot只能注册一次
          */
         template <typename T>
-        void RegisterBuffer(UpdateFrequency frequency, size_t maxDraws = 10000);
+        void RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency, size_t maxDraws = 10000);
 
         /**
          * @brief 上传数据到类型化Buffer
          * @tparam T Buffer数据类型 (必须与RegisterBuffer相同)
          * @param data 要上传的数据
          *
-         * 教学要点:
-         * 1. 使用std::type_index查找对应Buffer
-         * 2. 计算当前写入索引 (Ring Buffer模式下会循环)
-         * 3. 直接memcpy到持久映射的内存
-         * 4. 更新lastUpdatedValue缓存 (用于Delayed Fill)
-         *
-         * 使用示例:
-         * ```cpp
-         * MatricesUniforms matrices;
-         * matrices.gbufferModelView = viewMatrix;
-         * uniformMgr->UploadBuffer(matrices);
-         * ```
+         * 自动计算Ring Buffer索引并memcpy到持久映射内存，更新lastUpdatedValue缓存
          */
         template <typename T>
         void UploadBuffer(const T& data);
 
         /**
-         * @brief 获取当前Draw计数 (Phase 1)
-         * @return 当前帧已执行的Draw Call数量
-         *
-         * 教学要点:
-         * - 用于计算Ring Buffer索引: currentDrawCount % maxCount
-         * - DrawVertexArray调用此方法获取当前索引
+         * @brief 获取当前Draw计数
+         * @return 当前帧已执行的Draw Call数量，用于计算Ring Buffer索引
          */
         size_t GetCurrentDrawCount() const { return m_currentDrawCount; }
 
         /**
-         * @brief 递增Draw计数 (Phase 1)
+         * @brief 递增Draw计数
          *
-         * 教学要点:
-         * - 每次Draw Call后调用,递增计数
-         * - 下一次Draw Call会使用新的索引
+         * 每次Draw Call后调用，下一次Draw使用新索引
          */
         void IncrementDrawCount() { m_currentDrawCount++; }
 
         /**
-         * @brief 重置Draw计数 (每帧调用)
+         * @brief 重置Draw计数
          *
-         * 教学要点:
-         * 1. 在BeginFrame()中调用,重置当前帧的Draw计数为0
-         * 2. 配合Ring Buffer实现索引管理
-         * 3. Phase 2会扩展为重置所有Buffer的currentIndex
+         * 每帧调用，在BeginFrame()中重置为0
          */
         void ResetDrawCount()
         {
             m_currentDrawCount = 0;
-            // Phase 2: 重置所有Buffer的currentIndex
         }
+
+        // ========================================================================
+        // Slot management query API [PUBLIC]
+        // ========================================================================
+
+        /**
+         * @brief 根据TypeId查询已注册的slot
+         * @tparam T Buffer数据类型
+         * @return 已注册的slot编号，未注册返回UINT32_MAX
+         */
+        template <typename T>
+        uint32_t GetRegisteredSlot() const
+        {
+            auto typeId = std::type_index(typeid(T));
+            auto it     = m_typeToSlotMap.find(typeId);
+            return (it != m_typeToSlotMap.end()) ? it->second : UINT32_MAX;
+        }
+
+        /**
+         * @brief 检查slot是否已被注册
+         * @param slot slot编号
+         * @return true=已注册，false=未注册
+         */
+        bool IsSlotRegistered(uint32_t slot) const;
+
+        /**
+         * @brief 获取指定更新频率的所有slot列表
+         * @param frequency 更新频率 (PerObject, PerPass, PerFrame, Static)
+         * @return const引用，指向slot列表。未找到返回空vector
+         *
+         * 用于DrawVertexArray自动绑定所有PerObject Buffer，或批量操作特定频率的Buffer
+         */
+        const std::vector<uint32_t>& GetSlotsByFrequency(UpdateFrequency frequency) const;
 
     private:
         // ========================================================================
         // Root CBV架构 - Ring Buffer管理 
         // ========================================================================
 
-        /**
-         * @brief PerObject Buffer管理容器
-         *
-         * 教学要点:
-         * 1. 使用std::type_index作为Key实现类型安全
-         * 2. 存储所有需要Ring Buffer管理的Buffer (例如: MatricesUniforms)
-         * 3. 每个类型对应一个PerObjectBufferState状态
-         *
-         * 使用示例:
-         * ```cpp
-         * m_perObjectBuffers[typeid(MatricesUniforms)] = state;
-         * ```
-         */
+        // TypeId到Buffer状态的映射，实现类型安全的Buffer管理
         std::unordered_map<std::type_index, PerObjectBufferState> m_perObjectBuffers;
 
+        // Slot到TypeId映射表，用于GetBufferStateBySlot()快速查找
+        std::unordered_map<uint32_t, std::type_index> m_slotToTypeMap;
 
-        /**
-         * @brief 当前帧Draw计数
-         *
-         * 教学要点:
-         * 1. 用于追踪当前帧已执行的Draw Call数量
-         * 2. 配合Ring Buffer实现索引管理
-         * 3. 每帧重置为0 (在BeginFrame()中)
-         * 4. 每次Draw Call递增 (在UploadBuffer()中)
-         */
+        // TypeId到Slot映射表，用于GetRegisteredSlot<T>()反向查询
+        std::unordered_map<std::type_index, uint32_t> m_typeToSlotMap;
+
+        // UpdateFrequency到Slot列表映射表，支持自动绑定机制
+        // DrawVertexArray遍历PerObject的所有slot并自动绑定
+        std::unordered_map<UpdateFrequency, std::vector<uint32_t>> m_frequencyToSlotsMap;
+
+        // 当前帧Draw计数，用于Ring Buffer索引管理
         size_t m_currentDrawCount = 0;
 
         // 禁用拷贝 (遵循RAII原则)
@@ -381,26 +238,33 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // Template Method 实现 (必须在头文件中定义)
+    // Template Method implementation (must be defined in the header file)
     // ========================================================================
-
     template <typename T>
-    void UniformManager::RegisterBuffer(UpdateFrequency frequency, size_t maxDraws)
+    void UniformManager::RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency, size_t maxDraws)
     {
         std::type_index typeId = std::type_index(typeid(T));
 
-        // 防止重复注册
+        // [REQUIRED] prevents repeated registration of the same type
         if (m_perObjectBuffers.find(typeId) != m_perObjectBuffers.end())
         {
-            LogWarn(core::LogRenderer, "Buffer already registered: %s", typeid(T).name());
+            LogWarn(LogRenderer, "Buffer already registered: %s", typeid(T).name());
             return;
         }
 
-        // 计算256字节对齐的元素大小
-        size_t rawSize     = sizeof(T);
-        size_t alignedSize = (rawSize + 255) & ~255; // 256字节对齐
+        // [REQUIRED] Prevent repeated registration of the same slot
+        if (IsSlotRegistered(registerSlot))
+        {
+            LogError(LogRenderer, "Slot %u already registered! Cannot register type: %s",
+                     registerSlot, typeid(T).name());
+            ERROR_AND_DIE(Stringf("Slot %u already registered! Cannot register type: %s",registerSlot, typeid(T).name()))
+        }
 
-        // 根据频率决定Buffer大小
+        // Calculate 256-byte aligned element size
+        size_t rawSize     = sizeof(T);
+        size_t alignedSize = (rawSize + 255) & ~255; // 256-byte alignment
+
+        //Determine the Buffer size based on frequency
         size_t count = 1;
         switch (frequency)
         {
@@ -408,7 +272,7 @@ namespace enigma::graphic
             count = maxDraws; // 10000
             break;
         case UpdateFrequency::PerPass:
-            count = 20; // 保守估计
+            count = 20; // conservative estimate
             break;
         case UpdateFrequency::PerFrame:
         case UpdateFrequency::Static:
@@ -416,7 +280,8 @@ namespace enigma::graphic
             break;
         }
 
-        // 创建GPU Buffer (Upload Heap, persistent mapping)
+        // [FIX] Create GPU Buffer (Upload Heap, persistent mapping)
+        // [IMPORTANT] Use D3D12RenderSystem::CreateBuffer and follow the four-layer architecture
         size_t totalSize = alignedSize * count;
 
         BufferCreateInfo createInfo;
@@ -426,32 +291,46 @@ namespace enigma::graphic
         createInfo.initialData  = nullptr;
         createInfo.debugName    = typeid(T).name();
 
-        auto gpuBuffer = new D12Buffer(createInfo);
+        // [FIX] Use D3D12RenderSystem::CreateBuffer (returns std::unique_ptr)
+        auto gpuBuffer = D3D12RenderSystem::CreateBuffer(createInfo);
+        if (!gpuBuffer)
+        {
+            LogError(core::LogRenderer, "Failed to create buffer: %s", typeid(T).name());
+            ERROR_AND_DIE(Stringf("Failed to create buffer: %s", typeid(T).name()))
+        }
 
         // 持久映射
         void* mappedData = gpuBuffer->MapPersistent();
         if (!mappedData)
         {
             LogError(core::LogRenderer, "Failed to map buffer: %s", typeid(T).name());
-            delete gpuBuffer;
             return;
         }
 
-        // 创建状态对象
+        //Create state object
         PerObjectBufferState state;
-        state.gpuBuffer    = std::unique_ptr<D12Buffer>(gpuBuffer);
+        state.gpuBuffer    = std::move(gpuBuffer); // std::unique_ptr moves directly
         state.mappedData   = mappedData;
         state.elementSize  = alignedSize;
         state.maxCount     = count;
         state.frequency    = frequency;
         state.currentIndex = 0;
-        state.lastUpdatedValue.resize(alignedSize, 0); // 初始化为0
+        state.lastUpdatedValue.resize(alignedSize, 0); // Initialized to 0
         state.lastUpdatedIndex = SIZE_MAX;
 
         m_perObjectBuffers[typeId] = std::move(state);
 
-        LogInfo(core::LogRenderer, "Registered Buffer: type=%s, frequency=%d, size=%zu, count=%zu",
-                typeid(T).name(), static_cast<int>(frequency), alignedSize, count);
+        // [REQUIRED] Synchronously update slot mapping
+        // [FIX] std::type_index cannot be constructed by default, insert/emplace must be used
+        m_slotToTypeMap.insert_or_assign(registerSlot, typeId);
+        m_typeToSlotMap.insert_or_assign(typeId, registerSlot);
+
+        // [NEW] Automatically classify into UpdateFrequency list
+        m_frequencyToSlotsMap[frequency].push_back(registerSlot);
+
+        LogInfo(core::LogRenderer,
+                "Registered Buffer: type=%s, slot=%u, frequency=%d, size=%zu, count=%zu",
+                typeid(T).name(), registerSlot, static_cast<int>(frequency), alignedSize, count);
     }
 
     template <typename T>

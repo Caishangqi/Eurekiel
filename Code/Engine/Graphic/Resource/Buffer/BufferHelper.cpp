@@ -20,15 +20,11 @@ using namespace enigma::core;
 size_t BufferHelper::CalculateAlignedSize(size_t rawSize)
 {
     // D3D12要求ConstantBuffer必须256字节对齐
-    // 公式：(rawSize + 255) & ~255
-    // 示例：100 → 256, 300 → 512, 256 → 256
     return (rawSize + CONSTANT_BUFFER_ALIGNMENT - 1) & ~(CONSTANT_BUFFER_ALIGNMENT - 1);
 }
 
 size_t BufferHelper::CalculateBufferCount(size_t totalSize, size_t elementSize)
 {
-    // 计算总大小可以容纳多少个元素
-    // 教学要点：整数除法，向下取整
     if (elementSize == 0)
     {
         LogWarn(LogRenderer, "BufferHelper::CalculateBufferCount: elementSize is 0, returning 0");
@@ -51,8 +47,6 @@ bool BufferHelper::IsUserSlot(uint32_t slot)
 
 D3D12_GPU_VIRTUAL_ADDRESS BufferHelper::CalculateRootCBVAddress(ID3D12Resource* resource, size_t offset)
 {
-    // 计算ConstantBuffer的GPU虚拟地址
-    // 教学要点：GPU虚拟地址 = 资源基地址 + 偏移量
     if (resource == nullptr)
     {
         LogError(LogRenderer, "BufferHelper::CalculateRootCBVAddress: resource is nullptr");
@@ -81,9 +75,7 @@ void BufferHelper::EnsureBufferSize(
                              ? (std::min)((std::max)(requiredSize, buffer->GetSize() * 2), RendererSubsystemConfig::MAX_IMMEDIATE_BUFFER_SIZE)
                              : (std::max)(requiredSize, minSize);
 
-        // [FIX] Make sure newSize is a multiple of stride (aligned upward)
-        //Teaching points: D12VertexBuffer constructor requires size % stride == 0
-        // For example: stride=60, newSize=65536 → 65580 (1093 * 60) after alignment
+        // 确保newSize是stride的倍数（向上对齐）
         if (newSize % stride != 0)
         {
             newSize = ((newSize + stride - 1) / stride) * stride;
@@ -97,9 +89,7 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        // [FIX] Task 4 (2025-01-06): Persistent mapping for immediate buffers
-        // 教学要点：Upload heap buffer必须在创建后立即persistent map，以支持per-frame append策略
-        // 这确保GetPersistentMappedData()返回有效指针，避免DrawVertexArray中的ERROR_RECOVERABLE
+        // 持久映射支持per-frame append策略
         void* mappedPtr = buffer->MapPersistent();
         GUARANTEE_OR_DIE(mappedPtr != nullptr,
                          Stringf("BufferHelper: Failed to persistent map VertexBuffer '%s'", debugName).c_str());
@@ -123,10 +113,8 @@ void BufferHelper::EnsureBufferSize(
                              ? (std::min)((std::max)(requiredSize, buffer->GetSize() * 2), RendererSubsystemConfig::MAX_IMMEDIATE_BUFFER_SIZE)
                              : (std::max)(requiredSize, minSize);
 
-        // [FIX] 确保 newSize 是索引大小的倍数（向上对齐）
-        // 教学要点：D12IndexBuffer 构造函数要求 size % indexSize == 0
-        // Uint32 索引大小为 4 字节
-        constexpr size_t indexSize = sizeof(uint32_t); // 4 bytes for Uint32
+        // 确保newSize是索引大小的倍数（向上对齐）
+        constexpr size_t indexSize = sizeof(uint32_t);
         if (newSize % indexSize != 0)
         {
             newSize = ((newSize + indexSize - 1) / indexSize) * indexSize;
@@ -140,9 +128,7 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        // [FIX] Task 4 (2025-01-06): Persistent mapping for immediate buffers
-        // 教学要点：Upload heap buffer必须在创建后立即persistent map，以支持per-frame append策略
-        // 这确保GetPersistentMappedData()返回有效指针，避免DrawVertexArray中的ERROR_RECOVERABLE
+        // 持久映射支持per-frame append策略
         void* mappedPtr = buffer->MapPersistent();
         GUARANTEE_OR_DIE(mappedPtr != nullptr,
                          Stringf("BufferHelper: Failed to persistent map IndexBuffer '%s'", debugName).c_str());

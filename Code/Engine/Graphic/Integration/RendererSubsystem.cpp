@@ -15,7 +15,7 @@
 #include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
-#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp" // Phase 3: Uniform管理器
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
@@ -379,135 +379,47 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer,
-                 "Failed to create RenderTargetManager: {}",
+                 "Failed to create RenderTargetManager: %s",
                  e.what());
         ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()))
     }
 
-    // ==================== 创建UniformManager (Phase 3) ====================
-    // 初始化Uniform缓冲区管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
+    // ==================== Create UniformManager ====================
+    // Initialize the Uniform Buffer Manager - manage all Uniform Buffers
     try
     {
         LogInfo(LogRenderer, "Creating UniformManager...");
 
-        // UniformManager构造函数会自动初始化所有Uniform Buffer
+        //The UniformManager constructor will automatically initialize all Uniform Buffers
         m_uniformManager = std::make_unique<UniformManager>();
 
         LogInfo(LogRenderer, "UniformManager created successfully");
 
-        // ==================== 注册Matrices Ring Buffer (Phase 1) ====================
-        // 注册MatricesUniforms为PerObject Buffer, 分配10000 draws
-        // 教学要点:
-        // 1. MatricesUniforms原始大小1152字节, 对齐后1280字节
-        // 2. 10000 × 1280 = 12.8 MB (对现代GPU微不足道)
-        // 3. 这是Phase 1唯一的PerObject Buffer
+        //Register MatricesUniforms as PerObject Buffer, allocate 10000 draws
+        //Teaching points:
+        // 1. The original size of MatricesUniforms is 1152 bytes, and it is 1280 bytes after alignment.
+        // 2. 10000 × 1280 = 12.8 MB
+        // 4. [NEW] Explicitly specify slot 7
         m_uniformManager->RegisterBuffer<MatricesUniforms>(
+            7, // registerSlot: Slot 7 for Matrices
             UpdateFrequency::PerObject,
             10000 // maxDrawsPerFrame
         );
 
         LogInfo(LogRenderer, "Matrices Ring Buffer allocated: 10000 × 1280 bytes = 12.8 MB");
 
-        // 验证Buffer分配成功
-        auto* state = m_uniformManager->GetBufferStateBySlot(7); // Matrices在slot 7
-        if (state == nullptr)
-        {
-            LogError(LogRenderer, "Failed to get Matrices buffer state at slot 7");
-            ERROR_AND_DIE("Failed to get Matrices buffer state at slot 7")
-        }
-
-        // 验证所有字段
-        if (state->gpuBuffer == nullptr)
-        {
-            LogError(LogRenderer, "Matrices GPU buffer is null");
-            ERROR_AND_DIE("Matrices GPU buffer is null")
-        }
-
-        if (state->mappedData == nullptr)
-        {
-            LogError(LogRenderer, "Matrices mapped data is null");
-            ERROR_AND_DIE("Matrices mapped data is null")
-        }
-
-        if (state->elementSize != 1280)
-        {
-            LogError(LogRenderer, "Matrices element size mismatch: expected 1280, got %zu", state->elementSize);
-            ERROR_AND_DIE(Stringf("Matrices element size mismatch: expected 1280, got %zu", state->elementSize))
-        }
-
-        if (state->maxCount != 10000)
-        {
-            LogError(LogRenderer, "Matrices max count mismatch: expected 10000, got %zu", state->maxCount);
-            ERROR_AND_DIE(Stringf("Matrices max count mismatch: expected 10000, got %zu", state->maxCount))
-        }
-
-        // 验证GPU Address非空
-        D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = state->gpuBuffer->GetGPUVirtualAddress();
-        if (gpuAddress == 0)
-        {
-            LogError(LogRenderer, "Matrices GPU address is zero");
-            ERROR_AND_DIE("Matrices GPU address is zero")
-        }
-
-        LogInfo(LogRenderer, "Matrices Buffer verified: GPU Address = 0x%llx", gpuAddress);
-
-        // ==================== 注册 PerObjectUniforms Ring Buffer ====================
-        // 注册 PerObjectUniforms 为 PerObject Buffer, 分配 10000 draws
-        // 教学要点:
-        // 1. PerObjectUniforms 原始大小 128 字节（2个Mat44），对齐后 256 字节
-        // 2. 10000 × 256 = 2.5 MB（合理的内存开销）
-        // 3. 这是第二个 PerObject Buffer（第一个是 MatricesUniforms）
+        // ==================== Register PerObjectUniforms Ring Buffer ====================
+        // Register PerObjectUniforms as PerObject Buffer, allocate 10000 draws
+        // Teaching points:
+        // 1. PerObjectUniforms original size 128 bytes (2 Mat44), 256 bytes after alignment
+        // 2. 10000 × 256 = 2.5 MB (reasonable memory overhead)
+        // 3. This is the second PerObject Buffer (the first is MatricesUniforms)
+        // 4. [NEW] Explicitly specify slot 1
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(
+            1, // registerSlot: Slot 1 for PerObjectUniforms (Iris-compatible)
             UpdateFrequency::PerObject,
-            10000 // maxDrawsPerFrame，与 Matrices 保持一致
+            10000 // maxDrawsPerFrame, consistent with Matrices
         );
-
-        LogInfo(LogRenderer, "PerObject Ring Buffer allocated: 10000 × 256 bytes = 2.5 MB");
-
-        // 验证 Buffer 分配成功（需要先确定实际的 slot 号）
-        // 注意：slot 号可能不是 13，需要通过 TypeId 查询
-        auto* perObjState = m_uniformManager->GetBufferStateBySlot(1);
-
-        if (perObjState == nullptr)
-        {
-            LogError(LogRenderer, "Failed to get PerObjectUniforms buffer state");
-            ERROR_AND_DIE("Failed to get PerObjectUniforms buffer state")
-        }
-
-        // 验证关键字段
-        if (perObjState->gpuBuffer == nullptr)
-        {
-            LogError(LogRenderer, "PerObjectUniforms GPU buffer is null");
-            ERROR_AND_DIE("PerObjectUniforms GPU buffer is null")
-        }
-
-        if (perObjState->mappedData == nullptr)
-        {
-            LogError(LogRenderer, "PerObjectUniforms mapped data is null");
-            ERROR_AND_DIE("PerObjectUniforms mapped data is null")
-        }
-
-        if (perObjState->elementSize != 256)
-        {
-            LogError(LogRenderer, "PerObjectUniforms element size mismatch: expected 256, got %zu", perObjState->elementSize);
-            ERROR_AND_DIE(Stringf("PerObjectUniforms element size mismatch: expected 256, got %zu", perObjState->elementSize))
-        }
-
-        if (perObjState->maxCount != 10000)
-        {
-            LogError(LogRenderer, "PerObjectUniforms max count mismatch: expected 10000, got %zu", perObjState->maxCount);
-            ERROR_AND_DIE(Stringf("PerObjectUniforms max count mismatch: expected 10000, got %zu", perObjState->maxCount))
-        }
-
-        // 验证 GPU Address 非零
-        D3D12_GPU_VIRTUAL_ADDRESS perObjGpuAddr = perObjState->gpuBuffer->GetGPUVirtualAddress();
-        if (perObjGpuAddr == 0)
-        {
-            LogError(LogRenderer, "PerObjectUniforms GPU address is zero");
-            ERROR_AND_DIE("PerObjectUniforms GPU address is zero")
-        }
-
-        LogInfo(LogRenderer, "PerObjectUniforms Buffer verified: GPU Address = 0x%llx", perObjGpuAddr);
     }
     catch (const std::exception& e)
     {
@@ -654,8 +566,6 @@ void RendererSubsystem::Shutdown()
     // Reference: Iris.java Line 576-593
     UnloadShaderPack();
 
-    // TODO: M2 - 清理新的灵活渲染架构资源
-
     // Step 3: 最后关闭D3D12RenderSystem
     D3D12RenderSystem::Shutdown();
 }
@@ -709,8 +619,7 @@ void RendererSubsystem::BeginFrame()
     m_currentVertexOffset = 0;
     m_currentIndexOffset  = 0;
 
-    // [NEW] 重置Draw计数 (Phase 1: Ring Buffer管理)
-    // 教学要点: 每帧开始时重置计数器,配合Ring Buffer实现索引管理
+    // 重置Draw计数，配合Ring Buffer实现索引管理
     if (m_uniformManager)
     {
         m_uniformManager->ResetDrawCount();
@@ -1376,15 +1285,12 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
 
     if (drawBuffers.empty())
     {
-        // [FIX] Mode B: 空数组 → 绑定 SwapChain 后台缓冲区
-        // 架构修复：直接调用 OMSetRenderTargets，但在 FlushBindings 之前
-        // 这样可以避免 RenderTargetBinder 的 Hash 缓存污染
+        // Mode B: 空数组绑定SwapChain后台缓冲区
         auto rtvHandle = D3D12RenderSystem::GetBackBufferRTV();
         cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
         LogDebug(LogRenderer, "UseProgram: Bound SwapChain as default RT (Mode B)");
 
-        // [IMPORTANT] 通知 RenderTargetBinder 清除状态缓存
-        // 避免后续 Mode A 调用被 Hash 缓存错误跳过
+        // 清除RenderTargetBinder状态缓存
         if (m_renderTargetBinder)
         {
             m_renderTargetBinder->ClearBindings();
@@ -1395,15 +1301,14 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
         std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
 
-        // [FIX] 使用LoadAction::Clear清除深度缓冲
         std::vector<ClearValue> clearValues(drawBuffers.size(), ClearValue::Color(Rgba8::BLACK));
         m_renderTargetBinder->BindRenderTargets(
             rtTypes, indices,
             RTType::DepthTex, depthIndex,
-            false, // useAlt
-            LoadAction::Clear, // [FIX] 清除RT和深度缓冲
-            clearValues, // 颜色清除值
-            ClearValue::Depth(1.0f, 0) // [FIX] 深度清除值1.0
+            false,
+            LoadAction::Clear,
+            clearValues,
+            ClearValue::Depth(1.0f, 0)
         );
     }
 
@@ -2154,9 +2059,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 
     SetVertexBuffer(m_immediateVBO.get());
 
-    // [FIX] Set Primitive Topology
-    // Teaching points: DirectX 12 requires that Primitive Topology must be set before Draw is called.
-    // Otherwise it will trigger D3D12 ERROR: COMMAND_LIST_DRAW_INVALID_PRIMITIVETOPOLOGY
+    // 设置图元拓扑为三角形列表
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (cmdList)
     {
@@ -2177,20 +2080,10 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
-    // ========================================================================
-    // [PHASE 1] Ring Buffer Root CBV架构 - DrawVertexArray集成
-    // ========================================================================
-    // 新增功能:
-    // 1. [NEW] Delayed Fill逻辑 (自动填充未更新数据)
-    // 2. [NEW] Root CBV绑定 (设置Slot 7为Matrices Buffer地址)
-    // 3. [NEW] Draw计数递增 (Ring Buffer索引管理)
-    // ========================================================================
-    // 教学要点:
-    // - Delayed Fill避免内存浪费 (只复制最后值,无需预填10000份)
-    // - Root CBV性能优势 (硬件优化路径,比Bindless更快)
-    // - Ring Buffer索引: currentDrawCount % maxCount
-    // - GPU地址计算: baseAddress + index × elementSize
-    // ========================================================================
+    // Ring Buffer Root CBV架构集成
+    // - Delayed Fill：自动填充未更新数据，避免预填10000份浪费内存
+    // - Root CBV绑定：硬件优化路径，性能优于Bindless
+    // - 索引管理：currentDrawCount % maxCount实现循环
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
@@ -2198,41 +2091,28 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // ========================================================================
-    // Phase 1: Delayed Fill for Matrices
-    // ========================================================================
-    // 教学要点:
-    // 1. 检查当前索引是否已更新过
-    // 2. 如果未更新,复制最后一次更新的值 (Delayed Fill)
-    // 3. 避免内存浪费: 只在需要时复制,而非预填10000份
-    // ========================================================================
-    auto* matricesState = m_uniformManager->GetBufferStateBySlot(7);
-    if (matricesState)
+    // Delayed Fill：自动获取所有PerObject Buffer并按需复制最后更新值
+    const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+
+    for (uint32_t slot : perObjectSlots)
     {
-        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % matricesState->maxCount;
-
-        // 如果当前索引未更新过,复制最后一次更新的值
-        if (matricesState->lastUpdatedIndex != currentIndex)
+        auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);
+        if (!bufferState)
         {
-            void* destPtr = matricesState->GetDataAt(currentIndex);
-            memcpy(destPtr, matricesState->lastUpdatedValue.data(),
-                   matricesState->elementSize);
-
-            LogDebug(LogRenderer, "Delayed Fill: Matrices[%zu] copied from last value", currentIndex);
+            continue;
         }
-    }
 
-    auto* perObjState = m_uniformManager->GetBufferStateBySlot(1);
-    if (perObjState)
-    {
-        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % perObjState->maxCount;
-        if (perObjState->lastUpdatedIndex != currentIndex)
+        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
+
+        // 如果当前索引未更新过，复制最后一次更新的值
+        if (bufferState->lastUpdatedIndex != currentIndex)
         {
-            void* destPtr = perObjState->GetDataAt(currentIndex);
-            memcpy(destPtr, perObjState->lastUpdatedValue.data(),
-                   perObjState->elementSize);
+            void* destPtr = bufferState->GetDataAt(currentIndex);
+            memcpy(destPtr, bufferState->lastUpdatedValue.data(),
+                   bufferState->elementSize);
 
-            LogDebug(LogRenderer, "Delayed Fill: Matrices[%zu] copied from last value", currentIndex);
+            LogDebug(LogRenderer, "Delayed Fill: Buffer[slot=%u][%zu] copied from last value",
+                     slot, currentIndex);
         }
     }
 
@@ -2259,7 +2139,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped");
         return;
     }
-    // [FIX] 追加到当前offset，而非覆盖offset 0
+    // 追加数据到当前offset
     memcpy(static_cast<char*>(vertexMappedData) + m_currentVertexOffset, vertices, vertexSize);
 
     void* indexMappedData = m_immediateIBO->GetPersistentMappedData();
@@ -2268,48 +2148,36 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         ERROR_RECOVERABLE("DrawVertexArray: ImmediateIBO not persistently mapped");
         return;
     }
-    // [FIX] 追加到当前offset，而非覆盖offset 0
     memcpy(static_cast<char*>(indexMappedData) + m_currentIndexOffset, indices, indexSize);
 
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
-    // ========================================================================
-    // Phase 2: Set Root CBV for Matrices (Slot 7)
-    // ========================================================================
-    // 教学要点:
-    // 1. 计算GPU虚拟地址: baseAddress + index × elementSize
-    // 2. 调用SetGraphicsRootConstantBufferView绑定Root CBV
-    // 3. ROOT_CBV_MATRICES = 7 (来自BindlessRootSignature.hpp)
-    // 4. 必须在DrawIndexed之前绑定,否则GPU读取错误数据
-    // ========================================================================
-    if (matricesState)
+    // 自动绑定所有PerObject Buffer的Root CBV
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
     {
-        size_t                    currentIndex = m_uniformManager->GetCurrentDrawCount() % matricesState->maxCount;
-        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   =
-            matricesState->gpuBuffer->GetGPUVirtualAddress() +
-            currentIndex * matricesState->elementSize;
-
-        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-        if (cmdList)
-        {
-            cmdList->SetGraphicsRootConstantBufferView(
-                7, // ROOT_CBV_MATRICES = 7
-                cbvAddress
-            );
-
-            LogDebug(LogRenderer, "Set Root CBV Matrices: Address=0x%llx, Index=%zu", cbvAddress, currentIndex);
-        }
+        ERROR_RECOVERABLE("DrawVertexArray: CommandList is nullptr");
+        return;
     }
 
-    if (perObjState)
+    for (uint32_t slot : perObjectSlots)
     {
-        size_t                    currentIndex  = m_uniformManager->GetCurrentDrawCount() % perObjState->maxCount;
-        D3D12_GPU_VIRTUAL_ADDRESS perObjAddress =
-            perObjState->gpuBuffer->GetGPUVirtualAddress() +
-            currentIndex * perObjState->elementSize;
-        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-        cmdList->SetGraphicsRootConstantBufferView(1, perObjAddress);
+        auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);
+        if (!bufferState || !bufferState->gpuBuffer)
+        {
+            continue;
+        }
+
+        size_t                    currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
+        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   =
+            bufferState->gpuBuffer->GetGPUVirtualAddress() +
+            currentIndex * bufferState->elementSize;
+
+        cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+
+        LogDebug(LogRenderer, "Set Root CBV: Slot=%u, Address=0x%llx, Index=%zu",
+                 slot, cbvAddress, currentIndex);
     }
 
 
@@ -2320,14 +2188,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     uint32_t startIndex = static_cast<uint32_t>(m_currentIndexOffset / sizeof(unsigned));
     DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
 
-    // ========================================================================
-    // Phase 3: Increment Draw Count
-    // ========================================================================
-    // 教学要点:
-    // 1. 每次Draw Call后递增计数
-    // 2. 配合Ring Buffer实现索引管理
-    // 3. 下一次Draw Call会使用新的索引 (currentIndex + 1) % maxCount
-    // ========================================================================
+    // 递增Draw计数，下一次Draw使用新的Ring Buffer索引
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
