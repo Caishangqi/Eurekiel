@@ -1,7 +1,7 @@
 #pragma once
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
 #include "../Chunk/ESFRegionFile.hpp"
-#include "../Chunk/BlockStateSerializer.hpp"
+#include "../Block/BlockStateSerializer.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include <string>
 #include <memory>

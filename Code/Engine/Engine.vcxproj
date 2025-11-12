@@ -390,6 +390,7 @@
         <ClCompile Include="Resource\Sound\SoundResource.cpp" />
         <ClCompile Include="Voxel\Biome\MultiNoiseBiomeSource.cpp"/>
         <ClCompile Include="Voxel\Block\BlockIterator.cpp"/>
+        <ClCompile Include="Voxel\Block\BlockStateSerializer.cpp"/>
         <ClCompile Include="Voxel\Chunk\ChunkHelper.cpp"/>
         <ClCompile Include="Voxel\Chunk\ChunkMeshHelper.cpp"/>
         <ClCompile Include="Voxel\Climate\Climate.cpp"/>
@@ -407,7 +408,6 @@
         <ClCompile Include="Voxel\Chunk\ESFSFile.cpp" />
         <ClCompile Include="Voxel\Chunk\ESFSChunkSerializer.cpp" />
         <ClCompile Include="Voxel\Chunk\RLECompressor.cpp" />
-        <ClCompile Include="Voxel\Chunk\BlockStateSerializer.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkState.cpp" />
         <ClCompile Include="Voxel\Chunk\GenerateChunkJob.cpp" />
         <ClCompile Include="Voxel\Chunk\LoadChunkJob.cpp" />
@@ -732,6 +732,7 @@
         <ClInclude Include="Voxel\Biome\BiomeSource.hpp"/>
         <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp"/>
         <ClInclude Include="Voxel\Block\BlockIterator.hpp"/>
+        <ClInclude Include="Voxel\Block\BlockStateSerializer.hpp"/>
         <ClInclude Include="Voxel\Chunk\ChunkHelper.hpp"/>
         <ClInclude Include="Voxel\Chunk\ChunkMeshHelper.hpp"/>
         <ClInclude Include="Voxel\Climate\Climate.hpp"/>
@@ -953,7 +954,6 @@
         <ClInclude Include="Voxel\Chunk\ESFSFile.hpp" />
         <ClInclude Include="Voxel\Chunk\ESFSChunkSerializer.hpp" />
         <ClInclude Include="Voxel\Chunk\RLECompressor.hpp" />
-        <ClInclude Include="Voxel\Chunk\BlockStateSerializer.hpp" />
 
         <ClInclude Include="Voxel\Chunk\ChunkState.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkJob.hpp" />
