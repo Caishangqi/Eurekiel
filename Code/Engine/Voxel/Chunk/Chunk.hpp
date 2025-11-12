@@ -1,4 +1,4 @@
-Ôªø#pragma once
+#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
 #include "ChunkMesh.hpp"
@@ -13,6 +13,8 @@
 
 namespace enigma::voxel
 {
+    class World; // Forward declaration for dependency
+
     /**
      * @brief Represents a 16x16x256 section of the voxel world (Modified 2025-11-02: Increased from 128 to 256)
      *
@@ -115,8 +117,8 @@ namespace enigma::voxel
 
         // Mesh Management - PUBLIC for rendering system
         void       MarkDirty(); // Mark chunk as needing mesh rebuild
-        void       RebuildMesh(); // Regenerate ChunkMesh from block data using ChunkMeshBuilder
-        void       SetMesh(std::unique_ptr<ChunkMesh> mesh); // Set new mesh (used by ChunkMeshBuilder)
+        void       RebuildMesh(); // Regenerate ChunkMesh from block data using ChunkMeshHelper
+        void       SetMesh(std::unique_ptr<ChunkMesh> mesh); // Set new mesh (used by ChunkMeshHelper)
         ChunkMesh* GetMesh() const; // Get mesh for rendering
         bool       NeedsMeshRebuild() const; // Check if mesh needs rebuilding
 
@@ -181,12 +183,12 @@ namespace enigma::voxel
         int32_t  GetChunkY() const { return m_chunkCoords.y; }
         BlockPos GetWorldPos() const; // Bottom corner world position
 
-        // È¢ÑÁïôÔºöÊâ©Â±ïÊï∞ÊçÆÊé•Âè£ÔºàÁ±ª‰ººNeoForge AttachmentsÔºâ
+        // ‘§¡Ù£∫¿©’π ˝æ›Ω”ø⁄£®¿‡À∆NeoForge Attachments£©
         ChunkAttachmentHolder&       GetAttachmentHolder() { return m_attachmentHolder; }
         const ChunkAttachmentHolder& GetAttachmentHolder() const { return m_attachmentHolder; }
 
         // [A05] Neighbor chunk access for BlockIterator
-        void   SetChunkManager(class ChunkManager* manager) { m_chunkManager = manager; }
+        void   SetWorld(class World* world) { m_world = world; }
         Chunk* GetNorthNeighbor() const;
         Chunk* GetSouthNeighbor() const;
         Chunk* GetEastNeighbor() const;
@@ -224,6 +226,6 @@ namespace enigma::voxel
         //-------------------------------------------------------------------------------------------
         // [A05] Neighbor Access
         //-------------------------------------------------------------------------------------------
-        class ChunkManager* m_chunkManager = nullptr;
+        class World* m_world = nullptr;
     };
 }

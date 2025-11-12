@@ -390,6 +390,8 @@
         <ClCompile Include="Resource\Sound\SoundResource.cpp" />
         <ClCompile Include="Voxel\Biome\MultiNoiseBiomeSource.cpp"/>
         <ClCompile Include="Voxel\Block\BlockIterator.cpp"/>
+        <ClCompile Include="Voxel\Chunk\ChunkHelper.cpp"/>
+        <ClCompile Include="Voxel\Chunk\ChunkMeshHelper.cpp"/>
         <ClCompile Include="Voxel\Climate\Climate.cpp"/>
         <!-- Graphic - Bindless Rendering System -->
         <ClCompile Include="Voxel\Block\BlockPos.cpp" />
@@ -398,9 +400,7 @@
         <ClCompile Include="Voxel\Builtin\DefaultBlock.cpp" />
         <ClCompile Include="Voxel\Chunk\BuildMeshJob.cpp" />
         <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
-        <ClCompile Include="Voxel\Chunk\ChunkManager.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
-        <ClCompile Include="Voxel\Chunk\ChunkMeshBuilder.cpp" />
         <ClCompile Include="Voxel\Chunk\ChunkStorageConfig.cpp" />
         <ClCompile Include="Voxel\Chunk\ESFFormat.cpp" />
         <ClCompile Include="Voxel\Chunk\ESFRegionFile.cpp" />
@@ -732,6 +732,8 @@
         <ClInclude Include="Voxel\Biome\BiomeSource.hpp"/>
         <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp"/>
         <ClInclude Include="Voxel\Block\BlockIterator.hpp"/>
+        <ClInclude Include="Voxel\Chunk\ChunkHelper.hpp"/>
+        <ClInclude Include="Voxel\Chunk\ChunkMeshHelper.hpp"/>
         <ClInclude Include="Voxel\Climate\Climate.hpp"/>
         <ClInclude Include="Voxel\Feature\TreeStamp.hpp"/>
         <ClInclude Include="Voxel\Function\BinaryOperationDensityFunction.hpp"/>
@@ -942,9 +944,7 @@
         <ClInclude Include="Voxel\Builtin\DefaultBlock.hpp" />
         <ClInclude Include="Voxel\Chunk\BuildMeshJob.hpp" />
         <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
-        <ClInclude Include="Voxel\Chunk\ChunkManager.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
-        <ClInclude Include="Voxel\Chunk\ChunkMeshBuilder.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkSerializationInterfaces.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkStorageConfig.hpp" />
         <ClInclude Include="Voxel\Chunk\ESFConfig.hpp" />
@@ -954,7 +954,7 @@
         <ClInclude Include="Voxel\Chunk\ESFSChunkSerializer.hpp" />
         <ClInclude Include="Voxel\Chunk\RLECompressor.hpp" />
         <ClInclude Include="Voxel\Chunk\BlockStateSerializer.hpp" />
-        <ClInclude Include="Voxel\Chunk\IChunkGenerationCallback.hpp" />
+
         <ClInclude Include="Voxel\Chunk\ChunkState.hpp" />
         <ClInclude Include="Voxel\Chunk\ChunkJob.hpp" />
         <ClInclude Include="Voxel\Chunk\GenerateChunkJob.hpp" />

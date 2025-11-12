@@ -9,7 +9,7 @@
 #include <chrono>
 #include <ctime>
 
-#include "Engine/Voxel/Chunk/ChunkManager.hpp"
+#include "Engine/Voxel/Chunk/ChunkStorageConfig.hpp"
 
 namespace enigma::voxel
 {
@@ -403,7 +403,7 @@ namespace enigma::voxel
                 // Clear existing StateMapping and deserialize
                 m_stateMapping.Clear();
                 bool stateMappingSuccess = m_stateMapping.DeserializeStates(chunkBytes.data() + offset, stateMappingSize);
-                offset += stateMappingSize;
+                offset                   += stateMappingSize;
 
                 if (!stateMappingSuccess)
                 {
@@ -900,7 +900,7 @@ namespace enigma::voxel
             oldestEntry->second->fileStream.flush();
         }
 
-        core::LogDebug(LogChunk, "Evicted region file from cache: %s", oldestEntry->first.c_str());
+        core::LogDebug(LogChunkSave, "Evicted region file from cache: %s", oldestEntry->first.c_str());
         m_regionCache.erase(oldestEntry);
     }
 

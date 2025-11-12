@@ -23,7 +23,7 @@ namespace enigma::voxel
     // - CompileToGPU() MUST run on main thread (DirectX 11 limitation)
     //
     // WORKFLOW:
-    // 1. Worker thread: BuildMeshJob::Execute() -> ChunkMeshBuilder::BuildMesh()
+    // 1. Worker thread: BuildMeshJob::Execute() -> ChunkMeshHelper::BuildMesh()
     // 2. Main thread: ProcessCompletedMeshJobs() -> CompileToGPU() -> SetMesh()
     //-----------------------------------------------------------------------------------------------
     class BuildMeshJob : public ChunkJob

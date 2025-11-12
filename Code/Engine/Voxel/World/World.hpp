@@ -1,8 +1,7 @@
 ﻿#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
-#include "../Chunk/ChunkManager.hpp"
-#include "../Chunk/IChunkGenerationCallback.hpp"
+
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
 #include "../Chunk/ChunkJob.hpp"
 #include "../Chunk/GenerateChunkJob.hpp"
@@ -19,6 +18,8 @@
 #include <vector>
 #include <deque>
 #include <atomic>
+
+class Texture;
 
 namespace enigma::voxel
 {
@@ -39,13 +40,13 @@ namespace enigma::voxel
          * - Integration and scheduling of world generators
          * - Unified portal for rendering and updating
          */
-    class World : public IChunkGenerationCallback
+    class World
     {
     public:
         World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
 
         World() = default;
-        ~World() override;
+        ~World();
 
         // Block Operations:
         BlockState* GetBlockState(const BlockPos& pos);
@@ -57,16 +58,19 @@ namespace enigma::voxel
         int         GetTopBlockZ(const BlockPos& pos);
 
         // Chunk Operations:
-        Chunk* GetChunk(int32_t chunkX, int32_t chunkY);
+        Chunk* GetChunk(int32_t chunkX, int32_t chunkY); // 改为直接访问 m_loadedChunks
+        Chunk* GetChunk(int32_t chunkX, int32_t chunkY) const; // const version for const methods
+        void   LoadChunkDirect(int32_t chunkX, int32_t chunkY); // 新增直接加载方法
+        void   UnloadChunkDirect(int32_t chunkX, int32_t chunkY); // 新增直接卸载方法
         Chunk* GetChunkAt(const BlockPos& pos) const;
         bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
 
         void                                     UpdateNearbyChunks(); // Update nearby blocks according to player location
         std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // Calculate the required blocks
 
-        // IChunkGenerationCallback 实现
-        void GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY) override;
-        bool ShouldUnloadChunk(int32_t chunkX, int32_t chunkY) override;
+        // 区块生成和管理方法
+        void GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY);
+        bool ShouldUnloadChunk(int32_t chunkX, int32_t chunkY);
 
         // Update and Management:
         void Update(float deltaTime); // Update world systems
@@ -78,7 +82,23 @@ namespace enigma::voxel
         bool SetEnableChunkDebug(bool enable = true);
 
         // Utility
-        std::unique_ptr<ChunkManager>& GetChunkManager();
+
+        // 区块访问和管理（Direct 版本，直接访问 World 数据）
+        Chunk*                                               GetChunkDirect(int32_t chunkX, int32_t chunkY);
+        bool                                                 IsChunkLoadedDirect(int32_t chunkX, int32_t chunkY) const;
+        size_t                                               GetLoadedChunkCount() const;
+        std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks();
+
+        // 调试功能
+        bool SetEnableChunkDebugDirect(bool enable = true);
+
+        // 渲染资源
+        Texture* GetBlocksAtlasTexture() const;
+
+        // 延迟删除管理
+        void   MarkChunkForDeletion(Chunk* chunk);
+        void   ProcessPendingDeletions();
+        size_t GetPendingDeletionCount() const;
 
         // World generation integration
         void SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
@@ -160,11 +180,38 @@ namespace enigma::voxel
         // Called from Update() to cancel jobs for chunks that moved out of range
         void RemoveDistantJobs();
 
+        //-------------------------------------------------------------------------------------------
+        // 区块距离和管理辅助方法（从 ChunkManager 迁移）
+        //-------------------------------------------------------------------------------------------
+
+        // 计算区块到玩家的距离
+        float GetChunkDistanceToPlayer(int32_t chunkX, int32_t chunkY) const;
+
+        // 获取激活范围内的所有区块坐标
+        std::vector<std::pair<int32_t, int32_t>> GetChunksInActivationRange() const;
+
+        // 查找距离玩家最远的已加载区块
+        std::pair<int32_t, int32_t> FindFarthestChunk() const;
+
+        // 查找距离玩家最近的未加载区块（在激活范围内）
+        std::pair<int32_t, int32_t> FindNearestMissingChunk() const;
+
+        // 查找距离玩家最近的需要重建网格的区块
+        Chunk* FindNearestDirtyChunk() const;
+
     private:
-        std::unique_ptr<ChunkManager> m_chunkManager; // Manages all chunks
-        std::string                   m_worldName; // World identifier
-        std::string                   m_worldPath; // World storage path
-        uint64_t                      m_worldSeed = 0; // World generation seed
+        // 从 ChunkManager 迁移的成员
+        std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks;
+        std::vector<Chunk*>                                 m_pendingDeleteChunks;
+        bool                                                m_enableChunkDebug         = false;
+        int32_t                                             m_activationRange          = 12;
+        int32_t                                             m_deactivationRange        = 14;
+        int                                                 m_maxMeshRebuildsPerFrame  = 1;
+        Texture*                                            m_cachedBlocksAtlasTexture = nullptr;
+
+        std::string m_worldName; // World identifier
+        std::string m_worldPath; // World storage path
+        uint64_t    m_worldSeed = 0; // World generation seed
 
         // Player position and chunk management
         Vec3    m_playerPosition{0.0f, 0.0f, 256.0f}; // Current player position

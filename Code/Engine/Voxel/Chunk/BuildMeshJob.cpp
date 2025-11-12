@@ -1,6 +1,6 @@
 #include "BuildMeshJob.hpp"
 #include "Chunk.hpp"
-#include "ChunkMeshBuilder.hpp"
+#include "ChunkMeshHelper.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 using namespace enigma::voxel;
@@ -24,9 +24,8 @@ void BuildMeshJob::Execute()
 
     // CPU-intensive mesh building (1-5ms per chunk)
     // This is thread-safe: only reads chunk block data
-    ChunkMeshBuilder builder;
     if (m_chunk->GetState() == ChunkState::Inactive) return;
-    m_resultMesh = builder.BuildMesh(m_chunk);
+    m_resultMesh = ChunkMeshHelper::BuildMesh(m_chunk);
 
     core::LogInfo("BuildMeshJob",
                   "Execute() completed for chunk (%d, %d), mesh vertices=%d",

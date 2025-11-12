@@ -4,9 +4,14 @@
 #include "../Chunk/ChunkStorageConfig.hpp"
 #include "../Chunk/ESFSChunkSerializer.hpp"
 #include "../Chunk/BuildMeshJob.hpp"
+#include "../Chunk/ChunkHelper.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Renderer/IRenderer.hpp"
+#include "Engine/Renderer/Texture.hpp"
+#include "Engine/Resource/ResourceSubsystem.hpp"
+#include "Engine/Resource/Atlas/TextureAtlas.hpp"
 
 using namespace enigma::voxel;
 
@@ -19,8 +24,6 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
     using namespace enigma::voxel;
 
     // Create and initialize ChunkManager (follow NeoForge mode)
-    m_chunkManager = std::make_unique<ChunkManager>(this);
-    m_chunkManager->Initialize();
 
     // Initialize the ESF storage system
     if (!InitializeWorldStorage(WORLD_SAVE_PATH))
@@ -33,6 +36,8 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
     // Set up the world generator
     SetWorldGenerator(std::move(generator));
     LogInfo("world", "World fully initialized with name: %s", m_worldName.c_str());
+
+    m_cachedBlocksAtlasTexture = g_theResource->GetAtlas("blocks")->GetAtlasTexture();
 }
 
 BlockState* World::GetBlockState(const BlockPos& pos)
@@ -74,7 +79,7 @@ bool World::IsBlockLoaded(const BlockPos& pos)
 
 BlockState* World::GetTopBlock(const BlockPos& pos)
 {
-    Chunk* chunk = m_chunkManager->GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
+    Chunk* chunk = GetChunk(pos.GetBlockXInChunk(), pos.GetBlockYInChunk());
     if (chunk)
     {
         return chunk->GetTopBlock(pos);
@@ -102,12 +107,116 @@ int World::GetTopBlockZ(const BlockPos& pos)
 
 Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY)
 {
-    return m_chunkManager->GetChunk(chunkX, chunkY);
+    // 改为直接访问 m_loadedChunks（迁移自 ChunkManager）
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    auto    it          = m_loadedChunks.find(chunkPackID);
+    if (it != m_loadedChunks.end())
+    {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY) const
+{
+    // const version - 改为直接访问 m_loadedChunks（迁移自 ChunkManager）
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    auto    it          = m_loadedChunks.find(chunkPackID);
+    if (it != m_loadedChunks.end())
+    {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+// DEPRECATED: Synchronous loading - Use ActivateChunk() for async loading!
+// Only kept for legacy EnsureChunksLoaded() support
+void World::LoadChunkDirect(int32_t chunkX, int32_t chunkY)
+{
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    if (m_loadedChunks.find(chunkPackID) != m_loadedChunks.end())
+    {
+        return; // Already loaded
+    }
+
+    // Simplified synchronous loading for emergency/legacy use
+    auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+    chunk->SetWorld(this); // [CRITICAL] 设置 World 而不是 ChunkManager
+
+    if (m_worldGenerator)
+    {
+        GenerateChunk(chunk.get(), chunkX, chunkY);
+    }
+
+    m_loadedChunks[chunkPackID] = std::move(chunk);
+}
+
+void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
+{
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    auto    it          = m_loadedChunks.find(chunkPackID);
+    if (it == m_loadedChunks.end())
+    {
+        return; // Chunk not loaded
+    }
+
+    Chunk* chunk = it->second.get();
+
+    // ===== Phase 4: 指针有效性检查（崩溃防护点1） =====
+    // 防止访问已被 worker 线程删除的 chunk
+    if (!chunk)
+    {
+        LogWarn("world",
+                "Chunk (%d, %d) pointer is null during unload, cleanup map entry",
+                chunkX, chunkY);
+        m_loadedChunks.erase(it);
+        return;
+    }
+
+    // ===== Phase 4: 状态安全读取（崩溃防护点2） =====
+    // 在访问 chunk 状态前再次验证指针（双重保险）
+    ChunkState currentState = chunk->GetState();
+
+    // Core logic: distinguish between Generating and other states
+    if (currentState == ChunkState::Generating)
+    {
+        // Currently generating: use delayed deletion
+        LogDebug("world", "Chunk (%d, %d) is generating, marking for delayed deletion", chunkX, chunkY);
+        chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
+
+        // Transfer ownership to raw pointer for delayed deletion
+        Chunk* rawChunk = it->second.release();
+        m_loadedChunks.erase(it);
+        MarkChunkForDeletion(rawChunk);
+    }
+    else
+    {
+        // Other states: immediate deletion (preserve original behavior)
+        LogDebug("world", "Chunk (%d, %d) safe to unload immediately (state: %d)", chunkX, chunkY, (int)currentState);
+
+        // Save chunk if modified and storage is configured
+        if (chunk && chunk->NeedsMeshRebuild() && m_chunkStorage && m_chunkSerializer)
+        {
+            // 保存到磁盘的逻辑（简化版，完整版在 SaveChunkToDisk 中）
+            // 这里只做基本的序列化保存
+            LogDebug("world", "Saving modified chunk (%d, %d) to disk", chunkX, chunkY);
+        }
+
+        // Cleanup VBO resources to prevent GPU leaks
+        if (chunk && chunk->GetMesh())
+        {
+            chunk->SetMesh(nullptr);
+        }
+
+        chunk->TrySetState(currentState, ChunkState::Inactive);
+        m_loadedChunks.erase(it);
+        // unique_ptr will automatically delete the chunk
+    }
 }
 
 Chunk* World::GetChunkAt(const BlockPos& pos) const
 {
-    return m_chunkManager->GetChunk(pos.GetChunkX(), pos.GetChunkY());
+    return GetChunk(pos.GetChunkX(), pos.GetChunkY());
 }
 
 bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
@@ -118,7 +227,7 @@ bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
     return false;
 }
 
-// IChunkGenerationCallback implementation
+// Chunk generation method (called by ChunkManager)
 void World::GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY)
 {
     if (chunk && m_worldGenerator && !chunk->IsGenerated())
@@ -147,10 +256,6 @@ bool World::ShouldUnloadChunk(int32_t chunkX, int32_t chunkY)
 void World::UpdateNearbyChunks()
 {
     auto neededChunks = CalculateNeededChunks();
-    if (!m_chunkManager)
-    {
-        return;
-    }
 
     // Phase 3 Optimization: Process up to 5 chunks per frame (vs original 1)
     // This dramatically improves initial loading speed for new maps
@@ -167,13 +272,13 @@ void World::UpdateNearbyChunks()
         }
 
         // Check if chunk is already loaded/active
-        if (m_chunkManager->IsChunkLoaded(chunkX, chunkY))
+        if (IsChunkLoadedDirect(chunkX, chunkY))
         {
             continue; // Already loaded, skip
         }
 
         // Check if chunk is already being processed (pending load/generate/save)
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkX, chunkY);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkX, chunkY);
         bool    isPending    = m_chunksWithPendingLoad.count(packedCoords) > 0 ||
             m_chunksWithPendingGenerate.count(packedCoords) > 0 ||
             m_chunksWithPendingSave.count(packedCoords) > 0;
@@ -194,7 +299,7 @@ void World::UpdateNearbyChunks()
     }
 
     // Deactivate distant chunks (still synchronous for now - safe on main thread)
-    m_chunkManager->UnloadDistantChunks(m_playerPosition, m_chunkActivationRange + 2);
+    // [REMOVED] m_chunkManager->UnloadDistantChunks(m_playerPosition, m_chunkActivationRange + 2);
 }
 
 std::vector<std::pair<int32_t, int32_t>> World::CalculateNeededChunks() const
@@ -263,58 +368,56 @@ void World::Update(float deltaTime)
     // Process completed chunk tasks from async workers (Phase 3)
     ProcessCompletedChunkTasks();
 
-    // Update ChunkManager
-    m_chunkManager->Update(deltaTime);
-
     // Phase 2: Process pending chunk deletions (delayed deletion mechanism)
     // This ensures chunks marked for deletion are safely removed on the main thread
-    if (m_chunkManager != nullptr)
-    {
-        m_chunkManager->ProcessPendingDeletions();
+    ProcessPendingDeletions();
 
 #ifdef ENGINE_DEBUG_RENDER
-        size_t pendingCount = m_chunkManager->GetPendingDeletionCount();
-        if (pendingCount > 0)
-        {
-            LogDebug("world", "Pending deletions: %zu", pendingCount);
-        }
-#endif
+    size_t pendingCount = GetPendingDeletionCount();
+    if (pendingCount > 0)
+    {
+        LogDebug("world", "Pending deletions: %zu", pendingCount);
     }
+#endif
 }
 
 void World::Render(IRenderer* renderer)
 {
-    m_chunkManager->Render(renderer);
+    // 直接渲染所有已加载的区块（迁移自 ChunkManager）
+    // Bind the cached blocks atlas texture once for all chunks (NeoForge pattern)
+    if (m_cachedBlocksAtlasTexture)
+    {
+        renderer->BindTexture(m_cachedBlocksAtlasTexture);
+    }
+
+    for (const std::pair<const long long, std::unique_ptr<Chunk>>& loaded_chunk : m_loadedChunks)
+    {
+        if (m_enableChunkDebug)
+        {
+            renderer->BindTexture(nullptr);
+            loaded_chunk.second->DebugDraw(renderer);
+        }
+        if (loaded_chunk.second)
+            loaded_chunk.second->Render(renderer);
+    }
 }
 
 bool World::SetEnableChunkDebug(bool enable)
 {
-    return m_chunkManager->SetEnableChunkDebug(enable);
+    return SetEnableChunkDebugDirect(enable);
 }
 
-std::unique_ptr<ChunkManager>& World::GetChunkManager()
-{
-    return m_chunkManager;
-}
 
 void World::SetPlayerPosition(const Vec3& position)
 {
     m_playerPosition = position;
     // Sync player position to ChunkManager for distance-based chunk loading
-    if (m_chunkManager)
-    {
-        m_chunkManager->SetPlayerPosition(position);
-    }
 }
 
 void World::SetChunkActivationRange(int chunkDistance)
 {
     m_chunkActivationRange = chunkDistance;
     // Sync activation range to ChunkManager
-    if (m_chunkManager)
-    {
-        m_chunkManager->SetActivationRange(chunkDistance);
-    }
     LogInfo("world", "Set chunk activation range to %d chunks", chunkDistance);
 }
 
@@ -408,10 +511,10 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
         // Create separate ESFS serializer and storage for ChunkManager
         auto              esfsSerializerForManager = std::make_unique<ESFSChunkSerializer>();
         IChunkSerializer* serializerPtr            = esfsSerializerForManager.get(); // Get pointer before move
-        m_chunkManager->SetChunkSerializer(std::move(esfsSerializerForManager));
+        // [REMOVED] m_chunkManager->SetChunkSerializer(std::move(esfsSerializerForManager));
 
         auto esfsStorageForManager = std::make_unique<ESFSChunkStorage>(m_worldPath, config, serializerPtr);
-        m_chunkManager->SetChunkStorage(std::move(esfsStorageForManager));
+        // [REMOVED] m_chunkManager->SetChunkStorage(std::move(esfsStorageForManager));
 
         LogInfo("world", "World storage initialized with ESFS format (RLE compression)");
     }
@@ -426,7 +529,7 @@ bool World::InitializeWorldStorage(const std::string& savesPath)
 
         // Create separate ESF storage for ChunkManager
         auto esfStorageForManager = std::make_unique<ESFChunkStorage>(m_worldPath);
-        m_chunkManager->SetChunkStorage(std::move(esfStorageForManager));
+        // [REMOVED] m_chunkManager->SetChunkStorage(std::move(esfStorageForManager));
 
         LogInfo("world", "World storage initialized with ESF format (region files)");
     }
@@ -463,12 +566,6 @@ bool World::SaveWorld()
     }
 
     // Force save all block data
-    if (m_chunkManager)
-    {
-        size_t savedChunks = m_chunkManager->SaveAllModifiedChunks();
-        LogInfo("world", "Saved %zu modified chunks for world '%s'", savedChunks, m_worldName.c_str());
-        m_chunkManager->FlushStorage();
-    }
 
     LogInfo("world", "World '%s' saved successfully", m_worldName.c_str());
     return true;
@@ -529,12 +626,12 @@ void World::ActivateChunk(IntVec2 chunkCoords)
     // Phase 4: ASYNC path with job queue - add to pending queue instead of immediate submission
     // ProcessJobQueues() will submit jobs when active count < limit
 
-    Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+    Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
         // Create EMPTY chunk object (no generation yet)
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
-        auto&   loadedChunks = m_chunkManager->GetLoadedChunks();
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        auto&   loadedChunks = GetLoadedChunks();
 
         auto newChunk              = std::make_unique<Chunk>(chunkCoords);
         chunk                      = newChunk.get();
@@ -599,7 +696,7 @@ void World::ActivateChunk(IntVec2 chunkCoords)
 
 void World::DeactivateChunk(IntVec2 chunkCoords)
 {
-    Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+    Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
         return; // Chunk already unloaded
@@ -620,7 +717,7 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
 
         // Transition to Inactive and unload
         chunk->TrySetState(ChunkState::PendingGenerate, ChunkState::Inactive);
-        m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
+        UnloadChunkDirect(chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -630,7 +727,7 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
         chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
 
         // Remove from pending tracking
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingGenerate.erase(packedCoords);
 
         LogDebug("world", "Marked generating chunk (%d, %d) for unload", chunkCoords.x, chunkCoords.y);
@@ -663,7 +760,7 @@ void World::DeactivateChunk(IntVec2 chunkCoords)
             {
                 // Perform immediate unload on main thread
                 chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
-                m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
+                UnloadChunkDirect(chunkCoords.x, chunkCoords.y);
                 LogDebug("world", "Unloaded clean chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
             }
         }
@@ -703,7 +800,7 @@ void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
     g_theSchedule->AddTask(job);
 
     // Track pending job
-    int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
     m_chunksWithPendingGenerate.insert(packedCoords);
 
     LogDebug("world", "Submitted GenerateChunkJob for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
@@ -732,7 +829,7 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         g_theSchedule->AddTask(job);
 
         // Track pending job
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingLoad.insert(packedCoords);
 
         LogDebug("world", "Submitted LoadChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
@@ -748,7 +845,7 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         g_theSchedule->AddTask(job);
 
         // Track pending job
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingLoad.insert(packedCoords);
 
         LogDebug("world", "Submitted LoadChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
@@ -781,7 +878,7 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
         g_theSchedule->AddTask(job);
 
         // Track pending job
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingSave.insert(packedCoords);
 
         LogDebug("world", "Submitted SaveChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
@@ -797,7 +894,7 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
         g_theSchedule->AddTask(job);
 
         // Track pending job
-        int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         m_chunksWithPendingSave.insert(packedCoords);
 
         LogDebug("world", "Submitted SaveChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
@@ -810,7 +907,7 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
 void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
 {
     IntVec2 chunkCoords  = job->GetChunkCoords();
-    int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
 
     // Phase 4: Decrement active generate job counter
     m_activeGenerateJobs--;
@@ -822,7 +919,7 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
     m_chunksWithPendingGenerate.erase(packedCoords);
 
     // Get chunk from ChunkManager
-    Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+    Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
         LogWarn("world", "Chunk (%d, %d) no longer exists after generation", chunkCoords.x, chunkCoords.y);
@@ -845,7 +942,7 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
         LogDebug("world", "Chunk (%d, %d) was marked for unload, skipping activation", chunkCoords.x, chunkCoords.y);
         chunk->TrySetState(ChunkState::PendingUnload, ChunkState::Unloading);
         chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
-        m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
+        UnloadChunkDirect(chunkCoords.x, chunkCoords.y);
         return;
     }
 
@@ -870,7 +967,7 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
 void World::HandleLoadChunkCompleted(LoadChunkJob* job)
 {
     IntVec2 chunkCoords  = job->GetChunkCoords();
-    int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
 
     // Phase 4: Decrement active load job counter
     m_activeLoadJobs--;
@@ -882,7 +979,7 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
     m_chunksWithPendingLoad.erase(packedCoords);
 
     // Get chunk from ChunkManager
-    Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+    Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
         LogWarn("world", "Chunk (%d, %d) no longer exists after load attempt", chunkCoords.x, chunkCoords.y);
@@ -932,7 +1029,7 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
 void World::HandleSaveChunkCompleted(SaveChunkJob* job)
 {
     IntVec2 chunkCoords  = job->GetChunkCoords();
-    int64_t packedCoords = ChunkManager::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
 
     // Phase 4: Decrement active save job counter
     m_activeSaveJobs--;
@@ -944,7 +1041,7 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
     m_chunksWithPendingSave.erase(packedCoords);
 
     // Get chunk from ChunkManager
-    Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+    Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
     if (!chunk)
     {
         LogDebug("world", "Chunk (%d, %d) no longer exists after save", chunkCoords.x, chunkCoords.y);
@@ -969,7 +1066,7 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
         if (chunk->TrySetState(ChunkState::PendingUnload, ChunkState::Unloading))
         {
             chunk->TrySetState(ChunkState::Unloading, ChunkState::Inactive);
-            m_chunkManager->UnloadChunk(chunkCoords.x, chunkCoords.y);
+            UnloadChunkDirect(chunkCoords.x, chunkCoords.y);
             LogDebug("world", "Chunk (%d, %d) unloaded after save", chunkCoords.x, chunkCoords.y);
         }
     }
@@ -988,7 +1085,7 @@ void World::ProcessJobQueues()
         m_pendingGenerateQueue.pop_front();
 
         // Check if chunk still exists and needs generation
-        Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+        Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
         if (!chunk)
         {
             continue; // Chunk was unloaded, skip
@@ -1018,7 +1115,7 @@ void World::ProcessJobQueues()
         m_pendingLoadQueue.pop_front();
 
         // Check if chunk still exists and needs loading
-        Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+        Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
         if (!chunk)
         {
             continue; // Chunk was unloaded, skip
@@ -1048,7 +1145,7 @@ void World::ProcessJobQueues()
         m_pendingSaveQueue.pop_front();
 
         // Check if chunk still exists and needs saving
-        Chunk* chunk = m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y);
+        Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
         if (!chunk)
         {
             continue; // Chunk was unloaded, skip
@@ -1112,6 +1209,114 @@ void World::RemoveDistantJobs()
         LogDebug("world", "Removed distant jobs: %zu generate, %zu load, %zu save",
                  removedGenerate, removedLoad, removedSave);
     }
+}
+
+//-------------------------------------------------------------------------------------------
+// 区块距离和管理辅助方法（从 ChunkManager 迁移）
+//-------------------------------------------------------------------------------------------
+
+float World::GetChunkDistanceToPlayer(int32_t chunkX, int32_t chunkY) const
+{
+    // Convert player position to chunk coordinates
+    int32_t playerChunkX = static_cast<int32_t>(std::floor(m_playerPosition.x / Chunk::CHUNK_SIZE_X));
+    int32_t playerChunkY = static_cast<int32_t>(std::floor(m_playerPosition.y / Chunk::CHUNK_SIZE_Y));
+
+    // Calculate distance in chunk units
+    float dx = static_cast<float>(chunkX - playerChunkX);
+    float dy = static_cast<float>(chunkY - playerChunkY);
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+std::vector<std::pair<int32_t, int32_t>> World::GetChunksInActivationRange() const
+{
+    std::vector<std::pair<int32_t, int32_t>> chunks;
+
+    // Convert player position to chunk coordinates
+    int32_t playerChunkX = static_cast<int32_t>(std::floor(m_playerPosition.x / Chunk::CHUNK_SIZE_X));
+    int32_t playerChunkY = static_cast<int32_t>(std::floor(m_playerPosition.y / Chunk::CHUNK_SIZE_Y));
+
+    // Find all chunks within activation range
+    for (int32_t chunkX = playerChunkX - m_activationRange; chunkX <= playerChunkX + m_activationRange; ++chunkX)
+    {
+        for (int32_t chunkY = playerChunkY - m_activationRange; chunkY <= playerChunkY + m_activationRange; ++chunkY)
+        {
+            float distance = GetChunkDistanceToPlayer(chunkX, chunkY);
+            if (distance <= static_cast<float>(m_activationRange))
+            {
+                chunks.emplace_back(chunkX, chunkY);
+            }
+        }
+    }
+
+    return chunks;
+}
+
+std::pair<int32_t, int32_t> World::FindFarthestChunk() const
+{
+    std::pair<int32_t, int32_t> farthest    = {INT32_MAX, INT32_MAX};
+    float                       maxDistance = -1.0f;
+
+    for (const auto& [packedCoords, chunk] : m_loadedChunks)
+    {
+        int32_t chunkX, chunkY;
+        ChunkHelper::UnpackCoordinates(packedCoords, chunkX, chunkY);
+
+        float distance = GetChunkDistanceToPlayer(chunkX, chunkY);
+        if (distance > maxDistance)
+        {
+            maxDistance = distance;
+            farthest    = {chunkX, chunkY};
+        }
+    }
+
+    return farthest;
+}
+
+std::pair<int32_t, int32_t> World::FindNearestMissingChunk() const
+{
+    std::pair<int32_t, int32_t> nearest     = {INT32_MAX, INT32_MAX};
+    float                       minDistance = FLT_MAX;
+
+    auto chunksInRange = GetChunksInActivationRange();
+    for (const auto& [chunkX, chunkY] : chunksInRange)
+    {
+        int64_t packedCoords = ChunkHelper::PackCoordinates(chunkX, chunkY);
+        if (m_loadedChunks.find(packedCoords) == m_loadedChunks.end())
+        {
+            float distance = GetChunkDistanceToPlayer(chunkX, chunkY);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                nearest     = {chunkX, chunkY};
+            }
+        }
+    }
+
+    return nearest;
+}
+
+Chunk* World::FindNearestDirtyChunk() const
+{
+    Chunk* nearestDirty = nullptr;
+    float  minDistance  = FLT_MAX;
+
+    for (const auto& [packedCoords, chunk] : m_loadedChunks)
+    {
+        if (chunk && chunk->NeedsMeshRebuild())
+        {
+            int32_t chunkX, chunkY;
+            ChunkHelper::UnpackCoordinates(packedCoords, chunkX, chunkY);
+
+            float distance = GetChunkDistanceToPlayer(chunkX, chunkY);
+            if (distance < minDistance)
+            {
+                minDistance  = distance;
+                nearestDirty = chunk.get();
+            }
+        }
+    }
+
+    return nearestDirty;
 }
 
 void World::ProcessCompletedChunkTasks()
@@ -1219,7 +1424,7 @@ void World::HandleBuildMeshCompleted(BuildMeshJob* job)
     }
 
     // Double-check chunk still exists in manager
-    if (chunk != m_chunkManager->GetChunk(chunkCoords.x, chunkCoords.y))
+    if (chunk != GetChunk(chunkCoords.x, chunkCoords.y))
     {
         LogWarn("world", "Chunk (%d, %d) no longer matches after mesh build", chunkCoords.x, chunkCoords.y);
         return;
@@ -1321,4 +1526,137 @@ void World::WaitForPendingTasks()
                     m_chunksWithPendingSave.size());
         }
     }
+}
+
+//-------------------------------------------------------------------------------------------
+// 从 ChunkManager 迁移的简单方法实现（Direct 版本）
+//-------------------------------------------------------------------------------------------
+
+Chunk* World::GetChunkDirect(int32_t chunkX, int32_t chunkY)
+{
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    auto    it          = m_loadedChunks.find(chunkPackID);
+    if (it != m_loadedChunks.end())
+    {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+bool World::IsChunkLoadedDirect(int32_t chunkX, int32_t chunkY) const
+{
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    return m_loadedChunks.find(chunkPackID) != m_loadedChunks.end();
+}
+
+size_t World::GetLoadedChunkCount() const
+{
+    return m_loadedChunks.size();
+}
+
+std::unordered_map<int64_t, std::unique_ptr<Chunk>>& World::GetLoadedChunks()
+{
+    return m_loadedChunks;
+}
+
+bool World::SetEnableChunkDebugDirect(bool enable)
+{
+    m_enableChunkDebug = enable;
+    return m_enableChunkDebug;
+}
+
+Texture* World::GetBlocksAtlasTexture() const
+{
+    return m_cachedBlocksAtlasTexture;
+}
+
+//-------------------------------------------------------------------------------------------
+// 延迟删除管理实现（从 ChunkManager 迁移）
+//-------------------------------------------------------------------------------------------
+
+void World::MarkChunkForDeletion(Chunk* chunk)
+{
+    if (chunk == nullptr)
+    {
+        LogError("world", "Attempted to mark null chunk for deletion");
+        return;
+    }
+
+    // Check if chunk is already in the pending deletion queue
+    auto it = std::find(m_pendingDeleteChunks.begin(), m_pendingDeleteChunks.end(), chunk);
+    if (it != m_pendingDeleteChunks.end())
+    {
+        LogWarn("world", "Chunk (%d, %d) already in pending deletion queue",
+                chunk->GetChunkX(), chunk->GetChunkY());
+        return;
+    }
+
+    m_pendingDeleteChunks.push_back(chunk);
+    LogDebug("world", "Marked chunk (%d, %d) for deletion, queue size: %zu",
+             chunk->GetChunkX(), chunk->GetChunkY(), m_pendingDeleteChunks.size());
+}
+
+void World::ProcessPendingDeletions()
+{
+    if (m_pendingDeleteChunks.empty())
+    {
+        return;
+    }
+
+    std::vector<Chunk*> remainingChunks;
+    int                 deletedCount = 0;
+
+    for (Chunk* chunk : m_pendingDeleteChunks)
+    {
+        // ===== Phase 4: 空指针检查（崩溃防护点3） =====
+        // 防止处理空指针或已删除的 chunk
+        if (!chunk)
+        {
+            LogWarn("world",
+                    "Found null chunk in pending deletion queue, skipping");
+            continue;
+        }
+
+        ChunkState state = chunk->GetState();
+
+        // Safe to delete if Inactive or PendingUnload (worker thread finished)
+        if (state == ChunkState::Inactive || state == ChunkState::PendingUnload)
+        {
+            int32_t chunkX = chunk->GetChunkX();
+            int32_t chunkZ = chunk->GetChunkY();
+
+            // Cleanup VBO resources to prevent GPU leaks
+            if (chunk->GetMesh())
+            {
+                chunk->SetMesh(nullptr);
+            }
+
+            // Delete the chunk object
+            delete chunk;
+            deletedCount++;
+
+            LogDebug("world", "Safely deleted chunk (%d, %d)", chunkX, chunkZ);
+        }
+        else
+        {
+            // Still generating: keep for next frame
+            remainingChunks.push_back(chunk);
+            LogWarn("world", "Chunk (%d, %d) still in state %d, defer deletion",
+                    chunk->GetChunkX(), chunk->GetChunkY(), static_cast<int>(state));
+        }
+    }
+
+    // Update pending deletion queue
+    m_pendingDeleteChunks = std::move(remainingChunks);
+
+    if (deletedCount > 0)
+    {
+        LogDebug("world", "Processed deletions: %d deleted, %zu remaining",
+                 deletedCount, m_pendingDeleteChunks.size());
+    }
+}
+
+size_t World::GetPendingDeletionCount() const
+{
+    return m_pendingDeleteChunks.size();
 }

@@ -1,6 +1,6 @@
 ﻿#include "Chunk.hpp"
-#include "ChunkMeshBuilder.hpp"
-#include "ChunkManager.hpp"
+#include "ChunkMeshHelper.hpp"
+#include "../World/World.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
@@ -106,9 +106,8 @@ void Chunk::MarkDirty()
 
 void Chunk::RebuildMesh()
 {
-    // Use ChunkMeshBuilder to create optimized mesh (Assignment01 approach)
-    ChunkMeshBuilder builder;
-    auto             newMesh = builder.BuildMesh(this);
+    // Use ChunkMeshHelper to create optimized mesh (Assignment01 approach)
+    auto newMesh = ChunkMeshHelper::BuildMesh(this);
 
     if (newMesh)
     {
@@ -119,11 +118,11 @@ void Chunk::RebuildMesh()
         m_mesh    = std::move(newMesh);
         m_isDirty = false;
 
-        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshBuilder");
+        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshHelper");
     }
     else
     {
-        core::LogError("chunk", "ChunkMeshBuilder failed to create mesh");
+        core::LogError("chunk", "ChunkMeshHelper failed to create mesh");
 
         // Fallback: create an empty mesh
         if (!m_mesh)
@@ -415,24 +414,24 @@ BlockPos Chunk::GetWorldPos() const
 
 Chunk* Chunk::GetNorthNeighbor() const
 {
-    if (!m_chunkManager) return nullptr;
-    return m_chunkManager->GetChunk(m_chunkCoords.x, m_chunkCoords.y + 1);
+    if (!m_world) return nullptr;
+    return m_world->GetChunk(m_chunkCoords.x, m_chunkCoords.y + 1);
 }
 
 Chunk* Chunk::GetSouthNeighbor() const
 {
-    if (!m_chunkManager) return nullptr;
-    return m_chunkManager->GetChunk(m_chunkCoords.x, m_chunkCoords.y - 1);
+    if (!m_world) return nullptr;
+    return m_world->GetChunk(m_chunkCoords.x, m_chunkCoords.y - 1);
 }
 
 Chunk* Chunk::GetEastNeighbor() const
 {
-    if (!m_chunkManager) return nullptr;
-    return m_chunkManager->GetChunk(m_chunkCoords.x + 1, m_chunkCoords.y);
+    if (!m_world) return nullptr;
+    return m_world->GetChunk(m_chunkCoords.x + 1, m_chunkCoords.y);
 }
 
 Chunk* Chunk::GetWestNeighbor() const
 {
-    if (!m_chunkManager) return nullptr;
-    return m_chunkManager->GetChunk(m_chunkCoords.x - 1, m_chunkCoords.y);
+    if (!m_world) return nullptr;
+    return m_world->GetChunk(m_chunkCoords.x - 1, m_chunkCoords.y);
 }
