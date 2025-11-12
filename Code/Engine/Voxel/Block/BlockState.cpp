@@ -18,6 +18,17 @@ namespace enigma::voxel
         return m_blockType->GetState(newProperties);
     }
 
+    BlockState::BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex)
+        : m_blockType(blockType), m_properties(properties), m_stateIndex(stateIndex)
+    {
+        // Initialize flags from Block properties
+        if (m_blockType)
+        {
+            SetIsFullOpaque(m_blockType->IsOpaque());
+            SetIsSolid(m_blockType->IsFullBlock());
+        }
+    }
+
     bool BlockState::IsOpaque() const
     {
         return m_blockType ? m_blockType->IsOpaque() : true;

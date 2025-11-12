@@ -29,6 +29,20 @@ namespace enigma::voxel
      */
     class BlockState
     {
+    public:
+        /**
+         * @brief Flag bits for block state properties
+         * Each flag occupies one bit in m_flags (uint8_t)
+         */
+        enum class Flags : uint8_t
+        {
+            IS_SKY = 0x01, // Bit 0: Block is exposed to sky
+            IS_LIGHT_DIRTY = 0x02, // Bit 1: Light needs recalculation
+            IS_FULL_OPAQUE = 0x04, // Bit 2: Block is fully opaque (no light passes through)
+            IS_SOLID = 0x08, // Bit 3: Block is solid (collision)
+            IS_VISIBLE = 0x10 // Bit 4: Block is visible (should be rendered)
+        };
+
     private:
         enigma::registry::block::Block* m_blockType;
         PropertyMap                     m_properties;
@@ -38,11 +52,26 @@ namespace enigma::voxel
         mutable std::shared_ptr<enigma::renderer::model::RenderMesh> m_cachedMesh;
         mutable bool                                                 m_meshCacheValid = false;
 
-    public:
-        BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex)
-            : m_blockType(blockType), m_properties(properties), m_stateIndex(stateIndex)
+        // Light data and flags
+        uint8_t m_lightData = 0; // High 4 bits: outdoor light (0-15), Low 4 bits: indoor light (0-15)
+        uint8_t m_flags     = 0; // Bit flags: IsSky, IsLightDirty, IsFullOpaque, IsSolid, IsVisible
+
+        // Flag bit operations (private helpers)
+        inline bool HasFlag(Flags flag) const
         {
+            return (m_flags & static_cast<uint8_t>(flag)) != 0;
         }
+
+        inline void SetFlag(Flags flag, bool value)
+        {
+            if (value)
+                m_flags |= static_cast<uint8_t>(flag);
+            else
+                m_flags &= ~static_cast<uint8_t>(flag);
+        }
+
+    public:
+        BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex);
 
         virtual ~BlockState() = default;
 
@@ -79,9 +108,46 @@ namespace enigma::voxel
         size_t GetHash() const
         {
             size_t hash = std::hash<void*>{}(m_blockType);
-            hash ^= m_properties.GetHash() + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+            hash        ^= m_properties.GetHash() + 0x9e3779b9 + (hash << 6) + (hash >> 2);
             return hash;
         }
+
+        // Light data access (bit-packed: high 4 bits = outdoor, low 4 bits = indoor)
+        inline uint8_t GetOutdoorLight() const
+        {
+            return (m_lightData >> 4) & 0x0F;
+        }
+
+        inline void SetOutdoorLight(uint8_t level)
+        {
+            m_lightData = (m_lightData & 0x0F) | ((level & 0x0F) << 4);
+        }
+
+        inline uint8_t GetIndoorLight() const
+        {
+            return m_lightData & 0x0F;
+        }
+
+        inline void SetIndoorLight(uint8_t level)
+        {
+            m_lightData = (m_lightData & 0xF0) | (level & 0x0F);
+        }
+
+        // Flag accessors (semantic interface for bit flags)
+        inline bool IsSky() const { return HasFlag(Flags::IS_SKY); }
+        inline void SetIsSky(bool value) { SetFlag(Flags::IS_SKY, value); }
+
+        inline bool IsLightDirty() const { return HasFlag(Flags::IS_LIGHT_DIRTY); }
+        inline void SetIsLightDirty(bool value) { SetFlag(Flags::IS_LIGHT_DIRTY, value); }
+
+        inline bool IsFullOpaque() const { return HasFlag(Flags::IS_FULL_OPAQUE); }
+        inline void SetIsFullOpaque(bool value) { SetFlag(Flags::IS_FULL_OPAQUE, value); }
+
+        inline bool IsSolid() const { return HasFlag(Flags::IS_SOLID); }
+        inline void SetIsSolid(bool value) { SetFlag(Flags::IS_SOLID, value); }
+
+        inline bool IsVisible() const { return HasFlag(Flags::IS_VISIBLE); }
+        inline void SetIsVisible(bool value) { SetFlag(Flags::IS_VISIBLE, value); }
 
         // Block behavior delegation
         bool  IsOpaque() const;

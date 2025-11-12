@@ -255,20 +255,33 @@ bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
 
 bool ChunkMeshBuilder::ShouldRenderFace(const BlockIterator& iterator, Direction direction) const
 {
+    // Get neighbor block in the specified direction
     BlockIterator neighborIterator = iterator.GetNeighbor(direction);
 
+    // Render face if neighbor is invalid (chunk boundary or unloaded chunk)
     if (!neighborIterator.IsValid())
     {
-        return true; // Boundary or unloaded chunk, render face
+        return true;
     }
 
+    // Get neighbor block state
     BlockState* neighborBlock = neighborIterator.GetBlock();
-    if (!ShouldRenderBlock(neighborBlock))
+
+    // Render face if neighbor is air (null pointer)
+    if (!neighborBlock)
     {
-        return true; // Neighbor is air, render face
+        return true;
     }
 
-    return false; // Neighbor is solid, cull face
+    // [Phase 3] Use IsFullOpaque flag for precise face culling
+    // If neighbor is fully opaque, this face is hidden and should not be rendered
+    if (neighborBlock->IsFullOpaque())
+    {
+        return false;
+    }
+
+    // Render face for translucent or non-full blocks (water, glass, etc.)
+    return true;
 }
 
 BlockPos ChunkMeshBuilder::GetBlockPosition(int x, int y, int z) const
