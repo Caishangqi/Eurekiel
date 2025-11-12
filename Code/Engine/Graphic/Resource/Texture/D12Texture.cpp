@@ -836,7 +836,7 @@ namespace enigma::graphic
         heapManager->CreateShaderResourceView(device, resource, &srvDesc, GetBindlessIndex());
 
         core::LogInfo("D12Texture",
-                      "CreateDescriptorInGlobalHeap: Created SRV at bindless index %u for texture '%s'", GetBindlessIndex(), GetDebugName());
+                      "CreateDescriptorInGlobalHeap: Created SRV at bindless index %u for texture '%s'", GetBindlessIndex(), GetDebugName().c_str());
     }
 
     // ==================== GPU资源上传(Milestone 2.7) ====================

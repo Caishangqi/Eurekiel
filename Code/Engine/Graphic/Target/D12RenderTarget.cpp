@@ -289,7 +289,7 @@ std::string D12RenderTarget::GetDebugInfo() const
               "  Alt Texture Index: %u\n"
               "  Bindless Registered: %s\n"
               "  Valid: %s",
-              m_debugName,
+              m_debugName.c_str(),
               m_width, m_height,
               m_format,
               m_sampleCount,
@@ -434,7 +434,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Failed to register main texture for '%s'",
-                           m_debugName);
+                           m_debugName.c_str());
             return std::nullopt;
         }
     }
@@ -451,7 +451,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
         {
             core::LogError(RendererSubsystem::GetStaticSubsystemName(),
                            "RegisterBindless: Failed to register alt texture for '%s'",
-                           m_debugName);
+                           m_debugName.c_str());
             return std::nullopt;
         }
     }
@@ -461,7 +461,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
     // 只有内部纹理需要索引，RenderTarget作为容器管理这些索引
     core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
                    "RegisterBindless: RenderTarget '%s' registered (main=%u, alt=%u)",
-                   m_debugName, m_mainTextureIndex, m_altTextureIndex);
+                   m_debugName.c_str(), m_mainTextureIndex, m_altTextureIndex);
 
     return m_mainTextureIndex; // 返回主纹理索引
 }

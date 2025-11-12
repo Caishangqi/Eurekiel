@@ -145,7 +145,7 @@ namespace enigma::graphic
         m_cpuData.resize(dataSize);
         memcpy(m_cpuData.data(), data, dataSize);
 
-        LogDebug(LogRenderer, "SetInitialData: Cached %zu bytes for '%s'", dataSize, m_debugName);
+        LogDebug(LogRenderer, "SetInitialData: Cached %zu bytes for '%s'", dataSize, m_debugName.c_str());
     }
 
     /**
@@ -167,14 +167,14 @@ namespace enigma::graphic
         {
             LogError(LogRenderer,
                      "Upload: No CPU data for '%s'. Call SetInitialData() first.",
-                     m_debugName);
+                     m_debugName.c_str());
             return false;
         }
 
         // 2. 检查资源有效性
         if (!IsValid())
         {
-            LogError(LogRenderer, "Upload: Resource '%s' is invalid", m_debugName);
+            LogError(LogRenderer, "Upload: Resource '%s' is invalid", m_debugName.c_str());
             return false;
         }
 
@@ -189,7 +189,7 @@ namespace enigma::graphic
             m_isUploaded = true;
             core::LogInfo(LogRenderer,
                           "Upload: Successfully marked '%s' as uploaded (no CPU data required)",
-                          m_debugName);
+                          m_debugName.c_str());
             return true;
         }
 
@@ -338,7 +338,7 @@ namespace enigma::graphic
         {
             core::LogWarn(LogRenderer,
                           "RegisterBindless: Resource '%s' is already registered (index=%u)",
-                          m_debugName, m_bindlessIndex);
+                          m_debugName.c_str(), m_bindlessIndex);
             return std::nullopt;
         }
 
