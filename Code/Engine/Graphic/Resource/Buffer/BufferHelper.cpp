@@ -13,6 +13,58 @@ using enigma::graphic::D12IndexBuffer;
 using enigma::graphic::RendererSubsystemConfig;
 using namespace enigma::core;
 
+// ================================================================================================
+// [NEW] ConstantBuffer辅助方法实现
+// ================================================================================================
+
+size_t BufferHelper::CalculateAlignedSize(size_t rawSize)
+{
+    // D3D12要求ConstantBuffer必须256字节对齐
+    // 公式：(rawSize + 255) & ~255
+    // 示例：100 → 256, 300 → 512, 256 → 256
+    return (rawSize + CONSTANT_BUFFER_ALIGNMENT - 1) & ~(CONSTANT_BUFFER_ALIGNMENT - 1);
+}
+
+size_t BufferHelper::CalculateBufferCount(size_t totalSize, size_t elementSize)
+{
+    // 计算总大小可以容纳多少个元素
+    // 教学要点：整数除法，向下取整
+    if (elementSize == 0)
+    {
+        LogWarn(LogRenderer, "BufferHelper::CalculateBufferCount: elementSize is 0, returning 0");
+        return 0;
+    }
+    return totalSize / elementSize;
+}
+
+bool BufferHelper::IsEngineReservedSlot(uint32_t slot)
+{
+    // 引擎保留slot范围：0-14
+    return slot <= MAX_ENGINE_RESERVED_SLOT;
+}
+
+bool BufferHelper::IsUserSlot(uint32_t slot)
+{
+    // 用户自定义slot：>=15
+    return slot > MAX_ENGINE_RESERVED_SLOT;
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS BufferHelper::CalculateRootCBVAddress(ID3D12Resource* resource, size_t offset)
+{
+    // 计算ConstantBuffer的GPU虚拟地址
+    // 教学要点：GPU虚拟地址 = 资源基地址 + 偏移量
+    if (resource == nullptr)
+    {
+        LogError(LogRenderer, "BufferHelper::CalculateRootCBVAddress: resource is nullptr");
+        return 0;
+    }
+    return resource->GetGPUVirtualAddress() + offset;
+}
+
+// ================================================================================================
+// [EXISTING] VertexBuffer/IndexBuffer管理方法
+// ================================================================================================
+
 void BufferHelper::EnsureBufferSize(
     std::shared_ptr<D12VertexBuffer>& buffer,
     size_t                            requiredSize,

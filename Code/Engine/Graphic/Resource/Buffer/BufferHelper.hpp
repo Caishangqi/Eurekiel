@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+
 namespace enigma::graphic
 {
     // 前向声明
@@ -21,6 +23,49 @@ namespace enigma::graphic
 class BufferHelper
 {
 public:
+    // [NEW] ConstantBuffer对齐和slot管理常量
+    static constexpr size_t   CONSTANT_BUFFER_ALIGNMENT = 256; // D3D12 ConstantBuffer必须256字节对齐
+    static constexpr uint32_t MAX_ENGINE_RESERVED_SLOT  = 14; // 引擎保留slot范围：0-14
+
+    // [NEW] ConstantBuffer辅助方法
+    /**
+     * @brief 计算256字节对齐后的大小
+     * @param rawSize 原始大小
+     * @return 对齐后的大小（向上对齐到256字节边界）
+     */
+    static size_t CalculateAlignedSize(size_t rawSize);
+
+    /**
+     * @brief 计算给定总大小可以容纳多少个元素
+     * @param totalSize 总Buffer大小
+     * @param elementSize 单个元素大小
+     * @return 可容纳的元素数量
+     */
+    static size_t CalculateBufferCount(size_t totalSize, size_t elementSize);
+
+    /**
+     * @brief 检查slot是否为引擎保留slot（0-14）
+     * @param slot 要检查的slot编号
+     * @return true表示为引擎保留slot
+     */
+    static bool IsEngineReservedSlot(uint32_t slot);
+
+    /**
+     * @brief 检查slot是否为用户自定义slot（>=15）
+     * @param slot 要检查的slot编号
+     * @return true表示为用户自定义slot
+     */
+    static bool IsUserSlot(uint32_t slot);
+
+    /**
+     * @brief 计算ConstantBuffer的GPU虚拟地址
+     * @param resource D3D12资源指针
+     * @param offset 偏移量（字节）
+     * @return GPU虚拟地址
+     */
+    static D3D12_GPU_VIRTUAL_ADDRESS CalculateRootCBVAddress(ID3D12Resource* resource, size_t offset);
+
+    // [EXISTING] VertexBuffer/IndexBuffer管理方法
     /**
      * @brief 确保VertexBuffer大小足够（不足时扩容）
      * @param buffer 要检查的buffer智能指针（引用传递，可能被重新创建）
