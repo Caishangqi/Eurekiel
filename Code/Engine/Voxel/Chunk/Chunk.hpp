@@ -178,12 +178,19 @@ namespace enigma::voxel
         void     Clear(); // Clear all blocks to air
         IntVec2  GetChunkCoords() const { return m_chunkCoords; }
         int32_t  GetChunkX() const { return m_chunkCoords.x; }
-        int32_t  GetChunkZ() const { return m_chunkCoords.y; }
+        int32_t  GetChunkY() const { return m_chunkCoords.y; }
         BlockPos GetWorldPos() const; // Bottom corner world position
 
         // 预留：扩展数据接口（类似NeoForge Attachments）
         ChunkAttachmentHolder&       GetAttachmentHolder() { return m_attachmentHolder; }
         const ChunkAttachmentHolder& GetAttachmentHolder() const { return m_attachmentHolder; }
+
+        // [A05] Neighbor chunk access for BlockIterator
+        void   SetChunkManager(class ChunkManager* manager) { m_chunkManager = manager; }
+        Chunk* GetNorthNeighbor() const;
+        Chunk* GetSouthNeighbor() const;
+        Chunk* GetEastNeighbor() const;
+        Chunk* GetWestNeighbor() const;
 
     private:
         //-------------------------------------------------------------------------------------------
@@ -213,5 +220,10 @@ namespace enigma::voxel
 
         /// Debug Drawing
         AABB3 m_chunkBounding;
+
+        //-------------------------------------------------------------------------------------------
+        // [A05] Neighbor Access
+        //-------------------------------------------------------------------------------------------
+        class ChunkManager* m_chunkManager = nullptr;
     };
 }

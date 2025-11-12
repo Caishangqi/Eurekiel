@@ -1,5 +1,6 @@
 ﻿#include "Chunk.hpp"
 #include "ChunkMeshBuilder.hpp"
+#include "ChunkManager.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
@@ -406,4 +407,32 @@ BlockPos Chunk::GetWorldPos() const
     int32_t worldZ = 0; // Start at the bottom of the world (Z is height, starts at 0)
 
     return BlockPos(worldX, worldY, worldZ);
+}
+
+//-------------------------------------------------------------------------------------------
+// [A05] Neighbor Chunk Access for BlockIterator
+//-------------------------------------------------------------------------------------------
+
+Chunk* Chunk::GetNorthNeighbor() const
+{
+    if (!m_chunkManager) return nullptr;
+    return m_chunkManager->GetChunk(m_chunkCoords.x, m_chunkCoords.y + 1);
+}
+
+Chunk* Chunk::GetSouthNeighbor() const
+{
+    if (!m_chunkManager) return nullptr;
+    return m_chunkManager->GetChunk(m_chunkCoords.x, m_chunkCoords.y - 1);
+}
+
+Chunk* Chunk::GetEastNeighbor() const
+{
+    if (!m_chunkManager) return nullptr;
+    return m_chunkManager->GetChunk(m_chunkCoords.x + 1, m_chunkCoords.y);
+}
+
+Chunk* Chunk::GetWestNeighbor() const
+{
+    if (!m_chunkManager) return nullptr;
+    return m_chunkManager->GetChunk(m_chunkCoords.x - 1, m_chunkCoords.y);
 }
