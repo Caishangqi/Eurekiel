@@ -517,6 +517,7 @@ namespace enigma::graphic
             const D3D12_HEAP_PROPERTIES& heapProps,
             const D3D12_RESOURCE_DESC&   desc,
             D3D12_RESOURCE_STATES        initialState,
+            const D3D12_CLEAR_VALUE*     pOptimizedClearValue,
             ID3D12Resource**             resource);
 
         // ===== SM6.6 Bindless资源管理API (Milestone 2.7重构) =====

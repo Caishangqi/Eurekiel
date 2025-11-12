@@ -419,10 +419,12 @@ namespace enigma::graphic
         // 使用D3D12RenderSystem统一接口创建资源
         // 符合分层架构原则：资源层通过API封装层访问DirectX
         ID3D12Resource* resource = nullptr;
-        HRESULT         hr       = D3D12RenderSystem::CreateCommittedResource(
+        // [NEW] Buffer resources don't need ClearValue (DirectX 12 specification)
+        HRESULT hr = D3D12RenderSystem::CreateCommittedResource(
             heapProps, // 堆属性
             resourceDesc, // 资源描述
             initialState, // 初始状态
+            nullptr, // [NEW] Buffer resources always pass nullptr for pOptimizedClearValue
             &resource // 输出接口
         );
 

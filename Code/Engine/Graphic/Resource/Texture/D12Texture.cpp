@@ -510,7 +510,27 @@ namespace enigma::graphic
         // 3. 确定初始资源状态
         D3D12_RESOURCE_STATES initialState = GetInitialState(m_usage);
 
-        // 4. 创建提交资源
+        // 4. 构造OptimizedClearValue (RenderTarget Fast Clear优化)
+        // 教学要点:
+        // - RenderTarget纹理需要OptimizedClearValue启用Fast Clear优化
+        // - 清除值(0,0,0,1)必须与RenderTargetBinder::PerformClearOperations()中的Rgba8::BLACK匹配
+        // - 如果清除值不匹配，DirectX 12无法使用Fast Clear，性能会下降
+        // - 非RenderTarget纹理传递nullptr (不需要清除优化)
+        D3D12_CLEAR_VALUE        optimizedClearValue = {};
+        const D3D12_CLEAR_VALUE* pClearValue         = nullptr;
+
+        if (HasFlag(m_usage, TextureUsage::RenderTarget))
+        {
+            // 设置清除值为黑色(与Rgba8::BLACK匹配)
+            optimizedClearValue.Format   = m_format;
+            optimizedClearValue.Color[0] = 0.0f; // Red
+            optimizedClearValue.Color[1] = 0.0f; // Green
+            optimizedClearValue.Color[2] = 0.0f; // Blue
+            optimizedClearValue.Color[3] = 1.0f; // Alpha
+            pClearValue                  = &optimizedClearValue;
+        }
+
+        // 5. 创建提交资源
         // 使用D3D12RenderSystem统一接口创建资源
         // 符合分层架构原则：资源层通过API封装层访问DirectX
         ID3D12Resource* resource = nullptr;
@@ -518,6 +538,7 @@ namespace enigma::graphic
             heapProps, // 堆属性
             resourceDesc, // 资源描述
             initialState, // 初始状态
+            pClearValue, // OptimizedClearValue (RenderTarget启用Fast Clear)
             &resource // 输出接口
         );
 

@@ -589,11 +589,13 @@ namespace enigma::graphic
         // 3. 确定初始资源状态
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_DEPTH_WRITE; // 深度写入状态
 
-        // 4. 设置清除值优化
-        D3D12_CLEAR_VALUE clearValue    = {};
-        clearValue.Format               = m_depthFormat;
-        clearValue.DepthStencil.Depth   = m_clearDepth;
-        clearValue.DepthStencil.Stencil = m_clearStencil;
+        // 4. [NEW] OptimizedClearValue for depth texture (DirectX 12 best practice)
+        // Depth textures always need ClearValue to enable Fast Clear
+        // Default: depth=1.0f (far plane), stencil=0
+        D3D12_CLEAR_VALUE depthOptimizedClearValue    = {};
+        depthOptimizedClearValue.Format               = m_depthFormat;
+        depthOptimizedClearValue.DepthStencil.Depth   = m_clearDepth;
+        depthOptimizedClearValue.DepthStencil.Stencil = m_clearStencil;
 
         // 5. 使用D3D12RenderSystem统一接口创建资源
         // 符合分层架构原则：资源层通过API封装层访问DirectX
@@ -602,6 +604,7 @@ namespace enigma::graphic
             heapProps, // 堆属性
             resourceDesc, // 资源描述
             initialState, // 初始状态
+            &depthOptimizedClearValue, // [NEW] Always pass ClearValue for depth textures
             &resource // 输出接口
         );
 
