@@ -49,9 +49,9 @@ namespace enigma::voxel
          * @param chunkMesh Target chunk mesh
          * @param blockState Block state to render
          * @param blockPos Position of the block within the chunk (0-15 range)
-         * @param chunk Source chunk for face culling
+         * @param iterator Block iterator for face culling
          */
-        void AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, Chunk* chunk);
+        void AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, const class BlockIterator& iterator);
 
         /**
          * @brief Check if a block should be rendered
@@ -68,21 +68,12 @@ namespace enigma::voxel
          *
          * Assignment 2: Face culling implementation
          *
-         * @param chunk Source chunk
-         * @param blockPos Position of the block within chunk (0-15 range)
+         * @param iterator Block iterator at current position
          * @param direction Direction of the face to check
          * @return True if face should be rendered
          */
-        bool ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, Direction direction) const;
+        bool ShouldRenderFace(const class BlockIterator& iterator, Direction direction) const;
 
-        /**
-         * @brief Get neighbor block position in given direction
-         *
-         * @param blockPos Current block position
-         * @param direction Direction to get neighbor
-         * @return Neighbor position
-         */
-        BlockPos GetNeighborPosition(const BlockPos& blockPos, Direction direction) const;
 
         /**
          * @brief Get block position in chunk coordinates

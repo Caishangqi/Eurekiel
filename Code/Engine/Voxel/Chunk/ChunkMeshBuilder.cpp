@@ -6,6 +6,7 @@
 #include "Engine/Math/Mat44.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
+#include "../Block/BlockIterator.hpp"
 
 using namespace enigma::voxel;
 
@@ -41,33 +42,31 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
     size_t transparentQuadCount = 0;
 
     // First pass: Count quads needed
+    static const std::vector<enigma::voxel::Direction> allDirections = {
+        enigma::voxel::Direction::NORTH,
+        enigma::voxel::Direction::SOUTH,
+        enigma::voxel::Direction::EAST,
+        enigma::voxel::Direction::WEST,
+        enigma::voxel::Direction::UP,
+        enigma::voxel::Direction::DOWN
+    };
+
     for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
         {
             for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
-                BlockState* blockState = chunk->GetBlock(x, y, z);
+                int           blockIndex = x + (y << Chunk::CHUNK_BITS_X) + (z << (Chunk::CHUNK_BITS_X + Chunk::CHUNK_BITS_Y));
+                BlockIterator iterator(chunk, blockIndex);
+                BlockState*   blockState = iterator.GetBlock();
 
                 if (ShouldRenderBlock(blockState))
                 {
-                    BlockPos blockPos = GetBlockPosition(x, y, z);
-
-                    // Count visible faces for this block
-                    static const std::vector<enigma::voxel::Direction> allDirections = {
-                        enigma::voxel::Direction::NORTH,
-                        enigma::voxel::Direction::SOUTH,
-                        enigma::voxel::Direction::EAST,
-                        enigma::voxel::Direction::WEST,
-                        enigma::voxel::Direction::UP,
-                        enigma::voxel::Direction::DOWN
-                    };
-
                     for (const auto& direction : allDirections)
                     {
-                        if (ShouldRenderFace(chunk, blockPos, direction))
+                        if (ShouldRenderFace(iterator, direction))
                         {
-                            // For now, treat all as opaque (can be refined later for transparent blocks)
                             opaqueQuadCount++;
                         }
                     }
@@ -87,12 +86,15 @@ std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
             for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
                 if (chunk->GetState() != ChunkState::Active) return nullptr;
-                BlockState* blockState = chunk->GetBlock(x, y, z);
+
+                int           blockIndex = x + (y << Chunk::CHUNK_BITS_X) + (z << (Chunk::CHUNK_BITS_X + Chunk::CHUNK_BITS_Y));
+                BlockIterator iterator(chunk, blockIndex);
+                BlockState*   blockState = iterator.GetBlock();
 
                 if (ShouldRenderBlock(blockState))
                 {
                     BlockPos blockPos = GetBlockPosition(x, y, z);
-                    AddBlockToMesh(chunkMesh.get(), blockState, blockPos, chunk);
+                    AddBlockToMesh(chunkMesh.get(), blockState, blockPos, iterator);
                     blockCount++;
                 }
             }
@@ -128,30 +130,26 @@ void ChunkMeshBuilder::RebuildMesh(Chunk* chunk)
     }
 }
 
-void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, Chunk* chunk)
+void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, const BlockIterator& iterator)
 {
-    // ===== Phase 4: 关键位置状态验证（防护点2） =====
     if (!chunkMesh || !blockState)
     {
         return;
     }
 
+    Chunk* chunk = iterator.GetChunk();
     if (!chunk || chunk->GetState() != ChunkState::Active)
     {
         core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk invalid or not Active, aborting");
         return;
     }
 
-    // Get the compiled render mesh for this block state
     auto blockRenderMesh = blockState->GetRenderMesh();
-
     if (!blockRenderMesh || blockRenderMesh->IsEmpty())
     {
-        // No render mesh available - this is normal for air blocks
         return;
     }
 
-    // All 6 directions for face iteration
     static const std::vector<enigma::voxel::Direction> allDirections = {
         enigma::voxel::Direction::NORTH,
         enigma::voxel::Direction::SOUTH,
@@ -161,24 +159,20 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
         enigma::voxel::Direction::DOWN
     };
 
-    // Create transformation matrix from block space to chunk space
     Vec3  blockPosVec3(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
     Mat44 blockToChunkTransform = Mat44::MakeTranslation3D(blockPosVec3);
 
-    // Iterate through all faces of the block render mesh
     for (const auto& direction : allDirections)
     {
-        // ===== Phase 4: 面级别状态检查（防护点2.1） =====
         if (chunk->GetState() != ChunkState::Active)
         {
             core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk state changed during face iteration, aborting");
             return;
         }
 
-        // Assignment 2: Face culling - skip faces that are not visible
-        if (!ShouldRenderFace(chunk, blockPos, direction))
+        if (!ShouldRenderFace(iterator, direction))
         {
-            continue; // Skip this face as it's occluded
+            continue;
         }
 
         const auto* renderFace = blockRenderMesh->GetFace(direction);
@@ -259,62 +253,22 @@ bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
     return true;
 }
 
-bool ChunkMeshBuilder::ShouldRenderFace(Chunk* chunk, const BlockPos& blockPos, Direction direction) const
+bool ChunkMeshBuilder::ShouldRenderFace(const BlockIterator& iterator, Direction direction) const
 {
-    // ===== Phase 4: 当前chunk状态检查（防护点3.1） =====
-    if (!chunk || chunk->GetState() != ChunkState::Active)
+    BlockIterator neighborIterator = iterator.GetNeighbor(direction);
+
+    if (!neighborIterator.IsValid())
     {
-        core::LogDebug("ChunkMeshBuilder", "ShouldRenderFace: chunk invalid or not Active");
-        return false;
+        return true; // Boundary or unloaded chunk, render face
     }
 
-    // Assignment 2: Face culling implementation
-    // A face should be rendered if the adjacent block in that direction is:
-    // 1. Air (empty)
-    // 2. Transparent
-    // 3. Outside chunk bounds (edge faces are always visible)
-
-    BlockPos neighborPos = GetNeighborPosition(blockPos, direction);
-
-    // Check if neighbor is outside chunk bounds - render edge faces
-    if (neighborPos.x < 0 || neighborPos.x >= Chunk::CHUNK_SIZE_X ||
-        neighborPos.y < 0 || neighborPos.y >= Chunk::CHUNK_SIZE_Y ||
-        neighborPos.z < 0 || neighborPos.z >= Chunk::CHUNK_SIZE_Z)
+    BlockState* neighborBlock = neighborIterator.GetBlock();
+    if (!ShouldRenderBlock(neighborBlock))
     {
-        return true; // Edge face, always render
+        return true; // Neighbor is air, render face
     }
 
-    // ===== Phase 4: 再次验证chunk状态（防护点3.2） =====
-    // 防止在GetNeighborPosition和GetBlock之间chunk被删除
-    if (chunk->GetState() != ChunkState::Active)
-    {
-        core::LogDebug("ChunkMeshBuilder", "ShouldRenderFace: chunk state changed, conservative render");
-        return true; // 保守渲染策略：状态无效时渲染面，避免视觉缺失
-    }
-
-    // If we have chunk reference, check the neighbor block
-    if (chunk)
-    {
-        BlockState* neighborBlock = chunk->GetBlock(neighborPos.x, neighborPos.y, neighborPos.z);
-
-        // Render face if neighbor is air
-        if (!ShouldRenderBlock(neighborBlock))
-        {
-            return true; // Neighbor is air, render this face
-        }
-
-        // TODO: Add transparent block check here
-        // For now, assume all non-air blocks are opaque
-        return false; // Neighbor is solid, cull this face
-    }
-
-    // No chunk reference - render by default (fallback)
-    return true;
-}
-
-BlockPos ChunkMeshBuilder::GetNeighborPosition(const BlockPos& blockPos, Direction direction) const
-{
-    return blockPos.GetRelative(direction);
+    return false; // Neighbor is solid, cull face
 }
 
 BlockPos ChunkMeshBuilder::GetBlockPosition(int x, int y, int z) const
