@@ -81,6 +81,7 @@ void ChunkManager::LoadChunk(int32_t chunkX, int32_t chunkY)
 
     // Simplified synchronous loading for emergency/legacy use
     auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+    chunk->SetChunkManager(this); // [A05] Set ChunkManager for neighbor access
     if (m_generationCallback)
     {
         m_generationCallback->GenerateChunk(chunk.get(), chunkX, chunkY);
@@ -431,7 +432,7 @@ bool ChunkManager::SaveChunkToDisk(const Chunk* chunk)
     {
         // Use GetChunkX() and GetChunkZ() instead of GetPosition()
         int32_t chunkX = chunk->GetChunkX();
-        int32_t chunkZ = chunk->GetChunkZ();
+        int32_t chunkZ = chunk->GetChunkY();
         return m_chunkStorage->SaveChunk(chunkX, chunkZ, chunk);
     }
     catch (const std::exception& e)
@@ -457,6 +458,7 @@ std::unique_ptr<Chunk> ChunkManager::LoadChunkFromDisk(int32_t chunkX, int32_t c
     try
     {
         auto chunk = std::make_unique<Chunk>(IntVec2(chunkX, chunkY));
+        chunk->SetChunkManager(this); // [A05] Set ChunkManager for neighbor access
         if (m_chunkStorage->LoadChunk(chunkX, chunkY, chunk.get()))
         {
             LogDebug(LogChunk, "Successfully loaded chunk (%d, %d) from disk", chunkX, chunkY);
@@ -543,13 +545,13 @@ void ChunkManager::MarkChunkForDeletion(Chunk* chunk)
     if (it != m_pendingDeleteChunks.end())
     {
         LogWarn(LogChunk, "Chunk (%d, %d) already in pending deletion queue",
-                chunk->GetChunkX(), chunk->GetChunkZ());
+                chunk->GetChunkX(), chunk->GetChunkY());
         return;
     }
 
     m_pendingDeleteChunks.push_back(chunk);
     LogDebug(LogChunk, "Marked chunk (%d, %d) for deletion, queue size: %zu",
-             chunk->GetChunkX(), chunk->GetChunkZ(), m_pendingDeleteChunks.size());
+             chunk->GetChunkX(), chunk->GetChunkY(), m_pendingDeleteChunks.size());
 }
 
 void ChunkManager::ProcessPendingDeletions()
@@ -579,7 +581,7 @@ void ChunkManager::ProcessPendingDeletions()
         if (state == ChunkState::Inactive || state == ChunkState::PendingUnload)
         {
             int32_t chunkX = chunk->GetChunkX();
-            int32_t chunkZ = chunk->GetChunkZ();
+            int32_t chunkZ = chunk->GetChunkY();
 
             // Cleanup VBO resources to prevent GPU leaks
             if (chunk->GetMesh())
@@ -598,7 +600,7 @@ void ChunkManager::ProcessPendingDeletions()
             // Still generating: keep for next frame
             remainingChunks.push_back(chunk);
             LogWarn(LogChunk, "Chunk (%d, %d) still in state %d, defer deletion",
-                    chunk->GetChunkX(), chunk->GetChunkZ(), static_cast<int>(state));
+                    chunk->GetChunkX(), chunk->GetChunkY(), static_cast<int>(state));
         }
     }
 
