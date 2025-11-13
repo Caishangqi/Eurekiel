@@ -1,12 +1,23 @@
 #include "LoadChunkJob.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Voxel/World/World.hpp"
 
 namespace enigma::voxel
 {
     void LoadChunkJob::Execute()
     {
-        // Safety check: ensure chunk is still in Loading state
-        ChunkState currentState = m_chunk->GetState();
+        // [REFACTORED] Phase 1: Get Chunk via coordinates (eliminates null pointer checks)
+        // If Chunk was deleted, GetChunk() returns nullptr and we abort gracefully
+        Chunk* chunk = m_world->GetChunk(m_chunkCoords.x, m_chunkCoords.y);
+        if (!chunk)
+        {
+            // Chunk was deleted, abort silently
+            m_loadSuccess = false;
+            return;
+        }
+
+        // Phase 2: Verify chunk state before accessing
+        ChunkState currentState = chunk->GetState();
         if (currentState != ChunkState::Loading)
         {
             // Chunk was cancelled or state changed, abort loading
@@ -21,20 +32,18 @@ namespace enigma::voxel
             return;
         }
 
-        // Perform chunk loading from disk (supports both ESF and ESFS)
-        GUARANTEE_OR_DIE(m_chunk != nullptr, "LoadChunkJob: Chunk is null");
-
+        // Phase 3: Perform chunk loading from disk (supports both ESF and ESFS)
         if (m_esfStorage != nullptr)
         {
             // ESF format
             GUARANTEE_OR_DIE(m_esfsStorage == nullptr, "LoadChunkJob: Both storages are set");
-            m_loadSuccess = m_esfStorage->LoadChunkData(m_chunk, m_chunkCoords.x, m_chunkCoords.y);
+            m_loadSuccess = m_esfStorage->LoadChunkData(chunk, m_chunkCoords.x, m_chunkCoords.y);
         }
         else if (m_esfsStorage != nullptr)
         {
             // ESFS format
             GUARANTEE_OR_DIE(m_esfStorage == nullptr, "LoadChunkJob: Both storages are set");
-            m_loadSuccess = m_esfsStorage->LoadChunkData(m_chunk, m_chunkCoords.x, m_chunkCoords.y);
+            m_loadSuccess = m_esfsStorage->LoadChunkData(chunk, m_chunkCoords.x, m_chunkCoords.y);
         }
         else
         {
