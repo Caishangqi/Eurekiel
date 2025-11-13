@@ -15,8 +15,6 @@ namespace enigma::voxel
         Active,
         PendingSave,
         Saving,
-        PendingMeshRebuild,
-        BuildingMesh,
         PendingUnload,
         Unloading,
         COUNT

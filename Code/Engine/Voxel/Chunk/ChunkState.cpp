@@ -15,8 +15,6 @@ namespace enigma::voxel
         case ChunkState::Active: return "Active";
         case ChunkState::PendingSave: return "PendingSave";
         case ChunkState::Saving: return "Saving";
-        case ChunkState::PendingMeshRebuild: return "PendingMeshRebuild";
-        case ChunkState::BuildingMesh: return "BuildingMesh";
         case ChunkState::PendingUnload: return "PendingUnload";
         case ChunkState::Unloading: return "Unloading";
         default: return "Unknown";
