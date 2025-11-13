@@ -128,34 +128,12 @@ namespace enigma::voxel
 
         // New: Atomic State Machine (Thread-Safe)
         ChunkState  GetState() const { return m_state.Load(); }
+        void        SetState(ChunkState newState) { m_state.Store(newState); }
         bool        TrySetState(ChunkState expected, ChunkState desired) { return m_state.CompareAndSwap(expected, desired); }
         const char* GetStateName() const { return m_state.GetStateName(); }
 
         // Convenience state queries
         bool IsActive() const { return GetState() == ChunkState::Active; }
-
-        bool IsLoading() const
-        {
-            ChunkState state = GetState();
-            return state == ChunkState::Loading || state == ChunkState::Generating;
-        }
-
-        bool IsPendingWork() const
-        {
-            ChunkState state = GetState();
-            return state == ChunkState::PendingLoad ||
-                state == ChunkState::PendingGenerate ||
-                state == ChunkState::PendingSave;
-        }
-
-        // Legacy compatibility (to be removed after full migration)
-        bool IsGenerated() const
-        {
-            ChunkState state = GetState();
-            return state == ChunkState::Active ||
-                state == ChunkState::PendingSave ||
-                state == ChunkState::Saving;
-        }
 
         void SetGenerated(bool generated) { (void)generated; } // Suppress warning
         bool IsPopulated() const { return m_isPopulated; }
@@ -183,7 +161,6 @@ namespace enigma::voxel
         int32_t  GetChunkY() const { return m_chunkCoords.y; }
         BlockPos GetWorldPos() const; // Bottom corner world position
 
-        // 预留：扩展数据接口（类似NeoForge Attachments）
         ChunkAttachmentHolder&       GetAttachmentHolder() { return m_attachmentHolder; }
         const ChunkAttachmentHolder& GetAttachmentHolder() const { return m_attachmentHolder; }
 
