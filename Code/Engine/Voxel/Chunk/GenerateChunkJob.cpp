@@ -1,20 +1,23 @@
 #include "GenerateChunkJob.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Voxel/World/World.hpp"
 
 namespace enigma::voxel
 {
     void GenerateChunkJob::Execute()
     {
-        // Phase 1 Safety Check: Null pointer validation (prevent access to freed memory)
-        if (!m_chunk || !m_generator)
+        // [REFACTORED] Phase 1: Get Chunk via coordinates (eliminates null pointer checks)
+        // If Chunk was deleted, GetChunk() returns nullptr and we abort gracefully
+        Chunk* chunk = m_world->GetChunk(m_chunkCoords.x, m_chunkCoords.y);
+        if (!chunk || !m_generator)
         {
-            // Chunk or generator was destroyed, abort silently to prevent crash
+            // Chunk was deleted or generator is null, abort silently
             return;
         }
 
-        // Phase 2 Safety Check: Verify chunk state before accessing
-        ChunkState currentState = m_chunk->GetState();
+        // Phase 2: Verify chunk state before accessing
+        ChunkState currentState = chunk->GetState();
         if (currentState != ChunkState::Generating)
         {
             // Chunk was cancelled or state changed, abort generation
@@ -27,12 +30,12 @@ namespace enigma::voxel
             return;
         }
 
-        // Phase 3 Safety Check: Exception protection for terrain generation
+        // Phase 3: Exception protection for terrain generation
         // Wrap the generation call in try-catch to prevent crashes from unexpected errors
         try
         {
-            if (m_chunk->GetState() != ChunkState::Generating) return;
-            m_generator->GenerateChunk(m_chunk, m_chunkCoords.x, m_chunkCoords.y, m_worldSeed);
+            if (chunk->GetState() != ChunkState::Generating) return;
+            m_generator->GenerateChunk(chunk, m_chunkCoords.x, m_chunkCoords.y, m_worldSeed);
         }
         catch (const std::exception& e)
         {

@@ -4,16 +4,20 @@
 
 namespace enigma::voxel
 {
+    // Forward declaration
+    class World;
+
     //-----------------------------------------------------------------------------------------------
     // Job for procedural chunk generation on ChunkGen threads
     // CPU-intensive work: noise generation, terrain shaping, block placement
+    // [REFACTORED] No longer holds Chunk*, retrieves it via World::GetChunk() in Execute()
     //-----------------------------------------------------------------------------------------------
     class GenerateChunkJob : public ChunkJob
     {
     public:
-        GenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk, TerrainGenerator* generator, uint32_t worldSeed)
+        GenerateChunkJob(IntVec2 chunkCoords, World* world, TerrainGenerator* generator, uint32_t worldSeed)
             : ChunkJob(TaskTypeConstants::CHUNK_GEN, chunkCoords)
-              , m_chunk(chunk)
+              , m_world(world)
               , m_generator(generator)
               , m_worldSeed(worldSeed)
         {
@@ -22,7 +26,7 @@ namespace enigma::voxel
         void Execute() override;
 
     private:
-        Chunk*            m_chunk; // Target chunk (owned by main thread, only worker reads/writes blocks)
+        World*            m_world; // [NEW] World instance to get Chunk via coordinates
         TerrainGenerator* m_generator; // TerrainGenerator instance (thread-safe, stateless)
         uint32_t          m_worldSeed; // World generation seed
     };
