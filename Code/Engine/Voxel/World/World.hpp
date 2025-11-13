@@ -23,7 +23,6 @@ class Texture;
 
 namespace enigma::voxel
 {
-    class BuildMeshJob;
     // ========================================================================
     // Core Configuration
     // ========================================================================
@@ -60,7 +59,6 @@ namespace enigma::voxel
         // Chunk Operations:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY); // 改为直接访问 m_loadedChunks
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY) const; // const version for const methods
-        void   LoadChunkDirect(int32_t chunkX, int32_t chunkY); // 新增直接加载方法
         void   UnloadChunkDirect(int32_t chunkX, int32_t chunkY); // 新增直接卸载方法
         Chunk* GetChunkAt(const BlockPos& pos) const;
         bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
@@ -68,8 +66,6 @@ namespace enigma::voxel
         void                                     UpdateNearbyChunks(); // Update nearby blocks according to player location
         std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // Calculate the required blocks
 
-        // 区块生成和管理方法
-        void GenerateChunk(Chunk* chunk, int32_t chunkX, int32_t chunkY);
         bool ShouldUnloadChunk(int32_t chunkX, int32_t chunkY);
 
         // Update and Management:
@@ -95,10 +91,6 @@ namespace enigma::voxel
         // 渲染资源
         Texture* GetBlocksAtlasTexture() const;
 
-        // 延迟删除管理
-        void   MarkChunkForDeletion(Chunk* chunk);
-        void   ProcessPendingDeletions();
-        size_t GetPendingDeletionCount() const;
 
         // World generation integration
         void SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
@@ -141,9 +133,6 @@ namespace enigma::voxel
         // Activate a chunk (decide whether to load from disk or generate)
         void ActivateChunk(IntVec2 chunkCoords);
 
-        // Deactivate and save a chunk (if modified)
-        void DeactivateChunk(IntVec2 chunkCoords);
-
         // Submit chunk generation job to ScheduleSubsystem
         void SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk);
 
@@ -152,9 +141,6 @@ namespace enigma::voxel
 
         // Submit chunk save job to ScheduleSubsystem
         void SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk);
-
-        // Submit mesh build job to ScheduleSubsystem
-        void SubmitBuildMeshJob(Chunk* chunk, TaskPriority priority = TaskPriority::Normal);
 
         // Handle completed generation job
         void HandleGenerateChunkCompleted(GenerateChunkJob* job);
@@ -165,8 +151,21 @@ namespace enigma::voxel
         // Handle completed save job
         void HandleSaveChunkCompleted(SaveChunkJob* job);
 
-        // Handle completed mesh build job
-        void HandleBuildMeshCompleted(BuildMeshJob* job);
+        //-------------------------------------------------------------------------------------------
+        // Phase 1: Main Thread Mesh Building (Assignment 03 Requirements)
+        //-------------------------------------------------------------------------------------------
+
+        // Update chunk meshes on main thread (called from Update())
+        void UpdateChunkMeshes();
+
+        // Mark a chunk as needing mesh rebuild and add to queue
+        void MarkChunkDirty(Chunk* chunk);
+
+        // Sort mesh rebuild queue by distance to player (nearest first)
+        void SortMeshQueueByDistance();
+
+        // Get distance from chunk to player (helper for sorting)
+        float GetChunkDistanceToPlayer(Chunk* chunk) const;
 
         //-------------------------------------------------------------------------------------------
         // Phase 4: Job Queue Management Methods
@@ -180,33 +179,25 @@ namespace enigma::voxel
         // Called from Update() to cancel jobs for chunks that moved out of range
         void RemoveDistantJobs();
 
-        //-------------------------------------------------------------------------------------------
-        // 区块距离和管理辅助方法（从 ChunkManager 迁移）
-        //-------------------------------------------------------------------------------------------
+        // Phase 2.2: Cancel pending jobs for a specific chunk
+        // Called when unloading a chunk to remove it from all pending queues
+        void CancelPendingJobsForChunk(IntVec2 coords);
 
-        // 计算区块到玩家的距离
+        // Phase 3: Helper method to check if coords are in queue
+        bool IsInQueue(const std::deque<IntVec2>& queue, IntVec2 coords) const;
+
+        // Phase 6: Chunk Unloading Logic
+        void UnloadFarthestChunk(); // Unload the farthest chunk if beyond deactivation range
+
+        // Calculate the distance from the block to the player
         float GetChunkDistanceToPlayer(int32_t chunkX, int32_t chunkY) const;
 
-        // 获取激活范围内的所有区块坐标
-        std::vector<std::pair<int32_t, int32_t>> GetChunksInActivationRange() const;
-
-        // 查找距离玩家最远的已加载区块
+        // Find the loaded chunk farthest from the player
         std::pair<int32_t, int32_t> FindFarthestChunk() const;
 
-        // 查找距离玩家最近的未加载区块（在激活范围内）
-        std::pair<int32_t, int32_t> FindNearestMissingChunk() const;
-
-        // 查找距离玩家最近的需要重建网格的区块
-        Chunk* FindNearestDirtyChunk() const;
-
     private:
-        // 从 ChunkManager 迁移的成员
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks;
-        std::vector<Chunk*>                                 m_pendingDeleteChunks;
         bool                                                m_enableChunkDebug         = false;
-        int32_t                                             m_activationRange          = 12;
-        int32_t                                             m_deactivationRange        = 14;
-        int                                                 m_maxMeshRebuildsPerFrame  = 1;
         Texture*                                            m_cachedBlocksAtlasTexture = nullptr;
 
         std::string m_worldName; // World identifier
@@ -215,10 +206,11 @@ namespace enigma::voxel
 
         // Player position and chunk management
         Vec3    m_playerPosition{0.0f, 0.0f, 256.0f}; // Current player position
-        int32_t m_chunkActivationRange = 16; // Activation range in chunks (from settings.yml)
+        int32_t m_chunkActivationRange   = 16; // Activation range in chunks (from settings.yml)
+        int32_t m_chunkDeactivationRange = 18; // Deactivation range = activation + 2 chunks
 
         // World generation
-        std::unique_ptr<enigma::voxel::TerrainGenerator> m_worldGenerator;
+        std::unique_ptr<TerrainGenerator> m_worldGenerator = nullptr;
 
         // Serialize components
         std::unique_ptr<IChunkSerializer> m_chunkSerializer;
@@ -228,14 +220,10 @@ namespace enigma::voxel
         std::unique_ptr<ESFWorldManager> m_worldManager;
 
         //-------------------------------------------------------------------------------------------
-        // Phase 3: Async Task Management State
+        // Phase 3: Async Task Management State (REMOVED tracking sets)
         //-------------------------------------------------------------------------------------------
-
-        // Track chunks in different async states (for debugging and management)
-        // These sets track chunk coordinates that have pending async operations
-        std::unordered_set<int64_t> m_chunksWithPendingLoad; // Chunks with pending Load jobs
-        std::unordered_set<int64_t> m_chunksWithPendingGenerate; // Chunks with pending Generate jobs
-        std::unordered_set<int64_t> m_chunksWithPendingSave; // Chunks with pending Save jobs
+        // [Phase 3] Removed m_chunksWithPendingLoad/Generate/Save tracking sets
+        // Now using IsInQueue() helper to check pending queues directly
 
         //-------------------------------------------------------------------------------------------
         // Phase 4: Job Queue and Limits System (Assignment 03 Requirements)
@@ -254,14 +242,18 @@ namespace enigma::voxel
         std::atomic<int> m_activeGenerateJobs{0}; // Currently processing generate jobs
         std::atomic<int> m_activeLoadJobs{0}; // Currently processing load jobs
         std::atomic<int> m_activeSaveJobs{0}; // Currently processing save jobs
-        std::atomic<int> m_activeMeshBuildJobs{0}; // Currently processing mesh build jobs
 
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading
-        int m_maxGenerateJobs  = 1024; // Allow many generation jobs (CPU-bound, parallelizable)
-        int m_maxLoadJobs      = 512; // Increased for ESFS format (no file lock contention, SSD-friendly)
-        int m_maxSaveJobs      = 512; // Increased for better save throughput (lower priority than load)
-        int m_maxMeshBuildJobs = 1024; // Async mesh building jobs (CPU-bound, player interaction needs fast response)
+        int m_maxGenerateJobs = 1024; // Allow many generation jobs (CPU-bound, parallelizable)
+        int m_maxLoadJobs     = 512; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs     = 256; // Increased for better save throughput (lower priority than load)
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 1: Main Thread Mesh Building Queue (Assignment 03 Requirements)
+        //-------------------------------------------------------------------------------------------
+        std::deque<Chunk*> m_pendingMeshRebuildQueue; // Chunks waiting for mesh rebuild on main thread
+        int                m_maxMeshRebuildsPerFrame = 4; // Maximum mesh rebuilds per frame (Assignment 03 spec)
 
         //-------------------------------------------------------------------------------------------
         // Phase 5: Graceful Shutdown State
