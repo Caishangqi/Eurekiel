@@ -85,7 +85,51 @@ namespace enigma::voxel
         static constexpr int32_t CHUNK_MAX_Z      = CHUNK_SIZE_Z - 1;
         static constexpr int32_t BLOCKS_PER_CHUNK = CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 
-        // Bit masks for coordinate extraction (Assignment 02 specification)
+        /**
+         * @brief Bit masks for coordinate extraction from block_index (Assignment 02 specification)
+         *
+         * These masks are used by BlockIterator to efficiently manipulate coordinates
+         * without division or modulo operations.
+         *
+         * MASK DEFINITIONS:
+         *   CHUNK_MASK_X = 0x000F (binary: 0000 0000 0000 1111) - isolates bits 0-3
+         *   CHUNK_MASK_Y = 0x00F0 (binary: 0000 0000 1111 0000) - isolates bits 4-7
+         *   CHUNK_MASK_Z = 0xFF00 (binary: 1111 1111 0000 0000) - isolates bits 8-15
+         *
+         * USAGE EXAMPLES:
+         *
+         * 1. Extract coordinate (using AND):
+         *    x = blockIndex & CHUNK_MASK_X
+         *    y = (blockIndex & CHUNK_MASK_Y) >> CHUNK_BITS_X
+         *    z = (blockIndex & CHUNK_MASK_Z) >> (CHUNK_BITS_X + CHUNK_BITS_Y)
+         *
+         * 2. Clear coordinate bits (using AND with NOT):
+         *    blockIndex & ~CHUNK_MASK_Y   // Clears y-bits, sets y=0
+         *    Used for NORTH boundary: crossing from y=15 to y=0 in next chunk
+         *
+         * 3. Set coordinate bits to maximum (using OR):
+         *    blockIndex | CHUNK_MASK_Y    // Sets y-bits to 1111, y=15
+         *    Used for SOUTH boundary: crossing from y=0 to y=15 in prev chunk
+         *
+         * 4. Replace coordinate bits (using AND to clear, then OR to set):
+         *    (blockIndex & ~CHUNK_MASK_Y) | (newY << CHUNK_BITS_X)
+         *    Used for within-chunk movement: y=8 → y=9
+         *
+         * CROSS-CHUNK BOUNDARY EXAMPLES:
+         *   Example 1: NORTH boundary (y=15 → y=0)
+         *     Original: blockIndex = 0x40FA (x=10, y=15, z=64)
+         *     Operation: blockIndex & ~CHUNK_MASK_Y
+         *              = 0x40FA & 0xFF0F
+         *              = 0x400A (x=10, y=0, z=64) ✓
+         *
+         *   Example 2: SOUTH boundary (y=0 → y=15)
+         *     Original: blockIndex = 0x400A (x=10, y=0, z=64)
+         *     Operation: blockIndex | CHUNK_MASK_Y
+         *              = 0x400A | 0x00F0
+         *              = 0x40FA (x=10, y=15, z=64) ✓
+         *
+         * @see BlockIterator::GetNeighbor() for usage in cross-chunk navigation
+         */
         static constexpr int32_t CHUNK_MASK_X = CHUNK_MAX_X;
         static constexpr int32_t CHUNK_MASK_Y = CHUNK_MAX_Y << CHUNK_BITS_X;
         static constexpr int32_t CHUNK_MASK_Z = CHUNK_MAX_Z << (CHUNK_BITS_X + CHUNK_BITS_Y);
