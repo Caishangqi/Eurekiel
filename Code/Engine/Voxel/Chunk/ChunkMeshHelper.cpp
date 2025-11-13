@@ -23,7 +23,7 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
     }
 
     ChunkState state = chunk->GetState();
-    if (state != ChunkState::Active && state != ChunkState::BuildingMesh)
+    if (state != ChunkState::Active)
     {
         core::LogDebug("ChunkMeshHelper", "BuildMesh: chunk not in valid state (state=%s), aborting", chunk->GetStateName());
         return nullptr;
