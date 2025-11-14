@@ -209,8 +209,8 @@ namespace enigma::voxel
 
         // Player position and chunk management
         Vec3    m_playerPosition{0.0f, 0.0f, 256.0f}; // Current player position
-        int32_t m_chunkActivationRange   = 16; // Activation range in chunks (from settings.yml)
-        int32_t m_chunkDeactivationRange = 18; // Deactivation range = activation + 2 chunks
+        int32_t m_chunkActivationRange   = 12; // Activation range in chunks (from settings.yml)
+        int32_t m_chunkDeactivationRange = 14; // Deactivation range = activation + 2 chunks
 
         // World generation
         std::unique_ptr<TerrainGenerator> m_worldGenerator = nullptr;
@@ -248,15 +248,15 @@ namespace enigma::voxel
 
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading
-        int m_maxGenerateJobs = 1024; // Allow many generation jobs (CPU-bound, parallelizable)
-        int m_maxLoadJobs     = 512; // Increased for ESFS format (no file lock contention, SSD-friendly)
-        int m_maxSaveJobs     = 256; // Increased for better save throughput (lower priority than load)
+        int m_maxGenerateJobs = 256; // Allow many generation jobs (CPU-bound, parallelizable)
+        int m_maxLoadJobs     = 16; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs     = 8; // Increased for better save throughput (lower priority than load)
 
         //-------------------------------------------------------------------------------------------
         // Phase 1: Main Thread Mesh Building Queue (Assignment 03 Requirements)
         //-------------------------------------------------------------------------------------------
         std::deque<Chunk*> m_pendingMeshRebuildQueue; // Chunks waiting for mesh rebuild on main thread
-        int                m_maxMeshRebuildsPerFrame = 8; // Maximum mesh rebuilds per frame (Assignment 03 spec)
+        int                m_maxMeshRebuildsPerFrame = 2; // Maximum mesh rebuilds per frame (Assignment 03 spec)
 
         //-------------------------------------------------------------------------------------------
         // Phase 5: Graceful Shutdown State

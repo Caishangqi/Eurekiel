@@ -5,19 +5,42 @@
 
 namespace enigma::voxel
 {
+    using namespace enigma::core; // For LogWarn/LogError
+
     void GenerateChunkJob::Execute()
     {
         // [REFACTORED] Phase 1: Get Chunk via coordinates (eliminates null pointer checks)
         // If Chunk was deleted, GetChunk() returns nullptr and we abort gracefully
         Chunk* chunk = m_world->GetChunk(m_chunkCoords.x, m_chunkCoords.y);
-        if (!chunk || !m_generator)
+
+        // [NEW] Null pointer check with warning
+        if (!chunk)
         {
-            // Chunk was deleted or generator is null, abort silently
+            LogWarn("ChunkJob", "Chunk (%d, %d) not found in World during generation",
+                    m_chunkCoords.x, m_chunkCoords.y);
+            return;
+        }
+
+        // [NEW] Generator validation
+        if (!m_generator)
+        {
+            LogWarn("ChunkJob", "Generator is null for chunk (%d, %d), aborting generation",
+                    m_chunkCoords.x, m_chunkCoords.y);
             return;
         }
 
         // Phase 2: Verify chunk state before accessing
         ChunkState currentState = chunk->GetState();
+
+        // [NEW] Expanded state validation to catch PendingUnload and Inactive
+        if (currentState == ChunkState::PendingUnload || currentState == ChunkState::Inactive)
+        {
+            LogWarn("ChunkJob", "Chunk (%d, %d) is in invalid state (%d), aborting generation",
+                    m_chunkCoords.x, m_chunkCoords.y, static_cast<int>(currentState));
+            return;
+        }
+
+        // [ORIGINAL] Expected state check
         if (currentState != ChunkState::Generating)
         {
             // Chunk was cancelled or state changed, abort generation
