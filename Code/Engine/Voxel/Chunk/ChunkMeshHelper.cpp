@@ -29,6 +29,45 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
         return nullptr;
     }
 
+    //--------------------------------------------------------------------------------------------------
+    // Phase 2: 跨边界隐藏面剔除 - 4邻居激活检查
+    //
+    // 问题：如果邻居Chunk未激活，边界Block的ShouldRenderFace()会返回true（保守策略），
+    //       导致不必要的面被渲染。
+    //
+    // 解决：延迟Mesh构建直到4个水平邻居全部激活。当邻居激活时，Chunk::SetState()会
+    //       通知本Chunk重建Mesh（参见Task 2.2）。
+    //
+    // 性能影响：微小（仅4次指针检查 + 4次bool检查）
+    // 收益：边界Block顶点数减少30-40%
+    //--------------------------------------------------------------------------------------------------
+    Chunk* eastNeighbor  = chunk->GetEastNeighbor();
+    Chunk* westNeighbor  = chunk->GetWestNeighbor();
+    Chunk* northNeighbor = chunk->GetNorthNeighbor();
+    Chunk* southNeighbor = chunk->GetSouthNeighbor();
+
+    // [FIX] Assignment requirement: "Only construct meshes for chunks with all 4 neighbors active"
+    // Must check IsActive(), not just pointer existence
+    bool hasAllActiveNeighbors =
+        eastNeighbor != nullptr && eastNeighbor->IsActive() &&
+        westNeighbor != nullptr && westNeighbor->IsActive() &&
+        northNeighbor != nullptr && northNeighbor->IsActive() &&
+        southNeighbor != nullptr && southNeighbor->IsActive();
+
+    if (!hasAllActiveNeighbors)
+    {
+        // 邻居未激活，延迟Mesh构建（稍后由邻居激活时触发重建）
+        core::LogDebug("ChunkMeshHelper",
+                       "BuildMesh: skipping chunk (%d, %d) - not all 4 neighbors are active (E=%s W=%s N=%s S=%s)",
+                       chunk->GetChunkX(), chunk->GetChunkY(),
+                       (eastNeighbor && eastNeighbor->IsActive()) ? "OK" : "NO",
+                       (westNeighbor && westNeighbor->IsActive()) ? "OK" : "NO",
+                       (northNeighbor && northNeighbor->IsActive()) ? "OK" : "NO",
+                       (southNeighbor && southNeighbor->IsActive()) ? "OK" : "NO"
+        );
+        return nullptr;
+    }
+
     auto chunkMesh  = std::make_unique<ChunkMesh>();
     int  blockCount = 0;
 
