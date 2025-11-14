@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
 #include "ChunkMesh.hpp"
@@ -172,7 +172,7 @@ namespace enigma::voxel
 
         // New: Atomic State Machine (Thread-Safe)
         ChunkState  GetState() const { return m_state.Load(); }
-        void        SetState(ChunkState newState) { m_state.Store(newState); }
+        void        SetState(ChunkState newState); // [Phase 2] Moved to cpp for state transition detection
         bool        TrySetState(ChunkState expected, ChunkState desired) { return m_state.CompareAndSwap(expected, desired); }
         const char* GetStateName() const { return m_state.GetStateName(); }
 
@@ -248,5 +248,25 @@ namespace enigma::voxel
         // [A05] Neighbor Access
         //-------------------------------------------------------------------------------------------
         class World* m_world = nullptr;
+
+        //-------------------------------------------------------------------------------------------
+        // [Phase 2] Neighbor Notification for Cross-Chunk Hidden Face Culling
+        //-------------------------------------------------------------------------------------------
+        /**
+         * @brief Notify 4 horizontal neighbors to rebuild mesh
+         *
+         * Called when this chunk transitions from non-Active to Active state.
+         * Neighbors need to rebuild their mesh because boundary block faces
+         * may change (hidden face culling depends on neighbor activation).
+         *
+         * Implementation:
+         * - Checks if neighbor is active (GetEastNeighbor()->IsActive())
+         * - Calls World::MarkChunkDirty() to add neighbor to dirty queue
+         * - Only notifies ACTIVE neighbors (inactive ones will rebuild later)
+         *
+         * @see Task 2.1 - BuildMesh() checks neighbor activation
+         * @see Task 2.2 - SetState() detects activation event
+         */
+        void NotifyNeighborsDirty();
     };
 }
