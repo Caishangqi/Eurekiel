@@ -180,7 +180,7 @@ namespace enigma::resource
             if (g_theRenderer && m_atlasImage)
             {
                 // Create GPU texture from atlas image with MipMap support
-                m_atlasTexture = g_theRenderer->CreateTextureFromImageWithMipmaps(*m_atlasImage, 5);
+                m_atlasTexture = g_theRenderer->CreateTextureFromImageWithMipmaps(*m_atlasImage, 4);
                 if (m_atlasTexture)
                 {
                     if (m_atlasTexture->HasMipmaps())
