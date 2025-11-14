@@ -125,6 +125,14 @@ namespace enigma::voxel
         // Called automatically in Update() loop on main thread
         void ProcessCompletedChunkTasks();
 
+        //-------------------------------------------------------------------------------------------
+        // Phase 2: Cross-Chunk Hidden Face Culling Support
+        //-------------------------------------------------------------------------------------------
+
+        // Mark a chunk as needing mesh rebuild and add to queue
+        // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
+        void MarkChunkDirty(Chunk* chunk);
+
     private:
         //-------------------------------------------------------------------------------------------
         // Phase 3: Async Task Management Methods
@@ -157,9 +165,6 @@ namespace enigma::voxel
 
         // Update chunk meshes on main thread (called from Update())
         void UpdateChunkMeshes();
-
-        // Mark a chunk as needing mesh rebuild and add to queue
-        void MarkChunkDirty(Chunk* chunk);
 
         // Sort mesh rebuild queue by distance to player (nearest first)
         void SortMeshQueueByDistance();
@@ -253,7 +258,7 @@ namespace enigma::voxel
         // Phase 1: Main Thread Mesh Building Queue (Assignment 03 Requirements)
         //-------------------------------------------------------------------------------------------
         std::deque<Chunk*> m_pendingMeshRebuildQueue; // Chunks waiting for mesh rebuild on main thread
-        int                m_maxMeshRebuildsPerFrame = 4; // Maximum mesh rebuilds per frame (Assignment 03 spec)
+        int                m_maxMeshRebuildsPerFrame = 8; // Maximum mesh rebuilds per frame (Assignment 03 spec)
 
         //-------------------------------------------------------------------------------------------
         // Phase 5: Graceful Shutdown State

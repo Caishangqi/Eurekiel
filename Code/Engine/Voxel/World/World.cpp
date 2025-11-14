@@ -610,8 +610,9 @@ void World::ActivateChunk(IntVec2 chunkCoords)
         int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
         auto&   loadedChunks = GetLoadedChunks();
 
-        auto newChunk              = std::make_unique<Chunk>(chunkCoords);
-        chunk                      = newChunk.get();
+        auto newChunk = std::make_unique<Chunk>(chunkCoords);
+        chunk         = newChunk.get();
+        chunk->SetWorld(this); // [FIX] 设置m_world指针，使GetEastNeighbor()等方法能工作
         loadedChunks[packedCoords] = std::move(newChunk);
 
         LogDebug("world", "Created empty chunk (%d, %d) for async activation", chunkCoords.x, chunkCoords.y);
