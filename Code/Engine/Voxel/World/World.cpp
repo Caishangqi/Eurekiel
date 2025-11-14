@@ -16,6 +16,8 @@
 #include <cfloat>
 #include <algorithm>
 
+#include "Game/GameCommon.hpp"
+
 using namespace enigma::voxel;
 
 World::~World()
@@ -360,10 +362,10 @@ void World::Update(float deltaTime)
 
 void World::Render(IRenderer* renderer)
 {
-    // 直接渲染所有已加载的区块（迁移自 ChunkManager）
     // Bind the cached blocks atlas texture once for all chunks (NeoForge pattern)
     if (m_cachedBlocksAtlasTexture)
     {
+        //renderer->SetSamplerMode(SamplerMode::TRILINEAR_WRAP);
         renderer->BindTexture(m_cachedBlocksAtlasTexture);
     }
 

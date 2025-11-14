@@ -179,13 +179,22 @@ namespace enigma::resource
             extern IRenderer* g_theRenderer;
             if (g_theRenderer && m_atlasImage)
             {
-                // Create GPU texture from atlas image
-                m_atlasTexture = g_theRenderer->CreateTextureFromImage(*m_atlasImage);
+                // Create GPU texture from atlas image with MipMap support
+                m_atlasTexture = g_theRenderer->CreateTextureFromImageWithMipmaps(*m_atlasImage, 5);
                 if (m_atlasTexture)
                 {
-                    core::LogInfo(core::LogResource, "Created GPU texture for atlas: %s (%dx%d)",
-                                  m_location.ToString().c_str(),
-                                  m_atlasDimensions.x, m_atlasDimensions.y);
+                    if (m_atlasTexture->HasMipmaps())
+                    {
+                        core::LogInfo(core::LogResource, "[OK] TextureAtlas created with MipMap support (%d levels): %s (%dx%d)",
+                                      m_atlasTexture->GetMipLevels(),
+                                      m_location.ToString().c_str(),
+                                      m_atlasDimensions.x, m_atlasDimensions.y);
+                    }
+                    else
+                    {
+                        core::LogWarn(core::LogResource, "[WARNING] TextureAtlas MipMap generation failed for: %s",
+                                      m_location.ToString().c_str());
+                    }
                 }
                 else
                 {
