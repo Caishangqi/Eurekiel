@@ -79,8 +79,6 @@ namespace enigma::voxel
 
         // Utility
 
-        // 区块访问和管理（Direct 版本，直接访问 World 数据）
-        Chunk*                                               GetChunkDirect(int32_t chunkX, int32_t chunkY);
         bool                                                 IsChunkLoadedDirect(int32_t chunkX, int32_t chunkY) const;
         size_t                                               GetLoadedChunkCount() const;
         std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks();

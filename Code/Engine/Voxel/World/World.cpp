@@ -1317,73 +1317,55 @@ void World::PrepareShutdown()
             m_pendingSaveQueue.size());
 }
 
+//------------------------------------------------------------------------------------------------------------------
+// Shutdown fix: wait for all jobs to complete
+//
+// Problem: Previously, I only waited for the Pending queue, which caused the Generator to be destructed while the Job in the Executing queue was still running.
+// Solution: Add Executing queue waiting to ensure that all Worker threads are completed before destructing resources.
+// Assignment 03: "Handles shut down nicely by waiting on all threads to complete"
+//------------------------------------------------------------------------------------------------------------------
 void World::WaitForPendingTasks()
 {
-    // Phase 3: Use pending queues instead of tracking sets
-    LogInfo("world", "Waiting for %zu pending chunk generation tasks to complete...",
-            m_pendingGenerateQueue.size());
+    // Mark shutdown status
+    m_isShuttingDown.store(true);
 
-    // Wait for all generation tasks to complete
-    int maxRetries = 100; // 5 seconds timeout (50ms * 100)
-    while (!m_pendingGenerateQueue.empty() && maxRetries > 0)
+    // Phase 1: Wait for the Pending queue to be empty
+    LogInfo("world", "Shutdown Phase 1: Waiting for pending queues to drain...");
+    LogInfo("world", "  Pending tasks: Generate=%zu, Load=%zu, Save=%zu",
+            m_pendingGenerateQueue.size(),
+            m_pendingLoadQueue.size(),
+            m_pendingSaveQueue.size());
+
+    while (!m_pendingGenerateQueue.empty() || !m_pendingLoadQueue.empty() || !m_pendingSaveQueue.empty())
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        maxRetries--;
-
-        // Log progress every second (20 iterations)
-        if (maxRetries % 20 == 0)
-        {
-            LogInfo("world", "Still waiting... %zu generation tasks remaining",
-                    m_pendingGenerateQueue.size());
-        }
+        std::this_thread::yield();
     }
 
-    if (!m_pendingGenerateQueue.empty())
+    LogInfo("world", "Shutdown Phase 1: All pending queues drained");
+
+    // Phase 2: Wait for the Executing queue to be empty (new fix)
+    // Wait for all executing Chunk generation tasks to complete
+    LogInfo("world", "Shutdown Phase 2: Waiting for executing tasks to complete...");
+
+    if (!g_theSchedule)
     {
-        LogWarn("world", "Shutdown timeout: %zu generation tasks still pending after 5 seconds",
-                m_pendingGenerateQueue.size());
+        LogWarn("world", "ScheduleSubsystem not available, skipping executing task wait");
+        return;
     }
-    else
+
+    while (g_theSchedule->HasExecutingTasks("ChunkGen"))
     {
-        LogInfo("world", "All chunk generation tasks completed successfully");
+        std::this_thread::yield();
     }
 
-    // Also wait for load/save tasks (usually faster)
-    if (!m_pendingLoadQueue.empty() || !m_pendingSaveQueue.empty())
-    {
-        LogInfo("world", "Waiting for load/save tasks: Load=%zu, Save=%zu",
-                m_pendingLoadQueue.size(),
-                m_pendingSaveQueue.size());
+    LogInfo("world", "Shutdown Phase 2: All executing tasks completed");
 
-        maxRetries = 40; // 2 seconds timeout for disk I/O
-        while ((!m_pendingLoadQueue.empty() || !m_pendingSaveQueue.empty()) && maxRetries > 0)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            maxRetries--;
-        }
+    // Phase 3: Get completed task results
+    LogInfo("world", "Shutdown Phase 3: Retrieving completed job results...");
+    ProcessCompletedChunkTasks();
+    LogInfo("world", "Shutdown Phase 3: Job results retrieved");
 
-        if (!m_pendingLoadQueue.empty() || !m_pendingSaveQueue.empty())
-        {
-            LogWarn("world", "Some load/save tasks timed out: Load=%zu, Save=%zu",
-                    m_pendingLoadQueue.size(),
-                    m_pendingSaveQueue.size());
-        }
-    }
-}
-
-//-------------------------------------------------------------------------------------------
-// 从 ChunkManager 迁移的简单方法实现（Direct 版本）
-//-------------------------------------------------------------------------------------------
-
-Chunk* World::GetChunkDirect(int32_t chunkX, int32_t chunkY)
-{
-    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
-    auto    it          = m_loadedChunks.find(chunkPackID);
-    if (it != m_loadedChunks.end())
-    {
-        return it->second.get();
-    }
-    return nullptr;
+    LogInfo("world", "WaitForPendingTasks complete - safe to shutdown");
 }
 
 bool World::IsChunkLoadedDirect(int32_t chunkX, int32_t chunkY) const
