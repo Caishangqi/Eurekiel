@@ -941,6 +941,26 @@ Texture* DX12Renderer::CreateTextureFromImage(Image& image)
     return newTexture;
 }
 
+Texture* DX12Renderer::GenerateMipmaps(const Texture* sourceTexture, int mipLevels)
+{
+    UNUSED(sourceTexture)
+    UNUSED(mipLevels)
+    ERROR_AND_DIE("DX12Renderer::GenerateMipmaps not implemented yet")
+}
+
+bool DX12Renderer::CanGenerateMipmaps(const Texture* texture) const
+{
+    UNUSED(texture)
+    ERROR_AND_DIE("DX12Renderer::CanGenerateMipmaps not implemented yet")
+}
+
+Texture* DX12Renderer::CreateTextureFromImageWithMipmaps(Image& image, int mipLevels)
+{
+    UNUSED(mipLevels)
+    UNUSED(mipLevels)
+    ERROR_AND_DIE("DX12Renderer::CreateTextureFromImageWithMipmaps not implemented yet")
+}
+
 Texture* DX12Renderer::CreateOrGetTexture(const char* imageFilePath)
 {
     // See if we already have this texture previously loaded

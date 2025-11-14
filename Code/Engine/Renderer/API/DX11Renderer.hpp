@@ -60,6 +60,7 @@ public:
     Texture* CreateOrGetTexture(const char* imageFilePath) override;
     Image*   CreateImageFromFile(const char* imageFilePath) override;
     Texture* CreateTextureFromImage(Image& image) override;
+    Texture* CreateTextureFromImageWithMipmaps(Image& image, int mipLevels = 0) override;
     Texture* CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) override;
     Texture* CreateTextureFromFile(const char* imageFilePath) override;
     Texture* GetTextureForFileName(const char* imageFilePath) override;
@@ -113,6 +114,10 @@ public:
     uint32_t        GetNumFramesInFlight() const override;
     bool            IsRendererReady() const override;
     RendererBackend GetBackendType() const override;
+
+    // ==================== MipMap 接口实现 ====================
+    Texture* GenerateMipmaps(const Texture* sourceTexture, int maxLevels = 0) override;
+    bool     CanGenerateMipmaps(const Texture* texture) const override;
 
 private:
     /// DirectX
@@ -172,7 +177,10 @@ private:
     DX11Renderer() = default;
 
 private:
-    void SetStatesIfChanged();
+    // MipMap 辅助方法
+    int         CalculateMipLevels(int width, int height) const;
+    DXGI_FORMAT GetTextureFormat(const Texture* texture) const;
+    void        SetStatesIfChanged();
 
     void DrawIndexedVertexArray(int numVertexes, const Vertex_PCU* vertexes, const unsigned int* indices, unsigned int numIndices);
     void DrawIndexedVertexArray(int numVertexes, const Vertex_PCUTBN* vertexes, const unsigned int* indices, unsigned int numIndices);

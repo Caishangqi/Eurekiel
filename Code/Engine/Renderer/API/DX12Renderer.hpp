@@ -198,6 +198,9 @@ public:
     Shader*     CreateOrGetShader(const char* shaderName, VertexType vertexType = VertexType::Vertex_PCU) override;
     bool        CompileShaderToByteCode(std::vector<uint8_t>& outByteCode, const char* name, const char* src, const char* entryPoint, const char* target) override;
     Texture*    CreateTextureFromImage(Image& image) override;
+    Texture*    GenerateMipmaps(const Texture* sourceTexture, int mipLevels) override;
+    bool        CanGenerateMipmaps(const Texture* texture) const override;
+    Texture*    CreateTextureFromImageWithMipmaps(Image& image, int mipLevels) override;
     Texture*    CreateOrGetTexture(const char* imageFilePath) override;
     Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) override;
     Texture*    CreateTextureFromFile(const char* imageFilePath) override;

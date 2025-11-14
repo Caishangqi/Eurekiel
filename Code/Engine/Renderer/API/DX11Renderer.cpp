@@ -1,11 +1,13 @@
 ﻿#include "DX11Renderer.hpp"
 
 #include <filesystem>
+#include <cmath>
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/FileUtils.hpp"
 #include "Engine/Core/Image.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Window/Window.hpp"
 
@@ -17,6 +19,7 @@
 #include "Engine/Renderer/Shader.hpp"
 #include "Engine/Renderer/Texture.hpp"
 
+using namespace enigma::core;
 
 DX11Renderer::DX11Renderer(RenderConfig& config)
 {
@@ -189,6 +192,24 @@ void DX11Renderer::Startup()
     hr                   = m_device->CreateSamplerState(&samplerDesc, &m_samplerStates[static_cast<int>(SamplerMode::BILINEAR_WRAP)]);
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateSamplerState for SamplerMode::BILINEAR_WRAP failed.")
+
+    // [NEW] Create TRILINEAR_WRAP Sampler (支持 MipMap 三线性过滤)
+    samplerDesc.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR; // [CRITICAL] 三线性过滤
+    samplerDesc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP; // [CRITICAL] 循环寻址
+    samplerDesc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.MipLODBias     = 0.0f;
+    samplerDesc.MaxAnisotropy  = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.BorderColor[0] = 0.0f;
+    samplerDesc.BorderColor[1] = 0.0f;
+    samplerDesc.BorderColor[2] = 0.0f;
+    samplerDesc.BorderColor[3] = 0.0f;
+    samplerDesc.MinLOD         = 0.0f;
+    samplerDesc.MaxLOD         = D3D11_FLOAT32_MAX; // [CRITICAL] 允许所有 Mip 级别
+    hr                         = m_device->CreateSamplerState(&samplerDesc, &m_samplerStates[static_cast<int>(SamplerMode::TRILINEAR_WRAP)]);
+    if (!SUCCEEDED(hr))
+        ERROR_AND_DIE("CreateSamplerState for SamplerMode::TRILINEAR_WRAP failed.")
 
     m_samplerState = m_samplerStates[static_cast<int>(SamplerMode::POINT_CLAMP)]; // Default
     SetSamplerMode(SamplerMode::POINT_CLAMP);
@@ -645,6 +666,7 @@ Texture* DX11Renderer::CreateTextureFromImage(Image& image)
 {
     auto newTexture          = new Texture();
     newTexture->m_dimensions = image.GetDimensions();
+    newTexture->m_mipLevels  = 1; // [NEW] 默认无 MipMap
 
     D3D11_TEXTURE2D_DESC textureDesc = {};
     textureDesc.Width                = image.GetDimensions().x;
@@ -671,6 +693,92 @@ Texture* DX11Renderer::CreateTextureFromImage(Image& image)
 
     // Remember to keep the texture in thee list
     m_loadedTextures.push_back(newTexture);
+    return newTexture;
+}
+
+Texture* DX11Renderer::CreateTextureFromImageWithMipmaps(Image& image, int mipLevels)
+{
+    IntVec2 dimensions = image.GetDimensions();
+
+    // [STEP 1] 计算 MipMap 级数
+    if (mipLevels == 0)
+    {
+        // 自动计算: log2(max(width, height)) + 1
+        int maxDim = (dimensions.x > dimensions.y) ? dimensions.x : dimensions.y;
+        mipLevels  = 1;
+        while (maxDim > 1)
+        {
+            maxDim >>= 1;
+            mipLevels++;
+        }
+    }
+
+    // [STEP 2] 创建纹理描述符
+    D3D11_TEXTURE2D_DESC textureDesc = {};
+    textureDesc.Width                = dimensions.x;
+    textureDesc.Height               = dimensions.y;
+    textureDesc.MipLevels            = mipLevels; // [KEY] 多级 MipMap
+    textureDesc.ArraySize            = 1;
+    textureDesc.Format               = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureDesc.SampleDesc.Count     = 1;
+    textureDesc.SampleDesc.Quality   = 0;
+    textureDesc.Usage                = D3D11_USAGE_DEFAULT; // [KEY] 允许 GPU 修改
+    textureDesc.BindFlags            = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; // [KEY] SRV+RTV
+    textureDesc.CPUAccessFlags       = 0;
+    textureDesc.MiscFlags            = D3D11_RESOURCE_MISC_GENERATE_MIPS; // [KEY] MipMap 标志
+
+    // [STEP 3] 创建纹理(不提供初始数据)
+    auto*   newTexture = new Texture();
+    HRESULT hr         = m_device->CreateTexture2D(&textureDesc, nullptr, &newTexture->m_texture);
+    if (FAILED(hr))
+    {
+        DebuggerPrintf("[ERROR] CreateTexture2D failed for image '%s' (HRESULT: 0x%X)\n",
+                       image.GetImageFilePath().c_str(), hr);
+        delete newTexture;
+        return nullptr;
+    }
+
+    // [STEP 4] 创建 SRV
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                          = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension                   = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
+    srvDesc.Texture2D.MipLevels             = mipLevels;
+
+    hr = m_device->CreateShaderResourceView(newTexture->m_texture, &srvDesc, &newTexture->m_shaderResourceView);
+    if (FAILED(hr))
+    {
+        DebuggerPrintf("[ERROR] CreateShaderResourceView failed for image '%s' (HRESULT: 0x%X)\n",
+                       image.GetImageFilePath().c_str(), hr);
+        newTexture->m_texture->Release();
+        delete newTexture;
+        return nullptr;
+    }
+
+    // [STEP 5] 上传 Mip 0 级别数据
+    UINT rowPitch = 4 * dimensions.x; // RGBA8 = 4 bytes per pixel
+    m_deviceContext->UpdateSubresource(
+        newTexture->m_texture,
+        0, // Subresource index (Mip Level 0)
+        nullptr, // 整个资源
+        image.GetRawData(), // 源数据
+        rowPitch, // 行字节数
+        0 // 深度字节数(2D 纹理为 0)
+    );
+
+    // [STEP 6] 生成其他 MipMap 级别
+    m_deviceContext->GenerateMips(newTexture->m_shaderResourceView);
+
+    // [STEP 7] 设置 Texture 属性
+    newTexture->m_dimensions = dimensions;
+    newTexture->m_name       = image.GetImageFilePath();
+
+    // [STEP 8] 添加到纹理列表
+    m_loadedTextures.push_back(newTexture);
+
+    DebuggerPrintf("[OK] Created texture with mipmaps: %s (%dx%d, %d levels)\n",
+                   image.GetImageFilePath().c_str(), dimensions.x, dimensions.y, mipLevels);
+
     return newTexture;
 }
 
@@ -1243,4 +1351,206 @@ bool DX11Renderer::IsRendererReady() const
 RendererBackend DX11Renderer::GetBackendType() const
 {
     return RendererBackend::DirectX11;
+}
+
+// ==================== MipMap 接口实现 ====================
+
+bool DX11Renderer::CanGenerateMipmaps(const Texture* texture) const
+{
+    // [STEP 1] 验证纹理指针
+    if (!texture)
+    {
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: texture is nullptr");
+        return false;
+    }
+
+    // [STEP 2] 验证纹理尺寸
+    IntVec2 dims = texture->GetDimensions();
+    if (dims.x <= 0 || dims.y <= 0)
+    {
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: invalid dimensions %dx%d", dims.x, dims.y);
+        return false;
+    }
+
+    // [STEP 3] 验证 DX11 资源有效性
+    if (!texture->m_texture || !texture->m_shaderResourceView)
+    {
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: texture or SRV is null");
+        return false;
+    }
+
+    // [STEP 4] 检查纹理描述符（格式支持）
+    D3D11_TEXTURE2D_DESC desc;
+    texture->m_texture->GetDesc(&desc);
+
+    // 检查尺寸是否为 2 的幂次
+    bool isPowerOfTwo =
+        (desc.Width > 0 && (desc.Width & (desc.Width - 1)) == 0) &&
+        (desc.Height > 0 && (desc.Height & (desc.Height - 1)) == 0);
+
+    if (!isPowerOfTwo)
+    {
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: Texture size not power of 2 (%dx%d)",
+                desc.Width, desc.Height);
+        return false;
+    }
+
+    // 检查绑定标志（必须包含 SHADER_RESOURCE 和 RENDER_TARGET）
+    bool hasRequiredBindFlags =
+        (desc.BindFlags & D3D11_BIND_SHADER_RESOURCE) &&
+        (desc.BindFlags & D3D11_BIND_RENDER_TARGET);
+
+    if (!hasRequiredBindFlags)
+    {
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: Missing required bind flags (SRV+RTV)");
+        return false;
+    }
+
+    // 检查格式支持
+    bool isSupportedFormat = false;
+    switch (desc.Format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+    case DXGI_FORMAT_R32G32B32A32_FLOAT:
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        isSupportedFormat = true;
+        break;
+    default:
+        LogWarn("DX11Renderer", "CanGenerateMipmaps: Unsupported format %d", desc.Format);
+        break;
+    }
+
+    // [OK] 纹理符合 MipMap 生成条件
+    return isSupportedFormat;
+}
+
+Texture* DX11Renderer::GenerateMipmaps(const Texture* sourceTexture, int maxLevels)
+{
+    // ==================== [STEP 1] 输入验证 ====================
+    if (!CanGenerateMipmaps(sourceTexture))
+    {
+        LogError("renderer", "GenerateMipmaps: source texture is invalid or unsupported");
+        return nullptr;
+    }
+
+    // ==================== [STEP 2] 获取源纹理信息 ====================
+    IntVec2     dimensions = sourceTexture->GetDimensions();
+    DXGI_FORMAT format     = GetTextureFormat(sourceTexture);
+
+    // 自动计算 MipMap 级数
+    int mipLevels = maxLevels;
+    if (mipLevels == 0)
+    {
+        mipLevels = CalculateMipLevels(dimensions.x, dimensions.y);
+    }
+
+    // 验证级数合法性
+    int maxMipLevels = CalculateMipLevels(dimensions.x, dimensions.y);
+    if (mipLevels > maxMipLevels)
+    {
+        LogWarn("renderer",
+                "GenerateMipmaps: requested %d mip levels, clamping to %d",
+                mipLevels, maxMipLevels);
+        mipLevels = maxMipLevels;
+    }
+
+    LogInfo("renderer",
+            "GenerateMipmaps: creating %dx%d texture with %d mip levels",
+            dimensions.x, dimensions.y, mipLevels);
+
+    // ==================== [STEP 3] 创建目标纹理描述符 ====================
+    D3D11_TEXTURE2D_DESC destDesc = {};
+    destDesc.Width                = dimensions.x;
+    destDesc.Height               = dimensions.y;
+    destDesc.MipLevels            = mipLevels; // [KEY] 指定 MipMap 级数
+    destDesc.ArraySize            = 1;
+    destDesc.Format               = format; // 保持原格式
+    destDesc.SampleDesc.Count     = 1;
+    destDesc.SampleDesc.Quality   = 0;
+    destDesc.Usage                = D3D11_USAGE_DEFAULT; // [KEY] 必须为 DEFAULT
+    destDesc.BindFlags            = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; // [KEY] 需要 RTV
+    destDesc.CPUAccessFlags       = 0;
+    destDesc.MiscFlags            = D3D11_RESOURCE_MISC_GENERATE_MIPS; // [KEY] MipMap 生成标志
+
+    // ==================== [STEP 4] 创建目标纹理（不初始化数据）====================
+    ID3D11Texture2D* destTexture = nullptr;
+    HRESULT          hr          = m_device->CreateTexture2D(&destDesc, nullptr, &destTexture);
+    if (FAILED(hr))
+    {
+        LogError("renderer",
+                 "GenerateMipmaps: failed to create texture (HRESULT=0x%08X)", hr);
+        return nullptr;
+    }
+
+    // ==================== [STEP 5] 复制第 0 级 MipMap ====================
+    // 使用 CopySubresourceRegion 复制源纹理到目标纹理的第 0 级
+    m_deviceContext->CopySubresourceRegion(
+        destTexture, // 目标纹理
+        0, // 目标子资源索引（Mip 0）
+        0, 0, 0, // 目标位置 (x, y, z)
+        sourceTexture->m_texture, // 源纹理
+        0, // 源子资源索引
+        nullptr // 复制整个区域
+    );
+
+    // ==================== [STEP 6] 创建 SRV ====================
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format                          = format;
+    srvDesc.ViewDimension                   = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip       = 0;
+    srvDesc.Texture2D.MipLevels             = mipLevels; // [KEY] 包含所有 MipMap 级
+
+    ID3D11ShaderResourceView* srv = nullptr;
+    hr                            = m_device->CreateShaderResourceView(destTexture, &srvDesc, &srv);
+    if (FAILED(hr))
+    {
+        destTexture->Release();
+        LogError("renderer",
+                 "GenerateMipmaps: failed to create SRV (HRESULT=0x%08X)", hr);
+        return nullptr;
+    }
+
+    // ==================== [STEP 7] 自动生成 MipMap 链 ====================
+    m_deviceContext->GenerateMips(srv);
+
+    // ==================== [STEP 8] 封装为 Texture 对象 ====================
+    auto* newTexture                 = new Texture();
+    newTexture->m_name               = sourceTexture->GetImageFilePath() + "_mips";
+    newTexture->m_dimensions         = dimensions;
+    newTexture->m_mipLevels          = mipLevels; // [NEW] 设置 MipMap 级数
+    newTexture->m_texture            = destTexture;
+    newTexture->m_shaderResourceView = srv;
+
+    // 添加到已加载纹理列表（统一管理）
+    m_loadedTextures.push_back(newTexture);
+
+    LogInfo("renderer",
+            "[OK] Generated %d mipmap levels for texture '%s' (%dx%d)",
+            mipLevels, sourceTexture->GetImageFilePath().c_str(),
+            dimensions.x, dimensions.y);
+
+    return newTexture;
+}
+
+// MipMap 辅助方法
+#undef max
+int DX11Renderer::CalculateMipLevels(int width, int height) const
+{
+    int maxDim = std::max(width, height);
+    return static_cast<int>(std::floor(std::log2(maxDim))) + 1;
+}
+
+DXGI_FORMAT DX11Renderer::GetTextureFormat(const Texture* texture) const
+{
+    if (!texture || !texture->m_texture)
+    {
+        return DXGI_FORMAT_UNKNOWN;
+    }
+
+    D3D11_TEXTURE2D_DESC desc;
+    texture->m_texture->GetDesc(&desc);
+    return desc.Format;
 }

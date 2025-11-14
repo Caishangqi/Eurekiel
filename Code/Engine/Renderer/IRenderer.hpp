@@ -72,7 +72,8 @@ enum class SamplerMode
 {
     POINT_CLAMP,
     BILINEAR_WRAP,
-    COUNT = 2
+    TRILINEAR_WRAP, // [NEW] 支持 MipMap 的三线性过滤
+    COUNT = 3
 };
 
 enum class RasterizerMode
@@ -206,10 +207,82 @@ public:
     virtual Texture*    CreateOrGetTexture(const char* imageFilePath) = 0; // TODO: abstract to IResource interface
     virtual Image*      CreateImageFromFile(const char* imageFilePath);
     virtual Texture*    CreateTextureFromImage(Image& image) = 0;
+
+    /// @brief 从 Image 创建带 MipMap 的纹理
+    /// 
+    /// 此方法创建一个新纹理，包含完整的 MipMap 链。
+    /// 与 CreateTextureFromImage 不同，此方法创建的纹理支持 GPU MipMap 生成。
+    /// 
+    /// @param image 源图像数据（必须是有效的 Image 对象）
+    /// @param mipLevels MipMap 级数：
+    ///        - 0: 自动计算（生成到 1x1）
+    ///        - >0: 指定级数（例如 512x512 最多 10 级）
+    /// @return 带 MipMap 的新 Texture，失败返回 nullptr
+    /// 
+    /// @note 实现要求:
+    ///       - DX11: 使用 D3D11_USAGE_DEFAULT + SRV|RTV + GENERATE_MIPS
+    ///       - DX12: 返回 nullptr 并记录警告（当前不实现）
+    /// 
+    /// @warning 此方法比 CreateTextureFromImage 消耗更多 GPU 内存（约 1.33x）
+    /// 
+    /// @example
+    /// Image atlasImage = LoadImage("atlas.png");
+    /// Texture* atlasWithMips = renderer->CreateTextureFromImageWithMipmaps(atlasImage);
+    virtual Texture* CreateTextureFromImageWithMipmaps(
+        Image& image,
+        int    mipLevels = 0
+    ) = 0;
+
     virtual Texture*    CreateTextureFromData(const char* name, IntVec2 dimensions, int bytesPerTexel, uint8_t* texelData) = 0;
     virtual Texture*    CreateTextureFromFile(const char* imageFilePath) = 0;
     virtual Texture*    GetTextureForFileName(const char* imageFilePath) = 0;
     virtual BitmapFont* CreateBitmapFont(const char* bitmapFontFilePathWithNoExtension, Texture& fontTexture) = 0;
+
+    // ==================== MipMap 生成接口 ====================
+
+    /// @brief 从已存在的纹理生成 MipMap 版本
+    /// 
+    /// 此方法会创建一个新的 Texture 对象,包含完整的 MipMap 链。
+    /// 源纹理不会被修改,调用者可以选择继续使用源纹理或切换到 MipMap 版本。
+    /// 
+    /// @param sourceTexture 源纹理（必须是有效的 2D 纹理）
+    /// @param mipLevels MipMap 级数：
+    ///        - 0: 自动计算（生成到 1x1）
+    ///        - >0: 指定级数（例如 512x512 最多 10 级）
+    /// @return 带 MipMap 的新 Texture（调用者负责释放），失败返回 nullptr
+    /// 
+    /// @note 实现说明:
+    ///       - DX11: 使用 ID3D11DeviceContext::GenerateMips() 自动生成
+    ///       - DX12: 当前不实现，返回 nullptr 并记录警告
+    ///       - OpenGL: 未来实现
+    /// 
+    /// @warning 返回的 Texture 必须手动释放，或者替换原 Texture 后由原管理者释放
+    /// 
+    /// @example
+    /// Texture* atlasWithMips = renderer->GenerateMipmaps(m_cachedBlocksAtlasTexture);
+    /// if (atlasWithMips) {
+    ///     delete m_cachedBlocksAtlasTexture; // 释放原纹理
+    ///     m_cachedBlocksAtlasTexture = atlasWithMips; // 使用 MipMap 版本
+    /// }
+    virtual Texture* GenerateMipmaps(
+        const Texture* sourceTexture,
+        int            mipLevels = 0
+    ) = 0;
+
+    /// @brief 检查纹理是否可以生成 MipMap
+    /// 
+    /// 此方法用于提前验证纹理是否符合 MipMap 生成的要求。
+    /// 可以避免调用 GenerateMipmaps 后失败的情况。
+    /// 
+    /// @param texture 要检查的纹理
+    /// @return 若纹理有效且符合以下条件返回 true：
+    ///         - 纹理指针非空
+    ///         - 纹理尺寸有效（width > 0 && height > 0）
+    ///         - 纹理格式支持 MipMap（如 RGBA8）
+    ///         - DX11: ID3D11Texture2D 和 SRV 有效
+    /// 
+    /// @note 即使此方法返回 true，GenerateMipmaps 仍可能失败（如 GPU 内存不足）
+    virtual bool CanGenerateMipmaps(const Texture* texture) const = 0;
 
 
     virtual VertexBuffer*   CreateVertexBuffer(size_t size, unsigned stride) = 0;
