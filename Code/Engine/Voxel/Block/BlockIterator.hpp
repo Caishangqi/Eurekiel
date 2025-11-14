@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "BlockState.hpp"
 #include "../Property/PropertyTypes.hpp"
 #include <array>

@@ -1,4 +1,4 @@
-#include "BlockIterator.hpp"
+﻿#include "BlockIterator.hpp"
 #include "../Chunk/Chunk.hpp"
 
 namespace enigma::voxel
