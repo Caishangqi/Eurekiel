@@ -514,6 +514,11 @@ namespace enigma::registry::block
                 block->SetFullBlock(yaml.GetBoolean("full_block", true));
             }
 
+            if (yaml.Contains("light_level"))
+            {
+                block->SetIndoorLightEmission(static_cast<uint8_t>(yaml.GetInt("light_level", 0)));
+            }
+
             return block;
         }
         catch (const std::exception& e)

@@ -62,6 +62,7 @@ namespace enigma::registry::block
         bool        m_isOpaque    = true;
         bool        m_isFullBlock = true;
         std::string m_blockstatePath; // Path to blockstate definition
+        uint8_t     m_indoorLightEmission = 0; // Indoor light emission level (0-15)
 
     public:
         explicit Block(const std::string& registryName, const std::string& namespaceName = "");
@@ -125,6 +126,21 @@ namespace enigma::registry::block
 
         bool IsFullBlock() const { return m_isFullBlock; }
         void SetFullBlock(bool fullBlock) { m_isFullBlock = fullBlock; }
+
+        /**
+         * @brief Get the indoor light emission level of this block type
+         * @return Light level (0-15), where 0 = no light, 15 = maximum brightness
+         */
+        uint8_t GetIndoorLightEmission() const { return m_indoorLightEmission; }
+
+        /**
+         * @brief Set the indoor light emission level for this block type
+         * @param level Light level (0-15), values > 15 will be clamped to 15
+         */
+        void SetIndoorLightEmission(uint8_t level)
+        {
+            m_indoorLightEmission = (level > 15) ? 15 : level;
+        }
 
         // Blockstate path management
         const std::string& GetBlockstatePath() const { return m_blockstatePath; }
