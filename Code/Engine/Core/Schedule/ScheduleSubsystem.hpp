@@ -171,6 +171,9 @@ namespace enigma::core
         int32_t GetExecutingTaskCount(const std::string& typeStr) const;
         int32_t GetCompletedTaskCount(const std::string& typeStr) const;
 
+        // Shutdown support: Check whether a task of the specified type is being executed
+        bool HasExecutingTasks(const std::string& taskType) const;
+
     private:
         //-------------------------------------------------------------------------------------------
         // Internal Helpers

@@ -398,3 +398,25 @@ std::condition_variable& ScheduleSubsystem::GetConditionVariableForType(const st
 {
     return m_typeConditionVariables[typeStr];
 }
+
+//------------------------------------------------------------------------------------------------------------------
+// Shutdown support: check Executing queue
+//
+// Purpose: Wait for all executing tasks to be completed during shutdown
+// Thread safety: use m_queueMutex protection
+// Assignment 03 requirement: must wait for all threads to complete, not just the Pending queue
+//------------------------------------------------------------------------------------------------------------------
+bool ScheduleSubsystem::HasExecutingTasks(const std::string& taskType) const
+{
+    std::scoped_lock lock(m_queueMutex);
+
+    for (const auto& task : m_executingTasks)
+    {
+        if (task && task->GetType() == taskType)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
