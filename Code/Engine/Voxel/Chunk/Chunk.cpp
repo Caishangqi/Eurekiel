@@ -94,19 +94,84 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
 
 void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
 {
-    // Same boundary checks and index calculation as SetBlock
+    // 1. Get old block state BEFORE changing
+    BlockState* oldState  = GetBlock(x, y, z);
+    bool        wasOpaque = oldState->IsFullOpaque();
+    bool        wasSky    = GetIsSky(x, y, z);
+
+    // 2. Set new block
     size_t index    = CoordsToIndex(x, y, z);
     m_blocks[index] = state;
 
-    // Mark chunk as both modified for saving AND dirty for mesh rebuild (player action)
+    // 3. Mark chunk as modified and dirty
     m_isModified     = true;
-    m_playerModified = true; // Mark as player-modified for PlayerModifiedOnly save strategy
+    m_playerModified = true;
     m_isDirty        = true;
 
-    // [FIX] Trigger lighting propagation when player places/breaks blocks
+    // 4. Get new block properties
+    bool isOpaque = state->IsFullOpaque();
+
     if (m_world)
     {
         BlockIterator iter(this, index);
+
+        // ===== [NEW] SKY Flag Propagation (Assignment 05 requirements) =====
+
+        // Case 1: Digging a block (old=opaque, new=non-opaque)
+        if (wasOpaque && !isOpaque)
+        {
+            // Check if block above is SKY
+            if (z < CHUNK_MAX_Z)
+            {
+                bool aboveIsSky = GetIsSky(x, y, z + 1);
+                if (aboveIsSky)
+                {
+                    // Descend downward, flagging non-opaque blocks as SKY
+                    for (int descendZ = z; descendZ >= 0; --descendZ)
+                    {
+                        BlockState* currentBlock = GetBlock(x, y, descendZ);
+                        if (currentBlock->IsFullOpaque())
+                        {
+                            break; // Stop at first opaque block
+                        }
+
+                        // Flag as SKY and mark dirty
+                        SetIsSky(x, y, descendZ, true);
+                        SetOutdoorLight(x, y, descendZ, 15);
+
+                        BlockIterator descendIter(this, CoordsToIndex(x, y, descendZ));
+                        m_world->MarkLightingDirty(descendIter);
+                    }
+                }
+            }
+        }
+
+        // Case 2: Placing an opaque block (old=SKY, new=opaque)
+        else if (wasSky && isOpaque)
+        {
+            // Clear SKY flag and descend downward
+            SetIsSky(x, y, z, false);
+            SetOutdoorLight(x, y, z, 0);
+
+            // Descend downward, clearing SKY flags
+            for (int descendZ = z - 1; descendZ >= 0; --descendZ)
+            {
+                BlockState* currentBlock = GetBlock(x, y, descendZ);
+                if (currentBlock->IsFullOpaque())
+                {
+                    break; // Stop at first opaque block
+                }
+
+                // Clear SKY flag and mark dirty
+                SetIsSky(x, y, descendZ, false);
+                SetOutdoorLight(x, y, descendZ, 0);
+
+                BlockIterator descendIter(this, CoordsToIndex(x, y, descendZ));
+                m_world->MarkLightingDirty(descendIter);
+            }
+        }
+
+        // Always mark the changed block itself as dirty
         m_world->MarkLightingDirty(iter);
     }
 }
