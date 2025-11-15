@@ -16,6 +16,7 @@
 #include <cfloat>
 #include <algorithm>
 
+#include "Engine/Registry/Block/Block.hpp"
 #include "Game/GameCommon.hpp"
 
 using namespace enigma::voxel;
@@ -156,6 +157,9 @@ void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
         return;
     }
 
+    // Clean dirty light queue before deactivating chunk
+    UndirtyAllBlocksInChunk(chunk);
+
     // ===== Phase 4: 状态安全读取（崩溃防护点2） =====
     // 在访问 chunk 状态前再次验证指针（双重保险）
     ChunkState currentState = chunk->GetState();
@@ -209,28 +213,13 @@ bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
     return false;
 }
 
-bool World::ShouldUnloadChunk(int32_t chunkX, int32_t chunkY)
-{
-    // Calculate whether the block should be uninstalled based on the player's location
-    float chunkWorldX = chunkX * 16.0f + 8.0f; // Block Center X
-    float chunkWorldY = chunkY * 16.0f + 8.0f; // Block Center Y
-
-    float deltaX   = chunkWorldX - m_playerPosition.x;
-    float deltaY   = chunkWorldY - m_playerPosition.y;
-    float distance = sqrt(deltaX * deltaX + deltaY * deltaY);
-
-    // If the distance exceeds the activation range + 2, it should be uninstalled
-    float maxDistance = (float)(m_chunkActivationRange + 2) * 16.0f;
-    return distance > maxDistance;
-}
-
 void World::UpdateNearbyChunks()
 {
     auto neededChunks = CalculateNeededChunks();
 
-    // Phase 3 Optimization: Process up to 5 chunks per frame (vs original 1)
+    // Phase 3 Optimization: Process up to 10 chunks per frame (vs original 1)
     // This dramatically improves initial loading speed for new maps
-    constexpr int MAX_ACTIVATIONS_PER_FRAME = 5;
+    constexpr int MAX_ACTIVATIONS_PER_FRAME = 10;
     int           activatedThisFrame        = 0;
 
     // Phase 3: Activate chunks asynchronously (distance-sorted, nearest first)
@@ -277,11 +266,11 @@ void World::UpdateNearbyChunks()
     int unloadsThisFrame = 1; // Default: 1 chunk/frame (original design)
     if (loadedCount > targetCount * 1.5f)
     {
-        unloadsThisFrame = 5; // Overload 50%: fast cleanup
+        unloadsThisFrame = 10; // Overload 50%: fast cleanup
     }
     else if (loadedCount > targetCount * 1.2f)
     {
-        unloadsThisFrame = 3; // Overload 20%: medium cleanup
+        unloadsThisFrame = 5; // Overload 20%: medium cleanup
     }
 
     for (int i = 0; i < unloadsThisFrame; ++i)
@@ -355,6 +344,9 @@ void World::Update(float deltaTime)
 
     // Process completed chunk tasks from async workers (Phase 3)
     ProcessCompletedChunkTasks();
+
+    // Phase 7: Process dirty lighting before updating chunk meshes
+    ProcessDirtyLighting();
 
     // Phase 1: Update chunk meshes on main thread (Assignment 03 requirement)
     UpdateChunkMeshes();
@@ -856,6 +848,9 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
         return;
     }
 
+    // [Phase 6] Initialize lighting after generation
+    chunk->InitializeLighting(this);
+
     // Activate chunk and mark for mesh rebuild
     chunk->SetState(ChunkState::Active);
     chunk->SetGenerated(true);
@@ -901,6 +896,9 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
     // Check if load was successful
     if (job->WasSuccessful())
     {
+        // [Phase 6] Initialize lighting after loading from disk
+        chunk->InitializeLighting(this);
+
         // Load succeeded - activate chunk
         chunk->SetState(ChunkState::Active);
         chunk->SetGenerated(true);
@@ -1427,4 +1425,287 @@ void World::UnloadFarthestChunk()
         LogDebug("world", "Unloaded farthest chunk (%d, %d) at distance %.2f chunks",
                  chunkX, chunkY, distance);
     }
+}
+
+//-------------------------------------------------------------------------------------------
+// Phase 7: Lighting System Implementation
+//-------------------------------------------------------------------------------------------
+
+void World::MarkLightingDirty(const BlockIterator& iter)
+{
+    // 1. Check iterator validity
+    if (!iter.IsValid())
+    {
+        return; // Invalid iterator, cannot mark dirty
+    }
+
+    // 2. Get BlockState from iterator
+    BlockState* state = iter.GetBlock();
+    if (!state)
+    {
+        return; // No block state, cannot mark dirty
+    }
+
+    // 3. Check if already in queue (avoid duplicates)
+    if (state->IsLightDirty())
+    {
+        return; // Already marked dirty, skip to avoid duplicate entries
+    }
+
+    // 4. Add to queue tail
+    m_dirtyLightQueue.push_back(iter);
+
+    // 5. Mark as dirty
+    state->SetIsLightDirty(true);
+
+    LogDebug("world", "Marked block at (%d, %d, %d) as light dirty (queue size: %zu)",
+             iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z,
+             m_dirtyLightQueue.size());
+}
+
+void World::MarkLightingDirtyIfNotOpaque(const BlockIterator& iter)
+{
+    // 1. Check iterator validity
+    if (!iter.IsValid())
+    {
+        return; // Invalid iterator, cannot mark dirty
+    }
+
+    // 2. Get BlockState from iterator
+    BlockState* state = iter.GetBlock();
+    if (!state)
+    {
+        return; // No block state, cannot mark dirty
+    }
+
+    // 3. Only mark non-opaque blocks as dirty
+    // Opaque blocks refuse to become dirty (teacher's rule: "Opaque blocks refuse to become dirty")
+    if (!state->IsFullOpaque())
+    {
+        MarkLightingDirty(iter);
+    }
+}
+
+void World::ProcessNextDirtyLightBlock()
+{
+    // 1. Check if queue is empty
+    if (m_dirtyLightQueue.empty())
+    {
+        return; // No dirty blocks to process
+    }
+
+    // 2. Pop front block from queue
+    BlockIterator iter = m_dirtyLightQueue.front();
+    m_dirtyLightQueue.pop_front();
+
+    // 3. Get BlockState and clear dirty flag
+    BlockState* state = iter.GetBlock();
+    if (!state)
+    {
+        return; // Invalid block state
+    }
+    state->SetIsLightDirty(false);
+
+    // [Phase 7] Calculate theoretically correct light values using implemented algorithms
+    uint8_t correctOutdoor = ComputeCorrectOutdoorLight(iter);
+    uint8_t correctIndoor  = ComputeCorrectIndoorLight(iter);
+
+    // 5. Compare current values with correct values
+    uint8_t currentOutdoor = state->GetOutdoorLight();
+    uint8_t currentIndoor  = state->GetIndoorLight();
+
+    // 6. If values are incorrect, update and propagate
+    if (correctOutdoor != currentOutdoor || correctIndoor != currentIndoor)
+    {
+        // Update light values
+        state->SetOutdoorLight(correctOutdoor);
+        state->SetIndoorLight(correctIndoor);
+
+        // Mark this chunk's mesh as dirty
+        Chunk* chunk = iter.GetChunk();
+        if (chunk)
+        {
+            chunk->MarkDirty();
+        }
+
+        // Propagate to 6 neighbors (only non-opaque blocks)
+        for (int dir = 0; dir < 6; ++dir)
+        {
+            BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
+            if (neighbor.IsValid())
+            {
+                BlockState* neighborState = neighbor.GetBlock();
+                if (neighborState && !neighborState->IsFullOpaque())
+                {
+                    MarkLightingDirty(neighbor);
+
+                    // Also mark neighbor chunk's mesh as dirty
+                    Chunk* neighborChunk = neighbor.GetChunk();
+                    if (neighborChunk && neighborChunk != chunk)
+                    {
+                        neighborChunk->MarkDirty();
+                    }
+                }
+            }
+        }
+
+        LogDebug("world", "Processed dirty light block at (%d, %d, %d), propagated to neighbors",
+                 iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z);
+    }
+}
+
+void World::ProcessDirtyLighting()
+{
+    // Process all dirty lighting in a single frame until queue is empty
+    // This ensures lighting converges completely without multi-frame flickering
+    while (!m_dirtyLightQueue.empty())
+    {
+        ProcessNextDirtyLightBlock();
+    }
+
+    LogDebug("world", "Processed all dirty lighting (queue now empty)");
+}
+
+void World::UndirtyAllBlocksInChunk(Chunk* chunk)
+{
+    if (!chunk)
+    {
+        return; // Null chunk, nothing to clean
+    }
+
+    // Iterate through queue and remove all blocks belonging to this chunk
+    auto it = m_dirtyLightQueue.begin();
+    while (it != m_dirtyLightQueue.end())
+    {
+        if (it->GetChunk() == chunk)
+        {
+            // Clear the block's dirty flag
+            BlockState* state = it->GetBlock();
+            if (state)
+            {
+                state->SetIsLightDirty(false);
+            }
+
+            // Remove from queue
+            it = m_dirtyLightQueue.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    LogDebug("world", "Cleaned dirty light queue for chunk at (%d, %d)",
+             chunk->GetChunkCoords().x, chunk->GetChunkCoords().y);
+}
+
+/**
+ * @brief Compute the theoretically correct outdoor light value for a block
+ *
+ * This method calculates what the outdoor light influence should be for a given block
+ * based on Assignment 05 rules:
+ * - SKY blocks always have outdoor light = 15
+ * - Opaque blocks always have outdoor light = 0
+ * - Non-opaque blocks have outdoor light = max(neighbors) - 1 (minimum 0)
+ *
+ * @param iter BlockIterator pointing to the block to compute light for
+ * @return Correct outdoor light value (0-15)
+ */
+uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
+{
+    const BlockState* state = iter.GetBlock();
+
+    // [STEP 1] SKY blocks always have maximum outdoor light
+    if (state->IsSky())
+    {
+        return 15;
+    }
+
+    // [STEP 2] Opaque blocks block all outdoor light
+    if (state->IsFullOpaque())
+    {
+        return 0;
+    }
+
+    // [STEP 3] Non-opaque blocks: propagate light from neighbors (max - 1)
+    uint8_t maxNeighborLight = 0;
+#undef max
+    // Check all 6 neighbors (North, South, East, West, Up, Down)
+    for (int dir = 0; dir < 6; ++dir)
+    {
+        BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
+
+        // Check if neighbor is valid (not out of bounds or null chunk)
+        if (neighbor.IsValid())
+        {
+            const BlockState* neighborState = neighbor.GetBlock();
+            if (neighborState)
+            {
+                uint8_t neighborLight = neighborState->GetOutdoorLight();
+                maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+            }
+        }
+    }
+
+    // Light propagates with -1 attenuation per block (minimum 0)
+    return (maxNeighborLight > 0) ? (maxNeighborLight - 1) : 0;
+}
+
+/**
+ * @brief Compute the theoretically correct indoor light value for a block
+ *
+ * This method calculates what the indoor light influence should be for a given block
+ * based on Assignment 05 rules:
+ * - Blocks that emit light have indoor light >= their emission level
+ * - Opaque blocks have indoor light = their emission level (don't propagate from neighbors)
+ * - Non-opaque blocks have indoor light = max(emission level, max(neighbors) - 1)
+ *
+ * Key difference from outdoor light:
+ * - Emissive blocks (like glowstone) can have indoor light >= their emission level
+ * - Glowstone (emission=15) has indoor light=15, but neighbors see 14
+ * - Multiple light sources: take maximum, not sum
+ *
+ * @param iter BlockIterator pointing to the block to compute light for
+ * @return Correct indoor light value (0-15)
+ */
+uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
+{
+    const BlockState* state = iter.GetBlock();
+
+    // [STEP 1] Get the block's intrinsic light emission level
+    uint8_t emissionLevel = state->GetBlock()->GetIndoorLightEmission();
+
+    // [STEP 2] Opaque blocks: indoor light = emission level (don't propagate from neighbors)
+    if (state->IsFullOpaque())
+    {
+        return emissionLevel;
+    }
+
+    // [STEP 3] Non-opaque blocks: propagate light from neighbors (max - 1)
+    uint8_t maxNeighborLight = 0;
+#undef max
+    // Check all 6 neighbors (East, West, North, South, Up, Down)
+    for (int dir = 0; dir < 6; ++dir)
+    {
+        BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
+
+        // Check if neighbor is valid (not out of bounds or null chunk)
+        if (neighbor.IsValid())
+        {
+            const BlockState* neighborState = neighbor.GetBlock();
+            if (neighborState)
+            {
+                uint8_t neighborLight = neighborState->GetIndoorLight();
+                maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+            }
+        }
+    }
+
+    // Light propagates with -1 attenuation per block (minimum 0)
+    uint8_t propagatedLight = (maxNeighborLight > 0) ? (maxNeighborLight - 1) : 0;
+
+    // [STEP 4] Return the maximum of emission level and propagated light
+    // This ensures emissive blocks maintain their light level
+    // and can also accept higher light from neighbors
+    return std::max(emissionLevel, propagatedLight);
 }

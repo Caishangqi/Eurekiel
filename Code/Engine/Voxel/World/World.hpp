@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
+#include "../Block/BlockIterator.hpp"
 
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
 #include "../Chunk/ChunkJob.hpp"
@@ -66,8 +67,6 @@ namespace enigma::voxel
         void                                     UpdateNearbyChunks(); // Update nearby blocks according to player location
         std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // Calculate the required blocks
 
-        bool ShouldUnloadChunk(int32_t chunkX, int32_t chunkY);
-
         // Update and Management:
         void Update(float deltaTime); // Update world systems
         void SetPlayerPosition(const Vec3& position); // Update player position for chunk loading
@@ -130,6 +129,32 @@ namespace enigma::voxel
         // Mark a chunk as needing mesh rebuild and add to queue
         // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
         void MarkChunkDirty(Chunk* chunk);
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 7: Lighting System Support
+        //-------------------------------------------------------------------------------------------
+
+        // Get the size of the dirty light queue (for debugging and monitoring)
+        size_t GetDirtyLightQueueSize() const { return m_dirtyLightQueue.size(); }
+
+        // Mark a block as needing light recalculation and add to dirty light queue
+        void MarkLightingDirty(const BlockIterator& iter);
+
+        // Mark a block as dirty only if it is not fully opaque (convenience method)
+        void MarkLightingDirtyIfNotOpaque(const BlockIterator& iter);
+
+        // Process one dirty light block from the queue (BFS-style light propagation)
+        void ProcessNextDirtyLightBlock();
+
+        // Process all dirty lighting in a single frame (full queue processing)
+        void ProcessDirtyLighting();
+
+        // Clean dirty light queue for a specific chunk (called during chunk unload)
+        void UndirtyAllBlocksInChunk(Chunk* chunk);
+
+        // [Phase 7] Lighting Calculation - Compute Correct Light Values
+        uint8_t ComputeCorrectOutdoorLight(const BlockIterator& iter) const;
+        uint8_t ComputeCorrectIndoorLight(const BlockIterator& iter) const;
 
     private:
         //-------------------------------------------------------------------------------------------
@@ -262,5 +287,10 @@ namespace enigma::voxel
         // Phase 5: Graceful Shutdown State
         //-------------------------------------------------------------------------------------------
         std::atomic<bool> m_isShuttingDown{false}; // Shutdown flag (thread-safe)
+
+        //-------------------------------------------------------------------------------------------
+        // Phase 7: Lighting System State
+        //-------------------------------------------------------------------------------------------
+        std::deque<BlockIterator> m_dirtyLightQueue; // Queue of blocks that need light recalculation
     };
 }
