@@ -215,6 +215,9 @@ namespace enigma::voxel
         Chunk* GetEastNeighbor() const;
         Chunk* GetWestNeighbor() const;
 
+        // [A05] Lighting System
+        void InitializeLighting(World* world);
+
     private:
         //-------------------------------------------------------------------------------------------
         // Core Data
@@ -268,5 +271,25 @@ namespace enigma::voxel
          * @see Task 2.2 - SetState() detects activation event
          */
         void NotifyNeighborsDirty();
+
+        //-------------------------------------------------------------------------------------------
+        // [A05] Lighting System - Boundary Block Marking
+        //-------------------------------------------------------------------------------------------
+        /**
+         * @brief Mark boundary blocks as dirty for lighting propagation
+         *
+         * Called during InitializeLighting() (Task 6.2) to mark non-opaque blocks
+         * at chunk boundaries as dirty. These blocks need lighting updates because
+         * they may receive light from neighboring chunks.
+         *
+         * Implementation:
+         * - Checks 4 horizontal neighbors (East, West, North, South)
+         * - For each active neighbor, scans boundary blocks (x=0, x=15, y=0, y=15)
+         * - Marks non-opaque blocks as dirty using World::MarkLightingDirty()
+         * - Uses BlockIterator for cross-chunk boundary handling
+         *
+         * @param world World pointer for accessing MarkLightingDirty()
+         */
+        void MarkBoundaryBlocksDirty(World* world);
     };
 }

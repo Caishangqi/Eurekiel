@@ -97,6 +97,13 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
     m_isModified     = true;
     m_playerModified = true; // Mark as player-modified for PlayerModifiedOnly save strategy
     m_isDirty        = true;
+
+    // [FIX] Trigger lighting propagation when player places/breaks blocks
+    if (m_world)
+    {
+        BlockIterator iter(this, index);
+        m_world->MarkLightingDirty(iter);
+    }
 }
 
 void Chunk::MarkDirty()
@@ -489,6 +496,109 @@ Chunk* Chunk::GetWestNeighbor() const
 }
 
 //-------------------------------------------------------------------------------------------
+// [A05] Lighting System - Initialization
+//-------------------------------------------------------------------------------------------
+
+/**
+ * @brief Initialize lighting values for all blocks in the chunk
+ *
+ * This is the first step (Task 6.1) of the lighting initialization pipeline.
+ * Sets all blocks to default lighting state (outdoor=0, indoor=0, not dirty).
+ *
+ * Full Pipeline (Assignment 05):
+ * - Task 6.1: Default all lighting to 0 (this method)
+ * - Task 6.2: Mark boundary blocks as dirty
+ * - Task 6.3: Set SKY flag for top-exposed blocks
+ * - Task 6.4: Initialize sky light (15 for SKY blocks)
+ * - Task 6.5: Scan for emissive blocks and set indoor light
+ *
+ * @param world World pointer (reserved for future tasks, currently unused)
+ */
+void Chunk::InitializeLighting(World* world)
+{
+    // Step 1: Default all blocks to lighting=0, not dirty
+    for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
+    {
+        m_blocks[i]->SetOutdoorLight(0);
+        m_blocks[i]->SetIndoorLight(0);
+        m_blocks[i]->SetIsLightDirty(false);
+    }
+
+    // Step 2: Mark boundary blocks as dirty
+    MarkBoundaryBlocksDirty(world);
+
+    // Step 3: Set SKY flags from top to bottom
+    for (int x = 0; x < CHUNK_SIZE_X; ++x)
+    {
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = CHUNK_MAX_Z; z >= 0; --z)
+            {
+                BlockState* state = GetBlock(x, y, z);
+                if (state->IsFullOpaque())
+                {
+                    break; // Stop at first opaque block in this column
+                }
+                state->SetIsSky(true);
+            }
+        }
+    }
+
+    // Step 4: Initialize sky light and mark horizontal neighbors dirty
+    for (int x = 0; x < CHUNK_SIZE_X; ++x)
+    {
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = CHUNK_MAX_Z; z >= 0; --z)
+            {
+                BlockState* state = GetBlock(x, y, z);
+                if (!state->IsSky())
+                {
+                    break; // Stop at first non-sky block
+                }
+
+                // Set sky light to maximum (15)
+                state->SetOutdoorLight(15);
+
+                // Mark 4 horizontal neighbors as dirty
+                BlockIterator iter(this, CoordsToIndex(x, y, z));
+                Direction     horizontalFaces[] = {
+                    Direction::EAST,
+                    Direction::WEST,
+                    Direction::NORTH,
+                    Direction::SOUTH
+                };
+
+                for (Direction face : horizontalFaces)
+                {
+                    BlockIterator neighbor = iter.GetNeighbor(face);
+                    if (neighbor.IsValid())
+                    {
+                        BlockState* neighborState = neighbor.GetBlock();
+                        if (!neighborState->IsFullOpaque() && !neighborState->IsSky())
+                        {
+                            world->MarkLightingDirty(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 5: Scan for emissive blocks and mark them dirty
+    for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
+    {
+        BlockState* state         = m_blocks[i];
+        uint8_t     emissionLevel = state->GetBlock()->GetIndoorLightEmission();
+        if (emissionLevel > 0)
+        {
+            BlockIterator iter(this, i);
+            world->MarkLightingDirty(iter);
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------------------
 // [Phase 2] Neighbor Notification - Cross-Chunk Hidden Face Culling
 //-------------------------------------------------------------------------------------------
 
@@ -556,4 +666,105 @@ void Chunk::NotifyNeighborsDirty()
                    (neighbors[1] && neighbors[1]->IsActive()) ? "OK" : "NO",
                    (neighbors[2] && neighbors[2]->IsActive()) ? "OK" : "NO",
                    (neighbors[3] && neighbors[3]->IsActive()) ? "OK" : "NO");
+}
+
+//-------------------------------------------------------------------------------------------
+// [A05] Lighting System - Boundary Block Marking
+//-------------------------------------------------------------------------------------------
+
+/**
+ * @brief Mark boundary blocks as dirty for lighting propagation
+ *
+ * This method scans all 4 horizontal chunk boundaries (East, West, North, South)
+ * and marks non-opaque blocks as dirty if the neighboring chunk is active.
+ * These blocks need lighting updates because they may receive light from neighbors.
+ *
+ * Architecture:
+ * - Only processes boundaries where neighbor is active (light can propagate)
+ * - Scans all blocks on each boundary face (16x256 blocks per face)
+ * - Uses BlockIterator for cross-chunk boundary handling
+ * - Marks blocks via World::MarkLightingDirty() (global dirty queue)
+ *
+ * Performance:
+ * - Called once per chunk during InitializeLighting()
+ * - Up to 4 boundaries × 16×256 blocks = 16,384 checks per chunk
+ * - Only marks non-opaque blocks (typically <10% of boundary blocks)
+ *
+ * @param world World pointer for accessing MarkLightingDirty()
+ */
+void Chunk::MarkBoundaryBlocksDirty(World* world)
+{
+    // Get 4 horizontal neighbors
+    Chunk* eastNeighbor  = GetEastNeighbor();
+    Chunk* westNeighbor  = GetWestNeighbor();
+    Chunk* northNeighbor = GetNorthNeighbor();
+    Chunk* southNeighbor = GetSouthNeighbor();
+
+    // East boundary (x = CHUNK_MAX_X = 15)
+    if (eastNeighbor && eastNeighbor->IsActive())
+    {
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = GetBlock(CHUNK_MAX_X, y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(this, CoordsToIndex(CHUNK_MAX_X, y, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
+    }
+
+    // West boundary (x = 0)
+    if (westNeighbor && westNeighbor->IsActive())
+    {
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = GetBlock(0, y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(this, CoordsToIndex(0, y, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
+    }
+
+    // North boundary (y = CHUNK_MAX_Y = 15)
+    if (northNeighbor && northNeighbor->IsActive())
+    {
+        for (int x = 0; x < CHUNK_SIZE_X; ++x)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = GetBlock(x, CHUNK_MAX_Y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(this, CoordsToIndex(x, CHUNK_MAX_Y, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
+    }
+
+    // South boundary (y = 0)
+    if (southNeighbor && southNeighbor->IsActive())
+    {
+        for (int x = 0; x < CHUNK_SIZE_X; ++x)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = GetBlock(x, 0, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(this, CoordsToIndex(x, 0, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
+    }
 }
