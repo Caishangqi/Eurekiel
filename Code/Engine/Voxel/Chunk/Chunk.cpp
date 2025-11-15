@@ -47,6 +47,11 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
     BlockPos chunkBottomPos = GetWorldPos();
     m_chunkBounding.m_mins  = Vec3((float)chunkBottomPos.x, (float)chunkBottomPos.y, (float)chunkBottomPos.z);
     m_chunkBounding.m_maxs  = m_chunkBounding.m_mins + Vec3(CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z);
+
+    // [A05] Initialize independent light data arrays (Task 1)
+    // Each block gets its own light data and flags to avoid BlockState sharing pollution
+    m_lightData.resize(BLOCKS_PER_CHUNK, 0); // Initialize all light values to 0 (outdoor=0, indoor=0)
+    m_flags.resize(BLOCKS_PER_CHUNK, 0); // Initialize all flags to 0 (no flags set)
 }
 
 Chunk::~Chunk()
@@ -517,17 +522,20 @@ Chunk* Chunk::GetWestNeighbor() const
 void Chunk::InitializeLighting(World* world)
 {
     // Step 1: Default all blocks to lighting=0, not dirty
+    // [NEW] Use Chunk's independent storage instead of shared BlockState
     for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
     {
-        m_blocks[i]->SetOutdoorLight(0);
-        m_blocks[i]->SetIndoorLight(0);
-        m_blocks[i]->SetIsLightDirty(false);
+        int32_t x, y, z;
+        IndexToCoords(i, x, y, z);
+        SetOutdoorLight(x, y, z, 0);
+        SetIndoorLight(x, y, z, 0);
+        SetIsLightDirty(x, y, z, false);
     }
 
     // Step 2: Mark boundary blocks as dirty
     MarkBoundaryBlocksDirty(world);
 
-    // Step 3: Set SKY flags from top to bottom
+    // Step 3: Set SKY flags and outdoor light (CORRECTED - no neighbor marking)
     for (int x = 0; x < CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < CHUNK_SIZE_Y; ++y)
@@ -537,55 +545,15 @@ void Chunk::InitializeLighting(World* world)
                 BlockState* state = GetBlock(x, y, z);
                 if (state->IsFullOpaque())
                 {
-                    break; // Stop at first opaque block in this column
+                    break; // Stop at first opaque block
                 }
-                state->SetIsSky(true);
+                SetIsSky(x, y, z, true);
+                SetOutdoorLight(x, y, z, 15);
             }
         }
     }
 
-    // Step 4: Initialize sky light and mark horizontal neighbors dirty
-    for (int x = 0; x < CHUNK_SIZE_X; ++x)
-    {
-        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
-        {
-            for (int z = CHUNK_MAX_Z; z >= 0; --z)
-            {
-                BlockState* state = GetBlock(x, y, z);
-                if (!state->IsSky())
-                {
-                    break; // Stop at first non-sky block
-                }
-
-                // Set sky light to maximum (15)
-                state->SetOutdoorLight(15);
-
-                // Mark 4 horizontal neighbors as dirty
-                BlockIterator iter(this, CoordsToIndex(x, y, z));
-                Direction     horizontalFaces[] = {
-                    Direction::EAST,
-                    Direction::WEST,
-                    Direction::NORTH,
-                    Direction::SOUTH
-                };
-
-                for (Direction face : horizontalFaces)
-                {
-                    BlockIterator neighbor = iter.GetNeighbor(face);
-                    if (neighbor.IsValid())
-                    {
-                        BlockState* neighborState = neighbor.GetBlock();
-                        if (!neighborState->IsFullOpaque() && !neighborState->IsSky())
-                        {
-                            world->MarkLightingDirty(neighbor);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Step 5: Scan for emissive blocks and mark them dirty
+    // Step 4: Mark light-emitting blocks dirty (CORRECTED - mark self only)
     for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
     {
         BlockState* state         = m_blocks[i];
@@ -767,4 +735,150 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             }
         }
     }
+}
+
+//-------------------------------------------------------------------------------------------
+// [A05] Lighting Data Access - Independent Storage Implementation
+//-------------------------------------------------------------------------------------------
+
+/**
+ * @brief Get outdoor light level (0-15) from independent storage
+ *
+ * Outdoor light is stored in the high 4 bits of m_lightData[index].
+ * This method extracts the high 4 bits using bit shift and mask operations.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @return Outdoor light level (0-15)
+ */
+uint8_t Chunk::GetOutdoorLight(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return (m_lightData[index] >> 4) & 0x0F; // High 4 bits
+}
+
+/**
+ * @brief Set outdoor light level (0-15) in independent storage
+ *
+ * Outdoor light is stored in the high 4 bits of m_lightData[index].
+ * This method preserves the low 4 bits (indoor light) while updating high 4 bits.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @param light Outdoor light level (0-15)
+ */
+void Chunk::SetOutdoorLight(int32_t x, int32_t y, int32_t z, uint8_t light)
+{
+    size_t index       = CoordsToIndex(x, y, z);
+    m_lightData[index] = (m_lightData[index] & 0x0F) | ((light & 0x0F) << 4);
+}
+
+/**
+ * @brief Get indoor light level (0-15) from independent storage
+ *
+ * Indoor light is stored in the low 4 bits of m_lightData[index].
+ * This method extracts the low 4 bits using mask operation.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @return Indoor light level (0-15)
+ */
+uint8_t Chunk::GetIndoorLight(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return m_lightData[index] & 0x0F; // Low 4 bits
+}
+
+/**
+ * @brief Set indoor light level (0-15) in independent storage
+ *
+ * Indoor light is stored in the low 4 bits of m_lightData[index].
+ * This method preserves the high 4 bits (outdoor light) while updating low 4 bits.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @param light Indoor light level (0-15)
+ */
+void Chunk::SetIndoorLight(int32_t x, int32_t y, int32_t z, uint8_t light)
+{
+    size_t index       = CoordsToIndex(x, y, z);
+    m_lightData[index] = (m_lightData[index] & 0xF0) | (light & 0x0F);
+}
+
+/**
+ * @brief Get IsSky flag from independent storage
+ *
+ * IsSky flag is stored in bit 0 of m_flags[index].
+ * This flag indicates whether the block is exposed to sky (for outdoor lighting).
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @return true if block is exposed to sky, false otherwise
+ */
+bool Chunk::GetIsSky(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return (m_flags[index] & 0x01) != 0; // Bit 0
+}
+
+/**
+ * @brief Set IsSky flag in independent storage
+ *
+ * IsSky flag is stored in bit 0 of m_flags[index].
+ * This method uses bit manipulation to set or clear bit 0 while preserving other bits.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @param value true to set IsSky flag, false to clear it
+ */
+void Chunk::SetIsSky(int32_t x, int32_t y, int32_t z, bool value)
+{
+    size_t index = CoordsToIndex(x, y, z);
+    if (value)
+        m_flags[index] |= 0x01;
+    else
+        m_flags[index] &= ~0x01;
+}
+
+/**
+ * @brief Get IsLightDirty flag from independent storage
+ *
+ * IsLightDirty flag is stored in bit 1 of m_flags[index].
+ * This flag indicates whether the block's lighting needs to be recalculated.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @return true if block lighting is dirty, false otherwise
+ */
+bool Chunk::GetIsLightDirty(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return (m_flags[index] & 0x02) != 0; // Bit 1
+}
+
+/**
+ * @brief Set IsLightDirty flag in independent storage
+ *
+ * IsLightDirty flag is stored in bit 1 of m_flags[index].
+ * This method uses bit manipulation to set or clear bit 1 while preserving other bits.
+ *
+ * @param x Local X coordinate (0-15)
+ * @param y Local Y coordinate (0-15)
+ * @param z Local Z coordinate (0-255)
+ * @param value true to mark lighting as dirty, false to clear dirty flag
+ */
+void Chunk::SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value)
+{
+    size_t index = CoordsToIndex(x, y, z);
+    if (value)
+        m_flags[index] |= 0x02;
+    else
+        m_flags[index] &= ~0x02;
 }

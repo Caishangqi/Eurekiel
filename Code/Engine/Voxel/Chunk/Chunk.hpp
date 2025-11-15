@@ -218,6 +218,21 @@ namespace enigma::voxel
         // [A05] Lighting System
         void InitializeLighting(World* world);
 
+        // [A05] Lighting Data Access - Independent storage in Chunk
+        // Outdoor light (0-15)
+        uint8_t GetOutdoorLight(int32_t x, int32_t y, int32_t z) const;
+        void    SetOutdoorLight(int32_t x, int32_t y, int32_t z, uint8_t light);
+
+        // Indoor light (0-15)
+        uint8_t GetIndoorLight(int32_t x, int32_t y, int32_t z) const;
+        void    SetIndoorLight(int32_t x, int32_t y, int32_t z, uint8_t light);
+
+        // Flags
+        bool GetIsSky(int32_t x, int32_t y, int32_t z) const;
+        void SetIsSky(int32_t x, int32_t y, int32_t z, bool value);
+        bool GetIsLightDirty(int32_t x, int32_t y, int32_t z) const;
+        void SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value);
+
     private:
         //-------------------------------------------------------------------------------------------
         // Core Data
@@ -251,6 +266,33 @@ namespace enigma::voxel
         // [A05] Neighbor Access
         //-------------------------------------------------------------------------------------------
         class World* m_world = nullptr;
+
+        //-------------------------------------------------------------------------------------------
+        // [A05] Lighting System - Independent Light Data Storage
+        //-------------------------------------------------------------------------------------------
+        /**
+         * @brief Independent light data arrays (per-block storage)
+         *
+         * These arrays store lighting data independently from BlockState to avoid
+         * the shared BlockState pollution problem. Each block position has its own
+         * light data and flags, ensuring correct light propagation.
+         *
+         * Architecture:
+         * - m_lightData: 1 byte per block (high 4 bits: outdoor light 0-15, low 4 bits: indoor light 0-15)
+         * - m_flags: 1 byte per block (IsSky, IsLightDirty, IsFullOpaque, IsSolid, IsVisible)
+         * - Total memory: 2 bytes per block × 65536 blocks = 131 KB per chunk
+         *
+         * Benefits:
+         * - Eliminates BlockState sharing pollution (all glowstones no longer share light data)
+         * - Matches Minecraft's architecture (light data separate from block type)
+         * - Memory efficient (2 bytes vs 16 bytes per block for independent BlockState)
+         * - Cache-friendly (contiguous memory access)
+         *
+         * @see Task 1: Add independent light data arrays
+         * @see Task 2: Implement light data access interface
+         */
+        std::vector<uint8_t> m_lightData; // Light data: high 4 bits = outdoor (0-15), low 4 bits = indoor (0-15)
+        std::vector<uint8_t> m_flags; // Flags: IsSky, IsLightDirty, IsFullOpaque, IsSolid, IsVisible
 
         //-------------------------------------------------------------------------------------------
         // [Phase 2] Neighbor Notification for Cross-Chunk Hidden Face Culling
