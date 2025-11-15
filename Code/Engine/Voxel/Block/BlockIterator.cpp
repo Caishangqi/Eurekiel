@@ -13,6 +13,16 @@ namespace enigma::voxel
         return m_chunk->GetBlock(x, y, z);
     }
 
+    BlockPos BlockIterator::GetBlockPos() const
+    {
+        if (!IsValid()) return BlockPos(0, 0, 0);
+
+        int localX = GetLocalX();
+        int localY = GetLocalY();
+        int localZ = GetLocalZ();
+        return m_chunk->LocalToWorld(localX, localY, localZ);
+    }
+
     /**
      * @brief Get neighbor block iterator in the specified direction with cross-chunk boundary support
      *

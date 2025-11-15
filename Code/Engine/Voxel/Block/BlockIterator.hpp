@@ -96,6 +96,12 @@ namespace enigma::voxel
         Chunk* GetChunk() const { return m_chunk; }
         int    GetBlockIndex() const { return m_blockIndex; }
 
+        /**
+         * @brief Get world position of the block
+         * @return BlockPos World coordinates of the block
+         */
+        BlockPos GetBlockPos() const;
+
     private:
         Chunk* m_chunk;
         int    m_blockIndex;

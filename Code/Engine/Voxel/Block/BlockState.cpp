@@ -26,6 +26,7 @@ namespace enigma::voxel
         {
             SetIsFullOpaque(m_blockType->IsOpaque());
             SetIsSolid(m_blockType->IsFullBlock());
+            SetIsVisible(m_blockType->IsVisible()); // Sync IS_VISIBLE flag
         }
     }
 
