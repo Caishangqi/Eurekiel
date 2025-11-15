@@ -21,13 +21,8 @@ namespace enigma::voxel
     BlockState::BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex)
         : m_blockType(blockType), m_properties(properties), m_stateIndex(stateIndex)
     {
-        // Initialize flags from Block properties
-        if (m_blockType)
-        {
-            SetIsFullOpaque(m_blockType->IsOpaque());
-            SetIsSolid(m_blockType->IsFullBlock());
-            SetIsVisible(m_blockType->IsVisible()); // Sync IS_VISIBLE flag
-        }
+        // [REMOVED] Flag initialization - flags now managed by Chunk class
+        // No initialization needed here
     }
 
     bool BlockState::IsOpaque() const
