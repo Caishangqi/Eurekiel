@@ -519,6 +519,16 @@ namespace enigma::registry::block
                 block->SetIndoorLightEmission(static_cast<uint8_t>(yaml.GetInt("light_level", 0)));
             }
 
+            // Set visibility with smart default (air is invisible, others are visible)
+            bool isAir = (blockName == "air");
+            block->SetVisible(!isAir);
+
+            // YAML can override the default value (optional)
+            if (yaml.Contains("is_visible"))
+            {
+                block->SetVisible(yaml.GetBoolean("is_visible"));
+            }
+
             return block;
         }
         catch (const std::exception& e)

@@ -61,6 +61,7 @@ namespace enigma::registry::block
         float       m_resistance  = 1.0f;
         bool        m_isOpaque    = true;
         bool        m_isFullBlock = true;
+        bool        m_isVisible   = true; // Block visibility flag (default: visible)
         std::string m_blockstatePath; // Path to blockstate definition
         uint8_t     m_indoorLightEmission = 0; // Indoor light emission level (0-15)
 
@@ -126,6 +127,9 @@ namespace enigma::registry::block
 
         bool IsFullBlock() const { return m_isFullBlock; }
         void SetFullBlock(bool fullBlock) { m_isFullBlock = fullBlock; }
+
+        bool IsVisible() const { return m_isVisible; }
+        void SetVisible(bool visible) { m_isVisible = visible; }
 
         /**
          * @brief Get the indoor light emission level of this block type
