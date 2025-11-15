@@ -69,6 +69,63 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
     }
 }
 
+uint8_t World::GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
+{
+    // Calculate chunk coordinates
+    int32_t chunkX = globalX >> 4; // globalX / 16
+    int32_t chunkY = globalY >> 4; // globalY / 16
+
+    // Get chunk
+    Chunk* chunk = GetChunk(chunkX, chunkY);
+    if (!chunk) return 0;
+
+    // Calculate local coordinates
+    int32_t localX = globalX & 0x0F; // globalX % 16
+    int32_t localY = globalY & 0x0F; // globalY % 16
+    int32_t localZ = globalZ;
+
+    // Delegate to Chunk
+    return chunk->GetOutdoorLight(localX, localY, localZ);
+}
+
+uint8_t World::GetIndoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
+{
+    // Calculate chunk coordinates
+    int32_t chunkX = globalX >> 4;
+    int32_t chunkY = globalY >> 4;
+
+    // Get chunk
+    Chunk* chunk = GetChunk(chunkX, chunkY);
+    if (!chunk) return 0;
+
+    // Calculate local coordinates
+    int32_t localX = globalX & 0x0F;
+    int32_t localY = globalY & 0x0F;
+    int32_t localZ = globalZ;
+
+    // Delegate to Chunk
+    return chunk->GetIndoorLight(localX, localY, localZ);
+}
+
+bool World::GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const
+{
+    // Calculate chunk coordinates
+    int32_t chunkX = globalX >> 4;
+    int32_t chunkY = globalY >> 4;
+
+    // Get chunk
+    Chunk* chunk = GetChunk(chunkX, chunkY);
+    if (!chunk) return false;
+
+    // Calculate local coordinates
+    int32_t localX = globalX & 0x0F;
+    int32_t localY = globalY & 0x0F;
+    int32_t localZ = globalZ;
+
+    // Delegate to Chunk
+    return chunk->GetIsSky(localX, localY, localZ);
+}
+
 bool World::IsValidPosition(const BlockPos& pos)
 {
     UNUSED(pos)
@@ -1439,24 +1496,29 @@ void World::MarkLightingDirty(const BlockIterator& iter)
         return; // Invalid iterator, cannot mark dirty
     }
 
-    // 2. Get BlockState from iterator
-    BlockState* state = iter.GetBlock();
-    if (!state)
+    // 2. [FIX] Use Chunk's independent flag interface instead of BlockState
+    Chunk* chunk = iter.GetChunk();
+    if (!chunk)
     {
-        return; // No block state, cannot mark dirty
+        return; // No chunk, cannot mark dirty
     }
 
-    // 3. Check if already in queue (avoid duplicates)
-    if (state->IsLightDirty())
+    // 3. Get local coordinates within the chunk
+    int32_t x, y, z;
+    iter.GetLocalCoords(x, y, z);
+
+    // 4. Check if already in queue (avoid duplicates)
+    // [FIX] Now each block position has independent dirty flag
+    if (chunk->GetIsLightDirty(x, y, z))
     {
         return; // Already marked dirty, skip to avoid duplicate entries
     }
 
-    // 4. Add to queue tail
+    // 5. Add to queue tail
     m_dirtyLightQueue.push_back(iter);
 
-    // 5. Mark as dirty
-    state->SetIsLightDirty(true);
+    // 6. Mark as dirty using Chunk interface
+    chunk->SetIsLightDirty(x, y, z, true);
 
     LogDebug("world", "Marked block at (%d, %d, %d) as light dirty (queue size: %zu)",
              iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z,
@@ -1498,35 +1560,43 @@ void World::ProcessNextDirtyLightBlock()
     BlockIterator iter = m_dirtyLightQueue.front();
     m_dirtyLightQueue.pop_front();
 
-    // 3. Get BlockState and clear dirty flag
+    // 3. Get chunk and local coordinates
+    Chunk* chunk = iter.GetChunk();
+    if (!chunk)
+    {
+        return; // Invalid chunk
+    }
+
+    int32_t x, y, z;
+    iter.GetLocalCoords(x, y, z);
+
+    // 4. Get BlockState for opaque check (still needed for propagation logic)
     BlockState* state = iter.GetBlock();
     if (!state)
     {
         return; // Invalid block state
     }
-    state->SetIsLightDirty(false);
+
+    // [NEW] Clear dirty flag using Chunk interface
+    chunk->SetIsLightDirty(x, y, z, false);
 
     // [Phase 7] Calculate theoretically correct light values using implemented algorithms
     uint8_t correctOutdoor = ComputeCorrectOutdoorLight(iter);
     uint8_t correctIndoor  = ComputeCorrectIndoorLight(iter);
 
-    // 5. Compare current values with correct values
-    uint8_t currentOutdoor = state->GetOutdoorLight();
-    uint8_t currentIndoor  = state->GetIndoorLight();
+    // [NEW] Compare current values with correct values using Chunk interface
+    uint8_t currentOutdoor = chunk->GetOutdoorLight(x, y, z);
+    uint8_t currentIndoor  = chunk->GetIndoorLight(x, y, z);
 
     // 6. If values are incorrect, update and propagate
     if (correctOutdoor != currentOutdoor || correctIndoor != currentIndoor)
     {
-        // Update light values
-        state->SetOutdoorLight(correctOutdoor);
-        state->SetIndoorLight(correctIndoor);
+        // [NEW] Update light values using Chunk interface
+        chunk->SetOutdoorLight(x, y, z, correctOutdoor);
+        chunk->SetIndoorLight(x, y, z, correctIndoor);
 
         // Mark this chunk's mesh as dirty
-        Chunk* chunk = iter.GetChunk();
-        if (chunk)
-        {
-            chunk->MarkDirty();
-        }
+        chunk->MarkDirty();
 
         // Propagate to 6 neighbors (only non-opaque blocks)
         for (int dir = 0; dir < 6; ++dir)
@@ -1579,12 +1649,10 @@ void World::UndirtyAllBlocksInChunk(Chunk* chunk)
     {
         if (it->GetChunk() == chunk)
         {
-            // Clear the block's dirty flag
-            BlockState* state = it->GetBlock();
-            if (state)
-            {
-                state->SetIsLightDirty(false);
-            }
+            // [FIX] Clear the block's dirty flag using Chunk interface
+            int32_t x, y, z;
+            it->GetLocalCoords(x, y, z);
+            chunk->SetIsLightDirty(x, y, z, false);
 
             // Remove from queue
             it = m_dirtyLightQueue.erase(it);
@@ -1614,9 +1682,12 @@ void World::UndirtyAllBlocksInChunk(Chunk* chunk)
 uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
 {
     const BlockState* state = iter.GetBlock();
+    Chunk*            chunk = iter.GetChunk();
 
     // [STEP 1] SKY blocks always have maximum outdoor light
-    if (state->IsSky())
+    int32_t localX, localY, localZ;
+    iter.GetLocalCoords(localX, localY, localZ);
+    if (chunk && chunk->GetIsSky(localX, localY, localZ))
     {
         return 15;
     }
@@ -1641,8 +1712,15 @@ uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
             const BlockState* neighborState = neighbor.GetBlock();
             if (neighborState)
             {
-                uint8_t neighborLight = neighborState->GetOutdoorLight();
-                maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+                // [REFACTORED] Use Chunk interface instead of BlockState
+                Chunk* neighborChunk = neighbor.GetChunk();
+                if (neighborChunk)
+                {
+                    int32_t localX, localY, localZ;
+                    neighbor.GetLocalCoords(localX, localY, localZ);
+                    uint8_t neighborLight = neighborChunk->GetOutdoorLight(localX, localY, localZ);
+                    maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+                }
             }
         }
     }
@@ -1695,8 +1773,15 @@ uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
             const BlockState* neighborState = neighbor.GetBlock();
             if (neighborState)
             {
-                uint8_t neighborLight = neighborState->GetIndoorLight();
-                maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+                // [REFACTORED] Use Chunk interface instead of BlockState
+                Chunk* neighborChunk = neighbor.GetChunk();
+                if (neighborChunk)
+                {
+                    int32_t localX, localY, localZ;
+                    neighbor.GetLocalCoords(localX, localY, localZ);
+                    uint8_t neighborLight = neighborChunk->GetIndoorLight(localX, localY, localZ);
+                    maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
+                }
             }
         }
     }

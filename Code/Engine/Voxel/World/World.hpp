@@ -57,6 +57,12 @@ namespace enigma::voxel
         BlockState* GetTopBlock(int32_t x, int32_t y);
         int         GetTopBlockZ(const BlockPos& pos);
 
+        // Light Data Access (delegate to Chunk via global coordinates)
+        // These methods provide global coordinate access, consistent with GetBlockState()
+        uint8_t GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+        uint8_t GetIndoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+        bool    GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+
         // Chunk Operations:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY); // 改为直接访问 m_loadedChunks
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY) const; // const version for const methods
