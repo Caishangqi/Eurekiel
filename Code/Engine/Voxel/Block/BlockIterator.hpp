@@ -102,6 +102,14 @@ namespace enigma::voxel
          */
         BlockPos GetBlockPos() const;
 
+        /**
+         * @brief Get local coordinates within the chunk
+         * @param x Output: local X coordinate (0-15)
+         * @param y Output: local Y coordinate (0-15)
+         * @param z Output: local Z coordinate (0-255)
+         */
+        void GetLocalCoords(int32_t& x, int32_t& y, int32_t& z) const;
+
     private:
         Chunk* m_chunk;
         int    m_blockIndex;

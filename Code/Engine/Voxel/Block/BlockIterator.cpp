@@ -279,4 +279,16 @@ namespace enigma::voxel
             GetNeighbor(Direction::DOWN)
         };
     }
+
+    void BlockIterator::GetLocalCoords(int32_t& x, int32_t& y, int32_t& z) const
+    {
+        if (m_chunk)
+        {
+            m_chunk->IndexToCoords(m_blockIndex, x, y, z);
+        }
+        else
+        {
+            x = y = z = 0;
+        }
+    }
 }
