@@ -17,6 +17,7 @@
 #include <algorithm>
 
 #include "Engine/Registry/Block/Block.hpp"
+#include "Engine/Registry/Block/BlockRegistry.hpp"
 #include "Game/GameCommon.hpp"
 
 using namespace enigma::voxel;
@@ -166,6 +167,181 @@ int World::GetTopBlockZ(const BlockPos& pos)
         return chunk->GetTopBlockZ(pos);
     }
     return -1;
+}
+
+//-----------------------------------------------------------------------------------------------
+// RaycastVsBlocks - Fast Voxel Raycast (3D DDA Algorithm)
+// Maintains BlockIterator for efficient cross-chunk navigation
+// Based on 2D Fast Voxel Raycast from Libra/Map.cpp:853
+//-----------------------------------------------------------------------------------------------
+VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& rayFwdNormal, float rayMaxLength) const
+{
+    VoxelRaycastResult3D result;
+    result.m_rayStartPos  = rayStart;
+    result.m_rayFwdNormal = rayFwdNormal;
+    result.m_rayMaxLength = rayMaxLength;
+
+    // [STEP 1] Initialize starting block iterator
+    // Convert Vec3 world position to BlockPos using floor()
+    BlockPos startBlockPos(
+        static_cast<int32_t>(std::floor(rayStart.x)),
+        static_cast<int32_t>(std::floor(rayStart.y)),
+        static_cast<int32_t>(std::floor(rayStart.z))
+    );
+
+    Chunk* startChunk = GetChunkAt(startBlockPos);
+    if (!startChunk)
+    {
+        return result; // Ray starts outside loaded world
+    }
+
+    // Convert world BlockPos to local chunk coordinates
+    int32_t localX, localY, localZ;
+    if (!startChunk->WorldToLocal(startBlockPos, localX, localY, localZ))
+    {
+        return result; // Invalid coordinates (shouldn't happen if GetChunkAt succeeded)
+    }
+
+    // Create BlockIterator using local coordinates converted to blockIndex
+    int           blockIndex = static_cast<int>(Chunk::CoordsToIndex(localX, localY, localZ));
+    BlockIterator currentIter(startChunk, blockIndex);
+    BlockState*   startState = currentIter.GetBlock();
+    if (startState && startState->IsFullOpaque())
+    {
+        result.m_didImpact    = true;
+        result.m_impactPos    = rayStart;
+        result.m_impactDist   = 0.0f;
+        result.m_impactNormal = -rayFwdNormal; // Arbitrary normal when starting inside
+        result.m_hitBlockIter = currentIter;
+        result.m_hitFace      = Direction::NORTH; // Arbitrary face
+        return result;
+    }
+
+    // [STEP 2] DDA Initialization - Calculate step directions and delta distances
+
+    // X-axis DDA parameters
+    float fwdDistPerXCrossing    = (rayFwdNormal.x != 0.0f) ? std::abs(1.0f / rayFwdNormal.x) : FLT_MAX;
+    int   tileStepDirectionX     = (rayFwdNormal.x < 0.0f) ? -1 : 1;
+    float xAtFirstXCrossing      = (tileStepDirectionX > 0) ? (std::floor(rayStart.x) + 1.0f) : std::floor(rayStart.x);
+    float xDistToFirstXCrossing  = (xAtFirstXCrossing - rayStart.x) * static_cast<float>(tileStepDirectionX);
+    float fwdDistAtNextXCrossing = std::abs(xDistToFirstXCrossing) * fwdDistPerXCrossing;
+
+    // Y-axis DDA parameters
+    float fwdDistPerYCrossing    = (rayFwdNormal.y != 0.0f) ? std::abs(1.0f / rayFwdNormal.y) : FLT_MAX;
+    int   tileStepDirectionY     = (rayFwdNormal.y < 0.0f) ? -1 : 1;
+    float yAtFirstYCrossing      = (tileStepDirectionY > 0) ? (std::floor(rayStart.y) + 1.0f) : std::floor(rayStart.y);
+    float yDistToFirstYCrossing  = (yAtFirstYCrossing - rayStart.y) * static_cast<float>(tileStepDirectionY);
+    float fwdDistAtNextYCrossing = std::abs(yDistToFirstYCrossing) * fwdDistPerYCrossing;
+
+    // Z-axis DDA parameters
+    float fwdDistPerZCrossing    = (rayFwdNormal.z != 0.0f) ? std::abs(1.0f / rayFwdNormal.z) : FLT_MAX;
+    int   tileStepDirectionZ     = (rayFwdNormal.z < 0.0f) ? -1 : 1;
+    float zAtFirstZCrossing      = (tileStepDirectionZ > 0) ? (std::floor(rayStart.z) + 1.0f) : std::floor(rayStart.z);
+    float zDistToFirstZCrossing  = (zAtFirstZCrossing - rayStart.z) * static_cast<float>(tileStepDirectionZ);
+    float fwdDistAtNextZCrossing = std::abs(zDistToFirstZCrossing) * fwdDistPerZCrossing;
+
+    // [STEP 3] DDA Main Loop - Step through voxel grid until hit or max distance
+    while (true)
+    {
+        // Determine which axis to step along (choose minimum tMax)
+        if (fwdDistAtNextXCrossing < fwdDistAtNextYCrossing && fwdDistAtNextXCrossing < fwdDistAtNextZCrossing)
+        {
+            // Step along X-axis
+            if (fwdDistAtNextXCrossing > rayMaxLength)
+            {
+                break; // Ray missed - exceeded max distance
+            }
+
+            // Move to next block in X direction using BlockIterator
+            Direction moveDir = (tileStepDirectionX > 0) ? Direction::EAST : Direction::WEST;
+            currentIter       = currentIter.GetNeighbor(moveDir);
+
+            if (!currentIter.IsValid())
+            {
+                break; // Stepped outside loaded chunks
+            }
+
+            // Check for solid block
+            BlockState* state = currentIter.GetBlock();
+            if (state && state->IsFullOpaque())
+            {
+                result.m_didImpact    = true;
+                result.m_impactDist   = fwdDistAtNextXCrossing;
+                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextXCrossing;
+                result.m_impactNormal = Vec3(static_cast<float>(-tileStepDirectionX), 0.0f, 0.0f);
+                result.m_hitBlockIter = currentIter;
+                result.m_hitFace      = (tileStepDirectionX > 0) ? Direction::WEST : Direction::EAST; // Hit west face when moving east
+                return result;
+            }
+
+            fwdDistAtNextXCrossing += fwdDistPerXCrossing;
+        }
+        else if (fwdDistAtNextYCrossing < fwdDistAtNextZCrossing)
+        {
+            // Step along Y-axis
+            if (fwdDistAtNextYCrossing > rayMaxLength)
+            {
+                break; // Ray missed
+            }
+
+            Direction moveDir = (tileStepDirectionY > 0) ? Direction::NORTH : Direction::SOUTH;
+            currentIter       = currentIter.GetNeighbor(moveDir);
+
+            if (!currentIter.IsValid())
+            {
+                break;
+            }
+
+            BlockState* state = currentIter.GetBlock();
+            if (state && state->IsFullOpaque())
+            {
+                result.m_didImpact    = true;
+                result.m_impactDist   = fwdDistAtNextYCrossing;
+                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextYCrossing;
+                result.m_impactNormal = Vec3(0.0f, static_cast<float>(-tileStepDirectionY), 0.0f);
+                result.m_hitBlockIter = currentIter;
+                result.m_hitFace      = (tileStepDirectionY > 0) ? Direction::SOUTH : Direction::NORTH; // Hit south face when moving north
+                return result;
+            }
+
+            fwdDistAtNextYCrossing += fwdDistPerYCrossing;
+        }
+        else
+        {
+            // Step along Z-axis
+            if (fwdDistAtNextZCrossing > rayMaxLength)
+            {
+                break; // Ray missed
+            }
+
+            Direction moveDir = (tileStepDirectionZ > 0) ? Direction::UP : Direction::DOWN;
+            currentIter       = currentIter.GetNeighbor(moveDir);
+
+            if (!currentIter.IsValid())
+            {
+                break;
+            }
+
+            BlockState* state = currentIter.GetBlock();
+            if (state && state->IsFullOpaque())
+            {
+                result.m_didImpact    = true;
+                result.m_impactDist   = fwdDistAtNextZCrossing;
+                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextZCrossing;
+                result.m_impactNormal = Vec3(0.0f, 0.0f, static_cast<float>(-tileStepDirectionZ));
+                result.m_hitBlockIter = currentIter;
+                result.m_hitFace      = (tileStepDirectionZ > 0) ? Direction::DOWN : Direction::UP; // Hit bottom face when moving up
+                return result;
+            }
+
+            fwdDistAtNextZCrossing += fwdDistPerZCrossing;
+        }
+    }
+
+    // [STEP 4] No hit - return miss result
+    result.m_impactDist = rayMaxLength;
+    result.m_impactPos  = rayStart + rayFwdNormal * rayMaxLength;
+    return result;
 }
 
 Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY)
@@ -1716,9 +1892,9 @@ uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
                 Chunk* neighborChunk = neighbor.GetChunk();
                 if (neighborChunk)
                 {
-                    int32_t localX, localY, localZ;
-                    neighbor.GetLocalCoords(localX, localY, localZ);
-                    uint8_t neighborLight = neighborChunk->GetOutdoorLight(localX, localY, localZ);
+                    int32_t nbrLocalX, nbrLocalY, nbrLocalZ;
+                    neighbor.GetLocalCoords(nbrLocalX, nbrLocalY, nbrLocalZ);
+                    uint8_t neighborLight = neighborChunk->GetOutdoorLight(nbrLocalX, nbrLocalY, nbrLocalZ);
                     maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
                 }
             }
@@ -1793,4 +1969,116 @@ uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
     // This ensures emissive blocks maintain their light level
     // and can also accept higher light from neighbors
     return std::max(emissionLevel, propagatedLight);
+}
+
+//-----------------------------------------------------------------------------------------------
+// Phase 10: Block Digging and Placing Operations
+//-----------------------------------------------------------------------------------------------
+
+void World::DigBlock(const BlockIterator& blockIter)
+{
+    // 1. Check if iterator is valid
+    if (!blockIter.IsValid())
+    {
+        return;
+    }
+
+    Chunk* chunk = blockIter.GetChunk();
+    if (!chunk)
+    {
+        return;
+    }
+
+    // 2. Get current block state
+    BlockState* currentState = blockIter.GetBlock();
+    if (!currentState)
+    {
+        return;
+    }
+
+    // 3. Get air block state
+    auto airBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "air");
+    if (!airBlock)
+    {
+        LogError("world", "DigBlock: Cannot find air block in registry");
+        return;
+    }
+    BlockState* airState = airBlock->GetDefaultState();
+
+    // 4. Check if already air (no need to dig)
+    if (currentState == airState)
+    {
+        return; // Already air, nothing to dig
+    }
+
+    // 5. Get local coordinates and delegate to Chunk::SetBlockByPlayer
+    // This method already handles:
+    // - SKY flag propagation (digging opens sky column)
+    // - Light dirty marking
+    // - Chunk modification flags
+    int32_t localX, localY, localZ;
+    blockIter.GetLocalCoords(localX, localY, localZ);
+
+    chunk->SetBlockByPlayer(localX, localY, localZ, airState);
+
+    // 6. Schedule chunk mesh rebuild
+    ScheduleChunkMeshRebuild(chunk);
+
+    LogDebug("world", "DigBlock: Removed block at (%d, %d, %d)",
+             blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
+}
+
+void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
+{
+    // 1. Check if iterator and new state are valid
+    if (!blockIter.IsValid() || !newState)
+    {
+        return;
+    }
+
+    Chunk* chunk = blockIter.GetChunk();
+    if (!chunk)
+    {
+        return;
+    }
+
+    // 2. Get current block state
+    BlockState* currentState = blockIter.GetBlock();
+    if (!currentState)
+    {
+        return;
+    }
+
+    // 3. Get air block state for comparison
+    auto airBlock = enigma::registry::block::BlockRegistry::GetBlock("simpleminer", "air");
+    if (!airBlock)
+    {
+        LogError("world", "PlaceBlock: Cannot find air block in registry");
+        return;
+    }
+    BlockState* airState = airBlock->GetDefaultState();
+
+    // 4. Check if placement position is air (can only place in air)
+    if (currentState != airState)
+    {
+        LogDebug("world", "PlaceBlock: Cannot place block at non-air position (%d, %d, %d)",
+                 blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
+        return; // Cannot place in non-air position
+    }
+
+    // 5. Get local coordinates and delegate to Chunk::SetBlockByPlayer
+    // This method already handles:
+    // - SKY flag clearing (placing opaque blocks blocks sky column)
+    // - Light dirty marking
+    // - Chunk modification flags
+    int32_t localX, localY, localZ;
+    blockIter.GetLocalCoords(localX, localY, localZ);
+
+    chunk->SetBlockByPlayer(localX, localY, localZ, newState);
+
+    // 6. Schedule chunk mesh rebuild
+    ScheduleChunkMeshRebuild(chunk);
+
+    LogDebug("world", "PlaceBlock: Placed block at (%d, %d, %d)",
+             blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
 }

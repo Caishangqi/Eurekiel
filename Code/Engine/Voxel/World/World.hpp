@@ -10,6 +10,7 @@
 #include "../Chunk/SaveChunkJob.hpp"
 #include "../Generation/TerrainGenerator.hpp"
 #include "ESFWorldStorage.hpp"
+#include "VoxelRaycastResult3D.hpp"
 #include "../../Math/Vec3.hpp"
 #include "../../Math/IntVec2.hpp"
 #include "../../Core/Schedule/ScheduleSubsystem.hpp"
@@ -56,6 +57,13 @@ namespace enigma::voxel
         BlockState* GetTopBlock(const BlockPos& pos);
         BlockState* GetTopBlock(int32_t x, int32_t y);
         int         GetTopBlockZ(const BlockPos& pos);
+
+        // Raycast Operations:
+        VoxelRaycastResult3D RaycastVsBlocks(const Vec3& rayStart, const Vec3& rayFwdNormal, float rayMaxLength = 8.0f) const;
+
+        // Block Operations - Player digging and placing
+        void DigBlock(const BlockIterator& blockIter);
+        void PlaceBlock(const BlockIterator& blockIter, BlockState* newState);
 
         // Light Data Access (delegate to Chunk via global coordinates)
         // These methods provide global coordinate access, consistent with GetBlockState()
