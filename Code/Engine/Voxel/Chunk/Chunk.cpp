@@ -683,7 +683,7 @@ void Chunk::NotifyNeighborsDirty()
         {
             // Add neighbor to World's dirty queue for mesh rebuild
             // World::MarkChunkDirty() already checks for duplicates (std::find)
-            m_world->MarkChunkDirty(neighbor);
+            m_world->ScheduleChunkMeshRebuild(neighbor);
             notifiedCount++;
 
             core::LogDebug("chunk", "  -> Marked %s neighbor (%d, %d) dirty",
@@ -736,6 +736,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
     // East boundary (x = CHUNK_MAX_X = 15)
     if (eastNeighbor && eastNeighbor->IsActive())
     {
+        // [Step 1] Mark this chunk's East boundary (x=15)
         for (int y = 0; y < CHUNK_SIZE_Y; ++y)
         {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
@@ -748,11 +749,26 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 }
             }
         }
+
+        // [Step 2] Mark neighbor chunk's West boundary (x=0)
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = eastNeighbor->GetBlock(0, y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(eastNeighbor, eastNeighbor->CoordsToIndex(0, y, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
     }
 
     // West boundary (x = 0)
     if (westNeighbor && westNeighbor->IsActive())
     {
+        // [Step 1] Mark this chunk's West boundary (x=0)
         for (int y = 0; y < CHUNK_SIZE_Y; ++y)
         {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
@@ -765,11 +781,26 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 }
             }
         }
+
+        // [Step 2] Mark neighbor chunk's East boundary (x=15)
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = westNeighbor->GetBlock(CHUNK_MAX_X, y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(westNeighbor, westNeighbor->CoordsToIndex(CHUNK_MAX_X, y, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
     }
 
     // North boundary (y = CHUNK_MAX_Y = 15)
     if (northNeighbor && northNeighbor->IsActive())
     {
+        // [Step 1] Mark this chunk's North boundary (y=15)
         for (int x = 0; x < CHUNK_SIZE_X; ++x)
         {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
@@ -782,11 +813,26 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 }
             }
         }
+
+        // [Step 2] Mark neighbor chunk's South boundary (y=0)
+        for (int x = 0; x < CHUNK_SIZE_X; ++x)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = northNeighbor->GetBlock(x, 0, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(northNeighbor, northNeighbor->CoordsToIndex(x, 0, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
     }
 
     // South boundary (y = 0)
     if (southNeighbor && southNeighbor->IsActive())
     {
+        // [Step 1] Mark this chunk's South boundary (y=0)
         for (int x = 0; x < CHUNK_SIZE_X; ++x)
         {
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
@@ -795,6 +841,20 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 if (!state->IsFullOpaque())
                 {
                     BlockIterator iter(this, CoordsToIndex(x, 0, z));
+                    world->MarkLightingDirty(iter);
+                }
+            }
+        }
+
+        // [Step 2] Mark neighbor chunk's North boundary (y=15)
+        for (int x = 0; x < CHUNK_SIZE_X; ++x)
+        {
+            for (int z = 0; z < CHUNK_SIZE_Z; ++z)
+            {
+                BlockState* state = southNeighbor->GetBlock(x, CHUNK_MAX_Y, z);
+                if (!state->IsFullOpaque())
+                {
+                    BlockIterator iter(southNeighbor, southNeighbor->CoordsToIndex(x, CHUNK_MAX_Y, z));
                     world->MarkLightingDirty(iter);
                 }
             }

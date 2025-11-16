@@ -65,7 +65,7 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
 
         // Mark chunk for mesh rebuild on main thread
         // This ensures visual feedback when player places/breaks blocks
-        const_cast<World*>(this)->MarkChunkDirty(chunk);
+        const_cast<World*>(this)->ScheduleChunkMeshRebuild(chunk);
     }
 }
 
@@ -913,7 +913,7 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
     chunk->SetGenerated(true);
     chunk->SetModified(true);
     chunk->MarkDirty();
-    MarkChunkDirty(chunk);
+    ScheduleChunkMeshRebuild(chunk);
 
     // Phase 3: No tracking set to clean up
     m_activeGenerateJobs--;
@@ -960,7 +960,7 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
         chunk->SetState(ChunkState::Active);
         chunk->SetGenerated(true);
         chunk->MarkDirty();
-        MarkChunkDirty(chunk);
+        ScheduleChunkMeshRebuild(chunk);
         LogDebug("world", "Chunk (%d, %d) loaded successfully, now Active", coords.x, coords.y);
     }
     else
@@ -1302,7 +1302,7 @@ void World::UpdateChunkMeshes()
     }
 }
 
-void World::MarkChunkDirty(Chunk* chunk)
+void World::ScheduleChunkMeshRebuild(Chunk* chunk)
 {
     if (!chunk)
     {
@@ -1613,7 +1613,7 @@ void World::ProcessNextDirtyLightBlock()
                     Chunk* neighborChunk = neighbor.GetChunk();
                     if (neighborChunk && neighborChunk != chunk)
                     {
-                        neighborChunk->MarkDirty();
+                        ScheduleChunkMeshRebuild(neighborChunk);
                     }
                 }
             }

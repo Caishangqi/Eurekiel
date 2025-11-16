@@ -134,7 +134,7 @@ namespace enigma::voxel
 
         // Mark a chunk as needing mesh rebuild and add to queue
         // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
-        void MarkChunkDirty(Chunk* chunk);
+        void ScheduleChunkMeshRebuild(Chunk* chunk);
 
         //-------------------------------------------------------------------------------------------
         // Phase 7: Lighting System Support

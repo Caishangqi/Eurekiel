@@ -10,6 +10,107 @@
 
 using namespace enigma::voxel;
 
+//--------------------------------------------------------------------------------------------------
+// Anonymous namespace for helper functions
+//--------------------------------------------------------------------------------------------------
+namespace
+{
+    /**
+     * @brief Get directional shade value based on block face direction
+     * @details Implements Assignment 05 directional lighting specification:
+     *          - EAST:  0.7f (Eastern faces, moderate brightness)
+     *          - WEST:  0.6f (Western faces, slightly darker)
+     *          - SOUTH: 0.8f (Southern faces, brighter)
+     *          - NORTH: 0.75f (Northern faces, moderate-bright)
+     *          - UP:    1.0f (Top faces, full brightness)
+     *          - DOWN:  0.5f (Bottom faces, darkest)
+     * @param direction The direction of the block face
+     * @return Shade multiplier in range [0.5f, 1.0f]
+     */
+    constexpr float GetDirectionalShade(Direction direction)
+    {
+        switch (direction)
+        {
+        case Direction::EAST: return 0.7f;
+        case Direction::WEST: return 0.6f;
+        case Direction::SOUTH: return 0.8f;
+        case Direction::NORTH: return 0.75f;
+        case Direction::UP: return 1.0f;
+        case Direction::DOWN: return 0.5f;
+        default: return 1.0f; // Fallback: full brightness
+        }
+    }
+
+    /**
+     * @brief Light data structure containing normalized outdoor and indoor light values
+     * @details Stores dual-channel lighting information from a block:
+     *          - outdoorLight: Sky light from above (0.0 = dark, 1.0 = full sunlight)
+     *          - indoorLight: Block light from emissive blocks (0.0 = no emission, 1.0 = max emission)
+     */
+    struct LightingData
+    {
+        float outdoorLight; // Normalized outdoor light [0.0, 1.0]
+        float indoorLight; // Normalized indoor light [0.0, 1.0]
+    };
+
+    /**
+     * @brief Get normalized lighting values from a neighbor block
+     * 
+     * Retrieves dual-channel light values from the specified neighbor block and normalizes
+     * them to [0.0, 1.0] range. Provides boundary-safe access with defensive checks.
+     * 
+     * @param neighborIter Neighbor block iterator (obtained via BlockIterator::GetNeighbor())
+     * @return LightingData Normalized lighting data
+     *         - outdoorLight: Outdoor light intensity 0.0-1.0 (0=completely dark, 1.0=brightest)
+     *         - indoorLight: Indoor light intensity 0.0-1.0 (from emissive blocks like glowstone)
+     * 
+     * BOUNDARY SAFETY:
+     * - Returns {0.0f, 0.0f} if neighbor iterator is invalid (out of world bounds)
+     * - Returns {0.0f, 0.0f} if neighbor chunk is not loaded
+     * - Ensures safe access across chunk boundaries
+     * 
+     * IMPLEMENTATION DETAILS:
+     * - Light values retrieved from Chunk independent storage (m_lightData array)
+     * - Storage format: high 4 bits = outdoor light, low 4 bits = indoor light
+     * - Normalization formula: lightLevel / 15.0f (original range 0-15)
+     * 
+     * @note Uses Chunk::GetOutdoorLight() and Chunk::GetIndoorLight() APIs
+     * @note Follows DRY principle to avoid repeated boundary checks in mesh building code
+     */
+    LightingData GetNeighborLighting(const BlockIterator& neighborIter)
+    {
+        // Default: completely dark (boundary fallback)
+        LightingData result = {0.0f, 0.0f};
+
+        // Boundary check 1: Iterator validity (not out of world bounds)
+        if (!neighborIter.IsValid())
+        {
+            return result;
+        }
+
+        // Boundary check 2: Neighbor chunk is loaded
+        Chunk* neighborChunk = neighborIter.GetChunk();
+        if (neighborChunk == nullptr)
+        {
+            return result;
+        }
+
+        // Extract neighbor block's local coordinates (chunk-local 0-15)
+        int32_t x, y, z;
+        neighborIter.GetLocalCoords(x, y, z);
+
+        // Query dual-channel light values (raw range 0-15)
+        uint8_t outdoorRaw = neighborChunk->GetOutdoorLight(x, y, z);
+        uint8_t indoorRaw  = neighborChunk->GetIndoorLight(x, y, z);
+
+        // Normalize to [0.0, 1.0] (divide by max value 15)
+        result.outdoorLight = static_cast<float>(outdoorRaw) / 15.0f;
+        result.indoorLight  = static_cast<float>(indoorRaw) / 15.0f;
+
+        return result;
+    }
+} // anonymous namespace
+
 std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
 {
     // Static local variable to cache air block reference (C++11 thread-safe initialization)
@@ -221,12 +322,25 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
         // Transform vertices from block space to chunk space
         std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
 
+        // [Phase 8] Get neighbor lighting values for this face
+        BlockIterator neighborIter     = iterator.GetNeighbor(direction);
+        LightingData  lighting         = GetNeighborLighting(neighborIter);
+        float         directionalShade = GetDirectionalShade(direction);
+
+        // Calculate vertex color from lighting data (manual normalization to uint8_t)
+        uint8_t r = static_cast<uint8_t>(lighting.outdoorLight * 255.0f);
+        uint8_t g = static_cast<uint8_t>(lighting.indoorLight * 255.0f);
+        uint8_t b = static_cast<uint8_t>(directionalShade * 255.0f);
+        Rgba8   vertexColor(r, g, b, 255);
+
         for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
         {
             Vertex_PCU transformedVertex = renderFace->vertices[i];
             // Transform position from block space (0,0,0)-(1,1,1) to chunk space
             transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
-            transformedVertices[i]       = transformedVertex;
+            // [Phase 8] Set vertex color encoding lighting (R=outdoor, G=indoor, B=directional shade)
+            transformedVertex.m_color = vertexColor;
+            transformedVertices[i]    = transformedVertex;
         }
 
         // Convert vertices to quads and add to chunk mesh
