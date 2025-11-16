@@ -432,6 +432,7 @@
         <ClCompile Include="Voxel\Property\Property.cpp" />
         <ClCompile Include="Voxel\Property\PropertyRegistry.cpp" />
         <ClCompile Include="Voxel\Property\PropertyTypes.cpp" />
+        <ClCompile Include="Voxel\World\VoxelRaycastResult3D.cpp"/>
         <ClCompile Include="Voxel\World\World.cpp" />
         <ClCompile Include="Window\Window.cpp" />
         <Content Include="..\..\.enigma\assets\engine\resource_type_category" />
@@ -749,6 +750,7 @@
         <ClInclude Include="Voxel\NoiseGenerator\PerlinNoiseGenerator.hpp"/>
         <ClInclude Include="Voxel\NoiseGenerator\RawNoiseGenerator.hpp"/>
         <ClInclude Include="Voxel\VoxelCommon.hpp"/>
+        <ClInclude Include="Voxel\World\VoxelRaycastResult3D.hpp"/>
         <ClInclude Include="Window\IWindowsMessagePreprocessor.hpp" />
         <ClInclude Include="Core\Command\CommandSubsystem.hpp" />
         <ClInclude Include="Core\Command\CommandTypes.hpp" />
