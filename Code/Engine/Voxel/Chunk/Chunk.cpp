@@ -449,7 +449,7 @@ void Chunk::Render(IRenderer* renderer) const
     renderer->SetModelConstants(modelToWorldTransform, Rgba8::WHITE);
 
     // Set rendering state
-    //renderer->SetBlendMode(BlendMode::OPAQUE);
+    renderer->SetBlendMode(blend_mode::OPAQUE);
 
     // Note: Texture binding is now handled by ChunkManager to avoid per-chunk queries
     // ChunkManager binds the blocks atlas texture once for all chunks (NeoForge pattern)
