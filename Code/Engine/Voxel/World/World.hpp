@@ -287,9 +287,9 @@ namespace enigma::voxel
 
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading
-        int m_maxGenerateJobs = 256; // Allow many generation jobs (CPU-bound, parallelizable)
-        int m_maxLoadJobs     = 16; // Increased for ESFS format (no file lock contention, SSD-friendly)
-        int m_maxSaveJobs     = 8; // Increased for better save throughput (lower priority than load)
+        int m_maxGenerateJobs = 512; // Allow many generation jobs (CPU-bound, parallelizable)
+        int m_maxLoadJobs     = 64; // Increased for ESFS format (no file lock contention, SSD-friendly)
+        int m_maxSaveJobs     = 32; // Increased for better save throughput (lower priority than load)
 
         //-------------------------------------------------------------------------------------------
         // Phase 1: Main Thread Mesh Building Queue (Assignment 03 Requirements)

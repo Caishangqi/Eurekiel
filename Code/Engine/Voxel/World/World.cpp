@@ -452,7 +452,7 @@ void World::UpdateNearbyChunks()
 
     // Phase 3 Optimization: Process up to 10 chunks per frame (vs original 1)
     // This dramatically improves initial loading speed for new maps
-    constexpr int MAX_ACTIVATIONS_PER_FRAME = 10;
+    constexpr int MAX_ACTIVATIONS_PER_FRAME = 4;
     int           activatedThisFrame        = 0;
 
     // Phase 3: Activate chunks asynchronously (distance-sorted, nearest first)
@@ -499,11 +499,11 @@ void World::UpdateNearbyChunks()
     int unloadsThisFrame = 1; // Default: 1 chunk/frame (original design)
     if (loadedCount > targetCount * 1.5f)
     {
-        unloadsThisFrame = 10; // Overload 50%: fast cleanup
+        unloadsThisFrame = MAX_ACTIVATIONS_PER_FRAME; // Overload 50%: fast cleanup
     }
     else if (loadedCount > targetCount * 1.2f)
     {
-        unloadsThisFrame = 5; // Overload 20%: medium cleanup
+        unloadsThisFrame = (int)MAX_ACTIVATIONS_PER_FRAME / 2; // Overload 20%: medium cleanup
     }
 
     for (int i = 0; i < unloadsThisFrame; ++i)
@@ -1696,9 +1696,9 @@ void World::MarkLightingDirty(const BlockIterator& iter)
     // 6. Mark as dirty using Chunk interface
     chunk->SetIsLightDirty(x, y, z, true);
 
-    LogDebug("world", "Marked block at (%d, %d, %d) as light dirty (queue size: %zu)",
+    /*LogDebug("world", "Marked block at (%d, %d, %d) as light dirty (queue size: %zu)",
              iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z,
-             m_dirtyLightQueue.size());
+             m_dirtyLightQueue.size());*/
 }
 
 void World::MarkLightingDirtyIfNotOpaque(const BlockIterator& iter)
