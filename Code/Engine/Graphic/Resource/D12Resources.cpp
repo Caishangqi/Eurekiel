@@ -214,9 +214,7 @@ namespace enigma::graphic
         UploadContext uploadContext(device, GetCPUDataSize());
         if (!uploadContext.IsValid())
         {
-            LogError(LogRenderer,
-                     "Upload: Failed to create UploadContext for '%s'",
-                     m_debugName);
+            LogError(LogRenderer, "Upload: Failed to create UploadContext for '%s'", m_debugName.c_str());
             return false;
         }
 
@@ -244,15 +242,14 @@ namespace enigma::graphic
         uint32_t availableBefore = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
         uint32_t executingBefore = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(LogRenderer,
-                      "Upload[%s]: BEFORE Acquire - Available=%u, Executing=%u",
-                      m_debugName, availableBefore, executingBefore);
+                      "Upload[%s]: BEFORE Acquire - Available=%u, Executing=%u", m_debugName.c_str(), availableBefore, executingBefore);
 
         auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Graphics, "ResourceUpload");
         if (!commandList)
         {
             LogError(LogRenderer,
                      "Upload: Failed to acquire Graphics command list for '%s'",
-                     m_debugName);
+                     m_debugName.c_str());
             LogError(LogRenderer,
                      "  Available Graphics Lists: %u, Executing: %u",
                      availableBefore, executingBefore);
@@ -266,9 +263,7 @@ namespace enigma::graphic
         bool uploadSuccess = UploadToGPU(commandList, uploadContext);
         if (!uploadSuccess)
         {
-            LogError(LogRenderer,
-                     "Upload: UploadToGPU failed for '%s'",
-                     m_debugName);
+            LogError(LogRenderer, "Upload: UploadToGPU failed for '%s'", m_debugName.c_str());
             return false;
         }
 
@@ -293,7 +288,7 @@ namespace enigma::graphic
         uint32_t executingBeforeRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(LogRenderer,
                       "Upload[%s]: BEFORE Recycle - Available=%u, Executing=%u",
-                      m_debugName, availableBeforeRecycle, executingBeforeRecycle);
+                      m_debugName.c_str(), availableBeforeRecycle, executingBeforeRecycle);
 
         cmdListManager->UpdateCompletedCommandLists();
 
@@ -302,7 +297,7 @@ namespace enigma::graphic
         uint32_t executingAfterRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
         core::LogInfo(LogRenderer,
                       "Upload[%s]: AFTER Recycle - Available=%u, Executing=%u (Recycled=%u)",
-                      m_debugName, availableAfterRecycle, executingAfterRecycle,
+                      m_debugName.c_str(), availableAfterRecycle, executingAfterRecycle,
                       availableAfterRecycle - availableBeforeRecycle);
 
         // 10. 更新资源状态和上传标记
@@ -311,7 +306,7 @@ namespace enigma::graphic
 
         LogDebug(LogRenderer,
                  "Upload: Successfully uploaded '%s' (%zu bytes)",
-                 m_debugName, GetCPUDataSize());
+                 m_debugName.c_str(), GetCPUDataSize());
 
         return true;
     }
@@ -349,7 +344,7 @@ namespace enigma::graphic
                      "RegisterBindless: SAFETY VIOLATION - Resource '%s' not uploaded yet!\n"
                      "  True Bindless Flow: Create() → Upload() → RegisterBindless()\n"
                      "  Please call Upload() before RegisterBindless()",
-                     m_debugName);
+                     m_debugName.c_str());
             return std::nullopt;
         }
 
@@ -358,7 +353,7 @@ namespace enigma::graphic
         {
             LogError(LogRenderer,
                      "RegisterBindless: Resource '%s' is invalid",
-                     m_debugName);
+                     m_debugName.c_str());
             return std::nullopt;
         }
 
@@ -383,7 +378,7 @@ namespace enigma::graphic
         {
             LogError(LogRenderer,
                      "RegisterBindless: Failed to allocate index for '%s'",
-                     m_debugName);
+                     m_debugName.c_str());
             return std::nullopt;
         }
 
@@ -395,7 +390,7 @@ namespace enigma::graphic
 
         LogDebug(LogRenderer,
                  "RegisterBindless: Resource '%s' registered (index=%u)",
-                 m_debugName, index);
+                 m_debugName.c_str(), index);
 
         return index;
     }
@@ -435,14 +430,14 @@ namespace enigma::graphic
         {
             LogDebug(LogRenderer,
                      "UnregisterBindless: Resource '%s' unregistered (index=%u)",
-                     m_debugName, m_bindlessIndex);
+                     m_debugName.c_str(), m_bindlessIndex);
             ClearBindlessIndex();
         }
         else
         {
             LogError(LogRenderer,
                      "UnregisterBindless: Failed to free index %u for '%s'",
-                     m_bindlessIndex, m_debugName);
+                     m_bindlessIndex, m_debugName.c_str());
         }
 
         return success;

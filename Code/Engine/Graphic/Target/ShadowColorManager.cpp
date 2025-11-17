@@ -257,7 +257,8 @@ namespace enigma::graphic
 
             const auto& mainRT = m_shadowColors[i * 2];
             const auto& altRT  = m_shadowColors[i * 2 + 1];
-
+            UNUSED(mainRT)
+            UNUSED(altRT)
             // 调用ResizeIfNeeded（假设D12RenderTarget实现了此方法）
             // mainRT->ResizeIfNeeded(config.width, config.height);
             // if (config.enableFlipper)
@@ -285,7 +286,7 @@ namespace enigma::graphic
 
         const auto& config = m_configs[index];
         const auto& mainRT = m_shadowColors[index * 2];
-
+        UNUSED(mainRT)
         std::ostringstream oss;
         oss << "ShadowColor[" << index << "]: "
             << config.name << " "

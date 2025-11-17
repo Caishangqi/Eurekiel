@@ -685,7 +685,10 @@ namespace enigma::core
                 if (!searchLower.empty())
                 {
                     std::string categoryLower = category;
-                    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(), ::tolower);
+                    std::transform(categoryLower.begin(), categoryLower.end(), categoryLower.begin(), [](unsigned char c) -> char
+                    {
+                        return static_cast<char>(std::tolower(c));
+                    });
 
                     if (categoryLower.find(searchLower) == std::string::npos)
                     {
@@ -716,7 +719,7 @@ namespace enigma::core
     {
         // Use all remaining available space as log display area
         ImVec2 availSize = ImGui::GetContentRegionAvail();
-        availSize.y -= 60.0f; // Reserve space for bottom toolbar
+        availSize.y      -= 60.0f; // Reserve space for bottom toolbar
 
         ImGui::BeginChild("LogPanel", availSize, false, ImGuiWindowFlags_HorizontalScrollbar);
 
@@ -1230,7 +1233,10 @@ namespace enigma::core
         // Helper function: get VerbosityMode for specified level
         // Convert level string to uppercase for case-insensitive comparison
         std::string levelUpper = msg.level;
-        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), ::toupper);
+        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), [](unsigned char c) -> char
+        {
+            return static_cast<char>(std::toupper(c));
+        });
 
         VerbosityMode mode = VerbosityMode::All;
 
@@ -1298,7 +1304,10 @@ namespace enigma::core
     {
         // Convert level string to uppercase for case-insensitive comparison
         std::string levelUpper = level;
-        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), ::toupper);
+        std::transform(levelUpper.begin(), levelUpper.end(), levelUpper.begin(), [](unsigned char c) -> char
+        {
+            return static_cast<char>(std::toupper(c));
+        });
 
         // Verbose/Debug/Trace: Gray
         if (levelUpper == "VERBOSE" || levelUpper == "DEBUG" || levelUpper == "TRACE")

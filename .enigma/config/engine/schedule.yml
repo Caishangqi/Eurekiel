@@ -33,7 +33,7 @@ task_types:
 
   # Mesh Building: Async chunk mesh construction (CPU-intensive, priority-based)
   - type: MeshBuilding
-    threads: 6
+    threads: 2
     description: Asynchronous chunk mesh building with priority support
 
   # Rendering: Render preparation tasks (deprecated, use MeshBuilding)

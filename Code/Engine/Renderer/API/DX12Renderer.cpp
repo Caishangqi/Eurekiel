@@ -958,6 +958,7 @@ Texture* DX12Renderer::CreateTextureFromImageWithMipmaps(Image& image, int mipLe
 {
     UNUSED(mipLevels)
     UNUSED(mipLevels)
+    UNUSED(image)
     ERROR_AND_DIE("DX12Renderer::CreateTextureFromImageWithMipmaps not implemented yet")
 }
 

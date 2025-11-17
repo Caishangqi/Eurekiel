@@ -79,8 +79,10 @@ namespace
      */
     LightingData GetNeighborLighting(const BlockIterator& neighborIter)
     {
-        // Default: completely dark (boundary fallback)
-        LightingData result = {0.0f, 0.0f};
+        // [FIX] Minecraft-style minimum ambient light (light level 1 = 1/15 ≈ 6.67%)
+        // This prevents completely black faces in unlit areas while maintaining lighting contrast
+        // Reference: Assignment 05 - Lighting System Bug Fix (2025-11-16)
+        LightingData result = {1.0f / 15.0f, 0.0f};
 
         // Boundary check 1: Iterator validity (not out of world bounds)
         if (!neighborIter.IsValid())
@@ -106,6 +108,14 @@ namespace
         // Normalize to [0.0, 1.0] (divide by max value 15)
         result.outdoorLight = static_cast<float>(outdoorRaw) / 15.0f;
         result.indoorLight  = static_cast<float>(indoorRaw) / 15.0f;
+#undef max
+        // [FIX] Ensure minimum brightness (light level 1) for visibility
+        // This guarantees all block faces are at least slightly visible
+        float totalLight = std::max(result.outdoorLight, result.indoorLight);
+        if (totalLight < 1.0f / 15.0f)
+        {
+            result.outdoorLight = 1.0f / 15.0f;
+        }
 
         return result;
     }

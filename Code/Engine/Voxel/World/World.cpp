@@ -566,6 +566,7 @@ std::vector<std::pair<int32_t, int32_t>> World::CalculateNeededChunks() const
 
 void World::Update(float deltaTime)
 {
+    UNUSED(deltaTime)
     // Phase 3: Update nearby chunks (activate/deactivate based on player position)
     UpdateNearbyChunks();
 

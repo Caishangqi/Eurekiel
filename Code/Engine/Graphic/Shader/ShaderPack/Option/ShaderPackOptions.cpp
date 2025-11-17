@@ -225,7 +225,10 @@ std::unordered_map<std::string, std::string> ShaderPackOptions::GetMacroDefiniti
         {
             // 检查值是否为 true (支持 "true", "1", "on", "yes")
             std::string lowerValue = option.currentValue;
-            std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
+            std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), [](unsigned char c) -> char
+            {
+                return static_cast<char>(std::tolower(c));
+            });
 
             if (lowerValue == "true" || lowerValue == "1" || lowerValue == "on" || lowerValue == "yes")
             {

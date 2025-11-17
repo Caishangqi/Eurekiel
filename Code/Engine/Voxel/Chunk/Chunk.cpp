@@ -113,7 +113,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
 
     if (m_world)
     {
-        BlockIterator iter(this, index);
+        BlockIterator iter(this, (int)index);
 
         // ===== [NEW] SKY Flag Propagation (Assignment 05 requirements) =====
 
@@ -139,7 +139,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
                         SetIsSky(x, y, descendZ, true);
                         SetOutdoorLight(x, y, descendZ, 15);
 
-                        BlockIterator descendIter(this, CoordsToIndex(x, y, descendZ));
+                        BlockIterator descendIter(this, (int)CoordsToIndex(x, y, descendZ));
                         m_world->MarkLightingDirty(descendIter);
                     }
                 }
@@ -166,7 +166,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
                 SetIsSky(x, y, descendZ, false);
                 SetOutdoorLight(x, y, descendZ, 0);
 
-                BlockIterator descendIter(this, CoordsToIndex(x, y, descendZ));
+                BlockIterator descendIter(this, (int)CoordsToIndex(x, y, descendZ));
                 m_world->MarkLightingDirty(descendIter);
             }
         }
@@ -744,7 +744,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = GetBlock(CHUNK_MAX_X, y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(this, CoordsToIndex(CHUNK_MAX_X, y, z));
+                    BlockIterator iter(this, (int)CoordsToIndex(CHUNK_MAX_X, y, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -758,7 +758,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = eastNeighbor->GetBlock(0, y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(eastNeighbor, eastNeighbor->CoordsToIndex(0, y, z));
+                    BlockIterator iter(eastNeighbor, (int)eastNeighbor->CoordsToIndex(0, y, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -776,7 +776,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = GetBlock(0, y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(this, CoordsToIndex(0, y, z));
+                    BlockIterator iter(this, (int)CoordsToIndex(0, y, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -790,7 +790,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = westNeighbor->GetBlock(CHUNK_MAX_X, y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(westNeighbor, westNeighbor->CoordsToIndex(CHUNK_MAX_X, y, z));
+                    BlockIterator iter(westNeighbor, (int)westNeighbor->CoordsToIndex(CHUNK_MAX_X, y, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -808,7 +808,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = GetBlock(x, CHUNK_MAX_Y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(this, CoordsToIndex(x, CHUNK_MAX_Y, z));
+                    BlockIterator iter(this, (int)CoordsToIndex(x, CHUNK_MAX_Y, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -822,7 +822,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = northNeighbor->GetBlock(x, 0, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(northNeighbor, northNeighbor->CoordsToIndex(x, 0, z));
+                    BlockIterator iter(northNeighbor, (int)northNeighbor->CoordsToIndex(x, 0, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -840,7 +840,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = GetBlock(x, 0, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(this, CoordsToIndex(x, 0, z));
+                    BlockIterator iter(this, (int)CoordsToIndex(x, 0, z));
                     world->MarkLightingDirty(iter);
                 }
             }
@@ -854,7 +854,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
                 BlockState* state = southNeighbor->GetBlock(x, CHUNK_MAX_Y, z);
                 if (!state->IsFullOpaque())
                 {
-                    BlockIterator iter(southNeighbor, southNeighbor->CoordsToIndex(x, CHUNK_MAX_Y, z));
+                    BlockIterator iter(southNeighbor, (int)southNeighbor->CoordsToIndex(x, CHUNK_MAX_Y, z));
                     world->MarkLightingDirty(iter);
                 }
             }

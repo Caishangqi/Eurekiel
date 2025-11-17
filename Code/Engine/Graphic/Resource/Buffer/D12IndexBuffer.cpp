@@ -28,7 +28,7 @@ D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* init
     // 教学要点: 参数验证 - 确保size是索引大小的整数倍
     const size_t indexSize = (format == IndexFormat::Uint16) ? 2 : 4;
     assert(size % indexSize == 0 && "Buffer size must be multiple of index size");
-
+    UNUSED(indexSize)
     // 教学要点: 创建D3D12_INDEX_BUFFER_VIEW
     UpdateView();
 }
