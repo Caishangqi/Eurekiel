@@ -1,11 +1,12 @@
 ﻿#pragma once
 
 #include <cstdint>
+#include <stdexcept>
 
 namespace enigma::graphic
 {
     /**
-     * @brief CustomImageIndexBuffer - 自定义材质槽位索引管理
+     * @brief CustomImageUniform - 自定义材质槽位索引管理
      *
      * 教学要点:
      * 1. 支持16个自定义材质槽位（customImage0-15）
@@ -36,7 +37,7 @@ namespace enigma::graphic
      *
      * 使用示例（C++端）:
      * ```cpp
-     * CustomImageIndexBuffer customBuffer;
+     * CustomImageUniform customBuffer;
      *
      * // 设置自定义材质槽位
      * customBuffer.SetCustomImageIndex(0, myTextureIndex);  // customImage0
@@ -52,7 +53,7 @@ namespace enigma::graphic
      *
      * @note 此结构体必须与Common.hlsl中的CustomImageBuffer严格对应（64 bytes）
      */
-    struct CustomImageIndexBuffer
+    struct CustomImageUniform
     {
         /**
          * @brief 自定义材质索引数组 - customImage0-15
@@ -91,7 +92,7 @@ namespace enigma::graphic
         /**
          * @brief 默认构造函数 - 初始化所有索引为0
          */
-        CustomImageIndexBuffer()
+        CustomImageUniform()
         {
             for (int i = 0; i < 16; ++i)
             {
@@ -234,14 +235,14 @@ namespace enigma::graphic
     };
 
     // 编译期验证: 确保结构体大小为64字节（16个uint32_t）
-    static_assert(sizeof(CustomImageIndexBuffer) == 64,
-                  "CustomImageIndexBuffer must be exactly 64 bytes (16 x 4 bytes) to match HLSL CustomImageBuffer struct");
+    static_assert(sizeof(CustomImageUniform) == 64,
+                  "CustomImageUniform must be exactly 64 bytes (16 x 4 bytes) to match HLSL CustomImageBuffer struct");
 
     // 编译期验证: 确保对齐到16字节（GPU要求）
-    static_assert(sizeof(CustomImageIndexBuffer) % 16 == 0,
-                  "CustomImageIndexBuffer must be aligned to 16 bytes for GPU upload");
+    static_assert(sizeof(CustomImageUniform) % 16 == 0,
+                  "CustomImageUniform must be aligned to 16 bytes for GPU upload");
 
     // 编译期验证: 确保数组元素对齐
-    static_assert(alignof(CustomImageIndexBuffer) == 4,
-                  "CustomImageIndexBuffer must be 4-byte aligned (uint32_t alignment)");
+    static_assert(alignof(CustomImageUniform) == 4,
+                  "CustomImageUniform must be 4-byte aligned (uint32_t alignment)");
 } // namespace enigma::graphic

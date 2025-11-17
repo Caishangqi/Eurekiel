@@ -18,6 +18,7 @@
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
+#include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
@@ -420,11 +421,43 @@ void RendererSubsystem::Startup()
             UpdateFrequency::PerObject,
             10000 // maxDrawsPerFrame, consistent with Matrices
         );
+
+        // ==================== Register CustomImageUniform Ring Buffer ====================
+        // Register CustomImageUniform as PerObject Buffer, allocate 10000 draws
+        // Teaching points:
+        // 1. CustomImageUniform size 64 bytes (16 × uint32_t), 256 bytes after alignment
+        // 2. 10000 × 256 = 2.5 MB (reasonable memory overhead)
+        // 3. This is the third PerObject Buffer (after MatricesUniforms and PerObjectUniforms)
+        // 4. [NEW] Explicitly specify slot 2 for CustomImage
+        m_uniformManager->RegisterBuffer<CustomImageUniform>(
+            2, // registerSlot: Slot 2 for CustomImage (Iris-compatible)
+            UpdateFrequency::PerObject,
+            10000 // maxDrawsPerFrame, consistent with other PerObject buffers
+        );
+
+        LogInfo(LogRenderer, "CustomImageUniform Ring Buffer registered: slot 2, 10000 × 256 bytes = 2.5 MB");
     }
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create UniformManager: {}", e.what());
         ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()))
+    }
+
+    // ==================== Create CustomImageManager ====================
+    // Initialize CustomImage Manager - manage 16 CustomImage slots
+    try
+    {
+        LogInfo(LogRenderer, "Creating CustomImageManager...");
+
+        // Create CustomImageManager with UniformManager dependency injection
+        m_customImageManager = std::make_unique<CustomImageManager>(m_uniformManager.get());
+
+        LogInfo(LogRenderer, "CustomImageManager created successfully");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create CustomImageManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("CustomImageManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建DepthTextureManager ====================
@@ -1249,6 +1282,80 @@ void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
 }
 
 //-----------------------------------------------------------------------------------------------
+// CustomImage管理API实现
+// Teaching Note: 提供高层API，封装CustomImageManager的实现细节
+//-----------------------------------------------------------------------------------------------
+
+void RendererSubsystem::SetCustomImage(int slotIndex, D12Texture* texture)
+{
+    // [DELEGATION] 委托给CustomImageManager处理
+    // 教学要点：
+    // - 简单的委托模式（Delegation Pattern）
+    // - 封装实现细节，提供用户友好的接口
+    // - 完整的空指针检查
+
+    if (m_customImageManager)
+    {
+        m_customImageManager->SetCustomImage(slotIndex, texture);
+    }
+    else
+    {
+        LogWarn(LogRenderer, "SetCustomImage: CustomImageManager is not initialized");
+    }
+}
+
+D12Texture* RendererSubsystem::GetCustomImage(int slotIndex) const
+{
+    // [DELEGATION] 委托给CustomImageManager处理
+    // 教学要点：
+    // - const方法，不修改对象状态
+    // - 返回原始指针（非所有权）
+    // - 空指针检查确保安全
+
+    if (m_customImageManager)
+    {
+        return m_customImageManager->GetCustomImage(slotIndex);
+    }
+
+    LogWarn(LogRenderer, "GetCustomImage: CustomImageManager is not initialized");
+    return nullptr;
+}
+
+void RendererSubsystem::ClearCustomImage(int slotIndex)
+{
+    // [DELEGATION] 委托给CustomImageManager处理
+    // 教学要点：
+    // - 等价于SetCustomImage(slotIndex, nullptr)
+    // - 提供更清晰的语义
+    // - 完整的空指针检查
+
+    if (m_customImageManager)
+    {
+        m_customImageManager->ClearCustomImage(slotIndex);
+    }
+    else
+    {
+        LogWarn(LogRenderer, "ClearCustomImage: CustomImageManager is not initialized");
+    }
+}
+
+D12Texture* RendererSubsystem::CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData)
+{
+    // [DELEGATION] 委托给D3D12RenderSystem创建纹理
+    // 教学要点：
+    // - 使用unique_ptr::release()转移所有权
+    // - 返回裸指针，调用者负责管理生命周期
+    // - 建议调用者使用智能指针管理返回的纹理
+
+    // 1. 调用D3D12RenderSystem创建纹理（返回unique_ptr）
+    auto texture = D3D12RenderSystem::CreateTexture2D(width, height, format, initialData);
+
+    // 2. 转移所有权并返回裸指针
+    // 注意：调用者负责删除返回的纹理
+    return texture.release();
+}
+
+//-----------------------------------------------------------------------------------------------
 // M2 灵活渲染接口实现 (Milestone 2)
 // Teaching Note: 提供高层API，封装DirectX 12复杂性
 // Reference: DX11Renderer.cpp中的类似方法
@@ -1652,6 +1759,12 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
 
     D3D12RenderSystem::Draw(vertexCount, startVertex);
 
+    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnDrawComplete();
+    }
+
     LogDebug(LogRenderer,
              "Draw: Drew {} vertices starting from vertex {}",
              vertexCount, startVertex);
@@ -1678,6 +1791,12 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     }
 
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
+
+    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnDrawComplete();
+    }
 
     LogDebug(LogRenderer,
              "DrawIndexed: Drew {} indices starting from index {} with base vertex {}",
@@ -2196,7 +2315,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
 
     // [NEW] 更新offset（追加数据）
     m_currentVertexOffset += vertexSize;
-    m_currentIndexOffset += indexSize;
+    m_currentIndexOffset  += indexSize;
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount)

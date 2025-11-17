@@ -214,7 +214,7 @@ struct ShadowTexturesBuffer
  *
  * 对应C++: CustomImageIndexBuffer.hpp
  */
-struct CustomImageIndexBuffer
+cbuffer CustomImageUniforms: register(b2)
 {
     uint customImageIndices[16]; // customImage0-15的Bindless索引
 };
@@ -1232,13 +1232,8 @@ uint GetCustomImageIndex(uint slotIndex)
     {
         return 0xFFFFFFFF; // UINT32_MAX - 无效索引
     }
-
-    // 1. 获取CustomImageIndexBuffer（StructuredBuffer）
-    StructuredBuffer<CustomImageIndexBuffer> customImageBuffer =
-        ResourceDescriptorHeap[customImageBufferIndexCBV];
-
     // 2. 查询指定槽位的Bindless索引
-    uint bindlessIndex = customImageBuffer[0].customImageIndices[slotIndex];
+    uint bindlessIndex = customImageIndices[slotIndex];
 
     // 3. 返回Bindless索引
     return bindlessIndex;

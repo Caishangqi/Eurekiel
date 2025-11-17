@@ -48,6 +48,7 @@ namespace enigma::graphic
     class D12IndexBuffer;
     class DepthTextureManager;
     class PSOManager;
+    class CustomImageManager;
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -934,6 +935,196 @@ namespace enigma::graphic
             return m_renderTargetManager.get();
         }
 
+        // ==================== CustomImage管理API ====================
+
+        /**
+         * @brief 设置CustomImage槽位的纹理
+         * @param slotIndex 槽位索引 [0-15]
+         * @param texture 纹理指针（可以为nullptr表示清除）
+         *
+         * @details
+         * **使用场景**：
+         * - 设置自定义材质纹理到指定槽位
+         * - 支持运行时动态更新
+         * - 可用于实现自定义后处理效果
+         *
+         * **实现方式**：
+         * - 委托给CustomImageManager::SetCustomImage()
+         * - 只修改CPU端数据，不触发GPU上传
+         * - GPU上传在Draw时自动完成
+         *
+         * **执行流程**：
+         * 1. 参数验证（slotIndex范围检查）
+         * 2. 委托给m_customImageManager->SetCustomImage()
+         * 3. 保存纹理指针和Bindless索引
+         *
+         * @code
+         * // 基础用法：设置customImage0
+         * auto myTexture = CreateTexture2D(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM);
+         * renderer->SetCustomImage(0, myTexture);
+         *
+         * // 清除槽位
+         * renderer->SetCustomImage(0, nullptr);
+         *
+         * // 多槽位使用
+         * renderer->SetCustomImage(0, diffuseMap);
+         * renderer->SetCustomImage(1, normalMap);
+         * renderer->SetCustomImage(2, roughnessMap);
+         * @endcode
+         *
+         * **教学要点**：
+         * - 理解委托模式（Delegation Pattern）
+         * - 学习封装实现细节的重要性
+         * - 掌握用户友好的API设计
+         *
+         * **注意事项**：
+         * - slotIndex必须在 [0-15] 范围内
+         * - texture可以为nullptr（清除槽位）
+         * - 调用者负责管理texture的生命周期
+         * - 不触发GPU上传（延迟到Draw时）
+         *
+         * @note 此方法提供简洁的用户接口，封装CustomImageManager的实现细节
+         * @see GetCustomImage, ClearCustomImage, CustomImageManager::SetCustomImage
+         */
+        void SetCustomImage(int slotIndex, D12Texture* texture);
+
+        /**
+         * @brief 获取CustomImage槽位的纹理
+         * @param slotIndex 槽位索引 [0-15]
+         * @return D12Texture* 纹理指针（可能为nullptr）
+         *
+         * @details
+         * **使用场景**：
+         * - 查询当前槽位绑定的纹理
+         * - 用于调试和状态检查
+         * - 验证纹理是否正确设置
+         *
+         * **实现方式**：
+         * - 委托给CustomImageManager::GetCustomImage()
+         * - 返回原始指针（非所有权）
+         * - const方法，不修改对象状态
+         *
+         * @code
+         * // 基础用法：查询槽位
+         * D12Texture* tex = renderer->GetCustomImage(0);
+         * if (tex != nullptr) {
+         *     // 槽位已设置...
+         * }
+         *
+         * // 调试用法：验证纹理
+         * auto expectedTex = myTexture;
+         * auto actualTex = renderer->GetCustomImage(0);
+         * ASSERT(actualTex == expectedTex);
+         * @endcode
+         *
+         * **教学要点**：
+         * - 理解const方法的语义
+         * - 学习查询接口的设计
+         * - 掌握空指针检查的重要性
+         *
+         * **注意事项**：
+         * - 返回值可能为nullptr（槽位未设置）
+         * - 不拥有返回指针的所有权
+         * - 调用者不应删除返回的指针
+         *
+         * @see SetCustomImage, ClearCustomImage
+         */
+        D12Texture* GetCustomImage(int slotIndex) const;
+
+        /**
+         * @brief 清除CustomImage槽位的纹理
+         * @param slotIndex 槽位索引 [0-15]
+         *
+         * @details
+         * **使用场景**：
+         * - 清空指定槽位的纹理绑定
+         * - 释放不再使用的槽位
+         * - 重置槽位状态
+         *
+         * **实现方式**：
+         * - 委托给CustomImageManager::ClearCustomImage()
+         * - 等价于SetCustomImage(slotIndex, nullptr)
+         * - 提供更清晰的语义
+         *
+         * @code
+         * // 基础用法：清空槽位
+         * renderer->ClearCustomImage(0);
+         *
+         * // 批量清空
+         * for (int i = 0; i < 16; ++i) {
+         *     renderer->ClearCustomImage(i);
+         * }
+         * @endcode
+         *
+         * **教学要点**：
+         * - 理解语义化API的价值
+         * - 学习提供多种操作方式
+         * - 掌握API设计的一致性
+         *
+         * @see SetCustomImage, GetCustomImage
+         */
+        void ClearCustomImage(int slotIndex);
+
+        /**
+         * @brief 创建2D纹理（便捷API）
+         * @param width 纹理宽度
+         * @param height 纹理高度
+         * @param format 纹理格式
+         * @param initialData 初始数据（可选，默认nullptr）
+         * @return D12Texture* 纹理指针（调用者负责管理生命周期）
+         *
+         * @details
+         * **使用场景**：
+         * - 创建自定义纹理用于CustomImage
+         * - 动态生成纹理数据
+         * - 加载外部图片数据
+         *
+         * **实现方式**：
+         * - 委托给D3D12RenderSystem::CreateTexture2D()
+         * - 返回裸指针（调用者负责管理生命周期）
+         * - 使用unique_ptr::release()转移所有权
+         *
+         * **执行流程**：
+         * 1. 调用D3D12RenderSystem::CreateTexture2D()创建纹理
+         * 2. 使用unique_ptr::release()转移所有权
+         * 3. 返回裸指针给调用者
+         *
+         * @code
+         * // 基础用法：创建空纹理
+         * auto texture = renderer->CreateTexture2D(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM);
+         * renderer->SetCustomImage(0, texture);
+         * // 注意：调用者负责删除texture
+         *
+         * // 带初始数据
+         * std::vector<uint8_t> pixels(1024 * 1024 * 4, 255); // 白色纹理
+         * auto texture2 = renderer->CreateTexture2D(1024, 1024, DXGI_FORMAT_R8G8B8A8_UNORM, pixels.data());
+         * renderer->SetCustomImage(1, texture2);
+         * @endcode
+         *
+         * **教学要点**：
+         * - 理解所有权转移（unique_ptr::release()）
+         * - 学习裸指针的生命周期管理
+         * - 掌握资源创建的标准流程
+         *
+         * **注意事项**：
+         * - 返回裸指针，调用者负责管理生命周期
+         * - 建议使用智能指针管理返回的纹理
+         * - 创建失败返回nullptr
+         * - initialData可以为nullptr（创建空纹理）
+         *
+         * **生命周期管理建议**：
+         * @code
+         * // 推荐：使用智能指针管理
+         * std::unique_ptr<D12Texture> texture(renderer->CreateTexture2D(...));
+         * renderer->SetCustomImage(0, texture.get());
+         * // texture会自动释放
+         * @endcode
+         *
+         * @warning 调用者必须负责删除返回的纹理，否则会内存泄漏
+         * @see SetCustomImage, D3D12RenderSystem::CreateTexture2D
+         */
+        D12Texture* CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData = nullptr);
+
         /**
          * @brief 获取当前帧vertex buffer写入offset
          * @return 当前offset（字节单位）
@@ -1338,6 +1529,9 @@ namespace enigma::graphic
 
         /// Uniform管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
         std::unique_ptr<class UniformManager> m_uniformManager;
+
+        /// CustomImage管理器 - 管理16个CustomImage槽位的纹理绑定
+        std::unique_ptr<CustomImageManager> m_customImageManager;
 
         // ==================== PSO管理组件 ====================
 
