@@ -28,6 +28,7 @@
 #include <dxgi1_6.h>
 
 #include "Engine/Resource/ResourceCommon.hpp"
+#include "Engine/Graphic/Target/RTTypes.hpp"
 
 namespace enigma::graphic
 {
@@ -116,6 +117,9 @@ namespace enigma::graphic
         uint32_t    rowPitch; ///< 行间距 (字节)
         uint32_t    slicePitch; ///< 切片间距 (字节)
 
+        // RenderTarget属性
+        ClearValue clearValue; ///< Clear value for RenderTarget optimization
+
         // 调试属性
         const char* debugName; ///< 调试名称
 
@@ -128,6 +132,7 @@ namespace enigma::graphic
               , usage(TextureUsage::Default)
               , initialData(nullptr), dataSize(0)
               , rowPitch(0), slicePitch(0)
+              , clearValue(ClearValue::Color(Rgba8::BLACK))
               , debugName(nullptr)
         {
         }

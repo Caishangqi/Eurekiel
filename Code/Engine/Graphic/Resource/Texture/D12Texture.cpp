@@ -315,8 +315,8 @@ namespace enigma::graphic
     std::string D12Texture::GetDebugInfo() const
     {
         std::string info = "D12Texture Debug Info:\n";
-        info += "  Name: " + GetDebugName() + "\n";
-        info += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
+        info             += "  Name: " + GetDebugName() + "\n";
+        info             += "  Size: " + std::to_string(m_width) + "x" + std::to_string(m_height);
         if (m_depth > 1)
             info += "x" + std::to_string(m_depth);
         info += "\n";
@@ -521,12 +521,14 @@ namespace enigma::graphic
 
         if (HasFlag(m_usage, TextureUsage::RenderTarget))
         {
-            // 设置清除值为黑色(与Rgba8::BLACK匹配)
-            optimizedClearValue.Format   = m_format;
-            optimizedClearValue.Color[0] = 0.0f; // Red
-            optimizedClearValue.Color[1] = 0.0f; // Green
-            optimizedClearValue.Color[2] = 0.0f; // Blue
-            optimizedClearValue.Color[3] = 1.0f; // Alpha
+            // Use clearValue from createInfo for OptimizedClearValue
+            optimizedClearValue.Format = m_format;
+            float clearColor[4];
+            createInfo.clearValue.GetColorAsFloats(clearColor);
+            optimizedClearValue.Color[0] = clearColor[0];
+            optimizedClearValue.Color[1] = clearColor[1];
+            optimizedClearValue.Color[2] = clearColor[2];
+            optimizedClearValue.Color[3] = clearColor[3];
             pClearValue                  = &optimizedClearValue;
         }
 
