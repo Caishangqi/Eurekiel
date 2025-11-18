@@ -37,6 +37,7 @@ D12RenderTarget::D12RenderTarget(const Builder& builder)
       , m_allowLinearFilter(builder.m_allowLinearFilter)
       , m_sampleCount(builder.m_sampleCount)
       , m_enableMipmap(builder.m_enableMipmap)
+      , m_clearValue(builder.m_clearValue)
       , m_mainTextureIndex(INVALID_BINDLESS_INDEX)
       , m_altTextureIndex(INVALID_BINDLESS_INDEX)
 {
@@ -72,7 +73,8 @@ void D12RenderTarget::InitializeTextures(int width, int height)
     // Milestone 3.0 Bug Fix: RenderTarget必须同时支持RTV和SRV
     // - RTV用于渲染输出 (OMSetRenderTargets)
     // - SRV用于着色器采样 (历史帧读取/Ping-Pong渲染)
-    mainTexInfo.usage = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
+    mainTexInfo.usage      = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
+    mainTexInfo.clearValue = m_clearValue; // Pass clear value for Fast Clear optimization
 
     // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
     // Bug: (GetDebugName() + "_MainTex").c_str() 返回的指针在表达式结束后立即悬垂
