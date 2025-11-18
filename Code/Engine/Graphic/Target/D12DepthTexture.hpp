@@ -77,7 +77,7 @@ namespace enigma::graphic
     {
         int         width        = 0; ///< 深度纹理宽度（像素）
         int         height       = 0; ///< 深度纹理高度（像素）
-        DepthFormat format       = DepthFormat::D32_FLOAT; ///< 深度格式（默认最高精度）
+        DepthFormat format       = DepthFormat::D24_UNORM_S8_UINT; ///< 深度格式（默认最高精度）
         std::string semanticName = ""; ///< 语义化名称（如"depthtex0"）
 
         /**

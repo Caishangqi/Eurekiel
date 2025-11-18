@@ -290,7 +290,7 @@ namespace enigma::graphic
          *
          * @note 合并自Configuration::defaultClearColor
          */
-        Rgba8 defaultClearColor = Rgba8::DEBUG_GREEN;
+        Rgba8 defaultClearColor = Rgba8(25, 31, 52);
 
         /**
          * @brief 默认深度清除值

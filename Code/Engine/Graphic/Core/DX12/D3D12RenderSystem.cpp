@@ -1512,16 +1512,6 @@ namespace enigma::graphic
         LogInfo(LogRenderer,
                 "BeginFrame: Viewport and ScissorRect set (%ux%u)",
                 s_swapChainWidth, s_swapChainHeight);
-
-        // 注意：CommandList不在此处执行，保持打开状态用于后续绘制
-        // 将在EndFrame中统一执行并提交
-
-        // 6. 清除深度模板缓冲 (如果有的话)
-        // TODO: 当实现了深度缓冲系统后，在这里调用ClearDepthStencil
-        // ClearDepthStencil(nullptr, nullptr, clearDepth, clearStencil);
-
-        //LogInfo(LogRenderer,"BeginFrame completed - Color:(%d,%d,%d,%d), Depth:%.2f", clearColor.r, clearColor.g, clearColor.b, clearColor.a, clearDepth);
-
         return true;
     }
 

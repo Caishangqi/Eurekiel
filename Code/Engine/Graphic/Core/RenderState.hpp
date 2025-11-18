@@ -487,8 +487,9 @@ namespace enigma::graphic
             StencilTestDetail detail;
             detail.enable           = true;
             detail.stencilFunc      = StencilComparison::NotEqual;
-            detail.stencilPassOp    = StencilOperation::Replace;
-            detail.stencilWriteMask = 0xFF;
+            detail.stencilPassOp    = StencilOperation::Keep; // [FIX] Read-only, don't modify stencil
+            detail.stencilFailOp    = StencilOperation::Keep;
+            detail.stencilWriteMask = 0x00; // [FIX] Disable write, read-only test
             detail.depthWriteEnable = false; // Don't write depth for outlines
             return detail;
         }

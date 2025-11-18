@@ -26,7 +26,6 @@ DepthTextureManager::DepthTextureManager(
       , m_renderHeight(baseHeight)
       , m_width(baseWidth)
       , m_height(baseHeight)
-      , m_depthFormat(DXGI_FORMAT_D32_FLOAT)
 {
     // 参数验证 - 尺寸
     if (baseWidth <= 0 || baseHeight <= 0)

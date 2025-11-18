@@ -1,11 +1,17 @@
 #include "StencilHelper.hpp"
 
+#include "Engine/Core/Logger/LoggerAPI.hpp"
+
 namespace enigma::graphic
 {
     void StencilHelper::ConfigureStencilState(
         D3D12_DEPTH_STENCIL_DESC& desc,
         const StencilTestDetail&  detail)
     {
+        // [DIAGNOSTIC] Log input stencil configuration
+        core::LogInfo("StencilHelper", "[INPUT] enable=%d, func=%d, passOp=%d, writeMask=0x%02X",
+                      detail.enable, detail.stencilFunc, detail.stencilPassOp, detail.stencilWriteMask);
+        
         // [STEP 1] Enable/disable stencil testing
         desc.StencilEnable = detail.enable;
 

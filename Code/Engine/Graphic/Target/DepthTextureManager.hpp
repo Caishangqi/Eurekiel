@@ -370,7 +370,6 @@ namespace enigma::graphic
         // 保留原有成员（兼容性）
         int         m_width; // 屏幕宽度（废弃，使用m_renderWidth）
         int         m_height; // 屏幕高度（废弃，使用m_renderHeight）
-        DXGI_FORMAT m_depthFormat; // 深度格式
 
         // Milestone 4: 活动深度缓冲索引
         int m_currentActiveDepthIndex = 0; // 当前激活的深度缓冲索引（默认0=depthtex0）

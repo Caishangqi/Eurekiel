@@ -263,16 +263,6 @@ void RendererSubsystem::Startup()
                 totalSourcesCached);
     }
 
-    // TODO (M2): Initialize flexible rendering architecture
-    // Teaching Note: New architecture (BeginFrame/Render/EndFrame + 60+ API)
-    // - No PipelineManager (旧架构已删除)
-    // - Direct ShaderPack usage (dual pack: user + default)
-    // - Implement: BeginCamera, UseProgram, DrawVertexBuffer等
-    // =========================================================================================
-
-    // TODO: M2 - 实现新的灵活渲染架构
-    // 替代旧的Phase系统（IWorldRenderingPipeline/PipelineManager已删除）
-
     // ==================== 创建RenderCommandQueue (Milestone 3.1 新增) ====================
     // 初始化immediate模式渲染指令队列
     if (m_configuration.enableImmediateMode)
@@ -318,10 +308,10 @@ void RendererSubsystem::Startup()
                 "colortex" + std::to_string(i), // name
                 1.0f, // widthScale - 全分辨率
                 1.0f, // heightScale
-                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA16F
+                DXGI_FORMAT_R8G8B8A8_UNORM,
                 true, // enableFlipper
                 LoadAction::Clear, // loadAction
-                ClearValue::Color(Rgba8::DEBUG_GREEN), // clearValue
+                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
                 false, // enableMipmap - 默认关闭
                 true, // allowLinearFilter
                 1 // sampleCount - 无MSAA
@@ -338,7 +328,7 @@ void RendererSubsystem::Startup()
                 DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA8
                 true, // enableFlipper
                 LoadAction::Clear, // loadAction
-                ClearValue::Color(Rgba8::BLACK), // clearValue
+                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
                 false, // enableMipmap
                 true, // allowLinearFilter
                 1 // sampleCount
@@ -470,7 +460,7 @@ void RendererSubsystem::Startup()
         {
             depthConfigs[i].width        = m_configuration.renderWidth;
             depthConfigs[i].height       = m_configuration.renderHeight;
-            depthConfigs[i].format       = DepthFormat::D32_FLOAT;
+            depthConfigs[i].format       = DepthFormat::D24_UNORM_S8_UINT;
             depthConfigs[i].semanticName = "depthtex" + std::to_string(i);
         }
 
@@ -1458,9 +1448,6 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         }
     }
 
-    // 4. 获取深度格式（暂时硬编码为D32_FLOAT）
-    DXGI_FORMAT depthFormat = DXGI_FORMAT_D32_FLOAT;
-
     // 5. 调用PSOManager::GetOrCreatePSO获取PSO
     if (!cmdList)
     {
@@ -1474,7 +1461,7 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         shaderProgram.get(),
         rtFormats,
-        depthFormat,
+        DXGI_FORMAT_D24_UNORM_S8_UINT,  // TODO: Do not hardcoded the format
         m_currentBlendMode,
         m_currentDepthMode,
         m_currentStencilTest
@@ -2491,9 +2478,8 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
         0,
         nullptr
     );
-
-    LogDebug(LogRenderer, "ClearDepthStencil: Cleared depthtex%u (depth=%.2f, stencil=%u)",
-             depthIndex, clearDepth, clearStencil);
+    LogInfo(LogRenderer, "ClearDepthStencil: depthIndex=%u, depth=%.2f, stencil=%u",
+            depthIndex, clearDepth, clearStencil);
 }
 
 void RendererSubsystem::ClearAllRenderTargets(const Rgba8& clearColor)
