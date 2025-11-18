@@ -1439,12 +1439,16 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         return;
     }
 
+    // [Phase 4 DONE]: Pass m_currentStencilTest to PSOManager for PSO creation
+    // GetOrCreatePSO now accepts StencilTestDetail parameter
+    // This allows PSO to be created with stencil configuration baked in
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         shaderProgram.get(),
         rtFormats,
         depthFormat,
         m_currentBlendMode,
-        m_currentDepthMode
+        m_currentDepthMode,
+        m_currentStencilTest
     );
 
     if (!pso)
@@ -1456,6 +1460,15 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     // 6. 设置PSO和Root Signature
     cmdList->SetPipelineState(pso);
     cmdList->SetGraphicsRootSignature(shaderProgram->GetRootSignature());
+
+    // 6.5. Set stencil reference value (dynamic state)
+    // [IMPORTANT] Stencil reference value is dynamic state (not part of PSO)
+    // Must be set after SetPipelineState to ensure state synchronization
+    if (m_currentStencilTest.enable)
+    {
+        cmdList->OMSetStencilRef(m_currentStencilRef);
+        LogDebug(LogRenderer, "UseProgram: Applied stencil reference value {}", m_currentStencilRef);
+    }
 
     // 7. [REMOVED] 旧代码: SetRootConstants(14个值) - 已废弃
     // 架构变更: 所有Uniform Buffers现在通过Root CBV绑定
@@ -2064,6 +2077,43 @@ void RendererSubsystem::SetDepthMode(DepthMode mode)
 
     m_currentDepthMode = mode;
     LogDebug(LogRenderer, "SetDepthMode: Depth mode updated to {}", static_cast<int>(mode));
+}
+
+void RendererSubsystem::SetStencilTest(const StencilTestDetail& detail)
+{
+    m_currentStencilTest = detail;
+
+    // [IMPORTANT] Stencil configuration is part of PSO (immutable state)
+    // Changing it requires PSO rebuild. Next UseProgram() will create new PSO
+    // with updated stencil settings via PSOManager.
+
+    LogDebug(LogRenderer, "SetStencilTest: Stencil state updated (enable={})", detail.enable);
+}
+
+void RendererSubsystem::SetStencilRefValue(uint8_t refValue)
+{
+    // Avoid redundant updates
+    if (m_currentStencilRef == refValue)
+    {
+        return;
+    }
+
+    m_currentStencilRef = refValue;
+
+    // [DYNAMIC STATE] Stencil reference value can be changed per draw call
+    // without PSO rebuild. Applied via OMSetStencilRef on active CommandList.
+
+    // Get active CommandList from D3D12RenderSystem
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (cmdList && m_currentStencilTest.enable)
+    {
+        cmdList->OMSetStencilRef(refValue);
+        LogDebug(LogRenderer, "SetStencilRefValue: Updated to {} and applied to CommandList", refValue);
+    }
+    else
+    {
+        LogDebug(LogRenderer, "SetStencilRefValue: Updated to {} (will apply when stencil enabled)", refValue);
+    }
 }
 
 // ============================================================================

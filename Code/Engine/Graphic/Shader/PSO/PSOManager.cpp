@@ -7,6 +7,7 @@
 #include "PSOManager.hpp"
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Helper/StencilHelper.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include <functional>
 
@@ -25,6 +26,8 @@ namespace enigma::graphic
         if (blendMode != other.blendMode)
             return false;
         if (depthMode != other.depthMode)
+            return false;
+        if (!(stencilDetail == other.stencilDetail))
             return false;
 
         for (int i = 0; i < 8; ++i)
@@ -58,6 +61,22 @@ namespace enigma::graphic
         // Hash 深度模式
         hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(depthMode)) << 24;
 
+        // Hash StencilTestDetail (all 14 fields)
+        hash ^= std::hash<bool>{}(stencilDetail.enable) << 25;
+        hash ^= std::hash<uint8_t>{}(stencilDetail.refValue) << 26;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.stencilFunc)) << 27;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.stencilPassOp)) << 28;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.stencilFailOp)) << 29;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.stencilDepthFailOp)) << 30;
+        hash ^= std::hash<uint8_t>{}(stencilDetail.stencilReadMask) << 31;
+        hash ^= std::hash<uint8_t>{}(stencilDetail.stencilWriteMask);
+        hash ^= std::hash<bool>{}(stencilDetail.depthWriteEnable) << 1;
+        hash ^= std::hash<bool>{}(stencilDetail.useSeparateFrontBack) << 2;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilFunc)) << 3;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilPassOp)) << 4;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilFailOp)) << 5;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilDepthFailOp)) << 6;
+
         return hash;
     }
 
@@ -66,11 +85,12 @@ namespace enigma::graphic
     // ========================================================================
 
     ID3D12PipelineState* PSOManager::GetOrCreatePSO(
-        const ShaderProgram* shaderProgram,
-        const DXGI_FORMAT    rtFormats[8],
-        DXGI_FORMAT          depthFormat,
-        BlendMode            blendMode,
-        DepthMode            depthMode
+        const ShaderProgram*     shaderProgram,
+        const DXGI_FORMAT        rtFormats[8],
+        DXGI_FORMAT              depthFormat,
+        BlendMode                blendMode,
+        DepthMode                depthMode,
+        const StencilTestDetail& stencilDetail
     )
     {
         // 1. 构建PSOKey
@@ -80,9 +100,10 @@ namespace enigma::graphic
         {
             key.rtFormats[i] = rtFormats[i];
         }
-        key.depthFormat = depthFormat;
-        key.blendMode   = blendMode;
-        key.depthMode   = depthMode;
+        key.depthFormat   = depthFormat;
+        key.blendMode     = blendMode;
+        key.depthMode     = depthMode;
+        key.stencilDetail = stencilDetail;
 
         // 2. 查找缓存
         auto it = m_psoCache.find(key);
@@ -142,8 +163,8 @@ namespace enigma::graphic
         // 2.3 光栅化状态
         ConfigureRasterizerState(psoDesc.RasterizerState);
 
-        // 2.4 深度模板状态（使用key.depthMode）
-        ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthMode);
+        // 2.4 深度模板状态（使用key.depthMode和key.stencilDetail）
+        ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthMode, key.stencilDetail);
 
         // 2.5 Input Layout
         static const D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
@@ -283,10 +304,12 @@ namespace enigma::graphic
         }
     }
 
-    void PSOManager::ConfigureDepthStencilState(D3D12_DEPTH_STENCIL_DESC& depthStencilDesc, DepthMode depthMode)
+    void PSOManager::ConfigureDepthStencilState(
+        D3D12_DEPTH_STENCIL_DESC& depthStencilDesc,
+        DepthMode                 depthMode,
+        const StencilTestDetail&  stencilDetail)
     {
-        depthStencilDesc.StencilEnable = FALSE;
-
+        // [STEP 1] Configure depth test (existing logic)
         switch (depthMode)
         {
         case DepthMode::Enabled:
@@ -340,6 +363,9 @@ namespace enigma::graphic
             depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS;
             break;
         }
+
+        // [STEP 2] Configure stencil test (new integration)
+        StencilHelper::ConfigureStencilState(depthStencilDesc, stencilDetail);
     }
 
     void PSOManager::ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc)

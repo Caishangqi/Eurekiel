@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstdint>
+#include <d3d12.h> // Required for D3D12_STENCIL_OP and D3D12_COMPARISON_FUNC
 
 namespace enigma::graphic
 {
@@ -292,5 +293,272 @@ namespace enigma::graphic
          * DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS
          */
         Always
+    };
+
+    // ========================================
+    // Stencil Test Type Aliases
+    // ========================================
+
+    /**
+     * @brief Stencil operation type alias
+     * @details Maps to D3D12_STENCIL_OP for stencil buffer operations
+     */
+    using StencilOp = D3D12_STENCIL_OP;
+
+    /**
+     * @brief Stencil comparison function type alias
+     * @details Maps to D3D12_COMPARISON_FUNC for stencil testing
+     */
+    using StencilFunc = D3D12_COMPARISON_FUNC;
+
+    /**
+     * @brief Stencil operation constants
+     * @details
+     * Defines what happens to stencil buffer values after testing.
+     * 
+     * Educational Points:
+     * - Keep: Preserve current stencil value (most common)
+     * - Replace: Write reference value to stencil buffer
+     * - Incr/Decr: Increment/Decrement with wrapping or saturation
+     */
+    namespace StencilOperation
+    {
+        constexpr StencilOp Keep    = D3D12_STENCIL_OP_KEEP; ///< Keep existing stencil value
+        constexpr StencilOp Zero    = D3D12_STENCIL_OP_ZERO; ///< Set stencil to 0
+        constexpr StencilOp Replace = D3D12_STENCIL_OP_REPLACE; ///< Replace with reference value
+        constexpr StencilOp IncrSat = D3D12_STENCIL_OP_INCR_SAT; ///< Increment with saturation at 255
+        constexpr StencilOp DecrSat = D3D12_STENCIL_OP_DECR_SAT; ///< Decrement with saturation at 0
+        constexpr StencilOp Invert  = D3D12_STENCIL_OP_INVERT; ///< Bitwise invert stencil value
+        constexpr StencilOp Incr    = D3D12_STENCIL_OP_INCR; ///< Increment with wrapping
+        constexpr StencilOp Decr    = D3D12_STENCIL_OP_DECR; ///< Decrement with wrapping
+    }
+
+    /**
+     * @brief Stencil comparison function constants
+     * @details
+     * Defines how stencil reference value is compared with buffer value.
+     * 
+     * Educational Points:
+     * - Always: Test always passes (useful for marking)
+     * - Equal/NotEqual: Common for masking and outlining
+     * - Less/Greater: Used in shadow volume techniques
+     */
+    namespace StencilComparison
+    {
+        constexpr StencilFunc Never        = D3D12_COMPARISON_FUNC_NEVER; ///< Test never passes
+        constexpr StencilFunc Less         = D3D12_COMPARISON_FUNC_LESS; ///< Pass if ref < buffer
+        constexpr StencilFunc Equal        = D3D12_COMPARISON_FUNC_EQUAL; ///< Pass if ref == buffer
+        constexpr StencilFunc LessEqual    = D3D12_COMPARISON_FUNC_LESS_EQUAL; ///< Pass if ref <= buffer
+        constexpr StencilFunc Greater      = D3D12_COMPARISON_FUNC_GREATER; ///< Pass if ref > buffer
+        constexpr StencilFunc NotEqual     = D3D12_COMPARISON_FUNC_NOT_EQUAL; ///< Pass if ref != buffer
+        constexpr StencilFunc GreaterEqual = D3D12_COMPARISON_FUNC_GREATER_EQUAL; ///< Pass if ref >= buffer
+        constexpr StencilFunc Always       = D3D12_COMPARISON_FUNC_ALWAYS; ///< Test always passes
+    }
+
+    /**
+     * @brief Stencil test configuration detail
+     * @details
+     * Complete stencil testing configuration mapping to D3D12_DEPTH_STENCIL_DESC.
+     * Supports both single-sided and dual-sided stencil testing.
+     * 
+     * Educational Points:
+     * - Stencil testing enables advanced rendering techniques (shadows, outlines, portals)
+     * - Reference value is compared with stencil buffer using comparison function
+     * - Three operations: pass (depth+stencil pass), fail (stencil fail), depthFail (stencil pass but depth fail)
+     * - Dual-sided stencil allows different operations for front/back faces
+     * 
+     * Memory Layout:
+     * - 14 fields aligned for cache efficiency
+     * - Total size should be aligned to 16 bytes for optimal performance
+     */
+    struct StencilTestDetail
+    {
+        bool    enable   = false; ///< Enable stencil testing
+        uint8_t refValue = 0; ///< Reference value for comparison (0-255)
+
+        // Front face stencil operations (or both faces if useSeparateFrontBack == false)
+        StencilFunc stencilFunc        = StencilComparison::Always; ///< Comparison function
+        StencilOp   stencilPassOp      = StencilOperation::Keep; ///< Operation when stencil+depth pass
+        StencilOp   stencilFailOp      = StencilOperation::Keep; ///< Operation when stencil fails
+        StencilOp   stencilDepthFailOp = StencilOperation::Keep; ///< Operation when stencil passes but depth fails
+
+        uint8_t stencilReadMask  = 0xFF; ///< Mask for reading stencil buffer (default all bits)
+        uint8_t stencilWriteMask = 0xFF; ///< Mask for writing stencil buffer (default all bits)
+
+        bool depthWriteEnable = true; ///< Enable depth write during stencil test
+
+        // Back face stencil operations (only used if useSeparateFrontBack == true)
+        bool        useSeparateFrontBack       = false; ///< Use different operations for back faces
+        StencilFunc backFaceStencilFunc        = StencilComparison::Always; ///< Back face comparison function
+        StencilOp   backFaceStencilPassOp      = StencilOperation::Keep; ///< Back face pass operation
+        StencilOp   backFaceStencilFailOp      = StencilOperation::Keep; ///< Back face fail operation
+        StencilOp   backFaceStencilDepthFailOp = StencilOperation::Keep; ///< Back face depth fail operation
+
+        /**
+         * @brief Disabled stencil test
+         * @details No stencil testing performed
+         * @return StencilTestDetail with enable = false
+         */
+        static inline StencilTestDetail Disabled()
+        {
+            StencilTestDetail detail;
+            detail.enable = false;
+            return detail;
+        }
+
+        /**
+         * @brief Mark pixels unconditionally
+         * @details
+         * Always pass stencil test and replace buffer with reference value.
+         * Used to mark pixels for later testing.
+         * 
+         * Use Case: Mark visible pixels in first pass, test against them in second pass
+         * 
+         * @return StencilTestDetail configured for unconditional marking
+         */
+        static inline StencilTestDetail MarkAlways()
+        {
+            StencilTestDetail detail;
+            detail.enable           = true;
+            detail.stencilFunc      = StencilComparison::Always;
+            detail.stencilPassOp    = StencilOperation::Replace;
+            detail.stencilWriteMask = 0xFF;
+            detail.depthWriteEnable = true;
+            return detail;
+        }
+
+        /**
+         * @brief Test for equal stencil values
+         * @details
+         * Pass only if stencil buffer value equals reference value.
+         * Used for masking and selective rendering.
+         * 
+         * Use Case: Render only in regions marked with specific value
+         * 
+         * @return StencilTestDetail configured for equality testing
+         */
+        static inline StencilTestDetail TestEqual()
+        {
+            StencilTestDetail detail;
+            detail.enable           = true;
+            detail.stencilFunc      = StencilComparison::Equal;
+            detail.stencilPassOp    = StencilOperation::Keep;
+            detail.stencilFailOp    = StencilOperation::Keep;
+            detail.stencilWriteMask = 0x00; // Read-only test
+            detail.depthWriteEnable = true;
+            return detail;
+        }
+
+        /**
+         * @brief Test for non-equal stencil values
+         * @details
+         * Pass only if stencil buffer value does NOT equal reference value.
+         * Used for inverse masking.
+         * 
+         * Use Case: Render everywhere except marked regions
+         * 
+         * @return StencilTestDetail configured for inequality testing
+         */
+        static inline StencilTestDetail TestNotEqual()
+        {
+            StencilTestDetail detail;
+            detail.enable           = true;
+            detail.stencilFunc      = StencilComparison::NotEqual;
+            detail.stencilPassOp    = StencilOperation::Keep;
+            detail.stencilFailOp    = StencilOperation::Keep;
+            detail.stencilWriteMask = 0x00; // Read-only test
+            detail.depthWriteEnable = true;
+            return detail;
+        }
+
+        /**
+         * @brief Outline rendering using stencil
+         * @details
+         * Two-pass technique:
+         * 1. Mark object pixels with MarkAlways()
+         * 2. Render outline where stencil != marked value
+         * 
+         * Use Case: Character selection outlines, UI highlighting
+         * 
+         * @return StencilTestDetail configured for outline rendering
+         */
+        static inline StencilTestDetail OutlineNotEqual()
+        {
+            StencilTestDetail detail;
+            detail.enable           = true;
+            detail.stencilFunc      = StencilComparison::NotEqual;
+            detail.stencilPassOp    = StencilOperation::Replace;
+            detail.stencilWriteMask = 0xFF;
+            detail.depthWriteEnable = false; // Don't write depth for outlines
+            return detail;
+        }
+
+        /**
+         * @brief Shadow volume front face rendering
+         * @details
+         * Increment stencil when front faces pass depth test but fail stencil.
+         * Part of shadow volume algorithm (entering shadow).
+         * 
+         * Use Case: Real-time shadow volumes (front faces increment shadow counter)
+         * 
+         * @return StencilTestDetail configured for shadow volume front faces
+         */
+        static inline StencilTestDetail ShadowVolumeFront()
+        {
+            StencilTestDetail detail;
+            detail.enable             = true;
+            detail.stencilFunc        = StencilComparison::Always;
+            detail.stencilPassOp      = StencilOperation::Keep;
+            detail.stencilFailOp      = StencilOperation::Keep;
+            detail.stencilDepthFailOp = StencilOperation::Incr; // Increment on depth fail
+            detail.depthWriteEnable   = false; // Shadow volumes don't write depth
+            return detail;
+        }
+
+        /**
+         * @brief Shadow volume back face rendering
+         * @details
+         * Decrement stencil when back faces pass depth test but fail stencil.
+         * Part of shadow volume algorithm (exiting shadow).
+         * 
+         * Use Case: Real-time shadow volumes (back faces decrement shadow counter)
+         * 
+         * @return StencilTestDetail configured for shadow volume back faces
+         */
+        static inline StencilTestDetail ShadowVolumeBack()
+        {
+            StencilTestDetail detail;
+            detail.enable             = true;
+            detail.stencilFunc        = StencilComparison::Always;
+            detail.stencilPassOp      = StencilOperation::Keep;
+            detail.stencilFailOp      = StencilOperation::Keep;
+            detail.stencilDepthFailOp = StencilOperation::Decr; // Decrement on depth fail
+            detail.depthWriteEnable   = false; // Shadow volumes don't write depth
+            return detail;
+        }
+
+        /**
+         * @brief Equality comparison operator for PSO caching
+         * @details Compares all 14 fields to determine if two stencil configurations are identical
+         * @param other The other StencilTestDetail to compare with
+         * @return true if all fields match, false otherwise
+         */
+        bool operator==(const StencilTestDetail& other) const
+        {
+            return enable == other.enable &&
+                refValue == other.refValue &&
+                stencilFunc == other.stencilFunc &&
+                stencilPassOp == other.stencilPassOp &&
+                stencilFailOp == other.stencilFailOp &&
+                stencilDepthFailOp == other.stencilDepthFailOp &&
+                stencilReadMask == other.stencilReadMask &&
+                stencilWriteMask == other.stencilWriteMask &&
+                depthWriteEnable == other.depthWriteEnable &&
+                useSeparateFrontBack == other.useSeparateFrontBack &&
+                backFaceStencilFunc == other.backFaceStencilFunc &&
+                backFaceStencilPassOp == other.backFaceStencilPassOp &&
+                backFaceStencilFailOp == other.backFaceStencilFailOp &&
+                backFaceStencilDepthFailOp == other.backFaceStencilDepthFailOp;
+        }
     };
 } // namespace enigma::graphic

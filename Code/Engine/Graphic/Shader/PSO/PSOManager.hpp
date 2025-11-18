@@ -27,7 +27,8 @@
 namespace enigma::graphic
 {
     class ShaderProgram;
-
+#pragma warning(push)
+#pragma warning(disable: 4324)
     /**
      * @struct PSOKey
      * @brief PSO缓存键 - 唯一标识一个PSO配置
@@ -52,6 +53,7 @@ namespace enigma::graphic
         DXGI_FORMAT          depthFormat   = DXGI_FORMAT_UNKNOWN; ///< 深度格式
         BlendMode            blendMode     = BlendMode::Opaque; ///< 混合模式
         DepthMode            depthMode     = DepthMode::Enabled; ///< 深度模式
+        StencilTestDetail    stencilDetail = StencilTestDetail::Disabled(); ///< Stencil test configuration
 
         /**
          * @brief 相等比较运算符
@@ -144,11 +146,12 @@ namespace enigma::graphic
          * 4. 新PSO加入缓存
          */
         ID3D12PipelineState* GetOrCreatePSO(
-            const ShaderProgram* shaderProgram,
-            const DXGI_FORMAT    rtFormats[8],
-            DXGI_FORMAT          depthFormat,
-            BlendMode            blendMode,
-            DepthMode            depthMode
+            const ShaderProgram*     shaderProgram,
+            const DXGI_FORMAT        rtFormats[8],
+            DXGI_FORMAT              depthFormat,
+            BlendMode                blendMode,
+            DepthMode                depthMode,
+            const StencilTestDetail& stencilDetail
         );
 
         /**
@@ -188,8 +191,13 @@ namespace enigma::graphic
          * @brief 配置深度模板状态
          * @param depthStencilDesc 深度模板描述符
          * @param depthMode 深度模式
+         * @param stencilDetail Stencil test configuration
          */
-        static void ConfigureDepthStencilState(D3D12_DEPTH_STENCIL_DESC& depthStencilDesc, DepthMode depthMode);
+        static void ConfigureDepthStencilState(
+            D3D12_DEPTH_STENCIL_DESC& depthStencilDesc,
+            DepthMode                 depthMode,
+            const StencilTestDetail&  stencilDetail
+        );
 
         /**
          * @brief 配置光栅化状态

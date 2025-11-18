@@ -891,6 +891,28 @@ namespace enigma::graphic
          * - 对应OpenGL的glDepthFunc
          */
         void SetDepthMode(DepthMode mode);
+
+        /**
+         * @brief Set stencil test configuration (for PSO)
+         * @param detail Stencil test detail (enable, compare function, operations, etc.)
+         *
+         * Teaching Points:
+         * - Stencil configuration is part of PSO (immutable state)
+         * - Changing it requires PSO rebuild via PSOManager
+         * - Reference value is dynamic and set separately via SetStencilRefValue
+         */
+        void SetStencilTest(const StencilTestDetail& detail);
+
+        /**
+         * @brief Set stencil reference value (dynamic CommandList state)
+         * @param refValue Stencil reference value (0-255)
+         *
+         * Teaching Points:
+         * - Reference value is dynamic state (does not affect PSO)
+         * - Can be changed per draw call without PSO rebuild
+         * - Applied via OMSetStencilRef on active CommandList
+         */
+        void SetStencilRefValue(uint8_t refValue);
 #pragma endregion
 
 #pragma region RenderTarget Management
@@ -1543,6 +1565,12 @@ namespace enigma::graphic
 
         /// 当前深度模式
         DepthMode m_currentDepthMode = DepthMode::Enabled;
+
+        /// Current stencil test configuration (PSO static state)
+        StencilTestDetail m_currentStencilTest = StencilTestDetail::Disabled();
+
+        /// Current stencil reference value (CommandList dynamic state)
+        uint8_t m_currentStencilRef = 0;
 
         // ==================== 配置和状态 ====================
 
