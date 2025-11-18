@@ -687,7 +687,7 @@ void RendererSubsystem::BeginFrame()
     // 教学要点: 这是 MixinLevelRenderer 中 CLEAR target 所在位置
     if (m_configuration.enableAutoClearColor)
     {
-        // TODO (Milestone 3.2): 调用 D3D12RenderSystem::ClearRenderTarget()
+        // Clear SwapChain BackBuffer first
         bool success = D3D12RenderSystem::BeginFrame(
             m_configuration.defaultClearColor, // 配置的默认颜色
             m_configuration.defaultClearDepth, // 深度清除值
@@ -699,7 +699,20 @@ void RendererSubsystem::BeginFrame()
             LogWarn(LogRenderer, "BeginFrame - D3D12 frame clear failed");
         }
 
-        LogDebug(LogRenderer, "BeginFrame - Render target cleared");
+        // [NEW] Clear all GBuffer RTs and DepthTex (centralized clear strategy)
+        // This ensures clean state for the frame
+        // Clear order:
+        // 1. SwapChain BackBuffer: cleared by D3D12RenderSystem::BeginFrame (above)
+        // 2. GBuffer colortex (0-7): cleared here
+        // 3. DepthTex (0-2): cleared here (including stencil)
+        //
+        // Centralized approach benefits:
+        // - All RTs start with clean state
+        // - Multi-pass rendering can rely on preserved values (via LoadAction::Load)
+        // - No RT trailing artifacts
+        ClearAllRenderTargets(m_configuration.defaultClearColor);
+
+        LogDebug(LogRenderer, "BeginFrame - All render targets cleared (centralized strategy)");
     }
 
     LogInfo(LogRenderer, "BeginFrame - Frame preparation completed (ready for game update)");
@@ -1405,6 +1418,22 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     }
     else if (m_renderTargetBinder)
     {
+        // [ARCHITECTURE] Use LoadAction::Load to preserve RT contents across passes
+        // 
+        // Clear Strategy:
+        //   - BeginFrame: Clears all RTs once per frame (centralized)
+        //   - UseProgram: Loads existing RT contents (preserves multi-pass state)
+        //
+        // This design supports:
+        //   - Multi-pass rendering (e.g., 3-pass stencil outline)
+        //   - Deferred shading pipelines
+        //   - Shadow mapping techniques
+        //
+        // LoadAction::Load means:
+        //   - Color RTs: Preserve existing pixel data
+        //   - Depth/Stencil: Preserve depth and stencil values
+        //   - No clear operations performed
+
         std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
         std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
 
@@ -1413,9 +1442,9 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
             rtTypes, indices,
             RTType::DepthTex, depthIndex,
             false,
-            LoadAction::Clear,
+            LoadAction::Load, // [CHANGED] Load instead of Clear
             clearValues,
-            ClearValue::Depth(1.0f, 0)
+            ClearValue::Depth(1.0f, 0) // [NOTE] Not used when LoadAction::Load
         );
     }
 
@@ -2392,4 +2421,97 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
     SetIndexBuffer(ibo.get());
     DrawIndexed(static_cast<uint32_t>(indexCount), 0, 0);
 }
+
+// ============================================================================
+// Clear Operations - Flexible RT Management
+// ============================================================================
+
+void RendererSubsystem::ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearColor)
+{
+    // Get active CommandList
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "ClearRenderTarget: No active CommandList");
+        return;
+    }
+
+    // Validate rtIndex range
+    if (rtIndex >= static_cast<uint32_t>(m_configuration.gbufferColorTexCount))
+    {
+        LogError(LogRenderer, "ClearRenderTarget: Invalid rtIndex=%u (max=%d)",
+                 rtIndex, m_configuration.gbufferColorTexCount);
+        return;
+    }
+
+    // Get RTV handle for specified RT
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_renderTargetManager->GetMainRTV(static_cast<int>(rtIndex));
+
+    // Convert Rgba8 to float array
+    float clearColorFloat[4] = {
+        clearColor.r / 255.0f,
+        clearColor.g / 255.0f,
+        clearColor.b / 255.0f,
+        clearColor.a / 255.0f
+    };
+
+    // Clear the RT
+    cmdList->ClearRenderTargetView(rtvHandle, clearColorFloat, 0, nullptr);
+
+    LogDebug(LogRenderer, "ClearRenderTarget: Cleared colortex%u to RGBA(%u,%u,%u,%u)",
+             rtIndex, clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+}
+
+void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth, uint8_t clearStencil)
+{
+    // Get active CommandList
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "ClearDepthStencil: No active CommandList");
+        return;
+    }
+
+    // Validate depthIndex range [0, 2]
+    if (depthIndex > 2)
+    {
+        LogError(LogRenderer, "ClearDepthStencil: Invalid depthIndex=%u (max=2)", depthIndex);
+        return;
+    }
+
+    // Get DSV handle for specified depth texture
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthTextureManager->GetDSV(static_cast<int>(depthIndex));
+
+    // Clear depth and stencil
+    cmdList->ClearDepthStencilView(
+        dsvHandle,
+        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+        clearDepth,
+        clearStencil,
+        0,
+        nullptr
+    );
+
+    LogDebug(LogRenderer, "ClearDepthStencil: Cleared depthtex%u (depth=%.2f, stencil=%u)",
+             depthIndex, clearDepth, clearStencil);
+}
+
+void RendererSubsystem::ClearAllRenderTargets(const Rgba8& clearColor)
+{
+    // Clear all active colortex (0 to gbufferColorTexCount-1)
+    for (int i = 0; i < m_configuration.gbufferColorTexCount; ++i)
+    {
+        ClearRenderTarget(static_cast<uint32_t>(i), clearColor);
+    }
+
+    // Clear all 3 depthtex (0 to 2)
+    for (uint32_t i = 0; i < 3; ++i)
+    {
+        ClearDepthStencil(i, 1.0f, 0);
+    }
+
+    LogDebug(LogRenderer, "ClearAllRenderTargets: Cleared %d colortex and 3 depthtex",
+             m_configuration.gbufferColorTexCount);
+}
+
 #pragma endregion

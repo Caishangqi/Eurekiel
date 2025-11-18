@@ -351,11 +351,13 @@ namespace enigma::graphic
             ERROR_AND_DIE("PerformClearOperations: cmdList is null")
         }
 
-        // 根据LoadAction决定是否执行Clear操作
+        // [OPTIMIZATION] Early exit for LoadAction::Load
+        // Most cases use LoadAction::Load (UseProgram fixed to Load in Task 3)
+        // This avoids unnecessary checks and reduces CPU overhead
         if (m_pendingState.loadAction != LoadAction::Clear)
         {
-            // LoadAction::Load - 保留现有内容，不做任何操作
-            // LoadAction::DontCare - 性能优化，不关心内容，不做任何操作
+            LogDebug("RenderTargetBinder", "PerformClearOperations: Early exit (LoadAction=%d, not Clear)",
+                     static_cast<int>(m_pendingState.loadAction));
             return;
         }
 

@@ -118,7 +118,7 @@ namespace enigma::graphic
         uint32_t    slicePitch; ///< 切片间距 (字节)
 
         // RenderTarget属性
-        ClearValue clearValue; ///< Clear value for RenderTarget optimization
+        ClearValue clearValue; ///< Clear value for Fast Clear optimization (RenderTarget only)
 
         // 调试属性
         const char* debugName; ///< 调试名称

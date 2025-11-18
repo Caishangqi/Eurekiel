@@ -70,7 +70,8 @@ RenderTargetManager::RenderTargetManager(
                          .SetDimensions(rtWidth, rtHeight)
                          .SetLinearFilter(config.allowLinearFilter)
                          .SetSampleCount(config.sampleCount)
-                         .EnableMipmap(config.enableMipmap);
+                         .EnableMipmap(config.enableMipmap)
+                         .SetClearValue(config.clearValue); // [NEW] Pass clearValue from RTConfig to Builder
 
         // 设置调试名称 (例如: "colortex0")
         char debugName[32];

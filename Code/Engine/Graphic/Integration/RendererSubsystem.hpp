@@ -872,6 +872,82 @@ namespace enigma::graphic
          */
         void PresentCustomTexture(std::shared_ptr<D12Texture> texture);
 
+        // ========================================================================
+        // Clear Operations - Flexible RT Management
+        // ========================================================================
+
+        /**
+         * @brief Clear a specific render target with the given color
+         * @param rtIndex Render target index [0, activeColorTexCount)
+         * @param clearColor Clear color (default: black)
+         *
+         * @details
+         * Provides flexible RT clearing without rebinding or affecting other RTs.
+         * Useful for selective clearing in multi-pass rendering.
+         *
+         * @code
+         * // Clear colortex0 to red
+         * renderer->ClearRenderTarget(0, Rgba8::RED);
+         *
+         * // Clear colortex1 to black (default)
+         * renderer->ClearRenderTarget(1);
+         * @endcode
+         *
+         * Teaching Points:
+         * - Understand DirectX 12's ClearRenderTargetView API
+         * - Learn selective RT clearing without full rebind
+         * - Master flexible render target management
+         */
+        void ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearColor = Rgba8::BLACK);
+
+        /**
+         * @brief Clear a specific depth-stencil texture
+         * @param depthIndex Depth texture index [0, 2] (depthtex0/1/2)
+         * @param clearDepth Clear depth value (default: 1.0f)
+         * @param clearStencil Clear stencil value (default: 0)
+         *
+         * @details
+         * Provides flexible depth-stencil clearing for multi-pass rendering.
+         * Supports clearing depth and stencil independently.
+         *
+         * @code
+         * // Clear depthtex0 to default (depth=1.0, stencil=0)
+         * renderer->ClearDepthStencil(0);
+         *
+         * // Clear depthtex1 with custom values
+         * renderer->ClearDepthStencil(1, 0.5f, 128);
+         * @endcode
+         *
+         * Teaching Points:
+         * - Understand DirectX 12's ClearDepthStencilView API
+         * - Learn depth-stencil clearing strategies
+         * - Master multi-pass depth management
+         */
+        void ClearDepthStencil(uint32_t depthIndex = 0, float clearDepth = 1.0f, uint8_t clearStencil = 0);
+
+        /**
+         * @brief Clear all active render targets and depth textures
+         * @param clearColor Clear color for all RTs (default: black)
+         *
+         * @details
+         * Convenience method to clear all active colortex (0 to activeColorTexCount-1)
+         * and all depthtex (0 to 2) in one call.
+         *
+         * @code
+         * // Clear all RTs to black and all depth to 1.0
+         * renderer->ClearAllRenderTargets();
+         *
+         * // Clear all RTs to blue
+         * renderer->ClearAllRenderTargets(Rgba8::BLUE);
+         * @endcode
+         *
+         * Teaching Points:
+         * - Understand batch clearing operations
+         * - Learn efficient multi-RT clearing
+         * - Master frame initialization patterns
+         */
+        void ClearAllRenderTargets(const Rgba8& clearColor = Rgba8::BLACK);
+
         /**
          * @brief 设置混合模式
          * @param mode 混合模式
