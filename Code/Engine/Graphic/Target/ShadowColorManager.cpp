@@ -299,4 +299,10 @@ namespace enigma::graphic
 
         return oss.str();
     }
+
+    DXGI_FORMAT ShadowColorManager::GetRenderTargetFormat(int index) const
+    {
+        UNUSED(index)
+        return DXGI_FORMAT_UNKNOWN;
+    }
 } // namespace enigma::graphic

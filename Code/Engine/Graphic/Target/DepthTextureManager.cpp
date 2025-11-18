@@ -24,8 +24,6 @@ DepthTextureManager::DepthTextureManager(
 )
     : m_renderWidth(baseWidth)
       , m_renderHeight(baseHeight)
-      , m_width(baseWidth)
-      , m_height(baseHeight)
 {
     // 参数验证 - 尺寸
     if (baseWidth <= 0 || baseHeight <= 0)
@@ -299,9 +297,6 @@ void DepthTextureManager::OnResize(int newWidth, int newHeight)
         throw std::invalid_argument("New width and height must be greater than zero");
     }
 
-    // 更新尺寸
-    m_width        = newWidth;
-    m_height       = newHeight;
     m_renderWidth  = newWidth;
     m_renderHeight = newHeight;
 
@@ -319,9 +314,9 @@ void DepthTextureManager::OnResize(int newWidth, int newHeight)
             {
                 // 计算原有分辨率比例
                 float widthRatio = static_cast<float>(m_depthConfigs[i].width) /
-                    static_cast<float>(m_width);
+                    static_cast<float>(m_renderWidth);
                 float heightRatio = static_cast<float>(m_depthConfigs[i].height) /
-                    static_cast<float>(m_height);
+                    static_cast<float>(m_renderHeight);
 
                 targetWidth  = static_cast<int>(newWidth * widthRatio);
                 targetHeight = static_cast<int>(newHeight * heightRatio);

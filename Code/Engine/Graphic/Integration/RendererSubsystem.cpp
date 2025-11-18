@@ -20,6 +20,8 @@
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
+#include "Engine/Graphic/Shader/PSO/PSOStateCollector.hpp" // PSO状态收集器
+#include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
 #include "Engine/Graphic/Shader/ShaderPack/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
@@ -1375,17 +1377,22 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     }
 
     // ========================================================================
-    // M6.2.1: UseProgram RT 绑定（三种模式）
+    // [REFACTORED] UseProgram - PSO延迟绑定架构 (Phase 2)
     // ========================================================================
-    // Mode A: 参数指定 RT 输出 - UseProgram(program, {4,5,6,7})
-    // Mode B: 空数组使用默认 RT - UseProgram(program, {})
-    // Mode C: 显式绑定 - BindRenderTargets() + UseProgram(program)
+    // 职责：
+    // 1. 缓存当前ShaderProgram状态
+    // 2. 绑定RenderTarget（三种模式）
+    // 
+    // PSO创建和绑定已移至Draw()方法（延迟到实际绘制时执行）
     // ========================================================================
 
-    // 1. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
+    // 1. 缓存当前ShaderProgram（供后续Draw()使用）
+    m_currentShaderProgram = shaderProgram.get();
+
+    // 2. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
     const auto& drawBuffers = rtOutputs.empty() ? shaderProgram->GetDirectives().GetDrawBuffers() : rtOutputs;
 
-    // 2. RT绑定逻辑（三种模式）
+    // 3. RT绑定逻辑（三种模式）
     auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
@@ -1408,22 +1415,7 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     }
     else if (m_renderTargetBinder)
     {
-        // [ARCHITECTURE] Use LoadAction::Load to preserve RT contents across passes
-        // 
-        // Clear Strategy:
-        //   - BeginFrame: Clears all RTs once per frame (centralized)
-        //   - UseProgram: Loads existing RT contents (preserves multi-pass state)
-        //
-        // This design supports:
-        //   - Multi-pass rendering (e.g., 3-pass stencil outline)
-        //   - Deferred shading pipelines
-        //   - Shadow mapping techniques
-        //
-        // LoadAction::Load means:
-        //   - Color RTs: Preserve existing pixel data
-        //   - Depth/Stencil: Preserve depth and stencil values
-        //   - No clear operations performed
-
+        // Mode A/C: 绑定指定的RenderTarget
         std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
         std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
 
@@ -1432,75 +1424,16 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
             rtTypes, indices,
             RTType::DepthTex, depthIndex,
             false,
-            LoadAction::Load, // [CHANGED] Load instead of Clear
+            LoadAction::Load,
             clearValues,
-            ClearValue::Depth(1.0f, 0) // [NOTE] Not used when LoadAction::Load
+            ClearValue::Depth(1.0f, 0)
         );
-    }
 
-    // 3. 获取当前RT格式（从RenderTargetManager）
-    DXGI_FORMAT rtFormats[8] = {};
-    if (m_renderTargetManager)
-    {
-        for (size_t i = 0; i < drawBuffers.size() && i < 8; ++i)
-        {
-            rtFormats[i] = m_renderTargetManager->GetRenderTargetFormat(static_cast<int>(drawBuffers[i]));
-        }
-    }
-
-    // 5. 调用PSOManager::GetOrCreatePSO获取PSO
-    if (!cmdList)
-    {
-        LogError(LogRenderer, "UseProgram: CommandList is nullptr");
-        return;
-    }
-
-    // [Phase 4 DONE]: Pass m_currentStencilTest to PSOManager for PSO creation
-    // GetOrCreatePSO now accepts StencilTestDetail parameter
-    // This allows PSO to be created with stencil configuration baked in
-    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
-        shaderProgram.get(),
-        rtFormats,
-        DXGI_FORMAT_D24_UNORM_S8_UINT,  // TODO: Do not hardcoded the format
-        m_currentBlendMode,
-        m_currentDepthMode,
-        m_currentStencilTest
-    );
-
-    if (!pso)
-    {
-        LogError(LogRenderer, "UseProgram: Failed to get or create PSO");
-        return;
-    }
-
-    // 6. 设置PSO和Root Signature
-    cmdList->SetPipelineState(pso);
-    cmdList->SetGraphicsRootSignature(shaderProgram->GetRootSignature());
-
-    // 6.5. Set stencil reference value (dynamic state)
-    // [IMPORTANT] Stencil reference value is dynamic state (not part of PSO)
-    // Must be set after SetPipelineState to ensure state synchronization
-    if (m_currentStencilTest.enable)
-    {
-        cmdList->OMSetStencilRef(m_currentStencilRef);
-        LogDebug(LogRenderer, "UseProgram: Applied stencil reference value {}", m_currentStencilRef);
-    }
-
-    // 7. [REMOVED] 旧代码: SetRootConstants(14个值) - 已废弃
-    // 架构变更: 所有Uniform Buffers现在通过Root CBV绑定
-    // - 11个Uniform Buffers: 使用 SetGraphicsRootConstantBufferView (Slot 0-10)
-    // - NoiseTexture: 单独使用 SetRootConstants (1个uint32, Slot 14)
-    // 详见: DrawVertexArray() 第2322行的 SetGraphicsRootConstantBufferView 实现
-
-    // 8. 刷新RT绑定（延迟提交）
-    if (m_renderTargetBinder)
-    {
-        // [REFACTOR] 恢复正常的FlushBindings，Hash缓存机制生效
-        // 架构说明：BeginFrame()不绑定RT，所有RT绑定由UseProgram()负责
-        // 性能优化：Hash缓存避免70%+的冗余OMSetRenderTargets调用
-        //m_renderTargetBinder->ForceFlushBindings(cmdList);
+        // 刷新RT绑定（延迟提交）
         m_renderTargetBinder->FlushBindings(cmdList);
     }
+
+    LogDebug(LogRenderer, "UseProgram: ShaderProgram cached, RenderTargets bound (PSO deferred to Draw)");
 }
 
 void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs)
@@ -1781,12 +1714,60 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         return;
     }
 
-    // 教学要点：
-    // - 非索引绘制，使用当前绑定的VertexBuffer
-    // - 委托给D3D12RenderSystem的底层Draw API
-    // - 对应OpenGL的glDrawArrays
+    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "Draw: CommandList is nullptr");
+        return;
+    }
 
-    D3D12RenderSystem::Draw(vertexCount, startVertex);
+    // Step 1: 收集PSO状态
+    auto state = PSOStateCollector::CollectCurrentState(
+        const_cast<ShaderProgram*>(m_currentShaderProgram),
+        m_currentBlendMode,
+        m_currentDepthMode,
+        m_currentStencilTest,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        m_renderTargetBinder.get()
+    );
+
+    // Step 2: 验证状态
+    const char* errorMsg = nullptr;
+    if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
+    {
+        LogError(LogRenderer, "Draw validation failed: %s", errorMsg ? errorMsg : "Unknown error");
+        return;
+    }
+
+    // Step 3: 获取或创建PSO
+    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
+        state.program,
+        state.rtFormats.data(),
+        state.depthFormat,
+        state.blendMode,
+        state.depthMode,
+        state.stencilDetail
+    );
+
+    // Step 4: 绑定PSO (避免冗余绑定)
+    if (pso != m_lastBoundPSO)
+    {
+        cmdList->SetPipelineState(pso);
+        m_lastBoundPSO = pso;
+    }
+
+    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
+    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
+    if (m_currentShaderProgram)
+    {
+        m_currentShaderProgram->Use(cmdList);
+    }
+
+    // Step 5: 设置图元拓扑
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // Step 6: 执行绘制调用
+    cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
 
     // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
     if (m_customImageManager)
@@ -1795,7 +1776,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     }
 
     LogDebug(LogRenderer,
-             "Draw: Drew {} vertices starting from vertex {}",
+             "Draw: Drew %u vertices starting from vertex %u",
              vertexCount, startVertex);
 }
 
@@ -1807,18 +1788,60 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    // 教学要点：
-    // - 索引绘制，使用当前绑定的IndexBuffer和VertexBuffer
-    // - 委托给D3D12RenderSystem的底层DrawIndexed API
-    // - 对应OpenGL的glDrawElements
-
-    // [FIX] 设置图元拓扑为三角形列表
     auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    if (cmdList)
+    if (!cmdList)
     {
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        LogError(LogRenderer, "DrawIndexed: CommandList is nullptr");
+        return;
     }
 
+    // Step 1: 收集PSO状态
+    auto state = PSOStateCollector::CollectCurrentState(
+        const_cast<ShaderProgram*>(m_currentShaderProgram),
+        m_currentBlendMode,
+        m_currentDepthMode,
+        m_currentStencilTest,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        m_renderTargetBinder.get()
+    );
+
+    // Step 2: 验证状态
+    const char* errorMsg = nullptr;
+    if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
+    {
+        LogError(LogRenderer, "DrawIndexed validation failed: %s", errorMsg ? errorMsg : "Unknown error");
+        return;
+    }
+
+    // Step 3: 获取或创建PSO
+    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
+        state.program,
+        state.rtFormats.data(),
+        state.depthFormat,
+        state.blendMode,
+        state.depthMode,
+        state.stencilDetail
+    );
+
+    // Step 4: 绑定PSO（仅在变化时）
+    if (pso != m_lastBoundPSO)
+    {
+        cmdList->SetPipelineState(pso);
+        m_lastBoundPSO = pso;
+    }
+
+    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
+    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
+    // 之前UseProgram()会调用ShaderProgram::Use()，但重构后移除了该调用
+    if (m_currentShaderProgram)
+    {
+        m_currentShaderProgram->Use(cmdList);
+    }
+
+    // Step 5: 设置图元拓扑
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // Step 6: 执行绘制
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
     // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
@@ -1828,8 +1851,83 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     }
 
     LogDebug(LogRenderer,
-             "DrawIndexed: Drew {} indices starting from index {} with base vertex {}",
+             "DrawIndexed: Drew %u indices starting from index %u with base vertex %d",
              indexCount, startIndex, baseVertex);
+}
+
+void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance)
+{
+    if (vertexCount == 0 || instanceCount == 0)
+    {
+        LogWarn(LogRenderer, "DrawInstanced: vertexCount or instanceCount is 0, nothing to draw");
+        return;
+    }
+
+    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "DrawInstanced: CommandList is nullptr");
+        return;
+    }
+
+    // Step 1: 收集PSO状态
+    auto state = PSOStateCollector::CollectCurrentState(
+        const_cast<ShaderProgram*>(m_currentShaderProgram),
+        m_currentBlendMode,
+        m_currentDepthMode,
+        m_currentStencilTest,
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        m_renderTargetBinder.get()
+    );
+
+    // Step 2: 验证状态
+    const char* errorMsg = nullptr;
+    if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
+    {
+        LogError(LogRenderer, "DrawInstanced validation failed: %s", errorMsg ? errorMsg : "Unknown error");
+        return;
+    }
+
+    // Step 3: 获取或创建PSO
+    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
+        state.program,
+        state.rtFormats.data(),
+        state.depthFormat,
+        state.blendMode,
+        state.depthMode,
+        state.stencilDetail
+    );
+
+    // Step 4: 绑定PSO（仅在变化时）
+    if (pso != m_lastBoundPSO)
+    {
+        cmdList->SetPipelineState(pso);
+        m_lastBoundPSO = pso;
+    }
+
+    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
+    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
+    // 之前UseProgram()会调用ShaderProgram::Use()，但重构后移除了该调用
+    if (m_currentShaderProgram)
+    {
+        m_currentShaderProgram->Use(cmdList);
+    }
+
+    // Step 5: 设置图元拓扑
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // Step 6: 执行绘制
+    cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
+
+    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnDrawComplete();
+    }
+
+    LogDebug(LogRenderer,
+             "DrawInstanced: Drew %u vertices × %u instances starting from vertex %u, instance %u",
+             vertexCount, instanceCount, startVertex, startInstance);
 }
 
 void RendererSubsystem::DrawFullscreenQuad()
@@ -2338,7 +2436,8 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
-    // 自动绑定所有PerObject Buffer的Root CBV
+    // [CRITICAL FIX] 在设置Root CBV之前必须先设置Root Signature
+    // DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
@@ -2346,6 +2445,18 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
+    // 先设置Root Signature（通过ShaderProgram::Use()）
+    if (m_currentShaderProgram)
+    {
+        m_currentShaderProgram->Use(cmdList);
+    }
+    else
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: No shader program is set");
+        return;
+    }
+
+    // 现在可以安全地绑定所有PerObject Buffer的Root CBV
     for (uint32_t slot : perObjectSlots)
     {
         auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);

@@ -609,6 +609,21 @@ namespace enigma::graphic
          */
         void DrawIndexed(uint32_t indexCount, uint32_t startIndex = 0, int32_t baseVertex = 0);
 
+        /**
+         * @brief 绘制实例化几何体（非索引）
+         * @param vertexCount 每个实例的顶点数量
+         * @param instanceCount 实例数量
+         * @param startVertex 起始顶点（默认0）
+         * @param startInstance 起始实例（默认0）
+         *
+         * 教学要点：
+         * - 执行DrawInstanced指令
+         * - 对应OpenGL的glDrawArraysInstanced
+         * - 对应DirectX 11的DrawInstanced
+         * - 使用当前绑定的VertexBuffer
+         */
+        void DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex = 0, uint32_t startInstance = 0);
+
         // ========================================================================
         // 即时顶点绘制API - 双模式支持
         // ========================================================================
@@ -1636,14 +1651,12 @@ namespace enigma::graphic
         /// PSO管理器 - 动态创建和缓存PSO
         std::unique_ptr<PSOManager> m_psoManager;
 
-        /// 当前混合模式
-        BlendMode m_currentBlendMode = BlendMode::Opaque;
-
-        /// 当前深度模式
-        DepthMode m_currentDepthMode = DepthMode::Enabled;
-
-        /// Current stencil test configuration (PSO static state)
-        StencilTestDetail m_currentStencilTest = StencilTestDetail::Disabled();
+        // [NEW] PSO state caching for deferred binding
+        ShaderProgram* m_currentShaderProgram = nullptr;
+        BlendMode            m_currentBlendMode     = BlendMode::Opaque;
+        DepthMode            m_currentDepthMode     = DepthMode::Enabled;
+        StencilTestDetail    m_currentStencilTest   = StencilTestDetail::Disabled();
+        ID3D12PipelineState* m_lastBoundPSO         = nullptr;
 
         /// Current stencil reference value (CommandList dynamic state)
         uint8_t m_currentStencilRef = 0;

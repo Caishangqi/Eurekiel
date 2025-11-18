@@ -240,7 +240,6 @@ namespace enigma::graphic
 
         /**
          * @brief 复制深度纹理（通用接口）
-         * @param cmdList 命令列表
          * @param srcIndex 源深度纹理索引 [0-2]
          * @param dstIndex 目标深度纹理索引 [0-2]
          *
@@ -366,10 +365,6 @@ namespace enigma::graphic
         std::vector<DepthTextureConfig>               m_depthConfigs; // 每个深度纹理的配置
         int                                           m_renderWidth; // 渲染分辨率宽度
         int                                           m_renderHeight; // 渲染分辨率高度
-
-        // 保留原有成员（兼容性）
-        int         m_width; // 屏幕宽度（废弃，使用m_renderWidth）
-        int         m_height; // 屏幕高度（废弃，使用m_renderHeight）
 
         // Milestone 4: 活动深度缓冲索引
         int m_currentActiveDepthIndex = 0; // 当前激活的深度缓冲索引（默认0=depthtex0）

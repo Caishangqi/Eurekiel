@@ -231,6 +231,18 @@ namespace enigma::graphic
          */
         bool HasPendingChanges() const;
 
+        /**
+         * @brief Get current bound RT formats
+         * @param outFormats Output format array (8 elements)
+         */
+        void GetCurrentRTFormats(DXGI_FORMAT outFormats[8]) const;
+
+        /**
+         * @brief Get current depth format
+         * @return Depth format
+         */
+        DXGI_FORMAT GetCurrentDepthFormat() const;
+
     private:
         // ========================================================================
         // 内部实现方法
@@ -356,5 +368,12 @@ namespace enigma::graphic
         uint32_t m_totalBindCalls; ///< 总绑定调用次数
         uint32_t m_cacheHitCount; ///< 状态缓存命中次数
         uint32_t m_actualBindCalls; ///< 实际API调用次数
+
+        // ========================================================================
+        // 格式缓存（用于状态查询）
+        // ========================================================================
+
+        DXGI_FORMAT m_currentRTFormats[8]; ///< 当前绑定的RT格式
+        DXGI_FORMAT m_currentDepthFormat; ///< 当前绑定的深度格式
     };
 } // namespace enigma::graphic

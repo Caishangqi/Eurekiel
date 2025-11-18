@@ -60,21 +60,18 @@ namespace enigma::graphic
     class BindlessIndexAllocator final
     {
     public:
-        // 索引范围常量（Milestone 2.8修正 + ImGui预留槽位支持）
-        //  槽位布局（1M描述符堆总容量）:
-        //    槽位 0-99:       ImGui预留（100个槽位，ImGuiBackendDX12使用）
-        //    槽位 100-499,999: Bindless纹理（499,900个槽位）
-        //    槽位 500,000-999,999: Bindless缓冲区（500,000个槽位）
+        // Index range constant (ImGui reserved slot support)
+        // Slot layout (total capacity of 1M descriptor heap):
+        // Slots 0-99: reserved by ImGui (100 slots, used by ImGuiBackendDX12)
+        // Slot 100-499,999: Bindless texture (499,900 slots)
+        // Slot 500,000-999,999: Bindless buffer (500,000 slots)
         //
-        //  Milestone 2.8历史: 从2M总容量缩减至1M，匹配GlobalDescriptorHeapManager实际容量
-        //    原因: Buffer索引1M-2M超出描述符堆容量，导致CreateShaderResourceView失败
-        //    解决: 纹理500K + 缓冲区500K = 1M总容量
         //
-        //  ImGui预留槽位 (Task 6): ImGuiBackendDX12使用槽位0-99进行增量分配
-        //    冲突修复: TEXTURE_INDEX_START从0改为100，避免覆盖ImGui槽位
+        // ImGui reserved slots: ImGuiBackendDX12 uses slots 0-99 for incremental allocation
+        // Conflict fix: TEXTURE_INDEX_START changed from 0 to 100 to avoid overwriting the ImGui slot
         static constexpr uint32_t IMGUI_RESERVED_START = 0;
-        static constexpr uint32_t IMGUI_RESERVED_END   = 99; // ImGui预留100个槽位
-        static constexpr uint32_t TEXTURE_INDEX_START  = 100; //  从0改为100（避免ImGui冲突）
+        static constexpr uint32_t IMGUI_RESERVED_END   = 99; // ImGui reserves 100 slots
+        static constexpr uint32_t TEXTURE_INDEX_START  = 100; // Change from 0 to 100 (to avoid ImGui conflicts)
         static constexpr uint32_t TEXTURE_INDEX_END    = 499'999;
         static constexpr uint32_t BUFFER_INDEX_START   = 500'000;
         static constexpr uint32_t BUFFER_INDEX_END     = 999'999;

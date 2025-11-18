@@ -205,6 +205,14 @@ namespace enigma::graphic
          */
         std::string GetDebugInfo(int index) const;
 
+        /**
+         * @brief [PLACEHOLDER] 获取ShadowColor的渲染目标格式
+         * @param index ShadowColor索引 [0-7]
+         * @return DXGI_FORMAT 渲染目标格式
+         * @note 临时占位符API，返回DXGI_FORMAT_UNKNOWN
+         */
+        DXGI_FORMAT GetRenderTargetFormat(int index) const;
+
     private:
         // ========================================================================
         // 私有成员

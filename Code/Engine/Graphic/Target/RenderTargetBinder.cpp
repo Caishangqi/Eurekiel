@@ -107,6 +107,42 @@ namespace enigma::graphic
         // 计算Hash
         m_pendingState.stateHash = m_pendingState.ComputeHash();
 
+        // [NEW] 更新格式缓存
+        // 清空格式数组
+        for (int i = 0; i < 8; ++i)
+        {
+            m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
+        }
+        m_currentDepthFormat = DXGI_FORMAT_UNKNOWN;
+
+        // 填充RT格式
+        for (size_t i = 0; i < rtTypes.size() && i < 8; ++i)
+        {
+            RTType type  = rtTypes[i];
+            int    index = indices[i];
+
+            // Get the format based on RT type
+            if (type == RTType::ColorTex && m_rtManager)
+            {
+                m_currentRTFormats[i] = m_rtManager->GetRenderTargetFormat(index);
+            }
+            else if (type == RTType::ShadowColor && m_shadowColorManager)
+            {
+                /// TODO: Currently not implement the ShadowColorManager
+                m_currentRTFormats[i] = m_shadowColorManager->GetRenderTargetFormat(index);
+            }
+        }
+
+        // 填充深度格式
+        if (depthType == RTType::DepthTex && m_depthManager)
+        {
+            auto depthTex = m_depthManager->GetDepthTexture(depthIndex);
+            if (depthTex)
+            {
+                m_currentDepthFormat = depthTex->GetDepthFormat();
+            }
+        }
+
         ++m_totalBindCalls;
 
         LogDebug("RenderTargetBinder", "BindRenderTargets: %zu RTVs, LoadAction=%d, Hash=0x%08X",
@@ -168,6 +204,13 @@ namespace enigma::graphic
     {
         m_pendingState.Reset();
         m_currentState.Reset();
+
+        // [NEW] 清空格式缓存
+        for (int i = 0; i < 8; ++i)
+        {
+            m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
+        }
+        m_currentDepthFormat = DXGI_FORMAT_UNKNOWN;
 
         LogDebug("RenderTargetBinder", "ClearBindings: All bindings cleared");
     }
@@ -413,5 +456,18 @@ namespace enigma::graphic
                      m_pendingState.depthClearValue.depthStencil.depth,
                      m_pendingState.depthClearValue.depthStencil.stencil);
         }
+    }
+
+    void RenderTargetBinder::GetCurrentRTFormats(DXGI_FORMAT outFormats[8]) const
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            outFormats[i] = m_currentRTFormats[i];
+        }
+    }
+
+    DXGI_FORMAT RenderTargetBinder::GetCurrentDepthFormat() const
+    {
+        return m_currentDepthFormat;
     }
 } // namespace enigma::graphic

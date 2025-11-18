@@ -269,6 +269,8 @@
         <ClCompile Include="Graphic\Shader\Common\ShaderIncludeHelper.cpp"/>
         <ClCompile Include="Graphic\Shader\Compiler\DXCCompiler.cpp" />
         <ClCompile Include="Graphic\Shader\PSO\PSOManager.cpp"/>
+        <ClCompile Include="Graphic\Shader\PSO\PSOStateCollector.cpp" />
+        <ClCompile Include="Graphic\Shader\PSO\RenderStateValidator.cpp" />
         <ClCompile Include="Graphic\Shader\ShaderCache.cpp"/>
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\ShaderPath.cpp"/>
         <ClCompile Include="Graphic\Shader\ShaderPack\Include\FileNode.cpp" />
@@ -717,6 +719,8 @@
         <ClInclude Include="Graphic\Shader\Common\ShaderCompilationHelper.hpp"/>
         <ClInclude Include="Graphic\Shader\Common\ShaderIncludeHelper.hpp"/>
         <ClInclude Include="Graphic\Shader\PSO\PSOManager.hpp"/>
+        <ClInclude Include="Graphic\Shader\PSO\PSOStateCollector.hpp" />
+        <ClInclude Include="Graphic\Shader\PSO\RenderStateValidator.hpp" />
         <ClInclude Include="Graphic\Shader\ShaderCache.hpp"/>
         <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackHelper.hpp"/>
         <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackReader.hpp"/>
