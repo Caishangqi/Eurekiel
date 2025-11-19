@@ -126,6 +126,11 @@ void InputSystem::SetCursorMode(CursorMode cursorMode)
     m_cursorState.m_cursorMode = cursorMode;
 }
 
+CursorMode InputSystem::GetCursorMode() const
+{
+    return m_cursorState.m_cursorMode;
+}
+
 Vec2 InputSystem::GetCursorClientDelta() const
 {
     return m_cursorState.m_cursorClientDelta;

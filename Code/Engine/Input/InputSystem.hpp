@@ -84,7 +84,8 @@ public:
     // In pointer mode, the cursor should be visible, freely able to move, and not recentered.
     // In FPS mode, the cursor should be hidden, reset to the center of the window each frame,
     // and record the delta each frame.
-    void SetCursorMode(CursorMode cursorMode);
+    void       SetCursorMode(CursorMode cursorMode);
+    CursorMode GetCursorMode() const;
 
     /// Returns the current frame cursor delta in pixels, relative to the client region.
     /// This is how much the cursor moved last frame before it was reset to the center of the screen.
