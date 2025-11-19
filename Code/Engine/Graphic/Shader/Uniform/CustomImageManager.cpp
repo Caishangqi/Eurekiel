@@ -1,6 +1,7 @@
 ﻿#include "CustomImageManager.hpp"
 #include "UniformManager.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 
@@ -13,17 +14,17 @@ namespace enigma::graphic
     CustomImageManager::CustomImageManager(UniformManager* uniformManager)
         : m_uniformManager(uniformManager)
     {
-        // [INIT] 初始化所有纹理指针为nullptr
+        // [INIT] Initialize all texture pointers to nullptr
         m_textures.fill(nullptr);
 
-        // [INIT] 初始化CustomImageUniform数据（构造函数已自动初始化为0）
-        // m_currentCustomImage和m_lastDrawCustomImage的构造函数会将所有索引初始化为0
+        // [INIT] Initialize CustomImageUniform data (the constructor has been automatically initialized to 0)
+        // The constructors of m_currentCustomImage and m_lastDrawCustomImage will initialize all indexes to 0
 
         LogInfo(core::LogRenderer, "[CustomImageManager] Initialized with %d slots", MAX_CUSTOM_IMAGE_SLOTS);
     }
 
     // ========================================================================
-    // 纹理槽位管理API - 设置/获取/清除
+    // Texture slot management API - set/get/clear
     // ========================================================================
 
     void CustomImageManager::SetCustomImage(int slotIndex, D12Texture* texture)
@@ -57,16 +58,28 @@ namespace enigma::graphic
         }
         else
         {
-            // [REQUIRED] 如果texture为nullptr，清除槽位（索引设为0）
-            m_currentCustomImage.SetCustomImageIndex(slotIndex, 0);
-
-            LogDebug(core::LogRenderer,
-                     "[CustomImageManager] Cleared customImage%d (set to nullptr)",
-                     slotIndex);
+            // [FIX] 使用默认白色纹理而非index=0
+            auto defaultTexture = D3D12RenderSystem::GetDefaultWhiteTexture();
+            if (defaultTexture)
+            {
+                uint32_t bindlessIndex = defaultTexture->GetBindlessIndex();
+                m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
+                LogWarn(core::LogRenderer,
+                        "[CustomImageManager] SetCustomImage(%d, nullptr): Using default white texture (index=%u)",
+                        slotIndex, bindlessIndex);
+            }
+            else
+            {
+                // Fallback到index=0（极端情况：默认纹理创建失败）
+                m_currentCustomImage.SetCustomImageIndex(slotIndex, 0);
+                LogError(core::LogRenderer,
+                         "[CustomImageManager] SetCustomImage(%d, nullptr): Default white texture unavailable, using index=0",
+                         slotIndex);
+            }
         }
 
         // [IMPORTANT] 此方法只修改CPU端数据，不触发GPU上传
-        // GPU上传延迟到OnDrawComplete()时执行
+        // GPU上传延迟到PrepareCustomImagesForDraw()时执行
     }
 
     D12Texture* CustomImageManager::GetCustomImage(int slotIndex) const
@@ -95,10 +108,10 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // Draw时调用的API - GPU上传和状态保存
+    // Draw之前调用的API - GPU上传和状态保存
     // ========================================================================
 
-    void CustomImageManager::OnDrawComplete()
+    void CustomImageManager::PrepareCustomImagesForDraw()
     {
         // [REQUIRED] 验证UniformManager指针有效性
         if (m_uniformManager == nullptr)
@@ -120,7 +133,7 @@ namespace enigma::graphic
         // 下次Draw时会继续使用当前数据，除非调用SetCustomImage()修改
 
         LogDebug(core::LogRenderer,
-                 "[CustomImageManager] OnDrawComplete: Uploaded CustomImage data to GPU (used slots: %d)",
+                 "[CustomImageManager] PrepareCustomImagesForDraw: Uploaded CustomImage data to GPU (used slots: %d)",
                  m_currentCustomImage.GetUsedSlotCount());
     }
 
@@ -194,10 +207,10 @@ namespace enigma::graphic
      * 2. **SetCustomImage()**：
      *    - 只修改CPU端数据（m_currentCustomImage和m_textures）
      *    - 通过D12Texture::GetBindlessIndex()获取Bindless索引
-     *    - 不触发GPU上传（延迟到OnDrawComplete）
+     *    - 不触发GPU上传（延迟到PrepareCustomImagesForDraw）
      *    - 支持nullptr清除槽位
      *
-     * 3. **OnDrawComplete()**：
+     * 3. **PrepareCustomImagesForDraw()**：
      *    - 通过UniformManager::UploadBuffer()上传数据到GPU
      *    - 保存状态到m_lastDrawCustomImage（实现"复制上一次Draw的数据"）
      *    - m_currentCustomImage保持不变（自动保留数据）
@@ -214,7 +227,7 @@ namespace enigma::graphic
      *
      * 6. **与UniformManager协作**：
      *    - SetCustomImage()：修改CPU端数据
-     *    - OnDrawComplete()：通过UniformManager上传GPU数据
+     *    - PrepareCustomImagesForDraw()：通过UniformManager上传GPU数据
      *    - 延迟上传策略，优化性能
      *
      * 7. **错误处理**：

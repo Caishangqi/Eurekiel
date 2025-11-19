@@ -49,8 +49,8 @@ namespace enigma::graphic
      * m_customImageManager->SetCustomImage(0, myTexture);  // customImage0
      * m_customImageManager->SetCustomImage(1, anotherTex); // customImage1
      *
-     * // Draw完成时上传
-     * m_customImageManager->OnDrawComplete();
+     * // Draw之前上传数据
+     * m_customImageManager->PrepareCustomImagesForDraw();
      *
      * // 帧开始时重置
      * m_customImageManager->OnBeginFrame();
@@ -121,7 +121,7 @@ namespace enigma::graphic
          *
          * 教学要点:
          * - 只修改CPU端数据（m_currentCustomImage和m_textures）
-         * - 不触发GPU上传（延迟到OnDrawComplete）
+         * - 不触发GPU上传（延迟到PrepareCustomImagesForDraw）
          * - 支持运行时动态更新任意槽位
          * - 范围检查确保安全
          *
@@ -140,7 +140,7 @@ namespace enigma::graphic
          * customImageMgr->SetCustomImage(1, nullptr);
          * ```
          *
-         * @note 此方法不触发GPU上传，需要调用OnDrawComplete()
+         * @note 此方法不触发GPU上传，需要调用PrepareCustomImagesForDraw()
          */
         void SetCustomImage(int slotIndex, D12Texture* texture);
 
@@ -185,10 +185,10 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief Draw完成时调用，上传CustomImage数据到GPU并保存状态
+         * @brief Draw之前调用，上传CustomImage数据到GPU并准备绘制
          *
          * 教学要点:
-         * - 在每次Draw Call后调用
+         * - 在每次Draw Call之前调用（在Root Signature绑定之后）
          * - 通过UniformManager上传m_currentCustomImage到GPU
          * - 保存当前状态到m_lastDrawCustomImage（实现"复制上一次Draw的数据"）
          * - 不修改m_currentCustomImage（保留数据供下次Draw使用）
@@ -199,21 +199,22 @@ namespace enigma::graphic
          * 3. m_currentCustomImage保持不变（无需显式复制）
          *
          * 调用时机:
-         * - 在DrawVertexArray()结束时调用
-         * - 在每个Draw Call完成后调用
+         * - 在DrawVertexArray()中，Draw Call之前调用
+         * - 在Root Signature绑定之后调用
          *
          * 使用示例:
          * ```cpp
          * // 在DrawVertexArray中
          * void DrawVertexArray(...) {
-         *     // ... 执行Draw Call ...
-         *     m_customImageManager->OnDrawComplete();
+         *     // ... 准备PSO和绑定资源 ...
+         *     m_customImageManager->PrepareCustomImagesForDraw();  // [FIX] Draw之前上传
+         *     cmdList->DrawInstanced(...);  // Draw Call
          * }
          * ```
          *
          * @note 必须在UniformManager注册CustomImageUniform后才能调用
          */
-        void OnDrawComplete();
+        void PrepareCustomImagesForDraw();
 
         // ========================================================================
         // 帧管理API - 帧开始时重置状态
@@ -297,7 +298,7 @@ namespace enigma::graphic
          *
          * 教学要点:
          * - 通过SetCustomImage()修改
-         * - 在OnDrawComplete()时上传到GPU
+         * - 在PrepareCustomImagesForDraw()时上传到GPU
          * - 保留数据供下次Draw使用（无需显式复制）
          */
         CustomImageUniform m_currentCustomImage;
@@ -306,7 +307,7 @@ namespace enigma::graphic
          * @brief 上一次Draw的CustomImage数据
          *
          * 教学要点:
-         * - 在OnDrawComplete()时从m_currentCustomImage复制
+         * - 在PrepareCustomImagesForDraw()时从m_currentCustomImage复制
          * - 实现"复制上一次Draw的数据"机制
          * - 用于调试和状态追踪
          */
@@ -377,7 +378,7 @@ namespace enigma::graphic
          *
          * 5. **与UniformManager协作**:
          *    - SetCustomImage(): 只修改CPU端数据
-         *    - OnDrawComplete(): 通过UniformManager上传GPU数据
+         *    - PrepareCustomImagesForDraw(): 通过UniformManager上传GPU数据
          *    - 延迟上传策略，优化性能
          *
          * 6. **与RenderTargetManager对比**:
