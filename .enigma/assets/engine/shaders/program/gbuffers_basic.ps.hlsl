@@ -48,8 +48,14 @@ struct PSOutput
 PSOutput main(PSInput input)
 {
     PSOutput output;
-    // [IMPORTANT] 主颜色输出到第一个RT (colortex4)
-    output.color0 = input.Color * modelColor;
+
+    // 采样CustomImage0纹理（使用线性采样器和UV坐标）
+    // CustomImage槽位在CPU侧通过SetCustomImage(0, texture)设置
+    float4 texColor = customImage0.Sample(linearSampler, input.TexCoord);
+
+    // 混合纹理颜色与顶点颜色和模型颜色
+    // 最终颜色 = 纹理颜色 × 顶点颜色 × 模型颜色
+    output.color0 = texColor * input.Color * modelColor;
 
     // [TEST] 其他RT输出测试数据
     output.color1 = input.Color * modelColor;
