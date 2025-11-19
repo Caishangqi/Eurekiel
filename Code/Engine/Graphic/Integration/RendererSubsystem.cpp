@@ -29,7 +29,6 @@
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
 #include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
-#include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp" // Shrimp Task 2: DXC编译器
 #include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
@@ -80,7 +79,7 @@ void RendererSubsystem::Initialize()
         LogWarn(LogRenderer, "No window provided in configuration - initializing in headless mode");
     }
 
-    // 调用D3D12RenderSystem的完整初始化，包括SwapChain创建
+    // Call the complete initialization of D3D12RenderSystem, including SwapChain creation
     bool success = D3D12RenderSystem::Initialize(
         m_configuration.enableDebugLayer, // Debug layer
         m_configuration.enableGPUValidation, // GPU validation
@@ -88,7 +87,6 @@ void RendererSubsystem::Initialize()
         m_configuration.renderWidth, // Render width
         m_configuration.renderHeight // Render height
     );
-
     if (!success)
     {
         LogError(LogRenderer, "Failed to initialize D3D12RenderSystem");
@@ -96,18 +94,21 @@ void RendererSubsystem::Initialize()
         return;
     }
 
+    // [INIT] Initialize engine default material
+    D3D12RenderSystem::PrepareDefaultTextures();
+
     m_isInitialized = true;
     LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully through RendererSubsystem");
 
-    // 创建PSOManager
+    // Create PSOManager
     m_psoManager = std::make_unique<PSOManager>();
     LogInfo(LogRenderer, "PSOManager created successfully");
 
-    // ==================== 初始化ShaderCache (Shrimp Task) ====================
-    // 创建ShaderCache并注册ProgramId映射
+    // ==================== Initialize ShaderCache ====================
+    // Create ShaderCache and register ProgramId mapping
     m_shaderCache = std::make_unique<ShaderCache>();
 
-    // 注册91个ProgramId映射（使用ProgramIdToSourceName函数）
+    //Register 91 ProgramId mappings (using ProgramIdToSourceName function)
     std::unordered_map<ProgramId, std::string> programIdMappings;
     for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
     {
@@ -123,7 +124,7 @@ void RendererSubsystem::Initialize()
     LogInfo(LogRenderer, "ShaderCache initialized with %zu ProgramId mappings",
             m_shaderCache->GetProgramIdCount());
 
-    // 显示架构流程确认信息
+    // Display infrastructure flow confirmation information
     LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
     g_theRendererSubsystem = this;
 }
@@ -132,7 +133,7 @@ void RendererSubsystem::Startup()
 {
     LogInfo(LogRenderer, "Starting up...");
 
-    // ==================== ShaderPack Initialization (Dual ShaderPack Architecture - Phase 5.2) ====================
+    // ==================== ShaderPack Initialization (Dual ShaderPack Architecture) ====================
     // Architecture (2025-10-19): Dual ShaderPack system with in-memory fallback
     // - m_userShaderPack: User-downloaded shader packs (optional, may be null)
     // - m_defaultShaderPack: Engine built-in shaders (required, always valid)
@@ -191,9 +192,7 @@ void RendererSubsystem::Startup()
 
     // Step 3: ALWAYS load Engine Default ShaderPack (required fallback)
     std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
-    LogInfo(LogRenderer,
-            "Loading engine default ShaderPack from: {}",
-            engineDefaultPath.string().c_str());
+    LogInfo(LogRenderer, "Loading engine default ShaderPack from: {}", engineDefaultPath.string().c_str());
 
     try
     {
@@ -1344,7 +1343,7 @@ void RendererSubsystem::ClearCustomImage(int slotIndex)
     }
 }
 
-D12Texture* RendererSubsystem::CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData)
+std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData)
 {
     // [DELEGATION] 委托给D3D12RenderSystem创建纹理
     // 教学要点：
@@ -1353,11 +1352,18 @@ D12Texture* RendererSubsystem::CreateTexture2D(int width, int height, DXGI_FORMA
     // - 建议调用者使用智能指针管理返回的纹理
 
     // 1. 调用D3D12RenderSystem创建纹理（返回unique_ptr）
-    auto texture = D3D12RenderSystem::CreateTexture2D(width, height, format, initialData);
+    return D3D12RenderSystem::CreateTexture2D(width, height, format, initialData);
+}
 
-    // 2. 转移所有权并返回裸指针
-    // 注意：调用者负责删除返回的纹理
-    return texture.release();
+std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(const class ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName)
+{
+    return D3D12RenderSystem::CreateTexture2D(resourceLocation, usage, debugName);
+}
+
+std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName)
+{
+    auto texture = D3D12RenderSystem::CreateTexture2D(imagePath, usage, debugName);
+    return texture;
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -1769,12 +1775,6 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     // Step 6: 执行绘制调用
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
 
-    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
-    if (m_customImageManager)
-    {
-        m_customImageManager->OnDrawComplete();
-    }
-
     LogDebug(LogRenderer,
              "Draw: Drew %u vertices starting from vertex %u",
              vertexCount, startVertex);
@@ -1844,12 +1844,6 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     // Step 6: 执行绘制
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
-    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
-    if (m_customImageManager)
-    {
-        m_customImageManager->OnDrawComplete();
-    }
-
     LogDebug(LogRenderer,
              "DrawIndexed: Drew %u indices starting from index %u with base vertex %d",
              indexCount, startIndex, baseVertex);
@@ -1918,12 +1912,6 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
 
     // Step 6: 执行绘制
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
-
-    // [NEW] 在Draw完成后调用CustomImageManager::OnDrawComplete()上传CustomImage数据
-    if (m_customImageManager)
-    {
-        m_customImageManager->OnDrawComplete();
-    }
 
     LogDebug(LogRenderer,
              "DrawInstanced: Drew %u vertices × %u instances starting from vertex %u, instance %u",
@@ -2312,12 +2300,7 @@ int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
 }
 
 // ========================================================================
-// 即时缓冲区管理辅助方法
-// ========================================================================
-// 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至BufferHelper [REFACTOR 2025-01-06]
-
-// ========================================================================
-// DrawVertexArray - 即时数据非索引绘制
+// DrawVertexArray - instant data non-indexed drawing
 // ========================================================================
 
 void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
@@ -2327,6 +2310,12 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
+    // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
+    if (m_customImageManager)
+    {
+        m_customImageManager->PrepareCustomImagesForDraw();
+    }
+
     if (!vertices || count == 0)
     {
         ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex data");
@@ -2342,7 +2331,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 
     SetVertexBuffer(m_immediateVBO.get());
 
-    // 设置图元拓扑为三角形列表
+    //Set the primitive topology to a triangle list
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (cmdList)
     {
@@ -2353,7 +2342,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 }
 
 // ========================================================================
-// DrawVertexArray - 即时数据索引绘制
+// DrawVertexArray - instant data index drawing
 // ========================================================================
 
 void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices)
@@ -2363,10 +2352,16 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
-    // Ring Buffer Root CBV架构集成
-    // - Delayed Fill：自动填充未更新数据，避免预填10000份浪费内存
-    // - Root CBV绑定：硬件优化路径，性能优于Bindless
-    // - 索引管理：currentDrawCount % maxCount实现循环
+    // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
+    if (m_customImageManager)
+    {
+        m_customImageManager->PrepareCustomImagesForDraw();
+    }
+
+    // Ring Buffer Root CBV architecture integration
+    // - Delayed Fill: Automatically fill in unupdated data to avoid wasting memory by pre-filling 10,000 copies
+    // - Root CBV binding: hardware optimization path, performance is better than Bindless
+    // - Index management: currentDrawCount % maxCount implements looping
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
@@ -2374,7 +2369,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // Delayed Fill：自动获取所有PerObject Buffer并按需复制最后更新值
+    // Delayed Fill: Automatically obtain all PerObject Buffers and copy the last updated value as needed
     const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
 
     for (uint32_t slot : perObjectSlots)
@@ -2387,7 +2382,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
 
         size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
 
-        // 如果当前索引未更新过，复制最后一次更新的值
+        // If the current index has not been updated, copy the last updated value
         if (bufferState->lastUpdatedIndex != currentIndex)
         {
             void* destPtr = bufferState->GetDataAt(currentIndex);
@@ -2403,26 +2398,22 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     size_t vertexSize = vertexCount * sizeof(Vertex);
     size_t indexSize  = indexCount * sizeof(unsigned);
 
-    // [CHANGED] 计算所需总空间（当前offset + 新数据）
+    // [CHANGED] Calculate the total space required (current offset + new data)
     size_t requiredVertexSize = m_currentVertexOffset + vertexSize;
     size_t requiredIndexSize  = m_currentIndexOffset + indexSize;
 
-    // 确保buffer足够大（可能触发resize）
-    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize,
-                                   static_cast<size_t>(64 * 1024),
-                                   sizeof(Vertex), "ImmediateVBO");
-    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize,
-                                   static_cast<size_t>(64 * 1024),
-                                   "ImmediateIBO");
+    // Make sure the buffer is large enough (may trigger resize)
+    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
+    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
 
-    // [CHANGED] 使用persistent mapped pointer，从当前offset开始写入
+    // [CHANGED] Use persistent mapped pointer to start writing from the current offset
     void* vertexMappedData = m_immediateVBO->GetPersistentMappedData();
     if (!vertexMappedData)
     {
-        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped");
+        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped")
         return;
     }
-    // 追加数据到当前offset
+    // Append data to the current offset
     memcpy(static_cast<char*>(vertexMappedData) + m_currentVertexOffset, vertices, vertexSize);
 
     void* indexMappedData = m_immediateIBO->GetPersistentMappedData();
@@ -2436,16 +2427,16 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
-    // [CRITICAL FIX] 在设置Root CBV之前必须先设置Root Signature
-    // DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
+    // [CRITICAL FIX] Root Signature must be set before setting Root CBV
+    // DirectX 12 requires that Root Signature must be set before SetGraphicsRootConstantBufferView
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
-        ERROR_RECOVERABLE("DrawVertexArray: CommandList is nullptr");
+        ERROR_RECOVERABLE("DrawVertexArray: CommandList is nullptr")
         return;
     }
 
-    // 先设置Root Signature（通过ShaderProgram::Use()）
+    // Set Root Signature first (via ShaderProgram::Use())
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
@@ -2456,7 +2447,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // 现在可以安全地绑定所有PerObject Buffer的Root CBV
+    // It is now safe to bind the Root CBV of all PerObject Buffers
     for (uint32_t slot : perObjectSlots)
     {
         auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);
@@ -2466,9 +2457,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         }
 
         size_t                    currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
-        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   =
-            bufferState->gpuBuffer->GetGPUVirtualAddress() +
-            currentIndex * bufferState->elementSize;
+        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   = bufferState->gpuBuffer->GetGPUVirtualAddress() + currentIndex * bufferState->elementSize;
 
         cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
 
@@ -2477,20 +2466,20 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     }
 
 
-    // [CHANGED] 使用累积的offset计算baseVertex和startIndex
-    // baseVertex: 顶点索引 = 字节offset / sizeof(Vertex)
-    // startIndex: 索引数组起始位置 = 字节offset / sizeof(unsigned)
+    // [CHANGED] Use accumulated offset to calculate baseVertex and startIndex
+    // baseVertex: vertex index = byte offset / sizeof(Vertex)
+    // startIndex: starting position of index array = byte offset / sizeof(unsigned)
     uint32_t baseVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
     uint32_t startIndex = static_cast<uint32_t>(m_currentIndexOffset / sizeof(unsigned));
     DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
 
-    // 递增Draw计数，下一次Draw使用新的Ring Buffer索引
+    // Increment the Draw count and use the new Ring Buffer index for the next Draw
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
 
-    // [NEW] 更新offset（追加数据）
+    // [NEW] Update offset (append data)
     m_currentVertexOffset += vertexSize;
     m_currentIndexOffset  += indexSize;
 }
