@@ -1236,7 +1236,9 @@ namespace enigma::graphic
          * @warning 调用者必须负责删除返回的纹理，否则会内存泄漏
          * @see SetCustomImage, D3D12RenderSystem::CreateTexture2D
          */
-        D12Texture* CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData = nullptr);
+        std::shared_ptr<D12Texture> CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData = nullptr);
+        std::shared_ptr<D12Texture> CreateTexture2D(const class ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName = "");
+        std::shared_ptr<D12Texture> CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName = "");
 
         /**
          * @brief 获取当前帧vertex buffer写入offset
@@ -1652,7 +1654,7 @@ namespace enigma::graphic
         std::unique_ptr<PSOManager> m_psoManager;
 
         // [NEW] PSO state caching for deferred binding
-        ShaderProgram* m_currentShaderProgram = nullptr;
+        ShaderProgram*       m_currentShaderProgram = nullptr;
         BlendMode            m_currentBlendMode     = BlendMode::Opaque;
         DepthMode            m_currentDepthMode     = DepthMode::Enabled;
         StencilTestDetail    m_currentStencilTest   = StencilTestDetail::Disabled();
