@@ -85,7 +85,7 @@ namespace enigma::graphic
          */
         static bool Initialize(bool enableDebugLayer = true, bool        enableGPUValidation = false,
                                HWND hwnd             = nullptr, uint32_t renderWidth         = 1280, uint32_t renderHeight = 720);
-
+        static bool PrepareDefaultTextures();
         /**
          * 关闭渲染系统，释放所有资源
          * 包括设备、命令队列和CommandListManager
@@ -340,6 +340,51 @@ namespace enigma::graphic
          * @note M6.3新增 - 用于Present API绑定RTV
          */
         static D3D12_CPU_DESCRIPTOR_HANDLE GetBackBufferRTV();
+
+        // ===== 系统默认纹理API (用于材质系统Fallback) =====
+
+        /**
+         * @brief 获取系统默认白色纹理 (1x1, RGBA = 255,255,255,255)
+         * @return 白色纹理的shared_ptr，用于材质系统Fallback
+         * 
+         * 教学要点:
+         * 1. 用途：当材质缺少漫反射贴图时的默认值
+         * 2. 初始化时机：D3D12RenderSystem::Initialize()中创建
+         * 3. 线程安全：静态成员，Initialize后只读访问
+         * 4. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
+         * 
+         * 使用示例:
+         * @code
+         * auto whiteTex = D3D12RenderSystem::GetDefaultWhiteTexture();
+         * uint32_t bindlessIndex = whiteTex->GetBindlessIndex().value();
+         * @endcode
+         */
+        static std::shared_ptr<D12Texture> GetDefaultWhiteTexture();
+
+        /**
+         * @brief 获取系统默认黑色纹理 (1x1, RGBA = 0,0,0,255)
+         * @return 黑色纹理的shared_ptr，用于材质系统Fallback
+         * 
+         * 教学要点:
+         * 1. 用途：当材质缺少自发光/AO贴图时的默认值
+         * 2. 初始化时机：D3D12RenderSystem::Initialize()中创建
+         * 3. 线程安全：静态成员，Initialize后只读访问
+         * 4. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
+         */
+        static std::shared_ptr<D12Texture> GetDefaultBlackTexture();
+
+        /**
+         * @brief 获取系统默认法线纹理 (1x1, RGBA = 128,128,255,255)
+         * @return 法线纹理的shared_ptr，用于材质系统Fallback
+         * 
+         * 教学要点:
+         * 1. 用途：当材质缺少法线贴图时的默认值（表示平坦表面）
+         * 2. 颜色含义：RGB(128,128,255) = 法线向上(0,0,1)
+         * 3. 初始化时机：D3D12RenderSystem::Initialize()中创建
+         * 4. 线程安全：静态成员，Initialize后只读访问
+         * 5. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
+         */
+        static std::shared_ptr<D12Texture> GetDefaultNormalTexture();
 
         /**
          * @brief 获取当前BackBuffer的Resource指针
@@ -937,6 +982,11 @@ namespace enigma::graphic
         // 纹理缓存系统（Milestone Bindless新增）
         static std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> s_textureCache;
         static std::mutex                                                      s_textureCacheMutex; // 缓存互斥锁（线程安全）
+
+        // 系统默认纹理（用于材质系统Fallback）
+        static std::shared_ptr<D12Texture> s_defaultWhiteTexture; // 白色纹理 (1x1, RGBA = 255,255,255,255)
+        static std::shared_ptr<D12Texture> s_defaultBlackTexture; // 黑色纹理 (1x1, RGBA = 0,0,0,255)
+        static std::shared_ptr<D12Texture> s_defaultNormalTexture; // 法线纹理 (1x1, RGBA = 128,128,255,255)
 
 
         // 系统状态（移除重复的配置结构）

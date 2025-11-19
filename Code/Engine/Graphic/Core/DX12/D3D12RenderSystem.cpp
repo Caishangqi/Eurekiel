@@ -53,6 +53,11 @@ namespace enigma::graphic
     std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> D3D12RenderSystem::s_textureCache;
     std::mutex                                                      D3D12RenderSystem::s_textureCacheMutex;
 
+    // 系统默认纹理（用于材质系统Fallback）
+    std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultWhiteTexture  = nullptr;
+    std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultBlackTexture  = nullptr;
+    std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultNormalTexture = nullptr;
+
     bool D3D12RenderSystem::s_isInitialized = false;
 
     // ===== Public API implementation =====
@@ -152,6 +157,67 @@ namespace enigma::graphic
         return true;
     }
 
+    bool D3D12RenderSystem::PrepareDefaultTextures()
+    {
+        // 6. 创建系统默认纹理（用于材质系统Fallback）
+        // 教学要点：这些纹理在材质缺少贴图时作为默认值使用
+        // 注意：RGBA字节序为小端格式 (0xAABBGGRR)
+
+        // 6.1 白色纹理 (1x1, RGBA = 255,255,255,255)
+        // 用途：漫反射贴图缺失时的默认值
+        uint32_t whitePixel   = 0xFFFFFFFF; // ABGR: A=255, B=255, G=255, R=255
+        s_defaultWhiteTexture = std::shared_ptr<D12Texture>(
+            CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
+                            &whitePixel, "DefaultWhiteTexture").release());
+        if (!s_defaultWhiteTexture)
+        {
+            core::LogError(LogRenderer, "Failed to create default white texture");
+            ERROR_AND_DIE("Failed to create default white texture")
+        }
+        else
+        {
+            core::LogInfo(LogRenderer, "Default white texture created (Bindless index=%u)",
+                          s_defaultWhiteTexture->GetBindlessIndex());
+        }
+
+        // 6.2 黑色纹理 (1x1, RGBA = 0,0,0,255)
+        // 用途：自发光/AO贴图缺失时的默认值
+        uint32_t blackPixel   = 0xFF000000; // ABGR: A=255, B=0, G=0, R=0
+        s_defaultBlackTexture = std::shared_ptr<D12Texture>(
+            CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
+                            &blackPixel, "DefaultBlackTexture").release());
+        if (!s_defaultBlackTexture)
+        {
+            core::LogError(LogRenderer, "Failed to create default black texture");
+            ERROR_AND_DIE("Failed to create default black texture")
+        }
+        else
+        {
+            core::LogInfo(LogRenderer, "Default black texture created (Bindless index=%u)",
+                          s_defaultBlackTexture->GetBindlessIndex());
+        }
+
+        // 6.3 法线纹理 (1x1, RGBA = 128,128,255,255)
+        // 用途：法线贴图缺失时的默认值，表示平坦表面（法线向上）
+        // RGB(128,128,255) 解码后 = (0,0,1) 法线向上
+        uint32_t normalPixel   = 0xFFFF8080; // ABGR: A=255, B=255, G=128, R=128
+        s_defaultNormalTexture = std::shared_ptr<D12Texture>(
+            CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
+                            &normalPixel, "DefaultNormalTexture").release());
+        if (!s_defaultNormalTexture)
+        {
+            core::LogError(LogRenderer, "Failed to create default normal texture");
+            ERROR_AND_DIE("Failed to create default normal texture")
+        }
+        else
+        {
+            core::LogInfo(LogRenderer, "Default normal texture created (Bindless index=%u)",
+                          s_defaultNormalTexture->GetBindlessIndex());
+        }
+
+        return true;
+    }
+
     /**
      * Turn off the rendering system (release all resources)
      * Includes CommandListManager, Bindless systems, SwapChain, Devices and DXGI Objects
@@ -171,7 +237,25 @@ namespace enigma::graphic
             s_commandListManager.reset();
         }
 
-        // 2. Clean up SM6.6 Bindless components (Milestone 2.7)
+        // 2. 释放系统默认纹理（必须在Bindless组件关闭之前）
+        // 教学要点：这些纹理持有Bindless索引，必须先释放
+        if (s_defaultWhiteTexture)
+        {
+            s_defaultWhiteTexture.reset();
+            core::LogDebug(LogRenderer, "Default white texture released");
+        }
+        if (s_defaultBlackTexture)
+        {
+            s_defaultBlackTexture.reset();
+            core::LogDebug(LogRenderer, "Default black texture released");
+        }
+        if (s_defaultNormalTexture)
+        {
+            s_defaultNormalTexture.reset();
+            core::LogDebug(LogRenderer, "Default normal texture released");
+        }
+
+        // 3. Clean up SM6.6 Bindless components (Milestone 2.7)
         if (s_bindlessRootSignature)
         {
             s_bindlessRootSignature->Shutdown();
@@ -190,7 +274,7 @@ namespace enigma::graphic
             s_bindlessIndexAllocator.reset();
         }
 
-        // 3. Clean up SwapChain resources
+        // 4. Clean up SwapChain resources
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
             if (s_swapChainBuffers[i])
@@ -204,7 +288,7 @@ namespace enigma::graphic
         s_currentBackBufferIndex = 0;
         s_swapChainBufferCount   = 3;
 
-        // 4. Release DirectX 12 object (ComPtr will be automatically released)
+        // 5. Release DirectX 12 object (ComPtr will be automatically released)
         s_adapter.Reset();
         s_dxgiFactory.Reset();
         s_device.Reset();
@@ -506,6 +590,36 @@ namespace enigma::graphic
                 core::LogError(LogRenderer, "Failed to create D12Texture resource");
                 return nullptr;
             }
+
+            // [FIX] True Bindless流程: Create → Upload → RegisterBindless
+            // 步骤1: 上传纹理数据到GPU (必须在RegisterBindless之前调用)
+            if (!texture->Upload())
+            {
+                core::LogError(LogRenderer,
+                               "CreateTexture: Failed to upload texture '%s' to GPU",
+                               createInfo.debugName ? createInfo.debugName : "unnamed");
+                return nullptr;
+            }
+
+            // 步骤2: 注册到Bindless系统 (内部会调用CreateDescriptorInGlobalHeap)
+            // RegisterBindless()是public方法，会自动:
+            // - 分配Bindless索引 (AllocateBindlessIndexInternal)
+            // - 创建SRV描述符 (CreateDescriptorInGlobalHeap)
+            // - 存储索引到m_bindlessIndex
+            auto bindlessIndex = texture->RegisterBindless();
+            if (!bindlessIndex.has_value())
+            {
+                core::LogError(LogRenderer,
+                               "CreateTexture: Failed to register texture '%s' to Bindless system",
+                               createInfo.debugName ? createInfo.debugName : "unnamed");
+                return nullptr;
+            }
+
+            // [DEBUG] 输出成功日志，验证Bindless索引分配
+            core::LogInfo(LogRenderer,
+                          "CreateTexture: Texture '%s' created successfully (Bindless index=%u)",
+                          createInfo.debugName ? createInfo.debugName : "unnamed",
+                          bindlessIndex.value());
 
             return texture;
         }
@@ -964,6 +1078,67 @@ namespace enigma::graphic
             return nullptr;
         }
         return s_swapChainBuffers[s_currentBackBufferIndex].Get();
+    }
+
+    // ============================================================================
+    // 系统默认纹理访问方法
+    // ============================================================================
+
+    /**
+     * @brief 获取系统默认白色纹理
+     * 
+     * 教学要点:
+     * 1. 空检查日志：帮助调试初始化问题
+     * 2. 返回shared_ptr：允许调用者安全持有引用
+     * 3. 线程安全：Initialize后只读访问，无需锁
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::GetDefaultWhiteTexture()
+    {
+        if (!s_defaultWhiteTexture)
+        {
+            core::LogWarn(LogRenderer,
+                          "GetDefaultWhiteTexture: Default white texture not initialized. "
+                          "Ensure D3D12RenderSystem::Initialize() was called.");
+        }
+        return s_defaultWhiteTexture;
+    }
+
+    /**
+     * @brief 获取系统默认黑色纹理
+     * 
+     * 教学要点:
+     * 1. 空检查日志：帮助调试初始化问题
+     * 2. 返回shared_ptr：允许调用者安全持有引用
+     * 3. 线程安全：Initialize后只读访问，无需锁
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::GetDefaultBlackTexture()
+    {
+        if (!s_defaultBlackTexture)
+        {
+            core::LogWarn(LogRenderer,
+                          "GetDefaultBlackTexture: Default black texture not initialized. "
+                          "Ensure D3D12RenderSystem::Initialize() was called.");
+        }
+        return s_defaultBlackTexture;
+    }
+
+    /**
+     * @brief 获取系统默认法线纹理
+     * 
+     * 教学要点:
+     * 1. 空检查日志：帮助调试初始化问题
+     * 2. 返回shared_ptr：允许调用者安全持有引用
+     * 3. 线程安全：Initialize后只读访问，无需锁
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::GetDefaultNormalTexture()
+    {
+        if (!s_defaultNormalTexture)
+        {
+            core::LogWarn(LogRenderer,
+                          "GetDefaultNormalTexture: Default normal texture not initialized. "
+                          "Ensure D3D12RenderSystem::Initialize() was called.");
+        }
+        return s_defaultNormalTexture;
     }
 
     // ===== Internal implementation method =====
