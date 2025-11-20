@@ -176,6 +176,320 @@
         <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_basic.vs.hlsl"/>
         <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_textured.ps.hlsl"/>
         <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_textured.vs.hlsl"/>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_clouds.ps.hlsl">
+            <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+            <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+            <Optimization>Disabled</Optimization>
+            <SupportJustMyCode>true</SupportJustMyCode>
+            <AssemblerOutput>NoListing</AssemblerOutput>
+            <AssemblerListingLocation>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</AssemblerListingLocation>
+            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+            <BrowseInformation>false</BrowseInformation>
+            <BrowseInformationFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</BrowseInformationFile>
+            <CompileAs>Default</CompileAs>
+            <UseDynamicDebugging>false</UseDynamicDebugging>
+            <ConformanceMode>true</ConformanceMode>
+            <DiagnosticsFormat>Column</DiagnosticsFormat>
+            <DisableLanguageExtensions>false</DisableLanguageExtensions>
+            <ErrorReporting>Prompt</ErrorReporting>
+            <ExpandAttributedSource>false</ExpandAttributedSource>
+            <ExceptionHandling>Sync</ExceptionHandling>
+            <EnableASAN>false</EnableASAN>
+            <EnableFuzzer>false</EnableFuzzer>
+            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+            <EnableVectorLength>NotSet</EnableVectorLength>
+            <FloatingPointModel>Precise</FloatingPointModel>
+            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+            <GenerateModuleDependencies>false</GenerateModuleDependencies>
+            <GenerateSourceDependencies>false</GenerateSourceDependencies>
+            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+            <IntrinsicFunctions>false</IntrinsicFunctions>
+            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+            <LanguageStandard_C>Default</LanguageStandard_C>
+            <MinimalRebuild>false</MinimalRebuild>
+            <ModuleDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleDependenciesFile>
+            <ModuleOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleOutputFile>
+            <OmitDefaultLibName>false</OmitDefaultLibName>
+            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+            <WholeProgramOptimization>false</WholeProgramOptimization>
+            <ObjectFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ObjectFileName>
+            <CallingConvention>Cdecl</CallingConvention>
+            <ProgramDataBaseFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pdb</ProgramDataBaseFileName>
+            <PrecompiledHeader>NotUsing</PrecompiledHeader>
+            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pch</PrecompiledHeaderOutputFile>
+            <PreprocessToFile>false</PreprocessToFile>
+            <PreprocessKeepComments>false</PreprocessKeepComments>
+            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+            <ShowIncludes>false</ShowIncludes>
+            <SourceDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</SourceDependenciesFile>
+            <SuppressStartupBanner>true</SuppressStartupBanner>
+            <BufferSecurityCheck>true</BufferSecurityCheck>
+            <SmallerTypeCheck>false</SmallerTypeCheck>
+            <SpectreMitigation>false</SpectreMitigation>
+            <StructMemberAlignment>Default</StructMemberAlignment>
+            <TrackerLogDirectory>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.tlog\</TrackerLogDirectory>
+            <TranslateIncludes>false</TranslateIncludes>
+            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+            <TreatWarningAsError>false</TreatWarningAsError>
+            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+            <UseFullPaths>true</UseFullPaths>
+            <WarningLevel>Level4</WarningLevel>
+            <XMLDocumentationFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</XMLDocumentationFileName>
+            <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+            <IntelJCCErratum>false</IntelJCCErratum>
+            <BuildStlModules>false</BuildStlModules>
+            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+            <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;_UNICODE;UNICODE;</PreprocessorDefinitions>
+            <SDLCheck>true</SDLCheck>
+            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Thesis\Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/ThirdParty/DXC/inc;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui/backends;F:\p4\Personal\SD\Thesis\..</AdditionalIncludeDirectories>
+            <MultiProcessorCompilation>true</MultiProcessorCompilation>
+            <LibCompiled>true</LibCompiled>
+        </ClCompile>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_clouds.vs.hlsl">
+            <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+            <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+            <Optimization>Disabled</Optimization>
+            <SupportJustMyCode>true</SupportJustMyCode>
+            <AssemblerOutput>NoListing</AssemblerOutput>
+            <AssemblerListingLocation>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</AssemblerListingLocation>
+            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+            <BrowseInformation>false</BrowseInformation>
+            <BrowseInformationFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</BrowseInformationFile>
+            <CompileAs>Default</CompileAs>
+            <UseDynamicDebugging>false</UseDynamicDebugging>
+            <ConformanceMode>true</ConformanceMode>
+            <DiagnosticsFormat>Column</DiagnosticsFormat>
+            <DisableLanguageExtensions>false</DisableLanguageExtensions>
+            <ErrorReporting>Prompt</ErrorReporting>
+            <ExpandAttributedSource>false</ExpandAttributedSource>
+            <ExceptionHandling>Sync</ExceptionHandling>
+            <EnableASAN>false</EnableASAN>
+            <EnableFuzzer>false</EnableFuzzer>
+            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+            <EnableVectorLength>NotSet</EnableVectorLength>
+            <FloatingPointModel>Precise</FloatingPointModel>
+            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+            <GenerateModuleDependencies>false</GenerateModuleDependencies>
+            <GenerateSourceDependencies>false</GenerateSourceDependencies>
+            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+            <IntrinsicFunctions>false</IntrinsicFunctions>
+            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+            <LanguageStandard_C>Default</LanguageStandard_C>
+            <MinimalRebuild>false</MinimalRebuild>
+            <ModuleDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleDependenciesFile>
+            <ModuleOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleOutputFile>
+            <OmitDefaultLibName>false</OmitDefaultLibName>
+            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+            <WholeProgramOptimization>false</WholeProgramOptimization>
+            <ObjectFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ObjectFileName>
+            <CallingConvention>Cdecl</CallingConvention>
+            <ProgramDataBaseFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pdb</ProgramDataBaseFileName>
+            <PrecompiledHeader>NotUsing</PrecompiledHeader>
+            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pch</PrecompiledHeaderOutputFile>
+            <PreprocessToFile>false</PreprocessToFile>
+            <PreprocessKeepComments>false</PreprocessKeepComments>
+            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+            <ShowIncludes>false</ShowIncludes>
+            <SourceDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</SourceDependenciesFile>
+            <SuppressStartupBanner>true</SuppressStartupBanner>
+            <BufferSecurityCheck>true</BufferSecurityCheck>
+            <SmallerTypeCheck>false</SmallerTypeCheck>
+            <SpectreMitigation>false</SpectreMitigation>
+            <StructMemberAlignment>Default</StructMemberAlignment>
+            <TrackerLogDirectory>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.tlog\</TrackerLogDirectory>
+            <TranslateIncludes>false</TranslateIncludes>
+            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+            <TreatWarningAsError>false</TreatWarningAsError>
+            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+            <UseFullPaths>true</UseFullPaths>
+            <WarningLevel>Level4</WarningLevel>
+            <XMLDocumentationFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</XMLDocumentationFileName>
+            <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+            <IntelJCCErratum>false</IntelJCCErratum>
+            <BuildStlModules>false</BuildStlModules>
+            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+            <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;_UNICODE;UNICODE;</PreprocessorDefinitions>
+            <SDLCheck>true</SDLCheck>
+            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Thesis\Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/ThirdParty/DXC/inc;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui/backends;F:\p4\Personal\SD\Thesis\..</AdditionalIncludeDirectories>
+            <MultiProcessorCompilation>true</MultiProcessorCompilation>
+            <LibCompiled>true</LibCompiled>
+        </ClCompile>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_skybasic.ps.hlsl">
+            <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+            <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+            <Optimization>Disabled</Optimization>
+            <SupportJustMyCode>true</SupportJustMyCode>
+            <AssemblerOutput>NoListing</AssemblerOutput>
+            <AssemblerListingLocation>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</AssemblerListingLocation>
+            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+            <BrowseInformation>false</BrowseInformation>
+            <BrowseInformationFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</BrowseInformationFile>
+            <CompileAs>Default</CompileAs>
+            <UseDynamicDebugging>false</UseDynamicDebugging>
+            <ConformanceMode>true</ConformanceMode>
+            <DiagnosticsFormat>Column</DiagnosticsFormat>
+            <DisableLanguageExtensions>false</DisableLanguageExtensions>
+            <ErrorReporting>Prompt</ErrorReporting>
+            <ExpandAttributedSource>false</ExpandAttributedSource>
+            <ExceptionHandling>Sync</ExceptionHandling>
+            <EnableASAN>false</EnableASAN>
+            <EnableFuzzer>false</EnableFuzzer>
+            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+            <EnableVectorLength>NotSet</EnableVectorLength>
+            <FloatingPointModel>Precise</FloatingPointModel>
+            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+            <GenerateModuleDependencies>false</GenerateModuleDependencies>
+            <GenerateSourceDependencies>false</GenerateSourceDependencies>
+            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+            <IntrinsicFunctions>false</IntrinsicFunctions>
+            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+            <LanguageStandard_C>Default</LanguageStandard_C>
+            <MinimalRebuild>false</MinimalRebuild>
+            <ModuleDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleDependenciesFile>
+            <ModuleOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleOutputFile>
+            <OmitDefaultLibName>false</OmitDefaultLibName>
+            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+            <WholeProgramOptimization>false</WholeProgramOptimization>
+            <ObjectFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ObjectFileName>
+            <CallingConvention>Cdecl</CallingConvention>
+            <ProgramDataBaseFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pdb</ProgramDataBaseFileName>
+            <PrecompiledHeader>NotUsing</PrecompiledHeader>
+            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pch</PrecompiledHeaderOutputFile>
+            <PreprocessToFile>false</PreprocessToFile>
+            <PreprocessKeepComments>false</PreprocessKeepComments>
+            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+            <ShowIncludes>false</ShowIncludes>
+            <SourceDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</SourceDependenciesFile>
+            <SuppressStartupBanner>true</SuppressStartupBanner>
+            <BufferSecurityCheck>true</BufferSecurityCheck>
+            <SmallerTypeCheck>false</SmallerTypeCheck>
+            <SpectreMitigation>false</SpectreMitigation>
+            <StructMemberAlignment>Default</StructMemberAlignment>
+            <TrackerLogDirectory>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.tlog\</TrackerLogDirectory>
+            <TranslateIncludes>false</TranslateIncludes>
+            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+            <TreatWarningAsError>false</TreatWarningAsError>
+            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+            <UseFullPaths>true</UseFullPaths>
+            <WarningLevel>Level4</WarningLevel>
+            <XMLDocumentationFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</XMLDocumentationFileName>
+            <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+            <IntelJCCErratum>false</IntelJCCErratum>
+            <BuildStlModules>false</BuildStlModules>
+            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+            <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;_UNICODE;UNICODE;</PreprocessorDefinitions>
+            <SDLCheck>true</SDLCheck>
+            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Thesis\Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/ThirdParty/DXC/inc;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui/backends;F:\p4\Personal\SD\Thesis\..</AdditionalIncludeDirectories>
+            <MultiProcessorCompilation>true</MultiProcessorCompilation>
+            <LibCompiled>true</LibCompiled>
+        </ClCompile>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_skybasic.vs.hlsl"/>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_skytextured.ps.hlsl">
+            <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+            <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+            <Optimization>Disabled</Optimization>
+            <SupportJustMyCode>true</SupportJustMyCode>
+            <AssemblerOutput>NoListing</AssemblerOutput>
+            <AssemblerListingLocation>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</AssemblerListingLocation>
+            <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
+            <BrowseInformation>false</BrowseInformation>
+            <BrowseInformationFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</BrowseInformationFile>
+            <CompileAs>Default</CompileAs>
+            <UseDynamicDebugging>false</UseDynamicDebugging>
+            <ConformanceMode>true</ConformanceMode>
+            <DiagnosticsFormat>Column</DiagnosticsFormat>
+            <DisableLanguageExtensions>false</DisableLanguageExtensions>
+            <ErrorReporting>Prompt</ErrorReporting>
+            <ExpandAttributedSource>false</ExpandAttributedSource>
+            <ExceptionHandling>Sync</ExceptionHandling>
+            <EnableASAN>false</EnableASAN>
+            <EnableFuzzer>false</EnableFuzzer>
+            <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
+            <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+            <EnableVectorLength>NotSet</EnableVectorLength>
+            <FloatingPointModel>Precise</FloatingPointModel>
+            <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
+            <GenerateModuleDependencies>false</GenerateModuleDependencies>
+            <GenerateSourceDependencies>false</GenerateSourceDependencies>
+            <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
+            <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+            <IntrinsicFunctions>false</IntrinsicFunctions>
+            <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
+            <LanguageStandard>stdcpp17</LanguageStandard>
+            <LanguageStandard_C>Default</LanguageStandard_C>
+            <MinimalRebuild>false</MinimalRebuild>
+            <ModuleDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleDependenciesFile>
+            <ModuleOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ModuleOutputFile>
+            <OmitDefaultLibName>false</OmitDefaultLibName>
+            <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
+            <WholeProgramOptimization>false</WholeProgramOptimization>
+            <ObjectFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</ObjectFileName>
+            <CallingConvention>Cdecl</CallingConvention>
+            <ProgramDataBaseFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pdb</ProgramDataBaseFileName>
+            <PrecompiledHeader>NotUsing</PrecompiledHeader>
+            <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
+            <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.pch</PrecompiledHeaderOutputFile>
+            <PreprocessToFile>false</PreprocessToFile>
+            <PreprocessKeepComments>false</PreprocessKeepComments>
+            <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
+            <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
+            <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
+            <ShowIncludes>false</ShowIncludes>
+            <SourceDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</SourceDependenciesFile>
+            <SuppressStartupBanner>true</SuppressStartupBanner>
+            <BufferSecurityCheck>true</BufferSecurityCheck>
+            <SmallerTypeCheck>false</SmallerTypeCheck>
+            <SpectreMitigation>false</SpectreMitigation>
+            <StructMemberAlignment>Default</StructMemberAlignment>
+            <TrackerLogDirectory>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\Engine.tlog\</TrackerLogDirectory>
+            <TranslateIncludes>false</TranslateIncludes>
+            <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
+            <TreatWarningAsError>false</TreatWarningAsError>
+            <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+            <UseFullPaths>true</UseFullPaths>
+            <WarningLevel>Level4</WarningLevel>
+            <XMLDocumentationFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Debug\</XMLDocumentationFileName>
+            <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+            <IntelJCCErratum>false</IntelJCCErratum>
+            <BuildStlModules>false</BuildStlModules>
+            <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
+            <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
+            <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
+            <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
+            <PreprocessorDefinitions>_DEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;_UNICODE;UNICODE;</PreprocessorDefinitions>
+            <SDLCheck>true</SDLCheck>
+            <AdditionalIncludeDirectories>F:\p4\Personal\SD\Thesis\Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/ThirdParty/DXC/inc;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui/backends;F:\p4\Personal\SD\Thesis\..</AdditionalIncludeDirectories>
+            <MultiProcessorCompilation>true</MultiProcessorCompilation>
+            <LibCompiled>true</LibCompiled>
+        </ClCompile>
+        <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_skytextured.vs.hlsl"/>
         <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp"/>
         <!-- ImGui Core -->
         <ClCompile Include="..\ThirdParty\imgui\imgui.cpp"/>
@@ -294,6 +608,8 @@
         <ClCompile Include="Graphic\Shader\ShaderPack\ProgramSet.cpp" />
         <ClCompile Include="Graphic\Shader\Uniform\CustomImageManager.cpp"/>
         <ClCompile Include="Graphic\Shader\Uniform\UniformManager.cpp" />
+        <ClCompile Include="Graphic\Sprite\Sprite.cpp"/>
+        <ClCompile Include="Graphic\Sprite\SpriteAtlas.cpp"/>
         <ClCompile Include="Graphic\Target\D12DepthTexture.cpp" />
         <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
         <ClCompile Include="Graphic\Target\DepthTextureManager.cpp"/>
@@ -614,6 +930,12 @@
         <Content Include="..\..\.enigma\assets\engine\sounds\stereo\task-levelup.ogg" />
         <Content Include="..\..\.enigma\assets\engine\sounds\stereo\task-start.ogg" />
         <Content Include="..\..\.enigma\assets\engine\sounds\stereo\wardrobe.ogg" />
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\clouds.png"/>
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\end_sky.png"/>
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\moon_phases.png"/>
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\rain.png"/>
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\snow.png"/>
+        <Content Include="..\..\.enigma\assets\engine\textures\environment\sun.png"/>
         <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii-1920_1.png" />
         <Content Include="..\..\.enigma\assets\engine\textures\gui\Caizii_opaque.png" />
         <Content Include="..\..\.enigma\assets\engine\textures\gui\cat.png" />
@@ -728,6 +1050,8 @@
         <ClInclude Include="Graphic\Shader\Uniform\PerObjectUniforms.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\ShadowColorIndexBuffer.hpp" />
         <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp" />
+        <ClInclude Include="Graphic\Sprite\Sprite.hpp"/>
+        <ClInclude Include="Graphic\Sprite\SpriteAtlas.hpp"/>
         <!-- DepthTextureConfig.hpp 已合并到 D12DepthTexture.hpp 中 -->
         <ClInclude Include="Graphic\Target\DepthTextureManager.hpp" />
         <ClInclude Include="Graphic\Target\RenderTargetBinder.hpp" />
