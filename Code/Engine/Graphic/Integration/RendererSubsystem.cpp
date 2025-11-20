@@ -643,6 +643,11 @@ void RendererSubsystem::BeginFrame()
     m_currentVertexOffset = 0;
     m_currentIndexOffset  = 0;
 
+    // [CRITICAL FIX] 重置上一帧的PSO绑定状态（修复跨帧PSO缓存污染）
+    // 原因：CommandList在帧边界被重置，GPU状态失效，必须清除CPU侧的缓存
+    // 确保每帧第一次Draw调用时PSO被正确设置到CommandList
+    m_lastBoundPSO = nullptr;
+
     // 重置Draw计数，配合Ring Buffer实现索引管理
     if (m_uniformManager)
     {
@@ -2401,7 +2406,6 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     // [CHANGED] Calculate the total space required (current offset + new data)
     size_t requiredVertexSize = m_currentVertexOffset + vertexSize;
     size_t requiredIndexSize  = m_currentIndexOffset + indexSize;
-
     // Make sure the buffer is large enough (may trigger resize)
     BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
     BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
