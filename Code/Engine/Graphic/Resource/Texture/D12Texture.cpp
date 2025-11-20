@@ -507,15 +507,15 @@ namespace enigma::graphic
         // 2. 创建资源描述符
         D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(createInfo);
 
-        // 3. 确定初始资源状态
+        // 3. Determine the initial resource status
         D3D12_RESOURCE_STATES initialState = GetInitialState(m_usage);
 
-        // 4. 构造OptimizedClearValue (RenderTarget Fast Clear优化)
-        // 教学要点:
-        // - RenderTarget纹理需要OptimizedClearValue启用Fast Clear优化
-        // - 清除值(0,0,0,1)必须与RenderTargetBinder::PerformClearOperations()中的Rgba8::BLACK匹配
-        // - 如果清除值不匹配，DirectX 12无法使用Fast Clear，性能会下降
-        // - 非RenderTarget纹理传递nullptr (不需要清除优化)
+        // 4. Construct OptimizedClearValue (RenderTarget Fast Clear optimization)
+        //Teaching points:
+        // - RenderTarget texture requires OptimizedClearValue to enable Fast Clear optimization
+        // - Clear value (0,0,0,1) must match Rgba8::BLACK in RenderTargetBinder::PerformClearOperations()
+        // - If the clear values do not match, DirectX 12 cannot use Fast Clear and performance will decrease
+        // - non-RenderTarget textures pass nullptr (no clear optimization required)
         D3D12_CLEAR_VALUE        optimizedClearValue = {};
         const D3D12_CLEAR_VALUE* pClearValue         = nullptr;
 
@@ -532,16 +532,16 @@ namespace enigma::graphic
             pClearValue                  = &optimizedClearValue;
         }
 
-        // 5. 创建提交资源
-        // 使用D3D12RenderSystem统一接口创建资源
-        // 符合分层架构原则：资源层通过API封装层访问DirectX
+        // 5. Create submission resources
+        // Create resources using the D3D12RenderSystem unified interface
+        // Comply with the principle of layered architecture: the resource layer accesses DirectX through the API encapsulation layer
         ID3D12Resource* resource = nullptr;
         HRESULT         hr       = D3D12RenderSystem::CreateCommittedResource(
-            heapProps, // 堆属性
-            resourceDesc, // 资源描述
-            initialState, // 初始状态
-            pClearValue, // OptimizedClearValue (RenderTarget启用Fast Clear)
-            &resource // 输出接口
+            heapProps, // Heap properties
+            resourceDesc, // resource description
+            initialState, // initial state
+            pClearValue, // OptimizedClearValue (RenderTarget enables Fast Clear)
+            &resource // Output interface
         );
 
         if (FAILED(hr))
