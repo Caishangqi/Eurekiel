@@ -610,6 +610,7 @@
         <ClCompile Include="Graphic\Shader\Uniform\UniformManager.cpp" />
         <ClCompile Include="Graphic\Sprite\Sprite.cpp"/>
         <ClCompile Include="Graphic\Sprite\SpriteAtlas.cpp"/>
+        <ClCompile Include="Graphic\Sprite\SpriteAtlasHelper.cpp"/>
         <ClCompile Include="Graphic\Target\D12DepthTexture.cpp" />
         <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
         <ClCompile Include="Graphic\Target\DepthTextureManager.cpp"/>
@@ -1052,6 +1053,7 @@
         <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp" />
         <ClInclude Include="Graphic\Sprite\Sprite.hpp"/>
         <ClInclude Include="Graphic\Sprite\SpriteAtlas.hpp"/>
+        <ClInclude Include="Graphic\Sprite\SpriteAtlasHelper.hpp"/>
         <!-- DepthTextureConfig.hpp 已合并到 D12DepthTexture.hpp 中 -->
         <ClInclude Include="Graphic\Target\DepthTextureManager.hpp" />
         <ClInclude Include="Graphic\Target\RenderTargetBinder.hpp" />

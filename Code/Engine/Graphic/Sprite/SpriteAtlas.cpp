@@ -5,7 +5,7 @@
 
 #include "Engine/Graphic/Sprite/SpriteAtlas.hpp"
 #include "Engine/Graphic/Sprite/Sprite.hpp"
-#include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+#include "Engine/Graphic/Sprite/SpriteAtlasHelper.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Image.hpp"
 #include "Engine/Core/Rgba8.hpp"
@@ -16,6 +16,32 @@
 
 namespace enigma::graphic
 {
+    struct Rectangle
+    {
+        int x, y, width, height;
+
+        Rectangle() : x(0), y(0), width(0), height(0)
+        {
+        }
+
+        Rectangle(int x_, int y_, int w, int h) : x(x_), y(y_), width(w), height(h)
+        {
+        }
+
+        bool Intersects(const Rectangle& other) const
+        {
+            return !(x >= other.x + other.width || x + width <= other.x ||
+                y >= other.y + other.height || y + height <= other.y);
+        }
+
+        bool Contains(const Rectangle& other) const
+        {
+            return other.x >= x && other.y >= y &&
+                other.x + other.width <= x + width &&
+                other.y + other.height <= y + height;
+        }
+    };
+
     // ==================== Constructor ====================
 
     SpriteAtlas::SpriteAtlas(const std::string& atlasName)
@@ -44,27 +70,20 @@ namespace enigma::graphic
         const char*    spritePrefix
     )
     {
-        if (gridLayout.x <= 0 || gridLayout.y <= 0)
+        if (!SpriteAtlasHelper::ValidateGridLayout(gridLayout, "BuildFromGrid"))
         {
-            ERROR_RECOVERABLE("BuildFromGrid: Invalid gridLayout");
+            return;
+        }
+
+        if (!SpriteAtlasHelper::ValidateImage(image, "BuildFromGrid"))
+        {
             return;
         }
 
         IntVec2 textureDims = image.GetDimensions();
-        if (textureDims.x == 0 || textureDims.y == 0)
-        {
-            ERROR_RECOVERABLE("BuildFromGrid: Invalid image");
-            return;
-        }
-
         Clear();
 
-        m_atlasTexture = g_theRendererSubsystem->CreateTexture2D(
-            textureDims.x,
-            textureDims.y,
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            image.GetRawData()
-        );
+        m_atlasTexture = SpriteAtlasHelper::CreateTextureFromImage(image, textureDims);
 
         if (!m_atlasTexture)
         {
@@ -72,7 +91,7 @@ namespace enigma::graphic
             return;
         }
 
-        IntVec2 cellSize(textureDims.x / gridLayout.x, textureDims.y / gridLayout.y);
+        IntVec2 cellSize     = SpriteAtlasHelper::CalculateCellSize(textureDims, gridLayout);
         int     totalSprites = gridLayout.x * gridLayout.y;
 
         for (int index = 0; index < totalSprites; ++index)
@@ -105,22 +124,17 @@ namespace enigma::graphic
             return;
         }
 
-        Image   image(imagePath);
-        IntVec2 textureDims = image.GetDimensions();
-        if (textureDims.x == 0 || textureDims.y == 0)
+        Image image(imagePath);
+
+        if (!SpriteAtlasHelper::ValidateImage(image, "BuildFromGrid"))
         {
-            ERROR_RECOVERABLE("BuildFromGrid: Invalid image");
             return;
         }
 
+        IntVec2 textureDims = image.GetDimensions();
         Clear();
 
-        m_atlasTexture = g_theRendererSubsystem->CreateTexture2D(
-            textureDims.x,
-            textureDims.y,
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            image.GetRawData()
-        );
+        m_atlasTexture = SpriteAtlasHelper::CreateTextureFromImage(image, textureDims);
 
         if (!m_atlasTexture)
         {
@@ -128,7 +142,7 @@ namespace enigma::graphic
             return;
         }
 
-        IntVec2 cellSize(textureDims.x / gridLayout.x, textureDims.y / gridLayout.y);
+        IntVec2 cellSize     = SpriteAtlasHelper::CalculateCellSize(textureDims, gridLayout);
         int     totalSprites = expectedCount;
 
         for (int index = 0; index < totalSprites; ++index)
@@ -162,19 +176,19 @@ namespace enigma::graphic
             return;
         }
 
-        if (m_nameToIndex.find(spriteName) != m_nameToIndex.end())
+        if (!SpriteAtlasHelper::ValidateSpriteName(spriteName, m_nameToIndex, "AddSprite"))
         {
-            ERROR_RECOVERABLE(Stringf("AddSprite: Sprite name already exists: %s", spriteName.c_str()));
             return;
         }
 
-        auto    image = std::make_unique<Image>(imagePath);
-        IntVec2 dims  = image->GetDimensions();
-        if (dims.x == 0 || dims.y == 0)
+        auto image = std::make_unique<Image>(imagePath);
+
+        if (!SpriteAtlasHelper::ValidateImage(*image, "AddSprite"))
         {
-            ERROR_RECOVERABLE(Stringf("AddSprite: Invalid image: %s", imagePath));
             return;
         }
+
+        IntVec2 dims = image->GetDimensions();
 
         SpriteData data(spriteName, AABB2(0, 0, 0, 0), pivot, dims);
         m_spriteData.push_back(data);
@@ -191,22 +205,21 @@ namespace enigma::graphic
     {
         if (spriteName.empty())
         {
-            ERROR_RECOVERABLE("AddSprite: Empty sprite name")
+            ERROR_RECOVERABLE("AddSprite: Empty sprite name");
+            return;
+        }
+
+        if (!SpriteAtlasHelper::ValidateImage(image, "AddSprite"))
+        {
+            return;
+        }
+
+        if (!SpriteAtlasHelper::ValidateSpriteName(spriteName, m_nameToIndex, "AddSprite"))
+        {
             return;
         }
 
         IntVec2 dims = image.GetDimensions();
-        if (dims.x == 0 || dims.y == 0)
-        {
-            ERROR_RECOVERABLE("AddSprite: Invalid image");
-            return;
-        }
-
-        if (m_nameToIndex.find(spriteName) != m_nameToIndex.end())
-        {
-            ERROR_RECOVERABLE(Stringf("AddSprite: Sprite name already exists: %s", spriteName.c_str()));
-            return;
-        }
 
         auto       imageCopy = std::make_unique<Image>(image);
         SpriteData data(spriteName, AABB2(0, 0, 0, 0), pivot, dims);
@@ -224,26 +237,41 @@ namespace enigma::graphic
             return;
         }
 
-        bool success = false;
         switch (mode)
         {
         case PackingMode::SimpleGrid:
             PackSimpleGrid();
-            success = true;
             break;
         case PackingMode::MaxRects:
-            ERROR_RECOVERABLE("PackAtlas: MaxRects not implemented");
-            return;
-        case PackingMode::Auto:
-            PackSimpleGrid();
-            success = true;
+            PackMaxRects();
             break;
-        }
+        case PackingMode::Auto:
+            {
+                bool uniformSize = true;
+                if (!m_pendingImages.empty())
+                {
+                    IntVec2 firstSize = m_pendingImages[0]->GetDimensions();
+                    for (size_t i = 1; i < m_pendingImages.size(); ++i)
+                    {
+                        IntVec2 size = m_pendingImages[i]->GetDimensions();
+                        if (size.x != firstSize.x || size.y != firstSize.y)
+                        {
+                            uniformSize = false;
+                            break;
+                        }
+                    }
+                }
 
-        if (success)
-        {
-            m_isPacked = true;
-            m_pendingImages.clear();
+                if (uniformSize)
+                {
+                    PackSimpleGrid();
+                }
+                else
+                {
+                    PackMaxRects();
+                }
+                break;
+            }
         }
     }
 
@@ -367,16 +395,15 @@ namespace enigma::graphic
         int     imageCount = static_cast<int>(m_pendingImages.size());
         IntVec2 cellSize   = m_pendingImages[0]->GetDimensions();
 
-        int cols = m_maxAtlasSize.x / cellSize.x;
-        int rows = (imageCount + cols - 1) / cols;
-
-        IntVec2 atlasSize(cols * cellSize.x, rows * cellSize.y);
+        IntVec2 atlasSize = SpriteAtlasHelper::CalculateGridAtlasSize(imageCount, cellSize, m_maxAtlasSize);
 
         if (atlasSize.x > m_maxAtlasSize.x || atlasSize.y > m_maxAtlasSize.y)
         {
-            ERROR_RECOVERABLE("PackSimpleGrid: Atlas size exceeds maximum");
             return;
         }
+
+        int cols = m_maxAtlasSize.x / cellSize.x;
+        int rows = (imageCount + cols - 1) / cols;
 
         Image atlasImage(atlasSize, Rgba8::BLACK);
 
@@ -402,12 +429,7 @@ namespace enigma::graphic
             m_spriteData[i].uvBounds = uvBounds;
         }
 
-        m_atlasTexture = g_theRendererSubsystem->CreateTexture2D(
-            atlasSize.x,
-            atlasSize.y,
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            atlasImage.GetRawData()
-        );
+        m_atlasTexture = SpriteAtlasHelper::CreateTextureFromImage(atlasImage, atlasSize);
 
         if (!m_atlasTexture)
         {
@@ -420,6 +442,181 @@ namespace enigma::graphic
 
     void SpriteAtlas::PackMaxRects()
     {
-        // TODO: Phase 2 implementation
+        if (m_pendingImages.empty())
+        {
+            ERROR_RECOVERABLE("PackMaxRects: No pending images to pack");
+            return;
+        }
+
+        // [STEP 1] Calculate total area and initial atlas size
+        int     totalArea = 0;
+        IntVec2 maxImageSize(0, 0);
+
+        for (const auto& img : m_pendingImages)
+        {
+            IntVec2 dims   = img->GetDimensions();
+            totalArea      += dims.x * dims.y;
+            maxImageSize.x = std::max(maxImageSize.x, dims.x);
+            maxImageSize.y = std::max(maxImageSize.y, dims.y);
+        }
+
+        int estimatedSize = static_cast<int>(std::sqrt(totalArea * 1.2f));
+        estimatedSize     = std::max(estimatedSize, std::max(maxImageSize.x, maxImageSize.y));
+
+        int atlasWidth = 1;
+        while (atlasWidth < estimatedSize) atlasWidth *= 2;
+        int atlasHeight = atlasWidth;
+
+        atlasWidth  = std::min(atlasWidth, m_maxAtlasSize.x);
+        atlasHeight = std::min(atlasHeight, m_maxAtlasSize.y);
+
+        // [STEP 2] Initialize free rectangles list
+        std::vector<Rectangle> freeRects;
+        freeRects.push_back(Rectangle(0, 0, atlasWidth, atlasHeight));
+
+        // [STEP 3] Pack each image using Best-Fit heuristic
+        std::vector<Rectangle> placedRects;
+        placedRects.reserve(m_pendingImages.size());
+
+        for (size_t i = 0; i < m_pendingImages.size(); ++i)
+        {
+            IntVec2 imgDims = m_pendingImages[i]->GetDimensions();
+
+            int bestIndex        = -1;
+            int bestShortSideFit = INT_MAX;
+            int bestLongSideFit  = INT_MAX;
+
+            for (size_t j = 0; j < freeRects.size(); ++j)
+            {
+                const Rectangle& rect = freeRects[j];
+
+                if (rect.width >= imgDims.x && rect.height >= imgDims.y)
+                {
+                    int leftoverX    = rect.width - imgDims.x;
+                    int leftoverY    = rect.height - imgDims.y;
+                    int shortSideFit = std::min(leftoverX, leftoverY);
+                    int longSideFit  = std::max(leftoverX, leftoverY);
+
+                    if (shortSideFit < bestShortSideFit ||
+                        (shortSideFit == bestShortSideFit && longSideFit < bestLongSideFit))
+                    {
+                        bestIndex        = static_cast<int>(j);
+                        bestShortSideFit = shortSideFit;
+                        bestLongSideFit  = longSideFit;
+                    }
+                }
+            }
+
+            if (bestIndex == -1)
+            {
+                ERROR_RECOVERABLE("PackMaxRects: Failed to pack all images (atlas too small)");
+                return;
+            }
+
+            Rectangle placed(freeRects[bestIndex].x, freeRects[bestIndex].y, imgDims.x, imgDims.y);
+            placedRects.push_back(placed);
+
+            // [STEP 4] Split free rectangles
+            std::vector<Rectangle> newFreeRects;
+
+            for (const Rectangle& freeRect : freeRects)
+            {
+                if (placed.Intersects(freeRect))
+                {
+                    if (placed.x > freeRect.x)
+                    {
+                        newFreeRects.push_back(Rectangle(freeRect.x, freeRect.y,
+                                                         placed.x - freeRect.x, freeRect.height));
+                    }
+                    if (placed.x + placed.width < freeRect.x + freeRect.width)
+                    {
+                        newFreeRects.push_back(Rectangle(placed.x + placed.width, freeRect.y,
+                                                         freeRect.x + freeRect.width - (placed.x + placed.width), freeRect.height));
+                    }
+                    if (placed.y > freeRect.y)
+                    {
+                        newFreeRects.push_back(Rectangle(freeRect.x, freeRect.y,
+                                                         freeRect.width, placed.y - freeRect.y));
+                    }
+                    if (placed.y + placed.height < freeRect.y + freeRect.height)
+                    {
+                        newFreeRects.push_back(Rectangle(freeRect.x, placed.y + placed.height,
+                                                         freeRect.width, freeRect.y + freeRect.height - (placed.y + placed.height)));
+                    }
+                }
+                else
+                {
+                    newFreeRects.push_back(freeRect);
+                }
+            }
+
+            freeRects = std::move(newFreeRects);
+
+            // Remove redundant rectangles
+            for (size_t j = 0; j < freeRects.size(); ++j)
+            {
+                for (size_t k = j + 1; k < freeRects.size();)
+                {
+                    if (freeRects[j].Contains(freeRects[k]))
+                    {
+                        freeRects.erase(freeRects.begin() + k);
+                    }
+                    else if (freeRects[k].Contains(freeRects[j]))
+                    {
+                        freeRects.erase(freeRects.begin() + j);
+                        --j;
+                        break;
+                    }
+                    else
+                    {
+                        ++k;
+                    }
+                }
+            }
+        }
+
+        // [STEP 5] Create atlas texture and copy images
+        Image atlasImage(IntVec2(atlasWidth, atlasHeight), Rgba8::BLACK);
+
+        for (size_t i = 0; i < placedRects.size(); ++i)
+        {
+            const Rectangle& rect     = placedRects[i];
+            const Image&     srcImage = *m_pendingImages[i];
+            IntVec2          srcDims  = srcImage.GetDimensions();
+
+            for (int y = 0; y < srcDims.y; ++y)
+            {
+                const Rgba8* srcRow = static_cast<const Rgba8*>(srcImage.GetRawData()) + y * srcDims.x;
+                Rgba8*       dstRow = static_cast<Rgba8*>(const_cast<void*>(atlasImage.GetRawData())) + (rect.y + y) * atlasWidth + rect.x;
+                std::memcpy(dstRow, srcRow, srcDims.x * sizeof(Rgba8));
+            }
+
+            float uvMinX = static_cast<float>(rect.x) / atlasWidth;
+            float uvMinY = static_cast<float>(rect.y) / atlasHeight;
+            float uvMaxX = static_cast<float>(rect.x + rect.width) / atlasWidth;
+            float uvMaxY = static_cast<float>(rect.y + rect.height) / atlasHeight;
+
+            float texelOffsetU = 0.5f / atlasWidth;
+            float texelOffsetV = 0.5f / atlasHeight;
+            uvMinX             += texelOffsetU;
+            uvMinY             += texelOffsetV;
+            uvMaxX             -= texelOffsetU;
+            uvMaxY             -= texelOffsetV;
+
+            m_spriteData[i].uvBounds = AABB2(uvMinX, uvMinY, uvMaxX, uvMaxY);
+        }
+
+        IntVec2 atlasDims = atlasImage.GetDimensions();
+        m_atlasTexture    = SpriteAtlasHelper::CreateTextureFromImage(atlasImage, atlasDims);
+
+        if (!m_atlasTexture)
+        {
+            ERROR_RECOVERABLE("PackMaxRects: Failed to create atlas texture");
+            return;
+        }
+
+        m_atlasDimensions = IntVec2(atlasWidth, atlasHeight);
+        m_isPacked        = true;
+        m_pendingImages.clear();
     }
 } // namespace enigma::graphic
