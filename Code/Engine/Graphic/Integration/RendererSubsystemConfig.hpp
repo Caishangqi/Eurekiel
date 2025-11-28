@@ -457,7 +457,8 @@ namespace enigma::graphic
          *
          * @note 参考商业引擎调查：Unity和Unreal都有缓冲区大小限制
          */
-        static constexpr size_t MAX_IMMEDIATE_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
+        static constexpr size_t MAX_IMMEDIATE_BUFFER_SIZE     = 1600 * 1024 * 1024; // 1600MB
+        static constexpr size_t INITIAL_IMMEDIATE_BUFFER_SIZE = 640 * 1024 * 1024; // 640MB
 
         // ==================== 未来扩展配置 (Milestone 3.X+) ====================
 

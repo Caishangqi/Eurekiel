@@ -774,7 +774,6 @@ void RendererSubsystem::EndFrame()
 
     LogInfo(LogRenderer, "RendererSubsystem::EndFrame() called");
 
-    // ✅ 简单委托给 D3D12RenderSystem（完整的 EndFrame 逻辑）
     D3D12RenderSystem::EndFrame();
 
     LogInfo(LogRenderer, "RendererSubsystem::EndFrame() completed");
@@ -1814,7 +1813,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
             m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
         // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "Draw: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+        LogInfo(LogRenderer, "Draw: Custom Buffer Descriptor Table Handle ptr=0x%llX",
                 customBufferTableHandle.ptr);
 
         if (customBufferTableHandle.ptr != 0)
@@ -1928,7 +1927,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
             m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
         // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+        LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle ptr=0x%llX",
                 customBufferTableHandle.ptr);
 
         if (customBufferTableHandle.ptr != 0)
@@ -2046,7 +2045,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
             m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
         // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+        LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle ptr=0x%llX",
                 customBufferTableHandle.ptr);
 
         if (customBufferTableHandle.ptr != 0)
@@ -2464,6 +2463,9 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
+    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu", 
+            count, m_immediateVBO.get(), m_currentVertexOffset);
+
     // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
     if (m_customImageManager)
     {
@@ -2476,12 +2478,26 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    size_t requiredSize = count * sizeof(Vertex);
-    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredSize, 64 * 1024, sizeof(Vertex), "ImmediateVBO");
+    // ========================================================================
+    // [FIX 2025-11-28] 统一偏移量管理 - 与两参数版本保持一致
+    // ========================================================================
+    // 问题：原实现每次从 offset=0 写入，覆盖之前的数据
+    // 修复：使用累积偏移量 m_currentVertexOffset，追加数据而非覆盖
+    // 效果：一参数版本和两参数版本可以在同一帧内混用
+    // ========================================================================
 
-    void* mappedData = m_immediateVBO->Map();
-    memcpy(mappedData, vertices, requiredSize);
-    m_immediateVBO->Unmap();
+    size_t vertexSize = count * sizeof(Vertex);
+    size_t requiredSize = m_currentVertexOffset + vertexSize;  // [CHANGED] 使用累积偏移量
+    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredSize, RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE, sizeof(Vertex), "ImmediateVBO");
+
+    // [CHANGED] 使用 persistent mapped pointer + offset（与两参数版本一致）
+    void* mappedData = m_immediateVBO->GetPersistentMappedData();
+    if (!mappedData)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped");
+        return;
+    }
+    memcpy(static_cast<char*>(mappedData) + m_currentVertexOffset, vertices, vertexSize);
 
     SetVertexBuffer(m_immediateVBO.get());
 
@@ -2492,7 +2508,12 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     }
 
-    Draw(static_cast<uint32_t>(count), 0);
+    // [CHANGED] 使用累积偏移量计算 startVertex
+    uint32_t startVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
+    Draw(static_cast<uint32_t>(count), startVertex);
+
+    // [NEW] 更新偏移量（追加数据）
+    m_currentVertexOffset += vertexSize;
 }
 
 // ========================================================================
@@ -2506,6 +2527,7 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
+    LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, VBO addr=%p, offset=%zu", vertexCount, m_immediateVBO.get(), m_currentVertexOffset);
     // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
     if (m_customImageManager)
     {
@@ -2537,8 +2559,8 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     size_t requiredVertexSize = m_currentVertexOffset + vertexSize;
     size_t requiredIndexSize  = m_currentIndexOffset + indexSize;
     // Make sure the buffer is large enough (may trigger resize)
-    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize, static_cast<size_t>(64 * 1024), sizeof(Vertex), "ImmediateVBO");
-    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize, static_cast<size_t>(64 * 1024), "ImmediateIBO");
+    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize, static_cast<size_t>(RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE), sizeof(Vertex), "ImmediateVBO");
+    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize, static_cast<size_t>(RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE), "ImmediateIBO");
 
     // [CHANGED] Use persistent mapped pointer to start writing from the current offset
     void* vertexMappedData = m_immediateVBO->GetPersistentMappedData();
@@ -2566,7 +2588,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
-        ERROR_RECOVERABLE("DrawVertexArray: CommandList is nullptr")
+        ERROR_AND_DIE("DrawVertexArray: CommandList is nullptr")
         return;
     }
 
@@ -2609,7 +2631,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
             m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
         // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+        LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle ptr=0x%llX",
                 customBufferTableHandle.ptr);
 
         if (customBufferTableHandle.ptr != 0)
