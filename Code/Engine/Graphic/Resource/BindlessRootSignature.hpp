@@ -33,16 +33,22 @@ namespace enigma::graphic
      *   - b12: ShadowColorIndexBuffer
      *   - b13: PlayerUniforms
      * Slot 14:    Root Constants (1 DWORD) - NoiseTexture index (b14 space1)
-     * Slot 15:    Descriptor Table预留 (1 DWORD) - Custom Buffer
+     * Slot 15:    Custom Buffer Descriptor Table (1 DWORD) - space1隔离
      * ```
      *
      * 对应HLSL:
      * ```hlsl
+     * // Slot 0-14: Root CBV使用space0
      * cbuffer Matrices : register(b7) {
      *     MatricesUniforms matrices;
      * };
      * cbuffer RootConstants : register(b14, space1) {
      *     uint noiseTextureIndex;
+     * };
+     * 
+     * // Slot 15+: Custom Buffer必须使用space1
+     * cbuffer MyCustomBuffer : register(b88, space1) {
+     *     float4 myData;
      * };
      * ```
      *
@@ -72,28 +78,32 @@ namespace enigma::graphic
          */
         enum RootParameterIndex : uint32_t
         {
-            // Root CBV槽位 (Slot 0-13, 28 DWORDs)
-            ROOT_CBV_CAMERA_AND_PLAYER = 0, // b0  - CameraAndPlayerUniforms
-            ROOT_CBV_SCREEN = 1, // b1  - ScreenUniforms
-            ROOT_CBV_ID = 2, // b2  - IdUniforms
-            ROOT_CBV_WORLD = 3, // b3  - WorldUniforms
-            ROOT_CBV_BIOME = 4, // b4  - BiomeUniforms
-            ROOT_CBV_RENDERING = 5, // b5  - RenderingUniforms
-            ROOT_CBV_RENDER_TARGETS = 6, // b6  - RenderTargetsIndexBuffer
-            ROOT_CBV_MATRICES = 7, // b7  - MatricesUniforms [PHASE 1]
-            ROOT_CBV_DEPTH_TEXTURES = 8, // b8  - DepthTexturesIndexBuffer
-            ROOT_CBV_SHADOW = 9, // b9  - ShadowUniforms
-            ROOT_CBV_RESERVED_10 = 10, // b10 - [Reserved]
-            ROOT_CBV_COLOR_TARGETS = 11, // b11 - ColorTargetsIndexBuffer
-            ROOT_CBV_SHADOW_COLOR = 12, // b12 - ShadowColorIndexBuffer
-            ROOT_CBV_PLAYER = 13, // b13 - PlayerUniforms
+            // Root CBV槽位 (Slot 0-14, 28 DWORDs)
+            ROOT_CBV_UNDEFINE_0 = 0,
+            ROOT_CBV_PER_OBJECT = 1, // PerObjectUniforms
+            ROOT_CBV_CUSTOM_IMAGE = 2, // CustomImageUniforms
+            ROOT_CBV_UNDEFINE_3 = 3,
+            ROOT_CBV_UNDEFINE_4 = 4,
+            ROOT_CBV_UNDEFINE_5 = 5,
+            ROOT_CBV_UNDEFINE_6 = 6,
+            ROOT_CBV_MATRICES = 7, // b7  - MatricesUniforms
+            ROOT_CBV_UNDEFINE_8 = 8,
+            ROOT_CBV_UNDEFINE_9 = 9,
+            ROOT_CBV_UNDEFINE_10 = 10,
+            ROOT_CBV_UNDEFINE_11 = 11,
+            ROOT_CBV_UNDEFINE_12 = 12,
+            ROOT_CBV_UNDEFINE_13 = 13,
 
-            // 其他Root Parameters
-            ROOT_CONSTANTS_NOISE_TEXTURE = 14, // b14 space1 - NoiseTexture index (1 DWORD)
-            ROOT_DESCRIPTOR_TABLE_CUSTOM = 15, // 预留Custom Buffer (1 DWORD)
+            ROOT_CBV_UNDEFINE_14 = 14,
+            ROOT_DESCRIPTOR_TABLE_CUSTOM = 15, // Descriptor Table for custom uniform
 
             ROOT_PARAMETER_COUNT = 16
         };
+
+        /**
+         * @brief Custom Buffer系统常量
+         */
+        static constexpr uint32_t MAX_CUSTOM_BUFFERS = 100; // 最大Custom Buffer数量
 
         /**
          * @brief Root Constants配置
@@ -104,9 +114,13 @@ namespace enigma::graphic
         /**
          * @brief Root Signature预算统计
          */
-        static constexpr uint32_t ROOT_SIGNATURE_DWORD_COUNT = 30; // 28 + 1 + 1
+        static constexpr uint32_t ROOT_SIGNATURE_DWORD_COUNT = 31; // 28 + 1 + 1 + 1 [NEW]
         static constexpr uint32_t ROOT_SIGNATURE_MAX_DWORDS  = 64; // DX12限制
-        static constexpr float    ROOT_SIGNATURE_BUDGET_USED = 46.9f; // 30/64 = 46.9%
+        static constexpr float    ROOT_SIGNATURE_BUDGET_USED = 48.4f; // 31/64 = 48.4% [NEW]
+
+        // [NEW] 编译期预算验证
+        static_assert(ROOT_SIGNATURE_DWORD_COUNT <= ROOT_SIGNATURE_MAX_DWORDS,
+                      "Root Signature exceeds 64 DWORDs limit");
 
     public:
         /**
@@ -194,71 +208,6 @@ namespace enigma::graphic
          * 3. 全局共享 - 所有PSO使用同一个Root Signature
          */
         void BindToCommandList(ID3D12GraphicsCommandList* commandList) const;
-
-        /**
-         * @brief 设置完整Root Constants到命令列表
-         * @param commandList 命令列表
-         * @param data Root Constants数据指针（RootConstants结构体）
-         * @param numValues 要设置的32位值数量（默认11，可部分更新）
-         * @param offset 起始偏移量（32位值单位，默认0）
-         *
-         * 教学要点:
-         * 1. Root Constants是最快的常量传递方式（直接在Root Signature中）
-         * 2. 每次Pass执行前可以更新不同的索引
-         * 3. 支持部分更新（通过offset和numValues）
-         *
-         * 使用示例:
-         * ```cpp
-         * RootConstants constants = {...};  // 44 bytes
-         * rootSignature->SetRootConstants(cmdList, &constants, 11, 0);
-         * ```
-         */
-        void SetRootConstants(
-            ID3D12GraphicsCommandList* commandList,
-            const void*                data,
-            uint32_t                   numValues = ROOT_CONSTANTS_NUM_32BIT_VALUES,
-            uint32_t                   offset    = 0) const;
-
-        /**
-         * @brief 设置单个32位Root Constant
-         * @param commandList 命令列表
-         * @param value 32位值
-         * @param offset 偏移量（32位值单位，默认0）
-         *
-         * 教学要点: 优化的单值设置，避免memcpy开销
-         *
-         * 使用示例:
-         * ```cpp
-         * // 设置NoiseTexture索引
-         * rootSignature->SetRootConstant32Bit(cmdList, noiseTextureIndex);
-         * ```
-         */
-        void SetRootConstant32Bit(
-            ID3D12GraphicsCommandList* commandList,
-            uint32_t                   value,
-            uint32_t                   offset = 0) const;
-
-        /**
-         * @brief 绑定Root CBV到指定槽位
-         * @param commandList 命令列表
-         * @param slot Root Parameter索引 (使用RootParameterIndex枚举)
-         * @param bufferLocation Buffer的GPU虚拟地址
-         *
-         * 教学要点:
-         * 1. Root CBV直接绑定GPU虚拟地址，无需Descriptor Heap
-         * 2. 性能最优 - GPU硬件优化路径
-         * 3. Phase 1只使用Slot 7 (Matrices)
-         *
-         * 使用示例:
-         * ```cpp
-         * D3D12_GPU_VIRTUAL_ADDRESS gpuAddr = buffer->GetGPUVirtualAddress();
-         * rootSignature->SetRootCBV(cmdList, ROOT_CBV_MATRICES, gpuAddr);
-         * ```
-         */
-        void SetRootCBV(
-            ID3D12GraphicsCommandList* commandList,
-            RootParameterIndex         slot,
-            D3D12_GPU_VIRTUAL_ADDRESS  bufferLocation) const;
 
     private:
         // Root Signature对象
