@@ -146,7 +146,7 @@ namespace enigma::graphic
          * @return 持久映射的CPU内存指针，失败返回nullptr
          */
         void* MapPersistent();
-
+        
         /**
          * [NEW] 取消持久映射
          * 释放持久映射的CPU内存，通常在析构时调用
