@@ -57,8 +57,7 @@ cbuffer CustomImageUniforms: register(b2)
     uint customImageIndices[16]; // customImage0-15的Bindless索引
 };
 
-/**
- * @brief Matrices - 矩阵常量缓冲区 (cbuffer register(b7))
+
 /**
  * @brief PerObjectUniforms - Per-Object数据常量缓冲区 (cbuffer register(b1))
  *
@@ -355,11 +354,11 @@ VSOutput StandardVertexTransform(VSInput input)
     output.TexCoord = input.TexCoord;
 
     // 4. 法线变换
-    output.Normal = normalize(mul(float4(input.Normal, 0.0), normalMatrix).xyz);
+    output.Normal = normalize(mul(normalMatrix, float4(input.Normal, 0.0)).xyz);
 
     // 5. 切线和副切线
-    output.Tangent   = normalize(mul(float4(input.Tangent, 0.0), gbufferModelView).xyz);
-    output.Bitangent = normalize(mul(float4(input.Bitangent, 0.0), gbufferModelView).xyz);
+    output.Tangent   = normalize(mul(gbufferModelView, float4(input.Tangent, 0.0)).xyz);
+    output.Bitangent = normalize(mul(gbufferModelView, float4(input.Bitangent, 0.0)).xyz);
 
     return output;
 }
