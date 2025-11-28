@@ -74,6 +74,38 @@ void Sphere::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<uns
     sphere.BuildVertices(outVerts, outIndices, sides, color, uv);
 }
 
+std::vector<Vertex_PCUTBN> Sphere::GetVertices(const Rgba8& color, const AABB2& uv, int sides)
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    BuildVertices(vertices, indices, sides, color, uv);
+    return vertices;
+}
+
+std::vector<Vertex_PCUTBN> Sphere::GetVertices(Sphere& sphere, const Rgba8& color, const AABB2& uv, int sides)
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    sphere.BuildVertices(vertices, indices, sides, color, uv);
+    return vertices;
+}
+
+std::vector<unsigned> Sphere::GetIndices(int sides)
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    BuildVertices(vertices, indices, sides);
+    return indices;
+}
+
+std::vector<unsigned> Sphere::GetIndices(Sphere& sphere, int sides)
+{
+    std::vector<Vertex_PCUTBN> vertices;
+    std::vector<unsigned int>  indices;
+    sphere.BuildVertices(vertices, indices, sides);
+    return indices;
+}
+
 Sphere::Sphere()
 {
 }
