@@ -24,6 +24,14 @@ Vertex_PCU::~Vertex_PCU()
 {
 }
 
+// [NEW] Constructor converted from Vertex_PCUTBN (discards TBN data)
+Vertex_PCU::Vertex_PCU(const Vertex_PCUTBN& source)
+    : m_position(source.m_position)
+    , m_color(source.m_color)
+    , m_uvTextCoords(source.m_uvTexCoords)
+{
+}
+
 Vertex_PCUTBN::Vertex_PCUTBN() : m_position(Vec3::ZERO), m_color(Rgba8::WHITE), m_uvTexCoords(Vec2(0, 1)), m_tangent(Vec3::ZERO), m_bitangent(Vec3::ZERO), m_normal(Vec3::ZERO)
 {
 }
@@ -34,5 +42,19 @@ Vertex_PCUTBN::Vertex_PCUTBN(const Vec3& position, const Rgba8& color, const Vec
 }
 
 Vertex_PCUTBN::~Vertex_PCUTBN()
+{
+}
+
+// [NEW] Constructor converted from Vertex_PCU
+Vertex_PCUTBN::Vertex_PCUTBN(const Vertex_PCU& source, 
+                             const Vec3& normal,
+                             const Vec3& tangent,
+                             const Vec3& bitangent)
+    : m_position(source.m_position)
+    , m_color(source.m_color)
+    , m_uvTexCoords(source.m_uvTextCoords)
+    , m_tangent(tangent)
+    , m_bitangent(bitangent)
+    , m_normal(normal)
 {
 }

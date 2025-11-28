@@ -3,6 +3,7 @@
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Math/Vec3.hpp"
 
+struct Vertex_PCUTBN;
 /**
  * Represents a single point (vertex) of a simple 3D object intended to be rendered
  */
@@ -15,6 +16,10 @@ struct Vertex_PCU
     Vertex_PCU(const Vertex_PCU& copyFrom);
     Vertex_PCU();
     explicit Vertex_PCU(const Vec3& position, const Rgba8& color, const Vec2& uvTextCoords);
+    
+    // [NEW] Constructor converted from Vertex_PCUTBN (discards TBN data)
+    explicit Vertex_PCU(const Vertex_PCUTBN& source);
+    
     ~Vertex_PCU();
 };
 
@@ -29,5 +34,9 @@ struct Vertex_PCUTBN
 
     Vertex_PCUTBN();
     explicit Vertex_PCUTBN(const Vec3& position, const Rgba8& color, const Vec2& uvTexCoords, Vec3 normal = Vec3(), Vec3 tangent = Vec3(), Vec3 bitangent = Vec3());
+    
+    // [NEW] Constructor converted from Vertex_PCU
+    explicit Vertex_PCUTBN(const Vertex_PCU& source,    const Vec3& normal = Vec3(), const Vec3& tangent = Vec3(), const Vec3& bitangent = Vec3());
+    
     ~Vertex_PCUTBN();
 };
