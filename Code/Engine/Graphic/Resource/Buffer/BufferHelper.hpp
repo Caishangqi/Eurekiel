@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/UpdateFrequency.hpp"
 
 namespace enigma::graphic
 {
@@ -20,6 +21,8 @@ namespace enigma::graphic
  * - 位置优化：移动到Graphic/Resource/Buffer/目录
  * - 架构合规：符合资源管理层架构设计
  */
+using namespace enigma::graphic;
+
 class BufferHelper
 {
 public:
@@ -64,6 +67,37 @@ public:
      * @return GPU虚拟地址
      */
     static D3D12_GPU_VIRTUAL_ADDRESS CalculateRootCBVAddress(ID3D12Resource* resource, size_t offset);
+
+    /**
+     * @brief 复制Buffer数据（内存安全版本）
+     * @param dest 目标指针
+     * @param src 源指针
+     * @param size 复制大小（字节）
+     */
+    static void CopyBufferData(void* dest, const void* src, size_t size);
+
+    /**
+     * @brief 验证Buffer配置合法性
+     * @param slotId Slot编号
+     * @param size Buffer大小
+     * @param freq 更新频率
+     * @return 验证通过返回true
+     */
+    static bool ValidateBufferConfig(uint32_t slotId, size_t size, UpdateFrequency freq);
+
+    /**
+     * @brief 验证Slot范围合法性
+     * @param slotId Slot编号
+     * @return 验证通过返回true
+     */
+    static bool ValidateSlotRange(uint32_t slotId);
+
+    /**
+     * @brief 验证Buffer大小合法性
+     * @param size Buffer大小
+     * @return 验证通过返回true
+     */
+    static bool ValidateBufferSize(size_t size);
 
     // [EXISTING] VertexBuffer/IndexBuffer管理方法
     /**

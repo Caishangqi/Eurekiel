@@ -6,6 +6,10 @@
 #include "Engine/Graphic/Integration/RendererSubsystemConfig.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp" // For UpdateFrequency
+#include "Engine/Graphic/Resource/BindlessRootSignature.hpp" // For MAX_CUSTOM_BUFFERS
+
+#include <cstring> // For std::memcpy
 
 // 使用命名空间中的类型
 using enigma::graphic::D12VertexBuffer;
@@ -53,6 +57,71 @@ D3D12_GPU_VIRTUAL_ADDRESS BufferHelper::CalculateRootCBVAddress(ID3D12Resource* 
         return 0;
     }
     return resource->GetGPUVirtualAddress() + offset;
+}
+
+void BufferHelper::CopyBufferData(void* dest, const void* src, size_t size)
+{
+    if (!dest || !src || size == 0)
+    {
+        LogError(LogRenderer, "BufferHelper::CopyBufferData: Invalid parameters (dest=%p, src=%p, size=%zu)",
+                 dest, src, size);
+        return;
+    }
+    std::memcpy(dest, src, size);
+}
+
+bool BufferHelper::ValidateBufferConfig(uint32_t slotId, size_t size, enigma::graphic::UpdateFrequency freq)
+{
+    // 验证Slot范围
+    if (!ValidateSlotRange(slotId))
+    {
+        return false;
+    }
+
+    // 验证Buffer大小
+    if (!ValidateBufferSize(size))
+    {
+        return false;
+    }
+
+    // 验证更新频率
+    if (freq == enigma::graphic::UpdateFrequency::PerObject && size > 64 * 1024)
+    {
+        LogWarn(LogRenderer, "Large PerObject buffer (%zu bytes) may impact performance", size);
+    }
+
+    return true;
+}
+
+bool BufferHelper::ValidateSlotRange(uint32_t slotId)
+{
+    using enigma::graphic::BindlessRootSignature;
+    
+    uint32_t maxSlot = BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM + 
+                       BindlessRootSignature::MAX_CUSTOM_BUFFERS - 1;
+    
+    if (slotId > maxSlot)
+    {
+        LogError(LogRenderer, "Slot %u out of range (max: %u)", slotId, maxSlot);
+        return false;
+    }
+    return true;
+}
+
+bool BufferHelper::ValidateBufferSize(size_t size)
+{
+    if (size == 0)
+    {
+        LogError(LogRenderer, "Buffer size cannot be 0");
+        return false;
+    }
+
+    if (size > 64 * 1024)
+    {
+        LogWarn(LogRenderer, "Buffer size (%zu) exceeds 64KB, may impact performance", size);
+    }
+
+    return true;
 }
 
 // ================================================================================================
