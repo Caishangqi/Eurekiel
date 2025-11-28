@@ -440,10 +440,8 @@ Chunk* World::GetChunkAt(const BlockPos& pos) const
 
 bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
 {
-    UNUSED(chunkX)
-    UNUSED(chunkY)
-    ERROR_RECOVERABLE("World::IsChunkLoaded is not implemented")
-    return false;
+    Chunk* chunk = GetChunk(chunkX, chunkY);
+    return chunk != nullptr && chunk->GetState() == ChunkState::Active;
 }
 
 void World::UpdateNearbyChunks()
