@@ -4,6 +4,8 @@
 #include <cassert>
 #include <algorithm>
 
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+
 using namespace enigma::graphic;
 
 // ==================== DescriptorAllocation 实现 ====================
@@ -60,7 +62,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE GlobalDescriptorHeapManager::DescriptorHeap::GetCPUH
 {
     // TODO: 稍后完成完整实现
     D3D12_CPU_DESCRIPTOR_HANDLE handle = cpuStart;
-    handle.ptr += index * descriptorSize;
+    handle.ptr                         += index * descriptorSize;
     return handle;
 }
 
@@ -71,7 +73,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE GlobalDescriptorHeapManager::DescriptorHeap::GetGPUH
 {
     // TODO: 稍后完成完整实现
     D3D12_GPU_DESCRIPTOR_HANDLE handle = gpuStart;
-    handle.ptr += index * descriptorSize;
+    handle.ptr                         += index * descriptorSize;
     return handle;
 }
 
@@ -101,6 +103,7 @@ GlobalDescriptorHeapManager::GlobalDescriptorHeapManager()
       , m_peakRtvUsed(0)
       , m_peakDsvUsed(0)
       , m_peakSamplerUsed(0)
+      , m_customCbvNextFree(CUSTOM_CBV_RESERVED_START)
       , m_initialized(false)
 {
     // TODO: 稍后完成完整实现
@@ -162,6 +165,12 @@ bool GlobalDescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_
         m_dsvUsed.resize(dsvCapacity, false);
         m_samplerUsed.resize(samplerCapacity, false);
 
+        // 5.1 标记 Custom CBV 预留区域为已使用
+        for (uint32_t i = CUSTOM_CBV_RESERVED_START; i < CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT; ++i)
+        {
+            m_cbvSrvUavUsed[i] = true;
+        }
+
         // 6. 设置容量参数
         m_cbvSrvUavCapacity = cbvSrvUavCapacity;
         m_rtvCapacity       = rtvCapacity;
@@ -169,10 +178,16 @@ bool GlobalDescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_
         m_samplerCapacity   = samplerCapacity;
 
         // 7. 重置统计和索引
-        m_nextFreeCbvSrvUav = 0;
+        m_nextFreeCbvSrvUav = CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT;
         m_nextFreeRtv       = 0;
         m_nextFreeDsv       = 0;
         m_nextFreeSampler   = 0;
+
+        // 7.1 记录 Custom CBV 预留区域初始化信息
+        core::LogInfo(LogRenderer, "Custom CBV预留区域已标记: 索引 %u-%u, 主堆分配从索引 %u 开始",
+            CUSTOM_CBV_RESERVED_START,
+            CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT - 1,
+            m_nextFreeCbvSrvUav);
 
         m_totalCbvSrvUavAllocated = 0;
         m_totalRtvAllocated       = 0;
@@ -1105,7 +1120,7 @@ void GlobalDescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
     case HeapType::CBV_SRV_UAV:
         if (m_cbvSrvUavHeap)
         {
-            m_cbvSrvUavHeap->used += delta;
+            m_cbvSrvUavHeap->used     += delta;
             m_totalCbvSrvUavAllocated += delta;
             if (delta > 0)
             {
@@ -1117,7 +1132,7 @@ void GlobalDescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
     case HeapType::RTV:
         if (m_rtvHeap)
         {
-            m_rtvHeap->used += delta;
+            m_rtvHeap->used     += delta;
             m_totalRtvAllocated += delta;
             if (delta > 0)
             {
@@ -1129,7 +1144,7 @@ void GlobalDescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
     case HeapType::DSV:
         if (m_dsvHeap)
         {
-            m_dsvHeap->used += delta;
+            m_dsvHeap->used     += delta;
             m_totalDsvAllocated += delta;
             if (delta > 0)
             {
@@ -1141,7 +1156,7 @@ void GlobalDescriptorHeapManager::UpdateStats(HeapType heapType, int32_t delta)
     case HeapType::Sampler:
         if (m_samplerHeap)
         {
-            m_samplerHeap->used += delta;
+            m_samplerHeap->used     += delta;
             m_totalSamplerAllocated += delta;
             if (delta > 0)
             {
@@ -1226,3 +1241,65 @@ uint32_t GlobalDescriptorHeapManager::GetSamplerCapacity() const
 {
     return m_samplerCapacity;
 }
+
+// ==================== Custom CBV 预留区域分配方法 ====================
+
+/**
+ * @brief 批量分配 Custom Buffer 的 CBV 描述符
+ *
+ * 教学要点:
+ * 1. 从主堆 m_cbvSrvUavHeap 的预留区域（索引 0-99）分配连续 Descriptor
+ * 2. 使用 m_customCbvNextFree 管理预留区域的分配索引
+ * 3. 验证预留区域容量，防止越界
+ * 4. 保证连续分配，提高缓存局部性
+ *
+ * 架构说明:
+ * - 预留区域范围: [CUSTOM_CBV_RESERVED_START, CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT)
+ * - 当前实现: [0, 100)
+ * - 主堆正常分配从索引 100 开始
+ *
+ * @param count 要分配的描述符数量
+ * @return 分配的描述符数组，失败时返回空数组
+ */
+std::vector<GlobalDescriptorHeapManager::DescriptorAllocation>
+GlobalDescriptorHeapManager::BatchAllocateCustomCbv(uint32_t count)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!m_initialized || !m_cbvSrvUavHeap) {
+        core::LogError(LogRenderer, "BatchAllocateCustomCbv: 未初始化");
+        return {};
+    }
+
+    if (m_customCbvNextFree + count > CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT) {
+        core::LogError(LogRenderer, "Custom CBV预留区域已满: 请求%u, 剩余%u",
+                       count,
+                       CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT - m_customCbvNextFree);
+        return {};
+    }
+
+    std::vector<DescriptorAllocation> allocations;
+    allocations.reserve(count);
+
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t index = m_customCbvNextFree++;
+
+        DescriptorAllocation alloc;
+        alloc.heapIndex = index;
+        alloc.heapType = HeapType::CBV_SRV_UAV;
+        alloc.cpuHandle = m_cbvSrvUavHeap->GetCPUHandle(index);
+        alloc.gpuHandle = m_cbvSrvUavHeap->GetGPUHandle(index);
+        alloc.isValid = true;
+
+        allocations.push_back(alloc);
+    }
+
+    core::LogInfo(LogRenderer, "BatchAllocateCustomCbv: 分配%u个Descriptor (索引%u-%u)",
+                  count,
+                  m_customCbvNextFree - count,
+                  m_customCbvNextFree - 1);
+
+    return allocations;
+}
+
+

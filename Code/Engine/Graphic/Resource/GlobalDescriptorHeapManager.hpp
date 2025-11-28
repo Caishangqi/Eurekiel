@@ -110,6 +110,7 @@ namespace enigma::graphic
         std::unique_ptr<DescriptorHeap> m_dsvHeap; // DSV堆 (深度模板专用)
         std::unique_ptr<DescriptorHeap> m_samplerHeap; // Sampler堆
 
+
         // 索引管理 - 使用简单的位图方式
         std::vector<bool> m_cbvSrvUavUsed; // CBV/SRV/UAV堆使用状态
         std::vector<bool> m_rtvUsed; // RTV堆使用状态
@@ -125,6 +126,7 @@ namespace enigma::graphic
         uint32_t m_nextFreeRtv; // 下一个空闲RTV索引 (优化查找)
         uint32_t m_nextFreeDsv; // 下一个空闲DSV索引 (优化查找)
         uint32_t m_nextFreeSampler; // 下一个空闲Sampler索引 (优化查找)
+        uint32_t m_customCbvNextFree; // Custom CBV 预留区域下一个空闲索引 (范围: 0-99)
 
         // 统计信息
         uint32_t m_totalCbvSrvUavAllocated; // 总CBV/SRV/UAV分配数
@@ -140,11 +142,17 @@ namespace enigma::graphic
         mutable std::mutex m_mutex; // 保护所有操作的互斥锁
         bool               m_initialized; // 初始化状态
 
+
+        
         // 默认配置 - 基于1A-2A-3A决策的最优配置
         static constexpr uint32_t DEFAULT_CBV_SRV_UAV_CAPACITY = 1000000; // 默认100万个CBV/SRV/UAV (Bindless统一大堆)
         static constexpr uint32_t DEFAULT_RTV_CAPACITY         = 1000; // 默认1000个RTV (渲染目标)
         static constexpr uint32_t DEFAULT_DSV_CAPACITY         = 100; // 默认100个DSV (深度模板)
         static constexpr uint32_t DEFAULT_SAMPLER_CAPACITY     = 2048; // 默认2048个Sampler
+
+        // Custom CBV 预留区域配置 (在主堆 m_cbvSrvUavHeap 的索引 0-99)
+        static constexpr uint32_t CUSTOM_CBV_RESERVED_START = 0; // 预留区域起始索引
+        static constexpr uint32_t CUSTOM_CBV_RESERVED_COUNT = 100; // 预留区域大小
 
     public:
         /**
@@ -262,6 +270,18 @@ namespace enigma::graphic
          * 教学要点: 批量分配减少锁竞争，提升性能
          */
         std::vector<DescriptorAllocation> BatchAllocateCbvSrvUav(uint32_t count);
+        
+        /**
+         * @brief [NEW] 批量分配Custom CBV描述符（确保连续性）
+         * @param count 要分配的数量
+         * @return 连续分配的描述符数组，失败返回空数组
+         *
+         * 教学要点:
+         * 1. Descriptor Table要求Descriptor连续
+         * 2. 从m_nextFreeCustomCbv开始连续分配
+         * 3. 线程安全的批量分配
+         */
+        std::vector<DescriptorAllocation> BatchAllocateCustomCbv(uint32_t count);
 
         /**
          * @brief 释放CBV/SRV/UAV描述符
@@ -308,6 +328,8 @@ namespace enigma::graphic
          * @return 描述符堆指针
          */
         ID3D12DescriptorHeap* GetSamplerHeap() const;
+        
+
 
         /**
          * @brief 获取RTV描述符堆 (渲染目标视图堆)
@@ -531,6 +553,8 @@ namespace enigma::graphic
          * @return Sampler堆的总容量
          */
         uint32_t GetSamplerCapacity() const;
+        
+
 
         /**
          * @brief 检查是否还有足够空间
