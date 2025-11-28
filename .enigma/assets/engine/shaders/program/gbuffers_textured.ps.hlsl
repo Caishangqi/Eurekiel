@@ -36,7 +36,7 @@ float4 main(PSInput input) : SV_Target0
     // 1. 获取纹理 (默认使用索引 0)
     // 注意: 实际项目中可通过 Root Constants 传递纹理索引
     // 这里简化为固定索引 0 (通常是方块纹理 Atlas)
-    Texture2D mainTexture = ResourceDescriptorHeap[0];
+    Texture2D mainTexture = customImage0;
 
     // 2. 采样纹理
     // - 使用 linearSampler (线性过滤，防止像素化)
