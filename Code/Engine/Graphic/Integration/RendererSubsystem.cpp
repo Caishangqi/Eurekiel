@@ -5,6 +5,7 @@
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
+#include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
@@ -382,10 +383,14 @@ void RendererSubsystem::Startup()
     {
         LogInfo(LogRenderer, "Creating UniformManager...");
 
-        //The UniformManager constructor will automatically initialize all Uniform Buffers
+        // [RAII] UniformManager constructor automatically completes all initialization:
+        // 1. Allocates Custom Buffer Descriptor pool (100 contiguous descriptors)
+        // 2. Validates descriptor continuity (required for Descriptor Table)
+        // 3. Stores first descriptor's GPU handle as Descriptor Table base address
+        // [IMPORTANT] Shader must use register(bN, space1) for slot >= 15
         m_uniformManager = std::make_unique<UniformManager>();
 
-        LogInfo(LogRenderer, "UniformManager created successfully");
+        LogInfo(LogRenderer, "UniformManager created successfully (RAII initialization complete)");
 
         //Register MatricesUniforms as PerObject Buffer, allocate 10000 draws
         //Teaching points:
@@ -431,7 +436,7 @@ void RendererSubsystem::Startup()
     catch (const std::exception& e)
     {
         LogError(LogRenderer, "Failed to create UniformManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("UniformManager initialization failed! Error: %s", e.what()))
+        ERROR_AND_DIE(Stringf("UniformManager construction failed! Error: %s", e.what()))
     }
 
     // ==================== Create CustomImageManager ====================
@@ -1777,6 +1782,52 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     // Step 5: 设置图元拓扑
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets with Delayed Fill
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
+    if (m_uniformManager)
+    {
+        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+        for (uint32_t slot : perObjectSlots)
+        {
+            // 只绑定Engine Reserved Slots (0-14)
+            if (BufferHelper::IsEngineReservedSlot(slot))
+            {
+                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+                if (cbvAddress != 0)
+                {
+                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+                    LogDebug(LogRenderer, "Draw: Bound Engine Buffer Root CBV (Slot %u, Address=0x%llx)", slot, cbvAddress);
+                }
+            }
+        }
+    }
+
+    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
+    if (m_uniformManager)
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
+
+        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
+        LogInfo(LogRenderer, "Draw: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+                customBufferTableHandle.ptr);
+
+        if (customBufferTableHandle.ptr != 0)
+        {
+            cmdList->SetGraphicsRootDescriptorTable(
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
+                customBufferTableHandle
+            );
+
+            LogDebug(LogRenderer, "Draw: Custom Buffer Descriptor Table bound (Slot 15)");
+        }
+    }
+
     // Step 6: 执行绘制调用
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
 
@@ -1846,6 +1897,55 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     // Step 5: 设置图元拓扑
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets with Delayed Fill
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
+    if (m_uniformManager)
+    {
+        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+        for (uint32_t slot : perObjectSlots)
+        {
+            if (BufferHelper::IsEngineReservedSlot(slot))
+            {
+                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+                if (cbvAddress != 0)
+                {
+                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+                    LogDebug(LogRenderer, "DrawIndexed: Bound Engine Buffer Root CBV (Slot %u)", slot);
+                }
+            }
+        }
+    }
+
+    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
+    if (m_uniformManager)
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
+
+        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
+        LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+                customBufferTableHandle.ptr);
+
+        if (customBufferTableHandle.ptr != 0)
+        {
+            cmdList->SetGraphicsRootDescriptorTable(
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
+                customBufferTableHandle
+            );
+
+            LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table bound (Slot 15)");
+        }
+        else
+        {
+            LogWarn(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
+        }
+    }
+
     // Step 6: 执行绘制
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
@@ -1914,6 +2014,55 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
 
     // Step 5: 设置图元拓扑
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
+    if (m_uniformManager)
+    {
+        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+        for (uint32_t slot : perObjectSlots)
+        {
+            if (BufferHelper::IsEngineReservedSlot(slot))
+            {
+                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+                if (cbvAddress != 0)
+                {
+                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+                    LogDebug(LogRenderer, "DrawInstanced: Bound Engine Buffer Root CBV (Slot %u)", slot);
+                }
+            }
+        }
+    }
+
+    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
+    if (m_uniformManager)
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
+
+        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
+        LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+                customBufferTableHandle.ptr);
+
+        if (customBufferTableHandle.ptr != 0)
+        {
+            cmdList->SetGraphicsRootDescriptorTable(
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
+                customBufferTableHandle
+            );
+
+            LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table bound (Slot 15)");
+        }
+        else
+        {
+            LogWarn(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
+        }
+    }
 
     // Step 6: 执行绘制
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
@@ -2084,7 +2233,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
         LogError(LogRenderer, "PresentRenderTarget: BackBuffer resource is null");
         return;
     }
-
+    g_theImGui->Render();
     // ========================================================================
     // Step 5: 获取CommandList
     // ========================================================================
@@ -2374,30 +2523,11 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // Delayed Fill: Automatically obtain all PerObject Buffers and copy the last updated value as needed
-    const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-
-    for (uint32_t slot : perObjectSlots)
-    {
-        auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);
-        if (!bufferState)
-        {
-            continue;
-        }
-
-        size_t currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
-
-        // If the current index has not been updated, copy the last updated value
-        if (bufferState->lastUpdatedIndex != currentIndex)
-        {
-            void* destPtr = bufferState->GetDataAt(currentIndex);
-            memcpy(destPtr, bufferState->lastUpdatedValue.data(),
-                   bufferState->elementSize);
-
-            LogDebug(LogRenderer, "Delayed Fill: Buffer[slot=%u][%zu] copied from last value",
-                     slot, currentIndex);
-        }
-    }
+    // [Phase 3] Update Ring Buffer offsets with Delayed Fill mechanism
+    // UniformManager handles both Engine Buffers and Custom Buffers
+    // - Engine Buffers: Data update only (Root CBV binding done below)
+    // - Custom Buffers: Data update + Descriptor update
+    m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
 
 
     size_t vertexSize = vertexCount * sizeof(Vertex);
@@ -2451,22 +2581,49 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // It is now safe to bind the Root CBV of all PerObject Buffers
-    for (uint32_t slot : perObjectSlots)
+    // Step 5.6: Bind Engine Buffer Root CBVs (Slot 0-14)
+    // Use unified binding pattern for consistency across all Draw functions
+    if (m_uniformManager)
     {
-        auto* bufferState = m_uniformManager->GetBufferStateBySlot(slot);
-        if (!bufferState || !bufferState->gpuBuffer)
+        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+        for (uint32_t slot : perObjectSlots)
         {
-            continue;
+            // Only bind Engine Buffer slots (0-14)
+            if (BufferHelper::IsEngineReservedSlot(slot))
+            {
+                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+                if (cbvAddress != 0)
+                {
+                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+                    LogDebug(LogRenderer, "DrawVertexArray: Bound Engine Buffer Root CBV (Slot %u)", slot);
+                }
+            }
         }
+    }
 
-        size_t                    currentIndex = m_uniformManager->GetCurrentDrawCount() % bufferState->maxCount;
-        D3D12_GPU_VIRTUAL_ADDRESS cbvAddress   = bufferState->gpuBuffer->GetGPUVirtualAddress() + currentIndex * bufferState->elementSize;
+    // Step 5.7: Bind Custom Buffer Descriptor Table (Slot 15)
+    // Custom Buffer system uses Descriptor Table for user-defined uniform buffers
+    if (m_uniformManager)
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
-        cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
+        LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle ptr=0x%llX", 
+                customBufferTableHandle.ptr);
 
-        LogDebug(LogRenderer, "Set Root CBV: Slot=%u, Address=0x%llx, Index=%zu",
-                 slot, cbvAddress, currentIndex);
+        if (customBufferTableHandle.ptr != 0)
+        {
+            cmdList->SetGraphicsRootDescriptorTable(
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM, // Slot 15
+                customBufferTableHandle
+            );
+            LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table bound (Slot 15)");
+        }
+        else
+        {
+            LogWarn(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
+        }
     }
 
 
