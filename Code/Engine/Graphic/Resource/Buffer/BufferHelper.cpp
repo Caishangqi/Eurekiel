@@ -96,10 +96,10 @@ bool BufferHelper::ValidateBufferConfig(uint32_t slotId, size_t size, enigma::gr
 bool BufferHelper::ValidateSlotRange(uint32_t slotId)
 {
     using enigma::graphic::BindlessRootSignature;
-    
-    uint32_t maxSlot = BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM + 
-                       BindlessRootSignature::MAX_CUSTOM_BUFFERS - 1;
-    
+
+    uint32_t maxSlot = BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM +
+        BindlessRootSignature::MAX_CUSTOM_BUFFERS - 1;
+
     if (slotId > maxSlot)
     {
         LogError(LogRenderer, "Slot %u out of range (max: %u)", slotId, maxSlot);
@@ -139,6 +139,9 @@ void BufferHelper::EnsureBufferSize(
     // 延迟创建或动态扩展
     if (!buffer || buffer->GetSize() < requiredSize)
     {
+        LogWarn(LogRenderer, "[RESIZE] VBO resize triggered! old=%p, oldSize=%zu, requiredSize=%zu", buffer.get(), buffer ? buffer->GetSize() : 0, requiredSize);
+
+
         // 计算新大小：2倍增长策略，最小minSize，最大16MB
         size_t newSize = buffer
                              ? (std::min)((std::max)(requiredSize, buffer->GetSize() * 2), RendererSubsystemConfig::MAX_IMMEDIATE_BUFFER_SIZE)
