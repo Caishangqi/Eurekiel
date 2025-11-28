@@ -1,0 +1,70 @@
+# ==================== RendererSubsystem配置 (Milestone 3.0) ====================
+# 控制整个渲染子系统的行为
+# 遵循"一个子系统一个配置文件"原则
+
+# ==================== Shader编译配置 ====================
+shader:
+  # Shader入口点名称（全局统一）
+  # - "main": Iris兼容（推荐，默认值）
+  # - "VSMain": DirectX风格
+  # - 自定义名称: 用于特殊需求
+  #
+  # 教学要点:
+  # - Iris兼容性: Iris使用 "main" 作为入口点（GLSL标准）
+  # - 简化配置: 所有shader阶段使用相同入口点
+  # - 配置驱动: 避免硬编码，提高灵活性
+  entryPoint: "main"
+
+# ==================== GBuffer配置 ====================
+gbuffer:
+  # colortex数量，范围 [1-16]
+  #
+  # 推荐配置（1920x1080, R8G8B8A8格式）:
+  #   - 简单场景: 4个colortex，节省75%内存（约33.2MB，节省~99.4MB）
+  #   - 标准场景: 8个colortex，节省50%内存（约66.3MB，节省~66.3MB）
+  #   - 复杂场景: 16个colortex（Iris完全兼容，约132.6MB）
+  #
+  # 教学要点:
+  # - 配置驱动: 用户可根据场景复杂度调整内存占用
+  # - 性能权衡: 更多colortex支持更复杂的材质系统
+  # - Iris兼容: 16个colortex与Iris ShaderPack完全兼容
+  colorTexCount: 8
+
+# ==================== 渲染分辨率配置 ====================
+resolution:
+  # 渲染宽度（像素）
+  # 通常从窗口系统动态获取，此处为默认值/初始化备用值
+  width: 1920
+
+  # 渲染高度（像素）
+  height: 1080
+
+# ==================== 未来扩展配置 (Milestone 3.X+) ====================
+# 以下配置项预留，后续Milestone实现
+
+# VSync配置
+# vsync:
+#   enabled: true
+
+# MSAA配置
+# msaa:
+#   sampleCount: 1  # 1=无MSAA, 2/4/8=MSAA采样数
+
+# HDR配置
+# hdr:
+#   enabled: false
+#   format: R16G16B16A16_FLOAT
+
+# 调试配置
+# debug:
+#   enableOverlay: false
+#   enableGPUValidation: true
+
+# ==================== 配置文件说明 ====================
+# Milestone 3.0: 配置系统重构
+# - 从render_targets.yaml迁移到统一的renderer.yml
+# - 遵循"一个子系统一个配置文件"原则
+# - 支持未来扩展（VSync, MSAA, HDR等）
+# - 参考架构: ScheduleSubsystem的schedule.yml设计
+
+# 架构参考: Engine/Core/Schedule/ScheduleSubsystem.hpp (ScheduleConfig模式)
