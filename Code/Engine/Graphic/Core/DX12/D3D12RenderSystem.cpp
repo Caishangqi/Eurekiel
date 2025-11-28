@@ -11,7 +11,6 @@
 #include "Engine/Resource/Atlas/ImageResource.hpp"
 #include "Engine/Core/Image.hpp"
 
-// Milestone 2.X: 类型安全的VertexBuffer/IndexBuffer
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
@@ -1754,11 +1753,10 @@ namespace enigma::graphic
             LogError(LogRenderer, "EndFrame: Failed to get current SwapChain buffer");
             return false;
         }
-
         TransitionResource(s_currentGraphicsCommandList, currentBackBuffer,
                            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT,
                            "SwapChain BackBuffer");
-
+        
         // 3. 执行CommandList（通过CommandListManager）
         // 教学要点：ExecuteCommandList会关闭CommandList并提交到GPU队列
         uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);

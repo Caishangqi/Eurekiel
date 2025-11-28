@@ -6,6 +6,8 @@
 #include "NamedStrings.hpp"
 #include "ErrorWarningAssert.hpp"
 
+class Window;
+
 namespace enigma::core
 {
     class ImGuiSubsystem;
@@ -31,6 +33,7 @@ namespace enigma::core
 extern NamedStrings                         g_gameConfigBlackboard;
 extern EventSystem*                         g_theEventSystem;
 extern DevConsole*                          g_theDevConsole;
+extern Window*                              g_theWindow;
 extern enigma::core::Engine*                g_theEngine;
 extern enigma::core::ConsoleSubsystem*      g_theConsole;
 extern enigma::resource::ResourceSubsystem* g_theResource;
