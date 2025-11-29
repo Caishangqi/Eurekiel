@@ -2463,7 +2463,7 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
-    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu", 
+    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu",
             count, m_immediateVBO.get(), m_currentVertexOffset);
 
     // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
@@ -2479,18 +2479,19 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     }
 
     // ========================================================================
-    // [FIX 2025-11-28] 统一偏移量管理 - 与两参数版本保持一致
+    // [FIX 2025-11-29] 统一绑定流程 - 与两参数版本完全一致
     // ========================================================================
-    // 问题：原实现每次从 offset=0 写入，覆盖之前的数据
-    // 修复：使用累积偏移量 m_currentVertexOffset，追加数据而非覆盖
-    // 效果：一参数版本和两参数版本可以在同一帧内混用
+    // 问题：1参数版本缺少Ring Buffer更新、Root CBV绑定、Custom Buffer绑定
+    // 修复：添加完整的绑定流程，与2参数版本保持一致
     // ========================================================================
 
-    size_t vertexSize = count * sizeof(Vertex);
-    size_t requiredSize = m_currentVertexOffset + vertexSize;  // [CHANGED] 使用累积偏移量
+    // [FIX] Update Ring Buffer offsets with Delayed Fill mechanism
+    m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+
+    size_t vertexSize   = count * sizeof(Vertex);
+    size_t requiredSize = m_currentVertexOffset + vertexSize;
     BufferHelper::EnsureBufferSize(m_immediateVBO, requiredSize, RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE, sizeof(Vertex), "ImmediateVBO");
 
-    // [CHANGED] 使用 persistent mapped pointer + offset（与两参数版本一致）
     void* mappedData = m_immediateVBO->GetPersistentMappedData();
     if (!mappedData)
     {
@@ -2501,18 +2502,80 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 
     SetVertexBuffer(m_immediateVBO.get());
 
-    //Set the primitive topology to a triangle list
+    // [FIX] Get CommandList and set Root Signature via ShaderProgram
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    if (cmdList)
+    if (!cmdList)
     {
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ERROR_AND_DIE("DrawVertexArray: CommandList is nullptr");
+        return;
     }
 
-    // [CHANGED] 使用累积偏移量计算 startVertex
+    // [FIX] Set Root Signature first (via ShaderProgram::Use())
+    if (m_currentShaderProgram)
+    {
+        m_currentShaderProgram->Use(cmdList);
+    }
+    else
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: No shader program is set");
+        return;
+    }
+
+    // [FIX] Bind Engine Buffer Root CBVs (Slot 0-14)
+    if (m_uniformManager)
+    {
+        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
+        for (uint32_t slot : perObjectSlots)
+        {
+            if (BufferHelper::IsEngineReservedSlot(slot))
+            {
+                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+                if (cbvAddress != 0)
+                {
+                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
+                    LogDebug(LogRenderer, "DrawVertexArray[1-PARAM]: Bound Engine Buffer Root CBV (Slot %u)", slot);
+                }
+            }
+        }
+    }
+
+    // [FIX] Bind Custom Buffer Descriptor Table (Slot 15)
+    if (m_uniformManager)
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
+
+        LogInfo(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table Handle ptr=0x%llX",
+                customBufferTableHandle.ptr);
+
+        if (customBufferTableHandle.ptr != 0)
+        {
+            cmdList->SetGraphicsRootDescriptorTable(
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
+                customBufferTableHandle
+            );
+            LogInfo(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table bound (Slot 15)");
+        }
+        else
+        {
+            LogWarn(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
+        }
+    }
+
+    // Set primitive topology
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // Calculate startVertex using accumulated offset
     uint32_t startVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
     Draw(static_cast<uint32_t>(count), startVertex);
 
-    // [NEW] 更新偏移量（追加数据）
+    // [FIX] Increment Draw count for Ring Buffer
+    if (m_uniformManager)
+    {
+        m_uniformManager->IncrementDrawCount();
+    }
+
+    // Update offset (append data)
     m_currentVertexOffset += vertexSize;
 }
 
