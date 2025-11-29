@@ -494,9 +494,9 @@ void AddVertsForCone3D(std::vector<Vertex_PCU>& verts, const Vec3& apex, const V
 
 void AddVertsForArrow3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowPercentage, const Rgba8& color, int numSlices)
 {
-    Vec3  axis        = end - start;
+    Vec3  axis        = start - end;
     float arrowLength = axis.GetLength() * arrowPercentage;
-    Vec3  arrowEnd    = start + axis.GetNormalized() * arrowLength;
+    Vec3  arrowEnd    = end + axis.GetNormalized() * arrowLength;
 
     /// Cylinder but do not have cap
     float cylinderLength = axis.GetLength();
@@ -531,20 +531,20 @@ void AddVertsForArrow3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const
         Vec3 offsetA = (right * cosA + up * sinA) * radius;
         Vec3 offsetB = (right * cosB + up * sinB) * radius;
 
-        Vec3 p0 = end + offsetA;
-        Vec3 p1 = end + offsetB;
+        Vec3 p0 = start + offsetA;
+        Vec3 p1 = start + offsetB;
 
         Vec3 p2 = arrowEnd + offsetA;
         Vec3 p3 = arrowEnd + offsetB;
 
-        AddVertsForQuad3D(verts, p1, p0, end, end, color, AABB2::ZERO_TO_ONE);
+        AddVertsForQuad3D(verts, p1, p0, start, start, color, AABB2::ZERO_TO_ONE);
 
         AddVertsForQuad3D(verts, p0, p1, p3, p2, color, AABB2::ZERO_TO_ONE);
     }
 
     /// 
 
-    AddVertsForCone3D(verts, start, arrowEnd, radius * (1 + arrowPercentage), color, AABB2::ZERO_TO_ONE, numSlices);
+    AddVertsForCone3D(verts, end, arrowEnd, radius * (1 + arrowPercentage), color, AABB2::ZERO_TO_ONE, numSlices);
 }
 
 void AddVertsForArrow3DFixArrowSize(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, float arrowSize, const Rgba8& color, int numSlices)
@@ -980,9 +980,9 @@ void AddVertsForCylinderZ3D(std::vector<Vertex_PCU>& verts, const ZCylinder cyli
 
     float halfHeight   = cylinder.m_height * 0.5f;
     Vec3  bottomCenter = cylinder.m_center;
-    bottomCenter.z -= halfHeight; // 圆柱底面
-    Vec3 topCenter = cylinder.m_center;
-    topCenter.z += halfHeight; // 圆柱顶面
+    bottomCenter.z     -= halfHeight; // 圆柱底面
+    Vec3 topCenter     = cylinder.m_center;
+    topCenter.z        += halfHeight; // 圆柱顶面
 
     float uRange          = UVs.m_maxs.x - UVs.m_mins.x;
     float degreesPerSlice = 360.f / static_cast<float>(numSlices);

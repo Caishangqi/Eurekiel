@@ -330,7 +330,7 @@ void DebugAddWorldArrow(const Vec3& start, const Vec3& end, float radius, float 
 {
     DebugRenderPropsObject* debugRenderPropObject = CreateDebugRenderPropsObject(duration, false, startColor, endColor, mode);
     debugRenderPropsList.push_back(debugRenderPropObject);
-    AddVertsForArrow3D(debugRenderPropObject->vertices, start, end, radius, 0.4f, startColor);
+    AddVertsForArrow3D(debugRenderPropObject->vertices, end, start, radius, 0.4f, startColor);
 }
 
 void DebugAddWorldArrowFixArrowSize(const Vec3&     start, const Vec3& end, float radius, float duration, float arrowSize, const Rgba8& startColor, const Rgba8& endColor, int numSlices,
@@ -345,7 +345,7 @@ void DebugAddWorldArrow(const Vec3& start, const Vec3& end, float radius, float 
 {
     DebugRenderPropsObject* debugRenderPropObject = CreateDebugRenderPropsObject(duration, false, startColor, endColor, mode);
     debugRenderPropsList.push_back(debugRenderPropObject);
-    AddVertsForArrow3D(debugRenderPropObject->vertices, start, end, radius, arrowPercent, startColor);
+    AddVertsForArrow3D(debugRenderPropObject->vertices, end, start, radius, arrowPercent, startColor);
 }
 
 void DebugAddBasis(const Mat44& transform, float duration, float length, float radius, float colorScale, float alphaScale, DebugRenderMode mode)
