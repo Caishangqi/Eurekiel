@@ -1,25 +1,19 @@
 /**
  * @file gbuffers_skytextured.vs.hlsl
  * @brief Sun/Moon Billboard Rendering - Vertex Shader (Minecraft Style)
- * @date 2025-11-26
+ * @date 2025-11-28
  *
- * Features:
- * - Renders sun/moon as camera-facing billboards
- * - Extracts camera orientation from gbufferModelViewInverse
- * - Uses CelestialUniforms for sun/moon positions
- * - No CPU-side Billboard API (GPU-only calculation)
+ * [FIX] sunPosition/moonPosition are VIEW SPACE DIRECTION VECTORS (w=0)
+ * Reference: Iris CelestialUniforms.java - Vector4f(0, y, 0, 0) with w=0
  *
- * Billboard Algorithm:
- * 1. Extract camera right/up vectors from gbufferModelViewInverse columns 0/1
- * 2. Get sun/moon center position from CelestialUniforms
- * 3. Calculate billboard world position: center + right*offsetX + up*offsetY
- * 4. Apply 4-stage transform chain to Clip space
+ * The direction vector points from camera toward the celestial body.
+ * Billboard is rendered at this direction, always facing the camera.
  *
- * Transform Chain:
- * 1. Billboard World Position (calculated in this shader)
- * 2. World � Camera: gbufferModelView
- * 3. Camera � Render: cameraToRenderTransform
- * 4. Render to Clip: gbufferProjection
+ * Billboard Algorithm (View Space):
+ * 1. Get celestial direction in view space from CelestialUniforms
+ * 2. Calculate billboard right/up axes perpendicular to view direction
+ * 3. Apply billboard offset in view space
+ * 4. Project to clip space via gbufferProjection
  */
 
 #include "../core/Common.hlsl"
@@ -41,43 +35,63 @@ VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    // [STEP 1] Extract Camera Orientation from gbufferModelViewInverse
-    // Column-major layout: Column 0 = Right, Column 1 = Up, Column 2 = Forward
-    float3 cameraRight = gbufferModelViewInverse[0].xyz;
-    float3 cameraUp = gbufferModelViewInverse[1].xyz;
+    // [STEP 1] Get Sun/Moon Direction from CelestialUniforms
+    // These are VIEW SPACE direction vectors (length ~100)
+    float  celestialType = input.Position.z; // 0 = Sun, 1 = Moon
+    float3 celestialDir  = lerp(sunPosition, moonPosition, celestialType);
 
-    // [STEP 2] Get Sun/Moon Center Position from CelestialUniforms
-    // Position.z determines which celestial body to render
-    float celestialType = input.Position.z; // 0 = Sun, 1 = Moon
-    float3 celestialCenter = lerp(sunPosition, moonPosition, celestialType);
+    // [STEP 2] Calculate Billboard axes in VIEW SPACE
+    // The billboard should face the camera (which is at origin in view space)
+    // Forward direction is from billboard toward camera = -normalize(celestialDir)
+    float3 forward = -normalize(celestialDir);
 
-    // [STEP 3] Calculate Billboard World Position
-    // Billboard faces camera by using camera right/up vectors
-    float billboardSize = 30.0; // Billboard size in world units
-    float3 billboardOffset = cameraRight * input.Position.x * billboardSize
-                           + cameraUp * input.Position.y * billboardSize;
-    float3 billboardWorldPos = celestialCenter + billboardOffset;
+    // Calculate right and up vectors for billboard
+    // Use world up (0,1,0) in view space as reference, but handle edge cases
+    float3 worldUp = float3(0.0, 1.0, 0.0);
+    float3 right;
+    float3 up;
 
-    // [STEP 4] Apply 4-Stage Transform Chain
-    // Stage 1: Billboard World Position (already calculated)
-    float4 worldPos = float4(billboardWorldPos, 1.0);
+    // Check if forward is nearly parallel to worldUp
+    if (abs(dot(forward, worldUp)) < 0.999)
+    {
+        right = normalize(cross(worldUp, forward));
+        up    = cross(forward, right);
+    }
+    else
+    {
+        // Edge case: use world right as fallback
+        float3 worldRight = float3(1.0, 0.0, 0.0);
+        up                = normalize(cross(forward, worldRight));
+        right             = cross(up, forward);
+    }
 
-    // Stage 2: World to Camera Transform
-    float4 cameraPos = mul(gbufferModelView, worldPos);
+    // [STEP 3] Calculate Billboard View Position
+    // celestialDir is already the center position in view space
+    float  billboardSize   = 30.0; // Billboard size in view units
+    float3 billboardOffset = right * input.Position.x * billboardSize
+        + up * input.Position.y * billboardSize;
+    float3 billboardViewPos = celestialDir + billboardOffset;
 
-    // Stage 3: Camera to Render Transform (Player rotation)
-    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    // [STEP 4] Apply Transform Chain (View Space -> Clip Space)
+    float4 viewPos = float4(billboardViewPos, 1.0);
 
-    // Stage 4: Render to Clip Transform (Projection)
+    // Apply Camera to Render Transform (Player rotation)
+    float4 renderPos = mul(cameraToRenderTransform, viewPos);
+
+    // Apply Projection
     float4 clipPos = mul(gbufferProjection, renderPos);
 
-    output.Position = clipPos;
-    output.Color = input.Color;
-    output.TexCoord = input.TexCoord;
-    output.Normal = input.Normal;
-    output.Tangent = input.Tangent;
+    // [FIX] Force Far Plane: z = 1.0 in NDC
+    // Sun/Moon should render behind all geometry
+    clipPos.z = clipPos.w; // z/w = 1.0 in NDC
+
+    output.Position  = clipPos;
+    output.Color     = input.Color;
+    output.TexCoord  = input.TexCoord;
+    output.Normal    = input.Normal;
+    output.Tangent   = input.Tangent;
     output.Bitangent = input.Bitangent;
-    output.WorldPos = billboardWorldPos;
+    output.WorldPos  = billboardViewPos;
 
     return output;
 }

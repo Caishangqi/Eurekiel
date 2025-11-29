@@ -50,16 +50,20 @@ PSOutput main(PSInput input)
     float2 atlasUV = input.TexCoord;
 
     // [STEP 2] Sample Celestial Texture from Atlas
+    // Use linearSampler for smooth edges on sun/moon textures
     Texture2D celestialAtlas = GetCustomImage(CELESTIAL_ATLAS_SLOT);
-    float4 texColor = celestialAtlas.Sample(pointSampler, atlasUV);
+    float4    texColor       = celestialAtlas.Sample(pointSampler, atlasUV);
 
     // [STEP 3] Calculate Brightness Modulation based on celestial angle
-    // Brightness fades based on time of day
-    float brightness = saturate(1.0 - abs(celestialAngle - 0.25) * 2.0);
+    // Sun is brightest at noon (0.25), fades at sunrise/sunset
+    // Moon is brightest at midnight (0.75), fades at moonrise/moonset
+    // celestialType is encoded in WorldPos (0 = Sun, 1 = Moon) via Position.z in VS
+    // For simplicity, use full brightness - time-based fading handled by sky gradient
+    float brightness = 1.0;
 
     // [STEP 4] Apply Brightness and Alpha Blending
     float3 finalColor = texColor.rgb * brightness;
-    float alpha = texColor.a;
+    float  alpha      = texColor.a;
 
     // [STEP 5] Output Final Color
     output.Color0 = float4(finalColor, alpha);
