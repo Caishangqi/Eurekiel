@@ -50,7 +50,6 @@ PSOutput main(PSInput input)
     float2 atlasUV = input.TexCoord;
 
     // [STEP 2] Sample Celestial Texture from Atlas
-    // Use linearSampler for smooth edges on sun/moon textures
     Texture2D celestialAtlas = GetCustomImage(CELESTIAL_ATLAS_SLOT);
     float4    texColor       = celestialAtlas.Sample(pointSampler, atlasUV);
 

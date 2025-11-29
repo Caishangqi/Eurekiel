@@ -67,7 +67,8 @@ VSOutput main(VSInput input)
 
     // [STEP 3] Calculate Billboard View Position
     // celestialDir is already the center position in view space
-    float  billboardSize   = 30.0; // Billboard size in view units
+    // [FIX] Different billboard sizes: Sun = 30, Moon = 20 (Minecraft style)
+    float  billboardSize   = lerp(30.0, 20.0, celestialType); // Sun=30, Moon=20
     float3 billboardOffset = right * input.Position.x * billboardSize
         + up * input.Position.y * billboardSize;
     float3 billboardViewPos = celestialDir + billboardOffset;
