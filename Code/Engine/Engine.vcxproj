@@ -1152,6 +1152,7 @@
     <ClInclude Include="Window\Window.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="..\..\.enigma\assets\engine\shaders\lib\"/>
     <Folder Include="..\..\.enigma\assets\engine\shaders\post\" />
     <Folder Include="Core\Logger\Appender\" />
   </ItemGroup>

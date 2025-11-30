@@ -6,6 +6,7 @@
  * Features:
  * - Renders sky color with horizon-to-zenith gradient
  * - Applies Void gradient when camera is below minBuildHeight
+ * - Applies time-based sky brightness (CPU-calculated)
  * - Replicates Minecraft FogRenderer.setupColor() behavior
  *
  * Void Gradient Algorithm:
@@ -18,6 +19,7 @@
  */
 
 #include "../core/Common.hlsl"
+#include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (sky color)
@@ -34,13 +36,13 @@ struct PSOutput
 /**
  * @brief Minecraft Void Gradient Constants
  */
-static const float MIN_BUILD_HEIGHT = -64.0; // Minecraft min build height
+static const float MIN_BUILD_HEIGHT  = -64.0; // Minecraft min build height
 static const float CLEAR_COLOR_SCALE = 0.03125; // 1.0 / 32.0
 
 /**
  * @brief Sky Color Palette (Minecraft Style)
  */
-static const float3 SKY_ZENITH_COLOR = float3(0.47, 0.65, 1.0);  // Top (blue #78A7FF)
+static const float3 SKY_ZENITH_COLOR  = float3(0.47, 0.65, 1.0); // Top (blue #78A7FF)
 static const float3 SKY_HORIZON_COLOR = float3(0.75, 0.85, 1.0); // Horizon (light blue #C0D8FF)
 
 /**
@@ -55,18 +57,23 @@ PSOutput main(PSInput input)
     // [STEP 1] Extract Camera World Position from gbufferModelViewInverse
     // Column-major layout: 4th column (index [3]) contains translation
     float3 cameraWorldPos = gbufferModelViewInverse[3].xyz;
-    float cameraZ = cameraWorldPos.z; // Camera Z-axis (vertical height)
+    float  cameraZ        = cameraWorldPos.z; // Camera Z-axis (vertical height)
 
     // [STEP 2] Calculate Sky Color Gradient (Horizon → Zenith)
     // Interpolate based on world position height
-    float heightFactor = saturate((input.WorldPos.z + 16.0) / 512.0); // Normalized height
-    float3 skyColor = lerp(SKY_HORIZON_COLOR, SKY_ZENITH_COLOR, heightFactor);
+    float  heightFactor = saturate((input.WorldPos.z + 16.0) / 512.0); // Normalized height
+    float3 skyColor     = lerp(SKY_HORIZON_COLOR, SKY_ZENITH_COLOR, heightFactor);
 
     // [STEP 3] Calculate Void Gradient (Minecraft Algorithm)
     // Only active when camera is below minBuildHeight
     float voidDarkness = (cameraZ - MIN_BUILD_HEIGHT) * CLEAR_COLOR_SCALE;
-    voidDarkness = saturate(voidDarkness); // Clamp to [0, 1]
-    voidDarkness = voidDarkness * voidDarkness; // Quadratic falloff for smoothness
+    voidDarkness       = saturate(voidDarkness); // Clamp to [0, 1]
+    voidDarkness       = voidDarkness * voidDarkness; // Quadratic falloff for smoothness
+
+    // [STEP 3.5] Apply Sky Brightness (Time-based)
+    // Minecraft formula: brightness = cos(celestialAngle * 2π) * 2 + 0.5
+    // CPU-side calculated and passed via CelestialUniforms
+    skyColor *= skyBrightness;
 
     // [STEP 4] Apply Void Gradient to Sky Color
     skyColor *= voidDarkness;

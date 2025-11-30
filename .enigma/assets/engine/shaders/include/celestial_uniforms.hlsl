@@ -61,7 +61,7 @@ cbuffer CelestialUniforms: register(b15,space1)
     float celestialAngle; // Celestial angle (0.0-1.0)
     float compensatedCelestialAngle; // Compensated angle (+0.25)
     float cloudTime; // Cloud time (tick * 0.03)
-    // float _padding1;                // [REMOVED] HLSL compiler auto-pads, no explicit declaration needed
+    float skyBrightness; // Sky brightness (0.0-1.0), noon=1.0, midnight=0.0
 
     float3 sunPosition; // Sun position (world coordinates)
     // float _padding2;                // [REMOVED] HLSL compiler auto-pads
