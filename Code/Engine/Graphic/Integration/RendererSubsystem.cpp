@@ -21,7 +21,7 @@
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
-#include "Engine/Graphic/Shader/PSO/PSOStateCollector.hpp" // PSO状态收集器
+// [DELETE] Removed PSOStateCollector.hpp - class deleted after refactor
 #include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
 #include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
@@ -32,6 +32,8 @@
 #include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
 #include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
+#include "Engine/Graphic/Integration/ImmediateDrawHelper.hpp" // [NEW] Immediate draw helper
+#include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 #pragma region Lifecycle Management
@@ -1736,18 +1738,40 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         return;
     }
 
-    // Step 1: 收集PSO状态
-    auto state = PSOStateCollector::CollectCurrentState(
-        const_cast<ShaderProgram*>(m_currentShaderProgram),
-        m_currentBlendMode,
-        m_currentDepthMode,
-        m_currentStencilTest,
-        m_currentRasterizationConfig, // [NEW] Pass rasterization config
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        m_renderTargetBinder.get()
-    );
+    // ========================================================================
+    // [REFACTORED] Draw Execution - Inline PSO State + DrawBindingHelper
+    // ========================================================================
+    // Changes:
+    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
+    // 2. [NEW] Inline struct construction for DrawState
+    // 3. [NEW] Use DrawBindingHelper for resource binding
+    // ========================================================================
 
-    // Step 2: 验证状态
+    // Step 1: Prepare custom images (before draw)
+    if (m_customImageManager)
+    {
+        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
+    }
+
+    // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // Step 3: Inline PSO state construction (replaces PSOStateCollector)
+    RenderStateValidator::DrawState state{};
+    state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
+    state.blendMode           = m_currentBlendMode;
+    state.depthMode           = m_currentDepthMode;
+    state.stencilDetail       = m_currentStencilTest;
+    state.rasterizationConfig = m_currentRasterizationConfig;
+    state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    m_renderTargetBinder->GetCurrentRTFormats(state.rtFormats.data());
+    state.depthFormat = m_renderTargetBinder->GetCurrentDepthFormat();
+    state.rtCount     = 8;
+
+    // Step 4: Validate Draw state
     const char* errorMsg = nullptr;
     if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
     {
@@ -1755,7 +1779,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         return;
     }
 
-    // Step 3: 获取或创建PSO
+    // Step 5: Get or create PSO
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         state.program,
         state.rtFormats.data(),
@@ -1763,74 +1787,39 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         state.blendMode,
         state.depthMode,
         state.stencilDetail,
-        state.rasterizationConfig // [NEW] Pass rasterization config
+        state.rasterizationConfig
     );
 
-    // Step 4: 绑定PSO (避免冗余绑定)
+    // Step 6: Bind PSO (avoid redundant binding)
     if (pso != m_lastBoundPSO)
     {
         cmdList->SetPipelineState(pso);
         m_lastBoundPSO = pso;
     }
 
-    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
-    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
+    // Step 7: Bind Root Signature
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
     }
 
-    // Step 5: 设置图元拓扑
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // Step 8: Set Primitive Topology
+    cmdList->IASetPrimitiveTopology(state.topology);
 
-    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets with Delayed Fill
-    if (m_uniformManager)
-    {
-        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-    }
+    // Step 9: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
+    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
-    if (m_uniformManager)
-    {
-        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-        for (uint32_t slot : perObjectSlots)
-        {
-            // 只绑定Engine Reserved Slots (0-14)
-            if (BufferHelper::IsEngineReservedSlot(slot))
-            {
-                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
-                if (cbvAddress != 0)
-                {
-                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
-                    LogDebug(LogRenderer, "Draw: Bound Engine Buffer Root CBV (Slot %u, Address=0x%llx)", slot, cbvAddress);
-                }
-            }
-        }
-    }
+    // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
-    if (m_uniformManager)
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
-
-        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "Draw: Custom Buffer Descriptor Table Handle ptr=0x%llX",
-                customBufferTableHandle.ptr);
-
-        if (customBufferTableHandle.ptr != 0)
-        {
-            cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
-                customBufferTableHandle
-            );
-
-            LogDebug(LogRenderer, "Draw: Custom Buffer Descriptor Table bound (Slot 15)");
-        }
-    }
-
-    // Step 6: 执行绘制调用
+    // Step 11: Issue Draw call
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
+
+    // Step 12: Increment draw count
+    if (m_uniformManager)
+    {
+        m_uniformManager->IncrementDrawCount();
+    }
 
     LogDebug(LogRenderer,
              "Draw: Drew %u vertices starting from vertex %u",
@@ -1852,18 +1841,40 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    // Step 1: 收集PSO状态
-    auto state = PSOStateCollector::CollectCurrentState(
-        const_cast<ShaderProgram*>(m_currentShaderProgram),
-        m_currentBlendMode,
-        m_currentDepthMode,
-        m_currentStencilTest,
-        m_currentRasterizationConfig, // [NEW] Pass rasterization config
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        m_renderTargetBinder.get()
-    );
+    // ========================================================================
+    // [REFACTORED] DrawIndexed Execution - Inline PSO State + DrawBindingHelper
+    // ========================================================================
+    // Changes:
+    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
+    // 2. [NEW] Inline struct construction for DrawState
+    // 3. [NEW] Use DrawBindingHelper for resource binding
+    // ========================================================================
 
-    // Step 2: 验证状态
+    // Step 1: Prepare custom images (before draw)
+    if (m_customImageManager)
+    {
+        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
+    }
+
+    // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // Step 3: Inline PSO state construction (replaces PSOStateCollector)
+    RenderStateValidator::DrawState state{};
+    state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
+    state.blendMode           = m_currentBlendMode;
+    state.depthMode           = m_currentDepthMode;
+    state.stencilDetail       = m_currentStencilTest;
+    state.rasterizationConfig = m_currentRasterizationConfig;
+    state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    m_renderTargetBinder->GetCurrentRTFormats(state.rtFormats.data());
+    state.depthFormat = m_renderTargetBinder->GetCurrentDepthFormat();
+    state.rtCount     = 8;
+
+    // Step 4: Validate Draw state
     const char* errorMsg = nullptr;
     if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
     {
@@ -1871,7 +1882,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    // Step 3: 获取或创建PSO
+    // Step 5: Get or create PSO
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         state.program,
         state.rtFormats.data(),
@@ -1879,78 +1890,39 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         state.blendMode,
         state.depthMode,
         state.stencilDetail,
-        state.rasterizationConfig // [NEW] Pass rasterization config
+        state.rasterizationConfig
     );
 
-    // Step 4: 绑定PSO（仅在变化时）
+    // Step 6: Bind PSO (avoid redundant binding)
     if (pso != m_lastBoundPSO)
     {
         cmdList->SetPipelineState(pso);
         m_lastBoundPSO = pso;
     }
 
-    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
-    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
-    // 之前UseProgram()会调用ShaderProgram::Use()，但重构后移除了该调用
+    // Step 7: Bind Root Signature
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
     }
 
-    // Step 5: 设置图元拓扑
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // Step 8: Set Primitive Topology
+    cmdList->IASetPrimitiveTopology(state.topology);
 
-    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets with Delayed Fill
-    if (m_uniformManager)
-    {
-        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-    }
+    // Step 9: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
+    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
-    if (m_uniformManager)
-    {
-        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-        for (uint32_t slot : perObjectSlots)
-        {
-            if (BufferHelper::IsEngineReservedSlot(slot))
-            {
-                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
-                if (cbvAddress != 0)
-                {
-                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
-                    LogDebug(LogRenderer, "DrawIndexed: Bound Engine Buffer Root CBV (Slot %u)", slot);
-                }
-            }
-        }
-    }
+    // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
-    if (m_uniformManager)
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
-
-        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle ptr=0x%llX",
-                customBufferTableHandle.ptr);
-
-        if (customBufferTableHandle.ptr != 0)
-        {
-            cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
-                customBufferTableHandle
-            );
-
-            LogInfo(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table bound (Slot 15)");
-        }
-        else
-        {
-            LogWarn(LogRenderer, "DrawIndexed: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
-        }
-    }
-
-    // Step 6: 执行绘制
+    // Step 11: Issue DrawIndexed call
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
+
+    // Step 12: Increment draw count
+    if (m_uniformManager)
+    {
+        m_uniformManager->IncrementDrawCount();
+    }
 
     LogDebug(LogRenderer,
              "DrawIndexed: Drew %u indices starting from index %u with base vertex %d",
@@ -1972,18 +1944,40 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         return;
     }
 
-    // Step 1: 收集PSO状态
-    auto state = PSOStateCollector::CollectCurrentState(
-        const_cast<ShaderProgram*>(m_currentShaderProgram),
-        m_currentBlendMode,
-        m_currentDepthMode,
-        m_currentStencilTest,
-        m_currentRasterizationConfig, // [NEW] Pass rasterization config
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        m_renderTargetBinder.get()
-    );
+    // ========================================================================
+    // [REFACTORED] DrawInstanced Execution - Inline PSO State + DrawBindingHelper
+    // ========================================================================
+    // Changes:
+    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
+    // 2. [NEW] Inline struct construction for DrawState
+    // 3. [NEW] Use DrawBindingHelper for resource binding
+    // ========================================================================
 
-    // Step 2: 验证状态
+    // Step 1: Prepare custom images (before draw)
+    if (m_customImageManager)
+    {
+        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
+    }
+
+    // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
+    if (m_uniformManager)
+    {
+        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
+    }
+
+    // Step 3: Inline PSO state construction (replaces PSOStateCollector)
+    RenderStateValidator::DrawState state{};
+    state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
+    state.blendMode           = m_currentBlendMode;
+    state.depthMode           = m_currentDepthMode;
+    state.stencilDetail       = m_currentStencilTest;
+    state.rasterizationConfig = m_currentRasterizationConfig;
+    state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    m_renderTargetBinder->GetCurrentRTFormats(state.rtFormats.data());
+    state.depthFormat = m_renderTargetBinder->GetCurrentDepthFormat();
+    state.rtCount     = 8;
+
+    // Step 4: Validate Draw state
     const char* errorMsg = nullptr;
     if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
     {
@@ -1991,7 +1985,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         return;
     }
 
-    // Step 3: 获取或创建PSO
+    // Step 5: Get or create PSO
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         state.program,
         state.rtFormats.data(),
@@ -1999,78 +1993,39 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         state.blendMode,
         state.depthMode,
         state.stencilDetail,
-        state.rasterizationConfig // [NEW] Pass rasterization config
+        state.rasterizationConfig
     );
 
-    // Step 4: 绑定PSO（仅在变化时）
+    // Step 6: Bind PSO (avoid redundant binding)
     if (pso != m_lastBoundPSO)
     {
         cmdList->SetPipelineState(pso);
         m_lastBoundPSO = pso;
     }
 
-    // Step 4.5: 绑定Root Signature（PSO延迟绑定重构后必须手动调用）
-    // [CRITICAL FIX] DirectX 12要求在SetGraphicsRootConstantBufferView之前必须先设置Root Signature
-    // 之前UseProgram()会调用ShaderProgram::Use()，但重构后移除了该调用
+    // Step 7: Bind Root Signature
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
     }
 
-    // Step 5: 设置图元拓扑
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // Step 8: Set Primitive Topology
+    cmdList->IASetPrimitiveTopology(state.topology);
 
-    // [NEW Phase 4] Step 5.5: Update Ring Buffer offsets
-    if (m_uniformManager)
-    {
-        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-    }
+    // Step 9: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
+    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.6: Bind Engine Buffer Root CBVs
-    if (m_uniformManager)
-    {
-        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-        for (uint32_t slot : perObjectSlots)
-        {
-            if (BufferHelper::IsEngineReservedSlot(slot))
-            {
-                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
-                if (cbvAddress != 0)
-                {
-                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
-                    LogDebug(LogRenderer, "DrawInstanced: Bound Engine Buffer Root CBV (Slot %u)", slot);
-                }
-            }
-        }
-    }
+    // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
-    // [NEW Phase 4] Step 5.7: Bind Custom Buffer Descriptor Table
-    if (m_uniformManager)
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
-
-        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
-        LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle ptr=0x%llX",
-                customBufferTableHandle.ptr);
-
-        if (customBufferTableHandle.ptr != 0)
-        {
-            cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
-                customBufferTableHandle
-            );
-
-            LogInfo(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table bound (Slot 15)");
-        }
-        else
-        {
-            LogWarn(LogRenderer, "DrawInstanced: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
-        }
-    }
-
-    // Step 6: 执行绘制
+    // Step 11: Issue DrawInstanced call
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
+
+    // Step 12: Increment draw count
+    if (m_uniformManager)
+    {
+        m_uniformManager->IncrementDrawCount();
+    }
 
     LogDebug(LogRenderer,
              "DrawInstanced: Drew %u vertices × %u instances starting from vertex %u, instance %u",
@@ -2485,7 +2440,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu",
             count, m_immediateVBO.get(), m_currentVertexOffset);
 
-    // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
+    // [STEP 1] Prepare CustomImage data before Delayed Fill
     if (m_customImageManager)
     {
         m_customImageManager->PrepareCustomImagesForDraw();
@@ -2497,31 +2452,22 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    // ========================================================================
-    // [FIX 2025-11-29] 统一绑定流程 - 与两参数版本完全一致
-    // ========================================================================
-    // 问题：1参数版本缺少Ring Buffer更新、Root CBV绑定、Custom Buffer绑定
-    // 修复：添加完整的绑定流程，与2参数版本保持一致
-    // ========================================================================
-
-    // [FIX] Update Ring Buffer offsets with Delayed Fill mechanism
+    // [STEP 2] Update Ring Buffer offsets (Delayed Fill)
     m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
 
-    size_t vertexSize   = count * sizeof(Vertex);
-    size_t requiredSize = m_currentVertexOffset + vertexSize;
-    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredSize, RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE, sizeof(Vertex), "ImmediateVBO");
+    // [STEP 3] Append vertex data using ImmediateDrawHelper
+    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
+        m_immediateVBO,
+        vertices,
+        count,
+        m_currentVertexOffset,
+        sizeof(Vertex)
+    );
 
-    void* mappedData = m_immediateVBO->GetPersistentMappedData();
-    if (!mappedData)
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped");
-        return;
-    }
-    memcpy(static_cast<char*>(mappedData) + m_currentVertexOffset, vertices, vertexSize);
-
+    // [STEP 4] Set vertex buffer
     SetVertexBuffer(m_immediateVBO.get());
 
-    // [FIX] Get CommandList and set Root Signature via ShaderProgram
+    // [STEP 5] Get CommandList and set Root Signature
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
@@ -2529,7 +2475,6 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    // [FIX] Set Root Signature first (via ShaderProgram::Use())
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
@@ -2540,7 +2485,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    // [FIX] Bind Engine Buffer Root CBVs (Slot 0-14)
+    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14)
     if (m_uniformManager)
     {
         const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
@@ -2558,7 +2503,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         }
     }
 
-    // [FIX] Bind Custom Buffer Descriptor Table (Slot 15)
+    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15)
     if (m_uniformManager)
     {
         D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
@@ -2581,21 +2526,17 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         }
     }
 
-    // Set primitive topology
+    // [STEP 8] Set primitive topology
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // Calculate startVertex using accumulated offset
-    uint32_t startVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
+    // [STEP 9] Issue draw call
     Draw(static_cast<uint32_t>(count), startVertex);
 
-    // [FIX] Increment Draw count for Ring Buffer
+    // [STEP 10] Increment Draw count for Ring Buffer
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
-
-    // Update offset (append data)
-    m_currentVertexOffset += vertexSize;
 }
 
 // ========================================================================
@@ -2610,16 +2551,12 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
     LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, VBO addr=%p, offset=%zu", vertexCount, m_immediateVBO.get(), m_currentVertexOffset);
-    // [CRITICAL FIX] Prepare CustomImage data before Delayed Fill to avoid using expired lastUpdatedValue
+
+    // [STEP 1] Prepare CustomImage data before Delayed Fill
     if (m_customImageManager)
     {
         m_customImageManager->PrepareCustomImagesForDraw();
     }
-
-    // Ring Buffer Root CBV architecture integration
-    // - Delayed Fill: Automatically fill in unupdated data to avoid wasting memory by pre-filling 10,000 copies
-    // - Root CBV binding: hardware optimization path, performance is better than Bindless
-    // - Index management: currentDrawCount % maxCount implements looping
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
@@ -2627,46 +2564,30 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // [Phase 3] Update Ring Buffer offsets with Delayed Fill mechanism
-    // UniformManager handles both Engine Buffers and Custom Buffers
-    // - Engine Buffers: Data update only (Root CBV binding done below)
-    // - Custom Buffers: Data update + Descriptor update
+    // [STEP 2] Update Ring Buffer offsets (Delayed Fill)
     m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
 
+    // [STEP 3] Append vertex and index data using ImmediateDrawHelper
+    uint32_t baseVertex = ImmediateDrawHelper::AppendVertexData(
+        m_immediateVBO,
+        vertices,
+        vertexCount,
+        m_currentVertexOffset,
+        sizeof(Vertex)
+    );
 
-    size_t vertexSize = vertexCount * sizeof(Vertex);
-    size_t indexSize  = indexCount * sizeof(unsigned);
+    uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
+        m_immediateIBO,
+        indices,
+        indexCount,
+        m_currentIndexOffset
+    );
 
-    // [CHANGED] Calculate the total space required (current offset + new data)
-    size_t requiredVertexSize = m_currentVertexOffset + vertexSize;
-    size_t requiredIndexSize  = m_currentIndexOffset + indexSize;
-    // Make sure the buffer is large enough (may trigger resize)
-    BufferHelper::EnsureBufferSize(m_immediateVBO, requiredVertexSize, static_cast<size_t>(RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE), sizeof(Vertex), "ImmediateVBO");
-    BufferHelper::EnsureBufferSize(m_immediateIBO, requiredIndexSize, static_cast<size_t>(RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE), "ImmediateIBO");
-
-    // [CHANGED] Use persistent mapped pointer to start writing from the current offset
-    void* vertexMappedData = m_immediateVBO->GetPersistentMappedData();
-    if (!vertexMappedData)
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not persistently mapped")
-        return;
-    }
-    // Append data to the current offset
-    memcpy(static_cast<char*>(vertexMappedData) + m_currentVertexOffset, vertices, vertexSize);
-
-    void* indexMappedData = m_immediateIBO->GetPersistentMappedData();
-    if (!indexMappedData)
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: ImmediateIBO not persistently mapped");
-        return;
-    }
-    memcpy(static_cast<char*>(indexMappedData) + m_currentIndexOffset, indices, indexSize);
-
+    // [STEP 4] Set vertex and index buffers
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
-    // [CRITICAL FIX] Root Signature must be set before setting Root CBV
-    // DirectX 12 requires that Root Signature must be set before SetGraphicsRootConstantBufferView
+    // [STEP 5] Get CommandList and set Root Signature
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
@@ -2674,7 +2595,6 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // Set Root Signature first (via ShaderProgram::Use())
     if (m_currentShaderProgram)
     {
         m_currentShaderProgram->Use(cmdList);
@@ -2685,14 +2605,12 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // Step 5.6: Bind Engine Buffer Root CBVs (Slot 0-14)
-    // Use unified binding pattern for consistency across all Draw functions
+    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14)
     if (m_uniformManager)
     {
         const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
         for (uint32_t slot : perObjectSlots)
         {
-            // Only bind Engine Buffer slots (0-14)
             if (BufferHelper::IsEngineReservedSlot(slot))
             {
                 D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
@@ -2705,21 +2623,19 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         }
     }
 
-    // Step 5.7: Bind Custom Buffer Descriptor Table (Slot 15)
-    // Custom Buffer system uses Descriptor Table for user-defined uniform buffers
+    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15)
     if (m_uniformManager)
     {
         D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
             m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
 
-        // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值
         LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle ptr=0x%llX",
                 customBufferTableHandle.ptr);
 
         if (customBufferTableHandle.ptr != 0)
         {
             cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM, // Slot 15
+                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
                 customBufferTableHandle
             );
             LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table bound (Slot 15)");
@@ -2730,23 +2646,16 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         }
     }
 
+    // [STEP 8] Set primitive topology (implicit in DrawIndexed)
 
-    // [CHANGED] Use accumulated offset to calculate baseVertex and startIndex
-    // baseVertex: vertex index = byte offset / sizeof(Vertex)
-    // startIndex: starting position of index array = byte offset / sizeof(unsigned)
-    uint32_t baseVertex = static_cast<uint32_t>(m_currentVertexOffset / sizeof(Vertex));
-    uint32_t startIndex = static_cast<uint32_t>(m_currentIndexOffset / sizeof(unsigned));
+    // [STEP 9] Issue indexed draw call
     DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
 
-    // Increment the Draw count and use the new Ring Buffer index for the next Draw
+    // [STEP 10] Increment Draw count for Ring Buffer
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
-
-    // [NEW] Update offset (append data)
-    m_currentVertexOffset += vertexSize;
-    m_currentIndexOffset  += indexSize;
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount)
@@ -2757,8 +2666,30 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
         return;
     }
 
-    SetVertexBuffer(vbo.get());
-    Draw(static_cast<uint32_t>(vertexCount), 0);
+    // [FIX] External VBO data is copied to Ring Buffer to maintain
+    // Per-Frame Append strategy consistency. This adds one memcpy but
+    // avoids Pipeline Stall from mixed buffer usage.
+
+    // Get vertex data from external VBO
+    void* externalData = vbo->GetPersistentMappedData();
+    if (!externalData)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer: External VBO has no mapped data");
+        return;
+    }
+
+    // Append vertex data to Ring Buffer using ImmediateDrawHelper
+    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
+        m_immediateVBO,
+        externalData,
+        vertexCount,
+        m_currentVertexOffset,
+        vbo->GetStride()
+    );
+
+    // Use m_immediateVBO for IASetVertexBuffers (not external vbo)
+    SetVertexBuffer(m_immediateVBO.get());
+    Draw(static_cast<uint32_t>(vertexCount), startVertex);
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo, size_t indexCount)
@@ -2769,9 +2700,49 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
         return;
     }
 
-    SetVertexBuffer(vbo.get());
-    SetIndexBuffer(ibo.get());
-    DrawIndexed(static_cast<uint32_t>(indexCount), 0, 0);
+    // [FIX] External VBO/IBO data is copied to Ring Buffer to maintain
+    // Per-Frame Append strategy consistency. This adds one memcpy but
+    // avoids Pipeline Stall from mixed buffer usage.
+
+    // Get vertex data from external VBO
+    void* externalVertexData = vbo->GetPersistentMappedData();
+    if (!externalVertexData)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer: External VBO has no mapped data");
+        return;
+    }
+
+    // Get index data from external IBO
+    void* externalIndexData = ibo->GetPersistentMappedData();
+    if (!externalIndexData)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer: External IBO has no mapped data");
+        return;
+    }
+    // [FIX] Use GetVertexCount() API instead of manual calculation
+    size_t vertexCount = vbo->GetVertexCount();
+
+    // Append vertex data to Ring Buffer using ImmediateDrawHelper
+    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
+        m_immediateVBO,
+        externalVertexData,
+        vertexCount,
+        m_currentVertexOffset,
+        vbo->GetStride()
+    );
+
+    // Append index data to Ring Buffer using ImmediateDrawHelper
+    uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
+        m_immediateIBO,
+        static_cast<const unsigned*>(externalIndexData),
+        indexCount,
+        m_currentIndexOffset
+    );
+
+    // Use m_immediateVBO and m_immediateIBO for IA calls (not external buffers)
+    SetVertexBuffer(m_immediateVBO.get());
+    SetIndexBuffer(m_immediateIBO.get());
+    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, static_cast<int32_t>(startVertex));
 }
 
 // ============================================================================
