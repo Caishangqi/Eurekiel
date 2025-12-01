@@ -1,9 +1,16 @@
 #pragma once
 
-#include "PSOStateCollector.hpp"
+#include "Engine/Graphic/Core/RenderState.hpp"
+#include <d3d12.h>
+#include <array>
+
+// [DELETE] PSOStateCollector removed - using local DrawState struct instead
 
 namespace enigma::graphic
 {
+    // Forward declaration
+    class ShaderProgram;
+
     /**
      * @class RenderStateValidator
      * @brief Render State Validator - Validates Draw() state completeness
@@ -17,17 +24,37 @@ namespace enigma::graphic
     {
     public:
         /**
+         * @brief Draw state structure for validation
+         * [NEW] Local definition - replaces dependency on PSOStateCollector::CollectedState
+         */
+        struct DrawState
+        {
+            ShaderProgram*             program;
+            BlendMode                  blendMode;
+            DepthMode                  depthMode;
+            StencilTestDetail          stencilDetail;
+            RasterizationConfig        rasterizationConfig;
+            D3D12_PRIMITIVE_TOPOLOGY   topology;
+            std::array<DXGI_FORMAT, 8> rtFormats;
+            DXGI_FORMAT                depthFormat;
+            uint32_t                   rtCount;
+
+            // [DELETE] Removed PSOStateCollector conversion constructor - no longer needed
+            DrawState() = default; // Default constructor
+        };
+
+        /**
          * @brief Validate Draw() state completeness
-         * @param state Collected PSO state
+         * @param state Draw state to validate
          * @param outErrorMessage Optional error message output
          * @return true if state is valid, false otherwise
          */
         static bool ValidateDrawState(
-            const PSOStateCollector::CollectedState& state,
-            const char** outErrorMessage = nullptr
+            const DrawState& state,
+            const char**     outErrorMessage = nullptr
         );
 
     private:
-        RenderStateValidator() = delete;  // [REQUIRED] Prevent instantiation
+        RenderStateValidator() = delete; // [REQUIRED] Prevent instantiation
     };
 }
