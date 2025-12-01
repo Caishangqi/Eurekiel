@@ -1742,6 +1742,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         m_currentBlendMode,
         m_currentDepthMode,
         m_currentStencilTest,
+        m_currentRasterizationConfig, // [NEW] Pass rasterization config
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         m_renderTargetBinder.get()
     );
@@ -1761,7 +1762,8 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         state.depthFormat,
         state.blendMode,
         state.depthMode,
-        state.stencilDetail
+        state.stencilDetail,
+        state.rasterizationConfig // [NEW] Pass rasterization config
     );
 
     // Step 4: 绑定PSO (避免冗余绑定)
@@ -1856,6 +1858,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         m_currentBlendMode,
         m_currentDepthMode,
         m_currentStencilTest,
+        m_currentRasterizationConfig, // [NEW] Pass rasterization config
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         m_renderTargetBinder.get()
     );
@@ -1875,7 +1878,8 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         state.depthFormat,
         state.blendMode,
         state.depthMode,
-        state.stencilDetail
+        state.stencilDetail,
+        state.rasterizationConfig // [NEW] Pass rasterization config
     );
 
     // Step 4: 绑定PSO（仅在变化时）
@@ -1974,6 +1978,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         m_currentBlendMode,
         m_currentDepthMode,
         m_currentStencilTest,
+        m_currentRasterizationConfig, // [NEW] Pass rasterization config
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         m_renderTargetBinder.get()
     );
@@ -1993,7 +1998,8 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         state.depthFormat,
         state.blendMode,
         state.depthMode,
-        state.stencilDetail
+        state.stencilDetail,
+        state.rasterizationConfig // [NEW] Pass rasterization config
     );
 
     // Step 4: 绑定PSO（仅在变化时）
@@ -2369,6 +2375,19 @@ void RendererSubsystem::SetStencilRefValue(uint8_t refValue)
     {
         LogDebug(LogRenderer, "SetStencilRefValue: Updated to {} (will apply when stencil enabled)", refValue);
     }
+}
+
+void RendererSubsystem::SetRasterizationConfig(const RasterizationConfig& config)
+{
+    m_currentRasterizationConfig = config;
+
+    // [IMPORTANT] Rasterization configuration is part of PSO (immutable state)
+    // Changing it requires PSO rebuild. Next UseProgram() will create new PSO
+    // with updated rasterization settings via PSOManager.
+    // Configuration is stored in pending state until PSO is actually created/bound.
+
+    LogDebug(LogRenderer, "SetRasterizationConfig: Rasterization state updated (CullMode={}, FillMode={})",
+             static_cast<int>(config.cullMode), static_cast<int>(config.fillMode));
 }
 
 // ============================================================================

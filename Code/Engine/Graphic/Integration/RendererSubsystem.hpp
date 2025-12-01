@@ -1004,6 +1004,29 @@ namespace enigma::graphic
          * - Applied via OMSetStencilRef on active CommandList
          */
         void SetStencilRefValue(uint8_t refValue);
+
+        /**
+         * @brief Set rasterization configuration (for PSO)
+         * @param config Rasterization configuration (cull mode, fill mode, depth bias, etc.)
+         *
+         * Teaching Points:
+         * - Rasterization configuration is part of PSO (immutable state)
+         * - Changing it requires PSO rebuild via PSOManager
+         * - Configuration takes effect at next UseProgram call (deferred binding)
+         * - Stores config in pending state until PSO is actually created/bound
+         *
+         * Usage Examples:
+         * @code
+         * // Disable face culling for clouds/particles
+         * renderer->SetRasterizationConfig(RasterizationConfig::NoCull());
+         * renderer->UseProgram(cloudProgram);
+         * renderer->DrawClouds();
+         * 
+         * // Restore default culling
+         * renderer->SetRasterizationConfig(RasterizationConfig::Default());
+         * @endcode
+         */
+        void SetRasterizationConfig(const RasterizationConfig& config);
 #pragma endregion
 
 #pragma region RenderTarget Management
@@ -1654,11 +1677,12 @@ namespace enigma::graphic
         std::unique_ptr<PSOManager> m_psoManager;
 
         // [NEW] PSO state caching for deferred binding
-        ShaderProgram*       m_currentShaderProgram = nullptr;
-        BlendMode            m_currentBlendMode     = BlendMode::Opaque;
-        DepthMode            m_currentDepthMode     = DepthMode::Enabled;
-        StencilTestDetail    m_currentStencilTest   = StencilTestDetail::Disabled();
-        ID3D12PipelineState* m_lastBoundPSO         = nullptr;
+        ShaderProgram*       m_currentShaderProgram       = nullptr;
+        BlendMode            m_currentBlendMode           = BlendMode::Opaque;
+        DepthMode            m_currentDepthMode           = DepthMode::Enabled;
+        StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
+        RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::Default();
+        ID3D12PipelineState* m_lastBoundPSO               = nullptr;
 
         /// Current stencil reference value (CommandList dynamic state)
         uint8_t m_currentStencilRef = 0;
