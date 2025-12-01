@@ -46,6 +46,7 @@ void AddVertsForQuad3D(std::vector<Vertex_PCUTBN>& outVerts, std::vector<unsigne
                        const Rgba8&                color, const AABB2&                  uv);
 
 void  TransformVertexArray3D(std::vector<Vertex_PCU>& verts, const Mat44& transform);
+void  TransformVertexArray3D(std::vector<Vertex_PCUTBN>& verts, const Mat44& transform);
 AABB2 GetVertexBounds2D(const std::vector<Vertex_PCU>& verts);
 void  AddVertsForCylinder3D(std::vector<Vertex_PCU>& verts, const Vec3& start, const Vec3& end, float radius, const Rgba8& color = Rgba8::WHITE, const AABB2& UVs = AABB2::ZERO_TO_ONE,
                            int                       numSlices                                                                   = 32);

@@ -375,6 +375,14 @@ void TransformVertexArray3D(std::vector<Vertex_PCU>& verts, const Mat44& transfo
     }
 }
 
+void TransformVertexArray3D(std::vector<Vertex_PCUTBN>& verts, const Mat44& transform)
+{
+    for (Vertex_PCUTBN& vert : verts)
+    {
+        vert.m_position = transform.TransformPosition3D(vert.m_position);
+    }
+}
+
 AABB2 GetVertexBounds2D(const std::vector<Vertex_PCU>& verts)
 {
     AABB2 bounds;
