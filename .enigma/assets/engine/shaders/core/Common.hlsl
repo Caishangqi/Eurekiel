@@ -215,25 +215,22 @@ Texture2D GetCustomImage(uint slotIndex)
 #define customImage15 GetCustomImage(15)
 
 
-//──────────────────────────────────────────────────────
-// Sampler States
-//──────────────────────────────────────────────────────
-
 /**
- * @brief 全局采样器定义
+ * @brief global sampler definition
  *
- * 教学要点:
- * 1. 静态采样器 - 固定绑定到register(s0-s2)
- * 2. 线性采样: 用于纹理过滤
- * 3. 点采样: 用于精确像素访问
- * 4. 阴影采样: 比较采样器（Comparison Sampler）
+ *Teaching points:
+ * 1. Static sampler - fixedly bound to register(s0-s2)
+ * 2. Linear sampling: used for texture filtering
+ * 3. Point sampling: for precise pixel access
+ * 4. Shadow sampling: Comparison Sampler
  *
- * Shader Model 6.6也支持:
- * - SamplerDescriptorHeap[index] 动态采样器访问
+ *Shader Model 6.6 also supports:
+ * - SamplerDescriptorHeap[index] dynamic sampler access
  */
-SamplerState linearSampler : register(s0); // 线性过滤
-SamplerState pointSampler : register(s1); // 点采样
-SamplerState shadowSampler : register(s2); // 阴影比较采样器
+SamplerState linearSampler : register(s0); // Linear filtering
+SamplerState pointSampler: register(s1); // point sampling
+SamplerState shadowSampler: register(s2); // Shadow comparison sampler
+SamplerState wrapSampler : register(s3); // Point sampling with WRAP mode
 
 //──────────────────────────────────────────────────────
 // 注意事项
@@ -265,37 +262,37 @@ SamplerState shadowSampler : register(s2); // 阴影比较采样器
 //──────────────────────────────────────────────────────
 
 /**
- * @brief 顶点着色器输入结构体
+ * @brief vertex shader input structure
  *
- * 教学要点:
- * 1. 固定顶点格式 - 所有几何体使用相同布局
- * 2. 对应 C++ enigma::graphic::Vertex (Vertex_PCUTBN)
- * 3. 用于Gbuffers Pass（几何体渲染）
+ *Teaching points:
+ * 1. Fixed vertex format - all geometry uses the same layout
+ * 2. Corresponds to C++ enigma::graphic::Vertex (Vertex_PCUTBN)
+ * 3. For Gbuffers Pass (geometry rendering)
  *
- * 注意: Composite Pass使用全屏三角形，不需要复杂顶点格式
+ * Note: Composite Pass uses full-screen triangles and does not require complex vertex formats
  */
 struct VSInput
 {
-    float3 Position : POSITION; // 顶点位置 (世界空间)
-    float4 Color : COLOR0; // 顶点颜色 (R8G8B8A8_UNORM)
-    float2 TexCoord : TEXCOORD0; // 纹理坐标
-    float3 Tangent : TANGENT; // 切线向量
-    float3 Bitangent : BITANGENT; // 副切线向量
-    float3 Normal : NORMAL; // 法线向量
+    float3 Position : POSITION; // Vertex position (world space)
+    float4 Color : COLOR0; // Vertex color (R8G8B8A8_UNORM)
+    float2 TexCoord : TEXCOORD0; // Texture coordinates
+    float3 Tangent : TANGENT; // Tangent vector
+    float3 Bitangent : BITANGENT; // Bitangent vector
+    float3 Normal : NORMAL; // normal vector
 };
 
 /**
- * @brief 顶点着色器输出 / 像素着色器输入
+ * @brief vertex shader output / pixel shader input
  */
 struct VSOutput
 {
-    float4 Position : SV_POSITION; // 裁剪空间位置
-    float4 Color : COLOR0; // 顶点颜色 (解包后)
-    float2 TexCoord : TEXCOORD0; // 纹理坐标
-    float3 Tangent : TANGENT; // 切线向量
-    float3 Bitangent : BITANGENT; // 副切线向量
-    float3 Normal : NORMAL; // 法线向量
-    float3 WorldPos : TEXCOORD1; // 世界空间位置
+    float4 Position : SV_POSITION; // Clipping space position
+    float4 Color : COLOR0; // Vertex color (after unpacking)
+    float2 TexCoord : TEXCOORD0; // Texture coordinates
+    float3 Tangent : TANGENT; // Tangent vector
+    float3 Bitangent : BITANGENT; // Bitangent vector
+    float3 Normal : NORMAL; // normal vector
+    float3 WorldPos : TEXCOORD1; // World space position
 };
 
 // 像素着色器输入 (与 VSOutput 相同)

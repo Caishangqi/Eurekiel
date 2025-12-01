@@ -122,70 +122,87 @@ namespace enigma::graphic
         // ============================================================================
         CD3DX12_DESCRIPTOR_RANGE customBufferRange;
         customBufferRange.Init(
-            D3D12_DESCRIPTOR_RANGE_TYPE_CBV,           // rangeType
-            MAX_CUSTOM_BUFFERS,                         // numDescriptors (100个CBV)
-            0,                                          // baseShaderRegister (b0起始，在space1中)
-            1);                                         // registerSpace = space1 (与Root CBV的space0隔离)
+            D3D12_DESCRIPTOR_RANGE_TYPE_CBV, // rangeType
+            MAX_CUSTOM_BUFFERS, // numDescriptors (100个CBV)
+            0, // baseShaderRegister (b0起始，在space1中)
+            1); // registerSpace = space1 (与Root CBV的space0隔离)
 
         rootParameters[ROOT_DESCRIPTOR_TABLE_CUSTOM].InitAsDescriptorTable(
-            1,                              // numDescriptorRanges
-            &customBufferRange,            // pDescriptorRanges
-            D3D12_SHADER_VISIBILITY_ALL);  // visibility
+            1, // numDescriptorRanges
+            &customBufferRange, // pDescriptorRanges
+            D3D12_SHADER_VISIBILITY_ALL); // visibility
 
         // 2. 创建Static Sampler数组（与Common.hlsl中的Sampler声明对应）
         // TODO: 未来可以改为动态配置SetSamplerState()
         // 当前使用Static Sampler以实现零预算开销和最优性能
         // Static Sampler是编译时确定的，无法运行时修改
         // 注意：Static Sampler不占用Root Signature预算，是性能最优的采样器配置方式
-        std::array<CD3DX12_STATIC_SAMPLER_DESC, 3> staticSamplers;
+        std::array<CD3DX12_STATIC_SAMPLER_DESC, 4> staticSamplers;
 
         // 2.1 Linear Sampler (s0) - 线性过滤，用于常规纹理采样
         staticSamplers[0].Init(
-            0,                                      // shaderRegister (s0)
-            D3D12_FILTER_MIN_MAG_MIP_LINEAR,       // filter - 三线性过滤
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressU - U轴重复寻址
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressV - V轴重复寻址
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP,       // addressW - W轴重复寻址
-            0.0f,                                   // mipLODBias
-            16,                                     // maxAnisotropy - 各向异性过滤级别
-            D3D12_COMPARISON_FUNC_NEVER,           // comparisonFunc
+            0, // shaderRegister (s0)
+            D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter - 三线性过滤
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressU - U轴重复寻址
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressV - V轴重复寻址
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressW - W轴重复寻址
+            0.0f, // mipLODBias
+            16, // maxAnisotropy - 各向异性过滤级别
+            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
             D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, // borderColor
-            0.0f,                                   // minLOD
-            D3D12_FLOAT32_MAX,                      // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL,            // visibility - 所有着色器阶段可见
-            0);                                     // registerSpace (space0)
+            0.0f, // minLOD
+            D3D12_FLOAT32_MAX, // maxLOD
+            D3D12_SHADER_VISIBILITY_ALL, // visibility - 所有着色器阶段可见
+            0); // registerSpace (space0)
 
         // 2.2 Point Sampler (s1) - 点采样，用于精确像素访问
         staticSamplers[1].Init(
-            1,                                      // shaderRegister (s1)
-            D3D12_FILTER_MIN_MAG_MIP_POINT,        // filter - 点采样无过滤
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,      // addressU - U轴钳位寻址
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,      // addressV - V轴钳位寻址
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP,      // addressW - W轴钳位寻址
-            0.0f,                                   // mipLODBias
-            1,                                      // maxAnisotropy - 点采样不使用各向异性
-            D3D12_COMPARISON_FUNC_NEVER,           // comparisonFunc
+            1, // shaderRegister (s1)
+            D3D12_FILTER_MIN_MAG_MIP_POINT, // filter - 点采样无过滤
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressU - U轴钳位寻址
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressV - V轴钳位寻址
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressW - W轴钳位寻址
+            0.0f, // mipLODBias
+            1, // maxAnisotropy - 点采样不使用各向异性
+            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
             D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, // borderColor
-            0.0f,                                   // minLOD
-            D3D12_FLOAT32_MAX,                      // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL,            // visibility
-            0);                                     // registerSpace (space0)
+            0.0f, // minLOD
+            D3D12_FLOAT32_MAX, // maxLOD
+            D3D12_SHADER_VISIBILITY_ALL, // visibility
+            0); // registerSpace (space0)
 
         // 2.3 Shadow Comparison Sampler (s2) - 阴影比较采样器
         staticSamplers[2].Init(
-            2,                                      // shaderRegister (s2)
+            2, // shaderRegister (s2)
             D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, // filter - 比较采样线性过滤
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,     // addressU - 边界寻址
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,     // addressV - 边界寻址
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER,     // addressW - 边界寻址
-            0.0f,                                   // mipLODBias
-            0,                                      // maxAnisotropy - 比较采样器不使用各向异性
-            D3D12_COMPARISON_FUNC_LESS_EQUAL,      // comparisonFunc - 深度比较函数
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressU - 边界寻址
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressV - 边界寻址
+            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressW - 边界寻址
+            0.0f, // mipLODBias
+            0, // maxAnisotropy - 比较采样器不使用各向异性
+            D3D12_COMPARISON_FUNC_LESS_EQUAL, // comparisonFunc - 深度比较函数
             D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, // borderColor
-            0.0f,                                   // minLOD
-            D3D12_FLOAT32_MAX,                      // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL,            // visibility
-            0);                                     // registerSpace (space0)
+            0.0f, // minLOD
+            D3D12_FLOAT32_MAX, // maxLOD
+            D3D12_SHADER_VISIBILITY_ALL, // visibility
+            0); // registerSpace (space0)
+
+        // 2.4 Wrap Point Sampler (s3) - Point sampling with WRAP mode for cloud textures
+        // Used for pixel-perfect infinite scrolling textures (e.g., clouds.png)
+        staticSamplers[3].Init(
+            3, // shaderRegister (s3)
+            D3D12_FILTER_MIN_MAG_MIP_POINT, // filter - Point sampling for pixel-perfect look
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressU - WRAP mode for infinite scrolling
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressV - WRAP mode for infinite scrolling
+            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressW - WRAP mode for consistency
+            0.0f, // mipLODBias
+            1, // maxAnisotropy - Not used for point sampling
+            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
+            D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, // borderColor
+            0.0f, // minLOD
+            D3D12_FLOAT32_MAX, // maxLOD
+            D3D12_SHADER_VISIBILITY_ALL, // visibility
+            0); // registerSpace (space0)
 
         // 3. 创建Root Signature描述 - SM6.6关键配置
         CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
@@ -193,11 +210,11 @@ namespace enigma::graphic
             static_cast<UINT>(rootParameters.size()), // 16个参数 (Slot 0-15) [NEW]
             rootParameters.data(),
             static_cast<UINT>(staticSamplers.size()), // NumStaticSamplers - 3个Static Sampler
-            staticSamplers.data(),                     // pStaticSamplers - Static Sampler数组
+            staticSamplers.data(), // pStaticSamplers - Static Sampler数组
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-            // 注意：移除了 D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
-            // 原因：使用Static Sampler时不需要动态Sampler堆索引
+        // 注意：移除了 D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
+        // 原因：使用Static Sampler时不需要动态Sampler堆索引
 
         // 4. 序列化Root Signature
         Microsoft::WRL::ComPtr<ID3DBlob> signature;
@@ -249,7 +266,7 @@ namespace enigma::graphic
         core::LogInfo("BindlessRootSignature",
                       "  - 1 Descriptor Table (Custom Buffers, 1 DWORD)"); // [NEW]
         core::LogInfo("BindlessRootSignature",
-                      "  - 3 Static Samplers (s0-s2, 0 DWORDs)");
+                      "  - 4 Static Samplers (s0-s3, 0 DWORDs)");
         core::LogInfo("BindlessRootSignature",
                       "  - Custom Buffer Descriptor Table initialized: %u CBVs, b15-b%u", // [NEW]
                       MAX_CUSTOM_BUFFERS,
