@@ -79,7 +79,7 @@ PSOutput main(PSInput input)
     skyColor *= voidDarkness;
 
     // [STEP 5] Output Final Color
-    output.Color0 = float4(skyColor, 1.0);
+    output.Color0 = float4(skyColor, input.Color.z);
 
     return output;
 }
