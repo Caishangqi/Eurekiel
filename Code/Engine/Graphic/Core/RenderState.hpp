@@ -296,6 +296,299 @@ namespace enigma::graphic
     };
 
     // ========================================
+    // Rasterization Configuration Type Aliases
+    // ========================================
+
+    /**
+     * @brief Fill mode type alias
+     * @details Maps to D3D12_FILL_MODE for rasterizer fill behavior.
+     * Determines how triangles are filled (solid or wireframe).
+     */
+    using RasterizeFill = D3D12_FILL_MODE;
+
+    /**
+     * @brief Cull mode type alias
+     * @details Maps to D3D12_CULL_MODE for face culling configuration.
+     * Controls which triangle faces are culled (back, front, or none).
+     */
+    using RasterizeCull = D3D12_CULL_MODE;
+
+    /**
+     * @brief Fill mode constants
+     * @details
+     * Defines how triangles are rendered.
+     * 
+     * Educational Points:
+     * - Solid: Normal filled rendering (default)
+     * - Wireframe: Debug mode showing triangle edges only
+     */
+    namespace RasterizeFillMode
+    {
+        constexpr RasterizeFill Solid     = D3D12_FILL_MODE_SOLID; ///< Filled triangles (default rendering)
+        constexpr RasterizeFill Wireframe = D3D12_FILL_MODE_WIREFRAME; ///< Wireframe debug mode
+    }
+
+    /**
+     * @brief Cull mode constants
+     * @details
+     * Controls face culling to optimize rendering.
+     * 
+     * Educational Points:
+     * - BackFace: Cull back-facing triangles (default, most efficient)
+     * - FrontFace: Cull front-facing triangles (rare, special effects)
+     * - None: No culling (required for double-sided geometry like clouds)
+     */
+    namespace RasterizeCullMode
+    {
+        constexpr RasterizeCull BackFace  = D3D12_CULL_MODE_BACK; ///< Cull back faces (default, best performance)
+        constexpr RasterizeCull FrontFace = D3D12_CULL_MODE_FRONT; ///< Cull front faces (special effects)
+        constexpr RasterizeCull None      = D3D12_CULL_MODE_NONE; ///< No culling (double-sided rendering)
+    }
+
+    /**
+     * @brief Winding order enumeration
+     * @details
+     * Defines triangle vertex order to determine front/back faces.
+     * 
+     * Educational Points:
+     * - CounterClockwise: Standard in OpenGL and most engines (default)
+     * - Clockwise: DirectX default, matches D3D12_FILL_MODE behavior
+     */
+    enum class RasterizeWindingOrder : uint8_t
+    {
+        CounterClockwise, ///< Counter-clockwise winding (OpenGL default)
+        Clockwise ///< Clockwise winding (DirectX default)
+    };
+
+    /**
+     * @brief Rasterization configuration structure
+     * @details
+     * Complete rasterization state mapping to D3D12_RASTERIZER_DESC.
+     * Controls triangle filling, face culling, depth bias, and advanced features.
+     * 
+     * Educational Points:
+     * - Fill mode: Solid vs Wireframe rendering
+     * - Cull mode: Back-face culling optimization (cull invisible faces)
+     * - Depth bias: Shadow map bias to prevent shadow acne
+     * - Conservative rasterization: Ensure all pixels touched by triangle are rendered
+     * 
+     * Default Values:
+     * - Match current ConfigureRasterizerState() hardcoded behavior
+     * - Standard forward/deferred rendering configuration
+     * - Counter-clockwise winding (OpenGL/Iris standard)
+     * 
+     * Memory Layout:
+     * - 11 configurable fields aligned for cache efficiency
+     * - Total size: 32 bytes (8-byte aligned for optimal performance)
+     */
+    struct RasterizationConfig
+    {
+        // [KEY] Fill and culling configuration
+        RasterizeFill         fillMode     = RasterizeFillMode::Solid; ///< Triangle fill mode (solid or wireframe)
+        RasterizeCull         cullMode     = RasterizeCullMode::BackFace; ///< Face culling mode (back, front, or none)
+        RasterizeWindingOrder windingOrder = RasterizeWindingOrder::CounterClockwise; ///< Vertex winding order (CCW default)
+
+        // [KEY] Depth bias configuration (for shadow mapping)
+        int32_t depthBias            = 0; ///< Constant depth bias (shadow map offset)
+        float   depthBiasClamp       = 0.0f; ///< Maximum depth bias clamp
+        float   slopeScaledDepthBias = 0.0f; ///< Slope-scaled depth bias (prevents shadow acne on slopes)
+
+        // [KEY] Advanced rasterization features
+        bool depthClipEnabled          = true; ///< Enable depth clipping (clip geometry beyond far plane)
+        bool multisampleEnabled        = false; ///< Enable MSAA (multi-sample anti-aliasing)
+        bool antialiasedLineEnabled    = false; ///< Enable line anti-aliasing (smooth line edges)
+        bool conservativeRasterEnabled = false; ///< Enable conservative rasterization (SM 6.0+)
+
+        // [KEY] Forced sample count (0 = use MSAA settings)
+        uint32_t forcedSampleCount = 0; ///< Force specific sample count (0 = default)
+
+        // ========================================
+        // Static Preset Methods
+        // ========================================
+
+        /**
+         * @brief Default rasterization configuration
+         * @details
+         * Standard configuration for opaque solid geometry with back-face culling.
+         * This is the most common configuration used for forward and deferred rendering.
+         * 
+         * Configuration:
+         * - Fill Mode: Solid (filled triangles)
+         * - Cull Mode: BackFace (cull invisible back-facing triangles)
+         * - Winding Order: CounterClockwise (OpenGL/Iris standard)
+         * - All other settings: Default values (no depth bias, no special features)
+         * 
+         * Use Cases:
+         * - Standard opaque geometry (terrain, buildings, characters)
+         * - Deferred rendering G-Buffer pass
+         * - Forward rendering opaque objects
+         * 
+         * Performance Impact:
+         * - Best performance due to back-face culling (reduces fragment shader invocations by ~50%)
+         * - Solid fill mode is fastest (no wireframe overhead)
+         * 
+         * @return RasterizationConfig configured for standard opaque rendering
+         */
+        static inline RasterizationConfig Default()
+        {
+            RasterizationConfig config;
+            config.fillMode     = RasterizeFillMode::Solid; // [KEY] Solid triangles
+            config.cullMode     = RasterizeCullMode::BackFace; // [KEY] Cull back faces
+            config.windingOrder = RasterizeWindingOrder::CounterClockwise; // [KEY] CCW winding
+            return config;
+        }
+
+        /**
+         * @brief No culling configuration
+         * @details
+         * Disables face culling for double-sided geometry rendering.
+         * Required for objects that must be visible from both sides.
+         * 
+         * Configuration:
+         * - Fill Mode: Solid (filled triangles)
+         * - Cull Mode: None (no face culling, render both sides)
+         * - Winding Order: CounterClockwise (standard)
+         * 
+         * Use Cases:
+         * - [KEY] Cloud rendering (volumetric clouds visible from inside and outside)
+         * - Vegetation (leaves, grass billboards)
+         * - Transparent windows (glass panes)
+         * - Cloth simulation (flags, curtains)
+         * 
+         * Performance Impact:
+         * - [WARNING] 2x fragment shader cost (renders both front and back faces)
+         * - Use only when necessary (double-sided geometry)
+         * 
+         * @return RasterizationConfig configured for double-sided rendering
+         */
+        static inline RasterizationConfig NoCull()
+        {
+            RasterizationConfig config;
+            config.fillMode     = RasterizeFillMode::Solid;
+            config.cullMode     = RasterizeCullMode::None; // [KEY] Disable culling
+            config.windingOrder = RasterizeWindingOrder::CounterClockwise;
+            return config;
+        }
+
+        /**
+         * @brief Front-face culling configuration
+         * @details
+         * Culls front-facing triangles, renders only back faces.
+         * Useful for specific rendering techniques requiring inverted culling.
+         * 
+         * Configuration:
+         * - Fill Mode: Solid (filled triangles)
+         * - Cull Mode: FrontFace (cull front-facing triangles)
+         * - Winding Order: CounterClockwise (standard)
+         * 
+         * Use Cases:
+         * - [KEY] Shadow mapping (render back faces to reduce shadow acne)
+         * - Interior rendering (camera inside geometry, render back faces)
+         * - Portal rendering (render hidden geometry)
+         * - Reflection rendering (inverted geometry)
+         * 
+         * Performance Impact:
+         * - Similar to back-face culling (50% triangle reduction)
+         * - Less common than back-face culling
+         * 
+         * @return RasterizationConfig configured for front-face culling
+         */
+        static inline RasterizationConfig CullFront()
+        {
+            RasterizationConfig config;
+            config.fillMode     = RasterizeFillMode::Solid;
+            config.cullMode     = RasterizeCullMode::FrontFace; // [KEY] Cull front faces
+            config.windingOrder = RasterizeWindingOrder::CounterClockwise;
+            return config;
+        }
+
+        /**
+         * @brief Wireframe rendering configuration
+         * @details
+         * Renders only triangle edges without culling, useful for debugging geometry.
+         * Shows all triangle edges from both front and back faces.
+         * 
+         * Configuration:
+         * - Fill Mode: Wireframe (render triangle edges only)
+         * - Cull Mode: None (show all edges from both sides)
+         * - Winding Order: CounterClockwise (standard)
+         * 
+         * Use Cases:
+         * - [KEY] Debug visualization (inspect geometry topology)
+         * - Mesh analysis (check triangle count, distribution)
+         * - Level editor tools (wireframe overlay)
+         * - Performance profiling (verify culling effectiveness)
+         * 
+         * Performance Impact:
+         * - [WARNING] Debug mode, not for production rendering
+         * - No fragment shader savings (all edges visible)
+         * 
+         * @return RasterizationConfig configured for wireframe debug rendering
+         */
+        static inline RasterizationConfig Wireframe()
+        {
+            RasterizationConfig config;
+            config.fillMode     = RasterizeFillMode::Wireframe; // [KEY] Wireframe mode
+            config.cullMode     = RasterizeCullMode::None; // [KEY] No culling
+            config.windingOrder = RasterizeWindingOrder::CounterClockwise;
+            return config;
+        }
+
+        /**
+         * @brief Wireframe with back-face culling configuration
+         * @details
+         * Renders only visible triangle edges (front faces) in wireframe mode.
+         * Optimized wireframe rendering that respects face culling.
+         * 
+         * Configuration:
+         * - Fill Mode: Wireframe (render triangle edges only)
+         * - Cull Mode: BackFace (cull invisible back-facing edges)
+         * - Winding Order: CounterClockwise (standard)
+         * 
+         * Use Cases:
+         * - [KEY] Optimized debug visualization (show only visible edges)
+         * - Wireframe overlay on solid geometry (less cluttered)
+         * - Performance-friendly debug mode (50% edge reduction)
+         * - Level editor tools (cleaner wireframe display)
+         * 
+         * Performance Impact:
+         * - Better than Wireframe() due to back-face culling
+         * - Still debug mode, not for production
+         * 
+         * @return RasterizationConfig configured for wireframe rendering with back-face culling
+         */
+        static inline RasterizationConfig WireframeCullBack()
+        {
+            RasterizationConfig config;
+            config.fillMode     = RasterizeFillMode::Wireframe; // [KEY] Wireframe mode
+            config.cullMode     = RasterizeCullMode::BackFace; // [KEY] Cull back faces
+            config.windingOrder = RasterizeWindingOrder::CounterClockwise;
+            return config;
+        }
+
+        /**
+         * @brief Equality comparison operator for PSO caching
+         * @details Compares all 11 configurable fields to determine if two rasterization configurations are identical
+         * @param other The other RasterizationConfig to compare with
+         * @return true if all fields match, false otherwise
+         */
+        bool operator==(const RasterizationConfig& other) const
+        {
+            return fillMode == other.fillMode &&
+                cullMode == other.cullMode &&
+                windingOrder == other.windingOrder &&
+                depthBias == other.depthBias &&
+                depthBiasClamp == other.depthBiasClamp &&
+                slopeScaledDepthBias == other.slopeScaledDepthBias &&
+                depthClipEnabled == other.depthClipEnabled &&
+                multisampleEnabled == other.multisampleEnabled &&
+                antialiasedLineEnabled == other.antialiasedLineEnabled &&
+                conservativeRasterEnabled == other.conservativeRasterEnabled &&
+                forcedSampleCount == other.forcedSampleCount;
+        }
+    };
+
+    // ========================================
     // Stencil Test Type Aliases
     // ========================================
 
