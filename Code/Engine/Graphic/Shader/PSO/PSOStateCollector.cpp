@@ -5,21 +5,23 @@
 namespace enigma::graphic
 {
     PSOStateCollector::CollectedState PSOStateCollector::CollectCurrentState(
-        ShaderProgram*               program,
-        BlendMode                    blendMode,
-        DepthMode                    depthMode,
-        const StencilTestDetail&     stencilDetail,
-        D3D12_PRIMITIVE_TOPOLOGY     topology,
-        RenderTargetBinder*          rtBinder
+        ShaderProgram*             program,
+        BlendMode                  blendMode,
+        DepthMode                  depthMode,
+        const StencilTestDetail&   stencilDetail,
+        const RasterizationConfig& rasterizationConfig,
+        D3D12_PRIMITIVE_TOPOLOGY   topology,
+        RenderTargetBinder*        rtBinder
     )
     {
         CollectedState state{};
 
-        state.program       = program;
-        state.blendMode     = blendMode;
-        state.depthMode     = depthMode;
-        state.topology      = topology;
-        state.stencilDetail = stencilDetail;
+        state.program             = program;
+        state.blendMode           = blendMode;
+        state.depthMode           = depthMode;
+        state.topology            = topology;
+        state.stencilDetail       = stencilDetail;
+        state.rasterizationConfig = rasterizationConfig; // [NEW] Copy rasterization config
 
         if (rtBinder)
         {
