@@ -419,6 +419,8 @@
     <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp" />
     <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp" />
     <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp" />
+    <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
     <ClCompile Include="Graphic\Resource\Buffer\BufferHelper.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
@@ -440,7 +442,7 @@
     <ClCompile Include="Graphic\Shader\Common\ShaderIncludeHelper.cpp" />
     <ClCompile Include="Graphic\Shader\Compiler\DXCCompiler.cpp" />
     <ClCompile Include="Graphic\Shader\PSO\PSOManager.cpp" />
-    <ClCompile Include="Graphic\Shader\PSO\PSOStateCollector.cpp" />
+
     <ClCompile Include="Graphic\Shader\PSO\RenderStateValidator.cpp" />
     <ClCompile Include="Graphic\Shader\ShaderCache.cpp" />
     <ClCompile Include="Graphic\Shader\ShaderPack\Include\ShaderPath.cpp" />
@@ -889,6 +891,8 @@
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
+    <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
@@ -899,7 +903,7 @@
     <ClInclude Include="Graphic\Shader\Common\ShaderCompilationHelper.hpp" />
     <ClInclude Include="Graphic\Shader\Common\ShaderIncludeHelper.hpp" />
     <ClInclude Include="Graphic\Shader\PSO\PSOManager.hpp" />
-    <ClInclude Include="Graphic\Shader\PSO\PSOStateCollector.hpp" />
+
     <ClInclude Include="Graphic\Shader\PSO\RenderStateValidator.hpp" />
     <ClInclude Include="Graphic\Shader\ShaderCache.hpp" />
     <ClInclude Include="Graphic\Shader\ShaderPack\ShaderPackHelper.hpp" />
