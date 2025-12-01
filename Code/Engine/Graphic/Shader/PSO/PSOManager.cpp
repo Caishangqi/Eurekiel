@@ -31,6 +31,9 @@ namespace enigma::graphic
             return false;
         if (!(stencilDetail == other.stencilDetail))
             return false;
+        // [NEW] RasterizationConfig comparison
+        if (!(rasterizationConfig == other.rasterizationConfig))
+            return false;
 
         for (int i = 0; i < 8; ++i)
         {
@@ -79,6 +82,32 @@ namespace enigma::graphic
         hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilFailOp)) << 5;
         hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilDepthFailOp)) << 6;
 
+        // [NEW] RasterizationConfig Hash (optimized strategy)
+        // Strategy 1: High-frequency fields always hashed
+        uint32_t rastKey = (static_cast<uint32_t>(rasterizationConfig.fillMode) << 16) |
+            (static_cast<uint32_t>(rasterizationConfig.cullMode) << 8) |
+            static_cast<uint32_t>(rasterizationConfig.windingOrder);
+        hash ^= std::hash<uint32_t>{}(rastKey) << 10;
+
+        // Strategy 2: Sparse fields only when non-default
+        if (rasterizationConfig.depthBias != 0)
+            hash ^= std::hash<int32_t>{}(rasterizationConfig.depthBias) << 11;
+        if (rasterizationConfig.depthBiasClamp != 0.0f)
+            hash ^= std::hash<float>{}(rasterizationConfig.depthBiasClamp) << 12;
+        if (rasterizationConfig.slopeScaledDepthBias != 0.0f)
+            hash ^= std::hash<float>{}(rasterizationConfig.slopeScaledDepthBias) << 13;
+
+        // Strategy 3: Pack booleans into single byte
+        uint8_t boolFlags = 0;
+        if (rasterizationConfig.depthClipEnabled) boolFlags |= 0x01;
+        if (rasterizationConfig.multisampleEnabled) boolFlags |= 0x02;
+        if (rasterizationConfig.antialiasedLineEnabled) boolFlags |= 0x04;
+        if (rasterizationConfig.conservativeRasterEnabled) boolFlags |= 0x08;
+        hash ^= std::hash<uint8_t>{}(boolFlags) << 14;
+
+        if (rasterizationConfig.forcedSampleCount != 0)
+            hash ^= std::hash<uint32_t>{}(rasterizationConfig.forcedSampleCount) << 15;
+
         return hash;
     }
 
@@ -87,18 +116,19 @@ namespace enigma::graphic
     // ========================================================================
 
     ID3D12PipelineState* PSOManager::GetOrCreatePSO(
-        const ShaderProgram*     shaderProgram,
-        const DXGI_FORMAT        rtFormats[8],
-        DXGI_FORMAT              depthFormat,
-        BlendMode                blendMode,
-        DepthMode                depthMode,
-        const StencilTestDetail& stencilDetail
+        const ShaderProgram*       shaderProgram,
+        const DXGI_FORMAT          rtFormats[8],
+        DXGI_FORMAT                depthFormat,
+        BlendMode                  blendMode,
+        DepthMode                  depthMode,
+        const StencilTestDetail&   stencilDetail,
+        const RasterizationConfig& rasterizationConfig
     )
     {
         // [DIAGNOSTIC] Log input stencil configuration
         LogInfo("PSOManager", "[GetOrCreatePSO] stencil.enable=%d, func=%d, passOp=%d, writeMask=0x%02X",
-                    stencilDetail.enable, stencilDetail.stencilFunc, stencilDetail.stencilPassOp, stencilDetail.stencilWriteMask);
-        
+                stencilDetail.enable, stencilDetail.stencilFunc, stencilDetail.stencilPassOp, stencilDetail.stencilWriteMask);
+
         // 1. 构建PSOKey
         PSOKey key;
         key.shaderProgram = shaderProgram;
@@ -106,10 +136,11 @@ namespace enigma::graphic
         {
             key.rtFormats[i] = rtFormats[i];
         }
-        key.depthFormat   = depthFormat;
-        key.blendMode     = blendMode;
-        key.depthMode     = depthMode;
-        key.stencilDetail = stencilDetail;
+        key.depthFormat         = depthFormat;
+        key.blendMode           = blendMode;
+        key.depthMode           = depthMode;
+        key.stencilDetail       = stencilDetail;
+        key.rasterizationConfig = rasterizationConfig; // [NEW] Set rasterization config
 
         // 2. 查找缓存
         auto it = m_psoCache.find(key);
@@ -118,7 +149,7 @@ namespace enigma::graphic
             LogInfo("PSOManager", "[PSO Cache HIT] Returning cached PSO");
             return it->second.Get();
         }
-        
+
         LogInfo("PSOManager", "[PSO Cache MISS] Creating new PSO");
 
         // 3. 创建新PSO
@@ -169,8 +200,8 @@ namespace enigma::graphic
         // 2.2 Blend状态（使用key.blendMode）
         ConfigureBlendState(psoDesc.BlendState, key.blendMode);
 
-        // 2.3 光栅化状态
-        ConfigureRasterizerState(psoDesc.RasterizerState);
+        // 2.3 光栅化状态（使用key.rasterizationConfig）
+        ConfigureRasterizerState(psoDesc.RasterizerState, key.rasterizationConfig);
 
         // 2.4 深度模板状态（使用key.depthMode和key.stencilDetail）
         ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthMode, key.stencilDetail);
@@ -377,18 +408,27 @@ namespace enigma::graphic
         StencilHelper::ConfigureStencilState(depthStencilDesc, stencilDetail);
     }
 
-    void PSOManager::ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc)
+    void PSOManager::ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc, const RasterizationConfig& config)
     {
-        rasterDesc.FillMode              = D3D12_FILL_MODE_SOLID;
-        rasterDesc.CullMode              = D3D12_CULL_MODE_BACK;
-        rasterDesc.FrontCounterClockwise = TRUE; // [FIX] 使用逆时针绕序（OpenGL/Iris标准）
-        rasterDesc.DepthBias             = 0;
-        rasterDesc.DepthBiasClamp        = 0.0f;
-        rasterDesc.SlopeScaledDepthBias  = 0.0f;
-        rasterDesc.DepthClipEnable       = TRUE;
-        rasterDesc.MultisampleEnable     = FALSE;
-        rasterDesc.AntialiasedLineEnable = FALSE;
-        rasterDesc.ForcedSampleCount     = 0;
-        rasterDesc.ConservativeRaster    = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+        // [NEW] Core configuration from RasterizationConfig
+        rasterDesc.FillMode              = config.fillMode;
+        rasterDesc.CullMode              = config.cullMode;
+        rasterDesc.FrontCounterClockwise = (config.windingOrder == RasterizeWindingOrder::CounterClockwise);
+
+        // [NEW] Depth bias configuration (for shadow mapping)
+        rasterDesc.DepthBias            = config.depthBias;
+        rasterDesc.DepthBiasClamp       = config.depthBiasClamp;
+        rasterDesc.SlopeScaledDepthBias = config.slopeScaledDepthBias;
+
+        // [NEW] Feature switches
+        rasterDesc.DepthClipEnable       = config.depthClipEnabled;
+        rasterDesc.MultisampleEnable     = config.multisampleEnabled;
+        rasterDesc.AntialiasedLineEnable = config.antialiasedLineEnabled;
+        rasterDesc.ForcedSampleCount     = config.forcedSampleCount;
+
+        // [NEW] Conservative rasterization
+        rasterDesc.ConservativeRaster = config.conservativeRasterEnabled
+                                            ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
+                                            : D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
     }
 } // namespace enigma::graphic

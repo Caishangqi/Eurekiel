@@ -48,12 +48,13 @@ namespace enigma::graphic
      */
     struct alignas(16) PSOKey
     {
-        const ShaderProgram* shaderProgram = nullptr; ///< 着色器程序指针
-        DXGI_FORMAT          rtFormats[8]  = {}; ///< 8个RT格式 (对应colortex0-7)
-        DXGI_FORMAT          depthFormat   = DXGI_FORMAT_UNKNOWN; ///< 深度格式
-        BlendMode            blendMode     = BlendMode::Opaque; ///< 混合模式
-        DepthMode            depthMode     = DepthMode::Enabled; ///< 深度模式
-        StencilTestDetail    stencilDetail = StencilTestDetail::Disabled(); ///< Stencil test configuration
+        const ShaderProgram* shaderProgram       = nullptr; ///< 着色器程序指针
+        DXGI_FORMAT          rtFormats[8]        = {}; ///< 8个RT格式 (对应colortex0-7)
+        DXGI_FORMAT          depthFormat         = DXGI_FORMAT_UNKNOWN; ///< 深度格式
+        BlendMode            blendMode           = BlendMode::Opaque; ///< 混合模式
+        DepthMode            depthMode           = DepthMode::Enabled; ///< 深度模式
+        StencilTestDetail    stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
+        RasterizationConfig  rasterizationConfig = RasterizationConfig::Default(); ///< Rasterization configuration
 
         /**
          * @brief 相等比较运算符
@@ -146,12 +147,13 @@ namespace enigma::graphic
          * 4. 新PSO加入缓存
          */
         ID3D12PipelineState* GetOrCreatePSO(
-            const ShaderProgram*     shaderProgram,
-            const DXGI_FORMAT        rtFormats[8],
-            DXGI_FORMAT              depthFormat,
-            BlendMode                blendMode,
-            DepthMode                depthMode,
-            const StencilTestDetail& stencilDetail
+            const ShaderProgram*       shaderProgram,
+            const DXGI_FORMAT          rtFormats[8],
+            DXGI_FORMAT                depthFormat,
+            BlendMode                  blendMode,
+            DepthMode                  depthMode,
+            const StencilTestDetail&   stencilDetail,
+            const RasterizationConfig& rasterizationConfig
         );
 
         /**
@@ -202,8 +204,9 @@ namespace enigma::graphic
         /**
          * @brief 配置光栅化状态
          * @param rasterDesc 光栅化描述符
+         * @param config Rasterization configuration
          */
-        static void ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc);
+        static void ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc, const RasterizationConfig& config);
 
     private:
         /// PSO缓存 (Key → PSO)
