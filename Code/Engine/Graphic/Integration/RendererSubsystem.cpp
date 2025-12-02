@@ -2485,46 +2485,11 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14)
-    if (m_uniformManager)
-    {
-        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-        for (uint32_t slot : perObjectSlots)
-        {
-            if (BufferHelper::IsEngineReservedSlot(slot))
-            {
-                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
-                if (cbvAddress != 0)
-                {
-                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
-                    LogDebug(LogRenderer, "DrawVertexArray[1-PARAM]: Bound Engine Buffer Root CBV (Slot %u)", slot);
-                }
-            }
-        }
-    }
+    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14) using DrawBindingHelper
+    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15)
-    if (m_uniformManager)
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
-
-        LogInfo(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table Handle ptr=0x%llX",
-                customBufferTableHandle.ptr);
-
-        if (customBufferTableHandle.ptr != 0)
-        {
-            cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
-                customBufferTableHandle
-            );
-            LogInfo(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table bound (Slot 15)");
-        }
-        else
-        {
-            LogWarn(LogRenderer, "DrawVertexArray[1-PARAM]: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
-        }
-    }
+    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
     // [STEP 8] Set primitive topology
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -2605,46 +2570,11 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14)
-    if (m_uniformManager)
-    {
-        const auto& perObjectSlots = m_uniformManager->GetSlotsByFrequency(UpdateFrequency::PerObject);
-        for (uint32_t slot : perObjectSlots)
-        {
-            if (BufferHelper::IsEngineReservedSlot(slot))
-            {
-                D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
-                if (cbvAddress != 0)
-                {
-                    cmdList->SetGraphicsRootConstantBufferView(slot, cbvAddress);
-                    LogDebug(LogRenderer, "DrawVertexArray: Bound Engine Buffer Root CBV (Slot %u)", slot);
-                }
-            }
-        }
-    }
+    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14) using DrawBindingHelper
+    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15)
-    if (m_uniformManager)
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            m_uniformManager->GetCustomBufferDescriptorTableGPUHandle();
-
-        LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle ptr=0x%llX",
-                customBufferTableHandle.ptr);
-
-        if (customBufferTableHandle.ptr != 0)
-        {
-            cmdList->SetGraphicsRootDescriptorTable(
-                BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
-                customBufferTableHandle
-            );
-            LogInfo(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table bound (Slot 15)");
-        }
-        else
-        {
-            LogWarn(LogRenderer, "DrawVertexArray: Custom Buffer Descriptor Table Handle is NULL, skipping binding");
-        }
-    }
+    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
     // [STEP 8] Set primitive topology (implicit in DrawIndexed)
 
