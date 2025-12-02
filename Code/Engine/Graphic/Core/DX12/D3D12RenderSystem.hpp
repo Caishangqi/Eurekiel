@@ -114,30 +114,6 @@ namespace enigma::graphic
          */
         static std::unique_ptr<D12Buffer> CreateBuffer(const BufferCreateInfo& createInfo);
 
-        /**
-         * 简化的创建顶点缓冲区方法
-         * @param size 缓冲区大小
-         * @param initialData 初始顶点数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return 顶点缓冲区指针
-         */
-        static std::unique_ptr<D12Buffer> CreateVertexBuffer(
-            size_t      size,
-            const void* initialData = nullptr,
-            const char* debugName   = "VertexBuffer");
-
-        /**
-         * 简化的创建索引缓冲区方法
-         * @param size 缓冲区大小
-         * @param initialData 初始索引数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return 索引缓冲区指针
-         */
-        static std::unique_ptr<D12Buffer> CreateIndexBuffer(
-            size_t      size,
-            const void* initialData = nullptr,
-            const char* debugName   = "IndexBuffer");
-
         // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
 
         /**
@@ -165,7 +141,7 @@ namespace enigma::graphic
          * D3D12RenderSystem::BindVertexBuffer(vb->GetView());
          * @endcode
          */
-        static std::unique_ptr<class D12VertexBuffer> CreateVertexBufferTyped(
+        static std::unique_ptr<class D12VertexBuffer> CreateVertexBuffer(
             size_t      size,
             size_t      stride,
             const void* initialData = nullptr,
@@ -197,7 +173,7 @@ namespace enigma::graphic
          * D3D12RenderSystem::BindIndexBuffer(ib->GetView());
          * @endcode
          */
-        static std::unique_ptr<class D12IndexBuffer> CreateIndexBufferTyped(
+        static std::unique_ptr<class D12IndexBuffer> CreateIndexBuffer(
             size_t                      size,
             D12IndexBuffer::IndexFormat format,
             const void*                 initialData = nullptr,

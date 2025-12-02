@@ -1611,7 +1611,7 @@ D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned str
     }
 
     // 调用D3D12RenderSystem创建D12VertexBuffer
-    auto vertexBuffer = D3D12RenderSystem::CreateVertexBufferTyped(size, stride, nullptr, "AppVertexBuffer");
+    auto vertexBuffer = D3D12RenderSystem::CreateVertexBuffer(size, stride, nullptr, "AppVertexBuffer");
 
     if (!vertexBuffer)
     {

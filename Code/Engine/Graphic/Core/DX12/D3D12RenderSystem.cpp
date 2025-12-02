@@ -356,38 +356,6 @@ namespace enigma::graphic
         }
     }
 
-    /**
-     * Simplified vertex buffer creation
-     * Corresponding to common vertex data usage
-     */
-    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateVertexBuffer(size_t size, const void* initialData, const char* debugName)
-    {
-        BufferCreateInfo createInfo;
-        createInfo.size         = size;
-        createInfo.usage        = BufferUsage::VertexBuffer;
-        createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
-        createInfo.initialData  = initialData;
-        createInfo.debugName    = debugName;
-
-        return CreateBuffer(createInfo);
-    }
-
-    /**
-     * Simplified index buffer creation
-     * Corresponding to common index data uses
-     */
-    std::unique_ptr<D12Buffer> D3D12RenderSystem::CreateIndexBuffer(size_t size, const void* initialData, const char* debugName)
-    {
-        BufferCreateInfo createInfo;
-        createInfo.size         = size;
-        createInfo.usage        = BufferUsage::IndexBuffer;
-        createInfo.memoryAccess = initialData ? MemoryAccess::CPUToGPU : MemoryAccess::GPUOnly;
-        createInfo.initialData  = initialData;
-        createInfo.debugName    = debugName;
-
-        return CreateBuffer(createInfo);
-    }
-
     // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
 
     /**
@@ -398,7 +366,7 @@ namespace enigma::graphic
      * 2. 返回具体类型指针，提供类型安全的接口
      * 3. 失败时返回nullptr（D12VertexBuffer构造函数内部assert）
      */
-    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBufferTyped(
+    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBuffer(
         size_t size, size_t stride, const void* initialData, const char* debugName)
     {
         try
@@ -421,7 +389,7 @@ namespace enigma::graphic
      * 2. 返回具体类型指针，提供类型安全的接口
      * 3. 失败时返回nullptr
      */
-    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBufferTyped(
+    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBuffer(
         size_t size, D12IndexBuffer::IndexFormat format, const void* initialData, const char* debugName)
     {
         try
@@ -1756,7 +1724,7 @@ namespace enigma::graphic
         TransitionResource(s_currentGraphicsCommandList, currentBackBuffer,
                            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT,
                            "SwapChain BackBuffer");
-        
+
         // 3. 执行CommandList（通过CommandListManager）
         // 教学要点：ExecuteCommandList会关闭CommandList并提交到GPU队列
         uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);
