@@ -23,8 +23,8 @@
 #include "../core/Common.hlsl"
 #include "../include/celestial_uniforms.hlsl"
 
-// [RENDERTARGETS] 0 6 3
-// Output to colortex0 (main color), colortex6 (normal), colortex3 (specular)
+// [RENDERTARGETS] 0
+// Output to colortex0 (main color)
 
 /**
  * @brief Vertex Shader Main Entry
@@ -41,7 +41,7 @@ VSOutput main(VSInput input)
     VSOutput output;
 
     // [STEP 1] World � Camera Transform
-    float4 worldPos = float4(input.Position, 1.0);
+    float4 worldPos  = float4(input.Position, 1.0);
     float4 cameraPos = mul(gbufferModelView, worldPos);
 
     // [STEP 2] Camera � Render Transform (Player rotation)
@@ -50,19 +50,19 @@ VSOutput main(VSInput input)
     // [STEP 3] Render � Clip Transform (Projection)
     float4 clipPos = mul(gbufferProjection, renderPos);
 
-    output.Position = clipPos;
-    output.Color = input.Color;
-    output.Normal = input.Normal;
-    output.Tangent = input.Tangent;
+    output.Position  = clipPos;
+    output.Color     = input.Color;
+    output.Normal    = input.Normal;
+    output.Tangent   = input.Tangent;
     output.Bitangent = input.Bitangent;
-    output.WorldPos = worldPos.xyz;
+    output.WorldPos  = worldPos.xyz;
 
     // [STEP 4] Apply Cloud Animation to UV Coordinates
     // Cloud animation: UV offset based on cloudTime
     // cloudTime increments continuously, creating scrolling effect
     const float CLOUD_SPEED = 0.03; // Cloud animation speed multiplier
-    float2 uvOffset = float2(cloudTime * CLOUD_SPEED, 0.0); // Scroll in X direction
-    output.TexCoord = input.TexCoord + uvOffset;
+    float2      uvOffset    = float2(cloudTime * CLOUD_SPEED, 0.0); // Scroll in X direction
+    output.TexCoord         = input.TexCoord + uvOffset;
 
     // Note: UV wrapping is handled automatically by sampler
     // 256x256 clouds.png texture tiles seamlessly

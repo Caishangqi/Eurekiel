@@ -286,6 +286,7 @@ namespace enigma::graphic
         blendDesc.AlphaToCoverageEnable  = FALSE;
         blendDesc.IndependentBlendEnable = FALSE;
 
+        // [FIX] 初始化所有RT为不混合状态
         for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
         {
             blendDesc.RenderTarget[i].BlendEnable           = FALSE;
@@ -297,49 +298,65 @@ namespace enigma::graphic
         {
         case BlendMode::Alpha:
         case BlendMode::NonPremultiplied:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            blendDesc.RenderTarget[0].SrcBlend       = D3D12_BLEND_SRC_ALPHA;
-            blendDesc.RenderTarget[0].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
-            blendDesc.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            // [FIX] 为所有RT启用Alpha混合，修复MRT云渲染的黑底Bug
+            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+            {
+                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
+                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_SRC_ALPHA;
+                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
+                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
+                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
+                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            }
             break;
 
         case BlendMode::Additive:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            blendDesc.RenderTarget[0].SrcBlend       = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlend      = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            // [FIX] 为所有RT启用加法混合
+            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+            {
+                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
+                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
+                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            }
             break;
 
         case BlendMode::Multiply:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            blendDesc.RenderTarget[0].SrcBlend       = D3D12_BLEND_DEST_COLOR;
-            blendDesc.RenderTarget[0].DestBlend      = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_DEST_ALPHA;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-            blendDesc.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            // [FIX] 为所有RT启用乘法混合
+            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+            {
+                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
+                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_DEST_COLOR;
+                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_ZERO;
+                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
+                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_DEST_ALPHA;
+                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
+                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            }
             break;
 
         case BlendMode::Premultiplied:
-            blendDesc.RenderTarget[0].BlendEnable = TRUE;
-            blendDesc.RenderTarget[0].SrcBlend       = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
-            blendDesc.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
-            blendDesc.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ONE;
-            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-            blendDesc.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            // [FIX] 为所有RT启用预乘Alpha混合
+            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+            {
+                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
+                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
+                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
+                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
+                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+            }
             break;
 
         case BlendMode::Opaque:
         case BlendMode::Disabled:
         default:
-            // 默认不混合
+            // 默认不混合（已在初始化循环中设置）
             break;
         }
     }

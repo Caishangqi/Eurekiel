@@ -1,24 +1,22 @@
 /**
  * @file gbuffers_skybasic.vs.hlsl
  * @brief Sky with Void Gradient - Vertex Shader (Minecraft Style)
- * @date 2025-11-30
+ * @date 2025-11-28
  *
- * [SIMPLIFIED] CPU-side vertex transformation approach (following Minecraft/Iris)
- * Vertices are pre-transformed on CPU with pure rotation matrix, GPU only does Projection
+ * [FIX] Sky geometry now follows camera rotation but ignores translation
+ * This ensures sky always surrounds the player regardless of position
  *
  * Features:
  * - Renders sky dome as TRIANGLE_LIST (24 vertices)
- * - Vertices arrive already in camera space (CPU-side transformed)
+ * - Removes translation from gbufferModelView (rotation only)
  * - Forces far plane: z = 1.0 in NDC
  *
- * Transform Chain (simplified):
- * 1. Render Position (input.Position - already transformed on CPU including cameraToRenderTransform)
- * 2. Render to Clip: gbufferProjection
- * 3. Far plane override: z = 1.0
- *
- * [OLD] Previous GPU-side approach (removed):
- * - modelMatrix, viewRotationOnly construction removed
- * - CPU now handles: modelMatrix * skyViewMatrix transformation
+ * Transform Chain:
+ * 1. World Position (sky geometry centered at origin)
+ * 2. Apply rotation only from gbufferModelView (ignore translation)
+ * 3. Camera to Render: cameraToRenderTransform
+ * 4. Render to Clip: gbufferProjection
+ * 5. Far plane override: z = 1.0
  */
 
 #include "../core/Common.hlsl"
@@ -28,7 +26,7 @@
 
 /**
  * @brief Vertex Shader Main Entry
- * @param input Vertex data from sky dome geometry (pre-transformed on CPU)
+ * @param input Vertex data from sky dome geometry
  * @return VSOutput Transformed vertex for rasterization
  */
 VSOutput main(VSInput input)
@@ -36,34 +34,39 @@ VSOutput main(VSInput input)
     VSOutput output;
 
     // ==========================================================================
-    // [SIMPLIFIED] CPU-Side Vertex Transform Approach
+    // [FIX] Sky Geometry Transform - Follow Camera Rotation, Ignore Translation
     // ==========================================================================
-    // Following Minecraft/Iris approach:
-    // - Vertices are transformed on CPU with pure rotation matrix (no translation)
-    // - GPU only applies Projection transform
+    // Problem: Sky sphere was fixed in world space, player could "fly out" of it
+    // Solution: Remove translation from gbufferModelView, keep only rotation
     //
-    // CPU-side transformation (in SkyRenderPass.cpp):
-    // - Sky Dome: TransformVertexArray3D(vertices, skyViewMatrix * cameraToRenderTransform)
-    // - Strip: TransformVertexArray3D(vertices, celestialRotation * skyViewMatrix * cameraToRenderTransform)
+    // HLSL Matrix Layout (row-major with row-vector multiplication):
+    // - mul(matrix, vector) = row-vector × matrix
+    // - Translation is in the 4th COLUMN: matrix[0][3], matrix[1][3], matrix[2][3]
+    // - matrix[3] is the 4th ROW, NOT the translation!
     //
-    // Transform chain:
-    // - CPU: localPos → (celestialRotation) → skyViewMatrix → cameraToRenderTransform → renderPos
-    // - GPU: renderPos → gbufferProjection → clipPos
-    //
-    // Benefits:
-    // - Simpler shader (no viewRotationOnly construction, no cameraToRenderTransform)
-    // - Matches Minecraft/Iris implementation exactly
-    // - modelMatrix is IDENTITY, so we can skip it entirely
+    // To remove translation, we must zero out the 4th column elements:
     // ==========================================================================
 
-    // [STEP 1] Input position is already in RENDER space (CPU pre-transformed with cameraToRenderTransform)
-    float4 renderPos = float4(input.Position, 1.0);
+    // [STEP 1] Create rotation-only view matrix by zeroing translation column
+    float4x4 viewRotationOnly = gbufferModelView;
 
-    // [STEP 2] Render to Clip Transform (Projection only)
-    // Note: cameraToRenderTransform is already applied on CPU side
+    viewRotationOnly[0][3] = 0.0; // Zero X translation (in row 0, column 3)
+    viewRotationOnly[1][3] = 0.0; // Zero Y translation (in row 1, column 3)
+    viewRotationOnly[2][3] = 0.0; // Zero Z translation (in row 2, column 3)
+    // viewRotationOnly[3] remains as (0,0,0,1) - homogeneous coordinate row
+
+    // [STEP 2] Transform sky geometry (rotation only, no translation)
+    // Sky geometry is centered at origin, rotation makes it follow camera orientation
+    float4 worldPos  = float4(input.Position, 1.0);
+    float4 cameraPos = mul(viewRotationOnly, worldPos);
+
+    // [STEP 3] Camera to Render Transform (Player rotation)
+    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+
+    // [STEP 4] Render to Clip Transform (Projection)
     float4 clipPos = mul(gbufferProjection, renderPos);
 
-    // [STEP 3] Force Far Plane: z = 1.0 in NDC
+    // [STEP 5] Force Far Plane: z = 1.0 in NDC
     // This makes sky render behind all geometry
     clipPos.z = clipPos.w; // z/w = 1.0 in NDC
 
@@ -73,7 +76,7 @@ VSOutput main(VSInput input)
     output.Normal    = input.Normal;
     output.Tangent   = input.Tangent;
     output.Bitangent = input.Bitangent;
-    output.WorldPos  = renderPos.xyz; // [NOTE] Now in render space (DirectX coordinate system)
+    output.WorldPos  = worldPos.xyz;
 
     return output;
 }
