@@ -1,71 +1,75 @@
 /**
  * @file gbuffers_clouds.vs.hlsl
- * @brief Cloud Rendering - Vertex Shader (Minecraft Vanilla Style)
- * @date 2025-11-26
+ * @brief [REWRITE] Cloud Rendering - Vertex Shader (Sodium Architecture)
+ * @date 2025-12-02
+ *
+ * Architecture Design:
+ * - Sodium CloudRenderer.java architecture (CPU-side geometry generation)
+ * - All color calculations and lighting done on CPU side
+ * - Vertex Shader only performs standard MVP transformation
+ * - No texture sampling - colors pre-calculated in vertex data
  *
  * Features:
- * - Renders 32x32 cell cloud mesh grid
- * - Cloud animation driven by cloudTime from CelestialUniforms
- * - UV offset animation (not vertex position animation)
- * - Uses MatricesUniforms 4-stage transform chain
- *
- * Cloud Animation Algorithm:
- * 1. Get cloudTime from CelestialUniforms (increments over time)
- * 2. Apply UV offset: UV += cloudTime * cloudSpeed
- * 3. UV wraps automatically (256x256 texture tiles seamlessly)
+ * - Standard 4-stage transform chain (World -> Camera -> Render -> Clip)
+ * - Vertex color pass-through (contains pre-calculated brightness)
+ * - No UV animation (cloud animation handled by CPU-side geometry rebuild)
  *
  * Transform Chain:
- * 1. World � Camera: gbufferModelView
- * 2. Camera � Render: cameraToRenderTransform
- * 3. Render � Clip: gbufferProjection
+ * 1. World Position: input.Position (already contains cellOffset from CPU)
+ * 2. World -> Camera: gbufferModelView
+ * 3. Camera -> Render: cameraToRenderTransform
+ * 4. Render -> Clip: gbufferProjection
+ *
+ * CPU-Side Calculations (done before this shader):
+ * - Cloud cell geometry generation (12x12x4 cubes)
+ * - Face culling (avoid Z-fighting)
+ * - Brightness calculation (top: 1.0, bottom: 0.7, sides: 0.8-0.9)
+ * - Texture sampling from clouds.png (256x256)
+ * - Vertex color = textureColor * brightness
  */
 
 #include "../core/Common.hlsl"
-#include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (main color)
 
 /**
  * @brief Vertex Shader Main Entry
- * @param input Vertex data from cloud mesh geometry
- * @return VSOutput Transformed vertex with animated UV coordinates
+ * @param input Vertex data from CPU-generated cloud geometry
+ * @return VSOutput Transformed vertex for rasterization
  *
- * Cloud Animation:
- * - UV coordinates are offset by cloudTime to create scrolling effect
- * - Cloud speed is controlled by CLOUD_SPEED constant (default: 0.03)
- * - UV wraps seamlessly due to 256x256 tileable texture
+ * Key Points:
+ * - input.Position already contains cellOffset (cloud position + animation)
+ * - input.Color contains pre-calculated RGBA (texture color * brightness)
+ * - No need for celestial_uniforms.hlsl (animation done on CPU)
+ * - Simple MVP transformation following standard pipeline
  */
 VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    // [STEP 1] World � Camera Transform
-    float4 worldPos  = float4(input.Position, 1.0);
+    // [STEP 1] 5-Stage Transform Chain (Standard Pipeline)
+    // Local -> World -> Camera -> Render -> Clip
+    // [FIX] 添加 modelMatrix 变换，用于云的平滑滚动动画
+    float4 localPos  = float4(input.Position, 1.0);
+    float4 worldPos  = mul(modelMatrix, localPos);
     float4 cameraPos = mul(gbufferModelView, worldPos);
-
-    // [STEP 2] Camera � Render Transform (Player rotation)
     float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    float4 clipPos   = mul(gbufferProjection, renderPos);
 
-    // [STEP 3] Render � Clip Transform (Projection)
-    float4 clipPos = mul(gbufferProjection, renderPos);
+    output.Position = clipPos;
 
-    output.Position  = clipPos;
+    // [STEP 2] Pass-through Vertex Attributes
+    // Color already contains: textureColor * brightness (CPU-calculated)
     output.Color     = input.Color;
     output.Normal    = input.Normal;
     output.Tangent   = input.Tangent;
     output.Bitangent = input.Bitangent;
     output.WorldPos  = worldPos.xyz;
 
-    // [STEP 4] Apply Cloud Animation to UV Coordinates
-    // Cloud animation: UV offset based on cloudTime
-    // cloudTime increments continuously, creating scrolling effect
-    const float CLOUD_SPEED = 0.03; // Cloud animation speed multiplier
-    float2      uvOffset    = float2(cloudTime * CLOUD_SPEED, 0.0); // Scroll in X direction
-    output.TexCoord         = input.TexCoord + uvOffset;
-
-    // Note: UV wrapping is handled automatically by sampler
-    // 256x256 clouds.png texture tiles seamlessly
+    // [STEP 3] UV Coordinates (Unused in Sodium architecture)
+    // Set to zero as texture sampling is done on CPU side
+    output.TexCoord = float2(0.0, 0.0);
 
     return output;
 }

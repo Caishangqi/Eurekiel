@@ -1,36 +1,41 @@
 /**
  * @file gbuffers_clouds.ps.hlsl
- * @brief Cloud Rendering - Pixel Shader (Minecraft Vanilla Style)
- * @date 2025-11-26
+ * @brief [REWRITE] Cloud Rendering - Pixel Shader (Sodium Architecture)
+ * @date 2025-12-02
+ *
+ * Architecture Design:
+ * - Sodium CloudRenderer.java architecture (CPU-side texture sampling)
+ * - Pixel Shader is a simple pass-through (no texture sampling)
+ * - All color calculations done on CPU side (texture * brightness)
+ * - Alpha test for cloud shape formation (threshold: 0.1)
  *
  * Features:
- * - Samples 256x256 clouds.png texture
- * - Alpha blending for semi-transparent clouds
- * - Alpha discard for cloud shape formation (threshold: 0.1)
- * - Outputs to colortex0 (color only)
+ * - Direct output of vertex color (no texture sampling)
+ * - Alpha discard for transparency (threshold: 0.1)
+ * - Single render target: colortex0 (main color)
  *
- * Texture Sampling:
- * - clouds.png: 256x256 tileable cloud texture
- * - UV coordinates animated by Vertex Shader (scrolling effect)
- * - wrapSampler (register s3) for infinite UV scrolling
- * - Alpha channel controls cloud transparency
+ * CPU-Side Calculations (done before this shader):
+ * - clouds.png texture sampling (256x256 RGBA)
+ * - Color modulation by brightness (face-dependent)
+ * - Vertex color = textureColor * brightness
  *
- * Output Targets:
- * - colortex0: Cloud color with alpha
+ * Shader Responsibility:
+ * - Alpha test: discard if alpha < 0.1
+ * - Output vertex color directly
  */
 
 #include "../core/Common.hlsl"
-#include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (main color)
 
 /**
  * @brief Pixel Shader Output Structure
+ * ShaderCodeGenerator reads RENDERTARGETS comment and generates this struct
  */
 struct PSOutput
 {
-    float4 Color : SV_Target0; // colortex0: Cloud color (RGB) + Alpha
+    float4 Color : SV_Target0; // colortex0: Cloud color (RGBA)
 };
 
 /**
@@ -38,35 +43,28 @@ struct PSOutput
  * @param input Interpolated vertex data from Vertex Shader
  * @return PSOutput Single render target output
  *
- * Rendering:
- * 1. Sample clouds.png texture using animated UV coordinates with wrapSampler
- * 2. Apply alpha discard (threshold: 0.1) to form cloud shapes
- * 3. Apply vertex color modulation (for tinting)
- * 4. Output color and alpha to colortex0
+ * Key Points:
+ * - input.Color contains pre-calculated RGBA (texture * brightness)
+ * - No texture sampling (done on CPU side)
+ * - Simple alpha test for cloud shape formation
+ * - Direct color output
  */
 PSOutput main(VSOutput input)
 {
     PSOutput output;
 
-    // [STEP 1] Sample Cloud Texture (256x256 clouds.png)
-    // Use wrapSampler (register s3) for infinite UV scrolling
-    Texture2D cloudsTexture = customImage0;
-    float4    cloudColor    = cloudsTexture.Sample(wrapSampler, input.TexCoord);
-
-    // [STEP 2] Alpha Discard - Form Cloud Shapes
-    // Discard fragments with alpha below 0.1 to create cloud shapes
-    if (cloudColor.a < 0.1)
+    // [STEP 1] Alpha Test - Form Cloud Shapes
+    // Discard fragments with alpha below 0.1 to create cloud edges
+    // This threshold matches Sodium CloudRenderer behavior
+    if (input.Color.a < 0.1)
     {
         discard;
     }
 
-    // [STEP 3] Apply Vertex Color Modulation
-    // Vertex color can be used for tinting or brightness adjustment
-    cloudColor *= input.Color;
-
-    // [STEP 4] Output to colortex0 (Main Color + Alpha)
-    // Alpha channel controls cloud transparency (0.0 = transparent, 1.0 = opaque)
-    output.Color = cloudColor;
+    // [STEP 2] Direct Color Output
+    // Color already contains: textureColor * brightness (CPU-calculated)
+    // No need for texture sampling or additional calculations
+    output.Color = input.Color;
 
     return output;
 }
