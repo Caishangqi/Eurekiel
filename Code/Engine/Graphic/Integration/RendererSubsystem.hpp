@@ -1681,7 +1681,7 @@ namespace enigma::graphic
         BlendMode            m_currentBlendMode           = BlendMode::Opaque;
         DepthMode            m_currentDepthMode           = DepthMode::Enabled;
         StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
-        RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::Default();
+        RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::CullBack();
         ID3D12PipelineState* m_lastBoundPSO               = nullptr;
 
         /// Current stencil reference value (CommandList dynamic state)

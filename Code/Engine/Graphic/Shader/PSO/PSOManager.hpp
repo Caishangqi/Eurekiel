@@ -54,7 +54,7 @@ namespace enigma::graphic
         BlendMode            blendMode           = BlendMode::Opaque; ///< 混合模式
         DepthMode            depthMode           = DepthMode::Enabled; ///< 深度模式
         StencilTestDetail    stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
-        RasterizationConfig  rasterizationConfig = RasterizationConfig::Default(); ///< Rasterization configuration
+        RasterizationConfig  rasterizationConfig = RasterizationConfig::CullBack(); ///< Rasterization configuration
 
         /**
          * @brief 相等比较运算符

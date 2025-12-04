@@ -429,7 +429,7 @@ namespace enigma::graphic
          * 
          * @return RasterizationConfig configured for standard opaque rendering
          */
-        static inline RasterizationConfig Default()
+        static inline RasterizationConfig CullBack()
         {
             RasterizationConfig config;
             config.fillMode     = RasterizeFillMode::Solid; // [KEY] Solid triangles
