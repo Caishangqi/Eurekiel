@@ -61,10 +61,14 @@ PSOutput main(VSOutput input)
         discard;
     }
 
-    // [STEP 2] Direct Color Output
-    // Color already contains: textureColor * brightness (CPU-calculated)
-    // No need for texture sampling or additional calculations
-    output.Color = input.Color;
+    // [STEP 2] Apply modelColor (time-of-day cloud tinting)
+    // Reference: Minecraft ClientLevel.java:673-704 getCloudColor()
+    // Reference: Sodium CloudRenderer.java Line 118: RenderSystem.setShaderColor(r, g, b, 0.8F)
+    // modelColor contains: RGB = time-of-day color, A = 0.8 (Sodium standard)
+    float4 finalColor = input.Color * modelColor;
+
+    // [STEP 3] Output Final Color
+    output.Color = finalColor;
 
     return output;
 }
