@@ -24,12 +24,13 @@ AABB3 AABB3::BuildVertices(std::vector<Vertex_PCUTBN>& outVerts, std::vector<uns
         {5, 1, 2, 6} // -Z
     };
 
-    static const Vec2 quadUVs[4] = {
+    Vec2 quadUVs[4] = {
         Vec2(uv.m_mins.x, uv.m_mins.y), // bottomLeft
         Vec2(uv.m_maxs.x, uv.m_mins.y), // bottomRight
         Vec2(uv.m_maxs.x, uv.m_maxs.y), // topRight
         Vec2(uv.m_mins.x, uv.m_maxs.y) // topLeft
     };
+
 
     unsigned int baseIndex = static_cast<unsigned int>(outVerts.size());
 
@@ -269,8 +270,8 @@ void AABB3::Translate(const Vec3& translationToApply)
 void AABB3::SetCenter(const Vec3& newCenter)
 {
     Vec3 displacement = newCenter - GetCenter();
-    m_mins.x += displacement.x;
-    m_maxs.x += displacement.x;
+    m_mins.x          += displacement.x;
+    m_maxs.x          += displacement.x;
 
     m_mins.y += displacement.y;
     m_maxs.y += displacement.y;
