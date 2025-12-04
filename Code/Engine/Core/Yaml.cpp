@@ -232,6 +232,28 @@ namespace enigma::core
         return result;
     }
 
+    // [IMPORTANT] Helper function to find a child node by key using iterator
+    // This avoids the yaml-cpp bug where operator[] modifies the parent node
+    // Returns a CLONED node to ensure complete independence from the original
+    static YAML::Node FindChildByKey(const YAML::Node& parent, const std::string& key)
+    {
+        if (!parent.IsDefined() || !parent.IsMap())
+        {
+            return YAML::Node();
+        }
+
+        for (auto it = parent.begin(); it != parent.end(); ++it)
+        {
+            if (it->first.as<std::string>() == key)
+            {
+                // [FIX] Clone the node to break reference semantics
+                return YAML::Clone(it->second);
+            }
+        }
+
+        return YAML::Node(); // Key not found
+    }
+
     YAML::Node YamlConfiguration::GetNodeByPath(const std::string& path) const
     {
         if (path.empty())
@@ -241,37 +263,21 @@ namespace enigma::core
 
         auto pathParts = SplitPath(path);
 
-        // FIXED: Optimization for single-key paths (common in array element access)
-        // This fixes the issue where YamlConfiguration objects from GetConfigurationList()
-        // couldn't access their fields using GetString/GetInt
-        if (pathParts.size() == 1)
-        {
-            const std::string& key = pathParts[0];
-            if (m_node.IsDefined() && m_node.IsMap())
-            {
-                return m_node[key]; // Returns undefined node if key doesn't exist
-            }
-            return YAML::Node(); // Return undefined if m_node is not a map
-        }
+        // [FIX] Use YAML::Clone to create a completely independent copy
+        // yaml-cpp's YAML::Node uses reference semantics (like shared_ptr),
+        // so even assignment like "current = node" shares the underlying data.
+        // We must clone to ensure m_node is never modified.
 
-
-        YAML::Node current = m_node;
+        YAML::Node current = YAML::Clone(m_node);
 
         for (const auto& part : pathParts)
         {
-            if (!current.IsDefined() || !current.IsMap())
+            // Use iterator-based lookup instead of operator[]
+            current = FindChildByKey(current, part);
+            if (!current.IsDefined())
             {
-                return YAML::Node(); // Return an undefined node
+                return YAML::Node(); // Path not found
             }
-
-            // Check whether the child node exists
-            YAML::Node next = current[part];
-            if (!next.IsDefined())
-            {
-                return YAML::Node(); // Return an undefined node
-            }
-
-            current = next;
         }
 
         return current;
