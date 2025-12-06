@@ -47,9 +47,17 @@ namespace enigma::graphic
         SKY,
 
         /**
-         * @brief 日落/日出效果渲染
-         * 专门处理太阳升起和落下时的特殊光照效果
-         * 包括地平线的颜色渐变和大气散射
+         * @brief 日出/日落条带渲染阶段 (Sunrise/Sunset Strip Rendering)
+         * 
+         * [IMPORTANT] 这是渲染阶段名称，用于渲染地平线的日出/日落颜色条带效果，
+         * 不是Minecraft时间点定义。名称与Iris WorldRenderingPhase.java:8保持一致。
+         * 
+         * 渲染内容：地平线的颜色渐变和大气散射效果
+         * Minecraft官方时间点定义（参考TimeCommand.java:17-24）：
+         * - day = 1000 ticks（白天）
+         * - noon = 6000 ticks（正午）
+         * - night = 13000 ticks（夜晚开始）
+         * - midnight = 18000 ticks（午夜）
          */
         SUNSET,
 
@@ -250,32 +258,32 @@ namespace enigma::graphic
     {
         switch (phase)
         {
-            case WorldRenderingPhase::NONE:                return "NONE";
-            case WorldRenderingPhase::SKY:                 return "SKY";
-            case WorldRenderingPhase::SUNSET:              return "SUNSET";
-            case WorldRenderingPhase::CUSTOM_SKY:          return "CUSTOM_SKY";
-            case WorldRenderingPhase::SUN:                 return "SUN";
-            case WorldRenderingPhase::MOON:                return "MOON";
-            case WorldRenderingPhase::STARS:               return "STARS";
-            case WorldRenderingPhase::VOID_ENV:            return "VOID_ENV";
-            case WorldRenderingPhase::TERRAIN_SOLID:       return "TERRAIN_SOLID";
-            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED: return "TERRAIN_CUTOUT_MIPPED";
-            case WorldRenderingPhase::TERRAIN_CUTOUT:      return "TERRAIN_CUTOUT";
-            case WorldRenderingPhase::TERRAIN_TRANSLUCENT: return "TERRAIN_TRANSLUCENT";
-            case WorldRenderingPhase::TRIPWIRE:            return "TRIPWIRE";
-            case WorldRenderingPhase::ENTITIES:            return "ENTITIES";
-            case WorldRenderingPhase::BLOCK_ENTITIES:      return "BLOCK_ENTITIES";
-            case WorldRenderingPhase::DESTROY:             return "DESTROY";
-            case WorldRenderingPhase::HAND_SOLID:          return "HAND_SOLID";
-            case WorldRenderingPhase::HAND_TRANSLUCENT:    return "HAND_TRANSLUCENT";
-            case WorldRenderingPhase::OUTLINE:             return "OUTLINE";
-            case WorldRenderingPhase::DEBUG:               return "DEBUG";
-            case WorldRenderingPhase::PARTICLES:           return "PARTICLES";
-            case WorldRenderingPhase::CLOUDS:              return "CLOUDS";
-            case WorldRenderingPhase::RAIN_SNOW:           return "RAIN_SNOW";
-            case WorldRenderingPhase::WORLD_BORDER:        return "WORLD_BORDER";
-            case WorldRenderingPhase::COUNT:               return "COUNT";
-            default:                                        return "UNKNOWN";
+        case WorldRenderingPhase::NONE: return "NONE";
+        case WorldRenderingPhase::SKY: return "SKY";
+        case WorldRenderingPhase::SUNSET: return "SUNSET";
+        case WorldRenderingPhase::CUSTOM_SKY: return "CUSTOM_SKY";
+        case WorldRenderingPhase::SUN: return "SUN";
+        case WorldRenderingPhase::MOON: return "MOON";
+        case WorldRenderingPhase::STARS: return "STARS";
+        case WorldRenderingPhase::VOID_ENV: return "VOID_ENV";
+        case WorldRenderingPhase::TERRAIN_SOLID: return "TERRAIN_SOLID";
+        case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED: return "TERRAIN_CUTOUT_MIPPED";
+        case WorldRenderingPhase::TERRAIN_CUTOUT: return "TERRAIN_CUTOUT";
+        case WorldRenderingPhase::TERRAIN_TRANSLUCENT: return "TERRAIN_TRANSLUCENT";
+        case WorldRenderingPhase::TRIPWIRE: return "TRIPWIRE";
+        case WorldRenderingPhase::ENTITIES: return "ENTITIES";
+        case WorldRenderingPhase::BLOCK_ENTITIES: return "BLOCK_ENTITIES";
+        case WorldRenderingPhase::DESTROY: return "DESTROY";
+        case WorldRenderingPhase::HAND_SOLID: return "HAND_SOLID";
+        case WorldRenderingPhase::HAND_TRANSLUCENT: return "HAND_TRANSLUCENT";
+        case WorldRenderingPhase::OUTLINE: return "OUTLINE";
+        case WorldRenderingPhase::DEBUG: return "DEBUG";
+        case WorldRenderingPhase::PARTICLES: return "PARTICLES";
+        case WorldRenderingPhase::CLOUDS: return "CLOUDS";
+        case WorldRenderingPhase::RAIN_SNOW: return "RAIN_SNOW";
+        case WorldRenderingPhase::WORLD_BORDER: return "WORLD_BORDER";
+        case WorldRenderingPhase::COUNT: return "COUNT";
+        default: return "UNKNOWN";
         }
     }
 
@@ -284,30 +292,30 @@ namespace enigma::graphic
      */
     inline WorldRenderingPhase FromString(const std::string& str)
     {
-        if (str == "NONE")                return WorldRenderingPhase::NONE;
-        if (str == "SKY")                 return WorldRenderingPhase::SKY;
-        if (str == "SUNSET")              return WorldRenderingPhase::SUNSET;
-        if (str == "CUSTOM_SKY")          return WorldRenderingPhase::CUSTOM_SKY;
-        if (str == "SUN")                 return WorldRenderingPhase::SUN;
-        if (str == "MOON")                return WorldRenderingPhase::MOON;
-        if (str == "STARS")               return WorldRenderingPhase::STARS;
-        if (str == "VOID_ENV")            return WorldRenderingPhase::VOID_ENV;
-        if (str == "TERRAIN_SOLID")       return WorldRenderingPhase::TERRAIN_SOLID;
+        if (str == "NONE") return WorldRenderingPhase::NONE;
+        if (str == "SKY") return WorldRenderingPhase::SKY;
+        if (str == "SUNSET") return WorldRenderingPhase::SUNSET;
+        if (str == "CUSTOM_SKY") return WorldRenderingPhase::CUSTOM_SKY;
+        if (str == "SUN") return WorldRenderingPhase::SUN;
+        if (str == "MOON") return WorldRenderingPhase::MOON;
+        if (str == "STARS") return WorldRenderingPhase::STARS;
+        if (str == "VOID_ENV") return WorldRenderingPhase::VOID_ENV;
+        if (str == "TERRAIN_SOLID") return WorldRenderingPhase::TERRAIN_SOLID;
         if (str == "TERRAIN_CUTOUT_MIPPED") return WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED;
-        if (str == "TERRAIN_CUTOUT")      return WorldRenderingPhase::TERRAIN_CUTOUT;
+        if (str == "TERRAIN_CUTOUT") return WorldRenderingPhase::TERRAIN_CUTOUT;
         if (str == "TERRAIN_TRANSLUCENT") return WorldRenderingPhase::TERRAIN_TRANSLUCENT;
-        if (str == "TRIPWIRE")            return WorldRenderingPhase::TRIPWIRE;
-        if (str == "ENTITIES")            return WorldRenderingPhase::ENTITIES;
-        if (str == "BLOCK_ENTITIES")      return WorldRenderingPhase::BLOCK_ENTITIES;
-        if (str == "DESTROY")             return WorldRenderingPhase::DESTROY;
-        if (str == "HAND_SOLID")          return WorldRenderingPhase::HAND_SOLID;
-        if (str == "HAND_TRANSLUCENT")    return WorldRenderingPhase::HAND_TRANSLUCENT;
-        if (str == "OUTLINE")             return WorldRenderingPhase::OUTLINE;
-        if (str == "DEBUG")               return WorldRenderingPhase::DEBUG;
-        if (str == "PARTICLES")           return WorldRenderingPhase::PARTICLES;
-        if (str == "CLOUDS")              return WorldRenderingPhase::CLOUDS;
-        if (str == "RAIN_SNOW")           return WorldRenderingPhase::RAIN_SNOW;
-        if (str == "WORLD_BORDER")        return WorldRenderingPhase::WORLD_BORDER;
+        if (str == "TRIPWIRE") return WorldRenderingPhase::TRIPWIRE;
+        if (str == "ENTITIES") return WorldRenderingPhase::ENTITIES;
+        if (str == "BLOCK_ENTITIES") return WorldRenderingPhase::BLOCK_ENTITIES;
+        if (str == "DESTROY") return WorldRenderingPhase::DESTROY;
+        if (str == "HAND_SOLID") return WorldRenderingPhase::HAND_SOLID;
+        if (str == "HAND_TRANSLUCENT") return WorldRenderingPhase::HAND_TRANSLUCENT;
+        if (str == "OUTLINE") return WorldRenderingPhase::OUTLINE;
+        if (str == "DEBUG") return WorldRenderingPhase::DEBUG;
+        if (str == "PARTICLES") return WorldRenderingPhase::PARTICLES;
+        if (str == "CLOUDS") return WorldRenderingPhase::CLOUDS;
+        if (str == "RAIN_SNOW") return WorldRenderingPhase::RAIN_SNOW;
+        if (str == "WORLD_BORDER") return WorldRenderingPhase::WORLD_BORDER;
 
         return WorldRenderingPhase::NONE; // 默认值
     }
@@ -319,13 +327,13 @@ namespace enigma::graphic
     {
         switch (phase)
         {
-            case WorldRenderingPhase::TERRAIN_SOLID:
-            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
-            case WorldRenderingPhase::TERRAIN_CUTOUT:
-            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
-                return true;
-            default:
-                return false;
+        case WorldRenderingPhase::TERRAIN_SOLID:
+        case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
+        case WorldRenderingPhase::TERRAIN_CUTOUT:
+        case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+            return true;
+        default:
+            return false;
         }
     }
 
@@ -336,15 +344,15 @@ namespace enigma::graphic
     {
         switch (phase)
         {
-            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
-            case WorldRenderingPhase::HAND_TRANSLUCENT:
-            case WorldRenderingPhase::PARTICLES:
-            case WorldRenderingPhase::CLOUDS:
-            case WorldRenderingPhase::RAIN_SNOW:
-            case WorldRenderingPhase::WORLD_BORDER:
-                return true;
-            default:
-                return false;
+        case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+        case WorldRenderingPhase::HAND_TRANSLUCENT:
+        case WorldRenderingPhase::PARTICLES:
+        case WorldRenderingPhase::CLOUDS:
+        case WorldRenderingPhase::RAIN_SNOW:
+        case WorldRenderingPhase::WORLD_BORDER:
+            return true;
+        default:
+            return false;
         }
     }
 
@@ -355,29 +363,29 @@ namespace enigma::graphic
     {
         switch (phase)
         {
-            case WorldRenderingPhase::SKY:
-            case WorldRenderingPhase::SUNSET:
-            case WorldRenderingPhase::CUSTOM_SKY:
-                return "LEQUAL"; // 天空盒使用LEQUAL
+        case WorldRenderingPhase::SKY:
+        case WorldRenderingPhase::SUNSET:
+        case WorldRenderingPhase::CUSTOM_SKY:
+            return "LEQUAL"; // 天空盒使用LEQUAL
 
-            case WorldRenderingPhase::TERRAIN_SOLID:
-            case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
-            case WorldRenderingPhase::TERRAIN_CUTOUT:
-            case WorldRenderingPhase::ENTITIES:
-            case WorldRenderingPhase::BLOCK_ENTITIES:
-                return "LESS"; // 不透明物体使用标准深度测试
+        case WorldRenderingPhase::TERRAIN_SOLID:
+        case WorldRenderingPhase::TERRAIN_CUTOUT_MIPPED:
+        case WorldRenderingPhase::TERRAIN_CUTOUT:
+        case WorldRenderingPhase::ENTITIES:
+        case WorldRenderingPhase::BLOCK_ENTITIES:
+            return "LESS"; // 不透明物体使用标准深度测试
 
-            case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
-            case WorldRenderingPhase::HAND_TRANSLUCENT:
-            case WorldRenderingPhase::PARTICLES:
-                return "LEQUAL"; // 透明物体使用LEQUAL以正确处理排序
+        case WorldRenderingPhase::TERRAIN_TRANSLUCENT:
+        case WorldRenderingPhase::HAND_TRANSLUCENT:
+        case WorldRenderingPhase::PARTICLES:
+            return "LEQUAL"; // 透明物体使用LEQUAL以正确处理排序
 
-            case WorldRenderingPhase::DEBUG:
-            case WorldRenderingPhase::OUTLINE:
-                return "ALWAYS"; // 调试信息总是可见
+        case WorldRenderingPhase::DEBUG:
+        case WorldRenderingPhase::OUTLINE:
+            return "ALWAYS"; // 调试信息总是可见
 
-            default:
-                return "LESS"; // 默认深度测试
+        default:
+            return "LESS"; // 默认深度测试
         }
     }
 } // namespace enigma::graphic
