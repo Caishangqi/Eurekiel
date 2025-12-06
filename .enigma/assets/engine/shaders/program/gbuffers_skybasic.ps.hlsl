@@ -1,25 +1,32 @@
 /**
  * @file gbuffers_skybasic.ps.hlsl
  * @brief Sky with Void Gradient - Pixel Shader (Minecraft Style)
- * @date 2025-11-26
+ * @date 2025-12-06
+ * @version v2.0
+ *
+ * [NEW] Now uses renderStage to differentiate between SKY, SUNSET, and VOID phases
+ * This mirrors Iris WorldRenderingPhase + CommonUniforms behavior
  *
  * Features:
- * - Renders sky color with horizon-to-zenith gradient
+ * - Uses renderStage uniform to differentiate rendering phases
+ * - SKY phase: Uses CPU-calculated skyColor uniform
+ * - SUNSET phase: Uses vertex color (passed from CPU via GenerateSunriseStrip)
+ * - VOID phase: Uses darkened skyColor for void dome
  * - Applies Void gradient when camera is below minBuildHeight
- * - Applies time-based sky brightness (CPU-calculated)
- * - Replicates Minecraft FogRenderer.setupColor() behavior
  *
- * Void Gradient Algorithm:
- * 1. Extract camera world position from gbufferModelViewInverse column 4
- * 2. Calculate voidDarkness = (cameraZ - minBuildHeight) * clearColorScale
- * 3. Apply quadratic falloff: voidDarkness = voidDarkness^2
- * 4. Darken sky color: skyColor *= voidDarkness
+ * Render Stage Values (from common_uniforms.hlsl):
+ * - RENDER_STAGE_SKY (1): Sky dome rendering
+ * - RENDER_STAGE_SUNSET (2): Sunset/sunrise strip rendering
+ * - RENDER_STAGE_VOID (7): Void plane rendering
  *
- * Reference: Minecraft FogRenderer.java:45-150
+ * Reference:
+ * - Iris CommonUniforms.java:108 - uniform1i("renderStage", ...)
+ * - Iris WorldRenderingPhase.java - SKY, SUNSET, VOID phases
+ * - Minecraft FogRenderer.java:45-150
  */
 
 #include "../core/Common.hlsl"
-#include "../include/celestial_uniforms.hlsl"
+#include "../include/common_uniforms.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (sky color)
@@ -40,46 +47,86 @@ static const float MIN_BUILD_HEIGHT  = -64.0; // Minecraft min build height
 static const float CLEAR_COLOR_SCALE = 0.03125; // 1.0 / 32.0
 
 /**
- * @brief Sky Color Palette (Minecraft Style)
- */
-static const float3 SKY_ZENITH_COLOR  = float3(0.47, 0.65, 1.0); // Top (blue #78A7FF)
-static const float3 SKY_HORIZON_COLOR = float3(0.75, 0.85, 1.0); // Horizon (light blue #C0D8FF)
-
-/**
  * @brief Pixel Shader Main Entry
- * @param input Interpolated vertex data from VS
- * @return PSOutput Sky color with Void gradient
+ * @param input Interpolated vertex data from VS (includes color for SUNSET phase)
+ * @return PSOutput Sky color based on current render stage
  */
 PSOutput main(PSInput input)
 {
     PSOutput output;
+    float3   finalColor;
 
-    // [STEP 1] Extract Camera World Position from gbufferModelViewInverse
-    // Column-major layout: 4th column (index [3]) contains translation
-    float3 cameraWorldPos = gbufferModelViewInverse[3].xyz;
-    float  cameraZ        = cameraWorldPos.z; // Camera Z-axis (vertical height)
+    // ==========================================================================
+    // [STEP 1] Determine color based on renderStage
+    // ==========================================================================
+    // Reference: Iris WorldRenderingPhase.java + ShaderKey.java
+    // - SKY_BASIC uses POSITION format (no vertex color) -> use skyColor uniform
+    // - SKY_BASIC_COLOR uses POSITION_COLOR format -> use vertex color (sunset strip)
+    // ==========================================================================
 
-    // [STEP 2] Calculate Sky Color Gradient (Horizon → Zenith)
-    // Interpolate based on world position height
-    float  heightFactor = saturate((input.WorldPos.z + 16.0) / 512.0); // Normalized height
-    float3 skyColor     = lerp(SKY_HORIZON_COLOR, SKY_ZENITH_COLOR, heightFactor);
+    if (renderStage == RENDER_STAGE_SKY)
+    {
+        // ---------------------------------------------------------------------
+        // [SKY DOME] Use CPU-calculated sky color from CommonUniforms
+        // ---------------------------------------------------------------------
+        // Reference: Iris CommonUniforms.java:167 getSkyColor()
+        // skyColor is calculated on CPU based on time, weather, dimension
+        finalColor = skyColor;
+    }
+    else if (renderStage == RENDER_STAGE_SUNSET)
+    {
+        // ---------------------------------------------------------------------
+        // [SUNSET STRIP] Use vertex color (passed from CPU)
+        // ---------------------------------------------------------------------
+        // Reference: Minecraft LevelRenderer.java renderSky() -> getSunriseColor()
+        // Sunset strip vertices contain pre-calculated sunrise/sunset colors
+        // Alpha channel controls intensity (used for blending)
+        finalColor = input.Color.rgb * input.Color.a;
+    }
+    else if (renderStage == RENDER_STAGE_VOID)
+    {
+        // ---------------------------------------------------------------------
+        // [VOID DOME] Use darkened sky color for void plane
+        // ---------------------------------------------------------------------
+        // Reference: Minecraft LevelRenderer.java:1599-1607 darkBuffer
+        // Void dome is rendered when camera is below horizon height
+        finalColor = skyColor * 0.0; // Pure black for void (Minecraft behavior)
+    }
+    else
+    {
+        // ---------------------------------------------------------------------
+        // [FALLBACK] Default to sky color
+        // ---------------------------------------------------------------------
+        finalColor = skyColor;
+    }
 
-    // [STEP 3] Calculate Void Gradient (Minecraft Algorithm)
-    // Only active when camera is below minBuildHeight
-    float voidDarkness = (cameraZ - MIN_BUILD_HEIGHT) * CLEAR_COLOR_SCALE;
-    voidDarkness       = saturate(voidDarkness); // Clamp to [0, 1]
-    voidDarkness       = voidDarkness * voidDarkness; // Quadratic falloff for smoothness
+    // ==========================================================================
+    // [STEP 2] Apply Void Gradient (only for SKY phase)
+    // ==========================================================================
+    // Reference: Minecraft FogRenderer.java setupColor()
+    // Only apply void gradient when rendering sky dome, not sunset strip
+    // ==========================================================================
 
-    // [STEP 3.5] Apply Sky Brightness (Time-based)
-    // Minecraft formula: brightness = cos(celestialAngle * 2π) * 2 + 0.5
-    // CPU-side calculated and passed via CelestialUniforms
-    skyColor *= skyBrightness;
+    if (renderStage == RENDER_STAGE_SKY)
+    {
+        // Extract camera world position from gbufferModelViewInverse
+        float3 cameraWorldPos = gbufferModelViewInverse[3].xyz;
+        float  cameraZ        = cameraWorldPos.z; // Camera Z-axis (vertical height)
 
-    // [STEP 4] Apply Void Gradient to Sky Color
-    skyColor *= voidDarkness;
+        // Calculate Void Gradient (Minecraft Algorithm)
+        // Only active when camera is below minBuildHeight
+        float voidDarkness = (cameraZ - MIN_BUILD_HEIGHT) * CLEAR_COLOR_SCALE;
+        voidDarkness       = saturate(voidDarkness); // Clamp to [0, 1]
+        voidDarkness       = voidDarkness * voidDarkness; // Quadratic falloff
 
-    // [STEP 5] Output Final Color
-    output.Color0 = float4(skyColor, input.Color.a);
+        // Apply Void Gradient to Sky Color
+        finalColor *= voidDarkness;
+    }
+
+    // ==========================================================================
+    // [STEP 3] Output Final Color
+    // ==========================================================================
+    output.Color0 = float4(finalColor, 1.0);
 
     return output;
 }
