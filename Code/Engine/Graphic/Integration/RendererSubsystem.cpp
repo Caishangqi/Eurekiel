@@ -42,12 +42,6 @@ void RendererSubsystem::RenderStatistics::Reset()
     drawCalls            = 0;
     trianglesRendered    = 0;
     activeShaderPrograms = 0;
-
-    // 重置immediate模式统计
-    commandsPerPhase.clear();
-    totalCommandsSubmitted = 0;
-    totalCommandsExecuted  = 0;
-    averageCommandTime     = 0.0f;
 }
 
 // Milestone 3.0: 构造函数参数类型从Configuration改为RendererSubsystemConfig
@@ -266,35 +260,6 @@ void RendererSubsystem::Startup()
         LogInfo(LogRenderer, "ShaderCache: Loaded %zu ShaderSources from engine default ShaderPack",
                 totalSourcesCached);
     }
-
-    // ==================== 创建RenderCommandQueue (Milestone 3.1 新增) ====================
-    // 初始化immediate模式渲染指令队列
-    if (m_configuration.enableImmediateMode)
-    {
-        try
-        {
-            RenderCommandQueue::QueueConfig queueConfig;
-            queueConfig.maxCommandsPerPhase       = m_configuration.maxCommandsPerPhase;
-            queueConfig.enablePhaseDetection      = m_configuration.enablePhaseDetection;
-            queueConfig.enableDebugLogging        = true; // 开发阶段启用调试日志
-            queueConfig.enablePerformanceCounters = m_configuration.enableCommandProfiling;
-
-            m_renderCommandQueue = std::make_unique<RenderCommandQueue>(queueConfig);
-            m_renderCommandQueue->Initialize();
-
-            LogInfo(LogRenderer, "RenderCommandQueue created and initialized (double-buffered, lock-free)");
-        }
-        catch (const std::exception& e)
-        {
-            LogError(LogRenderer, "RenderCommandQueue creation exception: %s", e.what());
-            m_renderCommandQueue.reset();
-        }
-    }
-    else
-    {
-        LogInfo(LogRenderer, "Immediate mode rendering is disabled (configuration)");
-    }
-
     // ==================== 创建RenderTargetManager (Milestone 3.0任务4) ====================
     // 初始化GBuffer管理器 - 管理16个colortex RenderTarget（Iris兼容）
     try
@@ -789,10 +754,6 @@ void RendererSubsystem::EndFrame()
 #pragma endregion
 
 #pragma region ShaderPack Management
-RenderCommandQueue* RendererSubsystem::GetRenderCommandQueue() const noexcept
-{
-    return m_renderCommandQueue.get();
-}
 
 //-----------------------------------------------------------------------------------------------
 // Shrimp Task 2: CreateShaderProgramFromFiles 核心 API

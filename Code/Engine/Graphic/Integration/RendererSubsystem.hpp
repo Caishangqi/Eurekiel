@@ -22,10 +22,7 @@
 #include "Engine/Resource/ResourceCommon.hpp"
 #include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
-#include "../Core/Pipeline/WorldRenderingPhase.hpp"
 #include "../Core/RenderState.hpp"
-#include "../Immediate/RenderCommand.hpp"
-#include "../Immediate/RenderCommandQueue.hpp"
 #include "../Shader/ShaderPack/ShaderPack.hpp"
 #include "../Shader/ShaderCache.hpp"
 #include "RendererSubsystemConfig.hpp"
@@ -39,8 +36,6 @@ using namespace enigma::graphic;
 
 namespace enigma::graphic
 {
-    // 前向声明 - 避免循环包含
-    class RenderCommandQueue;
     class ShaderProgram;
     class ShaderSource;
     class ProgramSet;
@@ -89,12 +84,6 @@ namespace enigma::graphic
             uint32_t trianglesRendered    = 0; ///< 渲染三角形数量
             uint32_t activeShaderPrograms = 0; ///< 活跃着色器程序数量
             size_t   gpuMemoryUsed        = 0; ///< GPU内存使用量(字节)
-
-            // ==================== Immediate模式统计 ====================
-            std::map<WorldRenderingPhase, uint64_t> commandsPerPhase; ///< 每个阶段的指令数量
-            uint64_t                                totalCommandsSubmitted = 0; ///< 提交的总指令数量
-            uint64_t                                totalCommandsExecuted  = 0; ///< 已执行的总指令数量
-            float                                   averageCommandTime     = 0.0f; ///< 平均指令执行时间(微秒)
 
             /**
              * @brief 重置统计信息
@@ -192,14 +181,6 @@ namespace enigma::graphic
 #pragma endregion
 
 #pragma region ShaderPack Management
-        /**
-         * @brief 获取渲染指令队列
-         * @return RenderCommandQueue指针，如果未初始化返回nullptr
-         * @details 
-         * 提供对immediate模式渲染指令队列的访问
-         * 用户可以通过此接口提交自定义渲染指令
-         */
-        RenderCommandQueue* GetRenderCommandQueue() const noexcept;
 
         /**
          * @brief 通过ProgramId获取ShaderProgram（新增重载）
@@ -1626,9 +1607,6 @@ namespace enigma::graphic
         std::unique_ptr<ShaderCache> m_shaderCache;
 
         // ==================== Immediate模式渲染组件 ====================
-
-        /// 渲染指令队列 - immediate模式核心
-        std::unique_ptr<RenderCommandQueue> m_renderCommandQueue;
 
         /// 即时顶点缓冲区 - 用于DrawVertexArray即时数据模式
         std::shared_ptr<D12VertexBuffer> m_immediateVBO;

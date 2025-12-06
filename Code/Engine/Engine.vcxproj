@@ -346,6 +346,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\developer_uniforms.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_debug.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_debug.vs.hlsl" />
+      <Content Include="..\..\.enigma\assets\engine\shaders\include\common_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -416,11 +417,8 @@
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
-    <ClCompile Include="Graphic\Immediate\Commands\DrawCommands.cpp" />
-    <ClCompile Include="Graphic\Immediate\Commands\DebugDrawTextCommand.cpp" />
-    <ClCompile Include="Graphic\Immediate\RenderCommandQueue.cpp" />
-    <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
-    <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
+      <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
+      <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
     <ClCompile Include="Graphic\Resource\Buffer\BufferHelper.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
@@ -891,8 +889,8 @@
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
-    <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
-    <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
+      <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
+      <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
@@ -968,10 +966,8 @@
     <!-- Pipeline Layer (M1清理 - 删除旧Phase系统) -->
     <!-- 已删除: IWorldRenderingPipeline.hpp, IShaderRenderingPipeline.hpp -->
     <!-- 已删除: VanillaRenderingPipeline.hpp, PipelineManager.hpp -->
-    <ClInclude Include="Graphic\Core\Pipeline\WorldRenderingPhase.hpp" />
     <!-- Renderer Layer (在Pipeline�? -->
     <!-- Shader System -->
-    <ClInclude Include="Graphic\Immediate\Commands\DebugDrawTextCommand.hpp" />
     <ClInclude Include="Graphic\Resource\BindlessRootSignature.hpp" />
     <ClInclude Include="Graphic\Resource\CompiledShader.hpp" />
     <ClInclude Include="Graphic\Resource\DescriptorHandle.hpp" />
@@ -1004,9 +1000,6 @@
     <!-- Integration Layer -->
     <ClInclude Include="Graphic\Integration\RendererSubsystem.hpp" />
     <!-- Immediate Mode Rendering System -->
-    <ClInclude Include="Graphic\Immediate\RenderCommand.hpp" />
-    <ClInclude Include="Graphic\Immediate\RenderCommandQueue.hpp" />
-    <ClInclude Include="Graphic\Immediate\Commands\DrawCommands.hpp" />
     <!-- Resource Management -->
     <ClInclude Include="Graphic\Resource\BindlessIndexAllocator.hpp" />
     <ClInclude Include="Graphic\Resource\CommandListManager.hpp" />

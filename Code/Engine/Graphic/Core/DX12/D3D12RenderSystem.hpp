@@ -5,7 +5,6 @@
 #include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
 #include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
 #include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 Root Signature
-#include "../../Immediate/RenderCommandQueue.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -33,12 +32,10 @@ namespace enigma::graphic
     class D12Texture;
     class BindlessIndexAllocator;
     class ShaderResourceBinder;
-    class RenderCommandQueue;
     class IRenderCommand;
     struct TextureCreateInfo;
     struct DepthTextureCreateInfo;
     enum class TextureUsage : uint32_t;
-    enum class WorldRenderingPhase : uint32_t;
 
     /**
      * 教学目标：了解现代图形API封装层的设计模式
@@ -813,90 +810,6 @@ namespace enigma::graphic
 
         // ===== Immediate模式渲染API (Milestone 2.6新增) =====
 
-        /**
-         * 获取Immediate模式渲染命令队列
-         * @return RenderCommandQueue指针，用于immediate模式指令提交
-         * @note 遵循分层架构：D3D12RenderSystem管理RenderCommandQueue实例
-         *
-         * 教学要点：
-         * - RenderCommandQueue按WorldRenderingPhase分类存储指令
-         * - 支持延迟执行和批量处理优化
-         * - 与EnigmaRenderingPipeline的阶段分发机制完美集成
-         */
-        static RenderCommandQueue* GetRenderCommandQueue();
-
-        /**
-         * 添加immediate渲染指令到指定阶段
-         * @param phase 目标渲染阶段
-         * @param command 渲染指令智能指针
-         * @param debugTag 调试标签(可选)
-         * @return 是否成功添加
-         *
-         * 教学要点：
-         * - 这是RendererSubsystem.hpp:264绘制指令调用的底层实现
-         * - 遵循分层原则：RendererSubsystem → D3D12RenderSystem → RenderCommandQueue
-         * - 支持按phase分类，与Iris 10阶段渲染管线完全兼容
-         */
-        static bool AddImmediateCommand(
-            WorldRenderingPhase             phase,
-            std::unique_ptr<IRenderCommand> command,
-            const std::string&              debugTag = ""
-        );
-
-        /**
-         * 执行指定阶段的所有immediate命令
-         * @param phase 目标渲染阶段
-         * @return 执行的指令数量
-         *
-         * 教学要点：
-         * - 这是EnigmaRenderingPipeline::ExecuteDebugStage()等方法的底层实现
-         * - 使用现有的CommandListManager获取命令列表，遵循架构一致性
-         * - 批量执行优化，减少API调用开销
-         * - 自动命令列表管理，简化上层调用
-         */
-        static size_t ExecuteImmediateCommands(WorldRenderingPhase phase);
-
-        /**
-         * 清空指定阶段的immediate命令队列
-         * @param phase 目标渲染阶段
-         *
-         * 教学要点：
-         * - 帧结束时清理，避免内存累积
-         * - 支持选择性清理，便于调试和性能分析
-         */
-        static void ClearImmediateCommands(WorldRenderingPhase phase);
-
-        /**
-         * 清空所有阶段的immediate命令队列
-         *
-         * 教学要点：
-         * - 帧结束或管线重置时的完整清理
-         * - 确保下一帧从干净状态开始
-         */
-        static void ClearAllImmediateCommands();
-
-        /**
-         * 获取指定阶段的immediate命令数量
-         * @param phase 目标渲染阶段
-         * @return 当前队列中的指令数量
-         *
-         * 教学要点：
-         * - 性能分析和调试信息
-         * - 帮助识别渲染瓶颈和优化机会
-         */
-        static size_t GetImmediateCommandCount(WorldRenderingPhase phase);
-
-        /**
-         * 检查指定阶段是否有待执行的immediate命令
-         * @param phase 目标渲染阶段
-         * @return true如果有命令等待执行
-         *
-         * 教学要点：
-         * - 条件执行优化，跳过空阶段
-         * - 减少不必要的API调用和状态切换
-         */
-        static bool HasImmediateCommands(WorldRenderingPhase phase);
-
         // ===== CommandList访问API (Milestone 2.6新增) =====
 
         /**
@@ -951,9 +864,6 @@ namespace enigma::graphic
         static std::unique_ptr<BindlessIndexAllocator>      s_bindlessIndexAllocator; // 纯索引分配器（0-1,999,999）
         static std::unique_ptr<GlobalDescriptorHeapManager> s_globalDescriptorHeapManager; // 全局描述符堆管理器（1M容量）
         static std::unique_ptr<BindlessRootSignature>       s_bindlessRootSignature; // SM6.6极简Root Signature
-
-        // Immediate模式渲染系统（Milestone 2.6新增）
-        static std::unique_ptr<RenderCommandQueue> s_renderCommandQueue; // Immediate模式命令队列
 
         // 纹理缓存系统（Milestone Bindless新增）
         static std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> s_textureCache;
