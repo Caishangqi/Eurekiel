@@ -115,21 +115,21 @@
  * [48-63]  screenBrightness, nightVision, blindness, darknessFactor
  * [64-79]  renderStage (int), padding[3]
  */
-cbuffer CommonUniforms : register(b16, space1)
+cbuffer CommonUniforms : register(b8)
 {
     // ==================== Sky Color (16 bytes) ====================
     float3 skyColor; // CPU-calculated sky color [IMPORTANT: Use this!]
-    // float _padding1; // HLSL compiler auto-pads
+    float  _padding1; // HLSL compiler auto-pads
 
     // ==================== Fog Color (16 bytes) ====================
     float3 fogColor; // CPU-calculated fog color
-    // float _padding2; // HLSL compiler auto-pads
+    float  _padding2; // HLSL compiler auto-pads
 
     // ==================== Weather Parameters (16 bytes) ====================
     float rainStrength; // Rain intensity (0.0-1.0)
     float wetness; // Wetness factor (smoothed)
     float thunderStrength; // Thunder intensity (0.0-1.0)
-    // float _padding3;    // HLSL compiler auto-pads
+    float _padding3; // HLSL compiler auto-pads
 
     // ==================== Player State (16 bytes) ====================
     float screenBrightness; // Gamma setting (0.0-1.0)
@@ -141,7 +141,7 @@ cbuffer CommonUniforms : register(b16, space1)
     // [NEW] Current rendering phase for shader program differentiation
     // Use RENDER_STAGE_* macros for comparison (e.g., renderStage == RENDER_STAGE_SKY)
     int renderStage; // WorldRenderingPhase ordinal
-    // int _padding4[3];    // HLSL compiler auto-pads
+    int _padding4[3]; // HLSL compiler auto-pads
 };
 
 
