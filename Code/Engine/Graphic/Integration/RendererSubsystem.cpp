@@ -2400,22 +2400,6 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
     LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu",
             count, m_immediateVBO.get(), m_currentVertexOffset);
-
-    // [STEP 1] Prepare CustomImage data before Delayed Fill
-    if (m_customImageManager)
-    {
-        m_customImageManager->PrepareCustomImagesForDraw();
-    }
-
-    if (!vertices || count == 0)
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex data");
-        return;
-    }
-
-    // [STEP 2] Update Ring Buffer offsets (Delayed Fill)
-    m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-
     // [STEP 3] Append vertex data using ImmediateDrawHelper
     uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
         m_immediateVBO,
@@ -2428,41 +2412,8 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     // [STEP 4] Set vertex buffer
     SetVertexBuffer(m_immediateVBO.get());
 
-    // [STEP 5] Get CommandList and set Root Signature
-    ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    if (!cmdList)
-    {
-        ERROR_AND_DIE("DrawVertexArray: CommandList is nullptr");
-        return;
-    }
-
-    if (m_currentShaderProgram)
-    {
-        m_currentShaderProgram->Use(cmdList);
-    }
-    else
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: No shader program is set");
-        return;
-    }
-
-    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14) using DrawBindingHelper
-    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
-
-    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
-
-    // [STEP 8] Set primitive topology
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
     // [STEP 9] Issue draw call
     Draw(static_cast<uint32_t>(count), startVertex);
-
-    // [STEP 10] Increment Draw count for Ring Buffer
-    if (m_uniformManager)
-    {
-        m_uniformManager->IncrementDrawCount();
-    }
 }
 
 // ========================================================================
