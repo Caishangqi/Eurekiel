@@ -1465,51 +1465,8 @@ void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
 
     try
     {
-        // ========================================================================
-        // 1. 从EnigmaCamera读取数据并设置到UniformManager
-        // ========================================================================
-
-        // [TODO] 设置相机位置 (cameraPosition - CameraAndPlayerUniforms)
-        // CameraAndPlayerUniforms 尚未注册到UniformManager，暂时保留旧API
-        // m_uniformManager->Uniform3f("cameraPosition", camera.GetPosition());
-
-        // ========================================================================
-        // 2. [REFACTORED] 使用新的UploadBuffer API上传Camera矩阵
-        // ========================================================================
-        // 重构说明：
-        // - 旧API: 使用 UniformMat4() 逐个上传矩阵，然后调用 SyncToGPU()
-        // - 新API: 使用 UploadBuffer<MatricesUniforms>() 一次性上传所有矩阵数据
-        // - 优点: 类型安全、减少API调用、自动同步
-        // - 配合: Geometry::Render 使用新API上传Model矩阵，两者共同填充MatricesUniforms
-
-        // 读取Camera矩阵
-        Mat44 cameraToWorld    = camera.GetCameraToWorldTransform(); // Camera → World (逆矩阵)
-        Mat44 worldToCamera    = camera.GetWorldToCameraTransform(); // World → Camera
-        Mat44 cameraToRender   = camera.GetCameraToRenderTransform(); // Camera → Render (坐标系转换)
-        Mat44 projectionMatrix = camera.GetProjectionMatrix(); // Render → Clip
-
-        // 计算逆矩阵
-        Mat44 worldToCameraInverse    = worldToCamera.GetOrthonormalInverse();
-        Mat44 projectionMatrixInverse = projectionMatrix.GetOrthonormalInverse();
-
-        // 填充MatricesUniforms的Camera相关字段
-        MatricesUniforms matData;
-
-        // GBuffer相关矩阵（延迟渲染主Pass）- 完整4矩阵变换链
-        matData.gbufferModelView         = worldToCamera; // World → Camera
-        matData.gbufferModelViewInverse  = cameraToWorld; // Camera → World
-        matData.cameraToRenderTransform  = cameraToRender; // Camera → Render
-        matData.gbufferProjection        = projectionMatrix; // Render → Clip
-        matData.gbufferProjectionInverse = projectionMatrixInverse; // Clip → Render
-
-        // 通用矩阵（当前几何体 - 默认使用相同的Camera矩阵）
-        matData.modelViewMatrix         = worldToCamera;
-        matData.modelViewMatrixInverse  = worldToCameraInverse;
-        matData.projectionMatrix        = projectionMatrix;
-        matData.projectionMatrixInverse = projectionMatrixInverse;
-
         // 上传到GPU（新API - 类型安全，自动同步）
-        m_uniformManager->UploadBuffer<MatricesUniforms>(matData);
+        m_uniformManager->UploadBuffer<MatricesUniforms>(camera.GetMatricesUniforms());
 
         // Shadow管理由Game侧负责，引擎侧只提供接口
         // 理由：不是每个场景都需要shadow，且光照类型多样（sun light, point light, spot light等）

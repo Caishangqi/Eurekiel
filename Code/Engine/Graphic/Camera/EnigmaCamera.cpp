@@ -87,6 +87,37 @@ namespace enigma::graphic
     // 配置更新
     // ========================================================================
 
+    MatricesUniforms EnigmaCamera::GetMatricesUniforms() const
+    {
+        //Read Camera matrix
+        Mat44 cameraToWorld    = GetCameraToWorldTransform(); // Camera → World (逆矩阵)
+        Mat44 worldToCamera    = GetWorldToCameraTransform(); // World → Camera
+        Mat44 cameraToRender   = GetCameraToRenderTransform(); // Camera → Render (坐标系转换)
+        Mat44 projectionMatrix = GetProjectionMatrix(); // Render → Clip
+
+        // Calculate the inverse matrix
+        Mat44 worldToCameraInverse    = worldToCamera.GetOrthonormalInverse();
+        Mat44 projectionMatrixInverse = projectionMatrix.GetOrthonormalInverse();
+
+        // Fill in the Camera related fields of MatricesUniforms
+        MatricesUniforms matData;
+
+        // GBuffer correlation matrix (delayed rendering main Pass) - complete 4-matrix transformation chain
+        matData.gbufferModelView         = worldToCamera; // World → Camera
+        matData.gbufferModelViewInverse  = cameraToWorld; // Camera → World
+        matData.cameraToRenderTransform  = cameraToRender; // Camera → Render
+        matData.gbufferProjection        = projectionMatrix; // Render → Clip
+        matData.gbufferProjectionInverse = projectionMatrixInverse; // Clip → Render
+
+        // Generic matrix (current geometry - uses the same Camera matrix by default)
+        matData.modelViewMatrix         = worldToCamera;
+        matData.modelViewMatrixInverse  = worldToCameraInverse;
+        matData.projectionMatrix        = projectionMatrix;
+        matData.projectionMatrixInverse = projectionMatrixInverse;
+
+        return matData;
+    }
+
     void EnigmaCamera::UpdateCreateInfo(const CameraCreateInfo& createInfo)
     {
         m_createInfo = createInfo;

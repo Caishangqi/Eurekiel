@@ -67,7 +67,23 @@ cbuffer CelestialUniforms: register(b15,space1)
     // float _padding2;                // [REMOVED] HLSL compiler auto-pads
 
     float3 moonPosition; // Moon position (world coordinates)
-    // float _padding3;                // [REMOVED] HLSL compiler auto-pads
+    //float  _padding3;    // Explicit padding for C++ struct alignment
+
+    // ==========================================================================
+    // [NEW] Color Modulator - Matches Minecraft/Iris ColorModulator
+    // ==========================================================================
+    // Reference: Minecraft DynamicTransforms.ColorModulator
+    //            Iris iris_ColorModulator (ExternallyManagedUniforms.java:49)
+    //
+    // Usage: In shader, multiply vertex color by this value
+    //   finalColor = input.Color * colorModulator;
+    //
+    // For sunset strip:
+    //   - CPU sets colorModulator = sunriseColor (from getSunriseColor())
+    //   - Vertex color is pure white (255,255,255)
+    //   - Result: white * sunriseColor = actual sunset color
+    // ==========================================================================
+    float4 colorModulator; // Color modulator (RGBA), default (1,1,1,1)
 };
 
 

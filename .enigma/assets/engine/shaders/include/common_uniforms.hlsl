@@ -87,7 +87,7 @@
                                  (stage) == RENDER_STAGE_TERRAIN_TRANSLUCENT)
 
 // =============================================================================
-// CommonUniforms Constant Buffer (80 bytes)
+// CommonUniforms Constant Buffer (96 bytes)
 // =============================================================================
 /**
  * @brief CommonUniforms - Common Rendering Data Constant Buffer
@@ -104,6 +104,10 @@
  *
  * - screenBrightness/nightVision/blindness/darknessFactor: Player effects (0.0-1.0)
  *
+ * - fogStart/fogEnd/fogSkyEnd/fogCloudsEnd: Fog distance parameters
+ *   - Source: Minecraft Fog cbuffer (fog.glsl)
+ *   - Note: Iris SKY_BASIC uses FogMode.OFF (CPU skyColor already includes fog)
+ *
  * - renderStage: Current rendering phase (WorldRenderingPhase ordinal)
  *   - Source: Iris CommonUniforms.java:108 - uniform1i("renderStage", ...)
  *   - Use RENDER_STAGE_* macros for comparison
@@ -113,7 +117,8 @@
  * [16-31]  fogColor (float3), padding
  * [32-47]  rainStrength, wetness, thunderStrength, padding
  * [48-63]  screenBrightness, nightVision, blindness, darknessFactor
- * [64-79]  renderStage (int), padding[3]
+ * [64-79]  fogStart, fogEnd, fogSkyEnd, fogCloudsEnd [NEW]
+ * [80-95]  renderStage (int), padding[3]
  */
 cbuffer CommonUniforms : register(b8)
 {
@@ -137,8 +142,17 @@ cbuffer CommonUniforms : register(b8)
     float blindness; // Blindness effect (0.0-1.0)
     float darknessFactor; // Darkness effect (0.0-1.0)
 
+    // ==================== Fog Parameters (16 bytes) ====================
+    // [NEW] Fog distance parameters for shader fog calculations
+    // Source: Minecraft Fog cbuffer (fog.glsl)
+    // Note: Iris SKY_BASIC uses FogMode.OFF, but these are available for custom shaders
+    float fogStart; // Fog start distance (FogEnvironmentalStart)
+    float fogEnd; // Fog end distance (FogEnvironmentalEnd)
+    float fogSkyEnd; // Sky-specific fog end distance (FogSkyEnd)
+    float fogCloudsEnd; // Clouds-specific fog end distance (FogCloudsEnd)
+
     // ==================== Render Stage (16 bytes) ====================
-    // [NEW] Current rendering phase for shader program differentiation
+    // Current rendering phase for shader program differentiation
     // Use RENDER_STAGE_* macros for comparison (e.g., renderStage == RENDER_STAGE_SKY)
     int renderStage; // WorldRenderingPhase ordinal
     int _padding4[3]; // HLSL compiler auto-pads

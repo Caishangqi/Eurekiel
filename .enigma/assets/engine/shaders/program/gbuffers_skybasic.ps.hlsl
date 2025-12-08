@@ -1,16 +1,18 @@
 /**
  * @file gbuffers_skybasic.ps.hlsl
  * @brief Sky with Void Gradient - Pixel Shader (Minecraft Style)
- * @date 2025-12-06
- * @version v2.0
+ * @date 2025-12-07
+ * @version v2.1
  *
- * [NEW] Now uses renderStage to differentiate between SKY, SUNSET, and VOID phases
- * This mirrors Iris WorldRenderingPhase + CommonUniforms behavior
+ * [NEW v2.1] SUNSET phase now uses colorModulator for GPU-side coloring
+ * This matches Minecraft/Iris ColorModulator behavior exactly
  *
  * Features:
  * - Uses renderStage uniform to differentiate rendering phases
  * - SKY phase: Uses CPU-calculated skyColor uniform
- * - SUNSET phase: Uses vertex color (passed from CPU via GenerateSunriseStrip)
+ * - SUNSET phase: vertexColor * colorModulator (Minecraft/Iris style)
+ *   - Vertex color: pure white (255,255,255), alpha gradient
+ *   - colorModulator: sunriseColor from CPU (CelestialUniforms)
  * - VOID phase: Uses darkened skyColor for void dome
  * - Applies Void gradient when camera is below minBuildHeight
  *
@@ -21,12 +23,14 @@
  *
  * Reference:
  * - Iris CommonUniforms.java:108 - uniform1i("renderStage", ...)
+ * - Iris VanillaTransformer.java:76-79 - iris_Color * iris_ColorModulator
  * - Iris WorldRenderingPhase.java - SKY, SUNSET, VOID phases
  * - Minecraft FogRenderer.java:45-150
  */
 
 #include "../core/Common.hlsl"
 #include "../include/common_uniforms.hlsl"
+#include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (sky color)
@@ -67,21 +71,52 @@ PSOutput main(PSInput input)
     if (renderStage == RENDER_STAGE_SKY)
     {
         // ---------------------------------------------------------------------
-        // [SKY DOME] Use CPU-calculated sky color from CommonUniforms
+        // [SKY DOME] Use CPU-calculated vertex color with fog blending (Iris-style)
         // ---------------------------------------------------------------------
-        // Reference: Iris CommonUniforms.java:167 getSkyColor()
-        // skyColor is calculated on CPU based on time, weather, dimension
-        finalColor = skyColor;
+        // Reference: Iris FogMode.OFF for SKY_BASIC - fog is pre-blended on CPU
+        //
+        // CPU-side fog blending (GenerateSkyDiscWithFog):
+        // - Center vertex (zenith): pure skyColor
+        // - Edge vertices (horizon): pure fogColor
+        // - GPU interpolation creates smooth gradient between them
+        //
+        // This replaces the old uniform-based approach for natural sky appearance
+        finalColor = input.Color.rgb;
     }
     else if (renderStage == RENDER_STAGE_SUNSET)
     {
         // ---------------------------------------------------------------------
-        // [SUNSET STRIP] Use vertex color (passed from CPU)
+        // [SUNSET STRIP] Vertex color * colorModulator (Minecraft/Iris style)
         // ---------------------------------------------------------------------
         // Reference: Minecraft LevelRenderer.java renderSky() -> getSunriseColor()
-        // Sunset strip vertices contain pre-calculated sunrise/sunset colors
-        // Alpha channel controls intensity (used for blending)
-        finalColor = input.Color.rgb * input.Color.a;
+        //            Iris VanillaTransformer.java: gl_Color = iris_Color * iris_ColorModulator
+        //
+        // Flow:
+        //   1. CPU: Vertex color = pure white (255,255,255), alpha gradient (center=255, edge=0)
+        //   2. CPU: colorModulator = sunriseColor (from getSunriseColor())
+        //   3. GPU: finalColor = white * colorModulator = actual sunset color
+        //
+        // Alpha handling:
+        //   - input.Color.a: Vertex alpha (center=1.0 opaque, edge=0.0 transparent)
+        //   - colorModulator.a: Sunrise color alpha intensity
+        //   - Final alpha = input.Color.a * colorModulator.a (matches Minecraft)
+        // ---------------------------------------------------------------------
+        float3 vertexColor = input.Color.rgb;
+        float  vertexAlpha = input.Color.a;
+
+        // Apply colorModulator (matches Minecraft: fragColor = color * ColorModulator)
+        finalColor = vertexColor * colorModulator.rgb;
+
+        // Discard fully transparent pixels (Minecraft behavior)
+        float finalAlpha = vertexAlpha * colorModulator.a;
+        if (finalAlpha < 0.001)
+        {
+            discard;
+        }
+
+        // Output with proper alpha for blending
+        output.Color0 = float4(finalColor, finalAlpha);
+        return output;
     }
     else if (renderStage == RENDER_STAGE_VOID)
     {

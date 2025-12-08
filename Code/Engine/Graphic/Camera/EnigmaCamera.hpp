@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CameraCreateInfo.hpp"
+#include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp"
 #include "Engine/Math/AABB2.hpp"
 #include "Engine/Math/EulerAngles.hpp"
 #include "Engine/Math/Mat44.hpp"
@@ -163,10 +164,11 @@ namespace enigma::graphic
         /**
          * @brief 获取正交投影参数
          */
-        const Vec2& GetOrthographicBottomLeft() const { return m_createInfo.orthographicBottomLeft; }
-        const Vec2& GetOrthographicTopRight() const { return m_createInfo.orthographicTopRight; }
-        float       GetOrthographicNear() const { return m_createInfo.orthographicNear; }
-        float       GetOrthographicFar() const { return m_createInfo.orthographicFar; }
+        const Vec2&      GetOrthographicBottomLeft() const { return m_createInfo.orthographicBottomLeft; }
+        const Vec2&      GetOrthographicTopRight() const { return m_createInfo.orthographicTopRight; }
+        float            GetOrthographicNear() const { return m_createInfo.orthographicNear; }
+        float            GetOrthographicFar() const { return m_createInfo.orthographicFar; }
+        MatricesUniforms GetMatricesUniforms() const;
 
         // ========================================================================
         // 配置更新

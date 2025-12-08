@@ -33,32 +33,9 @@ VSOutput main(VSInput input)
 {
     VSOutput output;
 
-    // ==========================================================================
-    // [FIX] Sky Geometry Transform - Follow Camera Rotation, Ignore Translation
-    // ==========================================================================
-    // Problem: Sky sphere was fixed in world space, player could "fly out" of it
-    // Solution: Remove translation from gbufferModelView, keep only rotation
-    //
-    // HLSL Matrix Layout (row-major with row-vector multiplication):
-    // - mul(matrix, vector) = row-vector × matrix
-    // - Translation is in the 4th COLUMN: matrix[0][3], matrix[1][3], matrix[2][3]
-    // - matrix[3] is the 4th ROW, NOT the translation!
-    //
-    // To remove translation, we must zero out the 4th column elements:
-    // ==========================================================================
-
-    // [STEP 1] Create rotation-only view matrix by zeroing translation column
-    float4x4 viewRotationOnly = gbufferModelView;
-
-    viewRotationOnly[0][3] = 0.0; // Zero X translation (in row 0, column 3)
-    viewRotationOnly[1][3] = 0.0; // Zero Y translation (in row 1, column 3)
-    viewRotationOnly[2][3] = 0.0; // Zero Z translation (in row 2, column 3)
-    // viewRotationOnly[3] remains as (0,0,0,1) - homogeneous coordinate row
-
-    // [STEP 2] Transform sky geometry (rotation only, no translation)
-    // Sky geometry is centered at origin, rotation makes it follow camera orientation
+    // Sky geometry is centered at origin gbufferModelView already transformed in CPU, rotation makes it follow camera orientation
     float4 worldPos  = float4(input.Position, 1.0);
-    float4 cameraPos = mul(viewRotationOnly, worldPos);
+    float4 cameraPos = mul(gbufferModelView, worldPos);
 
     // [STEP 3] Camera to Render Transform (Player rotation)
     float4 renderPos = mul(cameraToRenderTransform, cameraPos);
