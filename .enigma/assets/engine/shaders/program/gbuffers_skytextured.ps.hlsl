@@ -1,18 +1,18 @@
 /**
  * @file gbuffers_skytextured.ps.hlsl
- * @brief Sun/Moon Texture Rendering - Pixel Shader (Minecraft Style)
- * @date 2025-11-26
+ * @brief Sun/Moon Texture Rendering - Pixel Shader (Minecraft Vanilla Style)
+ * @date 2025-12-08
  *
- * Features:
- * - Samples sun/moon texture from atlas (customImage0)
- * - UV coordinates calculated on CPU side using SpriteAtlas::GetSprite(index).GetUVBounds()
- * - Applies alpha blending for soft edges
- * - Uses celestial angle to modulate brightness
+ * [REFACTOR] Simplified to match Minecraft vanilla architecture:
+ * - Direct texture sampling from customImage0
+ * - Simple alpha discard for transparency
+ * - ColorModulator for brightness control (matches Minecraft DynamicTransforms)
  *
- * Design Philosophy:
- * - CPU-side UV calculation (follows design.md line 156)
- * - GPU only performs texture sampling and brightness modulation
- * - Consistent with SceneUnitTest_SpriteAtlas implementation pattern
+ * Reference:
+ * - Minecraft position_tex.fsh:
+ *   vec4 color = texture(Sampler0, texCoord0);
+ *   if (color.a == 0.0) discard;
+ *   fragColor = color * ColorModulator;
  */
 
 #include "../core/Common.hlsl"
@@ -30,13 +30,7 @@ struct PSOutput
 };
 
 /**
- * @brief Sun/Moon Texture Atlas Indices
- * Assumes atlas stored in customImage0 slot (configurable)
- */
-static const uint CELESTIAL_ATLAS_SLOT = 0; // customImage0
-
-/**
- * @brief Pixel Shader Main Entry
+ * @brief Pixel Shader Main Entry - Minecraft Vanilla Architecture
  * @param input Interpolated vertex data from VS
  * @return PSOutput Sun/moon texture with alpha blending
  */
@@ -44,28 +38,23 @@ PSOutput main(PSInput input)
 {
     PSOutput output;
 
-    // [STEP 1] Use CPU-calculated UV directly (no GPU-side offset calculation)
-    // CPU side uses SpriteAtlas::GetSprite(index).GetUVBounds() to calculate correct UV
-    // All atlas UV calculations are done on CPU side before vertex submission
-    float2 atlasUV = input.TexCoord;
+    // [STEP 1] Sample sun/moon texture from customImage0
+    Texture2D celestialTexture = GetCustomImage(0);
+    float4    texColor         = celestialTexture.Sample(pointSampler, input.TexCoord);
 
-    // [STEP 2] Sample Celestial Texture from Atlas
-    Texture2D celestialAtlas = GetCustomImage(CELESTIAL_ATLAS_SLOT);
-    float4    texColor       = celestialAtlas.Sample(pointSampler, atlasUV);
+    // [STEP 2] Discard fully transparent pixels (Minecraft style)
+    if (texColor.a == 0.0)
+    {
+        discard;
+    }
 
-    // [STEP 3] Calculate Brightness Modulation based on celestial angle
-    // Sun is brightest at noon (0.25), fades at sunrise/sunset
-    // Moon is brightest at midnight (0.75), fades at moonrise/moonset
-    // celestialType is encoded in WorldPos (0 = Sun, 1 = Moon) via Position.z in VS
-    // For simplicity, use full brightness - time-based fading handled by sky gradient
-    float brightness = 1.0;
+    // [STEP 3] Apply ColorModulator (brightness control)
+    // ColorModulator is uploaded via CelestialConstantBuffer
+    // Matches Minecraft DynamicTransforms.ColorModulator behavior
+    float4 finalColor = texColor * colorModulator;
 
-    // [STEP 4] Apply Brightness and Alpha Blending
-    float3 finalColor = texColor.rgb * brightness;
-    float  alpha      = texColor.a;
-
-    // [STEP 5] Output Final Color
-    output.Color0 = float4(finalColor, alpha);
+    // [STEP 4] Output final color with alpha
+    output.Color0 = finalColor;
 
     return output;
 }
