@@ -27,7 +27,7 @@ namespace enigma::voxel
 
     bool BlockState::IsOpaque() const
     {
-        return m_blockType ? m_blockType->IsOpaque() : true;
+        return m_blockType ? m_blockType->IsOpaque(const_cast<BlockState*>(this)) : true;
     }
 
     bool BlockState::IsFullBlock() const
@@ -52,13 +52,28 @@ namespace enigma::voxel
 
     std::shared_ptr<enigma::renderer::model::RenderMesh> BlockState::GetRenderMesh() const
     {
+        // [DEBUG] Track slab/stairs mesh lookup
+        bool isDebugBlock = m_blockType && (m_blockType->GetRegistryName().find("slab") != std::string::npos ||
+            m_blockType->GetRegistryName().find("stairs") != std::string::npos);
+
         if (!m_meshCacheValid || !m_cachedMesh)
         {
             // Get the BlockStateDefinition from the registry to access compiled mesh
             if (m_blockType)
             {
-                std::string blockName            = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
-                auto        blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
+                std::string blockName = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
+
+                if (isDebugBlock)
+                {
+                    core::LogInfo("BlockState", "[DEBUG] GetRenderMesh() for %s (cache invalid)", blockName.c_str());
+                }
+
+                auto blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
+
+                if (isDebugBlock)
+                {
+                    core::LogInfo("BlockState", "  GetBlockStateDefinition() = %s", blockStateDefinition ? "valid" : "NULL");
+                }
 
                 if (blockStateDefinition)
                 {
@@ -79,17 +94,48 @@ namespace enigma::voxel
                     }
 
                     // Get the variants for this property combination
+                    if (isDebugBlock)
+                    {
+                        core::LogInfo("BlockState", "  propertyString = '%s'", propertyString.c_str());
+                    }
+
                     const auto* variants = blockStateDefinition->GetVariants(propertyString);
+
+                    if (isDebugBlock)
+                    {
+                        core::LogInfo("BlockState", "  GetVariants() = %s, count=%zu",
+                                      variants ? "valid" : "NULL",
+                                      variants ? variants->size() : 0);
+                    }
+
                     if (variants && !variants->empty())
                     {
                         // Use the first variant (in the future, we might support weighted random selection)
                         const auto& variant = variants->front();
                         m_cachedMesh        = variant.compiledMesh;
+
+                        if (isDebugBlock)
+                        {
+                            core::LogInfo("BlockState", "  variant.compiledMesh = %s", m_cachedMesh ? "valid" : "NULL");
+                        }
                     }
+                    else if (isDebugBlock)
+                    {
+                        core::LogWarn("BlockState", "  [FAIL] No variants found for propertyString='%s'", propertyString.c_str());
+                    }
+                }
+                else if (isDebugBlock)
+                {
+                    core::LogWarn("BlockState", "  [FAIL] BlockStateDefinition is NULL!");
                 }
             }
 
             m_meshCacheValid = true;
+        }
+
+        if (isDebugBlock)
+        {
+            core::LogInfo("BlockState", "[DEBUG] GetRenderMesh() returning: %s", m_cachedMesh ? "valid" : "NULL");
         }
 
         return m_cachedMesh;

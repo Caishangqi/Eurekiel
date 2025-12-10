@@ -98,11 +98,11 @@ namespace enigma::voxel
 
         /**
          * @brief Check if this block is fully opaque (no light passes through)
-         * Delegates to the Block type definition
+         * Delegates to the Block type's per-state opacity check
          */
         inline bool IsFullOpaque() const
         {
-            return m_blockType ? m_blockType->IsOpaque() : true;
+            return m_blockType ? m_blockType->IsOpaque(const_cast<BlockState*>(this)) : true;
         }
 
         // Block behavior delegation
