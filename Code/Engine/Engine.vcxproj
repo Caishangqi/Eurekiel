@@ -325,6 +325,29 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <Content Include="..\..\.enigma\assets\engine\models\block\block.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_all.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_all_inner_faces.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_bottom_top.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_bottom_top_inner_faces.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column_horizontal.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column_mirrored.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column_uv_locked_x.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column_uv_locked_y.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_column_uv_locked_z.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_directional.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_mirrored.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_mirrored_all.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_north_west_mirrored.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_north_west_mirrored_all.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\cube_top.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\inner_stairs.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\outer_stairs.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\slab.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\slab_top.json"/>
+    <Content Include="..\..\.enigma\assets\engine\models\block\stairs.json"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\core\Common.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.vs.hlsl" />
@@ -346,7 +369,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\developer_uniforms.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_debug.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_debug.vs.hlsl" />
-      <Content Include="..\..\.enigma\assets\engine\shaders\include\common_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\common_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -417,8 +440,8 @@
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
-      <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
-      <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
     <ClCompile Include="Graphic\Resource\Buffer\BufferHelper.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
@@ -568,6 +591,8 @@
     <ClCompile Include="Voxel\Biome\MultiNoiseBiomeSource.cpp" />
     <ClCompile Include="Voxel\Block\BlockIterator.cpp" />
     <ClCompile Include="Voxel\Block\BlockStateSerializer.cpp" />
+    <ClCompile Include="Voxel\Block\SlabBlock.cpp"/>
+    <ClCompile Include="Voxel\Block\StairsBlock.cpp"/>
     <ClCompile Include="Voxel\Chunk\ChunkHelper.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkMeshHelper.cpp" />
     <ClCompile Include="Voxel\Climate\Climate.cpp" />
@@ -889,8 +914,8 @@
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
-      <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
-      <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
@@ -927,6 +952,12 @@
     <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp" />
     <ClInclude Include="Voxel\Block\BlockIterator.hpp" />
     <ClInclude Include="Voxel\Block\BlockStateSerializer.hpp" />
+    <ClInclude Include="Voxel\Block\HalfType.hpp"/>
+    <ClInclude Include="Voxel\Block\PlacementContext.hpp"/>
+    <ClInclude Include="Voxel\Block\SlabBlock.hpp"/>
+    <ClInclude Include="Voxel\Block\SlabType.hpp"/>
+    <ClInclude Include="Voxel\Block\StairsBlock.hpp"/>
+    <ClInclude Include="Voxel\Block\StairsShape.hpp"/>
     <ClInclude Include="Voxel\Chunk\ChunkHelper.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkMeshHelper.hpp" />
     <ClInclude Include="Voxel\Climate\Climate.hpp" />

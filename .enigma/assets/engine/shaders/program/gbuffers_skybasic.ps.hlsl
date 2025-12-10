@@ -60,6 +60,17 @@ PSOutput main(PSInput input)
     PSOutput output;
     float3   finalColor;
 
+    /*RENDERTARGETS: 0,3,7*/
+    /*BLEND:ADD*/
+    /*DEPTHTEST:GREATER*/
+
+    /*DEPTHWRITE:OFF*/
+    /*ALPHATEST:0.5*/
+
+#ifdef DEBUG_VISUALIZE_GBUFFERS
+#endif
+
+
     // ==========================================================================
     // [STEP 1] Determine color based on renderStage
     // ==========================================================================
@@ -103,6 +114,9 @@ PSOutput main(PSInput input)
         // ---------------------------------------------------------------------
         float3 vertexColor = input.Color.rgb;
         float  vertexAlpha = input.Color.a;
+
+        /*CULLFACE:BACK*/
+        /*CULLFACE:FRONT*/
 
         // Apply colorModulator (matches Minecraft: fragColor = color * ColorModulator)
         finalColor = vertexColor * colorModulator.rgb;
