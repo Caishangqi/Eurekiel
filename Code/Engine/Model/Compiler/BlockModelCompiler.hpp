@@ -26,12 +26,12 @@ namespace enigma::renderer::model
         /**
          * @brief Compile a ModelElement into render faces
          * @param element Model element to compile
-         * @param resolvedTextures Resolved texture mappings
+         * @param model ModelResource for texture resolution (uses Minecraft-style chain resolution)
          * @param blockMesh Target mesh to add faces to
          */
-        void CompileElementToFaces(const resource::model::ModelElement&                     element,
-                                   const std::map<std::string, resource::ResourceLocation>& resolvedTextures,
-                                   std::shared_ptr<BlockRenderMesh>                         blockMesh);
+        void CompileElementToFaces(const resource::model::ModelElement&            element,
+                                   std::shared_ptr<resource::model::ModelResource> model,
+                                   std::shared_ptr<BlockRenderMesh>                blockMesh);
 
         /**
          * @brief Create a render face from element and face data

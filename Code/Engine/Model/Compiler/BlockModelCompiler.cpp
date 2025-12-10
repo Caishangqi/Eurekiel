@@ -4,6 +4,7 @@
 #include "../../Resource/Atlas/AtlasManager.hpp"
 #include "../../Resource/Atlas/TextureAtlas.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Math/Vec3.hpp"
 #include "../../Core/Rgba8.hpp"
 #include <array>
@@ -19,20 +20,46 @@ namespace enigma::renderer::model
     {
         if (!model)
         {
-            LogError(LogBlockModelCompiler, "Cannot compile null model");
+            LogError(LogBlockModelCompiler, "[Compile] Cannot compile null model");
+            ERROR_RECOVERABLE("BlockModelCompiler::Compile called with null model");
             return nullptr;
         }
 
         SetCompilerContext(context);
 
-        // Get resolved textures and elements (with parent inheritance)
-        auto resolvedTextures = model->GetResolvedTextures();
-        auto resolvedElements = model->GetResolvedElements();
+        // Get model location for logging
+        std::string modelName    = model->GetMetadata().filePath.generic_string();
+        bool        isDebugModel = (modelName.find("stairs") != std::string::npos || modelName.find("slab") != std::string::npos);
 
-        if (context.enableLogging)
+        LogInfo(LogBlockModelCompiler, "[Compile] ========== Starting compile for: %s ==========", modelName.c_str());
+
+        // Get resolved elements (with parent inheritance)
+        auto resolvedElements = model->GetResolvedElements();
+        auto resolvedTextures = model->GetResolvedTextures();
+
+        if (isDebugModel)
         {
-            LogInfo(LogBlockModelCompiler, "Compiling block model with %zu textures and %zu elements",
-                    resolvedTextures.size(), resolvedElements.size());
+            LogInfo(LogBlockModelCompiler, "[DEBUG] Model: %s", modelName.c_str());
+            LogInfo(LogBlockModelCompiler, "[DEBUG] Resolved elements: %zu, textures: %zu",
+                    resolvedElements.size(), resolvedTextures.size());
+        }
+
+        LogInfo(LogBlockModelCompiler, "[Compile] Resolved textures: %zu, elements: %zu",
+                resolvedTextures.size(), resolvedElements.size());
+
+        // Log all resolved textures
+        for (const auto& [key, texture] : resolvedTextures)
+        {
+            if (resource::model::IsTextureLocation(texture))
+            {
+                LogInfo(LogBlockModelCompiler, "  Texture '%s' -> %s (ResourceLocation)",
+                        key.c_str(), resource::model::GetTextureLocation(texture).ToString().c_str());
+            }
+            else
+            {
+                LogInfo(LogBlockModelCompiler, "  Texture '%s' -> '%s' (Variable reference)",
+                        key.c_str(), resource::model::GetVariableReference(texture).c_str());
+            }
         }
 
         // Create block render mesh
@@ -41,27 +68,59 @@ namespace enigma::renderer::model
         // BlockModelCompiler is pure - it only compiles existing ModelElements
         if (resolvedElements.empty())
         {
-            LogError(LogBlockModelCompiler, "No elements to compile! ModelResource should contain geometry.");
+            LogError(LogBlockModelCompiler, "[Compile] CRITICAL: No elements to compile! Model '%s' will have 0 vertices!", modelName.c_str());
+            ERROR_RECOVERABLE(Stringf("BlockModelCompiler: Model '%s' has no elements!", modelName.c_str()));
             return blockMesh; // Return empty mesh
         }
 
-        // Compile all elements into faces
-        for (const auto& element : resolvedElements)
+        // Log element details
+        for (size_t i = 0; i < resolvedElements.size(); ++i)
         {
-            CompileElementToFaces(element, resolvedTextures, blockMesh);
+            const auto& elem = resolvedElements[i];
+            LogInfo(LogBlockModelCompiler, "  Element[%zu]: from(%.1f,%.1f,%.1f) to(%.1f,%.1f,%.1f) faces=%zu",
+                    i, elem.from.x, elem.from.y, elem.from.z,
+                    elem.to.x, elem.to.y, elem.to.z, elem.faces.size());
         }
 
-        if (context.enableLogging)
+        // Compile all elements into faces
+        // [FIX] Pass ModelResource for Minecraft-style chain texture resolution
+        int elementIndex = 0;
+        for (const auto& element : resolvedElements)
         {
-            LogInfo(LogBlockModelCompiler, "Generated block mesh with %zu faces", blockMesh->faces.size());
+            if (isDebugModel)
+            {
+                LogInfo(LogBlockModelCompiler, "[DEBUG STAIRS] Compiling element[%d]: from(%.1f,%.1f,%.1f) to(%.1f,%.1f,%.1f) faces=%zu",
+                        elementIndex, element.from.x, element.from.y, element.from.z,
+                        element.to.x, element.to.y, element.to.z, element.faces.size());
+            }
+
+            CompileElementToFaces(element, model, blockMesh);
+
+            if (isDebugModel)
+            {
+                LogInfo(LogBlockModelCompiler, "[DEBUG STAIRS] After element[%d]: total faces in mesh = %zu",
+                        elementIndex, blockMesh->faces.size());
+            }
+
+            elementIndex++;
         }
+
+        LogInfo(LogBlockModelCompiler, "[Compile] Generated block mesh with %zu faces", blockMesh->faces.size());
+
+        if (isDebugModel && blockMesh->faces.empty())
+        {
+            LogError(LogBlockModelCompiler, "[DEBUG STAIRS] ERROR: Generated 0 faces for stairs model!");
+            ERROR_RECOVERABLE("Stairs model generated 0 faces!");
+        }
+
+        LogInfo(LogBlockModelCompiler, "[Compile] ========== Complete for: %s ==========", modelName.c_str());
 
         return blockMesh;
     }
 
-    void BlockModelCompiler::CompileElementToFaces(const resource::model::ModelElement&                     element,
-                                                   const std::map<std::string, resource::ResourceLocation>& resolvedTextures,
-                                                   std::shared_ptr<BlockRenderMesh>                         blockMesh)
+    void BlockModelCompiler::CompileElementToFaces(const resource::model::ModelElement&            element,
+                                                   std::shared_ptr<resource::model::ModelResource> model,
+                                                   std::shared_ptr<BlockRenderMesh>                blockMesh)
     {
         if (m_context.enableLogging)
         {
@@ -74,7 +133,7 @@ namespace enigma::renderer::model
         // Assignment 1 face colors (from requirements)
         const std::map<std::string, Rgba8> faceColors = {
             {"down", Rgba8::WHITE}, // down - white
-            {"up", Rgba8::WHITE}, // up - white  
+            {"up", Rgba8::WHITE}, // up - white
             {"north", Rgba8(200, 200, 200)}, // north - darker grey
             {"south", Rgba8(200, 200, 200)}, // south - darker grey
             {"west", Rgba8(230, 230, 230)}, // west - light grey
@@ -84,33 +143,30 @@ namespace enigma::renderer::model
         // Compile each face of the element
         for (const auto& [faceDirection, modelFace] : element.faces)
         {
-            // Resolve texture reference (e.g., "#down" -> actual texture location)
-            ResourceLocation textureLocation;
-            std::string      textureRef = modelFace.texture;
+            // [FIX] Use ModelResource::ResolveTexture() for Minecraft-style chain resolution
+            // This handles "#particle" -> "#side" -> "minecraft:block/stone" chains
+            ResourceLocation textureLocation = model->ResolveTexture(modelFace.texture);
 
-            if (textureRef.find("#") == 0) // C++17 compatible check for starts_with("#")
-            {
-                // Texture variable reference
-                std::string varName = textureRef.substr(1);
-                auto        it      = resolvedTextures.find(varName);
-                if (it != resolvedTextures.end())
-                {
-                    textureLocation = it->second;
-                }
-                else
-                {
-                    LogWarn(LogBlockModelCompiler, "Unresolved texture variable: %s", textureRef.c_str());
-                    textureLocation = ResourceLocation("engine", "missingno");
-                }
-            }
-            else
-            {
-                // Direct texture reference
-                textureLocation = ResourceLocation::Parse(textureRef);
-            }
+            // [FIX] Get base atlas UV for the full texture
+            auto [atlasUvMin, atlasUvMax] = GetAtlasUV(textureLocation);
 
-            // Get UV coordinates from atlas
-            auto [uvMin, uvMax] = GetAtlasUV(textureLocation);
+            // [FIX] Apply modelFace.uv to get the sub-region within the texture
+            // modelFace.uv is in Minecraft texture space (0-16 pixels)
+            // Convert to 0-1 normalized, then map to atlas coordinates
+            float faceUvMinX = modelFace.uv.x / 16.0f;
+            float faceUvMinY = modelFace.uv.y / 16.0f;
+            float faceUvMaxX = modelFace.uv.z / 16.0f;
+            float faceUvMaxY = modelFace.uv.w / 16.0f;
+
+            // Interpolate within atlas sprite: atlasUV = atlasMin + (atlasMax - atlasMin) * faceUV
+            Vec2 uvMin(
+                atlasUvMin.x + (atlasUvMax.x - atlasUvMin.x) * faceUvMinX,
+                atlasUvMin.y + (atlasUvMax.y - atlasUvMin.y) * faceUvMinY
+            );
+            Vec2 uvMax(
+                atlasUvMin.x + (atlasUvMax.x - atlasUvMin.x) * faceUvMaxX,
+                atlasUvMin.y + (atlasUvMax.y - atlasUvMin.y) * faceUvMaxY
+            );
 
             // Convert face direction string to Direction enum
             Direction direction = StringToDirection(faceDirection);
@@ -139,11 +195,19 @@ namespace enigma::renderer::model
         RenderFace face(direction);
 
         // Convert from Minecraft coordinates (0-16) to normalized coordinates (0-1)
-        Vec3 from = element.from / 16.0f;
-        Vec3 to   = element.to / 16.0f;
+        // [IMPORTANT] Coordinate system conversion:
+        //   Minecraft: +X=East, +Y=Up, +Z=South
+        //   SimpleMiner: +X=Forward, +Y=Left, +Z=Up
+        //   Mapping: SimpleMiner(x,y,z) = Minecraft(x,z,y)
+        Vec3 mcFrom = element.from / 16.0f;
+        Vec3 mcTo   = element.to / 16.0f;
+
+        // [FIX] Apply Y<->Z swap for SimpleMiner coordinate system
+        Vec3 from(mcFrom.x, mcFrom.z, mcFrom.y); // (x, y, z) = (x, z, y)
+        Vec3 to(mcTo.x, mcTo.z, mcTo.y); // (x, y, z) = (x, z, y)
 
         // Create quad vertices based on direction and element bounds
-        // World coordinate system: +X=East, +Y=North, +Z=Up
+        // SimpleMiner coordinate system: +X=Forward, +Y=Left, +Z=Up
         // Note: Vertices ordered counter-clockwise for front face
         switch (direction)
         {
