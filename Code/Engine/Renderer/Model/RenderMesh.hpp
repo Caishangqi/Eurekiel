@@ -87,9 +87,22 @@ namespace enigma::renderer::model
         size_t GetIndexCount() const;
 
         /**
-         * @brief Get face by direction (for culling)
+         * @brief Get first face by direction (for culling)
+         * @note For multi-element models (like stairs), use GetFaces() instead
          */
         const RenderFace* GetFace(Direction direction) const;
+
+        /**
+         * @brief Get all faces by direction (for multi-element models like stairs)
+         *
+         * Unlike GetFace() which only returns the first match, this method returns
+         * all faces with the specified cull direction. Essential for models with
+         * multiple elements (e.g., stairs have 2 elements = up to 11 faces).
+         *
+         * @param direction The direction to filter faces by
+         * @return Vector of pointers to all faces with matching cullDirection
+         */
+        std::vector<const RenderFace*> GetFaces(Direction direction) const;
 
         /**
          * @brief Compile all faces into GPU buffers
@@ -121,6 +134,23 @@ namespace enigma::renderer::model
          * @brief Check if this mesh has any faces
          */
         bool IsEmpty() const { return faces.empty(); }
+
+        /**
+         * @brief Apply block rotation to all vertices in this mesh
+         *
+         * Rotates all vertices around the block center (0.5, 0.5, 0.5).
+         * Used for blockstate variant rotations (0, 90, 180, 270 degrees).
+         *
+         * Coordinate system mapping:
+         * - SimpleMiner: +X=Forward, +Y=Left, +Z=Up
+         * - Minecraft:   +X=East,    +Y=Up,   +Z=South
+         *
+         * @param rotX Rotation around X axis in degrees (Minecraft's X rotation)
+         *             Maps to rotation around SimpleMiner's X axis
+         * @param rotY Rotation around Y axis in degrees (Minecraft's Y rotation)
+         *             Maps to rotation around SimpleMiner's Z axis (up)
+         */
+        void ApplyBlockRotation(int rotX, int rotY);
 
         /**
          * @brief Get total triangle count
