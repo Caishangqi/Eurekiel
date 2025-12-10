@@ -2,8 +2,10 @@
 #include "../../Core/Yaml.hpp"
 #include "../../Core/FileUtils.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
+#include "../../Voxel/Builtin/BlockAir.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
 #include "../../Resource/ResourceSubsystem.hpp"
+#include "../../Model/ModelSubsystem.hpp"
 #include <filesystem>
 
 DEFINE_LOG_CATEGORY(LogRegistryBlock)
@@ -56,15 +58,47 @@ namespace enigma::registry::block
 
         // Create resource location for the block
         ResourceLocation location(block->GetNamespace(), "blockstates/" + block->GetRegistryName());
+        std::string      fullName = block->GetNamespace() + ":" + block->GetRegistryName();
 
-        // Get the blockstate path from the block (if set)
-        std::string blockstatePath = block->GetBlockstatePath();
-        std::string baseModelPath  = block->GetNamespace() + ":models/block/" + block->GetRegistryName();
+        // [FIX] First, try to load from JSON file (this contains rotation values for stairs/slabs)
+        // Expected path: Run/.enigma/assets/{namespace}/blockstates/{blockname}.json
+        auto* resourceSubsystem = GEngine->GetSubsystem<enigma::resource::ResourceSubsystem>();
+        if (resourceSubsystem)
+        {
+            // Construct the path directly using baseAssetPath from config
+            std::filesystem::path basePath = resourceSubsystem->GetConfig().baseAssetPath;
+            std::filesystem::path jsonPath = basePath / block->GetNamespace() / "blockstates" / (block->GetRegistryName() + ".json");
 
-        // Use BlockStateBuilder to create the definition
+            if (std::filesystem::exists(jsonPath))
+            {
+                // Load from JSON file - this will include rotation values
+                auto definition = BlockStateDefinition::LoadFromFile(location, jsonPath);
+                if (definition)
+                {
+                    // Compile models with rotation applied
+                    auto* modelSubsystem = GEngine->GetSubsystem<enigma::model::ModelSubsystem>();
+                    if (modelSubsystem)
+                    {
+                        definition->CompileModels(modelSubsystem);
+                    }
+
+                    s_blockStateDefinitions[fullName] = definition;
+                    LogInfo(LogRegistryBlock, "[JSON] Loaded BlockStateDefinition for block: %s from: %s",
+                            fullName.c_str(), jsonPath.string().c_str());
+                    return definition;
+                }
+                else
+                {
+                    LogWarn(LogRegistryBlock, "[JSON] Failed to load BlockStateDefinition from: %s, falling back to auto-generate",
+                            jsonPath.string().c_str());
+                }
+            }
+        }
+
+        // Fallback: Auto-generate BlockStateDefinition using BlockStateBuilder
+        std::string       baseModelPath = block->GetNamespace() + ":models/block/" + block->GetRegistryName();
         BlockStateBuilder builder(location);
 
-        // Check if block has properties - if so, auto-generate variants
         if (!block->GetProperties().empty())
         {
             // Auto-generate all possible variants based on block properties
@@ -74,8 +108,6 @@ namespace enigma::registry::block
                 [&](const PropertyMap& properties) -> std::string
                 {
                     UNUSED(properties)
-                    // Custom model path mapping based on properties
-                    // This can be overridden per-block if needed
                     return baseModelPath;
                 }
             );
@@ -89,10 +121,9 @@ namespace enigma::registry::block
         auto definition = builder.Build();
 
         // Store the definition for later retrieval
-        std::string fullName              = block->GetNamespace() + ":" + block->GetRegistryName();
         s_blockStateDefinitions[fullName] = definition;
 
-        LogDebug(LogRegistryBlock, ("Generated BlockStateDefinition for block: " + fullName).c_str());
+        LogDebug(LogRegistryBlock, "[AUTO] Generated BlockStateDefinition for block: %s", fullName.c_str());
 
         return definition;
     }
@@ -453,12 +484,38 @@ namespace enigma::registry::block
         }
     }
 
+    std::unique_ptr<Block> CreateBlockInstance(const std::string& blockClass,
+                                               const std::string& registryName,
+                                               const std::string& namespaceName)
+    {
+        if (blockClass == "SlabBlock")
+        {
+            return std::make_unique<SlabBlock>(registryName, namespaceName);
+        }
+        else if (blockClass == "StairsBlock")
+        {
+            return std::make_unique<StairsBlock>(registryName, namespaceName);
+        }
+        else if (blockClass == "BlockAir")
+        {
+            return std::make_unique<BlockAir>(registryName, namespaceName);
+        }
+        else
+        {
+            // Default: use base Block class
+            return std::make_unique<Block>(registryName, namespaceName);
+        }
+    }
+
     std::shared_ptr<Block> BlockRegistry::CreateBlockFromYaml(const std::string& blockName, const std::string& namespaceName, const YamlConfiguration& yaml)
     {
         try
         {
-            // Create the block
-            auto block = std::make_shared<Block>(blockName, namespaceName);
+            // Parse block_class field (optional, defaults to "Block")
+            std::string blockClass = yaml.GetString("block_class", "Block");
+
+            // Create the block using factory
+            auto block = CreateBlockInstance(blockClass, blockName, namespaceName);
 
             // Parse properties
             if (yaml.Contains("properties"))

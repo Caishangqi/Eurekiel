@@ -7,6 +7,8 @@
 #include "../../Resource/BlockState/BlockStateDefinition.hpp"
 #include "../../Resource/ResourceMapper.hpp"
 #include "Block.hpp"
+#include "../../Voxel/Block/SlabBlock.hpp"
+#include "../../Voxel/Block/StairsBlock.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>

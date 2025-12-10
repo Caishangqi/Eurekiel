@@ -23,6 +23,7 @@ namespace enigma::voxel
 {
     class BlockState;
     struct BlockPos;
+    struct PlacementContext; // [NEW] Forward declaration for placement logic
 }
 
 namespace enigma::voxel
@@ -191,6 +192,39 @@ namespace enigma::registry::block
          * Override this to provide custom model selection logic
          */
         virtual std::string GetModelPath(enigma::voxel::BlockState* state) const;
+
+        // [NEW] Virtual methods for advanced block placement and behavior (Non-Breaking)
+
+        /**
+         * @brief Determine the BlockState to use when placing this block
+         * @param ctx Placement context (position, player aim, face, etc.)
+         * @return The BlockState to place (default: GetDefaultState())
+         * 
+         * Override this to provide custom placement logic (e.g., stairs/slabs orientation).
+         * Default implementation ignores context and returns the default state.
+         */
+        virtual enigma::voxel::BlockState* GetStateForPlacement(const PlacementContext& ctx) const;
+
+        /**
+         * @brief Check if a specific BlockState is opaque (blocks light)
+         * @param state The BlockState to check
+         * @return True if the state is opaque (default: m_isOpaque)
+         * 
+         * Override this to provide per-state opacity checks (e.g., slabs are opaque when double).
+         * Default implementation uses the block-level m_isOpaque flag.
+         */
+        virtual bool IsOpaque(enigma::voxel::BlockState* state) const;
+
+        /**
+         * @brief Check if this BlockState can be replaced during block placement
+         * @param state The BlockState to check
+         * @param ctx Placement context
+         * @return True if the block can be replaced (default: false)
+         * 
+         * Override this to allow replacement (e.g., air, water, tall grass).
+         * Default implementation returns false (blocks cannot be replaced).
+         */
+        virtual bool CanBeReplaced(enigma::voxel::BlockState* state, const PlacementContext& ctx) const;
 
     protected:
         /**
