@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <regex>
 #include <thread>
+#include <set>
 
 
 using namespace enigma::resource;
@@ -235,6 +236,50 @@ ResourcePtr ResourceSubsystem::GetResource(const ResourceLocation& location)
     if (m_config.logResourceLoads)
     {
         std::cout << "[ResourceSubsystem] Resource not preloaded: " << location.ToString() << std::endl;
+
+        // [DEBUG] List similar resources to help identify path issues
+        std::cout << "[ResourceSubsystem] DEBUG: Searching for similar resources..." << std::endl;
+        std::shared_lock<std::shared_mutex> lock(m_resourceMutex);
+        int                                 similarCount = 0;
+        for (const auto& [loc, res] : m_loadedResources)
+        {
+            // Check if namespace matches and path contains part of the target path
+            std::string targetPath = location.GetPath();
+            std::string resPath    = loc.GetPath();
+
+            // Find resources with similar paths (e.g., both contain "slab" or "block")
+            if (loc.GetNamespace() == location.GetNamespace() &&
+                (resPath.find("block") != std::string::npos || targetPath.find("block") != std::string::npos))
+            {
+                if (similarCount < 20) // Limit output
+                {
+                    std::cout << "  [AVAILABLE] " << loc.ToString() << std::endl;
+                }
+                similarCount++;
+            }
+        }
+        if (similarCount > 20)
+        {
+            std::cout << "  ... and " << (similarCount - 20) << " more" << std::endl;
+        }
+        if (similarCount == 0)
+        {
+            std::cout << "  [DEBUG] No similar resources found in namespace: " << location.GetNamespace() << std::endl;
+            std::cout << "  [DEBUG] Total loaded resources: " << m_loadedResources.size() << std::endl;
+
+            // List all namespaces
+            std::set<std::string> namespaces;
+            for (const auto& [loc, res] : m_loadedResources)
+            {
+                namespaces.insert(loc.GetNamespace());
+            }
+            std::cout << "  [DEBUG] Available namespaces: ";
+            for (const auto& ns : namespaces)
+            {
+                std::cout << ns << " ";
+            }
+            std::cout << std::endl;
+        }
     }
 
     // Resource not found in preloaded resources
@@ -580,7 +625,7 @@ ResourcePtr ResourceSubsystem::LoadResourceInternal(const ResourceLocation& loca
     }
 
     // Read data
-    auto data = provider->ReadResource(location);
+    auto data                        = provider->ReadResource(location);
     m_perfStats.bytesLoadedThisFrame += data.size();
 
     if (m_config.logResourceLoads)
