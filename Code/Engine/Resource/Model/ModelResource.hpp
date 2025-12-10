@@ -10,11 +10,33 @@
 #include <optional>
 #include <memory>
 #include <filesystem>
+#include <variant>
 
 namespace enigma::resource::model
 {
     using namespace enigma::resource;
     using namespace enigma::core;
+
+    /**
+     * @brief Texture entry type following Minecraft's Either<Material, String> design
+     *
+     * Minecraft uses Either<Material, String> for texture mappings:
+     * - Left<Material> (index 0): Final texture location (e.g., "minecraft:block/stone")
+     * - Right<String> (index 1): Variable reference to another texture variable (without '#' prefix)
+     *
+     * Examples:
+     * - "all": "minecraft:block/stone" -> TextureEntry(ResourceLocation("minecraft", "block/stone"))
+     * - "particle": "#side" -> TextureEntry(std::string("side"))  // Note: '#' prefix removed
+     */
+    using TextureEntry = std::variant<ResourceLocation, std::string>;
+
+    /**
+     * @brief Helper functions for TextureEntry
+     */
+    inline bool                    IsTextureLocation(const TextureEntry& entry) { return std::holds_alternative<ResourceLocation>(entry); }
+    inline bool                    IsVariableReference(const TextureEntry& entry) { return std::holds_alternative<std::string>(entry); }
+    inline const ResourceLocation& GetTextureLocation(const TextureEntry& entry) { return std::get<ResourceLocation>(entry); }
+    inline const std::string&      GetVariableReference(const TextureEntry& entry) { return std::get<std::string>(entry); }
 
     /**
      * @brief Represents a face of a model element
@@ -82,18 +104,21 @@ namespace enigma::resource::model
     class ModelResource : public IResource
     {
     private:
-        ResourceMetadata                        m_metadata; // Resource metadata
-        std::optional<ResourceLocation>         m_parent; // Parent model to inherit from
-        std::map<std::string, ResourceLocation> m_textures; // Texture variable assignments
-        std::vector<ModelElement>               m_elements; // Model geometry
-        std::map<std::string, ModelDisplay>     m_display; // Display settings
-        bool                                    m_ambientOcclusion = true; // Whether to apply ambient occlusion
-        std::string                             m_gui_light        = "side"; // GUI lighting mode
+        ResourceMetadata                    m_metadata; // Resource metadata
+        std::optional<ResourceLocation>     m_parent; // Parent model to inherit from
+        std::map<std::string, TextureEntry> m_textures; // Texture mappings (Minecraft Either<Material, String> design)
+        std::vector<ModelElement>           m_elements; // Model geometry
+        std::map<std::string, ModelDisplay> m_display; // Display settings
+        bool                                m_ambientOcclusion = true; // Whether to apply ambient occlusion
+        std::string                         m_gui_light        = "side"; // GUI lighting mode
 
         // Resolved data (after parent inheritance)
-        mutable bool                                    m_resolved = false;
-        mutable std::map<std::string, ResourceLocation> m_resolvedTextures;
-        mutable std::vector<ModelElement>               m_resolvedElements;
+        // Uses Minecraft's Either<Material, String> design:
+        // - variant index 0 (ResourceLocation): Final texture location
+        // - variant index 1 (std::string): Variable reference (without '#' prefix)
+        mutable bool                                m_resolved = false;
+        mutable std::map<std::string, TextureEntry> m_resolvedTextures; // Merged texture map from parent chain
+        mutable std::vector<ModelElement>           m_resolvedElements;
 
     public:
         ModelResource() = default;
@@ -109,16 +134,18 @@ namespace enigma::resource::model
         bool LoadFromJson(const JsonObject& json);
 
         // Accessors (raw data)
-        const std::optional<ResourceLocation>&         GetParent() const { return m_parent; }
-        const std::map<std::string, ResourceLocation>& GetTextures() const { return m_textures; }
-        const std::vector<ModelElement>&               GetElements() const { return m_elements; }
-        const std::map<std::string, ModelDisplay>&     GetDisplay() const { return m_display; }
-        bool                                           GetAmbientOcclusion() const { return m_ambientOcclusion; }
-        const std::string&                             GetGuiLight() const { return m_gui_light; }
+        const std::optional<ResourceLocation>&     GetParent() const { return m_parent; }
+        const std::map<std::string, TextureEntry>& GetTextures() const { return m_textures; }
+        const std::vector<ModelElement>&           GetElements() const { return m_elements; }
+        const std::map<std::string, ModelDisplay>& GetDisplay() const { return m_display; }
+        bool                                       GetAmbientOcclusion() const { return m_ambientOcclusion; }
+        const std::string&                         GetGuiLight() const { return m_gui_light; }
 
         // Resolved accessors (with parent inheritance)
-        const std::map<std::string, ResourceLocation>& GetResolvedTextures() const;
-        const std::vector<ModelElement>&               GetResolvedElements() const;
+        // Returns texture map using Minecraft's Either<Material, String> design
+        // Use ResolveTexture() to get final ResourceLocation with chain resolution
+        const std::map<std::string, TextureEntry>& GetResolvedTextures() const;
+        const std::vector<ModelElement>&           GetResolvedElements() const;
 
         // Texture resolution
         ResourceLocation ResolveTexture(const std::string& textureVariable) const;
@@ -135,9 +162,25 @@ namespace enigma::resource::model
             m_resolved = false;
         }
 
+        /**
+         * @brief Set a texture variable to a final texture location (Minecraft Either.left)
+         * @param variable Variable name (e.g., "all", "side", "top")
+         * @param texture Final texture ResourceLocation
+         */
         void SetTexture(const std::string& variable, const ResourceLocation& texture)
         {
-            m_textures[variable] = texture;
+            m_textures[variable] = texture; // Store as ResourceLocation (variant index 0)
+            m_resolved           = false;
+        }
+
+        /**
+         * @brief Set a texture variable to reference another variable (Minecraft Either.right)
+         * @param variable Variable name (e.g., "particle")
+         * @param targetVariable Target variable name WITHOUT '#' prefix (e.g., "side", not "#side")
+         */
+        void SetTextureVariableReference(const std::string& variable, const std::string& targetVariable)
+        {
+            m_textures[variable] = targetVariable; // Store as string reference (variant index 1)
             m_resolved           = false;
         }
 
