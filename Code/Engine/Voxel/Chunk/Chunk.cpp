@@ -95,9 +95,10 @@ void Chunk::SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state)
 void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
 {
     // 1. Get old block state BEFORE changing
-    BlockState* oldState  = GetBlock(x, y, z);
-    bool        wasOpaque = oldState->IsFullOpaque();
-    bool        wasSky    = GetIsSky(x, y, z);
+    BlockState* oldState = GetBlock(x, y, z);
+    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+    bool wasOpaque = oldState->GetBlock()->IsOpaque(oldState);
+    bool wasSky    = GetIsSky(x, y, z);
 
     // 2. Set new block
     size_t index    = CoordsToIndex(x, y, z);
@@ -109,7 +110,8 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
     m_isDirty        = true;
 
     // 4. Get new block properties
-    bool isOpaque = state->IsFullOpaque();
+    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+    bool isOpaque = state->GetBlock()->IsOpaque(state);
 
     if (m_world)
     {
@@ -130,7 +132,8 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
                     for (int descendZ = z; descendZ >= 0; --descendZ)
                     {
                         BlockState* currentBlock = GetBlock(x, y, descendZ);
-                        if (currentBlock->IsFullOpaque())
+                        // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                        if (currentBlock->GetBlock()->IsOpaque(currentBlock))
                         {
                             break; // Stop at first opaque block
                         }
@@ -157,7 +160,8 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
             for (int descendZ = z - 1; descendZ >= 0; --descendZ)
             {
                 BlockState* currentBlock = GetBlock(x, y, descendZ);
-                if (currentBlock->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (currentBlock->GetBlock()->IsOpaque(currentBlock))
                 {
                     break; // Stop at first opaque block
                 }
@@ -608,7 +612,8 @@ void Chunk::InitializeLighting(World* world)
             for (int z = CHUNK_MAX_Z; z >= 0; --z)
             {
                 BlockState* state = GetBlock(x, y, z);
-                if (state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (state->GetBlock()->IsOpaque(state))
                 {
                     break; // Stop at first opaque block
                 }
@@ -742,7 +747,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = GetBlock(CHUNK_MAX_X, y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(this, (int)CoordsToIndex(CHUNK_MAX_X, y, z));
                     world->MarkLightingDirty(iter);
@@ -756,7 +762,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = eastNeighbor->GetBlock(0, y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(eastNeighbor, (int)eastNeighbor->CoordsToIndex(0, y, z));
                     world->MarkLightingDirty(iter);
@@ -774,7 +781,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = GetBlock(0, y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(this, (int)CoordsToIndex(0, y, z));
                     world->MarkLightingDirty(iter);
@@ -788,7 +796,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = westNeighbor->GetBlock(CHUNK_MAX_X, y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(westNeighbor, (int)westNeighbor->CoordsToIndex(CHUNK_MAX_X, y, z));
                     world->MarkLightingDirty(iter);
@@ -806,7 +815,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = GetBlock(x, CHUNK_MAX_Y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(this, (int)CoordsToIndex(x, CHUNK_MAX_Y, z));
                     world->MarkLightingDirty(iter);
@@ -820,7 +830,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = northNeighbor->GetBlock(x, 0, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(northNeighbor, (int)northNeighbor->CoordsToIndex(x, 0, z));
                     world->MarkLightingDirty(iter);
@@ -838,7 +849,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = GetBlock(x, 0, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(this, (int)CoordsToIndex(x, 0, z));
                     world->MarkLightingDirty(iter);
@@ -852,7 +864,8 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
             for (int z = 0; z < CHUNK_SIZE_Z; ++z)
             {
                 BlockState* state = southNeighbor->GetBlock(x, CHUNK_MAX_Y, z);
-                if (!state->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (!state->GetBlock()->IsOpaque(state))
                 {
                     BlockIterator iter(southNeighbor, (int)southNeighbor->CoordsToIndex(x, CHUNK_MAX_Y, z));
                     world->MarkLightingDirty(iter);

@@ -292,9 +292,31 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
         return;
     }
 
+    // [DEBUG] Track block type for slab/stairs debugging
+    std::string blockName    = blockState->GetBlock() ? blockState->GetBlock()->GetRegistryName() : "null";
+    bool        isDebugBlock = (blockName.find("slab") != std::string::npos || blockName.find("stairs") != std::string::npos);
+
     auto blockRenderMesh = blockState->GetRenderMesh();
+
+    // [DEBUG] Log detailed info for slab/stairs blocks
+    if (isDebugBlock)
+    {
+        core::LogInfo("ChunkMeshHelper", "[DEBUG] Processing block: %s at (%d,%d,%d)",
+                      blockName.c_str(), blockPos.x, blockPos.y, blockPos.z);
+        core::LogInfo("ChunkMeshHelper", "  GetRenderMesh() = %s", blockRenderMesh ? "valid" : "NULL");
+        if (blockRenderMesh)
+        {
+            core::LogInfo("ChunkMeshHelper", "  IsEmpty() = %s", blockRenderMesh->IsEmpty() ? "true" : "false");
+            core::LogInfo("ChunkMeshHelper", "  faces.size() = %zu", blockRenderMesh->faces.size());
+        }
+    }
+
     if (!blockRenderMesh || blockRenderMesh->IsEmpty())
     {
+        if (isDebugBlock)
+        {
+            core::LogWarn("ChunkMeshHelper", "[DEBUG] Skipping %s: mesh is null or empty!", blockName.c_str());
+        }
         return;
     }
 
@@ -310,6 +332,11 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
     Vec3  blockPosVec3(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
     Mat44 blockToChunkTransform = Mat44::MakeTranslation3D(blockPosVec3);
 
+    // [DEBUG] Track face processing for slab/stairs
+    int facesAdded             = 0;
+    int facesSkippedCull       = 0;
+    int facesSkippedNoGeometry = 0;
+
     for (const auto& direction : allDirections)
     {
         if (chunk->GetState() != ChunkState::Active)
@@ -320,58 +347,86 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
 
         if (!ShouldRenderFace(iterator, direction))
         {
+            if (isDebugBlock) facesSkippedCull++;
             continue;
         }
 
-        const auto* renderFace = blockRenderMesh->GetFace(direction);
-        if (!renderFace || renderFace->vertices.empty())
+        // [FIX] Use GetFaces() to handle multi-element models (stairs have 11 faces)
+        // GetFace() only returns the first match, missing faces from second element
+        auto renderFaces = blockRenderMesh->GetFaces(direction);
+
+        if (renderFaces.empty())
         {
-            continue; // Skip faces without geometry
+            if (isDebugBlock)
+            {
+                core::LogWarn("ChunkMeshHelper", "[DEBUG] Direction %d: GetFaces() returned 0 faces",
+                              static_cast<int>(direction));
+                facesSkippedNoGeometry++;
+            }
+            continue;
         }
 
-        // Transform vertices from block space to chunk space
-        std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
-
-        // [Phase 8] Get neighbor lighting values for this face
-        BlockIterator neighborIter     = iterator.GetNeighbor(direction);
-        LightingData  lighting         = GetNeighborLighting(neighborIter);
-        float         directionalShade = GetDirectionalShade(direction);
-
-        // Calculate vertex color from lighting data (manual normalization to uint8_t)
-        uint8_t r = static_cast<uint8_t>(lighting.outdoorLight * 255.0f);
-        uint8_t g = static_cast<uint8_t>(lighting.indoorLight * 255.0f);
-        uint8_t b = static_cast<uint8_t>(directionalShade * 255.0f);
-        Rgba8   vertexColor(r, g, b, 255);
-
-        for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
+        // Process ALL faces for this direction (not just the first one)
+        for (const auto* renderFace : renderFaces)
         {
-            Vertex_PCU transformedVertex = renderFace->vertices[i];
-            // Transform position from block space (0,0,0)-(1,1,1) to chunk space
-            transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
-            // [Phase 8] Set vertex color encoding lighting (R=outdoor, G=indoor, B=directional shade)
-            transformedVertex.m_color = vertexColor;
-            transformedVertices[i]    = transformedVertex;
-        }
+            if (!renderFace || renderFace->vertices.empty())
+            {
+                if (isDebugBlock) facesSkippedNoGeometry++;
+                continue;
+            }
 
-        // Convert vertices to quads and add to chunk mesh
-        // Assuming each face has 4 vertices arranged as a quad
-        if (transformedVertices.size() >= 4)
-        {
-            std::array<Vertex_PCU, 4> quad = {
-                transformedVertices[0],
-                transformedVertices[1],
-                transformedVertices[2],
-                transformedVertices[3]
-            };
+            // Transform vertices from block space to chunk space
+            std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
 
-            // Add the quad to chunk mesh
-            // For Assignment01, we treat all geometry as opaque
-            chunkMesh->AddOpaqueQuad(quad);
+            // [Phase 8] Get neighbor lighting values for this face
+            BlockIterator neighborIter     = iterator.GetNeighbor(direction);
+            LightingData  lighting         = GetNeighborLighting(neighborIter);
+            float         directionalShade = GetDirectionalShade(direction);
+
+            // Calculate vertex color from lighting data (manual normalization to uint8_t)
+            uint8_t r = static_cast<uint8_t>(lighting.outdoorLight * 255.0f);
+            uint8_t g = static_cast<uint8_t>(lighting.indoorLight * 255.0f);
+            uint8_t b = static_cast<uint8_t>(directionalShade * 255.0f);
+            Rgba8   vertexColor(r, g, b, 255);
+
+            for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
+            {
+                Vertex_PCU transformedVertex = renderFace->vertices[i];
+                // Transform position from block space (0,0,0)-(1,1,1) to chunk space
+                transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
+                // [Phase 8] Set vertex color encoding lighting (R=outdoor, G=indoor, B=directional shade)
+                transformedVertex.m_color = vertexColor;
+                transformedVertices[i]    = transformedVertex;
+            }
+
+            // Convert vertices to quads and add to chunk mesh
+            // Assuming each face has 4 vertices arranged as a quad
+            if (transformedVertices.size() >= 4)
+            {
+                std::array<Vertex_PCU, 4> quad = {
+                    transformedVertices[0],
+                    transformedVertices[1],
+                    transformedVertices[2],
+                    transformedVertices[3]
+                };
+
+                // Add the quad to chunk mesh
+                // For Assignment01, we treat all geometry as opaque
+                chunkMesh->AddOpaqueQuad(quad);
+                if (isDebugBlock) facesAdded++;
+            }
+            else if (transformedVertices.size() > 0)
+            {
+                core::LogWarn("ChunkMeshHelper", "Face has %zu vertices, expected 4 for quad conversion", transformedVertices.size());
+            }
         }
-        else if (transformedVertices.size() > 0)
-        {
-            core::LogWarn("ChunkMeshHelper", "Face has %zu vertices, expected 4 for quad conversion", transformedVertices.size());
-        }
+    }
+
+    // [DEBUG] Log summary for slab/stairs blocks
+    if (isDebugBlock)
+    {
+        core::LogInfo("ChunkMeshHelper", "[DEBUG] %s: faces_added=%d, culled=%d, no_geometry=%d",
+                      blockName.c_str(), facesAdded, facesSkippedCull, facesSkippedNoGeometry);
     }
 }
 
