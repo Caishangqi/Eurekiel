@@ -38,6 +38,15 @@ namespace enigma::voxel
     Direction StringToDirection(const std::string& str);
 
     /**
+     * @brief Rotate a Direction by the given Minecraft-style rotations
+     * @param dir Original direction
+     * @param rotX Rotation around X axis in degrees (0, 90, 180, 270)
+     * @param rotY Rotation around Y axis in degrees (0, 90, 180, 270)
+     * @return Rotated direction
+     */
+    Direction RotateDirection(Direction dir, int rotX, int rotY);
+
+    /**
      * @brief Boolean property implementation
      */
     class BooleanProperty : public Property<bool>

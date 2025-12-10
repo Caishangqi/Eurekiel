@@ -162,3 +162,66 @@ std::shared_ptr<DirectionProperty> DirectionProperty::CreateVertical(const std::
     return std::make_shared<DirectionProperty>(name,
                                                std::vector<Direction>{Direction::UP, Direction::DOWN});
 }
+
+Direction enigma::voxel::RotateDirection(Direction dir, int rotX, int rotY)
+{
+    // Normalize rotations to 0, 90, 180, 270
+    rotX = ((rotX % 360) + 360) % 360;
+    rotY = ((rotY % 360) + 360) % 360;
+
+    // Coordinate system mapping:
+    // SimpleMiner: +X=Forward, +Y=Left, +Z=Up
+    // Minecraft:   +X=East,    +Y=Up,   +Z=South
+    //
+    // Direction mapping (SimpleMiner perspective):
+    // NORTH = +Y (left in SimpleMiner)
+    // SOUTH = -Y (right in SimpleMiner)
+    // EAST  = +X (forward in SimpleMiner)
+    // WEST  = -X (backward in SimpleMiner)
+    // UP    = +Z (up in SimpleMiner)
+    // DOWN  = -Z (down in SimpleMiner)
+
+    Direction result = dir;
+
+    // Apply Y rotation (around vertical/Z axis in SimpleMiner)
+    // This rotates horizontal directions: NORTH, SOUTH, EAST, WEST
+    int ySteps = rotY / 90;
+    for (int i = 0; i < ySteps; ++i)
+    {
+        switch (result)
+        {
+        case Direction::NORTH: result = Direction::EAST;
+            break;
+        case Direction::EAST: result = Direction::SOUTH;
+            break;
+        case Direction::SOUTH: result = Direction::WEST;
+            break;
+        case Direction::WEST: result = Direction::NORTH;
+            break;
+        case Direction::UP: break; // Unchanged
+        case Direction::DOWN: break; // Unchanged
+        }
+    }
+
+    // Apply X rotation (around X axis in SimpleMiner)
+    // This rotates: NORTH<->UP<->SOUTH<->DOWN cycle, EAST/WEST unchanged
+    int xSteps = rotX / 90;
+    for (int i = 0; i < xSteps; ++i)
+    {
+        switch (result)
+        {
+        case Direction::NORTH: result = Direction::DOWN;
+            break;
+        case Direction::DOWN: result = Direction::SOUTH;
+            break;
+        case Direction::SOUTH: result = Direction::UP;
+            break;
+        case Direction::UP: result = Direction::NORTH;
+            break;
+        case Direction::EAST: break; // Unchanged
+        case Direction::WEST: break; // Unchanged
+        }
+    }
+
+    return result;
+}
