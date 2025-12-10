@@ -65,6 +65,10 @@ namespace enigma::voxel
         void DigBlock(const BlockIterator& blockIter);
         void PlaceBlock(const BlockIterator& blockIter, BlockState* newState);
 
+        // [NEW] PlaceBlock with placement context (for slab/stairs)
+        void PlaceBlock(const BlockIterator&        blockIter, enigma::registry::block::Block* blockType,
+                        const VoxelRaycastResult3D& raycast, const Vec3&                       playerLookDir);
+
         // Light Data Access (delegate to Chunk via global coordinates)
         // These methods provide global coordinate access, consistent with GetBlockState()
         uint8_t GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;

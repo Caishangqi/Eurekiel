@@ -5,6 +5,7 @@
 #include "../Chunk/ESFSChunkSerializer.hpp"
 #include "../Chunk/ChunkHelper.hpp"
 #include "../Chunk/ChunkMeshHelper.hpp"
+#include "../Block/PlacementContext.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -469,8 +470,9 @@ void World::UpdateNearbyChunks()
         }
 
         // Phase 3: Check if chunk is already being processed using IsInQueue()
-        IntVec2 coords    = IntVec2(chunkX, chunkY);
-        bool    isPending = IsInQueue(m_pendingLoadQueue, coords) ||
+        IntVec2 coords = IntVec2(
+            chunkX, chunkY);
+        bool isPending = IsInQueue(m_pendingLoadQueue, coords) ||
             IsInQueue(m_pendingGenerateQueue, coords) ||
             IsInQueue(m_pendingSaveQueue, coords);
 
@@ -620,8 +622,11 @@ void World::SetPlayerPosition(const Vec3& position)
 void World::SetChunkActivationRange(int chunkDistance)
 {
     m_chunkActivationRange = chunkDistance;
-    // Sync activation range to ChunkManager
-    LogInfo("world", "Set chunk activation range to %d chunks", chunkDistance);
+    // [FIX] Sync deactivation range = activation range + 2 (buffer zone)
+    // This prevents ping-pong effect where chunks are created and immediately removed
+    m_chunkDeactivationRange = chunkDistance + 2;
+    LogInfo("world", "Set chunk activation range to %d chunks (deactivation: %d)",
+            chunkDistance, m_chunkDeactivationRange);
 }
 
 void World::SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator)
@@ -1306,20 +1311,65 @@ void World::RemoveDistantJobs()
         return distanceSq > maxDistanceSq;
     };
 
-    // Remove distant jobs from Generate queue
+    // [FIX] Collect distant coords before removing from queues
+    // We need to also remove the chunk objects from m_loadedChunks to prevent
+    // re-creation loop: chunk created -> added to queue -> removed from queue (distant)
+    // -> chunk object remains with PendingGenerate state -> UnloadFarthestChunk removes it
+    // -> next frame: chunk not in loadedChunks, not in queue -> re-created
+    std::vector<IntVec2> distantChunksToRemove;
+
+    // Remove distant jobs from Generate queue and collect coords
+    for (const auto& coords : m_pendingGenerateQueue)
+    {
+        if (isDistant(coords))
+        {
+            distantChunksToRemove.push_back(coords);
+        }
+    }
     auto   it              = std::remove_if(m_pendingGenerateQueue.begin(), m_pendingGenerateQueue.end(), isDistant);
     size_t removedGenerate = std::distance(it, m_pendingGenerateQueue.end());
     m_pendingGenerateQueue.erase(it, m_pendingGenerateQueue.end());
 
-    // Remove distant jobs from Load queue
+    // Remove distant jobs from Load queue and collect coords
+    for (const auto& coords : m_pendingLoadQueue)
+    {
+        if (isDistant(coords))
+        {
+            distantChunksToRemove.push_back(coords);
+        }
+    }
     it                 = std::remove_if(m_pendingLoadQueue.begin(), m_pendingLoadQueue.end(), isDistant);
     size_t removedLoad = std::distance(it, m_pendingLoadQueue.end());
     m_pendingLoadQueue.erase(it, m_pendingLoadQueue.end());
 
-    // Remove distant jobs from Save queue
+    // Remove distant jobs from Save queue (don't remove chunk objects for save queue)
     it                 = std::remove_if(m_pendingSaveQueue.begin(), m_pendingSaveQueue.end(), isDistant);
     size_t removedSave = std::distance(it, m_pendingSaveQueue.end());
     m_pendingSaveQueue.erase(it, m_pendingSaveQueue.end());
+
+    // [FIX] Remove chunk objects from m_loadedChunks for distant Generate/Load jobs
+    // This prevents the re-creation loop
+    for (const auto& coords : distantChunksToRemove)
+    {
+        int64_t packedCoords = ChunkHelper::PackCoordinates(coords.x, coords.y);
+        auto    chunkIt      = m_loadedChunks.find(packedCoords);
+        if (chunkIt != m_loadedChunks.end())
+        {
+            Chunk* chunk = chunkIt->second.get();
+            if (chunk)
+            {
+                ChunkState state = chunk->GetState();
+                // Only remove if chunk is in pending state (not yet generated/loaded)
+                if (state == ChunkState::PendingGenerate || state == ChunkState::PendingLoad ||
+                    state == ChunkState::CheckingDisk)
+                {
+                    m_loadedChunks.erase(chunkIt);
+                    LogDebug("world", "Removed distant pending chunk (%d, %d) from loadedChunks",
+                             coords.x, coords.y);
+                }
+            }
+        }
+    }
 
     // Log cancellations (only if any were removed)
     if (removedGenerate > 0 || removedLoad > 0 || removedSave > 0)
@@ -1717,7 +1767,8 @@ void World::MarkLightingDirtyIfNotOpaque(const BlockIterator& iter)
 
     // 3. Only mark non-opaque blocks as dirty
     // Opaque blocks refuse to become dirty (teacher's rule: "Opaque blocks refuse to become dirty")
-    if (!state->IsFullOpaque())
+    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+    if (!state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
     {
         MarkLightingDirty(iter);
     }
@@ -1780,7 +1831,8 @@ void World::ProcessNextDirtyLightBlock()
             if (neighbor.IsValid())
             {
                 BlockState* neighborState = neighbor.GetBlock();
-                if (neighborState && !neighborState->IsFullOpaque())
+                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+                if (neighborState && !neighborState->GetBlock()->IsOpaque(const_cast<BlockState*>(neighborState)))
                 {
                     MarkLightingDirty(neighbor);
 
@@ -1868,7 +1920,8 @@ uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
     }
 
     // [STEP 2] Opaque blocks block all outdoor light
-    if (state->IsFullOpaque())
+    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+    if (state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
     {
         return 0;
     }
@@ -1929,7 +1982,8 @@ uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
     uint8_t emissionLevel = state->GetBlock()->GetIndoorLightEmission();
 
     // [STEP 2] Opaque blocks: indoor light = emission level (don't propagate from neighbors)
-    if (state->IsFullOpaque())
+    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
+    if (state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
     {
         return emissionLevel;
     }
@@ -2080,4 +2134,104 @@ void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
 
     LogDebug("world", "PlaceBlock: Placed block at (%d, %d, %d)",
              blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
+}
+
+//-------------------------------------------------------------------------------------------
+// [NEW] PlaceBlock with PlacementContext (for slab/stairs)
+//-------------------------------------------------------------------------------------------
+void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::block::Block* blockType,
+                       const VoxelRaycastResult3D& raycast, const Vec3&                       playerLookDir)
+{
+    using namespace enigma::registry::block;
+
+    // [DEBUG] Track slab/stairs placement
+    bool isDebugBlock = blockType && (blockType->GetRegistryName().find("slab") != std::string::npos ||
+        blockType->GetRegistryName().find("stairs") != std::string::npos);
+
+    if (isDebugBlock)
+    {
+        core::LogInfo("World", "[DEBUG] PlaceBlock (context) called for: %s:%s",
+                      blockType->GetNamespace().c_str(), blockType->GetRegistryName().c_str());
+    }
+
+    // [VALIDATION] Check block iterator validity
+    if (!blockIter.IsValid())
+    {
+        LogError("world", "PlaceBlock (context): Invalid block iterator");
+        return;
+    }
+
+    Chunk* chunk = blockIter.GetChunk();
+    if (!chunk)
+    {
+        LogError("world", "PlaceBlock (context): Chunk not found");
+        return;
+    }
+
+    if (!blockType)
+    {
+        LogError("world", "PlaceBlock (context): Block type is null");
+        return;
+    }
+
+    BlockPos targetPos = blockIter.GetBlockPos();
+
+    // [NEW] Compute block-local hit point (0-1 normalized)
+    Vec3 worldHitPos   = raycast.m_impactPos;
+    Vec3 blockWorldPos = Vec3(static_cast<float>(targetPos.x),
+                              static_cast<float>(targetPos.y),
+                              static_cast<float>(targetPos.z));
+    Vec3 localHitPoint = worldHitPos - blockWorldPos; // Already in 0-1 range for single block
+
+    // [NEW] Construct PlacementContext
+    PlacementContext ctx;
+    ctx.world         = this;
+    ctx.targetPos     = targetPos;
+    ctx.clickedPos    = raycast.m_hitBlockIter.GetBlockPos();
+    ctx.clickedFace   = raycast.m_hitFace;
+    ctx.hitPoint      = localHitPoint;
+    ctx.playerLookDir = playerLookDir;
+    ctx.heldItemBlock = blockType;
+
+    // [NEW] Check if can replace existing block (Double Slab case)
+    BlockState* existingState = blockIter.GetBlock();
+    if (existingState && existingState->GetBlock()->CanBeReplaced(existingState, ctx))
+    {
+        // Merge: Get replacement state from existing block
+        BlockState* mergedState = existingState->GetBlock()->GetStateForPlacement(ctx);
+        PlaceBlock(blockIter, mergedState); // Use original signature
+        LogDebug("world", "PlaceBlock (context): Merged block at (%d, %d, %d)",
+                 targetPos.x, targetPos.y, targetPos.z);
+        return;
+    }
+
+    // [FIX] Corrected log format - was printing hitPoint twice instead of playerLookDir
+    LogInfo("world", "PlaceBlock with PlacementContent: \n"
+            "TargetPos: (%d, %d, %d) \n"
+            "ClickedPos: (%d, %d, %d) \n"
+            "ClickedFace: %d \n"
+            "HitPoint: (%f, %f, %f) \n"
+            "PlayerLookDir: (%f, %f, %f) \n"
+            , ctx.targetPos.x, ctx.targetPos.y, ctx.targetPos.z,
+            ctx.clickedPos.x, ctx.clickedPos.y, ctx.clickedPos.z,
+            static_cast<int>(ctx.clickedFace), ctx.hitPoint.x, ctx.hitPoint.y, ctx.hitPoint.z,
+            ctx.playerLookDir.x, ctx.playerLookDir.y, ctx.playerLookDir.z);
+
+    // [NEW] Get final state from placement logic
+    BlockState* finalState = blockType->GetStateForPlacement(ctx);
+
+    if (isDebugBlock)
+    {
+        core::LogInfo("World", "  GetStateForPlacement() returned: %s", finalState ? "valid" : "NULL");
+        if (finalState)
+        {
+            core::LogInfo("World", "  Final state properties: '%s'", finalState->GetProperties().ToString().c_str());
+        }
+    }
+
+    // [REUSE] Call original PlaceBlock
+    PlaceBlock(blockIter, finalState);
+
+    LogDebug("world", "PlaceBlock (context): Placed block at (%d, %d, %d) with placement context",
+             targetPos.x, targetPos.y, targetPos.z);
 }
