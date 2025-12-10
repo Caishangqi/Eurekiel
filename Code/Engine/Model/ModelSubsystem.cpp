@@ -45,21 +45,32 @@ void ModelSubsystem::Shutdown()
 
 void ModelSubsystem::InitializeBuiltinModels()
 {
-    LogInfo(LogModel, "Initializing builtin models...");
-
-    ModelResourcePtr blockCube = ModelBuiltin::CreateBlockCube();
-    m_resourceSubsystem->LoadResource(ResourceLocation("block/cube"), blockCube);
+    // [REMOVED] All models are now loaded from JSON files
+    // Previously hardcoded builtin models like "block/cube" are now at:
+    //   - .enigma/assets/engine/models/block/cube.json
+    //   - .enigma/assets/engine/models/block/block.json
+    //   - .enigma/assets/engine/models/block/slab.json
+    // These are automatically scanned and indexed by ResourceSubsystem
+    // when the "engine" namespace is registered in App.cpp
+    LogInfo(LogModel, "Builtin models are now loaded from JSON files in engine namespace");
 }
 
 
 std::shared_ptr<RenderMesh> ModelSubsystem::CompileModel(const ResourceLocation& modelPath)
 {
+    LogInfo(LogModel, "----------------------------------------");
+    LogInfo(LogModel, "[CompileModel] Input: %s", modelPath.ToString().c_str());
+
     ModelResourcePtr modelResource = std::dynamic_pointer_cast<ModelResource>(m_resourceSubsystem->GetResource(modelPath));
     if (!modelResource)
     {
-        LogWarn(LogModel, "Failed to get model resource: %s", modelPath.ToString().c_str());
+        LogError(LogModel, "[CompileModel] FAILED: Model resource not found: %s", modelPath.ToString().c_str());
+        LogInfo(LogModel, "----------------------------------------");
         return nullptr;
     }
+
+    LogInfo(LogModel, "[CompileModel] Model loaded successfully");
+
     // TODO: Right now we assume we only compile block, so we use block atlas.
     CompilerContext context;
     context.atlasManager   = m_resourceSubsystem->GetAtlasManager();
@@ -67,10 +78,43 @@ std::shared_ptr<RenderMesh> ModelSubsystem::CompileModel(const ResourceLocation&
     context.modelSubsystem = this;
     context.enableLogging  = true; // Enable logging to debug atlas contents
 
-    std::string                     identifier   = modelResource->GetParent()->GetPath();
-    std::shared_ptr<IModelCompiler> compiler     = GetCompiler(identifier);
-    std::shared_ptr<RenderMesh>     compiledMesh = compiler->Compile(modelResource, context);
+    // Get parent path for compiler selection
+    std::string identifier = "null/empty";
+    auto        parentOpt  = modelResource->GetParent();
+    if (parentOpt.has_value())
+    {
+        identifier = parentOpt.value().GetPath();
+        LogInfo(LogModel, "[CompileModel] Parent path: '%s'", identifier.c_str());
+    }
+    else
+    {
+        LogInfo(LogModel, "[CompileModel] No parent (root model), using default compiler");
+    }
 
+    std::shared_ptr<IModelCompiler> compiler = GetCompiler(identifier);
+    LogInfo(LogModel, "[CompileModel] Using compiler for: '%s' (found=%s)",
+            identifier.c_str(), (compiler != m_compilers["null/empty"]) ? "YES" : "NO (fallback)");
+
+    // Log resolved elements before compilation
+    auto resolvedElements = modelResource->GetResolvedElements();
+    LogInfo(LogModel, "[CompileModel] Resolved elements count: %zu", resolvedElements.size());
+    if (resolvedElements.empty())
+    {
+        LogError(LogModel, "[CompileModel] WARNING: No elements to compile! Model will have 0 vertices!");
+    }
+
+    std::shared_ptr<RenderMesh> compiledMesh = compiler->Compile(modelResource, context);
+
+    if (compiledMesh)
+    {
+        LogInfo(LogModel, "[CompileModel] SUCCESS: Mesh compiled");
+    }
+    else
+    {
+        LogError(LogModel, "[CompileModel] FAILED: Compiler returned null mesh");
+    }
+
+    LogInfo(LogModel, "----------------------------------------");
     return compiledMesh;
 }
 
@@ -126,7 +170,16 @@ std::string ModelSubsystem::CreateCacheKey(const ResourceLocation&              
 void ModelSubsystem::RegisterCompilers()
 {
     RegisterCompiler("null/empty", std::make_unique<GenericModelCompiler>());
-    RegisterCompiler("block/cube", std::make_unique<BlockModelCompiler>());
+    // [Updated] Use full path with "models/" prefix to match ResourceLocation from JSON loading
+    RegisterCompiler("models/block/cube", std::make_unique<BlockModelCompiler>());
+    // Also register common parent models that blocks may inherit from
+    RegisterCompiler("models/block/block", std::make_unique<BlockModelCompiler>());
+    RegisterCompiler("models/block/slab", std::make_unique<BlockModelCompiler>());
+    RegisterCompiler("models/block/slab_top", std::make_unique<BlockModelCompiler>());
+    // [FIX] Register stairs model compilers
+    RegisterCompiler("models/block/stairs", std::make_unique<BlockModelCompiler>());
+    RegisterCompiler("models/block/inner_stairs", std::make_unique<BlockModelCompiler>());
+    RegisterCompiler("models/block/outer_stairs", std::make_unique<BlockModelCompiler>());
 }
 
 /**
