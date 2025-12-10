@@ -1,11 +1,55 @@
-﻿#include "BlockStateDefinition.hpp"
+#include "BlockStateDefinition.hpp"
 #include "../../Core/StringUtils.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Model/ModelSubsystem.hpp"
+#include "../../Renderer/Model/RenderMesh.hpp"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 using namespace enigma::resource::blockstate;
 using namespace enigma::core;
+
+/**
+ * @brief Normalize a property string by sorting key=value pairs alphabetically
+ * 
+ * Converts "facing=east,half=bottom,shape=straight" to sorted order.
+ * This ensures consistent lookup regardless of the order in JSON files.
+ * 
+ * @param propertyString Original property string (e.g., "facing=east,half=bottom")
+ * @return Normalized property string with sorted keys
+ */
+static std::string NormalizePropertyString(const std::string& propertyString)
+{
+    if (propertyString.empty())
+        return "";
+
+    // Split by comma
+    std::vector<std::string> pairs;
+    std::stringstream        ss(propertyString);
+    std::string              pair;
+    while (std::getline(ss, pair, ','))
+    {
+        if (!pair.empty())
+        {
+            pairs.push_back(pair);
+        }
+    }
+
+    // Sort alphabetically
+    std::sort(pairs.begin(), pairs.end());
+
+    // Rejoin
+    std::string result;
+    for (size_t i = 0; i < pairs.size(); ++i)
+    {
+        if (i > 0) result += ",";
+        result += pairs[i];
+    }
+
+    return result;
+}
 
 bool BlockStateVariant::LoadFromJson(const JsonObject& json)
 {
@@ -240,7 +284,8 @@ bool BlockStateDefinition::LoadFromJson(const JsonObject& json)
 
         for (auto it = variantsJson.begin(); it != variantsJson.end(); ++it)
         {
-            std::string                    propertyString = it.key();
+            // [FIX] Normalize property string to ensure consistent lookup order
+            std::string                    propertyString = NormalizePropertyString(it.key());
             std::vector<BlockStateVariant> variants;
 
             if (it->is_array())
@@ -281,7 +326,33 @@ bool BlockStateDefinition::LoadFromJson(const JsonObject& json)
 
 const std::vector<BlockStateVariant>* BlockStateDefinition::GetVariants(const std::string& propertyString) const
 {
-    auto it = m_variants.find(propertyString);
+    // [FIX] Normalize the property string before lookup to ensure consistent matching
+    std::string normalizedString = NormalizePropertyString(propertyString);
+
+    // [DEBUG] Log normalization and lookup
+    bool isDebug = (m_metadata.location.ToString().find("stairs") != std::string::npos);
+    if (isDebug)
+    {
+        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] GetVariants() input='%s' normalized='%s'",
+                              propertyString.c_str(), normalizedString.c_str());
+        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] Available variants (%zu):", m_variants.size());
+        int idx = 0;
+        for (const auto& pair : m_variants)
+        {
+            if (idx < 5) // Only log first 5
+                enigma::core::LogInfo("BlockStateDefinition", "[DEBUG]   [%d] '%s'", idx, pair.first.c_str());
+            idx++;
+        }
+    }
+
+    auto it = m_variants.find(normalizedString);
+
+    if (isDebug)
+    {
+        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] find() result: %s",
+                              (it != m_variants.end()) ? "FOUND" : "NOT FOUND");
+    }
+
     return (it != m_variants.end()) ? &it->second : nullptr;
 }
 
@@ -362,4 +433,137 @@ std::string BlockStateDefinition::MapToPropertyString(const std::map<std::string
     }
 
     return ss.str();
+}
+
+/**
+ * @brief Convert Minecraft-style model path to resource path
+ *
+ * Minecraft JSON uses short paths like "simpleminer:block/oak_stairs"
+ * but ResourceSubsystem indexes with "simpleminer:models/block/oak_stairs"
+ *
+ * This function converts:
+ *   "simpleminer:block/xxx" -> "simpleminer:models/block/xxx"
+ *   "block/xxx" -> "models/block/xxx"
+ */
+static ResourceLocation NormalizeModelPath(const ResourceLocation& modelPath)
+{
+    std::string ns   = modelPath.GetNamespace();
+    std::string path = modelPath.GetPath();
+
+    // If path doesn't start with "models/", add it
+    if (path.find("models/") != 0)
+    {
+        path = "models/" + path;
+    }
+
+    return ResourceLocation(ns, path);
+}
+
+void BlockStateDefinition::CompileModels(enigma::model::ModelSubsystem* modelSubsystem)
+{
+    if (!modelSubsystem)
+    {
+        enigma::core::LogWarn("BlockStateDefinition", "CompileModels called with null ModelSubsystem");
+        return;
+    }
+
+    // Track compilation statistics
+    int compiledCount = 0;
+    int failedCount   = 0;
+    int rotatedCount  = 0;
+
+    // Check debug flag for detailed logging
+    bool isDebug = (m_metadata.location.ToString().find("stairs") != std::string::npos ||
+        m_metadata.location.ToString().find("slab") != std::string::npos);
+
+    if (isDebug)
+    {
+        enigma::core::LogInfo("BlockStateDefinition", "[CompileModels] Starting for: %s (variants: %zu, multipart: %zu)",
+                              m_metadata.location.ToString().c_str(), m_variants.size(), m_multipart.size());
+    }
+
+    if (m_isMultipart)
+    {
+        // Compile multipart variants
+        for (auto& multipartCase : m_multipart)
+        {
+            for (auto& variant : multipartCase.apply)
+            {
+                // [FIX] Normalize model path: "block/xxx" -> "models/block/xxx"
+                ResourceLocation normalizedPath = NormalizeModelPath(variant.model);
+
+                // Compile the base model
+                auto compiledMesh = modelSubsystem->CompileModel(normalizedPath);
+
+                if (compiledMesh)
+                {
+                    // [NEW] Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
+                    if (variant.x != 0 || variant.y != 0)
+                    {
+                        if (isDebug)
+                        {
+                            enigma::core::LogInfo("BlockStateDefinition", "  [ROTATION] Applying (x=%d, y=%d) to model: %s",
+                                                  variant.x, variant.y, variant.model.ToString().c_str());
+                        }
+                        compiledMesh->ApplyBlockRotation(variant.x, variant.y);
+                        rotatedCount++;
+                    }
+
+                    variant.compiledMesh = compiledMesh;
+                    compiledCount++;
+                }
+                else
+                {
+                    enigma::core::LogWarn("BlockStateDefinition", "  [FAILED] Could not compile model: %s",
+                                          variant.model.ToString().c_str());
+                    failedCount++;
+                }
+            }
+        }
+    }
+    else
+    {
+        // Compile variants mode
+        for (auto& [propertyString, variantList] : m_variants)
+        {
+            for (auto& variant : variantList)
+            {
+                // [FIX] Normalize model path: "block/xxx" -> "models/block/xxx"
+                ResourceLocation normalizedPath = NormalizeModelPath(variant.model);
+
+                // Compile the base model
+                auto compiledMesh = modelSubsystem->CompileModel(normalizedPath);
+
+                if (compiledMesh)
+                {
+                    // [NEW] Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
+                    if (variant.x != 0 || variant.y != 0)
+                    {
+                        if (isDebug)
+                        {
+                            enigma::core::LogInfo("BlockStateDefinition", "  [ROTATION] Applying (x=%d, y=%d) to variant '%s' model: %s",
+                                                  variant.x, variant.y, propertyString.c_str(), variant.model.ToString().c_str());
+                        }
+                        compiledMesh->ApplyBlockRotation(variant.x, variant.y);
+                        rotatedCount++;
+                    }
+
+                    variant.compiledMesh = compiledMesh;
+                    compiledCount++;
+                }
+                else
+                {
+                    enigma::core::LogWarn("BlockStateDefinition", "  [FAILED] Could not compile model for variant '%s': %s",
+                                          propertyString.c_str(), variant.model.ToString().c_str());
+                    failedCount++;
+                }
+            }
+        }
+    }
+
+    if (isDebug || failedCount > 0)
+    {
+        enigma::core::LogInfo("BlockStateDefinition", "[CompileModels] Complete for %s: compiled=%d, failed=%d, rotated=%d",
+                              m_metadata.location.ToString().c_str(), compiledCount, failedCount, rotatedCount);
+    }
 }

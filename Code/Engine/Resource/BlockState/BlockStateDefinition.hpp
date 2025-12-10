@@ -7,10 +7,19 @@
 #include <map>
 #include <memory>
 
-// Forward declaration for RenderMesh
+#include "Engine/Core/LogCategory/LogCategory.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogBlockState)
+
+// Forward declarations
 namespace enigma::renderer::model
 {
     class RenderMesh;
+}
+
+namespace enigma::model
+{
+    class ModelSubsystem;
 }
 
 namespace enigma::resource::blockstate
@@ -152,6 +161,18 @@ namespace enigma::resource::blockstate
          * @brief Get all possible property combinations for variants mode
          */
         std::vector<std::string> GetAllVariantKeys() const;
+
+        /**
+         * @brief Compile all models for this blockstate definition
+         *
+         * Iterates through all variants and compiles their models using ModelSubsystem.
+         * Applies rotation (x, y) from variant definitions after compilation.
+         * This is the recommended way to compile blockstate models, following
+         * Minecraft's FaceBakery pattern where rotation is applied during baking.
+         *
+         * @param modelSubsystem The model subsystem to use for compilation
+         */
+        void CompileModels(enigma::model::ModelSubsystem* modelSubsystem);
 
         // Factory methods
         static std::shared_ptr<BlockStateDefinition> Create(const ResourceLocation& location);

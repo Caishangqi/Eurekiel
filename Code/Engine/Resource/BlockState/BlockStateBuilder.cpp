@@ -362,8 +362,20 @@ void BlockStateBuilder::CompileVariantModel(BlockStateVariant& variant, enigma::
 
         if (compiledMesh)
         {
-            LogInfo(LogBlockStateBuilder, "Successfully compiled model: %s",
-                    variant.model.ToString().c_str());
+            // [FIX] Apply variant rotation if specified
+            // Minecraft blockstate variants can have x and y rotation values (0, 90, 180, 270)
+            if (variant.x != 0 || variant.y != 0)
+            {
+                LogInfo(LogBlockStateBuilder, "Applying rotation (x=%d, y=%d) to model: %s",
+                        variant.x, variant.y, variant.model.ToString().c_str());
+
+                // Apply rotation to the compiled mesh
+                // This rotates all vertices around block center (0.5, 0.5, 0.5)
+                compiledMesh->ApplyBlockRotation(variant.x, variant.y);
+            }
+
+            LogInfo(LogBlockStateBuilder, "Successfully compiled model: %s (faces=%zu)",
+                    variant.model.ToString().c_str(), compiledMesh->faces.size());
 
             // Store the compiled mesh in the variant for BlockState to access
             variant.compiledMesh = compiledMesh;
