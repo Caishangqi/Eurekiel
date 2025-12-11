@@ -4,6 +4,7 @@
 #include "Engine/Voxel/Block/BlockPos.hpp"
 #include "Engine/Voxel/Property/PropertyMap.hpp"
 #include "Engine/Voxel/World/World.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::voxel
 {
@@ -77,36 +78,79 @@ namespace enigma::voxel
     {
         // [ALGORITHM] Reference: Minecraft StairBlock.java getStairsShape() lines 126-153
 
+        // [DEBUG] Log input parameters
+        LogInfo("Stairs", "[GetStairsShape] pos=%s facing=%s half=%s",
+                pos.ToString().c_str(), DirectionToString(facing), HalfTypeToString(half));
+
         // [STEP 1] Check front neighbor (in facing direction)
         BlockPos                   frontPos   = pos.GetRelative(facing);
         enigma::voxel::BlockState* frontState = world->GetBlockState(frontPos);
+
+        LogInfo("Stairs", "  [STEP1] frontPos=%s (in facing dir %s)",
+                frontPos.ToString().c_str(), DirectionToString(facing));
 
         if (frontState && IsStairs(frontState))
         {
             // [CHECK] Must have same half
             HalfType frontHalf = frontState->Get(std::static_pointer_cast<Property<HalfType>>(m_halfProperty));
+            LogInfo("Stairs", "    frontState is stairs, frontHalf=%s", HalfTypeToString(frontHalf));
+
             if (frontHalf == half)
             {
                 // [CHECK] Must have perpendicular axis
                 Direction frontFacing    = frontState->Get(std::static_pointer_cast<Property<Direction>>(m_facingProperty));
                 Direction oppositeFacing = GetOpposite(facing);
 
+                LogInfo("Stairs", "    frontFacing=%s oppositeFacing=%s",
+                        DirectionToString(frontFacing), DirectionToString(oppositeFacing));
+
                 // Check if perpendicular (different axis)
-                if ((frontFacing == Direction::NORTH || frontFacing == Direction::SOUTH) !=
-                    (facing == Direction::NORTH || facing == Direction::SOUTH))
+                bool frontIsNS  = (frontFacing == Direction::NORTH || frontFacing == Direction::SOUTH);
+                bool facingIsNS = (facing == Direction::NORTH || facing == Direction::SOUTH);
+                LogInfo("Stairs", "    frontIsNS=%d facingIsNS=%d perpendicular=%d",
+                        frontIsNS, facingIsNS, frontIsNS != facingIsNS);
+
+                if (frontIsNS != facingIsNS)
                 {
                     // [VALIDATE] Check if can form outer corner
-                    if (CanTakeShape(frontState, world, frontPos, oppositeFacing))
+                    // Minecraft: canTakeShape(blockState, blockGetter, blockPos, direction2.getOpposite())
+                    // - blockState = current stair state
+                    // - blockPos = current stair position
+                    // - direction2.getOpposite() = opposite of front neighbor's facing
+                    Direction checkDir = GetOpposite(frontFacing);
+
+                    // We need to create current stair's state for CanTakeShape check
+                    PropertyMap currentProps;
+                    currentProps.Set(std::static_pointer_cast<Property<Direction>>(m_facingProperty), facing);
+                    currentProps.Set(std::static_pointer_cast<Property<HalfType>>(m_halfProperty), half);
+                    currentProps.Set(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty), StairsShape::STRAIGHT);
+                    enigma::voxel::BlockState* currentState = GetState(currentProps);
+
+                    bool canTake = CanTakeShape(currentState, world, pos, checkDir);
+                    LogInfo("Stairs", "    CanTakeShape(checkDir=%s)=%d",
+                            DirectionToString(checkDir), canTake);
+
+                    if (canTake)
                     {
                         // [DETERMINE] Left or right outer corner
-                        if (frontFacing == GetCounterClockWise(facing))
+                        Direction ccw = GetCounterClockWise(facing);
+                        LogInfo("Stairs", "    CCW(facing=%s)=%s frontFacing==CCW? %d",
+                                DirectionToString(facing), DirectionToString(ccw), frontFacing == ccw);
+
+                        if (frontFacing == ccw)
                         {
+                            LogInfo("Stairs", "    => OUTER_LEFT");
                             return StairsShape::OUTER_LEFT;
                         }
+                        LogInfo("Stairs", "    => OUTER_RIGHT");
                         return StairsShape::OUTER_RIGHT;
                     }
                 }
             }
+        }
+        else
+        {
+            LogInfo("Stairs", "    frontState=%s", frontState ? "not stairs" : "null");
         }
 
         // [STEP 2] Check back neighbor (opposite facing direction)
@@ -114,43 +158,88 @@ namespace enigma::voxel
         BlockPos                   backPos       = pos.GetRelative(backDirection);
         enigma::voxel::BlockState* backState     = world->GetBlockState(backPos);
 
+        LogInfo("Stairs", "  [STEP2] backPos=%s (in dir %s)",
+                backPos.ToString().c_str(), DirectionToString(backDirection));
+
         if (backState && IsStairs(backState))
         {
             // [CHECK] Must have same half
             HalfType backHalf = backState->Get(std::static_pointer_cast<Property<HalfType>>(m_halfProperty));
+            LogInfo("Stairs", "    backState is stairs, backHalf=%s", HalfTypeToString(backHalf));
+
             if (backHalf == half)
             {
                 // [CHECK] Must have perpendicular axis
                 Direction backFacing = backState->Get(std::static_pointer_cast<Property<Direction>>(m_facingProperty));
 
+                LogInfo("Stairs", "    backFacing=%s", DirectionToString(backFacing));
+
                 // Check if perpendicular (different axis)
-                if ((backFacing == Direction::NORTH || backFacing == Direction::SOUTH) !=
-                    (facing == Direction::NORTH || facing == Direction::SOUTH))
+                bool backIsNS   = (backFacing == Direction::NORTH || backFacing == Direction::SOUTH);
+                bool facingIsNS = (facing == Direction::NORTH || facing == Direction::SOUTH);
+                LogInfo("Stairs", "    backIsNS=%d facingIsNS=%d perpendicular=%d",
+                        backIsNS, facingIsNS, backIsNS != facingIsNS);
+
+                if (backIsNS != facingIsNS)
                 {
                     // [VALIDATE] Check if can form inner corner
-                    if (CanTakeShape(backState, world, backPos, backFacing))
+                    // Minecraft: canTakeShape(blockState, blockGetter, blockPos, direction3)
+                    // - blockState = current stair state
+                    // - blockPos = current stair position
+                    // - direction3 = back neighbor's facing direction
+                    Direction checkDir = backFacing;
+
+                    // We need to create current stair's state for CanTakeShape check
+                    PropertyMap currentProps;
+                    currentProps.Set(std::static_pointer_cast<Property<Direction>>(m_facingProperty), facing);
+                    currentProps.Set(std::static_pointer_cast<Property<HalfType>>(m_halfProperty), half);
+                    currentProps.Set(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty), StairsShape::STRAIGHT);
+                    enigma::voxel::BlockState* currentState = GetState(currentProps);
+
+                    bool canTake = CanTakeShape(currentState, world, pos, checkDir);
+                    LogInfo("Stairs", "    CanTakeShape(checkDir=%s)=%d",
+                            DirectionToString(checkDir), canTake);
+
+                    if (canTake)
                     {
                         // [DETERMINE] Left or right inner corner
-                        if (backFacing == GetCounterClockWise(facing))
+                        Direction ccw = GetCounterClockWise(facing);
+                        LogInfo("Stairs", "    CCW(facing=%s)=%s backFacing==CCW? %d",
+                                DirectionToString(facing), DirectionToString(ccw), backFacing == ccw);
+
+                        if (backFacing == ccw)
                         {
+                            LogInfo("Stairs", "    => INNER_LEFT");
                             return StairsShape::INNER_LEFT;
                         }
+                        LogInfo("Stairs", "    => INNER_RIGHT");
                         return StairsShape::INNER_RIGHT;
                     }
                 }
             }
         }
+        else
+        {
+            LogInfo("Stairs", "    backState=%s", backState ? "not stairs" : "null");
+        }
 
         // [DEFAULT] No matching neighbors or parallel alignment
+        LogInfo("Stairs", "  => STRAIGHT (default)");
         return StairsShape::STRAIGHT;
     }
 
     void StairsBlock::OnNeighborChanged(World* world, const BlockPos& pos, enigma::voxel::BlockState* state, registry::block::Block* neighborBlock)
     {
+        LogInfo("Stairs", "[OnNeighborChanged] pos=%s neighborBlock=%s",
+                pos.ToString().c_str(),
+                neighborBlock ? neighborBlock->GetRegistryName().c_str() : "null");
+
         // [CHECK] Only update if neighbor is also a stairs block
         // This prevents unnecessary updates from other block types
-        if (neighborBlock != this)
+        auto* neighborStairs = dynamic_cast<StairsBlock*>(neighborBlock);
+        if (!neighborStairs)
         {
+            LogInfo("Stairs", "  => Skipped (neighbor is not stairs)");
             return; // Different block type, no shape update needed
         }
 
@@ -159,6 +248,9 @@ namespace enigma::voxel
         HalfType    half     = state->Get(std::static_pointer_cast<Property<HalfType>>(m_halfProperty));
         StairsShape oldShape = state->Get(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty));
 
+        LogInfo("Stairs", "  Current: facing=%s half=%s shape=%s",
+                DirectionToString(facing), HalfTypeToString(half), StairsShapeToString(oldShape));
+
         // [RECALCULATE] Shape based on new neighbor configuration
         StairsShape newShape = GetStairsShape(facing, half, world, pos);
 
@@ -166,6 +258,9 @@ namespace enigma::voxel
         // This prevents infinite recursion when placing adjacent stairs
         if (newShape != oldShape)
         {
+            LogInfo("Stairs", "  => Shape changed: %s -> %s, updating state",
+                    StairsShapeToString(oldShape), StairsShapeToString(newShape));
+
             // [UPDATE] Create new state with updated shape
             PropertyMap props;
             props.Set(std::static_pointer_cast<Property<Direction>>(m_facingProperty), facing);
@@ -176,6 +271,10 @@ namespace enigma::voxel
 
             // [APPLY] Set the new state (triggers mesh rebuild)
             world->SetBlockState(pos, newState);
+        }
+        else
+        {
+            LogInfo("Stairs", "  => Shape unchanged: %s", StairsShapeToString(oldShape));
         }
     }
 
@@ -245,8 +344,20 @@ namespace enigma::voxel
 
     Direction StairsBlock::GetCounterClockWise(Direction dir)
     {
-        // [ROTATION] Counter-clockwise (left turn)
-        // NORTH → WEST → SOUTH → EAST → NORTH
+        // [ROTATION] Counter-clockwise rotation (from above, looking down at XY plane)
+        //
+        // [COORDINATE SYSTEM ANALYSIS]
+        // SimpleMiner: +X=Forward, +Y=Left, +Z=Up
+        // Looking down from +Z axis (bird's eye view):
+        //   - NORTH = +Y (up on screen)
+        //   - SOUTH = -Y (down on screen)
+        //   - EAST  = +X (right on screen)
+        //   - WEST  = -X (left on screen)
+        //
+        // Counter-clockwise from +Z looking down:
+        //   NORTH → WEST → SOUTH → EAST → NORTH
+        //
+        // This matches Minecraft's CCW because both look down the "up" axis.
         switch (dir)
         {
         case Direction::NORTH: return Direction::WEST;
@@ -259,8 +370,9 @@ namespace enigma::voxel
 
     Direction StairsBlock::GetClockWise(Direction dir)
     {
-        // [ROTATION] Clockwise (right turn)
-        // NORTH → EAST → SOUTH → WEST → NORTH
+        // [ROTATION] Clockwise rotation (from above, looking down at XY plane)
+        // Opposite of GetCounterClockWise:
+        //   NORTH → EAST → SOUTH → WEST → NORTH
         switch (dir)
         {
         case Direction::NORTH: return Direction::EAST;

@@ -47,6 +47,18 @@ namespace enigma::voxel
          * @return Horizontal direction based on player look vector
          *
          * ============================================================================
+         * MINECRAFT REFERENCE (StairBlock.java:114)
+         * ============================================================================
+         *
+         * Minecraft's StairBlock.getStateForPlacement():
+         *   .setValue(FACING, blockPlaceContext.getHorizontalDirection())
+         *
+         * Where getHorizontalDirection() (UseOnContext.java:70-71):
+         *   return this.player == null ? Direction.NORTH : this.player.getDirection();
+         *
+         * This means: stairs FACING = player look direction (SAME, not opposite!)
+         *
+         * ============================================================================
          * COORDINATE SYSTEM REFERENCE
          * ============================================================================
          *
@@ -60,62 +72,67 @@ namespace enigma::voxel
          *   +Y = Up,    -Y = Down
          *   +Z = South, -Z = North
          *
-         * Coordinate Conversion (applied in BlockModelCompiler):
+         * Coordinate Conversion (applied in BlockModelCompiler.cpp:206-207):
          *   SimpleMiner(x, y, z) = Minecraft(x, z, y)
          *   - SimpleMiner X = Minecraft X (no change)
          *   - SimpleMiner Y = Minecraft Z (swapped)
          *   - SimpleMiner Z = Minecraft Y (swapped)
          *
+         * Direction Mapping:
+         *   SimpleMiner +X = Minecraft +X = EAST
+         *   SimpleMiner -X = Minecraft -X = WEST
+         *   SimpleMiner +Y = Minecraft -Z = NORTH
+         *   SimpleMiner -Y = Minecraft +Z = SOUTH
+         *
          * ============================================================================
          * STAIRS FACING SEMANTICS
          * ============================================================================
          *
-         * "Facing" direction = where the CLIMBABLE FACE (low step side) points
-         * - If stairs faces -X, the climbable face is at -X side
-         * - Player stands at +X side and climbs toward -X
-         * - HIGH STEP is at +X (player's side), LOW STEP is at -X
+         * "Facing" direction = direction player walks UP the stairs
+         *   - facing=EAST means player walks toward +X to climb
+         *   - The LOW STEP (entry point) is at the -X side
+         *   - The HIGH STEP is at the +X side
          *
          * When placing stairs:
-         * - Player looks in direction D
-         * - Stairs should have HIGH STEP toward player (direction D)
-         * - So "facing" should be OPPOSITE of player look direction
+         *   - Player looks in direction D
+         *   - Stairs "facing" is set to D (same as player look)
+         *   - Player will walk UP the stairs in direction D
          *
          * ============================================================================
          * DIRECTION MAPPING TABLE
          * ============================================================================
          *
-         * | Player Look | High Step At | Facing Dir | Rotation | Result in SimpleMiner |
-         * |-------------|--------------|------------|----------|----------------------|
-         * | +X (Fwd)    | +X           | EAST       | y:0      | High step at +X      |
-         * | -X (Back)   | -X           | WEST       | y:180    | High step at -X      |
-         * | +Y (Left)   | +Y           | NORTH      | y:270    | High step at +Y      |
-         * | -Y (Right)  | -Y           | SOUTH      | y:90     | High step at -Y      |
-         *
-         * [IMPORTANT] Y-axis mapping appears "swapped" (NORTH for +Y, SOUTH for -Y):
-         * This is because Minecraft's Y rotation is applied BEFORE coordinate conversion.
-         * - Minecraft y:90  rotates EAST(+X) -> SOUTH(+Z) -> SimpleMiner -Y
-         * - Minecraft y:270 rotates EAST(+X) -> NORTH(-Z) -> SimpleMiner +Y
-         * The rotation direction in Minecraft space combined with Y<->Z swap produces
-         * this counter-intuitive but correct mapping.
+         * | Player Look (SM) | facing Value | Blockstate Rotation | High Step At |
+         * |------------------|--------------|---------------------|--------------|
+         * | +X (Forward)     | EAST         | y:0                 | +X           |
+         * | -X (Backward)    | WEST         | y:180               | -X           |
+         * | +Y (Left)        | NORTH        | y:270               | +Y           |
+         * | -Y (Right)       | SOUTH        | y:90                | -Y           |
          *
          * ============================================================================
          */
         Direction GetHorizontalFacing() const
         {
+            // Stairs facing = player look direction (same as Minecraft behavior)
+            // Reference: Minecraft StairBlock.java:114, UseOnContext.java:70-71
+
             float absX = std::abs(playerLookDir.x);
             float absY = std::abs(playerLookDir.y);
 
             if (absX > absY)
             {
                 // X-axis dominant (Forward/Backward in SimpleMiner)
-                // Direct mapping: SimpleMiner +X = Minecraft EAST, -X = WEST
+                // Player looks +X → facing EAST (climb toward +X)
+                // Player looks -X → facing WEST (climb toward -X)
                 return (playerLookDir.x > 0.0f) ? Direction::EAST : Direction::WEST;
             }
             else
             {
                 // Y-axis dominant (Left/Right in SimpleMiner)
-                // Swapped mapping due to rotation + coordinate conversion interaction:
-                // SimpleMiner +Y needs NORTH (y:270), -Y needs SOUTH (y:90)
+                // SimpleMiner +Y = Minecraft -Z = NORTH
+                // SimpleMiner -Y = Minecraft +Z = SOUTH
+                // Player looks +Y → facing NORTH (climb toward +Y)
+                // Player looks -Y → facing SOUTH (climb toward -Y)
                 return (playerLookDir.y > 0.0f) ? Direction::NORTH : Direction::SOUTH;
             }
         }
