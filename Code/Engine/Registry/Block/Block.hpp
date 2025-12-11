@@ -1,5 +1,6 @@
 #pragma once
 #include "../Core/IRegistrable.hpp"
+#include "../../Voxel/Block/VoxelShape.hpp"
 #include "../../Voxel/Property/Property.hpp"
 #include "../../Voxel/Property/PropertyMap.hpp"
 #include <string>
@@ -214,6 +215,24 @@ namespace enigma::registry::block
          * Default implementation uses the block-level m_isOpaque flag.
          */
         virtual bool IsOpaque(enigma::voxel::BlockState* state) const;
+
+        /**
+         * @brief Get the collision shape for a specific BlockState
+         * @param state The BlockState to get collision shape for
+         * @return VoxelShape representing the collision geometry
+         * 
+         * Override this to provide custom collision shapes for non-full blocks:
+         * - Full blocks: Return Shapes::FullBlock()
+         * - Slabs: Return Shapes::SlabBottom() or Shapes::SlabTop()
+         * - Stairs: Return compound shape with multiple AABBs
+         * - Air/Transparent: Return Shapes::Empty()
+         * 
+         * Default implementation returns full block shape if m_isFullBlock is true,
+         * otherwise returns empty shape.
+         * 
+         * Used by World::RaycastVsBlocks() for precise collision detection.
+         */
+        virtual VoxelShape GetCollisionShape(enigma::voxel::BlockState* state) const;
 
         /**
          * @brief Check if this BlockState can be replaced during block placement

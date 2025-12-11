@@ -1,5 +1,6 @@
 #include "Block.hpp"
 #include "BlockRegistry.hpp"
+#include "../../Voxel/Block/VoxelShape.hpp"
 #include "../../Voxel/Block/BlockState.hpp"
 #include "../../Model/ModelSubsystem.hpp"
 #include "../../Resource/Atlas/AtlasManager.hpp"
@@ -163,6 +164,17 @@ namespace enigma::registry::block
         UNUSED(state);
         // Default: use block-level opaque flag
         return m_isOpaque;
+    }
+
+    VoxelShape Block::GetCollisionShape(enigma::voxel::BlockState* state) const
+    {
+        UNUSED(state);
+        // Default: full block shape if m_isFullBlock, otherwise empty
+        if (m_isFullBlock)
+        {
+            return Shapes::FullBlock();
+        }
+        return Shapes::Empty();
     }
 
     bool Block::CanBeReplaced(enigma::voxel::BlockState* state, const PlacementContext& ctx) const
