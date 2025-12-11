@@ -909,7 +909,7 @@ void AddVertsForCube3DWireFrame(std::vector<Vertex_PCU>& verts, const AABB3& box
     Vec3 facingTopRight    = facingBottomRight + Vec3(0, 0, height);
 
     Vec3 backBottomLeft  = facingBottomLeft + Vec3(0, width, 0);
-    Vec3 backBottomRight = facingBottomRight + Vec3(0, length, 0);
+    Vec3 backBottomRight = facingBottomRight + Vec3(0, width, 0);
     Vec3 backTopLeft     = backBottomLeft + Vec3(0, 0, height);
     Vec3 backTopRight    = backBottomRight + Vec3(0, 0, height);
 
