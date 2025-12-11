@@ -24,6 +24,34 @@
 
 using namespace enigma::voxel;
 
+//-----------------------------------------------------------------------------------------------
+// Helper function to convert impact normal to Direction enum
+// Used by RaycastVsBlocks to determine which face of a VoxelShape was hit
+//-----------------------------------------------------------------------------------------------
+static Direction GetDirectionFromNormal(const Vec3& normal)
+{
+    // Find the dominant axis in the normal vector
+    float absX = std::abs(normal.x);
+    float absY = std::abs(normal.y);
+    float absZ = std::abs(normal.z);
+
+    if (absX >= absY && absX >= absZ)
+    {
+        // X axis is dominant
+        return (normal.x > 0.0f) ? Direction::EAST : Direction::WEST;
+    }
+    else if (absY >= absX && absY >= absZ)
+    {
+        // Y axis is dominant
+        return (normal.y > 0.0f) ? Direction::NORTH : Direction::SOUTH;
+    }
+    else
+    {
+        // Z axis is dominant
+        return (normal.z > 0.0f) ? Direction::UP : Direction::DOWN;
+    }
+}
+
 World::~World()
 {
 }
@@ -330,8 +358,8 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                                 result.m_impactPos    = shapeResult.m_impactPos;
                                 result.m_impactNormal = shapeResult.m_impactNormal;
                                 result.m_hitBlockIter = currentIter;
-                                // Determine hit face from impact normal
-                                result.m_hitFace = (tileStepDirectionX > 0) ? Direction::WEST : Direction::EAST;
+                                // Determine hit face from actual collision normal (not DDA step direction)
+                                result.m_hitFace = GetDirectionFromNormal(shapeResult.m_impactNormal);
                                 return result;
                             }
                         }
@@ -394,8 +422,8 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                                 result.m_impactPos    = shapeResult.m_impactPos;
                                 result.m_impactNormal = shapeResult.m_impactNormal;
                                 result.m_hitBlockIter = currentIter;
-                                // Determine hit face from impact normal
-                                result.m_hitFace = (tileStepDirectionY > 0) ? Direction::SOUTH : Direction::NORTH;
+                                // Determine hit face from actual collision normal (not DDA step direction)
+                                result.m_hitFace = GetDirectionFromNormal(shapeResult.m_impactNormal);
                                 return result;
                             }
                         }
@@ -458,8 +486,8 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                                 result.m_impactPos    = shapeResult.m_impactPos;
                                 result.m_impactNormal = shapeResult.m_impactNormal;
                                 result.m_hitBlockIter = currentIter;
-                                // Determine hit face from impact normal
-                                result.m_hitFace = (tileStepDirectionZ > 0) ? Direction::DOWN : Direction::UP;
+                                // Determine hit face from actual collision normal (not DDA step direction)
+                                result.m_hitFace = GetDirectionFromNormal(shapeResult.m_impactNormal);
                                 return result;
                             }
                         }
