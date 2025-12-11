@@ -1,6 +1,7 @@
 ﻿#include "RenderMesh.hpp"
 #include "../../Math/Mat44.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 using namespace enigma::renderer::model;
 
 void RenderMesh::AddFace(const RenderFace& face)
@@ -106,23 +107,69 @@ void RenderMesh::ApplyBlockRotation(int rotX, int rotY)
     const Vec3      pivot(CENTER, CENTER, CENTER);
 
     // Build rotation matrix
-    // Coordinate system mapping:
-    // - SimpleMiner: +X=Forward, +Y=Left, +Z=Up
-    // - Minecraft:   +X=East,    +Y=Up,   +Z=South
+    // ============================================================================
+    // Coordinate System Mapping
+    // ============================================================================
+    // SimpleMiner: +X=Forward, +Y=Left,  +Z=Up    (Right-handed, Z-up)
+    // Minecraft:   +X=East,    +Y=Up,    +Z=South (Right-handed, Y-up)
     //
-    // Minecraft's Y rotation (around vertical axis) maps to SimpleMiner's Z rotation
-    // Minecraft's X rotation (around horizontal axis) maps to SimpleMiner's X rotation
-    // But we need to negate because of coordinate handedness differences
+    // ============================================================================
+    // Rotation Axis Mapping
+    // ============================================================================
+    // - Minecraft Y-axis rotation (vertical) -> SimpleMiner Z-axis rotation
+    // - Minecraft X-axis rotation (horizontal) -> SimpleMiner X-axis rotation
+    //
+    // ============================================================================
+    // CRITICAL: Y Rotation Direction Mapping
+    // ============================================================================
+    // The horizontal planes are different:
+    //   MC horizontal: XZ plane (X=EAST, Z=SOUTH)
+    //   SM horizontal: XY plane (X=FORWARD, Y=LEFT)
+    //
+    // Base model orientations differ:
+    //   MC base model faces SOUTH(0,0,+1) when y:0
+    //   SM base model faces NORTH(0,+1,0) when z:0
+    //   (because MC SOUTH maps to SM NORTH in coordinate conversion)
+    //
+    // Rotation direction analysis:
+    //   MC SOUTH(0,0,+1) counter-clockwise 90° -> MC EAST(+1,0,0)
+    //   SM NORTH(0,+1,0) must also rotate to -> SM EAST(+1,0,0)
+    //
+    // SimpleMiner rotation from NORTH to EAST:
+    //   NORTH(0,+1,0) counter-clockwise 90° around +Z -> WEST(-1,0,0) [WRONG]
+    //   NORTH(0,+1,0) clockwise 90° around +Z -> EAST(+1,0,0) [CORRECT]
+    //
+    // However, AppendZRotation(+270) = counter-clockwise 270° = clockwise 90°
+    // So we can use: AppendZRotation(+rotY) to achieve the correct rotation
+    //
+    // Conclusion: MC y:angle -> SM z:+angle (DO NOT NEGATE!)
+    //
+    // ============================================================================
+    // X Rotation Mapping
+    // ============================================================================
+    // X rotation (flip upside-down) requires negation due to axis direction
+    // differences between the two coordinate systems.
+    // Conclusion: MC x:angle -> SM x:-angle (NEGATE)
 
     Mat44 rotationMatrix = Mat44::IDENTITY;
 
-    // Apply Y rotation first (around Minecraft's Y = SimpleMiner's Z axis)
+    // Apply Y rotation (around Minecraft's Y-axis = SimpleMiner's Z-axis)
+    //
+    // [CRITICAL] Rotation direction difference:
+    // - Minecraft: +Y axis points UP, rotation from +Y looking down = CLOCKWISE
+    //   y:90 rotates EAST → SOUTH (clockwise)
+    // - SimpleMiner: +Z axis points UP, rotation from +Z looking down = COUNTER-CLOCKWISE
+    //   z:+90 rotates EAST → NORTH (counter-clockwise)
+    //
+    // Therefore: MC y:angle = SM z:-angle (NEGATE!)
     if (rotY != 0)
     {
+        core::LogInfo("RenderMesh", "[ApplyBlockRotation] Applying Z rotation: %d degrees (negated from MC y:%d)", -rotY, rotY);
         rotationMatrix.AppendZRotation(static_cast<float>(-rotY));
     }
 
-    // Apply X rotation (around Minecraft's X = SimpleMiner's X axis)
+    // Apply X rotation (around Minecraft's X-axis = SimpleMiner's X-axis)
+    // Use -rotX (negate) due to axis direction differences between coordinate systems
     if (rotX != 0)
     {
         rotationMatrix.AppendXRotation(static_cast<float>(-rotX));
@@ -143,11 +190,31 @@ void RenderMesh::ApplyBlockRotation(int rotX, int rotY)
             vertex.m_position = pos + pivot;
         }
 
-        // Also rotate the cull direction
-        // Map direction through rotation
+        // Also rotate the cull direction to match vertex transformation
+        // ============================================================================
+        // CRITICAL: cullDirection must rotate in the SAME direction as vertices
+        // ============================================================================
+        //
+        // Vertex rotation uses:
+        //   AppendZRotation(-rotY)  - rotates vertices by -rotY degrees (Y rotation)
+        //   AppendXRotation(-rotX)  - rotates vertices by -rotX degrees (X rotation)
+        //
+        // RotateDirection must use the SAME angles to stay synchronized:
+        //   RotateDirection(dir, -rotX, -rotY)
+        //
+        // If we use different angles, the cullDirection rotates opposite to geometry,
+        // causing incorrect face culling (e.g., faces that should be visible get
+        // culled because their cullDirection points the wrong way).
+        //
+        // Example: half=top stairs with x:180, y:270
+        //   - Vertices rotate by (-180, -270) → geometry flips and rotates
+        //   - CullDirection must also rotate by (-180, -270) to match
+        //   - If cullDirection uses different angles, NORTH face would wrongly
+        //     point in wrong direction, causing incorrect culling
+        // ============================================================================
         if (rotY != 0 || rotX != 0)
         {
-            face.cullDirection = RotateDirection(face.cullDirection, rotX, rotY);
+            face.cullDirection = RotateDirection(face.cullDirection, -rotX, -rotY);
         }
     }
 
