@@ -2132,6 +2132,28 @@ void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
     // 6. Schedule chunk mesh rebuild
     ScheduleChunkMeshRebuild(chunk);
 
+    // 7. [NEW] Notify 6 neighbors about block change (for stairs shape update, etc.)
+    //    This is critical for stairs/slab auto-connection feature
+    BlockPos                        pos             = blockIter.GetBlockPos();
+    enigma::registry::block::Block* placedBlockType = newState->GetBlock();
+
+    constexpr Direction allDirections[] = {
+        Direction::NORTH, Direction::SOUTH, Direction::EAST,
+        Direction::WEST, Direction::UP, Direction::DOWN
+    };
+
+    for (Direction dir : allDirections)
+    {
+        BlockPos    neighborPos   = pos.GetRelative(dir);
+        BlockState* neighborState = GetBlockState(neighborPos);
+
+        if (neighborState && neighborState->GetBlock())
+        {
+            // Call neighbor's OnNeighborChanged callback
+            neighborState->OnNeighborChanged(this, neighborPos, placedBlockType);
+        }
+    }
+
     LogDebug("world", "PlaceBlock: Placed block at (%d, %d, %d)",
              blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
 }
