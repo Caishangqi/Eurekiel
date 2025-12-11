@@ -1,5 +1,7 @@
 ﻿#include "PropertyTypes.hpp"
 
+#include "Engine/Core/EngineCommon.hpp"
+
 using namespace enigma::voxel;
 
 std::string enigma::voxel::DirectionToString(Direction dir)
@@ -168,6 +170,7 @@ Direction enigma::voxel::RotateDirection(Direction dir, int rotX, int rotY)
     // [CRITICAL] Check sign BEFORE normalization to preserve rotation direction
     bool yIsNegative = (rotY < 0);
     bool xIsNegative = (rotX < 0);
+    UNUSED(xIsNegative)
 
     // Normalize rotations to 0, 90, 180, 270
     rotX = ((rotX % 360) + 360) % 360;
