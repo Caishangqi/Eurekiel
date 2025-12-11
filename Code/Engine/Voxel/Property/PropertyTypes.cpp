@@ -165,6 +165,10 @@ std::shared_ptr<DirectionProperty> DirectionProperty::CreateVertical(const std::
 
 Direction enigma::voxel::RotateDirection(Direction dir, int rotX, int rotY)
 {
+    // [CRITICAL] Check sign BEFORE normalization to preserve rotation direction
+    bool yIsNegative = (rotY < 0);
+    bool xIsNegative = (rotX < 0);
+
     // Normalize rotations to 0, 90, 180, 270
     rotX = ((rotX % 360) + 360) % 360;
     rotY = ((rotY % 360) + 360) % 360;
@@ -185,21 +189,54 @@ Direction enigma::voxel::RotateDirection(Direction dir, int rotX, int rotY)
 
     // Apply Y rotation (around vertical/Z axis in SimpleMiner)
     // This rotates horizontal directions: NORTH, SOUTH, EAST, WEST
+    //
+    // [ROTATION DIRECTION]
+    // Positive angle (or negative normalized to 0-180) → Counter-Clockwise:
+    //   EAST(+X) → NORTH(+Y) → WEST(-X) → SOUTH(-Y) → EAST
+    //
+    // Negative angle (normalized to 270) → Clockwise:
+    //   EAST(+X) → SOUTH(-Y) → WEST(-X) → NORTH(+Y) → EAST
+    //
+    // [CRITICAL] ApplyBlockRotation calls with -rotY (negated Minecraft angle):
+    //   MC y:90 → calls RotateDirection(dir, 0, -90)
+    //   -90 is negative → use CLOCKWISE → EAST → SOUTH ✓
     int ySteps = rotY / 90;
+
     for (int i = 0; i < ySteps; ++i)
     {
-        switch (result)
+        if (yIsNegative)
         {
-        case Direction::NORTH: result = Direction::EAST;
-            break;
-        case Direction::EAST: result = Direction::SOUTH;
-            break;
-        case Direction::SOUTH: result = Direction::WEST;
-            break;
-        case Direction::WEST: result = Direction::NORTH;
-            break;
-        case Direction::UP: break; // Unchanged
-        case Direction::DOWN: break; // Unchanged
+            // Clockwise rotation (original angle was negative)
+            switch (result)
+            {
+            case Direction::EAST: result = Direction::SOUTH; // +X → -Y
+                break;
+            case Direction::SOUTH: result = Direction::WEST; // -Y → -X
+                break;
+            case Direction::WEST: result = Direction::NORTH; // -X → +Y
+                break;
+            case Direction::NORTH: result = Direction::EAST; // +Y → +X
+                break;
+            case Direction::UP: break; // Unchanged
+            case Direction::DOWN: break; // Unchanged
+            }
+        }
+        else
+        {
+            // Counter-clockwise rotation (original angle was positive or zero)
+            switch (result)
+            {
+            case Direction::EAST: result = Direction::NORTH; // +X → +Y
+                break;
+            case Direction::NORTH: result = Direction::WEST; // +Y → -X
+                break;
+            case Direction::WEST: result = Direction::SOUTH; // -X → -Y
+                break;
+            case Direction::SOUTH: result = Direction::EAST; // -Y → +X
+                break;
+            case Direction::UP: break; // Unchanged
+            case Direction::DOWN: break; // Unchanged
+            }
         }
     }
 
