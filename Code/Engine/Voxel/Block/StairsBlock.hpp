@@ -142,6 +142,23 @@ namespace enigma::voxel
          */
         std::string GetModelPath(enigma::voxel::BlockState* state) const override;
 
+        /**
+         * @brief Get collision shape for specific stairs state
+         * @param state BlockState to get collision for
+         * @return VoxelShape representing the collision geometry (compound shape)
+         *
+         * Collision Shapes (based on facing, half, and shape properties):
+         * - STRAIGHT: Base slab + step in front
+         * - INNER_LEFT/RIGHT: Base slab + 3/4 corner piece
+         * - OUTER_LEFT/RIGHT: Base slab + 1/4 corner piece
+         *
+         * Reference: Minecraft StairBlock.java static SHAPES arrays
+         * Uses 8 octets (1/8 cube pieces) combined to form 16 unique shapes.
+         *
+         * Coordinate System: +X forward, +Y left, +Z up
+         */
+        VoxelShape GetCollisionShape(enigma::voxel::BlockState* state) const override;
+
     protected:
         /**
          * @brief Initialize BlockState during state generation
@@ -197,5 +214,23 @@ namespace enigma::voxel
          * @return Opposite direction (NORTH↔SOUTH, EAST↔WEST, UP↔DOWN)
          */
         static Direction GetOpposite(Direction dir);
+
+        /**
+         * @brief Build step shape based on stairs shape property
+         * @param shape Stairs shape (STRAIGHT, INNER_*, OUTER_*)
+         * @param minX, minY, maxX, maxY Bounds of the front half in XY plane
+         * @param minZ, maxZ Bounds in Z axis (step height)
+         * @param facing Current stairs facing direction
+         * @return VoxelShape for the step portion
+         *
+         * Builds the upper (or lower for TOP half) step piece:
+         * - STRAIGHT: Full front half
+         * - INNER_LEFT/RIGHT: 3/4 of step (front half + one side quadrant)
+         * - OUTER_LEFT/RIGHT: 1/4 of step (one front corner only)
+         */
+        VoxelShape BuildStepShape(StairsShape shape,
+                                  float       minX, float minY, float maxX, float maxY,
+                                  float       minZ, float maxZ,
+                                  Direction   facing) const;
     };
 }

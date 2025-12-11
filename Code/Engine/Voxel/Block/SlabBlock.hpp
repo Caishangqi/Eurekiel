@@ -102,6 +102,20 @@ namespace enigma::voxel
         bool IsOpaque(enigma::voxel::BlockState* state) const override;
 
         /**
+         * @brief Get collision shape for specific slab state
+         * @param state BlockState to get collision for
+         * @return VoxelShape representing the collision geometry
+         *
+         * Collision Shapes:
+         * - BOTTOM: Box(0,0,0, 1,1,0.5) - lower half
+         * - TOP: Box(0,0,0.5, 1,1,1) - upper half
+         * - DOUBLE: Full block (1x1x1)
+         *
+         * Used by World::RaycastVsBlocks() for precise hit detection.
+         */
+        VoxelShape GetCollisionShape(enigma::voxel::BlockState* state) const override;
+
+        /**
          * @brief Get model path for specific slab state
          * @param state BlockState to get model for
          * @return Model path string (e.g., "simpleminer:block/oak_slab_bottom")

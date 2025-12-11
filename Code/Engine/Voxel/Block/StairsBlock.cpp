@@ -1,4 +1,5 @@
 ﻿#include "StairsBlock.hpp"
+#include "VoxelShape.hpp"
 
 #include "PlacementContext.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"
@@ -291,6 +292,79 @@ namespace enigma::voxel
         return modelPath;
     }
 
+    VoxelShape StairsBlock::GetCollisionShape(enigma::voxel::BlockState* state) const
+    {
+        // [ALGORITHM] Reference: Minecraft StairBlock.java static SHAPES arrays
+        // Uses 8 octets (1/8 cube pieces) combined based on shape index.
+        //
+        // Coordinate System: +X forward, +Y left, +Z up
+        // Minecraft: +X east, +Z south, +Y up
+        //
+        // Mapping (Minecraft → SimpleMiner):
+        //   MC X (east)  → SM Y (left, but inverted for east=right)
+        //   MC Z (south) → SM X (forward, but inverted for south=back)
+        //   MC Y (up)    → SM Z (up)
+
+        // [GET] Properties from state
+        Direction   facing = state->Get(std::static_pointer_cast<Property<Direction>>(m_facingProperty));
+        HalfType    half   = state->Get(std::static_pointer_cast<Property<HalfType>>(m_halfProperty));
+        StairsShape shape  = state->Get(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty));
+
+        // [DEFINE] Base slab shapes (bottom half or top half)
+        // BOTTOM: Z from 0 to 0.5
+        // TOP: Z from 0.5 to 1.0
+        VoxelShape baseSlab = (half == HalfType::BOTTOM)
+                                  ? VoxelShape::Box(0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.5f)
+                                  : VoxelShape::Box(0.0f, 0.0f, 0.5f, 1.0f, 1.0f, 1.0f);
+
+        // [DEFINE] Octet boxes for building stair step pieces
+        // Each octet is a 0.5x0.5x0.5 cube in different positions
+        // Naming: [X position][Y position] where X=front/back, Y=left/right
+        // For BOTTOM half: Z from 0.5 to 1.0 (step on top of base slab)
+        // For TOP half: Z from 0.0 to 0.5 (step on bottom of base slab)
+
+        float stepZMin = (half == HalfType::BOTTOM) ? 0.5f : 0.0f;
+        float stepZMax = (half == HalfType::BOTTOM) ? 1.0f : 0.5f;
+
+        // Define the 4 quadrants for step pieces (in default NORTH facing)
+        // When facing NORTH (+Y), the step is in front (+Y direction)
+        // Front-Left (FL), Front-Right (FR), Back-Left (BL), Back-Right (BR)
+        // In SimpleMiner coords: +X=forward, +Y=left
+        // So for NORTH facing: "front" = +Y, "left" = -X
+
+        // We'll compute the step shape based on facing and shape
+        VoxelShape stepShape;
+
+        // [COMPUTE] Step boxes based on facing direction
+        // The step occupies the "front" half of the block
+        switch (facing)
+        {
+        case Direction::NORTH:
+            // Facing NORTH (+Y): step in +Y half
+            stepShape = BuildStepShape(shape, 0.0f, 0.5f, 1.0f, 1.0f, stepZMin, stepZMax, facing);
+            break;
+        case Direction::SOUTH:
+            // Facing SOUTH (-Y): step in -Y half
+            stepShape = BuildStepShape(shape, 0.0f, 0.0f, 1.0f, 0.5f, stepZMin, stepZMax, facing);
+            break;
+        case Direction::EAST:
+            // Facing EAST (+X): step in +X half
+            stepShape = BuildStepShape(shape, 0.5f, 0.0f, 1.0f, 1.0f, stepZMin, stepZMax, facing);
+            break;
+        case Direction::WEST:
+            // Facing WEST (-X): step in -X half
+            stepShape = BuildStepShape(shape, 0.0f, 0.0f, 0.5f, 1.0f, stepZMin, stepZMax, facing);
+            break;
+        default:
+            // UP/DOWN not used for stairs facing
+            stepShape = VoxelShape::Empty();
+            break;
+        }
+
+        // [COMBINE] Base slab + step shape
+        return VoxelShape::Or(baseSlab, stepShape);
+    }
+
     void StairsBlock::InitializeState(enigma::voxel::BlockState* state, const PropertyMap& properties)
     {
         // [NOTE] No custom initialization needed beyond base class
@@ -398,6 +472,154 @@ namespace enigma::voxel
         case Direction::UP: return Direction::DOWN;
         case Direction::DOWN: return Direction::UP;
         default: return dir;
+        }
+    }
+
+    VoxelShape StairsBlock::BuildStepShape(StairsShape shape,
+                                           float       minX, float minY, float maxX, float maxY,
+                                           float       minZ, float maxZ,
+                                           Direction   facing) const
+    {
+        // [ALGORITHM] Build step shape based on stairs shape property
+        //
+        // Coordinate System: +X forward, +Y left, +Z up
+        //
+        // For a NORTH-facing stair:
+        //   - Front half: Y from 0.5 to 1.0
+        //   - Left side: X from 0.0 to 0.5
+        //   - Right side: X from 0.5 to 1.0
+        //
+        // STRAIGHT: Full front half (1x0.5x0.5 box)
+        // INNER_LEFT: Front half + back-left quadrant (L-shape)
+        // INNER_RIGHT: Front half + back-right quadrant (L-shape)
+        // OUTER_LEFT: Front-left quadrant only (0.5x0.5x0.5 box)
+        // OUTER_RIGHT: Front-right quadrant only (0.5x0.5x0.5 box)
+
+        // Calculate midpoints for quadrant splitting
+        float midX = (minX + maxX) * 0.5f;
+        float midY = (minY + maxY) * 0.5f;
+
+        // Determine "left" and "right" directions based on facing
+        // Left = counter-clockwise from facing, Right = clockwise from facing
+        // This affects which quadrant is "left" vs "right"
+
+        switch (shape)
+        {
+        case StairsShape::STRAIGHT:
+            // Full front half - simple box
+            return VoxelShape::Box(minX, minY, minZ, maxX, maxY, maxZ);
+
+        case StairsShape::INNER_LEFT:
+            {
+                // Front half + back-left quadrant
+                // Need to add an extra quadrant on the "left" side extending backward
+                VoxelShape frontHalf = VoxelShape::Box(minX, minY, minZ, maxX, maxY, maxZ);
+                VoxelShape backQuadrant;
+
+                // Determine which quadrant based on facing direction
+                switch (facing)
+                {
+                case Direction::NORTH:
+                    // Left = -X, Back = -Y
+                    // Back-left quadrant: X from 0 to 0.5, Y from 0 to 0.5
+                    backQuadrant = VoxelShape::Box(0.0f, 0.0f, minZ, 0.5f, 0.5f, maxZ);
+                    break;
+                case Direction::SOUTH:
+                    // Left = +X, Back = +Y
+                    backQuadrant = VoxelShape::Box(0.5f, 0.5f, minZ, 1.0f, 1.0f, maxZ);
+                    break;
+                case Direction::EAST:
+                    // Left = +Y, Back = -X
+                    backQuadrant = VoxelShape::Box(0.0f, 0.5f, minZ, 0.5f, 1.0f, maxZ);
+                    break;
+                case Direction::WEST:
+                    // Left = -Y, Back = +X
+                    backQuadrant = VoxelShape::Box(0.5f, 0.0f, minZ, 1.0f, 0.5f, maxZ);
+                    break;
+                default:
+                    backQuadrant = VoxelShape::Empty();
+                    break;
+                }
+                return VoxelShape::Or(frontHalf, backQuadrant);
+            }
+
+        case StairsShape::INNER_RIGHT:
+            {
+                // Front half + back-right quadrant
+                VoxelShape frontHalf = VoxelShape::Box(minX, minY, minZ, maxX, maxY, maxZ);
+                VoxelShape backQuadrant;
+
+                switch (facing)
+                {
+                case Direction::NORTH:
+                    // Right = +X, Back = -Y
+                    backQuadrant = VoxelShape::Box(0.5f, 0.0f, minZ, 1.0f, 0.5f, maxZ);
+                    break;
+                case Direction::SOUTH:
+                    // Right = -X, Back = +Y
+                    backQuadrant = VoxelShape::Box(0.0f, 0.5f, minZ, 0.5f, 1.0f, maxZ);
+                    break;
+                case Direction::EAST:
+                    // Right = -Y, Back = -X
+                    backQuadrant = VoxelShape::Box(0.0f, 0.0f, minZ, 0.5f, 0.5f, maxZ);
+                    break;
+                case Direction::WEST:
+                    // Right = +Y, Back = +X
+                    backQuadrant = VoxelShape::Box(0.5f, 0.5f, minZ, 1.0f, 1.0f, maxZ);
+                    break;
+                default:
+                    backQuadrant = VoxelShape::Empty();
+                    break;
+                }
+                return VoxelShape::Or(frontHalf, backQuadrant);
+            }
+
+        case StairsShape::OUTER_LEFT:
+            {
+                // Only front-left quadrant
+                switch (facing)
+                {
+                case Direction::NORTH:
+                    // Front = +Y, Left = -X
+                    return VoxelShape::Box(0.0f, 0.5f, minZ, 0.5f, 1.0f, maxZ);
+                case Direction::SOUTH:
+                    // Front = -Y, Left = +X
+                    return VoxelShape::Box(0.5f, 0.0f, minZ, 1.0f, 0.5f, maxZ);
+                case Direction::EAST:
+                    // Front = +X, Left = +Y
+                    return VoxelShape::Box(0.5f, 0.5f, minZ, 1.0f, 1.0f, maxZ);
+                case Direction::WEST:
+                    // Front = -X, Left = -Y
+                    return VoxelShape::Box(0.0f, 0.0f, minZ, 0.5f, 0.5f, maxZ);
+                default:
+                    return VoxelShape::Empty();
+                }
+            }
+
+        case StairsShape::OUTER_RIGHT:
+            {
+                // Only front-right quadrant
+                switch (facing)
+                {
+                case Direction::NORTH:
+                    // Front = +Y, Right = +X
+                    return VoxelShape::Box(0.5f, 0.5f, minZ, 1.0f, 1.0f, maxZ);
+                case Direction::SOUTH:
+                    // Front = -Y, Right = -X
+                    return VoxelShape::Box(0.0f, 0.0f, minZ, 0.5f, 0.5f, maxZ);
+                case Direction::EAST:
+                    // Front = +X, Right = -Y
+                    return VoxelShape::Box(0.5f, 0.0f, minZ, 1.0f, 0.5f, maxZ);
+                case Direction::WEST:
+                    // Front = -X, Right = +Y
+                    return VoxelShape::Box(0.0f, 0.5f, minZ, 0.5f, 1.0f, maxZ);
+                default:
+                    return VoxelShape::Empty();
+                }
+            }
+
+        default:
+            return VoxelShape::Empty();
         }
     }
 }

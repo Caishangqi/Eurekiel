@@ -1,4 +1,5 @@
 ﻿#include "SlabBlock.hpp"
+#include "VoxelShape.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"
@@ -112,6 +113,27 @@ namespace enigma::voxel
         // Only DOUBLE slabs are opaque and block light
         SlabType type = state->Get(std::static_pointer_cast<Property<SlabType>>(m_typeProperty));
         return IsSlabOpaque(type); // Use helper function from SlabType.hpp
+    }
+
+    VoxelShape SlabBlock::GetCollisionShape(enigma::voxel::BlockState* state) const
+    {
+        // [NEW] Get collision shape based on slab type
+        SlabType type = state->Get(std::static_pointer_cast<Property<SlabType>>(m_typeProperty));
+
+        switch (type)
+        {
+        case SlabType::BOTTOM:
+            // Bottom slab: Z from 0 to 0.5
+            return Shapes::SlabBottom();
+        case SlabType::TOP:
+            // Top slab: Z from 0.5 to 1.0
+            return Shapes::SlabTop();
+        case SlabType::DOUBLE:
+            // Double slab: full block
+            return Shapes::FullBlock();
+        default:
+            return Shapes::Empty();
+        }
     }
 
     std::string SlabBlock::GetModelPath(enigma::voxel::BlockState* state) const
