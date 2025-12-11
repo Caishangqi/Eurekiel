@@ -3,7 +3,6 @@
 #include "Engine/Voxel/Property/PropertyTypes.hpp"
 #include "Engine/Voxel/Block/HalfType.hpp"
 #include "Engine/Voxel/Block/StairsShape.hpp"
-#include "Engine/Voxel/Block/PlacementContext.hpp"
 
 namespace enigma::voxel
 {

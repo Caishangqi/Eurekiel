@@ -1,4 +1,6 @@
 ﻿#include "StairsBlock.hpp"
+
+#include "PlacementContext.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"
 #include "Engine/Voxel/Block/BlockIterator.hpp"
 #include "Engine/Voxel/Block/BlockPos.hpp"
@@ -80,14 +82,14 @@ namespace enigma::voxel
 
         // [DEBUG] Log input parameters
         LogInfo("Stairs", "[GetStairsShape] pos=%s facing=%s half=%s",
-                pos.ToString().c_str(), DirectionToString(facing), HalfTypeToString(half));
+                pos.ToString().c_str(), DirectionToString(facing).c_str(), HalfTypeToString(half));
 
         // [STEP 1] Check front neighbor (in facing direction)
         BlockPos                   frontPos   = pos.GetRelative(facing);
         enigma::voxel::BlockState* frontState = world->GetBlockState(frontPos);
 
         LogInfo("Stairs", "  [STEP1] frontPos=%s (in facing dir %s)",
-                frontPos.ToString().c_str(), DirectionToString(facing));
+                frontPos.ToString().c_str(), DirectionToString(facing).c_str());
 
         if (frontState && IsStairs(frontState))
         {
@@ -102,7 +104,7 @@ namespace enigma::voxel
                 Direction oppositeFacing = GetOpposite(facing);
 
                 LogInfo("Stairs", "    frontFacing=%s oppositeFacing=%s",
-                        DirectionToString(frontFacing), DirectionToString(oppositeFacing));
+                        DirectionToString(frontFacing).c_str(), DirectionToString(oppositeFacing).c_str());
 
                 // Check if perpendicular (different axis)
                 bool frontIsNS  = (frontFacing == Direction::NORTH || frontFacing == Direction::SOUTH);
@@ -128,14 +130,14 @@ namespace enigma::voxel
 
                     bool canTake = CanTakeShape(currentState, world, pos, checkDir);
                     LogInfo("Stairs", "    CanTakeShape(checkDir=%s)=%d",
-                            DirectionToString(checkDir), canTake);
+                            DirectionToString(checkDir).c_str(), canTake);
 
                     if (canTake)
                     {
                         // [DETERMINE] Left or right outer corner
                         Direction ccw = GetCounterClockWise(facing);
                         LogInfo("Stairs", "    CCW(facing=%s)=%s frontFacing==CCW? %d",
-                                DirectionToString(facing), DirectionToString(ccw), frontFacing == ccw);
+                                DirectionToString(facing).c_str(), DirectionToString(ccw).c_str(), frontFacing == ccw);
 
                         if (frontFacing == ccw)
                         {
@@ -159,7 +161,7 @@ namespace enigma::voxel
         enigma::voxel::BlockState* backState     = world->GetBlockState(backPos);
 
         LogInfo("Stairs", "  [STEP2] backPos=%s (in dir %s)",
-                backPos.ToString().c_str(), DirectionToString(backDirection));
+                backPos.ToString().c_str(), DirectionToString(backDirection).c_str());
 
         if (backState && IsStairs(backState))
         {
@@ -172,7 +174,7 @@ namespace enigma::voxel
                 // [CHECK] Must have perpendicular axis
                 Direction backFacing = backState->Get(std::static_pointer_cast<Property<Direction>>(m_facingProperty));
 
-                LogInfo("Stairs", "    backFacing=%s", DirectionToString(backFacing));
+                LogInfo("Stairs", "    backFacing=%s", DirectionToString(backFacing).c_str());
 
                 // Check if perpendicular (different axis)
                 bool backIsNS   = (backFacing == Direction::NORTH || backFacing == Direction::SOUTH);
@@ -198,14 +200,14 @@ namespace enigma::voxel
 
                     bool canTake = CanTakeShape(currentState, world, pos, checkDir);
                     LogInfo("Stairs", "    CanTakeShape(checkDir=%s)=%d",
-                            DirectionToString(checkDir), canTake);
+                            DirectionToString(checkDir).c_str(), canTake);
 
                     if (canTake)
                     {
                         // [DETERMINE] Left or right inner corner
                         Direction ccw = GetCounterClockWise(facing);
                         LogInfo("Stairs", "    CCW(facing=%s)=%s backFacing==CCW? %d",
-                                DirectionToString(facing), DirectionToString(ccw), backFacing == ccw);
+                                DirectionToString(facing).c_str(), DirectionToString(ccw).c_str(), backFacing == ccw);
 
                         if (backFacing == ccw)
                         {
@@ -249,7 +251,7 @@ namespace enigma::voxel
         StairsShape oldShape = state->Get(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty));
 
         LogInfo("Stairs", "  Current: facing=%s half=%s shape=%s",
-                DirectionToString(facing), HalfTypeToString(half), StairsShapeToString(oldShape));
+                DirectionToString(facing).c_str(), HalfTypeToString(half), StairsShapeToString(oldShape));
 
         // [RECALCULATE] Shape based on new neighbor configuration
         StairsShape newShape = GetStairsShape(facing, half, world, pos);
