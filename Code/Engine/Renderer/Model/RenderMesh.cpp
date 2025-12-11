@@ -192,25 +192,26 @@ void RenderMesh::ApplyBlockRotation(int rotX, int rotY)
 
         // Also rotate the cull direction to match vertex transformation
         // ============================================================================
-        // CRITICAL: cullDirection must rotate in the SAME direction as vertices
+        // [CRITICAL] cullDirection must rotate EXACTLY like vertices
         // ============================================================================
         //
-        // Vertex rotation uses:
-        //   AppendZRotation(-rotY)  - rotates vertices by -rotY degrees (Y rotation)
-        //   AppendXRotation(-rotX)  - rotates vertices by -rotX degrees (X rotation)
+        // Vertex rotation is applied via matrix: M = Rz(-rotY) * Rx(-rotX)
+        // Matrix multiplication is RIGHT-TO-LEFT, so vector transformation order is:
+        //   v' = M * v = Rz(-rotY) * (Rx(-rotX) * v)
+        //   1. First X rotation by -rotX
+        //   2. Then Z rotation by -rotY
         //
-        // RotateDirection must use the SAME angles to stay synchronized:
-        //   RotateDirection(dir, -rotX, -rotY)
+        // RotateDirection() must match this EXACTLY:
+        //   - Same angles: (-rotX, -rotY)
+        //   - Same order: X first, then Y
+        //   - Same direction: counter-clockwise for positive angles
         //
-        // If we use different angles, the cullDirection rotates opposite to geometry,
-        // causing incorrect face culling (e.g., faces that should be visible get
-        // culled because their cullDirection points the wrong way).
+        // [WARNING] If ANY of the following are mismatched, face culling will break:
+        //   - Rotation order (X vs Y first)
+        //   - Rotation direction (CW vs CCW)
+        //   - Angle normalization (handling of negative angles)
         //
-        // Example: half=top stairs with x:180, y:270
-        //   - Vertices rotate by (-180, -270) → geometry flips and rotates
-        //   - CullDirection must also rotate by (-180, -270) to match
-        //   - If cullDirection uses different angles, NORTH face would wrongly
-        //     point in wrong direction, causing incorrect culling
+        // See PropertyTypes.cpp::RotateDirection() for the implementation details.
         // ============================================================================
         if (rotY != 0 || rotX != 0)
         {
