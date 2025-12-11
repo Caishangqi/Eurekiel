@@ -593,6 +593,7 @@
     <ClCompile Include="Voxel\Block\BlockStateSerializer.cpp" />
     <ClCompile Include="Voxel\Block\SlabBlock.cpp"/>
     <ClCompile Include="Voxel\Block\StairsBlock.cpp"/>
+    <ClCompile Include="Voxel\Block\VoxelShape.cpp"/>
     <ClCompile Include="Voxel\Chunk\ChunkHelper.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkMeshHelper.cpp" />
     <ClCompile Include="Voxel\Climate\Climate.cpp" />
@@ -958,6 +959,7 @@
     <ClInclude Include="Voxel\Block\SlabType.hpp"/>
     <ClInclude Include="Voxel\Block\StairsBlock.hpp"/>
     <ClInclude Include="Voxel\Block\StairsShape.hpp"/>
+    <ClInclude Include="Voxel\Block\VoxelShape.hpp"/>
     <ClInclude Include="Voxel\Chunk\ChunkHelper.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkMeshHelper.hpp" />
     <ClInclude Include="Voxel\Climate\Climate.hpp" />

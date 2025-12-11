@@ -19,6 +19,7 @@
 
 #include "Engine/Registry/Block/Block.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
+#include "Engine/Voxel/Block/VoxelShape.hpp"
 #include "Game/GameCommon.hpp"
 
 using namespace enigma::voxel;
@@ -207,15 +208,45 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
     int           blockIndex = static_cast<int>(Chunk::CoordsToIndex(localX, localY, localZ));
     BlockIterator currentIter(startChunk, blockIndex);
     BlockState*   startState = currentIter.GetBlock();
-    if (startState && startState->IsFullOpaque())
+    if (startState)
     {
-        result.m_didImpact    = true;
-        result.m_impactPos    = rayStart;
-        result.m_impactDist   = 0.0f;
-        result.m_impactNormal = -rayFwdNormal; // Arbitrary normal when starting inside
-        result.m_hitBlockIter = currentIter;
-        result.m_hitFace      = Direction::NORTH; // Arbitrary face
-        return result;
+        if (startState->IsFullOpaque())
+        {
+            // Starting inside full opaque block - immediate hit
+            result.m_didImpact    = true;
+            result.m_impactPos    = rayStart;
+            result.m_impactDist   = 0.0f;
+            result.m_impactNormal = -rayFwdNormal; // Arbitrary normal when starting inside
+            result.m_hitBlockIter = currentIter;
+            result.m_hitFace      = Direction::NORTH; // Arbitrary face
+            return result;
+        }
+        else
+        {
+            // Starting inside non-full block - test if inside collision shape
+            registry::block::Block* block = startState->GetBlock();
+            if (block)
+            {
+                VoxelShape collisionShape = block->GetCollisionShape(startState);
+                if (!collisionShape.IsEmpty())
+                {
+                    // Calculate local position within block
+                    Vec3 localPos(rayStart.x - std::floor(rayStart.x),
+                                  rayStart.y - std::floor(rayStart.y),
+                                  rayStart.z - std::floor(rayStart.z));
+                    if (collisionShape.IsPointInside(localPos))
+                    {
+                        result.m_didImpact    = true;
+                        result.m_impactPos    = rayStart;
+                        result.m_impactDist   = 0.0f;
+                        result.m_impactNormal = -rayFwdNormal;
+                        result.m_hitBlockIter = currentIter;
+                        result.m_hitFace      = Direction::NORTH;
+                        return result;
+                    }
+                }
+            }
+        }
     }
 
     // [STEP 2] DDA Initialization - Calculate step directions and delta distances
@@ -262,17 +293,50 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                 break; // Stepped outside loaded chunks
             }
 
-            // Check for solid block
+            // Check for solid block or non-full block with collision shape
             BlockState* state = currentIter.GetBlock();
-            if (state && state->IsFullOpaque())
+            if (state)
             {
-                result.m_didImpact    = true;
-                result.m_impactDist   = fwdDistAtNextXCrossing;
-                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextXCrossing;
-                result.m_impactNormal = Vec3(static_cast<float>(-tileStepDirectionX), 0.0f, 0.0f);
-                result.m_hitBlockIter = currentIter;
-                result.m_hitFace      = (tileStepDirectionX > 0) ? Direction::WEST : Direction::EAST; // Hit west face when moving east
-                return result;
+                if (state->IsFullOpaque())
+                {
+                    // Full opaque block - immediate hit
+                    result.m_didImpact    = true;
+                    result.m_impactDist   = fwdDistAtNextXCrossing;
+                    result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextXCrossing;
+                    result.m_impactNormal = Vec3(static_cast<float>(-tileStepDirectionX), 0.0f, 0.0f);
+                    result.m_hitBlockIter = currentIter;
+                    result.m_hitFace      = (tileStepDirectionX > 0) ? Direction::WEST : Direction::EAST;
+                    return result;
+                }
+                else
+                {
+                    // Non-full block (slab, stairs, etc.) - test against collision shape
+                    registry::block::Block* block = state->GetBlock();
+                    if (block)
+                    {
+                        VoxelShape collisionShape = block->GetCollisionShape(state);
+                        if (!collisionShape.IsEmpty())
+                        {
+                            // Get block world position from iterator
+                            BlockPos blockPos = currentIter.GetBlockPos();
+                            Vec3     blockWorldPos(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
+
+                            // Raycast against collision shape
+                            RaycastResult3D shapeResult = collisionShape.RaycastWorld(rayStart, rayFwdNormal, rayMaxLength, blockWorldPos);
+                            if (shapeResult.m_didImpact)
+                            {
+                                result.m_didImpact    = true;
+                                result.m_impactDist   = shapeResult.m_impactDist;
+                                result.m_impactPos    = shapeResult.m_impactPos;
+                                result.m_impactNormal = shapeResult.m_impactNormal;
+                                result.m_hitBlockIter = currentIter;
+                                // Determine hit face from impact normal
+                                result.m_hitFace = (tileStepDirectionX > 0) ? Direction::WEST : Direction::EAST;
+                                return result;
+                            }
+                        }
+                    }
+                }
             }
 
             fwdDistAtNextXCrossing += fwdDistPerXCrossing;
@@ -293,16 +357,50 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                 break;
             }
 
+            // Check for solid block or non-full block with collision shape
             BlockState* state = currentIter.GetBlock();
-            if (state && state->IsFullOpaque())
+            if (state)
             {
-                result.m_didImpact    = true;
-                result.m_impactDist   = fwdDistAtNextYCrossing;
-                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextYCrossing;
-                result.m_impactNormal = Vec3(0.0f, static_cast<float>(-tileStepDirectionY), 0.0f);
-                result.m_hitBlockIter = currentIter;
-                result.m_hitFace      = (tileStepDirectionY > 0) ? Direction::SOUTH : Direction::NORTH; // Hit south face when moving north
-                return result;
+                if (state->IsFullOpaque())
+                {
+                    // Full opaque block - immediate hit
+                    result.m_didImpact    = true;
+                    result.m_impactDist   = fwdDistAtNextYCrossing;
+                    result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextYCrossing;
+                    result.m_impactNormal = Vec3(0.0f, static_cast<float>(-tileStepDirectionY), 0.0f);
+                    result.m_hitBlockIter = currentIter;
+                    result.m_hitFace      = (tileStepDirectionY > 0) ? Direction::SOUTH : Direction::NORTH;
+                    return result;
+                }
+                else
+                {
+                    // Non-full block (slab, stairs, etc.) - test against collision shape
+                    registry::block::Block* block = state->GetBlock();
+                    if (block)
+                    {
+                        VoxelShape collisionShape = block->GetCollisionShape(state);
+                        if (!collisionShape.IsEmpty())
+                        {
+                            // Get block world position from iterator
+                            BlockPos blockPos = currentIter.GetBlockPos();
+                            Vec3     blockWorldPos(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
+
+                            // Raycast against collision shape
+                            RaycastResult3D shapeResult = collisionShape.RaycastWorld(rayStart, rayFwdNormal, rayMaxLength, blockWorldPos);
+                            if (shapeResult.m_didImpact)
+                            {
+                                result.m_didImpact    = true;
+                                result.m_impactDist   = shapeResult.m_impactDist;
+                                result.m_impactPos    = shapeResult.m_impactPos;
+                                result.m_impactNormal = shapeResult.m_impactNormal;
+                                result.m_hitBlockIter = currentIter;
+                                // Determine hit face from impact normal
+                                result.m_hitFace = (tileStepDirectionY > 0) ? Direction::SOUTH : Direction::NORTH;
+                                return result;
+                            }
+                        }
+                    }
+                }
             }
 
             fwdDistAtNextYCrossing += fwdDistPerYCrossing;
@@ -323,16 +421,50 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
                 break;
             }
 
+            // Check for solid block or non-full block with collision shape
             BlockState* state = currentIter.GetBlock();
-            if (state && state->IsFullOpaque())
+            if (state)
             {
-                result.m_didImpact    = true;
-                result.m_impactDist   = fwdDistAtNextZCrossing;
-                result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextZCrossing;
-                result.m_impactNormal = Vec3(0.0f, 0.0f, static_cast<float>(-tileStepDirectionZ));
-                result.m_hitBlockIter = currentIter;
-                result.m_hitFace      = (tileStepDirectionZ > 0) ? Direction::DOWN : Direction::UP; // Hit bottom face when moving up
-                return result;
+                if (state->IsFullOpaque())
+                {
+                    // Full opaque block - immediate hit
+                    result.m_didImpact    = true;
+                    result.m_impactDist   = fwdDistAtNextZCrossing;
+                    result.m_impactPos    = rayStart + rayFwdNormal * fwdDistAtNextZCrossing;
+                    result.m_impactNormal = Vec3(0.0f, 0.0f, static_cast<float>(-tileStepDirectionZ));
+                    result.m_hitBlockIter = currentIter;
+                    result.m_hitFace      = (tileStepDirectionZ > 0) ? Direction::DOWN : Direction::UP;
+                    return result;
+                }
+                else
+                {
+                    // Non-full block (slab, stairs, etc.) - test against collision shape
+                    registry::block::Block* block = state->GetBlock();
+                    if (block)
+                    {
+                        VoxelShape collisionShape = block->GetCollisionShape(state);
+                        if (!collisionShape.IsEmpty())
+                        {
+                            // Get block world position from iterator
+                            BlockPos blockPos = currentIter.GetBlockPos();
+                            Vec3     blockWorldPos(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
+
+                            // Raycast against collision shape
+                            RaycastResult3D shapeResult = collisionShape.RaycastWorld(rayStart, rayFwdNormal, rayMaxLength, blockWorldPos);
+                            if (shapeResult.m_didImpact)
+                            {
+                                result.m_didImpact    = true;
+                                result.m_impactDist   = shapeResult.m_impactDist;
+                                result.m_impactPos    = shapeResult.m_impactPos;
+                                result.m_impactNormal = shapeResult.m_impactNormal;
+                                result.m_hitBlockIter = currentIter;
+                                // Determine hit face from impact normal
+                                result.m_hitFace = (tileStepDirectionZ > 0) ? Direction::DOWN : Direction::UP;
+                                return result;
+                            }
+                        }
+                    }
+                }
             }
 
             fwdDistAtNextZCrossing += fwdDistPerZCrossing;
