@@ -1,6 +1,15 @@
 {
+  "_comment": [
+    "=== SimpleMiner Coordinate System Adaptation ===",
+    "Problem: MC outer_stairs corner at +X +Z (EAST-SOUTH)",
+    "After Y<->Z swap: corner moves to +X +Y (EAST-NORTH in SM)",
+    "But blockstate rotations assume corner at EAST-SOUTH",
+    "Solution: Pre-rotate model by moving corner from +Z to -Z",
+    "Result: After Y<->Z swap, corner at +X -Y (EAST-SOUTH in SM)",
+    "This makes blockstate rotations work correctly"
+  ],
   "format_version": "1.21.6",
-  "credit": "Made with Blockbench",
+  "credit": "Made with Blockbench - Modified for SimpleMiner coordinate system",
   "textures": {
     "particle": "#side"
   },
@@ -79,15 +88,16 @@
       }
     },
     {
+      "comment": "[FIX] Corner moved from +Z to -Z for SimpleMiner Y<->Z coordinate swap",
       "from": [
         8,
         8,
-        8
+        0
       ],
       "to": [
         16,
         16,
-        16
+        8
       ],
       "faces": {
         "north": {
@@ -97,13 +107,14 @@
             8,
             8
           ],
-          "texture": "#side"
+          "texture": "#side",
+          "cullface": "north"
         },
         "east": {
           "uv": [
-            0,
-            0,
             8,
+            0,
+            16,
             8
           ],
           "texture": "#side",
@@ -116,14 +127,13 @@
             16,
             8
           ],
-          "texture": "#side",
-          "cullface": "south"
+          "texture": "#side"
         },
         "west": {
           "uv": [
-            8,
             0,
-            16,
+            0,
+            8,
             8
           ],
           "texture": "#side"
@@ -131,9 +141,9 @@
         "up": {
           "uv": [
             8,
-            8,
+            0,
             16,
-            16
+            8
           ],
           "texture": "#top",
           "cullface": "up"
