@@ -39,8 +39,9 @@ namespace enigma::voxel
         core::LogInfo("SlabBlock", "  hitPoint.z = %.3f, IsTopHalf() = %s",
                       ctx.hitPoint.z, ctx.IsTopHalf() ? "true" : "false");
 
-        // [NEW] Check if merging to double slab
-        BlockState* existingState = ctx.world->GetBlockState(ctx.targetPos);
+        // [FIX] Check if merging to double slab at CLICKED position
+        // Minecraft logic: Check clickedPos (the existing slab) NOT targetPos
+        BlockState* existingState = ctx.world->GetBlockState(ctx.clickedPos);
         if (existingState && CanBeReplaced(existingState, ctx))
         {
             core::LogInfo("SlabBlock", "  [MERGE] Creating DOUBLE slab");
@@ -55,9 +56,25 @@ namespace enigma::voxel
             return result;
         }
 
-        // [NEW] Normal placement - determine slab type based on hit point Z coordinate
-        // IsTopHalf() returns true if hitPoint.z >= 0.5
-        SlabType type = ctx.IsTopHalf() ? SlabType::TOP : SlabType::BOTTOM;
+        // [FIX] Normal placement - determine slab type based on clicked face and hit point
+        // Minecraft logic (SlabBlock.java line 73-74):
+        // - Click UP face → always BOTTOM (place slab at bottom of target block)
+        // - Click DOWN face → always TOP (place slab at top of target block)
+        // - Click horizontal face → use hitPoint.z to determine
+        SlabType type;
+        if (ctx.clickedFace == Direction::UP)
+        {
+            type = SlabType::BOTTOM; // Clicked top of block below, place bottom slab
+        }
+        else if (ctx.clickedFace == Direction::DOWN)
+        {
+            type = SlabType::TOP; // Clicked bottom of block above, place top slab
+        }
+        else
+        {
+            // Horizontal face: use hit point Z to determine
+            type = ctx.IsTopHalf() ? SlabType::TOP : SlabType::BOTTOM;
+        }
 
         core::LogInfo("SlabBlock", "  [NORMAL] Placing %s slab", SlabTypeToString(type));
 
@@ -81,10 +98,17 @@ namespace enigma::voxel
 
     bool SlabBlock::CanBeReplaced(enigma::voxel::BlockState* state, const PlacementContext& ctx) const
     {
-        // [CHECK] Must be placing the same slab type
+        // [FIX] First check if the clicked block IS a slab of the same type
+        // Without this check, clicking on grass/stone would incorrectly trigger merge!
+        if (state->GetBlock() != this)
+        {
+            return false; // Clicked block is not the same slab type
+        }
+
+        // [CHECK] Must be placing the same slab type (holding same item)
         if (ctx.heldItemBlock != this)
         {
-            return false; // Different block type, cannot merge
+            return false; // Different block type in hand, cannot merge
         }
 
         // [CHECK] Get current slab type from state

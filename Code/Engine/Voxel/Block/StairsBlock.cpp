@@ -61,8 +61,28 @@ namespace enigma::voxel
         // [NEW] Determine facing from player look direction
         Direction facing = ctx.GetHorizontalFacing();
 
-        // [NEW] Determine half from raycast hit point
-        HalfType half = ctx.IsTopHalf() ? HalfType::TOP : HalfType::BOTTOM;
+        // [FIX] Determine half based on clicked face and hit point
+        // Minecraft logic (StairBlock.java line 114):
+        // - Click DOWN face → always TOP (place upside-down stairs)
+        // - Click UP face → always BOTTOM (place normal stairs)
+        // - Click horizontal face → use hitPoint.z to determine
+        HalfType half;
+        if (ctx.clickedFace == Direction::UP)
+        {
+            half = HalfType::BOTTOM; // Clicked top of block below, place bottom stairs
+        }
+        else if (ctx.clickedFace == Direction::DOWN)
+        {
+            half = HalfType::TOP; // Clicked bottom of block above, place top stairs (upside-down)
+        }
+        else
+        {
+            // Horizontal face: use hit point Z to determine
+            half = ctx.IsTopHalf() ? HalfType::TOP : HalfType::BOTTOM;
+        }
+
+        LogInfo("Stairs", "[DEBUG] GetStateForPlacement: clickedFace=%s IsTopHalf=%d => half=%s",
+                DirectionToString(ctx.clickedFace).c_str(), ctx.IsTopHalf(), HalfTypeToString(half));
 
         // [NEW] Calculate shape based on adjacent stairs
         StairsShape shape = GetStairsShape(facing, half, ctx.world, ctx.targetPos);
@@ -495,13 +515,8 @@ namespace enigma::voxel
         // OUTER_LEFT: Front-left quadrant only (0.5x0.5x0.5 box)
         // OUTER_RIGHT: Front-right quadrant only (0.5x0.5x0.5 box)
 
-        // Calculate midpoints for quadrant splitting
-        float midX = (minX + maxX) * 0.5f;
-        float midY = (minY + maxY) * 0.5f;
-
-        // Determine "left" and "right" directions based on facing
+        // Note: Quadrant positions use hardcoded 0.5f values based on facing direction
         // Left = counter-clockwise from facing, Right = clockwise from facing
-        // This affects which quadrant is "left" vs "right"
 
         switch (shape)
         {

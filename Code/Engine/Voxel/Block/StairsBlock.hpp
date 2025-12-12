@@ -22,7 +22,7 @@ namespace enigma::voxel
      *
      * Key Features:
      * - Facing determined by player look direction (GetHorizontalFacing)
-     * - Half determined by raycast hit point (IsTopHalf)
+     * - Half determined by clickedFace (UP→BOTTOM, DOWN→TOP), then hitPoint.z for horizontal faces
      * - Shape auto-calculated based on adjacent stairs with matching half
      * - Shape updates when neighboring stairs change (OnNeighborChanged)
      *
@@ -75,13 +75,16 @@ namespace enigma::voxel
          * @param ctx Placement context containing player look direction and hit point
          * @return BlockState with facing, half, and calculated shape
          *
-         * Placement Logic:
+         * Placement Logic (Reference: Minecraft StairBlock.java line 114):
          * 1. Facing = ctx.GetHorizontalFacing() (player look direction)
-         * 2. Half = ctx.IsTopHalf() ? TOP : BOTTOM (raycast hit point Z >= 0.5)
+         * 2. Half determination:
+         *    - ClickedFace == UP → BOTTOM (normal stairs on top of block)
+         *    - ClickedFace == DOWN → TOP (upside-down stairs under block)
+         *    - Horizontal face → IsTopHalf() ? TOP : BOTTOM
          * 3. Shape = GetStairsShape() (calculated from adjacent stairs)
          *
          * Example:
-         * - Player looks NORTH, hits bottom half → facing=NORTH, half=BOTTOM
+         * - Click top of block, looking NORTH → facing=NORTH, half=BOTTOM
          * - Adjacent stairs determines shape (STRAIGHT/INNER/OUTER)
          */
         enigma::voxel::BlockState* GetStateForPlacement(const PlacementContext& ctx) const override;

@@ -55,16 +55,18 @@ namespace enigma::voxel
         ~SlabBlock() override = default;
 
         /**
-         * @brief Determine BlockState for placement based on raycast hit point
+         * @brief Determine BlockState for placement based on clickedFace and hit point
          * @param ctx Placement context containing hit point and player state
-         * @return BlockState with type=BOTTOM (hit lower half) or TOP (hit upper half)
+         * @return BlockState with type=BOTTOM or TOP based on placement logic
          *
-         * Uses PlacementContext::IsTopHalf() to detect which half was clicked:
-         * - hitPoint.z < 0.5 → BOTTOM slab
-         * - hitPoint.z >= 0.5 → TOP slab
+         * Placement Logic (Reference: Minecraft SlabBlock.java line 73-74):
+         * 1. Check for slab merging first (existing slab → DOUBLE)
+         * 2. If not merging, determine type by clickedFace:
+         *    - ClickedFace == UP → BOTTOM slab (on top of block below)
+         *    - ClickedFace == DOWN → TOP slab (under block above)
+         *    - Horizontal face → IsTopHalf() ? TOP : BOTTOM
          *
-         * Note: This method does NOT handle merging. Merging is handled by
-         * CanBeReplaced() which allows World::SetBlock() to replace existing slabs.
+         * Note: Merging is handled by CanBeReplaced() + World logic.
          */
         enigma::voxel::BlockState* GetStateForPlacement(const PlacementContext& ctx) const override;
 
