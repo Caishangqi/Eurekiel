@@ -2358,31 +2358,63 @@ void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::
 
     BlockPos targetPos = blockIter.GetBlockPos();
 
-    // [NEW] Compute block-local hit point (0-1 normalized)
-    Vec3 worldHitPos   = raycast.m_impactPos;
-    Vec3 blockWorldPos = Vec3(static_cast<float>(targetPos.x),
-                              static_cast<float>(targetPos.y),
-                              static_cast<float>(targetPos.z));
-    Vec3 localHitPoint = worldHitPos - blockWorldPos; // Already in 0-1 range for single block
+    // [FIX] Compute block-local hit point relative to CLICKED block (0-1 normalized)
+    // Minecraft uses clickedPos for hit point calculation (getClickLocation - getClickedPos)
+    // This is critical for slab merge detection: clicking top of bottom slab should give z=0.5
+    Vec3     worldHitPos     = raycast.m_impactPos;
+    BlockPos clickedPos      = raycast.m_hitBlockIter.GetBlockPos();
+    Vec3     clickedWorldPos = Vec3(static_cast<float>(clickedPos.x),
+                                static_cast<float>(clickedPos.y),
+                                static_cast<float>(clickedPos.z));
+    Vec3 localHitPoint = worldHitPos - clickedWorldPos; // Relative to clicked block, not target
 
     // [NEW] Construct PlacementContext
     PlacementContext ctx;
     ctx.world         = this;
     ctx.targetPos     = targetPos;
-    ctx.clickedPos    = raycast.m_hitBlockIter.GetBlockPos();
+    ctx.clickedPos    = clickedPos;
     ctx.clickedFace   = raycast.m_hitFace;
     ctx.hitPoint      = localHitPoint;
     ctx.playerLookDir = playerLookDir;
     ctx.heldItemBlock = blockType;
 
-    // [NEW] Check if can replace existing block (Double Slab case)
-    BlockState* existingState = blockIter.GetBlock();
-    if (existingState && existingState->GetBlock()->CanBeReplaced(existingState, ctx))
+    // [FIX] Check if can replace CLICKED block first (Slab merge case)
+    // Minecraft logic: When clicking on a slab, check if we can merge at clickedPos
+    // NOT at targetPos (which would be the adjacent empty block)
+    BlockState* clickedState = raycast.m_hitBlockIter.GetBlock();
+    if (clickedState && clickedState->GetBlock()->CanBeReplaced(clickedState, ctx))
     {
-        // Merge: Get replacement state from existing block
-        BlockState* mergedState = existingState->GetBlock()->GetStateForPlacement(ctx);
-        PlaceBlock(blockIter, mergedState); // Use original signature
-        LogDebug("world", "PlaceBlock (context): Merged block at (%d, %d, %d)",
+        // [MERGE] Replace existing slab with double slab at CLICKED position
+        BlockState* mergedState = clickedState->GetBlock()->GetStateForPlacement(ctx);
+        if (mergedState)
+        {
+            // [FIX] Cannot use PlaceBlock() here - it checks for air and would fail!
+            // Directly replace the block using SetBlockByPlayer (supports replacement)
+            Chunk* clickedChunk = raycast.m_hitBlockIter.GetChunk();
+            if (clickedChunk)
+            {
+                int32_t localX, localY, localZ;
+                raycast.m_hitBlockIter.GetLocalCoords(localX, localY, localZ);
+                clickedChunk->SetBlockByPlayer(localX, localY, localZ, mergedState);
+                ScheduleChunkMeshRebuild(clickedChunk);
+
+                LogDebug("world", "PlaceBlock (context): Merged slab at clickedPos (%d, %d, %d)",
+                         ctx.clickedPos.x, ctx.clickedPos.y, ctx.clickedPos.z);
+            }
+        }
+        return;
+    }
+
+    // [OLD CASE] Check targetPos for potential replacement (kept for future use cases)
+    // This handles cases where targetPos itself might be replaceable (e.g., water, grass)
+    BlockState* existingState = blockIter.GetBlock();
+    if (existingState && existingState->GetBlock() != blockType &&
+        existingState->GetBlock()->CanBeReplaced(existingState, ctx))
+    {
+        // Non-slab replacement case (e.g., replacing water/grass)
+        BlockState* replacedState = blockType->GetStateForPlacement(ctx);
+        PlaceBlock(blockIter, replacedState);
+        LogDebug("world", "PlaceBlock (context): Replaced block at targetPos (%d, %d, %d)",
                  targetPos.x, targetPos.y, targetPos.z);
         return;
     }
