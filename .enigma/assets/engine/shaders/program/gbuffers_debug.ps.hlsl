@@ -9,12 +9,12 @@ PSOutput main(PSInput input)
 {
     PSOutput output;
 
-    // 采样CustomImage0纹理（使用线性采样器和UV坐标）
-    // CustomImage槽位在CPU侧通过SetCustomImage(0, texture)设置
+    // Sample CustomImage0 texture (using linear sampler and UV coordinates)
+    // The CustomImage slot is set on the CPU side through SetCustomImage(0, texture)
     float4 texColor = customImage0.Sample(wrapSampler, input.TexCoord);
 
-    // 混合纹理颜色与顶点颜色和模型颜色
-    // 最终颜色 = 纹理颜色 × 顶点颜色 × 模型颜色
+    // Blend texture color with vertex color and model color
+    // Final color = texture color × vertex color × model color
     output.color0 = texColor * input.Color * modelColor;
     return output;
 }

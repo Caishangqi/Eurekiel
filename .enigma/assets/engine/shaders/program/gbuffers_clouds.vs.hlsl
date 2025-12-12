@@ -50,7 +50,7 @@ VSOutput main(VSInput input)
 
     // [STEP 1] 5-Stage Transform Chain (Standard Pipeline)
     // Local -> World -> Camera -> Render -> Clip
-    // [FIX] 添加 modelMatrix 变换，用于云的平滑滚动动画
+    // [FIX] Add modelMatrix transformation for smooth scrolling animation of clouds
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
     float4 cameraPos = mul(gbufferModelView, worldPos);
