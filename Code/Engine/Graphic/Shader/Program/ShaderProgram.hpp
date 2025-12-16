@@ -22,7 +22,7 @@
 #pragma once
 
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
-#include "Engine/Graphic/Shader/ShaderPack/Properties/ProgramDirectives.hpp"
+#include "Engine/Graphic/Shader/Program/Properties/ProgramDirectives.hpp"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <string>

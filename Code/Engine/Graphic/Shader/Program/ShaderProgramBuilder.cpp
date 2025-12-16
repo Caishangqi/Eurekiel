@@ -220,7 +220,7 @@ namespace enigma::graphic
 
         // 3. Include 路径
         // 默认包含 ShaderPack 目录
-        options.includePaths.push_back(L"F:/p4/Personal/SD/Engine/Code/Engine/Graphic/Shader/ShaderPack/");
+        options.includePaths.push_back(L"F:/p4/Personal/SD/Engine/Code/Engine/Graphic/Shader/Program/");
         options.includePaths.push_back(L"F:/p4/Personal/SD/Engine/Code/Engine/Graphic/Shader/Common/");
 
         // 4. 根据 ProgramDirectives 添加宏定义

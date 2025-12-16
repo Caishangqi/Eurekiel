@@ -22,7 +22,7 @@ namespace enigma::graphic
      * **使用场景**：
      * - IncludeGraph 构建时找不到依赖文件
      * - IncludeProcessor 展开时路径解析失败
-     * - ShaderPackLoader 加载时文件缺失
+     * - ShaderBundleLoader file not found
      *
      * **示例**：
      * ```cpp
@@ -30,10 +30,10 @@ namespace enigma::graphic
      *     "/shaders/gbuffers_terrain.vsh",
      *     42,
      *     "../lib/common.hlsl",
-     *     "File not found in shader pack"
+     *     "File not found in shader bundle"
      * );
      * // 输出: Include error in '/shaders/gbuffers_terrain.vsh:42':
-     * //       Cannot resolve '../lib/common.hlsl' - File not found in shader pack
+     * //       Cannot resolve '../lib/common.hlsl' - File not found in shader bundle
      * ```
      */
     class FileIncludeException : public std::runtime_error
@@ -41,7 +41,7 @@ namespace enigma::graphic
     public:
         /**
          * @brief 完整构造函数（带行号）
-         * @param sourceFile 出错的源文件路径（Shader Pack 内部路径）
+         * @param sourceFile Source file path that caused the error (virtual path)
          * @param lineNumber #include 指令所在行号（1-based）
          * @param targetPath 尝试包含的目标路径（可能是相对路径）
          * @param reason 失败原因描述
@@ -92,7 +92,7 @@ namespace enigma::graphic
 
         /**
          * @brief 获取出错的源文件路径
-         * @return Shader Pack 内部路径（如 `/shaders/gbuffers_terrain.vsh`）
+         * @return Virtual path (e.g. `/shaders/gbuffers_terrain.vsh`）
          */
         const std::string& GetSourceFile() const { return m_sourceFile; }
 

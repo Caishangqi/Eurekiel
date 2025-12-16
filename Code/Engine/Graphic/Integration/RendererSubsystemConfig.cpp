@@ -75,10 +75,6 @@ namespace enigma::graphic
         result.enableGPUValidation     = yamlOpt->GetBoolean("debug.enableGPUValidation", true);
         result.enableBindlessResources = yamlOpt->GetBoolean("debug.enableBindlessResources", true);
 
-        // 步骤5: 解析ShaderPack配置
-        // YAML路径: shaderpack.name
-        result.currentShaderPackName = yamlOpt->GetString("shaderpack.name", "");
-
         // 步骤5.5: 解析Shader编译配置
         // YAML路径: shader.entryPoint
         result.shaderEntryPoint = yamlOpt->GetString("shader.entryPoint", "main");

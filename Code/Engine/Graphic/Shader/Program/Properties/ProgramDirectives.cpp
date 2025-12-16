@@ -16,8 +16,8 @@
  */
 
 #include "ProgramDirectives.hpp"
-#include "Engine/Graphic/Shader/ShaderPack/Parsing/CommentDirectiveParser.hpp"
-#include "Engine/Graphic/Shader/ShaderPack/ShaderSource.hpp"
+#include "Engine/Graphic/Shader/Program/Parsing/CommentDirectiveParser.hpp"
+#include "Engine/Graphic/Shader/Program/ShaderSource.hpp"
 #include <algorithm>
 #include <cctype>
 

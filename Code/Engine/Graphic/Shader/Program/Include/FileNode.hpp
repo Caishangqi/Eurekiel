@@ -18,7 +18,7 @@ namespace enigma::graphic
      *
      * **对应 Iris 源码**：
      * - Iris: FileNode.java
-     * - 职责：表示 Shader Pack 中的一个文件及其 Include 依赖
+     * - Represents a file and its include dependencies in the virtual path system
      *
      * **使用场景**：
      * - IncludeGraph 构建依赖图时的节点
@@ -26,7 +26,7 @@ namespace enigma::graphic
      * - 支持 BFS/DFS 遍历依赖树
      *
      * **核心数据**：
-     * - m_path: 文件的绝对路径（Shader Pack 内部路径）
+     * - m_path: File's absolute path (virtual path)
      * - m_lines: 文件内容（按行存储）
      * - m_includes: Include 映射（行号 → 目标文件的绝对路径）
      *
@@ -54,7 +54,7 @@ namespace enigma::graphic
     public:
         /**
          * @brief 工厂方法 - 从文件路径和内容创建 FileNode
-         * @param path 文件的绝对路径（Shader Pack 内部路径）
+         * @param path File's absolute path (virtual path)
          * @param lines 文件内容（按行存储）
          * @return 自动解析 #include 后的 FileNode
          *
@@ -77,7 +77,7 @@ namespace enigma::graphic
 
         /**
          * @brief 获取文件路径
-         * @return Shader Pack 内部绝对路径
+         * @return Virtual absolute path
          */
         const ShaderPath& GetPath() const { return m_path; }
 

@@ -90,7 +90,7 @@
 
 #pragma once
 
-#include "Engine/Graphic/Shader/ShaderPack/Properties/ProgramDirectives.hpp"
+#include "Engine/Graphic/Shader/Program/Properties/ProgramDirectives.hpp"
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp"
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
 #include <filesystem>

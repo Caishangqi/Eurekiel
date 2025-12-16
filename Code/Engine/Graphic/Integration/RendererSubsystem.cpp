@@ -24,13 +24,12 @@
 // [DELETE] Removed PSOStateCollector.hpp - class deleted after refactor
 #include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
 #include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
-#include "Engine/Graphic/Shader/ShaderPack/ShaderProgram.hpp" // M6.2: ShaderProgram
-#include "Engine/Graphic/Shader/ShaderPack/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
-#include "Engine/Graphic/Shader/ShaderPack/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
+#include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // M6.2: ShaderProgram
+#include "Engine/Graphic/Shader/Program/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
+#include "Engine/Graphic/Shader/Program/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
-#include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
-#include "Engine/Graphic/Shader/ShaderPack/ShaderPackHelper.hpp" // 阶段2.3: ShaderPackHelper工具类
+#include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
 #include "Engine/Graphic/Integration/ImmediateDrawHelper.hpp" // [NEW] Immediate draw helper
 #include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
@@ -101,26 +100,6 @@ void RendererSubsystem::Initialize()
     m_psoManager = std::make_unique<PSOManager>();
     LogInfo(LogRenderer, "PSOManager created successfully");
 
-    // ==================== Initialize ShaderCache ====================
-    // Create ShaderCache and register ProgramId mapping
-    m_shaderCache = std::make_unique<ShaderCache>();
-
-    //Register 91 ProgramId mappings (using ProgramIdToSourceName function)
-    std::unordered_map<ProgramId, std::string> programIdMappings;
-    for (int i = 0; i < static_cast<int>(ProgramId::COUNT); ++i)
-    {
-        ProgramId   id   = static_cast<ProgramId>(i);
-        std::string name = ProgramIdToSourceName(id);
-        if (name != "unknown")
-        {
-            programIdMappings[id] = name;
-        }
-    }
-
-    m_shaderCache->RegisterProgramIds(programIdMappings);
-    LogInfo(LogRenderer, "ShaderCache initialized with %zu ProgramId mappings",
-            m_shaderCache->GetProgramIdCount());
-
     // Display infrastructure flow confirmation information
     LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
     g_theRendererSubsystem = this;
@@ -129,137 +108,6 @@ void RendererSubsystem::Initialize()
 void RendererSubsystem::Startup()
 {
     LogInfo(LogRenderer, "Starting up...");
-
-    // ==================== ShaderPack Initialization (Dual ShaderPack Architecture) ====================
-    // Architecture (2025-10-19): Dual ShaderPack system with in-memory fallback
-    // - m_userShaderPack: User-downloaded shader packs (optional, may be null)
-    // - m_defaultShaderPack: Engine built-in shaders (required, always valid)
-    // - Fallback: User → Engine Default → ERROR_AND_DIE()
-
-    // Step 1: Initialize current pack name from Configuration (unified config interface)
-    m_currentPackName = m_configuration.currentShaderPackName;
-
-    // Step 2: Attempt to load User ShaderPack (if specified in configuration)
-    if (!m_currentPackName.empty())
-    {
-        std::filesystem::path userPackPath = std::filesystem::path(USER_SHADERPACK_SEARCH_PATH) / m_currentPackName;
-
-        if (std::filesystem::exists(userPackPath))
-        {
-            LogInfo(LogRenderer,
-                    "Loading user ShaderPack '{}' from: {}",
-                    m_currentPackName.c_str(),
-                    userPackPath.string().c_str());
-
-            // Load user ShaderPack (may fail without crashing)
-            try
-            {
-                m_userShaderPack = std::make_unique<ShaderPack>(userPackPath);
-
-                if (!m_userShaderPack || !m_userShaderPack->IsValid())
-                {
-                    LogError(LogRenderer,
-                             "User ShaderPack loaded but validation failed: {}",
-                             m_currentPackName.c_str());
-                    m_userShaderPack.reset();
-                }
-                else
-                {
-                    LogInfo(LogRenderer,
-                            "User ShaderPack loaded successfully: {}",
-                            m_currentPackName.c_str());
-                }
-            }
-            catch (const std::exception& e)
-            {
-                LogError(LogRenderer,
-                         "Exception loading user ShaderPack '{}': {}",
-                         m_currentPackName.c_str(), e.what());
-                m_userShaderPack.reset();
-            }
-        }
-        else
-        {
-            LogWarn(LogRenderer,
-                    "User ShaderPack '{}' not found at '{}', using engine default only",
-                    m_currentPackName.c_str(),
-                    userPackPath.string().c_str());
-        }
-    }
-
-    // Step 3: ALWAYS load Engine Default ShaderPack (required fallback)
-    std::filesystem::path engineDefaultPath(ENGINE_DEFAULT_SHADERPACK_PATH);
-    LogInfo(LogRenderer, "Loading engine default ShaderPack from: {}", engineDefaultPath.string().c_str());
-
-    try
-    {
-        m_defaultShaderPack = std::make_unique<ShaderPack>(engineDefaultPath);
-
-        if (!m_defaultShaderPack || !m_defaultShaderPack->IsValid())
-        {
-            LogError("Engine default ShaderPack loaded but validation failed! Path: %s",
-                     engineDefaultPath.string().c_str());
-            ERROR_AND_DIE(Stringf("Engine default ShaderPack loaded but validation failed! Path: %s",
-                engineDefaultPath.string().c_str()))
-        }
-
-        LogInfo(LogRenderer,
-                "Engine default ShaderPack loaded successfully");
-    }
-    catch (const std::exception& e)
-    {
-        LogError("Failed to load engine default ShaderPack! Path: %s, Error: %s",
-                 engineDefaultPath.string().c_str(), e.what());
-        ERROR_AND_DIE(Stringf("Failed to load engine default ShaderPack! Path: %s, Error: %s",
-            engineDefaultPath.string().c_str(), e.what()))
-    }
-
-    // Step 4: Verify at least one ShaderPack is available
-    // Teaching Note: m_defaultShaderPack is always required, m_userShaderPack is optional
-    if (!m_defaultShaderPack)
-    {
-        LogError(LogRenderer, "Both user and engine default ShaderPacks failed to load!");
-        ERROR_AND_DIE("Both user and engine default ShaderPacks failed to load!")
-    }
-
-    // Step 5: Log final ShaderPack system status
-    LogInfo(LogRenderer,
-            "ShaderPack system initialized (User: {}, Default: {})",
-            m_userShaderPack ? "+" : "-",
-            m_defaultShaderPack ? "+" : "-");
-
-    // Step 6: 从引擎默认ShaderPack加载ShaderSource到ShaderCache (Shrimp Task)
-    // 缓存默认ProgramSet的ShaderSource
-    if (m_shaderCache && m_defaultShaderPack)
-    {
-        size_t totalSourcesCached = 0;
-
-        // 获取默认ProgramSet（world0）
-        const ProgramSet* programSet = m_defaultShaderPack->GetProgramSet();
-        if (programSet)
-        {
-            // 获取所有单一程序（ProgramId对应的ShaderSource）
-            const auto& singlePrograms = programSet->GetPrograms();
-            for (const auto& [id, source] : singlePrograms)
-            {
-                if (source && source->IsValid())
-                {
-                    std::string name = m_shaderCache->GetProgramName(id);
-                    if (!name.empty())
-                    {
-                        // 使用空deleter从unique_ptr创建shared_ptr（不转移所有权）
-                        m_shaderCache->CacheSource(name, std::shared_ptr<ShaderSource>(source.get(), [](ShaderSource*)
-                        {
-                        }));
-                        ++totalSourcesCached;
-                    }
-                }
-            }
-        }
-
-        LogInfo(LogRenderer, "ShaderCache: Loaded %zu ShaderSources from engine default ShaderPack",
-                totalSourcesCached);
-    }
     // ==================== 创建RenderTargetManager (Milestone 3.0任务4) ====================
     // 初始化GBuffer管理器 - 管理16个colortex RenderTarget（Iris兼容）
     try
@@ -557,11 +405,6 @@ void RendererSubsystem::Shutdown()
 {
     LogInfo(LogRenderer, "Shutting down...");
 
-    // Step 1: Unload ShaderPack before other resources (Phase 5.3)
-    // Teaching Note: Iris destroys ShaderPack in destroyEverything()
-    // Reference: Iris.java Line 576-593
-    UnloadShaderPack();
-
     // Step 3: 最后关闭D3D12RenderSystem
     D3D12RenderSystem::Shutdown();
 }
@@ -686,41 +529,6 @@ void RendererSubsystem::BeginFrame()
     LogInfo(LogRenderer, "BeginFrame - Frame preparation completed (ready for game update)");
 }
 
-void RendererSubsystem::RenderFrame()
-{
-    // ========================================================================
-    // Pipeline 生命周期重构 - RenderFrame 阶段 (Game Update)
-    // ========================================================================
-    // 职责: 游戏逻辑的 Update 阶段 (对应 Minecraft 的 tick/update)
-    // - 上传 Buffer 修改 (Uniform 更新)
-    // - 材质修改 (纹理加载/卸载)
-    // - 几何体数据更新
-    // - 提交 Immediate 指令到 RenderCommandQueue
-    // ========================================================================
-    // 教学要点: 这个阶段是 Game 线程提交渲染指令的时机
-    // - Game 线程写入 submitQueue (双缓冲的另一半)
-    // - Render 线程读取 executeQueue (上一帧的指令)
-    // - SwapBuffers() 在下一帧 EndFrame 开始时调用
-    // ========================================================================
-
-    // TODO (Milestone 3.2): 游戏逻辑更新
-    // - 更新实体位置
-    // - 更新方块状态
-    // - 提交几何体绘制指令
-
-    // TODO (Milestone 3.2): Uniform 变量更新
-    // - 更新摄像机矩阵
-    // - 更新时间变量
-    // - 更新光照参数
-
-    // TODO (Milestone 3.2): 纹理资源更新
-    // - 加载新的纹理
-    // - 卸载未使用的纹理
-    // - 更新纹理动画
-
-    LogDebug(LogRenderer, "RenderFrame - Game update completed (commands submitted to queue)");
-}
-
 //-----------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
 void RendererSubsystem::EndFrame()
@@ -753,12 +561,7 @@ void RendererSubsystem::EndFrame()
 }
 #pragma endregion
 
-#pragma region ShaderPack Management
-
-//-----------------------------------------------------------------------------------------------
-// Shrimp Task 2: CreateShaderProgramFromFiles 核心 API
-// Teaching Note: 独立着色器编译接口，解决 Game.cpp:28 的 TODO 问题
-//-----------------------------------------------------------------------------------------------
+#pragma region Shader Program
 
 std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     const std::filesystem::path& vsPath,
@@ -841,15 +644,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
             buildResult.errorMessage.c_str()))
     }
 
-    // ========================================================================
-    // Step 4: 检查缓存 (Shrimp Task)
-    // ========================================================================
-    if (m_shaderCache && m_shaderCache->HasProgram(programName))
-    {
-        LogWarn(LogRenderer, "ShaderProgram '%s' already exists in cache, returning cached version",
-                programName.c_str());
-        return m_shaderCache->GetProgram(programName);
-    }
 
     // ========================================================================
     // Step 5: 创建 ShaderProgram
@@ -862,15 +656,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
         ShaderType::GBuffers_Terrain,
         buildResult.directives // 使用解析后的 Directives
     );
-
-    // ========================================================================
-    // Step 6: 缓存 ShaderProgram (Shrimp Task)
-    // ========================================================================
-    if (m_shaderCache)
-    {
-        m_shaderCache->CacheProgram(programName, program);
-        LogInfo(LogRenderer, "ShaderProgram '%s' cached successfully", programName.c_str());
-    }
 
     LogInfo(LogRenderer, "Successfully compiled shader program from source: %s", programName.c_str());
     return program;
@@ -1000,12 +785,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
         LogDebug(LogRenderer, "No #include directives detected, using original shader source");
     }
 
-    // ========================================================================
-    // Step 4: 提取程序名称（如果未提供）
-    // ========================================================================
-    std::string finalProgramName = programName.empty()
-                                       ? ShaderCompilationHelper::ExtractProgramNameFromPath(vsPath)
-                                       : programName;
+    std::string finalProgramName = programName.empty() ? ShaderCompilationHelper::ExtractProgramNameFromPath(vsPath) : programName;
 
     // ========================================================================
     // Step 5: 调用CreateShaderProgramFromSource编译
@@ -1018,99 +798,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     );
 }
 
-//-----------------------------------------------------------------------------------------------
-// ShaderPack Query and Fallback (Phase 5.2)
-//-----------------------------------------------------------------------------------------------
-
-const ShaderSource* RendererSubsystem::GetShaderSource(ProgramId id) const noexcept
-{
-    // Delegate to GetShaderProgram() for dual ShaderPack fallback (Phase 5.2)
-    // Teaching Note: GetShaderProgram() handles user -> default fallback automatically
-    return GetShaderProgram(id, "world0");
-}
-
-//----------------------------------------------------------------------------------------------------------------------
-// Get shader program with dual ShaderPack fallback mechanism (Phase 5.2 - 2025-10-19)
-// Priority: User ShaderPack → Engine Default ShaderPack → nullptr (3-step fallback)
-//
-// Teaching Note:
-// - KISS principle: Simple 3-step lookup, no complex file copying
-// - In-memory fallback: Check user pack first, then engine default
-// - Iris-compatible: Matches NewWorldRenderingPipeline::getShaderProgram() behavior
-// - User ShaderPack can partially override engine defaults
-//----------------------------------------------------------------------------------------------------------------------
-const ShaderSource* RendererSubsystem::GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept
-{
-    // Priority 1: Try user ShaderPack first (if loaded)
-    if (m_userShaderPack)
-    {
-        const ProgramSet* userProgramSet = m_userShaderPack->GetProgramSet(dimension);
-        if (userProgramSet)
-        {
-            std::optional<const ShaderSource*> userSource = userProgramSet->Get(id);
-            if (userSource && *userSource && (*userSource)->IsValid())
-            {
-                // User shader found and valid - use it
-                return *userSource;
-            }
-        }
-    }
-
-    // Priority 2: Fallback to engine default ShaderPack (always loaded)
-    if (m_defaultShaderPack)
-    {
-        const ProgramSet* defaultProgramSet = m_defaultShaderPack->GetProgramSet(dimension);
-        if (defaultProgramSet)
-        {
-            std::optional<const ShaderSource*> defaultSource = defaultProgramSet->Get(id);
-            if (defaultSource && *defaultSource && (*defaultSource)->IsValid())
-            {
-                // Engine default shader found - use as fallback
-                return *defaultSource;
-            }
-        }
-    }
-
-    // Priority 3: Complete failure - program not found in both packs
-    // Teaching Note: Return nullptr (caller should handle gracefully)
-    // Iris behavior: Returns null and logs error in NewWorldRenderingPipeline::getShaderProgram()
-    return nullptr;
-}
-
-//-----------------------------------------------------------------------------------------------
-// GetShaderProgram(ProgramId) - 从ShaderCache获取编译后的ShaderProgram (Shrimp Task)
-//-----------------------------------------------------------------------------------------------
-std::shared_ptr<ShaderProgram> RendererSubsystem::GetShaderProgram(ProgramId id)
-{
-    if (!m_shaderCache)
-    {
-        LogError(LogRenderer, "ShaderCache not initialized");
-        return nullptr;
-    }
-
-    // 从ShaderCache获取ShaderProgram（支持ProgramId查找）
-    return m_shaderCache->GetProgram(id);
-}
-
-//-----------------------------------------------------------------------------------------------
-// ShaderPack Lifecycle Management (Phase 5.2)
-// Teaching Note: Based on Iris.java lifecycle methods
-// Reference: F:\github\Iris\common\src\main\java\net\irisshaders\iris\Iris.java
-//-----------------------------------------------------------------------------------------------
-
-bool RendererSubsystem::LoadShaderPack(const std::string& packPath)
-{
-    // Teaching Note: Public interface - converts string to filesystem::path
-    // Delegates to ShaderPackHelper for actual loading
-    auto result = ShaderPackHelper::LoadShaderPackFromPath(std::filesystem::path(packPath), m_shaderCache.get());
-    return result != nullptr;
-}
-
-void RendererSubsystem::UnloadShaderPack()
-{
-}
-
-// 阶段2.3: LoadShaderPackInternal, UnloadShaderPack, SelectShaderPackPath已移至ShaderPackHelper
 #pragma endregion
 
 #pragma region Rendering API
@@ -1125,58 +812,6 @@ void RendererSubsystem::UnloadShaderPack()
 #pragma endregion
 
 #pragma region State Management
-//-----------------------------------------------------------------------------------------------
-bool RendererSubsystem::ReloadShaderPack()
-{
-    // Teaching Note: Based on Iris.java::reload() implementation
-    // Reference: Iris.java Line 556-571
-
-    LogInfo(LogRenderer, "Reloading ShaderPack (hot-reload)");
-
-    // Step 1: Get current ShaderPack path (before unloading)
-    // Teaching Note: Iris uses SelectShaderPackPath() to resolve path priority
-    std::string selectedPath = ShaderPackHelper::SelectShaderPackPath(
-        m_currentPackName,
-        m_configuration.shaderPackSearchPath,
-        m_configuration.engineDefaultShaderPackPath
-    );
-    std::filesystem::path currentPath(selectedPath);
-
-    // Step 2: Unload current ShaderPack
-    // Teaching Note: Iris calls destroyEverything() first
-    // Reference: Iris.java Line 561
-    UnloadShaderPack();
-
-    // Step 3: Reload from same path
-    // Teaching Note: Iris calls loadShaderpack() after destruction
-    // Reference: Iris.java Line 564
-    auto result  = ShaderPackHelper::LoadShaderPackFromPath(currentPath, m_shaderCache.get());
-    bool success = result != nullptr;
-
-    if (success)
-    {
-        LogInfo(LogRenderer, "ShaderPack reloaded successfully");
-
-        // TODO (Phase 5.4): Immediately rebuild pipeline for current dimension
-        // Teaching Note: Iris re-creates pipeline IMMEDIATELY after reload
-        // Reference: Iris.java Line 568-570
-        // - Check if in game world (Minecraft.getInstance().level != null)
-        // - Call preparePipeline(getCurrentDimension())
-        // - CRITICAL: Prevents "extremely dangerous" inconsistent state (Iris warning)
-    }
-    else
-    {
-        LogError(LogRenderer, "Failed to reload ShaderPack");
-
-        // TODO (Phase 6+): Implement fallback to engine default
-        // Teaching Note: Iris calls setShadersDisabled() on failure
-        // Reference: Iris.java Line 224
-        // - Attempt to load ENGINE_DEFAULT_SHADERPACK_PATH
-        // - If that fails too, disable shaders completely
-    }
-
-    return success;
-}
 
 ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
 {
@@ -1411,22 +1046,6 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
     }
 
     LogDebug(LogRenderer, "UseProgram: ShaderProgram cached, RenderTargets bound (PSO deferred to Draw)");
-}
-
-void RendererSubsystem::UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs)
-{
-    UNUSED(rtOutputs)
-    // 当前简化实现：直接从ShaderPack获取
-    const ShaderSource* shaderSource = GetShaderProgram(programId, "world0");
-    if (!shaderSource)
-    {
-        LogError(LogRenderer, "UseProgram(ProgramId): Failed to get ShaderSource for ProgramId");
-        return;
-    }
-
-    // TODO: 编译ShaderSource为ShaderProgram（M6.2后续任务）
-    // 当前暂时无法调用，等待ShaderProgram编译系统实现
-    LogWarn(LogRenderer, "UseProgram(ProgramId): ShaderProgram compilation not implemented yet");
 }
 
 //-----------------------------------------------------------------------------------------------

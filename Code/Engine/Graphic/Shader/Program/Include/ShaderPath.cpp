@@ -55,7 +55,7 @@ namespace enigma::graphic
          * - /shaders//lib/common.hlsl -> /shaders/lib/common.hlsl
          * - / -> /
          *
-         * [FIX] Allow '..' to escape virtual root for cross-shaderpack includes
+         * [FIX] Allow '..' to escape virtual root for cross-bundle includes
          * - /shaders/program/../../../../assets/engine/... -> /../../../assets/engine/...
          */
 
@@ -109,7 +109,7 @@ namespace enigma::graphic
             }
             else if (segment == "..")
             {
-                // [FIX] Allow '..' to escape virtual root for cross-shaderpack includes
+                // [FIX] Allow '..' to escape virtual root for cross-bundle includes
                 // Example: /shaders/program/../../../../assets/engine/...
                 //       -> /../../../assets/engine/...
                 if (!normalizedSegments.empty() && normalizedSegments.back() != "..")
@@ -282,16 +282,16 @@ namespace enigma::graphic
     std::filesystem::path ShaderPath::Resolved(const std::filesystem::path& root) const
     {
         /**
-         * Teaching Point: ShaderPack Path to Filesystem Path Conversion
+         * Teaching Point: Virtual Path to Filesystem Path Conversion
          *
          * Business Logic:
-         * - ShaderPack path: /shaders/gbuffers_terrain.hlsl
-         * - Root: F:/shaderpacks/ComplementaryReimagined/
-         * - Result: F:/shaderpacks/ComplementaryReimagined/shaders/gbuffers_terrain.hlsl
+         * - Virtual path: /shaders/gbuffers_terrain.hlsl
+         * - Root: F:/MyProject/ShaderBundle/
+         * - Result: F:/MyProject/ShaderBundle/shaders/gbuffers_terrain.hlsl
          *
-         * [FIX] Support escape paths (cross-shaderpack include engine shaders):
+         * [FIX] Support escape paths (cross-bundle include engine shaders):
          * - Escape path: /../../../assets/engine/shaders/core/Common.hlsl
-         * - Root: .enigma/shaderpacks/EnigmaDefault
+         * - Root: .enigma/assets/engine/shaders
          * - Result: .enigma/assets/engine/shaders/core/Common.hlsl
          *
          * Implementation:

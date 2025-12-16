@@ -196,51 +196,6 @@ namespace enigma::graphic
          */
         bool enableBindlessResources = true;
 
-        // ==================== ShaderPack配置 ====================
-
-        /**
-         * @brief 当前ShaderPack名称（空字符串=使用引擎默认）
-         *
-         * ShaderPack系统（Phase 6.3）:
-         * - 空字符串: 使用ENGINE_DEFAULT_SHADERPACK_PATH
-         * - "PackName": 使用USER_SHADERPACK_SEARCH_PATH/PackName
-         *
-         * 示例: "ComplementaryReimagined", "BSL", "Sildurs"
-         *
-         * 未来增强（Milestone 3.2+）:
-         * - 从GameConfig.xml加载（持久化用户选择）
-         * - 热重载支持（ReloadShaderPack方法）
-         *
-         * 架构设计理由:
-         * - 用户可配置参数 → 属于Configuration
-         * - 固定路径（ENGINE_DEFAULT_PATH） → private constexpr
-         * - 参考Iris: IrisConfig::shaderPackName vs Iris::shaderpacksDirectory
-         *
-         * @note 合并自Configuration::currentShaderPackName
-         */
-        std::string currentShaderPackName;
-
-        /**
-         * @brief 用户ShaderPack搜索路径
-         *
-         * 默认值: "" (空字符串)
-         *
-         * 教学要点:
-         * - ShaderPack路径管理: 用户可指定自定义ShaderPack目录
-         * - 路径解析顺序: 用户包 → 引擎默认包
-         */
-        std::string shaderPackSearchPath;
-
-        /**
-         * @brief 引擎默认ShaderPack路径
-         *
-         * 默认值: "" (空字符串)
-         *
-         * 教学要点:
-         * - Fallback机制: 当用户ShaderPack缺失时使用引擎默认包
-         * - 引擎内置资源: 确保渲染系统始终有可用的ShaderPack
-         */
-        std::string engineDefaultShaderPackPath;
 
         // ==================== Shader编译配置 ====================
 

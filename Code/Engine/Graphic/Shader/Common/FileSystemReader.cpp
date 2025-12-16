@@ -28,7 +28,7 @@
 #include <system_error>
 
 #include "Engine/Core/ErrorWarningAssert.hpp"
-#include "Engine/Graphic/Shader/ShaderPack/Include/ShaderPath.hpp"
+#include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp"
 
 namespace enigma::graphic
 {

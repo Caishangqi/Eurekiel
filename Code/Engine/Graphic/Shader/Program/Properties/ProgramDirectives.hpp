@@ -71,7 +71,7 @@
 
 #pragma once
 
-#include "Engine/Graphic/Shader/ShaderPack/Parsing/CommentDirective.hpp"
+#include "Engine/Graphic/Shader/Program/Parsing/CommentDirective.hpp"
 #include <optional>
 #include <vector>
 #include <unordered_map>

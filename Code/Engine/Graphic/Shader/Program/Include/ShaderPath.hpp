@@ -8,7 +8,7 @@ namespace enigma::graphic
 {
     /**
      * @class ShaderPath
-     * @brief Shader Pack 内部绝对路径表示（Unix 风格）
+     * @brief Virtual path (Unix-style absolute path)表示（Unix 风格）
      *
      * **设计原则**：
      * - 所有路径以 `/` 开头（Unix 风格绝对路径）
@@ -18,11 +18,11 @@ namespace enigma::graphic
      *
      * **对应 Iris 源码**：
      * - Iris: AbsolutePackPath.java
-     * - 职责：统一 Shader Pack 内部路径表示
+     * - 职责：Unified virtual path representation
      *
      * **使用场景**：
      * - Include 依赖图管理（IncludeGraph）
-     * - 着色器文件查找（ShaderPackLoader）
+     * - Shader file lookup (ShaderBundleLoader)
      * - 相对路径解析（#include "../common.hlsl"）
      *
      * **示例**：
@@ -78,13 +78,13 @@ namespace enigma::graphic
 
         /**
          * @brief 转换为文件系统路径
-         * @param root Shader Pack 根目录（文件系统路径）
+         * @param root Root directory (filesystem path)
          * @return 完整的文件系统路径
          *
          * 示例：
-         * - Shader Pack 路径: `/shaders/gbuffers_terrain.hlsl`
-         * - 根目录: `F:/shaderpacks/ComplementaryReimagined/`
-         * - 结果: `F:/shaderpacks/ComplementaryReimagined/shaders/gbuffers_terrain.hlsl`
+         * - Virtual path: `/shaders/gbuffers_terrain.hlsl`
+         * - Root: `F:/MyProject/ShaderBundle/`
+         * - Result: `F:/MyProject/ShaderBundle/shaders/gbuffers_terrain.hlsl`
          */
         std::filesystem::path Resolved(const std::filesystem::path& root) const;
 

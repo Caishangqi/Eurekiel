@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * **对应 Iris 源码**：
      * - Iris: IncludeGraph.java
-     * - 职责：构建并验证 Shader Pack 的完整依赖图
+     * - Builds and validates the complete include dependency graph
      *
      * **核心算法**：
      * 1. **BFS 构建**（构造函数）：
@@ -53,7 +53,7 @@ namespace enigma::graphic
      * };
      *
      * IncludeGraph graph(
-     *     std::filesystem::path("F:/shaderpacks/MyPack"),
+     *     std::filesystem::path("F:/MyProject/ShaderBundle"),
      *     startingPaths
      * );
      *
@@ -95,7 +95,7 @@ namespace enigma::graphic
          * - std::runtime_error: 如果检测到循环依赖
          *
          * @code
-         * auto fileReader = std::make_shared<ShaderPackReader>(packRoot);
+         * auto fileReader = std::make_shared<VirtualPathReader>(packRoot);
          * IncludeGraph graph(fileReader, startingPaths);
          * @endcode
          */
@@ -106,7 +106,7 @@ namespace enigma::graphic
 
         /**
          * @brief 构建 Include 依赖图（BFS + 循环检测）- 向后兼容版本
-         * @param root Shader Pack 根目录（文件系统路径）
+         * @param root Shader bundle root directory (filesystem path)
          * @param startingPaths 起始路径列表（着色器程序文件）
          *
          * 教学要点：
@@ -141,7 +141,7 @@ namespace enigma::graphic
 
         /**
          * @brief 检查指定文件是否已加载
-         * @param path 文件路径（Shader Pack 内部路径）
+         * @param path File path (virtual path)
          * @return true 如果文件已成功加载
          */
         bool HasNode(const ShaderPath& path) const

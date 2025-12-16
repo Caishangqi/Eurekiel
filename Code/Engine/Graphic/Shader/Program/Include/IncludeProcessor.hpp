@@ -146,7 +146,7 @@ namespace enigma::graphic
          *
          * 教学要点：
          * - 批量处理优化（共享已访问集合）
-         * - 适用于 ShaderPackLoader 批量加载场景
+         * - 适用于 ShaderBundleLoader 批量加载场景
          */
         static std::unordered_map<ShaderPath, std::string> ExpandMultiple(
             const IncludeGraph&            graph,

@@ -6,7 +6,7 @@
  * 1. 理解新的灵活渲染架构（BeginFrame/Render/EndFrame + 60+ API）
  * 2. 学习DirectX 12的现代化资源管理
  * 3. 掌握引擎子系统的生命周期管理
- * 4. 理解双ShaderPack架构和Fallback机制
+ * 4. Understand shader bundle architecture and fallback mechanism
  */
 
 #pragma once
@@ -23,14 +23,11 @@
 #include "Engine/Window/Window.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "../Core/RenderState.hpp"
-#include "../Shader/ShaderPack/ShaderPack.hpp"
-#include "../Shader/ShaderCache.hpp"
 #include "RendererSubsystemConfig.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp"
 
-// 使用Enigma核心命名空间中的EngineSubsystem
 using namespace enigma::core;
 using namespace enigma::graphic;
 
@@ -93,132 +90,70 @@ namespace enigma::graphic
 
     public:
 #pragma region Lifecycle Management
-        /**
-         * @brief 构造函数
-         * @details 初始化基本成员，但不进行重型初始化工作
-         *
-         * Milestone 3.0: 参数类型从Configuration改为RendererSubsystemConfig
-         */
-        explicit RendererSubsystem(RendererSubsystemConfig& config);
 
-        /**
-         * @brief 析构函数
-         * @details 确保所有资源正确释放，遵循RAII原则
-         */
+        explicit RendererSubsystem(RendererSubsystemConfig& config);
         ~RendererSubsystem() override;
 
-        // ==================== EngineSubsystem接口实现 ====================
-
-        /// 使用引擎提供的宏来简化子系统注册
         DECLARE_SUBSYSTEM(RendererSubsystem, "RendererSubsystem", 80)
 
         /**
-         * @brief 早期初始化阶段
-         * @details 
-         * 在所有子系统的Startup之前调用，用于：
-         * - 委托D3D12RenderSystem初始化DirectX 12设备和命令队列
-         * - 设置调试和验证层
-         * 
-         * 教学要点: 理解为什么图形设备需要最早初始化，以及架构分层的重要性
-         */
+          * @brief early initialization phase
+          * @details
+          * Called before Startup of all subsystems, used for:
+          * - Delegate D3D12RenderSystem to initialize DirectX 12 devices and command queues
+          * - Set up debugging and verification layers
+          *
+          */
         void Initialize() override;
 
         /**
-         * @brief 主要启动阶段
+         * @brief Main startup phase
          * @details
-         * 在Initialize阶段之后调用，用于：
-         * - 加载引擎默认ShaderPack（必需）
-         * - 加载用户ShaderPack（可选）
-         * - 初始化渲染资源和状态
+         * Called after the Initialize phase, used for:
+         * - Initialize rendering resources and status
          */
         void Startup() override;
 
         /**
-         * @brief 关闭子系统
+         * @brief Close subsystem
          * @details
-         * 释放所有管理的资源，确保无内存泄漏：
-         * - 释放所有高级渲染组件
-         * - 委托D3D12RenderSystem进行底层资源清理
-         * 
-         * @note 析构函数会调用此方法，但显式调用更安全
+         * Release all managed resources to ensure no memory leaks:
+         * - Release all advanced rendering components
+         * - Entrust D3D12RenderSystem to clean up underlying resources
+         *
+         * @note The destructor will call this method, but calling it explicitly is safer
          */
         void Shutdown() override;
 
         bool RequiresInitialize() const override { return true; }
 
-        // ==================== 游戏循环接口 - 对应Iris管线生命周期 ====================
-
         /**
-         * @brief 帧开始处理
+         * @brief Initiates the start of a new rendering frame.
          * @details
-         * 对应Iris管线的setup和begin阶段：
-         * - setup1-99: GPU状态初始化、SSBO设置
-         * - begin1-99: 每帧参数更新、摄像机矩阵计算
-         * 
-         * 教学要点:
-         * - 理解为什么每帧开始需要更新全局参数
-         * - 学习GPU状态管理的重要性
-         * - 掌握Command List的开始记录
+         * Handles all necessary preparations for rendering at the beginning of a frame, including:
+         * - Resetting per-frame resource offsets and state caches.
+         * - Ensuring correctness of GPU and CPU-side pipeline state synchronization.
+         * - Preparing the DirectX 12 frame by acquiring the next back buffer and resetting bindings.
+         * - Clearing all render targets and depth-stencil buffers as per configuration to ensure a clean rendering state.
+         *
+         * Teaching Focus:
+         * - Illustrates explicit state management and modern graphics API design principles.
+         * - Emphasizes responsible resource handling, including frame boundary constraints.
+         * - Balances optimization techniques with architectural purity (e.g., frame-local hash caching).
+         * - Showcases the importance of separating frame-internal optimizations from inter-frame processes.
+         *
+         * Key Features:
+         * - Resets GPU state and all associated pipeline caches to avoid contamination from the previous frame.
+         * - Implements a centralized render target clearing strategy for enhanced state reliability.
+         * - Integrates multi-pass rendering considerations by preserving values when necessary.
+         *
+         * @note This method does not bind any render target. Render target binding is deferred to the UseProgram function.
+         *
+         * @critical Adjusts internal mechanisms (such as PSO binding and hash caches) to support performance optimization while adhering to frame-specific state requirements.
          */
         void BeginFrame() override;
 
-        void RenderFrame();
-
-        /**
-         * @brief 帧结束处理
-         * @details
-         * 对应Iris管线的final阶段：
-         * - final: 最终输出处理
-         * - Present: 交换链呈现
-         * - 性能统计收集
-         * - Command List提交和同步
-         * 
-         * 教学要点:
-         * - 理解双缓冲和垂直同步
-         * - 学习GPU/CPU同步的重要性
-         */
         void EndFrame() override;
-#pragma endregion
-
-#pragma region ShaderPack Management
-
-        /**
-         * @brief 通过ProgramId获取ShaderProgram（新增重载）
-         * @param id 程序ID
-         * @return std::shared_ptr<ShaderProgram> ShaderProgram智能指针（未找到返回nullptr）
-         *
-         * 教学要点:
-         * - 从ShaderCache获取ShaderProgram
-         * - 支持ProgramId查找
-         * - 向后兼容：保持现有API不变
-         */
-        std::shared_ptr<ShaderProgram> GetShaderProgram(ProgramId id);
-
-
-        const ShaderSource* GetShaderProgram(ProgramId id, const std::string& dimension) const noexcept;
-        /**
-         * @brief Load a ShaderPack from the specified path
-         * @param packPath Path to the ShaderPack directory
-         * @return true if loaded successfully, false otherwise
-         *
-         * Teaching Note:
-         * - Based on Iris.java::loadExternalShaderpack() implementation
-         * - Validates ShaderPack structure before loading
-         * - Unloads previous ShaderPack if any
-         * - Triggers pipeline rebuild after successful load
-         */
-        bool LoadShaderPack(const std::string& packPath);
-
-        /**
-         * @brief Unload the currently loaded ShaderPack
-         *
-         * Teaching Note:
-         * - Based on Iris.java::resetShaderPack() implementation
-         * - Safely releases ShaderPack resources
-         * - Resets to engine default state
-         * - Triggers pipeline rebuild
-         */
-        void UnloadShaderPack();
 #pragma endregion
 
 #pragma region Shader Compilation
@@ -340,7 +275,6 @@ namespace enigma::graphic
             const std::string&           programName,
             const ShaderCompileOptions&  options
         );
-        const ShaderSource* GetShaderSource(ProgramId id) const noexcept;
 
         /**
          * @brief 从源码字符串编译着色器程序（核心实现）
@@ -447,17 +381,6 @@ namespace enigma::graphic
          * - 掌握Iris DRAWBUFFERS指令的解析和应用
          */
         void UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs = {}, int depthIndex = 0);
-
-        /**
-         * @brief 使用ShaderProgram（ProgramId重载版本）
-         * @param programId Shader程序ID（从ShaderPack获取）
-         * @param rtOutputs RT输出索引列表（Mode A），为空时从DRAWBUFFERS读取
-         * 
-         * @details
-         * 便捷重载版本，通过ShaderPackManager自动获取ShaderProgram指针
-         * 内部调用UseProgram(ShaderProgram*, rtOutputs)
-         */
-        void UseProgram(ProgramId programId, const std::vector<uint32_t>& rtOutputs = {});
 
         /**
          * @brief 翻转指定RenderTarget的Main/Alt状态
@@ -1413,13 +1336,6 @@ namespace enigma::graphic
 #pragma endregion
 
     public:
-        /**
-         * @brief 重新加载当前Shader Pack
-         * @return true表示重新加载成功
-         * @details 用于Shader开发期间的热重载
-         */
-        bool ReloadShaderPack();
-
         // ==================== 调试和开发支持 ====================
 
         /**
@@ -1492,121 +1408,10 @@ namespace enigma::graphic
          */
         class UniformManager* GetUniformManager() const noexcept { return m_uniformManager.get(); }
 
-        // ==================== 自定义材质纹理上传 API (Phase 3) ====================
-
     private:
-        // ==================== ShaderPack Fixed Paths (Internal Constants) ====================
-        /**
-         * @brief Internal fixed paths for ShaderPack system
-         *
-         * These are compile-time constants defining the file system structure.
-         * NOT intended to be user-configurable (use Configuration::currentShaderPackName instead).
-         *
-         * Rationale:
-         * - Separation of Concerns: Fixed paths vs user choices
-         * - KISS Principle: 99% of users never need to change these paths
-         * - Iris Compatibility: Maintains standard directory structure
-         */
-
-        /**
-         * @brief Engine default ShaderPack path (Fallback)
-         *
-         * This path points to the engine's built-in default shaders.
-         * Used as a fallback when no user pack is selected.
-         *
-         * Architecture Decision (Plan 1):
-         * - Engine assets directory is treated as a standard ShaderPack
-         * - Directory structure: .enigma/assets/engine/shaders/ (Iris-compatible)
-         * - Contains: shaders/core/Common.hlsl + shaders/program/gbuffers_*.hlsl
-         * - 100% Iris-compatible (shaders/program/ directory structure)
-         *
-         * Teaching Note:
-         * - constexpr: Compile-time constant, zero runtime overhead
-         * - Relative path: Points to ShaderPack root (LoadShaderPackInternal adds /shaders)
-         * - Final path: ".enigma/assets/engine/shaders/" (after /shaders appended)
-         * - Path will be copied from Engine/.enigma/ to Run/.enigma/ during build
-         *
-         * Bug Fix (2025-10-19):
-         * - Changed from ".enigma/assets/engine/shaders" to ".enigma/assets/engine"
-         * - Reason: LoadShaderPackInternal() always appends "/shaders" subdirectory
-         * - Previous path caused: .enigma/assets/engine/shaders/shaders (duplicate)
-         */
-        static constexpr const char* ENGINE_DEFAULT_SHADERPACK_PATH =
-            ".enigma/assets/engine";
-
-        /**
-         * @brief User ShaderPack search directory
-         *
-         * This is where users can place custom ShaderPacks.
-         * Each subdirectory represents one ShaderPack (Iris standard).
-         *
-         * Example structure:
-         * .enigma/shaderpacks/
-         * ├── ComplementaryReimagined/
-         * │   └── shaders/
-         * │       ├── program/
-         * │       └── shaders.properties
-         * ├── BSL/
-         * │   └── shaders/
-         * └── Sildurs/
-         *     └── shaders/
-         *
-         * Teaching Note:
-         * - Users can download ShaderPacks from Modrinth/CurseForge
-         * - Each pack is self-contained in its own directory
-         * - Compatible with Minecraft Iris/Optifine ShaderPacks
-         */
-        static constexpr const char* USER_SHADERPACK_SEARCH_PATH =
-            ".enigma/shaderpacks";
-
-        /**
-         * @brief Current ShaderPack name
-         *
-         * - Empty string: Use ENGINE_DEFAULT_SHADERPACK_PATH
-         * - "PackName": Use USER_SHADERPACK_SEARCH_PATH/PackName
-         *
-         * Teaching Note:
-         * - This can be loaded from a config file (e.g., GameConfig.xml)
-         * - Allows users to switch ShaderPacks without recompiling
-         * - Hot-reload supported via ReloadShaderPack() method
-         */
-        std::string m_currentPackName;
-        // ==================================================================
-
-        // ==================== 内部初始化方法 ====================
-
-        // ==================== ShaderPack Lifecycle Management ====================
-
-        // 阶段2.3: SelectShaderPackPath, LoadShaderPackInternal已移至ShaderPackHelper
-        // 阶段2.4: EnsureImmediateVBO和EnsureImmediateIBO已移至BufferHelper [REFACTOR 2025-01-06]
-
-        // =========================================================================
-
-    private:
-        // ==================== 子系统特定对象 (非DirectX核心对象) ====================
-
         /// 交换链 - 双缓冲显示 (需要窗口句柄，由子系统管理)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
 
-        // ==================== 渲染系统组件 - 基于Iris架构 ====================
-
-        // TODO: M2 - 添加新的灵活渲染架构成员变量
-
-        /// Shader Pack管理器 - 着色器包系统 (已删除 - Milestone 3.0 重构)
-        // std::unique_ptr<ShaderPackManager> m_shaderPackManager;
-
-        /// Dual ShaderPack Architecture (Milestone 3.0 Phase 5.2 - 2025-10-19)
-        /// Priority 1: User ShaderPack (user-downloaded shader packs from Configuration::currentShaderPackName)
-        /// Priority 2: Engine Default ShaderPack (fallback for missing programs, always required)
-        /// Fallback Strategy: User → Engine Default → nullptr (3-step in-memory fallback, KISS principle)
-        std::unique_ptr<ShaderPack> m_userShaderPack; // User ShaderPack (may be null)
-        std::unique_ptr<ShaderPack> m_defaultShaderPack; // Engine default ShaderPack (always valid)
-
-        /// ShaderCache管理器 - 统一管理ShaderSource和ShaderProgram缓存 (Shrimp Task)
-        /// 职责: 缓存ShaderSource（持久存储）和ShaderProgram（可清理），支持ProgramId和字符串双重索引
-        std::unique_ptr<ShaderCache> m_shaderCache;
-
-        // ==================== Immediate模式渲染组件 ====================
 
         /// 即时顶点缓冲区 - 用于DrawVertexArray即时数据模式
         std::shared_ptr<D12VertexBuffer> m_immediateVBO;

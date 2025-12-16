@@ -273,15 +273,15 @@ namespace enigma::graphic
     std::filesystem::path AbsolutePackPath::Resolved(const std::filesystem::path& root) const
     {
         /**
-         * 教学要点: Shader Pack 路径到文件系统路径的转换
+         * [NOTE] Virtual path to filesystem path conversion
          *
          * 业务逻辑:
-         * - Shader Pack 路径: `/shaders/gbuffers_terrain.hlsl`
-         * - 根目录: `F:/shaderpacks/ComplementaryReimagined/`
-         * - 结果: `F:/shaderpacks/ComplementaryReimagined/shaders/gbuffers_terrain.hlsl`
+         * - Virtual path: `/shaders/gbuffers_terrain.hlsl`
+         * - Root: `F:/MyProject/ShaderBundle/`
+         * - Result: `F:/MyProject/ShaderBundle/shaders/gbuffers_terrain.hlsl`
          *
          * 实现细节:
-         * - 移除 Shader Pack 路径的前导 `/`
+         * - Remove leading `/` from virtual path `/`
          * - 使用 std::filesystem::path 的 `/` 运算符拼接
          */
 
