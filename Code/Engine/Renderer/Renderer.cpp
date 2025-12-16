@@ -5,7 +5,7 @@
 #include "VertexBuffer.hpp"
 #include "Engine/Window/Window.hpp"
 #include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Core/FileUtils.hpp"
+#include "Engine/Core/FileSystemHelper.hpp"
 #include "Engine/Renderer/Camera.hpp"
 #include "Engine/Core/Vertex_PCU.hpp"
 
