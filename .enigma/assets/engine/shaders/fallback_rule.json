@@ -1,0 +1,32 @@
+{
+  "default": "gbuffers_textured",
+  "fallbacks": {
+    "gbuffers_textured": [
+      "gbuffers_basic"
+    ],
+    "gbuffers_textured_lit": [
+      "gbuffers_textured"
+    ],
+    "gbuffers_skybasic": [
+      "gbuffers_basic"
+    ],
+    "gbuffers_skytextured": [
+      "gbuffers_textured"
+    ],
+    "gbuffers_clouds": [
+      "gbuffers_textured"
+    ],
+    "gbuffers_terrain": [
+      "gbuffers_textured_lit"
+    ],
+    "gbuffers_block": [
+      "gbuffers_terrain"
+    ],
+    "gbuffers_weather": [
+      "gbuffers_textured_lit"
+    ],
+    "gbuffers_water": [
+      "gbuffers_terrain"
+    ]
+  }
+}
