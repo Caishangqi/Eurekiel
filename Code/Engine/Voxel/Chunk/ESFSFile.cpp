@@ -1,6 +1,6 @@
 #include "ESFSFile.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Core/FileUtils.hpp"
+#include "Engine/Core/FileSystemHelper.hpp"
 #include <fstream>
 #include <filesystem>
 #include <cstring>

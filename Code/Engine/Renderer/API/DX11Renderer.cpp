@@ -5,7 +5,7 @@
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
-#include "Engine/Core/FileUtils.hpp"
+#include "Engine/Core/FileSystemHelper.hpp"
 #include "Engine/Core/Image.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Math/MathUtils.hpp"

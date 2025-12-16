@@ -1,6 +1,6 @@
 ﻿#include "BlockRegistry.hpp"
 #include "../../Core/Yaml.hpp"
-#include "../../Core/FileUtils.hpp"
+#include "../../Core/FileSystemHelper.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include "../../Voxel/Builtin/BlockAir.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"

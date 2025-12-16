@@ -7,7 +7,7 @@
 
 #include "Engine/Window/Window.hpp"
 #include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Core/FileUtils.hpp"
+#include "Engine/Core/FileSystemHelper.hpp"
 #include "Engine/Core/Image.hpp"
 #include "Engine/Renderer/BitmapFont.hpp"
 #include "Engine/Renderer/Camera.hpp"

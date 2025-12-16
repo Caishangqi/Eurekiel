@@ -1,5 +1,5 @@
 #include "ConsoleConfig.hpp"
-#include "Engine/Core/FileUtils.hpp"
+#include "Engine/Core/FileSystemHelper.hpp"
 
 namespace enigma::core
 {

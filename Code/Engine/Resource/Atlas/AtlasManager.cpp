@@ -2,7 +2,7 @@
 #include "../ResourceSubsystem.hpp"
 #include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Core/StringUtils.hpp"
-#include "../../Core/FileUtils.hpp"
+#include "../../Core/FileSystemHelper.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <regex>

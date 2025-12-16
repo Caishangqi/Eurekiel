@@ -1,7 +1,7 @@
 #include "TextureAtlas.hpp"
 #include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Core/StringUtils.hpp"
-#include "../../Core/FileUtils.hpp"
+#include "../../Core/FileSystemHelper.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
 #include <algorithm>
 #include <cmath>
