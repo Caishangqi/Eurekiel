@@ -6,54 +6,57 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // 私有构造函数 - 只能通过工厂方法创建
+    // [INTERNAL] Private Constructor - Only created via factory methods
     // ========================================================================
 
     ShaderPath::ShaderPath(const std::string& normalizedPath)
         : m_path(normalizedPath)
     {
-        // 教学要点: 私有构造函数确保所有路径都经过标准化验证
-        // 不可变对象模式: m_path 在构造后永不改变
+        // Teaching Point: Private constructor ensures all paths go through normalization
+        // Immutable object pattern: m_path never changes after construction
     }
 
     // ========================================================================
-    // 工厂方法 - 创建并验证绝对路径
+    // [PUBLIC] Factory Method - Create and validate absolute path
     // ========================================================================
 
     ShaderPath ShaderPath::FromAbsolutePath(const std::string& absolutePath)
     {
-        // 教学要点: 工厂方法模式 - 集中验证和标准化逻辑
+        // Teaching Point: Factory Method Pattern - Centralized validation and normalization
         if (absolutePath.empty() || absolutePath[0] != '/')
         {
             throw std::invalid_argument("Path must start with '/': " + absolutePath);
         }
 
-        // 标准化路径（处理 . 和 ..）
+        // Normalize path (handle . and ..)
         std::string normalized = NormalizeAbsolutePath(absolutePath);
 
-        // 使用私有构造函数创建实例
+        // Create instance using private constructor
         return ShaderPath(normalized);
     }
 
     // ========================================================================
-    // 路径标准化算法 - 核心逻辑
+    // [INTERNAL] Path Normalization Algorithm - Core Logic
     // ========================================================================
 
     std::string ShaderPath::NormalizeAbsolutePath(const std::string& path)
     {
         /**
-         * 教学要点: 路径标准化算法
+         * Teaching Point: Path Normalization Algorithm
          *
-         * 步骤:
-         * 1. 按 `/` 分割路径为段
-         * 2. 过滤空段和 `.` 段
-         * 3. 处理 `..` 段（回退到上级目录）
-         * 4. 重建标准化路径
+         * Steps:
+         * 1. Split path by '/' into segments
+         * 2. Filter empty segments and '.' segments
+         * 3. Handle '..' segments (go to parent directory)
+         * 4. Rebuild normalized path
          *
-         * 示例:
-         * - `/shaders/./lib/../common.hlsl` → `/shaders/common.hlsl`
-         * - `/shaders//lib/common.hlsl` → `/shaders/lib/common.hlsl`
-         * - `/` → `/`
+         * Examples:
+         * - /shaders/./lib/../common.hlsl -> /shaders/common.hlsl
+         * - /shaders//lib/common.hlsl -> /shaders/lib/common.hlsl
+         * - / -> /
+         *
+         * [FIX] Allow '..' to escape virtual root for cross-shaderpack includes
+         * - /shaders/program/../../../../assets/engine/... -> /../../../assets/engine/...
          */
 
         if (path.empty() || path[0] != '/')
@@ -62,7 +65,7 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // Step 1: 分割路径为段
+        // Step 1: Split path into segments
         // ========================================================================
 
         std::vector<std::string> segments;
@@ -77,7 +80,7 @@ namespace enigma::graphic
                     segments.push_back(currentSegment);
                     currentSegment.clear();
                 }
-                // 忽略空段（连续的 `/`）
+                // Ignore empty segments (consecutive '/')
             }
             else
             {
@@ -85,14 +88,14 @@ namespace enigma::graphic
             }
         }
 
-        // 处理最后一个段（如果路径不以 `/` 结尾）
+        // Handle last segment (if path doesn't end with '/')
         if (!currentSegment.empty())
         {
             segments.push_back(currentSegment);
         }
 
         // ========================================================================
-        // Step 2: 标准化段（处理 . 和 ..）
+        // Step 2: Normalize segments (handle . and ..)
         // ========================================================================
 
         std::vector<std::string> normalizedSegments;
@@ -101,32 +104,39 @@ namespace enigma::graphic
         {
             if (segment == "." || segment.empty())
             {
-                // 忽略当前目录符号和空段
+                // Ignore current directory symbol and empty segments
                 continue;
             }
             else if (segment == "..")
             {
-                // 回退到上级目录
-                if (!normalizedSegments.empty())
+                // [FIX] Allow '..' to escape virtual root for cross-shaderpack includes
+                // Example: /shaders/program/../../../../assets/engine/...
+                //       -> /../../../assets/engine/...
+                if (!normalizedSegments.empty() && normalizedSegments.back() != "..")
                 {
+                    // Still have normal segments to pop
                     normalizedSegments.pop_back();
                 }
-                // 如果已经在根目录，忽略 ..
+                else
+                {
+                    // Already at root or have escape '..' - preserve for Resolved() to handle
+                    normalizedSegments.push_back("..");
+                }
             }
             else
             {
-                // 正常段，添加到结果
+                // Normal segment, add to result
                 normalizedSegments.push_back(segment);
             }
         }
 
         // ========================================================================
-        // Step 3: 重建标准化路径
+        // Step 3: Rebuild normalized path
         // ========================================================================
 
         if (normalizedSegments.empty())
         {
-            // 特殊情况: 根路径
+            // Special case: root path
             return "/";
         }
 
@@ -140,63 +150,63 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 获取父路径
+    // [PUBLIC] Get Parent Path
     // ========================================================================
 
     std::optional<ShaderPath> ShaderPath::Parent() const
     {
         /**
-         * 教学要点: std::optional 应用
+         * Teaching Point: std::optional usage
          *
-         * 业务逻辑:
-         * - `/shaders/lib/common.hlsl` → `/shaders/lib`
-         * - `/shaders` → `/`
-         * - `/` → std::nullopt（根路径无父路径）
+         * Business Logic:
+         * - /shaders/lib/common.hlsl -> /shaders/lib
+         * - /shaders -> /
+         * - / -> std::nullopt (root has no parent)
          */
 
         if (m_path == "/")
         {
-            // 根路径无父路径
+            // Root path has no parent
             return std::nullopt;
         }
 
-        // 查找最后一个 `/` 的位置
+        // Find position of last '/'
         size_t lastSlash = m_path.find_last_of('/');
 
         if (lastSlash == 0)
         {
-            // 父路径是根目录
+            // Parent is root directory
             return ShaderPath("/");
         }
 
-        // 截取到最后一个 `/` 之前的部分
+        // Extract part before last '/'
         std::string parentPath = m_path.substr(0, lastSlash);
         return ShaderPath(parentPath);
     }
 
     // ========================================================================
-    // 解析相对路径
+    // [PUBLIC] Resolve Relative Path
     // ========================================================================
 
     ShaderPath ShaderPath::Resolve(const std::string& relativePath) const
     {
         /**
-         * 教学要点: 相对路径解析算法
+         * Teaching Point: Relative Path Resolution Algorithm
          *
-         * 业务逻辑:
-         * 1. 如果 relativePath 以 `/` 开头，直接返回新的绝对路径
-         * 2. 检测当前路径是文件路径还是目录路径
-         * 3. 文件路径：基于父路径解析；目录路径：基于当前路径解析
+         * Business Logic:
+         * 1. If relativePath starts with '/', return new absolute path
+         * 2. Detect if current path is file path or directory path
+         * 3. File path: resolve based on parent; Directory path: resolve based on current
          *
-         * 示例（文件路径）:
-         * - 当前路径: `/shaders/gbuffers_terrain.hlsl`
-         * - 解析 `../lib/common.hlsl`
-         * - 步骤: 获取父路径 `/shaders` → 拼接 → 标准化为 `/shaders/lib/common.hlsl`
+         * Example (file path):
+         * - Current: /shaders/gbuffers_terrain.hlsl
+         * - Resolve: ../lib/common.hlsl
+         * - Steps: Get parent /shaders -> concat -> normalize to /shaders/lib/common.hlsl
          *
-         * 示例（目录路径）:
-         * - 当前路径: `/shaders/programs`
-         * - 解析 `Common.hlsl`
-         * - 步骤: 直接使用 `/shaders/programs` → 拼接 → 标准化为 `/shaders/programs/Common.hlsl`
+         * Example (directory path):
+         * - Current: /shaders/programs
+         * - Resolve: Common.hlsl
+         * - Steps: Use /shaders/programs -> concat -> normalize to /shaders/programs/Common.hlsl
          */
 
         if (relativePath.empty())
@@ -204,24 +214,23 @@ namespace enigma::graphic
             throw std::invalid_argument("Relative path cannot be empty");
         }
 
-        // 如果是绝对路径，直接创建新路径
+        // If absolute path, create new path directly
         if (relativePath[0] == '/')
         {
             return FromAbsolutePath(relativePath);
         }
 
         // ========================================================================
-        // 检测当前路径是文件路径还是目录路径
+        // Detect if current path is file path or directory path
         // ========================================================================
-        // 策略：检查路径的最后一个段是否包含 '.'（可能是文件扩展名）
+        // Strategy: Check if last segment contains '.' (possible file extension)
         //
-        // 规则:
-        // - `/shaders/main.hlsl` → 文件路径（最后一个段包含 '.'）
-        // - `/shaders/programs` → 目录路径（最后一个段不包含 '.'）
-        // - `/shaders/lib.old` → 目录路径（虽然包含 '.' 但是目录名）
+        // Rules:
+        // - /shaders/main.hlsl -> File path (last segment contains '.')
+        // - /shaders/programs -> Directory path (no '.' in last segment)
         //
-        // 注意：这个判断不是100%准确（目录也可能包含 '.'），
-        // 但符合常见的文件系统约定，在绝大多数情况下都能正确工作
+        // Note: This heuristic isn't 100% accurate (directories can contain '.'),
+        // but follows common filesystem conventions and works in most cases.
         // ========================================================================
 
         bool   isFilePath = false;
@@ -229,10 +238,10 @@ namespace enigma::graphic
 
         if (lastSlash != std::string::npos && lastSlash + 1 < m_path.size())
         {
-            // 获取最后一个段（文件名或目录名）
+            // Get last segment (filename or dirname)
             std::string lastSegment = m_path.substr(lastSlash + 1);
 
-            // 如果最后一个段包含 '.' 且不是以 '.' 开头，则可能是文件路径
+            // If last segment contains '.' and doesn't start with '.', likely a file
             size_t dotPos = lastSegment.find('.');
             if (dotPos != std::string::npos && dotPos > 0)
             {
@@ -241,58 +250,112 @@ namespace enigma::graphic
         }
 
         // ========================================================================
-        // 基于路径类型选择基础路径
+        // Select base path based on path type
         // ========================================================================
 
         std::string basePath;
         if (isFilePath)
         {
-            // 文件路径：获取父路径作为基础
-            // 例如：`/shaders/main.hlsl` → 基础路径为 `/shaders`
+            // File path: Use parent as base
+            // Example: /shaders/main.hlsl -> base is /shaders
             auto parentOpt = Parent();
             basePath       = parentOpt.has_value() ? parentOpt->GetPathString() : "/";
         }
         else
         {
-            // 目录路径：直接使用当前路径作为基础
-            // 例如：`/shaders/programs` → 基础路径为 `/shaders/programs`
+            // Directory path: Use current path as base
+            // Example: /shaders/programs -> base is /shaders/programs
             basePath = m_path;
         }
 
-        // 拼接路径
+        // Concat paths
         std::string combinedPath = basePath + "/" + relativePath;
 
-        // 标准化并返回
+        // Normalize and return
         return FromAbsolutePath(combinedPath);
     }
 
     // ========================================================================
-    // 转换为文件系统路径
+    // [PUBLIC] Convert to Filesystem Path
     // ========================================================================
 
     std::filesystem::path ShaderPath::Resolved(const std::filesystem::path& root) const
     {
         /**
-         * 教学要点: Shader Pack 路径到文件系统路径的转换
+         * Teaching Point: ShaderPack Path to Filesystem Path Conversion
          *
-         * 业务逻辑:
-         * - Shader Pack 路径: `/shaders/gbuffers_terrain.hlsl`
-         * - 根目录: `F:/shaderpacks/ComplementaryReimagined/`
-         * - 结果: `F:/shaderpacks/ComplementaryReimagined/shaders/gbuffers_terrain.hlsl`
+         * Business Logic:
+         * - ShaderPack path: /shaders/gbuffers_terrain.hlsl
+         * - Root: F:/shaderpacks/ComplementaryReimagined/
+         * - Result: F:/shaderpacks/ComplementaryReimagined/shaders/gbuffers_terrain.hlsl
          *
-         * 实现细节:
-         * - 移除 Shader Pack 路径的前导 `/`
-         * - 使用 std::filesystem::path 的 `/` 运算符拼接
+         * [FIX] Support escape paths (cross-shaderpack include engine shaders):
+         * - Escape path: /../../../assets/engine/shaders/core/Common.hlsl
+         * - Root: .enigma/shaderpacks/EnigmaDefault
+         * - Result: .enigma/assets/engine/shaders/core/Common.hlsl
+         *
+         * Implementation:
+         * - Count leading '..' segments
+         * - Traverse up from root by that count
+         * - Append remaining path
          */
 
         if (m_path == "/")
         {
-            // 根路径直接返回 root
+            // Root path returns root directly
             return root;
         }
 
-        // 移除前导 `/` 并转换为文件系统路径
-        std::string relativePart = m_path.substr(1); // 跳过前导 `/`
-        return root / relativePart;
+        // [FIX] Handle escape paths (starting with /..)
+        // Count leading '..' segments and find remaining path
+        std::string pathStr = m_path.substr(1); // Skip leading '/'
+
+        int    escapeCount = 0;
+        size_t pos         = 0;
+
+        // Count consecutive '..' segments at start
+        while (pathStr.substr(pos, 2) == "..")
+        {
+            escapeCount++;
+            pos += 2;
+
+            // Skip separator '/'
+            if (pos < pathStr.size() && pathStr[pos] == '/')
+            {
+                pos++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (escapeCount > 0)
+        {
+            // Has escape '..' segments, traverse up from root
+            std::filesystem::path adjustedRoot = root;
+
+            for (int i = 0; i < escapeCount; ++i)
+            {
+                if (adjustedRoot.has_parent_path() && adjustedRoot != adjustedRoot.root_path())
+                {
+                    adjustedRoot = adjustedRoot.parent_path();
+                }
+                // Stop if already at filesystem root
+            }
+
+            // Get remaining path (part after all '..' segments)
+            std::string remainingPath = pathStr.substr(pos);
+
+            if (remainingPath.empty())
+            {
+                return adjustedRoot;
+            }
+
+            return adjustedRoot / remainingPath;
+        }
+
+        // Normal path: direct concat
+        return root / pathStr;
     }
 } // namespace enigma::graphic

@@ -766,9 +766,8 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     const std::string&           programName
 )
 {
-    // ✅ 修复：创建配置并传递入口点
     ShaderCompileOptions options = ShaderCompileOptions::WithCommonInclude();
-    options.entryPoint           = m_configuration.shaderEntryPoint; // 传递配置的入口点
+    options.entryPoint           = m_configuration.shaderEntryPoint;
 
     LogDebug(LogRenderer, "Using configured entry point: {}",
              options.entryPoint.c_str());
@@ -951,10 +950,10 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
             // 3.3 检查Include构建失败
             if (!graph->GetFailures().empty())
             {
-                LogWarn(LogRenderer, "IncludeGraph has {} failures:", graph->GetFailures().size());
+                LogWarn(LogRenderer, "IncludeGraph has %d failures:", graph->GetFailures().size());
                 for (const auto& [path, error] : graph->GetFailures())
                 {
-                    LogWarn(LogRenderer, "  - {}: {}", path.GetPathString().c_str(), error.c_str());
+                    LogWarn(LogRenderer, "  - %s: %s", path.GetPathString().c_str(), error.c_str());
                 }
             }
 
