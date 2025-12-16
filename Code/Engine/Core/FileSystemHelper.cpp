@@ -1,4 +1,4 @@
-﻿#include "FileUtils.hpp"
+﻿#include "FileSystemHelper.hpp"
 
 #include <iostream>
 
@@ -57,4 +57,48 @@ int FileReadToString(std::string& outString, const std::string& filename)
     // Construct std::string from the null-terminated C string.
     outString = std::string(reinterpret_cast<const char*>(buffer.data()));
     return static_cast<int>(outString.length());
+}
+
+// -----------------------------------------------------------------------------
+// [NEW] FileSystemHelper static methods for ShaderBundle directory operations
+// -----------------------------------------------------------------------------
+
+std::vector<std::filesystem::path> FileSystemHelper::ListSubdirectories(
+    const std::filesystem::path& directory)
+{
+    std::vector<std::filesystem::path> result;
+
+    // Return empty vector if directory doesn't exist (no exception thrown)
+    if (!std::filesystem::exists(directory) || !std::filesystem::is_directory(directory))
+    {
+        return result;
+    }
+
+    // Iterate directory and collect only subdirectories
+    for (const auto& entry : std::filesystem::directory_iterator(directory))
+    {
+        if (entry.is_directory())
+        {
+            result.push_back(entry.path());
+        }
+    }
+
+    return result;
+}
+
+bool FileSystemHelper::FileExists(const std::filesystem::path& path)
+{
+    return std::filesystem::exists(path) && std::filesystem::is_regular_file(path);
+}
+
+bool FileSystemHelper::DirectoryExists(const std::filesystem::path& path)
+{
+    return std::filesystem::exists(path) && std::filesystem::is_directory(path);
+}
+
+std::filesystem::path FileSystemHelper::CombinePath(
+    const std::filesystem::path& base,
+    const std::string&           relative)
+{
+    return (base / relative).lexically_normal();
 }
