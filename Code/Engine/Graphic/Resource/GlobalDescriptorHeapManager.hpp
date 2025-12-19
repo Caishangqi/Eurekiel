@@ -143,16 +143,16 @@ namespace enigma::graphic
         bool               m_initialized; // 初始化状态
 
 
-        
         // 默认配置 - 基于1A-2A-3A决策的最优配置
         static constexpr uint32_t DEFAULT_CBV_SRV_UAV_CAPACITY = 1000000; // 默认100万个CBV/SRV/UAV (Bindless统一大堆)
         static constexpr uint32_t DEFAULT_RTV_CAPACITY         = 1000; // 默认1000个RTV (渲染目标)
         static constexpr uint32_t DEFAULT_DSV_CAPACITY         = 100; // 默认100个DSV (深度模板)
         static constexpr uint32_t DEFAULT_SAMPLER_CAPACITY     = 2048; // 默认2048个Sampler
 
-        // Custom CBV 预留区域配置 (在主堆 m_cbvSrvUavHeap 的索引 0-99)
-        static constexpr uint32_t CUSTOM_CBV_RESERVED_START = 0; // 预留区域起始索引
-        static constexpr uint32_t CUSTOM_CBV_RESERVED_COUNT = 100; // 预留区域大小
+        // [FIX] Custom CBV reserved area configuration (Ring Descriptor Table architecture)
+        // Requires MAX_RING_FRAMES * MAX_CUSTOM_BUFFERS = 64 * 100 = 6400 Descriptors
+        static constexpr uint32_t CUSTOM_CBV_RESERVED_START = 0; // Reserved area starting index
+        static constexpr uint32_t CUSTOM_CBV_RESERVED_COUNT = 6400; // Reserved area size (64 ring frames * 100 slots)
 
     public:
         /**
@@ -270,7 +270,7 @@ namespace enigma::graphic
          * 教学要点: 批量分配减少锁竞争，提升性能
          */
         std::vector<DescriptorAllocation> BatchAllocateCbvSrvUav(uint32_t count);
-        
+
         /**
          * @brief [NEW] 批量分配Custom CBV描述符（确保连续性）
          * @param count 要分配的数量
@@ -328,7 +328,6 @@ namespace enigma::graphic
          * @return 描述符堆指针
          */
         ID3D12DescriptorHeap* GetSamplerHeap() const;
-        
 
 
         /**
@@ -553,7 +552,6 @@ namespace enigma::graphic
          * @return Sampler堆的总容量
          */
         uint32_t GetSamplerCapacity() const;
-        
 
 
         /**

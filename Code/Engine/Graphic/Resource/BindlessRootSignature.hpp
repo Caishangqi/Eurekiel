@@ -101,9 +101,15 @@ namespace enigma::graphic
         };
 
         /**
-         * @brief Custom Buffer系统常量
+         * @brief Custom Buffer system constants
+         *
+         * [FIX] Ring Descriptor Table architecture:
+         * - MAX_RING_FRAMES: Maximum number of Draws in a single frame, used for Ring Descriptor Table
+         * - Use a different Descriptor Table copy for each Draw to solve the CBV coverage problem
+         * - Total number of Descriptors = MAX_RING_FRAMES * MAX_CUSTOM_BUFFERS
          */
         static constexpr uint32_t MAX_CUSTOM_BUFFERS = 100; // 最大Custom Buffer数量
+        static constexpr uint32_t MAX_RING_FRAMES    = 64; // [FIX] 单帧最大Draw次数（Ring Descriptor Table副本数）
 
         /**
          * @brief Root Constants配置

@@ -3,11 +3,10 @@
 #include <memory>
 
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
-#include "Engine/Graphic/Shader/Uniform/UpdateFrequency.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp"
 
 namespace enigma::graphic
 {
-    // 前向声明
     class D12VertexBuffer;
     class D12IndexBuffer;
 }

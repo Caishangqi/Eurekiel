@@ -13,46 +13,14 @@
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
-#include "Engine/Graphic/Shader/Uniform/UpdateFrequency.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp"
 
 namespace enigma::graphic
 {
     // Forward declaration
     class D12Buffer;
 
-    /**
-     * @brief Ring Buffer管理状态
-     *
-     * 关键特性:
-     * - 256字节对齐: elementSize按D3D12要求对齐
-     * - 持久映射: mappedData指针持续有效，避免Map/Unmap开销
-     * - Delayed Fill: lastUpdatedValue缓存值，检测重复上传
-     * - Ring Buffer: currentIndex循环使用maxCount个槽位
-     */
-    struct PerObjectBufferState
-    {
-        std::unique_ptr<D12Buffer> gpuBuffer; // GPU Buffer资源
-        void*                      mappedData  = nullptr; // 持久映射指针
-        size_t                     elementSize = 0; // 256字节对齐的元素大小
-        size_t                     maxCount    = 0; // 最大元素数量
-        UpdateFrequency            frequency; // 更新频率
-        size_t                     currentIndex = 0; // 当前写入索引
-        std::vector<uint8_t>       lastUpdatedValue; // 缓存最后更新值
-        size_t                     lastUpdatedIndex = SIZE_MAX; // 最后更新的索引
-
-        /**
-         * @brief 获取指定索引的数据地址
-         * @param index 索引值
-         * @return 指向数据的void*指针
-         */
-        void* GetDataAt(size_t index);
-
-        /**
-         * @brief 获取当前应该使用的索引
-         * @return PerObject频率返回currentIndex % maxCount，其他频率返回0
-         */
-        size_t GetCurrentIndex() const;
-    };
+    // [NOTE] PerObjectBufferState is now defined in UniformCommon.hpp
 
     /**
      * @brief Uniform管理器 - 基于SM6.6 Bindless架构的Constant Buffer管理
@@ -150,8 +118,51 @@ namespace enigma::graphic
          * @warning 如果slot >= 15但shader中未使用space1，将导致绑定失败！
          * @note 防止重复注册，同一类型或slot只能注册一次
          */
+        /**
+         * @brief 注册类型化Buffer（支持显式space参数）
+         * @tparam T Buffer数据类型 (例如: MatricesUniforms)
+         * @param registerSlot Root Signature Slot编号 (0-14引擎保留, 0-99用户自定义)
+         * @param frequency Buffer更新频率
+         * @param space Register Space (0=Engine Root CBV, 1=Custom Descriptor Table)
+         * @param maxDraws PerObject模式的最大Draw数量 (默认10000)
+         *
+         * [IMPORTANT] HLSL绑定规则：
+         * - space=0 (Engine): shader使用 register(bN)
+         * - space=1 (Custom): shader必须使用 register(bN, space1)
+         *
+         * [NEW] Space参数路由：
+         * - space=0: 调用RegisterEngineBuffer，要求slot 0-14，使用Root CBV绑定
+         * - space=1: 调用RegisterCustomBuffer，允许任意slot，使用Descriptor Table绑定
+         *
+         * @example C++侧注册（显式space参数）
+         * @code
+         * // Engine Buffer (space=0)
+         * g_theUniformManager->RegisterBuffer<CameraUniforms>(0, UpdateFrequency::PerFrame);
+         * // 等同于: RegisterBuffer<CameraUniforms>(0, PerFrame, 0);
+         *
+         * // Custom Buffer (space=1)
+         * g_theUniformManager->RegisterBuffer<MyUniform>(88, UpdateFrequency::PerFrame, 1);
+         * @endcode
+         *
+         * @example HLSL侧声明
+         * @code
+         * // space=0 (Engine Buffer): 使用register(bN)
+         * cbuffer CameraUniforms : register(b0) { ... };
+         *
+         * // space=1 (Custom Buffer): 必须添加space1
+         * cbuffer MyUniform : register(b88, space1) { ... };  // [CORRECT]
+         * cbuffer MyUniform : register(b88) { ... };          // [WRONG] 缺少space1
+         * @endcode
+         *
+         * @throws UniformBufferException if slot/space validation fails or buffer creation fails
+         * @throws DescriptorHeapException if descriptor allocation fails (fatal, should never happen)
+         *
+         * @warning 向后兼容：默认space=0确保现有调用无需修改
+         * @note space验证在注册时执行，无运行时开销
+         */
         template <typename T>
-        void RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency, size_t maxDraws = 10000);
+        void RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency,
+                            uint32_t space = 0, size_t             maxDraws = 10000);
 
         /**
          * @brief 上传数据到类型化Buffer
@@ -159,31 +170,85 @@ namespace enigma::graphic
          * @param data 要上传的数据
          *
          * 自动计算Ring Buffer索引并memcpy到持久映射内存，更新lastUpdatedValue缓存
+         *
+         * [IMPORTANT] Multi-draw data independence:
+         * - Each UploadCustomBuffer call writes to a new Ring Buffer slice
+         * - currentDrawIndex increments after each draw (via IncrementDrawCount)
+         * - GPU reads from slice N while CPU uploads to slice N+1
+         * - maxDraws parameter limits maximum draws per frame
+         *
+         * Example:
+         *   UploadBuffer(red);       // Write to slice 0 based on type
+         *   Draw();                  // GPU reads slice 0
+         *   IncrementDrawCount();    // currentDrawIndex: 0 -> 1
+         *
+         *   UploadBuffer(green);     // Write to slice 1
+         *   Draw();                  // GPU reads slice 1
+         *   IncrementDrawCount();    // currentDrawIndex: 1 -> 2
          */
         template <typename T>
         void UploadBuffer(const T& data);
 
         /**
-         * @brief 获取当前Draw计数
-         * @return 当前帧已执行的Draw Call数量，用于计算Ring Buffer索引
+         * @brief Upload data to Buffer (explicit slot and space parameters)
+         * @tparam T Buffer data type
+         * @param data The data to be uploaded
+         * @param slot HLSL register slot
+         * @param space Register space (0=Engine Root CBV, 1=Custom Descriptor Table)
+         *
+         * [ADD] Allows slot and space to be specified directly, bypassing the TypeId search mechanism.
+         * Suitable for scenarios where dynamic switching of Buffer targets is required.
+         *
+         * @throws UniformBufferException if space parameter is invalid
+         *
+         * @example
+         * @code
+         * // Upload to Engine Buffer (space=0)
+         * uniformMgr->UploadBuffer(cameraData, 0, 0);
+         *
+         * // Upload to Custom Buffer (space=1)
+         * uniformMgr->UploadBuffer(customData, 88, 1);
+         * @endcode
+         */
+        template <typename T>
+        void UploadBuffer(const T& data, uint32_t slot, uint32_t space);
+
+        /**
+         * @brief Get the current Draw count
+         * @return The number of Draw Calls executed in the current frame, used to calculate the Ring Buffer index
          */
         size_t GetCurrentDrawCount() const { return m_currentDrawCount; }
 
         /**
-         * @brief 递增Draw计数
+         * @brief Increment Draw count
          *
-         * 每次Draw Call后调用，下一次Draw使用新索引
+         * Called after each Draw Call, the next Draw will use the new index
          */
-        void IncrementDrawCount() { m_currentDrawCount++; }
+        void IncrementDrawCount()
+        {
+            m_currentDrawCount++;
+
+            // [ADD] Increment all Custom buffers' draw index
+            for (auto& [slotId, state] : m_customBufferStates)
+            {
+                state->currentDrawIndex++;
+            }
+        }
 
         /**
-         * @brief 重置Draw计数
+         * @brief reset Draw count
          *
-         * 每帧调用，在BeginFrame()中重置为0
+         * Called every frame, reset to 0 in BeginFrame()
          */
         void ResetDrawCount()
         {
             m_currentDrawCount = 0;
+
+            // [ADD] Reset all Custom buffers' draw index
+            for (auto& [slotId, state] : m_customBufferStates)
+            {
+                state->currentDrawIndex = 0;
+            }
         }
 
         // ========================================================================
@@ -191,9 +256,9 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief 根据TypeId查询已注册的slot
-         * @tparam T Buffer数据类型
-         * @return 已注册的slot编号，未注册返回UINT32_MAX
+         * @brief Query registered slots based on TypeId
+         * @tparam T Buffer data type
+         * @return the registered slot number, if not registered, return UINT32_MAX
          */
         template <typename T>
         uint32_t GetRegisteredSlot() const
@@ -211,11 +276,11 @@ namespace enigma::graphic
         bool IsSlotRegistered(uint32_t slot) const;
 
         /**
-         * @brief 获取指定更新频率的所有slot列表
-         * @param frequency 更新频率 (PerObject, PerPass, PerFrame, Static)
-         * @return const引用，指向slot列表。未找到返回空vector
+         * @brief Get a list of all slots with a specified update frequency
+         * @param frequency update frequency (PerObject, PerPass, PerFrame, Static)
+         * @return const reference, pointing to the slot list. Not found returns empty vector
          *
-         * 用于DrawVertexArray自动绑定所有PerObject Buffer，或批量操作特定频率的Buffer
+         * Used for DrawVertexArray to automatically bind all PerObject Buffers, or batch operate Buffers with a specific frequency
          */
         const std::vector<uint32_t>& GetSlotsByFrequency(UpdateFrequency frequency) const;
 
@@ -243,10 +308,16 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief 获取Custom Buffer Descriptor Table的GPU句柄（用于Slot 15绑定）
-         * @return GPU Descriptor Handle
+         * @brief Get the GPU handle of Custom Buffer Descriptor Table (for Slot 15 binding)
+         * @param ringIndex [FIX] Ring Descriptor Table index, each Draw uses a different index
+         * @return GPU Descriptor Handle, pointing to baseHandle + ringIndex * MAX_CUSTOM_BUFFERS * descriptorSize
+         *
+         * [FIX] Ring Descriptor Table architecture:
+         * - Use a different copy of the Descriptor Table for each Draw
+         * - ringIndex = currentDrawCount % MAX_RING_FRAMES
+         * - Solve the problem of multi-Draw data independence caused by CBV Descriptor coverage
          */
-        D3D12_GPU_DESCRIPTOR_HANDLE GetCustomBufferDescriptorTableGPUHandle() const;
+        D3D12_GPU_DESCRIPTOR_HANDLE GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex = 0) const;
 
         /**
          * @brief 获取Engine Buffer的GPU虚拟地址（用于Root CBV绑定）
@@ -280,27 +351,14 @@ namespace enigma::graphic
         // [NEW] Custom Buffer Descriptor管理
         // ========================================================================
 
-        /**
-         * @brief Custom Buffer Descriptor分配记录
-         *
-         * 教学要点:
-         * 1. 记录每个Custom Buffer的CBV Descriptor分配信息
-         * 2. slotId范围：15-114（对应b15-b114）
-         * 3. allocation包含CPU和GPU句柄，用于创建CBV和绑定
-         */
-        struct CustomBufferDescriptor
-        {
-            GlobalDescriptorHeapManager::DescriptorAllocation allocation; // Descriptor分配信息
-            uint32_t                                          slotId; // Slot编号 (15-114)
-            bool                                              isValid; // 有效性标记
-
-            CustomBufferDescriptor() : slotId(0), isValid(false)
-            {
-            }
-        };
+        // [NOTE] CustomBufferDescriptor is now defined in UniformCommon.hpp
 
         // Custom Buffer Descriptor映射表：slotId -> CustomBufferDescriptor
         std::unordered_map<uint32_t, CustomBufferDescriptor> m_customBufferDescriptors;
+
+        // [NEW] Custom Buffer state management (space=1)
+        // Key: slot number, Value: buffer state with Ring Buffer and Descriptor info
+        std::unordered_map<uint32_t, std::unique_ptr<CustomBufferState>> m_customBufferStates;
 
         // [NEW] Custom Buffer Descriptor预分配池（100个连续Descriptor）
         // [RAII] 在构造函数中从GlobalDescriptorHeapManager批量分配，确保连续性
@@ -308,6 +366,9 @@ namespace enigma::graphic
 
         // Custom Buffer Descriptor Table基础GPU句柄（Slot 15绑定）
         D3D12_GPU_DESCRIPTOR_HANDLE m_customBufferDescriptorTableBaseGPUHandle = {};
+
+        // [FIX] Increment size of CBV/SRV/UAV Descriptor (used to calculate Ring Descriptor Table offset)
+        UINT m_cbvSrvUavDescriptorIncrementSize = 0;
 
         // 初始化状态标记
         bool m_initialized = false;
@@ -333,12 +394,12 @@ namespace enigma::graphic
          * 4. 更新m_slotToTypeMap和m_typeToSlotMap
          */
         bool RegisterEngineBuffer(
-            uint32_t             slotId,
-            std::type_index      typeId,
-            size_t               bufferSize,
-            UpdateFrequency      freq,
-            size_t               maxDraws,
-            uint32_t             space = 0
+            uint32_t        slotId,
+            std::type_index typeId,
+            size_t          bufferSize,
+            UpdateFrequency freq,
+            size_t          maxDraws,
+            uint32_t        space = 0
         );
 
         /**
@@ -386,12 +447,12 @@ namespace enigma::graphic
          * 5. 创建PerObjectBufferState，复用现有架构
          */
         bool RegisterCustomBuffer(
-            uint32_t             slotId,
-            std::type_index      typeId,
-            size_t               bufferSize,
-            UpdateFrequency      freq,
-            size_t               maxDraws,
-            uint32_t             space = 0
+            uint32_t        slotId,
+            std::type_index typeId,
+            size_t          bufferSize,
+            UpdateFrequency freq,
+            size_t          maxDraws,
+            uint32_t        space = 0
         );
 
         /**
@@ -478,36 +539,70 @@ namespace enigma::graphic
     // Template Method implementation (must be defined in the header file)
     // ========================================================================
     template <typename T>
-    void UniformManager::RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency, size_t maxDraws)
+    void UniformManager::RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency,
+                                        uint32_t space, size_t                 maxDraws)
     {
-        std::type_index typeId     = std::type_index(typeid(T));
-        size_t          bufferSize = sizeof(T);
+        try
+        {
+            // [REFACTOR] Validate space parameter - throw exception instead of return
+            if (space != 0 && space != 1)
+            {
+                throw UniformBufferException("Invalid space parameter, must be 0 (Engine) or 1 (Custom)",
+                                             registerSlot, space);
+            }
 
-        // [REQUIRED] prevents repeated registration of the same type
-        if (m_perObjectBuffers.find(typeId) != m_perObjectBuffers.end())
-        {
-            LogWarn(LogRenderer, "Buffer already registered: %s", typeid(T).name());
-            return;
-        }
+            std::type_index typeId     = std::type_index(typeid(T));
+            size_t          bufferSize = sizeof(T);
 
-        // [NEW] 自动路由：根据slotId判断是引擎Buffer还是Custom Buffer
-        bool success = false;
-        if (BufferHelper::IsEngineReservedSlot(registerSlot))
-        {
-            // 引擎Buffer路径（Slot 0-14）
-            success = RegisterEngineBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, 0);
-        }
-        else
-        {
-            // Custom Buffer路径（Slot 15-99，使用space1）
-            success = RegisterCustomBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, 0);
-        }
+            // [NOTE] Duplicate registration is a warning, not an error
+            if (m_perObjectBuffers.find(typeId) != m_perObjectBuffers.end())
+            {
+                LogWarn(LogUniform, "Buffer already registered: %s", typeid(T).name());
+                return;
+            }
 
-        if (success)
-        {
-            // 记录TypeId映射
-            m_typeToSlotMap[typeId]       = registerSlot;
+            // [REFACTOR] Route by space parameter - internal methods may throw
+            bool success = false;
+            if (space == 0)
+            {
+                // Engine Buffer path (space=0, Root CBV)
+                success = RegisterEngineBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, space);
+            }
+            else
+            {
+                // Custom Buffer path (space=1, Descriptor Table)
+                success = RegisterCustomBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, space);
+            }
+
+            if (!success)
+            {
+                throw UniformBufferException("Internal registration failed", registerSlot, space);
+            }
+
+            // Record TypeId mapping on success
+            m_typeToSlotMap[typeId] = registerSlot;
             m_slotToTypeMap.insert({registerSlot, typeId});
+        }
+        catch (const UniformBufferException& e)
+        {
+            // [ADD] Recoverable error - log and notify via ERROR_RECOVERABLE
+            LogError(LogUniform, "RegisterBuffer failed: %s (slot=%u, space=%u)",
+                     e.what(), e.GetSlot(), e.GetSpace());
+            ERROR_RECOVERABLE(e.what());
+            throw; // Re-throw for caller to handle
+        }
+        catch (const DescriptorHeapException& e)
+        {
+            // [ADD] Fatal error - descriptor exhaustion should never happen
+            LogError(LogUniform, "RegisterBuffer descriptor allocation failed: %s (slot=%u, space=%u)",
+                     e.what(), registerSlot, space);
+            ERROR_AND_DIE(e.what());
+        }
+        catch (const std::exception& e)
+        {
+            // [ADD] Unexpected error - treat as fatal
+            LogError(LogUniform, "RegisterBuffer unexpected error: %s", e.what());
+            ERROR_AND_DIE(e.what());
         }
     }
 
@@ -520,7 +615,7 @@ namespace enigma::graphic
         auto slotIt = m_typeToSlotMap.find(typeId);
         if (slotIt == m_typeToSlotMap.end())
         {
-            LogError(core::LogRenderer, "Buffer not registered: %s", typeid(T).name());
+            LogError(LogUniform, "Buffer not registered: %s", typeid(T).name());
             return;
         }
 
@@ -536,6 +631,32 @@ namespace enigma::graphic
         {
             // Custom Buffer路径（Slot 15-99，使用space1）
             UploadCustomBuffer(slotId, &data, sizeof(T));
+        }
+    }
+
+    // ========================================================================
+    // [ADD] UploadBuffer with explicit slot and space parameter
+    // ========================================================================
+    template <typename T>
+    void UniformManager::UploadBuffer(const T& data, uint32_t slot, uint32_t space)
+    {
+        // [ADD] Validate space parameter
+        if (space != 0 && space != 1)
+        {
+            LogError(LogUniform, "Invalid space parameter: %u (must be 0 or 1)", space);
+            throw UniformBufferException("Invalid space parameter", slot, space);
+        }
+
+        // [ADD] Route to appropriate upload method based on space
+        if (space == 0)
+        {
+            // Engine Buffer path (space=0, Root CBV)
+            UploadEngineBuffer(slot, &data, sizeof(T));
+        }
+        else
+        {
+            // Custom Buffer path (space=1, Descriptor Table)
+            UploadCustomBuffer(slot, &data, sizeof(T));
         }
     }
 } // namespace enigma::graphic

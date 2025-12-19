@@ -8,61 +8,51 @@
 
 #include <cstring>
 
-// 遵循四层架构: UniformManager → D3D12RenderSystem → D12Buffer → DX12 Native
-#include "Engine/Core/Logger/LoggerAPI.hpp"
+// Follow the four-layer architecture: UniformManager → D3D12RenderSystem → D12Buffer → DX12 Native#include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
 
 namespace enigma::graphic
 {
-    void* PerObjectBufferState::GetDataAt(size_t index)
-    {
-        return static_cast<uint8_t*>(mappedData) + index * elementSize;
-    }
-
-    size_t PerObjectBufferState::GetCurrentIndex() const
-    {
-        switch (frequency)
-        {
-        case UpdateFrequency::PerObject:
-            return currentIndex % maxCount;
-        case UpdateFrequency::PerPass:
-        case UpdateFrequency::PerFrame:
-            return 0; // single index
-        default:
-            return 0;
-        }
-    }
+    // [NOTE] PerObjectBufferState::GetDataAt and GetCurrentIndex are now defined in UniformCommon.cpp
 
     UniformManager::UniformManager()
     {
-        // [RAII] 构造函数完成所有初始化工作
-        
-        // 步骤1: 获取GlobalDescriptorHeapManager
+        // Step 1: Get GlobalDescriptorHeapManager
         auto* heapMgr = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
         if (!heapMgr)
         {
-            LogError(LogRenderer, "GlobalDescriptorHeapManager not available");
+            LogError(LogUniform, "GlobalDescriptorHeapManager not available");
             ERROR_AND_DIE("UniformManager construction failed: GlobalDescriptorHeapManager not available");
         }
 
-        // 步骤2: 预分配100个连续的Custom Buffer CBV
-        auto allocations = heapMgr->BatchAllocateCustomCbv(BindlessRootSignature::MAX_CUSTOM_BUFFERS);
-        if (allocations.size() != BindlessRootSignature::MAX_CUSTOM_BUFFERS)
+        // [FIX] Step 1.5: Get the Descriptor increment size (used to calculate the Ring Descriptor Table offset)
+        auto* device = D3D12RenderSystem::GetDevice();
+        if (device)
         {
-            LogError(LogRenderer, "Failed to allocate Custom Buffer descriptors: expected %u, got %zu",
-                     BindlessRootSignature::MAX_CUSTOM_BUFFERS, allocations.size());
-            ERROR_AND_DIE(Stringf("UniformManager construction failed: expected %u descriptors, got %zu",
-                                  BindlessRootSignature::MAX_CUSTOM_BUFFERS, allocations.size()));
+            m_cbvSrvUavDescriptorIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
 
-        // 步骤3: 验证连续性（Descriptor Table要求）
+        // [FIX] Step 2: Pre-allocate Ring Descriptor Pool
+        // Total quantity = MAX_RING_FRAMES * MAX_CUSTOM_BUFFERS (copies per frame * number of slots per copy)
+        // For example: 64 * 100 = 6400 Descriptors
+        const uint32_t totalDescriptors = BindlessRootSignature::MAX_RING_FRAMES * BindlessRootSignature::MAX_CUSTOM_BUFFERS;
+        auto           allocations      = heapMgr->BatchAllocateCustomCbv(totalDescriptors);
+        if (allocations.size() != totalDescriptors)
+        {
+            LogError(LogUniform, "Failed to allocate Ring Descriptor Pool: expected %u, got %zu",
+                     totalDescriptors, allocations.size());
+            ERROR_AND_DIE(Stringf("UniformManager construction failed: expected %u descriptors, got %zu",
+                totalDescriptors, allocations.size()));
+        }
+
+        // Step 3: Verify continuity (required by Descriptor Table)
         for (size_t i = 1; i < allocations.size(); i++)
         {
             if (allocations[i].heapIndex != allocations[i - 1].heapIndex + 1)
             {
-                LogError(LogRenderer, "Custom Buffer descriptors are not contiguous: [%zu]=%u, [%zu]=%u",
+                LogError(LogUniform, "Ring Descriptor Pool not contiguous: [%zu]=%u, [%zu]=%u",
                          i - 1, allocations[i - 1].heapIndex, i, allocations[i].heapIndex);
                 ERROR_AND_DIE(Stringf("UniformManager construction failed: descriptors not contiguous at index %zu", i));
             }
@@ -72,11 +62,11 @@ namespace enigma::graphic
         m_customBufferDescriptorTableBaseGPUHandle = allocations[0].gpuHandle;
 
         // [DIAGNOSTIC] 打印 GPU Handle 的 ptr 值以确认有效性
-        LogInfo(LogRenderer, "UniformManager constructed - Custom Buffer Descriptor Table Base GPU Handle: ptr=0x%llX",
-                m_customBufferDescriptorTableBaseGPUHandle.ptr);
+        LogInfo(LogUniform, "UniformManager constructed - Ring Descriptor Pool Base GPU Handle: ptr=0x%llX, incrementSize=%u",
+                m_customBufferDescriptorTableBaseGPUHandle.ptr, m_cbvSrvUavDescriptorIncrementSize);
 
         // 步骤5: 记录所有分配到Descriptor池
-        m_customBufferDescriptorPool.resize(BindlessRootSignature::MAX_CUSTOM_BUFFERS);
+        m_customBufferDescriptorPool.resize(totalDescriptors);
         for (size_t i = 0; i < allocations.size(); i++)
         {
             m_customBufferDescriptorPool[i] = allocations[i];
@@ -84,8 +74,8 @@ namespace enigma::graphic
 
         m_initialized = true;
 
-        LogInfo(LogRenderer, "UniformManager constructed successfully: %u Custom Buffer descriptors pre-allocated (contiguous)",
-                BindlessRootSignature::MAX_CUSTOM_BUFFERS);
+        LogInfo(LogUniform, "UniformManager constructed successfully: %u Ring Descriptor Pool (MAX_RING_FRAMES=%u * MAX_CUSTOM_BUFFERS=%u)",
+                totalDescriptors, BindlessRootSignature::MAX_RING_FRAMES, BindlessRootSignature::MAX_CUSTOM_BUFFERS);
     }
 
     UniformManager::~UniformManager()
@@ -148,6 +138,24 @@ namespace enigma::graphic
         // 遍历所有slot，更新Ring Buffer offset并执行Delayed Fill
         for (uint32_t slotId : slots)
         {
+            // [FIX] Check if this is a Custom Buffer (stored in m_customBufferStates)
+            auto customIt = m_customBufferStates.find(slotId);
+            if (customIt != m_customBufferStates.end())
+            {
+                // Custom Buffer path - use CustomBufferState
+                CustomBufferState* customState = customIt->second.get();
+                if (!customState || !customState->gpuBuffer)
+                {
+                    continue;
+                }
+
+                // [NOTE] Custom Buffer offset update is handled in UpdateDescriptorTableOffset
+                // which is called during UploadCustomBuffer, so we just skip here
+                // The Ring Buffer index is managed per-draw via IncrementDrawCount()
+                continue;
+            }
+
+            // Engine Buffer path - use PerObjectBufferState
             auto* state = GetBufferStateBySlot(slotId);
             if (!state || !state->gpuBuffer)
             {
@@ -170,18 +178,8 @@ namespace enigma::graphic
             }
 
             // 步骤3: 更新offset（根据Buffer类型选择不同路径）
-            if (BufferHelper::IsEngineReservedSlot(slotId))
-            {
-                // Root CBV路径（引擎Buffer）
-                // [NOTE] 实现为空，因为Root CBV在Draw时直接绑定
-                UpdateRootCBVOffset(slotId, currentIndex);
-            }
-            else
-            {
-                // Descriptor Table路径（Custom Buffer）
-                // 动态更新CBV Descriptor指向当前Ring Buffer slice
-                UpdateDescriptorTableOffset(slotId, currentIndex);
-            }
+            // [NOTE] Only Engine buffers reach here, Custom buffers are handled above
+            UpdateRootCBVOffset(slotId, currentIndex);
         }
     }
 
@@ -196,33 +194,36 @@ namespace enigma::graphic
         size_t          maxDraws,
         uint32_t        space)
     {
-        UNUSED(space)
-        // 步骤1: 验证Slot范围
+        // [REFACTOR] Validate space must be 0 for Engine buffers - throw exception
+        if (space != 0)
+        {
+            throw UniformBufferException("Engine Buffer must use space=0", slotId, space);
+        }
+
+        // Step 1: Validate Slot range (Engine Buffer must use slot 0-14)
         if (!BufferHelper::IsEngineReservedSlot(slotId))
         {
-            LogError(LogRenderer, "Slot %u is not an engine reserved slot (0-14)", slotId);
-            return false;
+            throw UniformBufferException("Engine Buffer slot must be 0-14", slotId, space);
         }
 
-        // 步骤2: 检查Slot冲突
+        // Step 2: Check Slot conflict
         if (IsSlotRegistered(slotId))
         {
-            LogError(LogRenderer, "Slot %u already registered!", slotId);
-            return false;
+            throw UniformBufferException("Slot already registered", slotId, space);
         }
 
-        // 步骤3: 计算256字节对齐的Buffer大小
+        // Step 3: Calculate 256-byte aligned Buffer size
         size_t alignedSize = BufferHelper::CalculateAlignedSize(bufferSize);
 
-        // 步骤4: 根据频率计算Ring Buffer数量
+        // Step 4: Calculate Ring Buffer count based on frequency
         size_t ringBufferCount = 1;
         switch (freq)
         {
         case UpdateFrequency::PerObject:
-            ringBufferCount = maxDraws; // 默认10000
+            ringBufferCount = maxDraws; // Default 10000
             break;
         case UpdateFrequency::PerPass:
-            ringBufferCount = 20; // 保守估计
+            ringBufferCount = 20; // Conservative estimate
             break;
         case UpdateFrequency::PerFrame:
         case UpdateFrequency::Static:
@@ -232,7 +233,7 @@ namespace enigma::graphic
 
         size_t totalSize = alignedSize * ringBufferCount;
 
-        // 步骤5: 创建GPU Buffer
+        // Step 5: Create GPU Buffer
         BufferCreateInfo createInfo;
         createInfo.size          = totalSize;
         createInfo.usage         = BufferUsage::ConstantBuffer;
@@ -244,19 +245,17 @@ namespace enigma::graphic
         auto gpuBuffer = D3D12RenderSystem::CreateBuffer(createInfo);
         if (!gpuBuffer)
         {
-            LogError(LogRenderer, "Failed to create engine buffer for slot %u", slotId);
-            return false;
+            throw UniformBufferException("Failed to create GPU buffer", slotId, space);
         }
 
-        // 步骤6: 持久映射
+        // Step 6: Persistent mapping
         void* mappedData = gpuBuffer->MapPersistent();
         if (!mappedData)
         {
-            LogError(LogRenderer, "Failed to map engine buffer for slot %u", slotId);
-            return false;
+            throw UniformBufferException("Failed to map GPU buffer", slotId, space);
         }
 
-        // 步骤7: 创建PerObjectBufferState
+        // Step 7: Create PerObjectBufferState
         PerObjectBufferState state;
         state.gpuBuffer    = std::move(gpuBuffer);
         state.mappedData   = mappedData;
@@ -267,13 +266,13 @@ namespace enigma::graphic
         state.lastUpdatedValue.resize(alignedSize, 0);
         state.lastUpdatedIndex = SIZE_MAX;
 
-        // 步骤8: 直接使用传入的typeId存储到m_perObjectBuffers
+        // Step 8: Store to m_perObjectBuffers using typeId
         m_perObjectBuffers[typeId] = std::move(state);
 
-        // 步骤9: 添加到频率分类
+        // Step 9: Add to frequency classification
         m_frequencyToSlotsMap[freq].push_back(slotId);
 
-        LogInfo(LogRenderer, "Engine Buffer registered: Slot=%u, Size=%zu, Frequency=%d, Count=%zu",
+        LogInfo(LogUniform, "Engine Buffer registered: Slot=%u, Size=%zu, Frequency=%d, Count=%zu",
                 slotId, alignedSize, static_cast<int>(freq), ringBufferCount);
         return true;
     }
@@ -282,45 +281,44 @@ namespace enigma::graphic
     // [NEW] RegisterCustomBuffer实现
     // ========================================================================
     bool UniformManager::RegisterCustomBuffer(
-        uint32_t        slotId,
-        std::type_index typeId,
+        uint32_t slotId,
+        std::type_index /*typeId*/, // [NOTE] typeId unused - Custom buffers use slotId as key
         size_t          bufferSize,
         UpdateFrequency freq,
         size_t          maxDraws,
         uint32_t        space)
     {
-        UNUSED(space)
+        // [REFACTOR] Validate space must be 1 for Custom buffers - throw exception
+        if (space != 1)
+        {
+            throw UniformBufferException("Custom Buffer must use space=1", slotId, space);
+        }
 
-        // [IMPORTANT] Shader绑定规则：
-        // - Slot 0-14:  使用Root CBV (space0)，shader中使用 register(bN)
-        // - Slot 15-99: 使用Descriptor Table (space1)，shader中必须使用 register(bN, space1)
+        // [NOTE] Custom Buffer uses space=1, shader must use register(bN, space1)
+        // Slot range validation: allow any slot 0-99 (unlike Engine Buffer 0-14 limit)
         if (slotId >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
         {
-            LogError(LogRenderer, "Custom Buffer slot %u exceeds MAX_CUSTOM_BUFFERS (%u), must be in range [0, %u]",
-                     slotId, BindlessRootSignature::MAX_CUSTOM_BUFFERS, BindlessRootSignature::MAX_CUSTOM_BUFFERS - 1);
-            return false;
+            throw UniformBufferException("Custom Buffer slot exceeds MAX_CUSTOM_BUFFERS", slotId, space);
         }
 
-        // [WARNING] Slot 0-14 与引擎保留Slot冲突检查
-        // 虽然技术上可以使用Slot 0-14，但会与引擎保留的Root CBV冲突
-        // 建议使用Slot 15+以避免冲突，且必须在shader中使用space1
+        // [WARNING] Slot 0-14 conflict with engine reserved slots (warn only, allow registration)
+        // When using space=1, even slots in 0-14 range use Descriptor Table binding
         if (BufferHelper::IsEngineReservedSlot(slotId))
         {
-            LogWarn(LogRenderer, "Custom Buffer slot %u conflicts with engine reserved slot (0-14), "
-                    "this may cause binding conflicts. Recommend using slot >= 15 with space1 in shader", slotId);
+            LogWarn(LogUniform, "Custom Buffer slot %u is in engine reserved range (0-14), "
+                    "ensure shader uses register(b%u, space1) to avoid conflicts", slotId, slotId);
         }
 
-        // 步骤2: 检查Slot冲突
+        // Step 2: Check Slot conflict
         if (IsSlotRegistered(slotId))
         {
-            LogError(LogRenderer, "Slot %u already registered!", slotId);
-            return false;
+            throw UniformBufferException("Slot already registered", slotId, space);
         }
 
-        // 步骤3: 计算256字节对齐的Buffer大小
+        // Step 3: Calculate 256-byte aligned Buffer size
         size_t alignedSize = BufferHelper::CalculateAlignedSize(bufferSize);
 
-        // 步骤4: 根据频率计算Ring Buffer数量
+        // Step 4: Calculate Ring Buffer count based on frequency
         size_t ringBufferCount = 1;
         switch (freq)
         {
@@ -338,7 +336,7 @@ namespace enigma::graphic
 
         size_t totalSize = alignedSize * ringBufferCount;
 
-        // 步骤5: 创建GPU Buffer
+        // Step 5: Create GPU Buffer
         BufferCreateInfo createInfo;
         createInfo.size          = totalSize;
         createInfo.usage         = BufferUsage::ConstantBuffer;
@@ -350,72 +348,97 @@ namespace enigma::graphic
         auto gpuBuffer = D3D12RenderSystem::CreateBuffer(createInfo);
         if (!gpuBuffer)
         {
-            LogError(LogRenderer, "Failed to create Custom Buffer for slot %u", slotId);
-            return false;
+            throw UniformBufferException("Failed to create GPU buffer", slotId, space);
         }
 
-        // 步骤6: 持久映射
+        // Step 6: Persistent mapping
         void* mappedData = gpuBuffer->MapPersistent();
         if (!mappedData)
         {
-            LogError(LogRenderer, "Failed to map Custom Buffer for slot %u", slotId);
-            return false;
+            throw UniformBufferException("Failed to map GPU buffer", slotId, space);
         }
 
-        // 步骤7: 分配Descriptor
+        // Step 7: Allocate Descriptor
         if (!AllocateCustomBufferDescriptor(slotId))
         {
-            LogError(LogRenderer, "Failed to allocate descriptor for Custom Buffer slot %u", slotId);
-            return false;
+            throw DescriptorHeapException("Failed to allocate descriptor for Custom Buffer");
         }
 
-        // 步骤7.5: [FIX] 创建初始CBV到Descriptor中
-        // 获取分配的Descriptor的CPU Handle
-        auto it = m_customBufferDescriptors.find(slotId);
-        if (it == m_customBufferDescriptors.end() || !it->second.isValid)
-        {
-            LogError(LogRenderer, "Failed to get allocated descriptor for Custom Buffer slot %u", slotId);
-            return false;
-        }
-
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = it->second.allocation.cpuHandle;
-
-        // 创建CBV描述符（指向Ring Buffer的第一个slice）
-        D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-        cbvDesc.BufferLocation                  = gpuBuffer->GetGPUVirtualAddress();
-        cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
-
+        // [FIX] Step 7.5: Create CBV for ALL Ring Frames (Ring Descriptor Table 架构)
+        // 为每个 ringFrame 创建独立的 CBV，解决 CBV 覆盖问题
         auto* device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
-            LogError(LogRenderer, "D3D12 device not available");
-            return false;
+            throw DescriptorHeapException("D3D12 device not available for CBV creation");
         }
 
-        device->CreateConstantBufferView(&cbvDesc, cpuHandle);
+        D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress = gpuBuffer->GetGPUVirtualAddress();
 
-        LogInfo(LogRenderer, "Created initial CBV for Custom Buffer Slot=%u at Descriptor Index=%u, GPU Address=0x%llX",
-                slotId, it->second.allocation.heapIndex, cbvDesc.BufferLocation);
+        // [FIX] 确保 ringBufferCount >= MAX_RING_FRAMES，避免越界
+        size_t effectiveRingCount = std::min(ringBufferCount, static_cast<size_t>(BindlessRootSignature::MAX_RING_FRAMES));
 
-        // 步骤8: 创建PerObjectBufferState
-        PerObjectBufferState state;
-        state.gpuBuffer    = std::move(gpuBuffer);
-        state.mappedData   = mappedData;
-        state.elementSize  = alignedSize;
-        state.maxCount     = ringBufferCount;
-        state.frequency    = freq;
-        state.currentIndex = 0;
-        state.lastUpdatedValue.resize(alignedSize, 0);
-        state.lastUpdatedIndex = SIZE_MAX;
+        for (uint32_t ringFrame = 0; ringFrame < BindlessRootSignature::MAX_RING_FRAMES; ++ringFrame)
+        {
+            // [FIX] 计算 Descriptor 在 Ring Descriptor Pool 中的位置
+            // Layout: [ringFrame0: slot0,slot1,...,slot99][ringFrame1: slot0,slot1,...,slot99]...
+            uint32_t descriptorIndex = ringFrame * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
 
-        // 步骤9: 直接使用传入的typeId存储到m_perObjectBuffers
-        m_perObjectBuffers[typeId] = std::move(state);
+            if (descriptorIndex >= m_customBufferDescriptorPool.size())
+            {
+                LogError(LogUniform, "Descriptor index %u out of range (pool size=%zu)", descriptorIndex, m_customBufferDescriptorPool.size());
+                continue;
+            }
 
-        // 步骤10: 添加到频率分类
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
+
+            // [FIX] 计算 Ring Buffer slice 的 GPU 地址
+            // ringFrame 对应的 slice = ringFrame % ringBufferCount（处理 ringBufferCount < MAX_RING_FRAMES 的情况）
+            size_t                    sliceIndex   = ringFrame % effectiveRingCount;
+            D3D12_GPU_VIRTUAL_ADDRESS sliceAddress = baseGpuAddress + sliceIndex * alignedSize;
+
+            // Create CBV descriptor
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+            cbvDesc.BufferLocation                  = sliceAddress;
+            cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
+
+            device->CreateConstantBufferView(&cbvDesc, cpuHandle);
+        }
+
+        LogInfo(LogUniform, "Created %u CBVs for Custom Buffer Slot=%u (Ring Descriptor Table), Base GPU Address=0x%llX",
+                BindlessRootSignature::MAX_RING_FRAMES, slotId, baseGpuAddress);
+
+        // [NOTE] 保留 m_customBufferDescriptors 的兼容性（存储第一个 ringFrame 的 Descriptor）
+        auto                        it             = m_customBufferDescriptors.find(slotId);
+        D3D12_CPU_DESCRIPTOR_HANDLE firstCpuHandle = {};
+        if (it != m_customBufferDescriptors.end() && it->second.isValid)
+        {
+            firstCpuHandle = it->second.allocation.cpuHandle;
+        }
+
+        // [REFACTOR] Step 8: Create CustomBufferState instead of PerObjectBufferState
+        auto customState              = std::make_unique<CustomBufferState>();
+        customState->elementSize      = alignedSize;
+        customState->maxDraws         = ringBufferCount;
+        customState->currentDrawIndex = 0;
+        customState->gpuBuffer        = gpuBuffer->GetResource(); // [REFACTOR] Store ComPtr<ID3D12Resource>
+        customState->mappedPtr        = static_cast<uint8_t*>(mappedData);
+        customState->bindlessIndex    = it->second.allocation.heapIndex;
+        customState->cpuHandle        = firstCpuHandle;
+        customState->slot             = slotId;
+        customState->frequency        = freq;
+        customState->isDirty          = false;
+
+        // [REFACTOR] Step 9: Store in m_customBufferStates instead of m_perObjectBuffers
+        m_customBufferStates[slotId] = std::move(customState);
+
+        // [NOTE] Step 10 removed: TypeId mappings are updated in RegisterBuffer template method
+        // to avoid duplicate updates and ensure consistency
+
+        // Step 11: Add to frequency classification
         m_frequencyToSlotsMap[freq].push_back(slotId);
 
-        LogInfo(LogRenderer, "Custom Buffer registered: Slot=%u, Size=%zu, Frequency=%d, Count=%zu",
-                slotId, alignedSize, static_cast<int>(freq), ringBufferCount);
+        LogInfo(LogUniform, "Custom Buffer registered: Slot=%u, Space=1, Size=%zu, MaxDraws=%zu",
+                slotId, alignedSize, ringBufferCount);
         return true;
     }
 
@@ -428,14 +451,14 @@ namespace enigma::graphic
         auto* state = GetBufferStateBySlot(slotId);
         if (!state)
         {
-            LogError(LogRenderer, "Engine Buffer slot %u not registered", slotId);
+            LogError(LogUniform, "Engine Buffer slot %u not registered", slotId);
             return false;
         }
 
         // 步骤2: 验证数据大小
         if (size > state->elementSize)
         {
-            LogWarn(LogRenderer, "Data size (%zu) exceeds buffer element size (%zu)", size, state->elementSize);
+            LogWarn(LogUniform, "Data size (%zu) exceeds buffer element size (%zu)", size, state->elementSize);
         }
 
         // 步骤3: 计算当前Ring Buffer索引
@@ -456,37 +479,43 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // [NEW] UploadCustomBuffer实现
+    // [REFACTOR] UploadCustomBuffer - uses CustomBufferState from m_customBufferStates
     // ========================================================================
     bool UniformManager::UploadCustomBuffer(uint32_t slotId, const void* data, size_t size)
     {
-        // 步骤1: 获取Buffer状态
-        auto* state = GetBufferStateBySlot(slotId);
-        if (!state)
+        // [REFACTOR] Step 1: Find Custom Buffer state in m_customBufferStates
+        auto it = m_customBufferStates.find(slotId);
+        if (it == m_customBufferStates.end())
         {
-            LogError(LogRenderer, "Custom Buffer slot %u not registered", slotId);
+            LogError(LogUniform, "Custom Buffer slot %u not registered", slotId);
             return false;
         }
 
-        // 步骤2: 验证数据大小
+        CustomBufferState* state = it->second.get();
+
+        // Step 2: 验证数据大小
         if (size > state->elementSize)
         {
-            LogWarn(LogRenderer, "Data size (%zu) exceeds buffer element size (%zu)", size, state->elementSize);
+            LogWarn(LogUniform, "Data size (%zu) exceeds buffer element size (%zu)", size, state->elementSize);
         }
 
-        // 步骤3: 计算当前Ring Buffer索引
-        size_t currentIndex = state->GetCurrentIndex();
+        // [REFACTOR] Step 3: Calculate Ring Buffer index using currentDrawIndex
+        uint32_t ringIndex = state->currentDrawIndex % static_cast<uint32_t>(state->maxDraws);
+        size_t   offset    = ringIndex * state->elementSize;
 
-        // 步骤4: 复制数据到GPU Buffer
-        void* destPtr = state->GetDataAt(currentIndex);
-        std::memcpy(destPtr, data, size);
+        // Step 4: Copy data to Ring Buffer slice
+        std::memcpy(state->mappedPtr + offset, data, size);
 
-        // 步骤5: 更新Delayed Fill缓存
-        std::memcpy(state->lastUpdatedValue.data(), data, size);
-        state->lastUpdatedIndex = currentIndex;
+        // [FIX] Step 5: CBV 已在 RegisterCustomBuffer 中预创建 (Ring Descriptor Table 架构)
+        // 不再每次 Upload 时更新 CBV Descriptor，避免覆盖问题
+        // 只需写入数据到 Ring Buffer，GPU 通过 ringIndex 选择正确的 CBV
 
-        // 步骤6: 递增索引
-        state->currentIndex++;
+        // [FIX] Step 6: 不在这里递增 currentDrawIndex
+        // 计数器统一由 IncrementDrawCount() 管理（在每次 Draw 后调用）
+        // 这样确保 Upload 和 Bind 使用相同的 ring index
+
+        // Step 7: Mark as dirty
+        state->isDirty = true;
 
         return true;
     }
@@ -524,7 +553,7 @@ namespace enigma::graphic
         auto it = m_customBufferDescriptors.find(slotId);
         if (it == m_customBufferDescriptors.end() || !it->second.isValid)
         {
-            LogError(LogRenderer, "Custom Buffer descriptor not allocated for slot %u", slotId);
+            LogError(LogUniform, "Custom Buffer descriptor not allocated for slot %u", slotId);
             return;
         }
 
@@ -543,7 +572,7 @@ namespace enigma::graphic
         auto* device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
-            LogError(LogRenderer, "D3D12 device not available");
+            LogError(LogUniform, "D3D12 device not available");
             return;
         }
 
@@ -560,14 +589,14 @@ namespace enigma::graphic
         // 步骤1: 检查是否已分配
         if (m_customBufferDescriptors.find(slotId) != m_customBufferDescriptors.end())
         {
-            LogWarn(LogRenderer, "Custom Buffer descriptor already allocated for slot %u", slotId);
+            LogWarn(LogUniform, "Custom Buffer descriptor already allocated for slot %u", slotId);
             return true; // 已分配，视为成功
         }
 
         // 步骤2: 验证初始化状态
         if (!m_initialized || m_customBufferDescriptorPool.empty())
         {
-            LogError(LogRenderer, "UniformManager not initialized or descriptor pool empty");
+            LogError(LogUniform, "UniformManager not initialized or descriptor pool empty");
             return false;
         }
 
@@ -578,7 +607,7 @@ namespace enigma::graphic
 
         if (descriptorIndex >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
         {
-            LogError(LogRenderer, "Custom Buffer slot %u exceeds MAX_CUSTOM_BUFFERS (%u)",
+            LogError(LogUniform, "Custom Buffer slot %u exceeds MAX_CUSTOM_BUFFERS (%u)",
                      slotId, BindlessRootSignature::MAX_CUSTOM_BUFFERS);
             return false;
         }
@@ -588,7 +617,7 @@ namespace enigma::graphic
 
         if (!allocation.isValid)
         {
-            LogError(LogRenderer, "Failed to get pre-allocated descriptor for slot %u (index %u)",
+            LogError(LogUniform, "Failed to get pre-allocated descriptor for slot %u (index %u)",
                      slotId, descriptorIndex);
             return false;
         }
@@ -601,7 +630,7 @@ namespace enigma::graphic
 
         m_customBufferDescriptors[slotId] = desc;
 
-        LogInfo(LogRenderer, "Allocated Custom Buffer descriptor: Slot=%u → Descriptor Index=%u (direct mapping)",
+        LogInfo(LogUniform, "Allocated Custom Buffer descriptor: Slot=%u → Descriptor Index=%u (direct mapping)",
                 slotId, descriptorIndex);
         return true;
     }
@@ -615,16 +644,27 @@ namespace enigma::graphic
         if (it != m_customBufferDescriptors.end())
         {
             m_customBufferDescriptors.erase(it);
-            LogInfo(LogRenderer, "Custom Buffer descriptor freed: Slot=%u", slotId);
+            LogInfo(LogUniform, "Custom Buffer descriptor freed: Slot=%u", slotId);
         }
     }
 
     // ========================================================================
-    // [NEW] GetCustomBufferDescriptorTableGPUHandle实现
+    // [FIX] GetCustomBufferDescriptorTableGPUHandle implementation - Ring Descriptor Table architecture
     // ========================================================================
-    D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::GetCustomBufferDescriptorTableGPUHandle() const
+    D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex) const
     {
-        return m_customBufferDescriptorTableBaseGPUHandle;
+        // [FIX] Calculate Descriptor Table offset based on ringIndex
+        // Layout: [ringFrame0: slot0,slot1,...,slot99][ringFrame1: slot0,slot1,...,slot99]...
+        //Each ringFrame occupies MAX_CUSTOM_BUFFERS Descriptors
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = m_customBufferDescriptorTableBaseGPUHandle;
+
+        // ringIndex % MAX_RING_FRAMES ensures that the index is within the valid range
+        uint32_t effectiveRingIndex = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
+
+        // Calculate offset: ringIndex * MAX_CUSTOM_BUFFERS * incrementSize
+        handle.ptr += effectiveRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS * m_cbvSrvUavDescriptorIncrementSize;
+
+        return handle;
     }
 
     // ========================================================================
@@ -652,7 +692,7 @@ namespace enigma::graphic
         // 步骤1: 验证是否为Engine Buffer Slot
         if (!BufferHelper::IsEngineReservedSlot(slotId))
         {
-            LogError(LogRenderer, "Slot %u is not an engine reserved slot", slotId);
+            LogError(LogUniform, "Slot %u is not an engine reserved slot", slotId);
             return 0;
         }
 

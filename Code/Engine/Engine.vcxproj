@@ -493,6 +493,7 @@
     <ClCompile Include="Graphic\Shader\Program\ShaderSource.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\VirtualPathReader.cpp"/>
     <ClCompile Include="Graphic\Shader\Uniform\CustomImageManager.cpp" />
+    <ClCompile Include="Graphic\Shader\Uniform\UniformCommon.cpp"/>
     <ClCompile Include="Graphic\Shader\Uniform\UniformManager.cpp" />
     <ClCompile Include="Graphic\Sprite\Sprite.cpp" />
     <ClCompile Include="Graphic\Sprite\SpriteAtlas.cpp" />
@@ -951,7 +952,9 @@
     <ClInclude Include="Graphic\Shader\Uniform\PerObjectUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\ShadowColorIndexBuffer.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp" />
-    <ClInclude Include="Graphic\Shader\Uniform\UpdateFrequency.hpp" />
+    <ClInclude Include="Graphic\Shader\Uniform\UniformCommon.hpp"/>
+    <ClInclude Include="Graphic\Shader\Uniform\UniformException.hpp"/>
+    <!-- [DELETED] UpdateFrequency.hpp - consolidated into UniformCommon.hpp -->
     <ClInclude Include="Graphic\Sprite\Sprite.hpp" />
     <ClInclude Include="Graphic\Sprite\SpriteAtlas.hpp" />
     <ClInclude Include="Graphic\Sprite\SpriteAtlasHelper.hpp" />

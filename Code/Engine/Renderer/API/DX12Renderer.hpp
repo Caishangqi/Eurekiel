@@ -228,7 +228,7 @@ public:
     void SetDirectionalLightConstants(const DirectionalLightConstants&) override;
     void SetLightConstants(const LightingConstants& lightConstants) override;
     void SetFrameConstants(const FrameConstants& frameConstants) override;
-    void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) override;
+    void SetCustomConstantBuffer(ConstantBuffer*& cbo, void* data, int slot) override; //
 
     void SetBlendMode(blend_mode) override;
     void SetRasterizerMode(RasterizerMode) override;

@@ -33,14 +33,15 @@ PSOutput main(PSInput input)
     // CustomImage槽位在CPU侧通过SetCustomImage(0, texture)设置
     float4 texColor = customImage0.Sample(pointSampler, input.TexCoord);
 
-    // 混合纹理颜色与顶点颜色和模型颜色
-    // 最终颜色 = 纹理颜色 × 顶点颜色 × 模型颜色
-    output.color0 = texColor * input.Color * modelColor * dummySineValue;
+    // [NEW] Multi-draw data independence test
+    // Final color = Custom Buffer color (should be Red/Green/Blue for each cube)
+    // If Ring Buffer isolation fails, all cubes will show Blue (last uploaded color)
+    output.color0 = texColor * input.Color * modelColor * color;
 
-    // [TEST] 其他RT输出测试数据
-    output.color1 = input.Color * modelColor * dummySineValue;
-    output.color2 = input.Color * modelColor * dummySineValue;
-    output.color3 = input.Color * modelColor * dummySineValue;
+    // [TEST] Other RT outputs for debugging
+    output.color1 = color; // Pure custom buffer color
+    output.color2 = input.Color * modelColor;
+    output.color3 = float4(1.0, 1.0, 1.0, 1.0);
 
     return output;
 }

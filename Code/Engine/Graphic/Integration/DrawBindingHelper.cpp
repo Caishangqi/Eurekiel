@@ -1,4 +1,4 @@
-#include "Engine/Graphic/Integration/DrawBindingHelper.hpp"
+﻿#include "Engine/Graphic/Integration/DrawBindingHelper.hpp"
 
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -36,7 +36,7 @@ namespace enigma::graphic
         }
     }
 
-    void DrawBindingHelper::BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr)
+    void DrawBindingHelper::BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr, uint32_t ringIndex)
     {
         // [VALIDATION] Check parameters
         if (!cmdList || !uniformMgr)
@@ -45,13 +45,14 @@ namespace enigma::graphic
             return;
         }
 
-        // [CUSTOM BUFFER TABLE] Bind slot 15 using Descriptor Table
+        // [FIX] [CUSTOM BUFFER TABLE] Bind slot 15 using Descriptor Table with Ring Index
         // Technical Details:
         // - Slot 15 is Custom Buffer Descriptor Table slot
         // - Custom buffers use space1 in HLSL (register(bN, space1))
-        // - GetCustomBufferDescriptorTableGPUHandle comes from UniformManager
+        // - ringIndex selects the correct Descriptor Table slice for this draw
+        // - Ring Descriptor Table architecture: Each Draw uses a different Descriptor Table offset
         D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-            uniformMgr->GetCustomBufferDescriptorTableGPUHandle();
+            uniformMgr->GetCustomBufferDescriptorTableGPUHandle(ringIndex);
 
         // [OPTIONAL BINDING] Bind if custom buffers exist
         if (customBufferTableHandle.ptr != 0)

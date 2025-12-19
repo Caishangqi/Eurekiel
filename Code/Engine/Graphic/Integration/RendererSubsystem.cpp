@@ -17,6 +17,7 @@
 #include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // [ADD] For UniformException hierarchy
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
@@ -215,6 +216,7 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<MatricesUniforms>(
             7, // registerSlot: Slot 7 for Matrices
             UpdateFrequency::PerObject,
+            0, // space=0 (Engine Root CBV)
             10000 // maxDrawsPerFrame
         );
 
@@ -230,6 +232,7 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(
             1, // registerSlot: Slot 1 for PerObjectUniforms (Iris-compatible)
             UpdateFrequency::PerObject,
+            0, // space=0 (Engine Root CBV)
             10000 // maxDrawsPerFrame, consistent with Matrices
         );
 
@@ -243,14 +246,22 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<CustomImageUniform>(
             2, // registerSlot: Slot 2 for CustomImage (Iris-compatible)
             UpdateFrequency::PerObject,
+            0, // space=0 (Engine Root CBV)
             10000 // maxDrawsPerFrame, consistent with other PerObject buffers
         );
 
         LogInfo(LogRenderer, "CustomImageUniform Ring Buffer registered: slot 2, 10000 × 256 bytes = 2.5 MB");
     }
+    catch (const UniformException& e)
+    {
+        // [ADD] Catch Uniform system specific exceptions (UniformBufferException, DescriptorHeapException)
+        LogError(LogRenderer, "UniformManager initialization failed: %s", e.what());
+        ERROR_AND_DIE(Stringf("UniformManager initialization failed: %s", e.what()))
+    }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create UniformManager: {}", e.what());
+        // [ADD] Fallback for unexpected exceptions
+        LogError(LogRenderer, "UniformManager unexpected error: %s", e.what());
         ERROR_AND_DIE(Stringf("UniformManager construction failed! Error: %s", e.what()))
     }
 
@@ -1346,7 +1357,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
 
     // Step 11: Issue Draw call
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
@@ -1449,7 +1460,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
 
     // Step 11: Issue DrawIndexed call
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
@@ -1552,7 +1563,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
 
     // Step 11: Issue DrawInstanced call
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
@@ -2061,7 +2072,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
 
     // [STEP 8] Set primitive topology (implicit in DrawIndexed)
 

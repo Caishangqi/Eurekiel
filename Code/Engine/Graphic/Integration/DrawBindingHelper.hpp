@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 
+#include <cstdint>
 #include <d3d12.h>
 
 namespace enigma::graphic
@@ -32,7 +33,7 @@ namespace enigma::graphic
      * ```cpp
      * // In Draw function
      * DrawBindingHelper::BindEngineBuffers(cmdList, uniformMgr);
-     * DrawBindingHelper::BindCustomBufferTable(cmdList, uniformMgr);
+     * DrawBindingHelper::BindCustomBufferTable(cmdList, uniformMgr, currentDrawCount);
      * DrawBindingHelper::PrepareCustomImages(customImgMgr);
      * ```
      */
@@ -54,18 +55,19 @@ namespace enigma::graphic
         static void BindEngineBuffers(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr);
 
         /**
-         * @brief Bind Custom Buffer Descriptor Table (slot 15)
+         * @brief Bind Custom Buffer Descriptor Table (slot 15) with Ring Index
          * @param cmdList Graphics command list
          * @param uniformMgr Uniform manager instance
+         * @param ringIndex Current draw index for Ring Descriptor Table selection
          *
          * Implementation:
-         * - Gets Custom Buffer Descriptor Table GPU handle from UniformManager
+         * - Gets Custom Buffer Descriptor Table GPU handle from UniformManager with ringIndex offset
          * - Calls SetGraphicsRootDescriptorTable(15, handle) if valid
-         * - Logs warning if handle is null
+         * - Ring Descriptor Table 架构: 每个 Draw 使用不同的 Descriptor Table 偏移
          *
          * @note Custom Buffer Table handle comes from UniformManager, not CustomImageManager
          */
-        static void BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr);
+        static void BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr, uint32_t ringIndex);
 
         /**
          * @brief Prepare custom images for drawing
