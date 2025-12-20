@@ -18,6 +18,7 @@
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // [ADD] For UniformException hierarchy
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // [ADD] For ENGINE_BUFFER_RING_CAPACITY
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
@@ -217,40 +218,40 @@ void RendererSubsystem::Startup()
             7, // registerSlot: Slot 7 for Matrices
             UpdateFrequency::PerObject,
             0, // space=0 (Engine Root CBV)
-            10000 // maxDrawsPerFrame
+            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant instead of hardcoded 10000
         );
 
-        LogInfo(LogRenderer, "Matrices Ring Buffer allocated: 10000 × 1280 bytes = 12.8 MB");
+        LogInfo(LogRenderer, "Matrices Ring Buffer allocated: %u × 1280 bytes", ENGINE_BUFFER_RING_CAPACITY);
 
         // ==================== Register PerObjectUniforms Ring Buffer ====================
-        // Register PerObjectUniforms as PerObject Buffer, allocate 10000 draws
+        // Register PerObjectUniforms as PerObject Buffer
         // Teaching points:
         // 1. PerObjectUniforms original size 128 bytes (2 Mat44), 256 bytes after alignment
-        // 2. 10000 × 256 = 2.5 MB (reasonable memory overhead)
+        // 2. ENGINE_BUFFER_RING_CAPACITY × 256 = 2.5 MB (reasonable memory overhead)
         // 3. This is the second PerObject Buffer (the first is MatricesUniforms)
         // 4. [NEW] Explicitly specify slot 1
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(
             1, // registerSlot: Slot 1 for PerObjectUniforms (Iris-compatible)
             UpdateFrequency::PerObject,
             0, // space=0 (Engine Root CBV)
-            10000 // maxDrawsPerFrame, consistent with Matrices
+            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
         );
 
         // ==================== Register CustomImageUniform Ring Buffer ====================
-        // Register CustomImageUniform as PerObject Buffer, allocate 10000 draws
+        // Register CustomImageUniform as PerObject Buffer
         // Teaching points:
         // 1. CustomImageUniform size 64 bytes (16 × uint32_t), 256 bytes after alignment
-        // 2. 10000 × 256 = 2.5 MB (reasonable memory overhead)
+        // 2. ENGINE_BUFFER_RING_CAPACITY × 256 = 2.5 MB (reasonable memory overhead)
         // 3. This is the third PerObject Buffer (after MatricesUniforms and PerObjectUniforms)
         // 4. [NEW] Explicitly specify slot 2 for CustomImage
         m_uniformManager->RegisterBuffer<CustomImageUniform>(
             2, // registerSlot: Slot 2 for CustomImage (Iris-compatible)
             UpdateFrequency::PerObject,
             0, // space=0 (Engine Root CBV)
-            10000 // maxDrawsPerFrame, consistent with other PerObject buffers
+            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
         );
 
-        LogInfo(LogRenderer, "CustomImageUniform Ring Buffer registered: slot 2, 10000 × 256 bytes = 2.5 MB");
+        LogInfo(LogRenderer, "CustomImageUniform Ring Buffer registered: slot 2, %u × 256 bytes", ENGINE_BUFFER_RING_CAPACITY);
     }
     catch (const UniformException& e)
     {
@@ -1357,7 +1358,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
 
     // Step 11: Issue Draw call
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
@@ -1460,7 +1461,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
 
     // Step 11: Issue DrawIndexed call
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
@@ -1563,7 +1564,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // Step 10: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
 
     // Step 11: Issue DrawInstanced call
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
@@ -2072,7 +2073,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
     // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get(), static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount()));
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
 
     // [STEP 8] Set primitive topology (implicit in DrawIndexed)
 

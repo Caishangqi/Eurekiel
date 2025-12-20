@@ -14,6 +14,7 @@
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp"
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // For MAX_DRAWS_PER_FRAME
 
 namespace enigma::graphic
 {
@@ -83,93 +84,59 @@ namespace enigma::graphic
          */
         PerObjectBufferState* GetBufferStateBySlot(uint32_t rootSlot) const;
 
-        // ========================================================================
-        // TypeId-based Buffer registration and upload API [PUBLIC]
-        // ========================================================================
-
         /**
-         * @brief 注册类型化Buffer
-         * @tparam T Buffer数据类型 (例如: MatricesUniforms)
-         * @param registerSlot Root Signature Slot编号 (0-14引擎保留, 15-99用户自定义)
-         * @param frequency Buffer更新频率
-         * @param maxDraws PerObject模式的最大Draw数量 (默认10000)
-         *
-         * 创建GPU Buffer并持久映射，自动计算256字节对齐大小。
-         * 根据frequency分配容量：PerObject=maxDraws, PerPass=20, PerFrame/Static=1
-         *
-         * @note [IMPORTANT] Shader绑定规则：
-         *       - Slot 0-14:  使用Root CBV，shader中使用 register(bN)
-         *       - Slot 15-99: 使用Descriptor Table，shader中必须使用 register(bN, space1)
-         *
-         * @example C++侧注册
-         * @code
-         * g_theUniformManager->RegisterBuffer<MyUniform>(88, UpdateFrequency::PerFrame);
-         * @endcode
-         *
-         * @example HLSL侧声明（Slot >= 15时必须添加space1）
-         * @code
-         * // [CORRECT] Slot 88使用space1
-         * cbuffer MyUniform : register(b88, space1) { float4 myData; };
-         *
-         * // [WRONG] 缺少space1会导致绑定失败
-         * cbuffer MyUniform : register(b88) { float4 myData; };  // [BAD]
-         * @endcode
-         *
-         * @warning 如果slot >= 15但shader中未使用space1，将导致绑定失败！
-         * @note 防止重复注册，同一类型或slot只能注册一次
-         */
-        /**
-         * @brief 注册类型化Buffer（支持显式space参数）
-         * @tparam T Buffer数据类型 (例如: MatricesUniforms)
-         * @param registerSlot Root Signature Slot编号 (0-14引擎保留, 0-99用户自定义)
-         * @param frequency Buffer更新频率
+         * @brief Register typed Buffer (supports explicit space parameter)
+         * @tparam T Buffer data type (for example: MatricesUniforms)
+         * @param registerSlot Root Signature Slot number (0-14 engine reserved, 0-99 user-defined)
+         * @param frequency Buffer update frequency
          * @param space Register Space (0=Engine Root CBV, 1=Custom Descriptor Table)
-         * @param maxDraws PerObject模式的最大Draw数量 (默认10000)
+         * @param maxDraws The maximum number of Draws in PerObject mode (default 10000)
          *
-         * [IMPORTANT] HLSL绑定规则：
-         * - space=0 (Engine): shader使用 register(bN)
-         * - space=1 (Custom): shader必须使用 register(bN, space1)
+         * [IMPORTANT] HLSL binding rules:
+         * - space=0 (Engine): shader uses register(bN)
+         * - space=1 (Custom): shader must use register(bN, space1)
          *
-         * [NEW] Space参数路由：
-         * - space=0: 调用RegisterEngineBuffer，要求slot 0-14，使用Root CBV绑定
-         * - space=1: 调用RegisterCustomBuffer，允许任意slot，使用Descriptor Table绑定
+         * [NEW] Space parameter routing:
+         * - space=0: Call RegisterEngineBuffer, require slot 0-14, use Root CBV binding
+         * - space=1: Call RegisterCustomBuffer, allow any slot, use Descriptor Table binding
          *
-         * @example C++侧注册（显式space参数）
+         * @example C++ side registration (explicit space parameter)
          * @code
          * // Engine Buffer (space=0)
          * g_theUniformManager->RegisterBuffer<CameraUniforms>(0, UpdateFrequency::PerFrame);
-         * // 等同于: RegisterBuffer<CameraUniforms>(0, PerFrame, 0);
+         * // Equivalent to: RegisterBuffer<CameraUniforms>(0, PerFrame, 0);
          *
          * // Custom Buffer (space=1)
          * g_theUniformManager->RegisterBuffer<MyUniform>(88, UpdateFrequency::PerFrame, 1);
          * @endcode
          *
-         * @example HLSL侧声明
+         * @example HLSL side declaration
          * @code
-         * // space=0 (Engine Buffer): 使用register(bN)
+         * // space=0 (Engine Buffer): use register(bN)
          * cbuffer CameraUniforms : register(b0) { ... };
          *
-         * // space=1 (Custom Buffer): 必须添加space1
-         * cbuffer MyUniform : register(b88, space1) { ... };  // [CORRECT]
-         * cbuffer MyUniform : register(b88) { ... };          // [WRONG] 缺少space1
+         * // space=1 (Custom Buffer): space1 must be added
+         * cbuffer MyUniform: register(b88, space1) { ... }; // [CORRECT]
+         * cbuffer MyUniform: register(b88) { ... }; // [WRONG] space1 is missing
          * @endcode
          *
          * @throws UniformBufferException if slot/space validation fails or buffer creation fails
          * @throws DescriptorHeapException if descriptor allocation fails (fatal, should never happen)
          *
-         * @warning 向后兼容：默认space=0确保现有调用无需修改
-         * @note space验证在注册时执行，无运行时开销
+         * @warning backward compatibility: default space=0 ensures that existing calls do not need to be modified
+         * @note space validation is performed at registration time with no runtime overhead
          */
+        // [REFACTORED] maxDraws default changed from 10000 to MAX_DRAWS_PER_FRAME (64)
+        // This ensures Ring Buffer index stays within valid range and prevents memory waste
         template <typename T>
-        void RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency,
-                            uint32_t space = 0, size_t             maxDraws = 10000);
+        void RegisterBuffer(uint32_t registerSlot, UpdateFrequency frequency, uint32_t space = 0, size_t maxDraws = MAX_DRAWS_PER_FRAME);
 
         /**
-         * @brief 上传数据到类型化Buffer
-         * @tparam T Buffer数据类型 (必须与RegisterBuffer相同)
-         * @param data 要上传的数据
+         * @brief Upload data to typed Buffer
+         * @tparam T Buffer data type (must be the same as RegisterBuffer)
+         * @param data The data to be uploaded
          *
-         * 自动计算Ring Buffer索引并memcpy到持久映射内存，更新lastUpdatedValue缓存
+         * Automatically calculate Ring Buffer index and memcpy to persistent mapped memory, update lastUpdatedValue cache
          *
          * [IMPORTANT] Multi-draw data independence:
          * - Each UploadCustomBuffer call writes to a new Ring Buffer slice
@@ -177,14 +144,14 @@ namespace enigma::graphic
          * - GPU reads from slice N while CPU uploads to slice N+1
          * - maxDraws parameter limits maximum draws per frame
          *
-         * Example:
-         *   UploadBuffer(red);       // Write to slice 0 based on type
-         *   Draw();                  // GPU reads slice 0
-         *   IncrementDrawCount();    // currentDrawIndex: 0 -> 1
+         *Example:
+         * UploadBuffer(red); // Write to slice 0 based on type
+         * Draw(); // GPU reads slice 0
+         * IncrementDrawCount(); // currentDrawIndex: 0 -> 1
          *
-         *   UploadBuffer(green);     // Write to slice 1
-         *   Draw();                  // GPU reads slice 1
-         *   IncrementDrawCount();    // currentDrawIndex: 1 -> 2
+         * UploadBuffer(green); // Write to slice 1
+         * Draw(); // GPU reads slice 1
+         * IncrementDrawCount(); // currentDrawIndex: 1 -> 2
          */
         template <typename T>
         void UploadBuffer(const T& data);
@@ -289,17 +256,17 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief 更新指定频率的Ring Buffer offset
-         * @param frequency 更新频率 (PerObject, PerPass, PerFrame)
+         * @brief updates the Ring Buffer offset of the specified frequency
+         * @param frequency update frequency (PerObject, PerPass, PerFrame)
          *
-         * 教学要点:
-         * 1. Draw函数在绘制前调用，更新所有相关Buffer的offset
-         * 2. 集成Delayed Fill机制：检测数据是否变化，避免重复上传
-         * 3. 根据Buffer类型调用不同的Internal方法：
-         *    - Root CBV: UpdateRootCBVOffset()
-         *    - Custom Buffer: UpdateDescriptorTableOffset()
+         *Teaching points:
+         * 1. The Draw function is called before drawing and updates the offset of all related Buffers.
+         * 2. Integrate Delayed Fill mechanism: detect whether data changes and avoid repeated uploading
+         * 3. Call different Internal methods according to the Buffer type:
+         * - Root CBV: UpdateRootCBVOffset()
+         * - Custom Buffer: UpdateDescriptorTableOffset()
          *
-         * 参考: RendererSubsystem.cpp:2367-2400 - Delayed Fill实现
+         * Reference: RendererSubsystem.cpp:2367-2400 - Delayed Fill implementation
          */
         void UpdateRingBufferOffsets(UpdateFrequency frequency);
 

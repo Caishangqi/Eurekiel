@@ -123,19 +123,16 @@ namespace enigma::graphic
         return nullptr;
     }
 
-    // ========================================================================
-    // [NEW] UpdateRingBufferOffsets实现 - 集成Delayed Fill机制
-    // ========================================================================
     void UniformManager::UpdateRingBufferOffsets(UpdateFrequency frequency)
     {
-        // 获取指定频率的所有slot
+        // Get all slots of the specified frequency
         const auto& slots = GetSlotsByFrequency(frequency);
         if (slots.empty())
         {
-            return; // 没有注册该频率的Buffer
+            return; // There is no Buffer registered for this frequency
         }
 
-        // 遍历所有slot，更新Ring Buffer offset并执行Delayed Fill
+        // Traverse all slots, update Ring Buffer offset and perform Delayed Fill
         for (uint32_t slotId : slots)
         {
             // [FIX] Check if this is a Custom Buffer (stored in m_customBufferStates)
@@ -159,25 +156,23 @@ namespace enigma::graphic
             auto* state = GetBufferStateBySlot(slotId);
             if (!state || !state->gpuBuffer)
             {
-                continue; // slot未注册或Buffer未创建，跳过
+                continue; // The slot is not registered or the Buffer is not created, skip
             }
 
-            // 步骤1: 计算当前Ring Buffer索引
+            // Step 1: Calculate the current Ring Buffer index
             size_t currentIndex = (frequency == UpdateFrequency::PerObject)
                                       ? (m_currentDrawCount % state->maxCount)
                                       : 0;
 
-            // 步骤2: Delayed Fill机制（参考RendererSubsystem.cpp:2391-2400）
-            // 如果当前索引未被更新，自动复制上次更新的值，避免重复上传
+            // Step 2: Delayed Fill mechanism
+            // If the current index has not been updated, automatically copy the last updated value to avoid repeated uploads
             if (state->lastUpdatedIndex != currentIndex)
             {
                 void* destPtr = state->GetDataAt(currentIndex);
                 std::memcpy(destPtr, state->lastUpdatedValue.data(), state->elementSize);
-
-                // [REMOVED] LogDebug太频繁，影响性能，仅在需要时启用
             }
 
-            // 步骤3: 更新offset（根据Buffer类型选择不同路径）
+            // Step 3: Update offset (select different paths according to Buffer type)
             // [NOTE] Only Engine buffers reach here, Custom buffers are handled above
             UpdateRootCBVOffset(slotId, currentIndex);
         }
