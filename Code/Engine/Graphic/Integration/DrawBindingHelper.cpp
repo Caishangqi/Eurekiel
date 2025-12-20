@@ -36,7 +36,7 @@ namespace enigma::graphic
         }
     }
 
-    void DrawBindingHelper::BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr, uint32_t ringIndex)
+    void DrawBindingHelper::BindCustomBufferTable(ID3D12GraphicsCommandList* cmdList, UniformManager* uniformMgr)
     {
         // [VALIDATION] Check parameters
         if (!cmdList || !uniformMgr)
@@ -44,6 +44,10 @@ namespace enigma::graphic
             LogWarn(core::LogRenderer, "[DrawBindingHelper] Invalid parameters in BindCustomBufferTable");
             return;
         }
+
+        // [REFACTORED] Get ringIndex from UniformManager internally (DRY principle)
+        // Previously this was passed as a third parameter which was redundant
+        uint32_t ringIndex = static_cast<uint32_t>(uniformMgr->GetCurrentDrawCount());
 
         // [FIX] [CUSTOM BUFFER TABLE] Bind slot 15 using Descriptor Table with Ring Index
         // Technical Details:
