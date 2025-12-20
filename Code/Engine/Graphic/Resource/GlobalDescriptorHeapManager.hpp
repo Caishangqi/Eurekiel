@@ -7,6 +7,8 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // For CUSTOM_CBV_DESCRIPTOR_POOL_SIZE
+
 namespace enigma::graphic
 {
     /**
@@ -150,9 +152,10 @@ namespace enigma::graphic
         static constexpr uint32_t DEFAULT_SAMPLER_CAPACITY     = 2048; // 默认2048个Sampler
 
         // [FIX] Custom CBV reserved area configuration (Ring Descriptor Table architecture)
-        // Requires MAX_RING_FRAMES * MAX_CUSTOM_BUFFERS = 64 * 100 = 6400 Descriptors
+        // [REFACTORED] Use CUSTOM_CBV_DESCRIPTOR_POOL_SIZE from EnigmaGraphicCommon.hpp
+        // = MAX_DRAWS_PER_FRAME * MAX_CUSTOM_BUFFERS (e.g., 64 * 100 = 6400 Descriptors)
         static constexpr uint32_t CUSTOM_CBV_RESERVED_START = 0; // Reserved area starting index
-        static constexpr uint32_t CUSTOM_CBV_RESERVED_COUNT = 6400; // Reserved area size (64 ring frames * 100 slots)
+        static constexpr uint32_t CUSTOM_CBV_RESERVED_COUNT = CUSTOM_CBV_DESCRIPTOR_POOL_SIZE; // Use unified constant
 
     public:
         /**
