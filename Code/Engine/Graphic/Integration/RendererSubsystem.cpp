@@ -217,7 +217,7 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<MatricesUniforms>(
             7, // registerSlot: Slot 7 for Matrices
             UpdateFrequency::PerObject,
-            0, // space=0 (Engine Root CBV)
+            BufferSpace::Engine, // space=0 (Engine Root CBV)
             ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant instead of hardcoded 10000
         );
 
@@ -233,7 +233,7 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(
             1, // registerSlot: Slot 1 for PerObjectUniforms (Iris-compatible)
             UpdateFrequency::PerObject,
-            0, // space=0 (Engine Root CBV)
+            BufferSpace::Engine, // space=0 (Engine Root CBV)
             ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
         );
 
@@ -247,7 +247,7 @@ void RendererSubsystem::Startup()
         m_uniformManager->RegisterBuffer<CustomImageUniform>(
             2, // registerSlot: Slot 2 for CustomImage (Iris-compatible)
             UpdateFrequency::PerObject,
-            0, // space=0 (Engine Root CBV)
+            BufferSpace::Engine, // space=0 (Engine Root CBV)
             ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
         );
 

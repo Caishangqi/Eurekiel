@@ -64,6 +64,37 @@ namespace enigma::graphic
     };
 
     // ========================================================================
+    // [NEW] SlotSpaceKey - Hash key for (slot, space) combination
+    // ========================================================================
+
+    /**
+     * @brief Hash key for unordered_map using (slot, space) as composite key
+     * 
+     * Allows same slot with different space to coexist:
+     * - register(b1, space0) and register(b1, space1) are different bindings
+     */
+    struct SlotSpaceKey
+    {
+        uint32_t slot  = UINT32_MAX;
+        uint32_t space = 0;
+
+        bool operator==(const SlotSpaceKey& other) const
+        {
+            return slot == other.slot && space == other.space;
+        }
+    };
+
+    // Hash function for SlotSpaceKey
+    struct SlotSpaceKeyHash
+    {
+        std::size_t operator()(const SlotSpaceKey& key) const
+        {
+            // Combine slot and space into a single hash
+            return std::hash<uint64_t>{}((static_cast<uint64_t>(key.slot) << 32) | key.space);
+        }
+    };
+
+    // ========================================================================
     // [MOVE] UpdateFrequency Enum - from UpdateFrequency.hpp
     // ========================================================================
 
