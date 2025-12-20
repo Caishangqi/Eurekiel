@@ -47,6 +47,23 @@ namespace enigma::graphic
     };
 
     // ========================================================================
+    // [NEW] SlotSpaceInfo - Slot and Space binding information
+    // ========================================================================
+
+    /**
+     * @brief Stores slot and space information for type-safe buffer routing
+     * 
+     * Used by UniformManager to route UploadBuffer calls to the correct path:
+     * - space=0: UploadEngineBuffer (Root CBV)
+     * - space=1: UploadCustomBuffer (Descriptor Table)
+     */
+    struct SlotSpaceInfo
+    {
+        uint32_t slot  = UINT32_MAX; // HLSL register slot
+        uint32_t space = 0; // 0=Engine Root CBV, 1=Custom Descriptor Table
+    };
+
+    // ========================================================================
     // [MOVE] UpdateFrequency Enum - from UpdateFrequency.hpp
     // ========================================================================
 

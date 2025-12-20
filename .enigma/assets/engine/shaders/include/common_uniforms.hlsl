@@ -120,7 +120,7 @@
  * [64-79]  fogStart, fogEnd, fogSkyEnd, fogCloudsEnd [NEW]
  * [80-95]  renderStage (int), padding[3]
  */
-cbuffer CommonUniforms : register(b8)
+cbuffer CommonUniforms : register(b8,space1)
 {
     // ==================== Sky Color (16 bytes) ====================
     float3 skyColor; // CPU-calculated sky color [IMPORTANT: Use this!]

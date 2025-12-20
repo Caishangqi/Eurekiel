@@ -691,6 +691,14 @@ namespace enigma::graphic
             return 0;
         }
 
+        // [FIX] 步骤1.5: 检查该slot是否被注册为Custom Buffer
+        // Custom Buffer使用space1，通过Descriptor Table绑定，不需要Root CBV
+        // 如果slot被Custom Buffer占用，直接返回0跳过Engine Buffer绑定
+        if (m_customBufferStates.find(slotId) != m_customBufferStates.end())
+        {
+            return 0; // Slot被Custom Buffer占用，跳过Engine Buffer绑定
+        }
+
         // 步骤2: 获取Buffer状态
         auto* state = GetBufferStateBySlot(slotId);
         if (!state || !state->gpuBuffer)

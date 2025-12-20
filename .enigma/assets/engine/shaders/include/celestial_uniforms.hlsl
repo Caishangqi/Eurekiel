@@ -56,7 +56,7 @@
  * [16-31]  sunPosition (float3), padding
  * [32-47]  moonPosition (float3), padding
  */
-cbuffer CelestialUniforms: register(b9)
+cbuffer CelestialUniforms: register(b9,space1)
 {
     float celestialAngle; // Celestial angle (0.0-1.0)
     float compensatedCelestialAngle; // Compensated angle (+0.25)

@@ -232,7 +232,7 @@ namespace enigma::graphic
         {
             auto typeId = std::type_index(typeid(T));
             auto it     = m_typeToSlotMap.find(typeId);
-            return (it != m_typeToSlotMap.end()) ? it->second : UINT32_MAX;
+            return (it != m_typeToSlotMap.end()) ? it->second.slot : UINT32_MAX;
         }
 
         /**
@@ -304,8 +304,9 @@ namespace enigma::graphic
         // Slot到TypeId映射表，用于GetBufferStateBySlot()快速查找
         std::unordered_map<uint32_t, std::type_index> m_slotToTypeMap;
 
-        // TypeId到Slot映射表，用于GetRegisteredSlot<T>()反向查询
-        std::unordered_map<std::type_index, uint32_t> m_typeToSlotMap;
+        // TypeId到(Slot,Space)映射表，用于GetRegisteredSlot<T>()和UploadBuffer路由
+        // [NOTE] SlotSpaceInfo is defined in UniformCommon.hpp
+        std::unordered_map<std::type_index, SlotSpaceInfo> m_typeToSlotMap;
 
         // UpdateFrequency到Slot列表映射表，支持自动绑定机制
         // DrawVertexArray遍历PerObject的所有slot并自动绑定
@@ -546,8 +547,8 @@ namespace enigma::graphic
                 throw UniformBufferException("Internal registration failed", registerSlot, space);
             }
 
-            // Record TypeId mapping on success
-            m_typeToSlotMap[typeId] = registerSlot;
+            // Record TypeId mapping on success (with slot and space info)
+            m_typeToSlotMap[typeId] = SlotSpaceInfo{registerSlot, space};
             m_slotToTypeMap.insert({registerSlot, typeId});
         }
         catch (const UniformBufferException& e)
@@ -578,7 +579,7 @@ namespace enigma::graphic
     {
         std::type_index typeId = std::type_index(typeid(T));
 
-        // 获取已注册的slot
+        // 获取已注册的(slot, space)信息
         auto slotIt = m_typeToSlotMap.find(typeId);
         if (slotIt == m_typeToSlotMap.end())
         {
@@ -586,18 +587,18 @@ namespace enigma::graphic
             return;
         }
 
-        uint32_t slotId = slotIt->second;
+        const SlotSpaceInfo& info = slotIt->second;
 
-        // [NEW] 自动路由：根据slotId判断是引擎Buffer还是Custom Buffer
-        if (BufferHelper::IsEngineReservedSlot(slotId))
+        // [FIX] Routing based on the space parameter during registration
+        // space=0: Engine Buffer (Root CBV)
+        // space=1: Custom Buffer (Descriptor Table)
+        if (info.space == 1)
         {
-            // 引擎Buffer路径（Slot 0-14）
-            UploadEngineBuffer(slotId, &data, sizeof(T));
+            UploadCustomBuffer(info.slot, &data, sizeof(T));
         }
         else
         {
-            // Custom Buffer路径（Slot 15-99，使用space1）
-            UploadCustomBuffer(slotId, &data, sizeof(T));
+            UploadEngineBuffer(info.slot, &data, sizeof(T));
         }
     }
 
