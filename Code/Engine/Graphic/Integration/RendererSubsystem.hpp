@@ -41,6 +41,7 @@ namespace enigma::graphic
     class DepthTextureManager;
     class PSOManager;
     class CustomImageManager;
+    class VertexLayout; // [NEW] Forward declaration for VertexLayout state API
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -931,6 +932,38 @@ namespace enigma::graphic
          * @endcode
          */
         void SetRasterizationConfig(const RasterizationConfig& config);
+
+        /**
+         * @brief Set vertex layout for next draw call
+         * @param layout Pointer to vertex layout (nullptr uses default)
+         *
+         * Teaching Points:
+         * - Decouples vertex buffer from layout definition
+         * - Enables dynamic layout switching per draw call
+         * - Layout affects PSO creation (InputLayout)
+         * - nullptr falls back to default layout (Vertex_PCUTBN)
+         *
+         * Usage Examples:
+         * @code
+         * // Set terrain-specific layout
+         * renderer->SetVertexLayout(VertexLayoutRegistry::GetLayout("Terrain"));
+         * renderer->DrawTerrain();
+         *
+         * // Reset to default layout
+         * renderer->SetVertexLayout(nullptr);
+         * @endcode
+         */
+        void SetVertexLayout(const VertexLayout* layout);
+
+        /**
+         * @brief Get current vertex layout
+         * @return Pointer to current vertex layout
+         *
+         * Teaching Points:
+         * - Returns currently set layout for debugging/validation
+         * - Returns default layout if none explicitly set
+         */
+        [[nodiscard]] const VertexLayout* GetCurrentVertexLayout() const noexcept;
 #pragma endregion
 
 #pragma region RenderTarget Management
@@ -1465,6 +1498,7 @@ namespace enigma::graphic
         DepthMode            m_currentDepthMode           = DepthMode::Enabled;
         StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
         RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::CullBack();
+        const VertexLayout*  m_currentVertexLayout        = nullptr; // [NEW] Current vertex layout state
         ID3D12PipelineState* m_lastBoundPSO               = nullptr;
 
         /// Current stencil reference value (CommandList dynamic state)
