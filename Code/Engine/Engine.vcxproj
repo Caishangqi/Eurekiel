@@ -458,7 +458,8 @@
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
     <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
-    <ClCompile Include="Graphic\Integration\ImmediateDrawHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\RingBuffer\IndexRingBuffer.cpp"/>
+    <ClCompile Include="Graphic\Integration\RingBuffer\VertexRingBuffer.cpp"/>
     <ClCompile Include="Graphic\Resource\Buffer\BufferHelper.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
@@ -945,7 +946,8 @@
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
     <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
-    <ClInclude Include="Graphic\Integration\ImmediateDrawHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\RingBuffer\IndexRingBuffer.hpp"/>
+    <ClInclude Include="Graphic\Integration\RingBuffer\VertexRingBuffer.hpp"/>
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
