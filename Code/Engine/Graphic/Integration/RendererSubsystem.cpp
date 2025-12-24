@@ -1910,21 +1910,15 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
-    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu", count, m_immediateVBO.get(), m_currentVertexOffset);
-    // [STEP 3] Append vertex data using ImmediateDrawHelper
-    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
-        m_immediateVBO,
-        vertices,
-        count,
-        m_currentVertexOffset,
-        sizeof(Vertex)
+    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, offset=%zu", count, m_currentVertexOffset);
+
+    // Append vertex data and get VBV with correct BufferLocation
+    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
+        m_immediateVBO, vertices, count, m_currentVertexOffset, sizeof(Vertex)
     );
 
-    // [STEP 4] Set vertex buffer
-    SetVertexBuffer(m_immediateVBO.get());
-
-    // [STEP 9] Issue draw call
-    Draw(static_cast<uint32_t>(count), startVertex);
+    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
+    Draw(static_cast<uint32_t>(count), 0);
 }
 
 // ========================================================================
@@ -1938,7 +1932,7 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
-    LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, VBO addr=%p, offset=%zu", vertexCount, m_immediateVBO.get(), m_currentVertexOffset);
+    LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, indexCount=%zu", vertexCount, indexCount);
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
@@ -1946,31 +1940,19 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // [STEP 1] Append vertex data to Ring Buffer
-    uint32_t baseVertex = ImmediateDrawHelper::AppendVertexData(
-        m_immediateVBO,
-        vertices,
-        vertexCount,
-        m_currentVertexOffset,
-        sizeof(Vertex)
+    // Append vertex data and get VBV with correct BufferLocation
+    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
+        m_immediateVBO, vertices, vertexCount, m_currentVertexOffset, sizeof(Vertex)
     );
 
-    // [STEP 2] Append index data to Ring Buffer
+    // Append index data to Ring Buffer
     uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
-        m_immediateIBO,
-        indices,
-        indexCount,
-        m_currentIndexOffset
+        m_immediateIBO, indices, indexCount, m_currentIndexOffset
     );
 
-    // [STEP 3] Set vertex and index buffers
-    SetVertexBuffer(m_immediateVBO.get());
+    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
     SetIndexBuffer(m_immediateIBO.get());
-
-    // [STEP 4] Issue indexed draw call
-    // DrawIndexed() will internally call PreparePSOAndBindings() to complete all bindings
-    // And call IncrementDrawCount(), no need to call it repeatedly here
-    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
+    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, 0);
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo)
@@ -2009,18 +1991,13 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
         return;
     }
 
-    // Append vertex data to Ring Buffer using ImmediateDrawHelper
-    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
-        m_immediateVBO,
-        externalData,
-        vertexCount,
-        m_currentVertexOffset,
-        vbo->GetStride()
+    // Append vertex data and get VBV with correct BufferLocation
+    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
+        m_immediateVBO, externalData, vertexCount, m_currentVertexOffset, vbo->GetStride()
     );
 
-    // Use m_immediateVBO for IASetVertexBuffers (not external vbo)
-    SetVertexBuffer(m_immediateVBO.get());
-    Draw(static_cast<uint32_t>(vertexCount), startVertex);
+    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
+    Draw(static_cast<uint32_t>(vertexCount), 0);
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo)
@@ -2068,27 +2045,19 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
         return;
     }
 
-    // Append vertex data to Ring Buffer using ImmediateDrawHelper
-    uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
-        m_immediateVBO,
-        externalVertexData,
-        vertexCount,
-        m_currentVertexOffset,
-        vbo->GetStride()
+    // Append vertex data and get VBV with correct BufferLocation
+    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
+        m_immediateVBO, externalVertexData, vertexCount, m_currentVertexOffset, vbo->GetStride()
     );
 
-    // Append index data to Ring Buffer using ImmediateDrawHelper
+    // Append index data to Ring Buffer
     uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
-        m_immediateIBO,
-        static_cast<const unsigned*>(externalIndexData),
-        indexCount,
-        m_currentIndexOffset
+        m_immediateIBO, static_cast<const unsigned*>(externalIndexData), indexCount, m_currentIndexOffset
     );
 
-    // Use m_immediateVBO and m_immediateIBO for IA calls (not external buffers)
-    SetVertexBuffer(m_immediateVBO.get());
+    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
     SetIndexBuffer(m_immediateIBO.get());
-    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, static_cast<int32_t>(startVertex));
+    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, 0);
 }
 
 // ============================================================================
