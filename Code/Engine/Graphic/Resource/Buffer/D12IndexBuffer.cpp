@@ -7,13 +7,13 @@ using namespace enigma::graphic;
 // ============================================================================
 // Constructor and destructor
 // ============================================================================
-D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* initialData, const char* debugName)
+D12IndexBuffer::D12IndexBuffer(size_t size, const void* initialData, const char* debugName)
     : D12Buffer([&]()
       {
           BufferCreateInfo info;
           info.size  = size;
           info.usage = BufferUsage::IndexBuffer;
-          //Teaching points: The application layer IndexBuffer needs to be updated frequently, and CPUWritable should be used uniformly.
+          // Teaching points: The application layer IndexBuffer needs to be updated frequently, and CPUWritable should be used uniformly.
           // Even if there is no initialData, it may be updated later through UpdateBuffer
           // Refer to Iris: Dynamic index data uses UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
           info.memoryAccess = MemoryAccess::CPUWritable;
@@ -21,13 +21,11 @@ D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* init
           info.debugName    = debugName;
           return info;
       }())
-      , m_format(format)
       , m_view{}
 {
-    //Teaching Points: Parameter Validation - Make sure size is an integer multiple of the index size
-    const size_t indexSize = (format == IndexFormat::Uint16) ? 2 : 4;
-    assert(size % indexSize == 0 && "Buffer size must be multiple of index size");
-    UNUSED(indexSize)
+    // [SIMPLIFIED] Always use Uint32 (4 bytes per index)
+    // Teaching Points: Parameter Validation - Make sure size is an integer multiple of INDEX_SIZE
+    assert(size % INDEX_SIZE == 0 && "Buffer size must be multiple of INDEX_SIZE (4 bytes)");
     //Teaching points: Create D3D12_INDEX_BUFFER_VIEW
     UpdateView();
 
@@ -57,7 +55,7 @@ void D12IndexBuffer::UpdateView()
     // 3. Format: index format (R16_UINT or R32_UINT)
     m_view.BufferLocation = resource->GetGPUVirtualAddress();
     m_view.SizeInBytes    = static_cast<UINT>(GetSize());
-    m_view.Format         = IndexFormatToDXGI(m_format);
+    m_view.Format         = DXGI_FORMAT_R32_UINT; // [SIMPLIFIED] Always Uint32
 }
 
 // ============================================================================
@@ -73,7 +71,7 @@ std::string D12IndexBuffer::GetDebugInfo() const
     std::ostringstream oss;
     oss << "IndexBuffer [" << GetDebugName() << "]\n";
     oss << "  Size: " << GetSize() << " bytes\n";
-    oss << "  Format: " << (m_format == IndexFormat::Uint16 ? "Uint16" : "Uint32") << "\n";
+    oss << "  Format: Uint32 (fixed)\\n"; // [SIMPLIFIED] Always Uint32
     oss << "  Index Count: " << GetIndexCount() << "\n";
     oss << "  GPU Address: 0x" << std::hex << m_view.BufferLocation << std::dec << "\n";
     oss << "  Valid: " << (IsValid() ? "Yes" : "No");

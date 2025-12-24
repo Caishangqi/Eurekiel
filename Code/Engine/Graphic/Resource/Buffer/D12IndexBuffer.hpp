@@ -58,61 +58,48 @@ namespace enigma::graphic
     class D12IndexBuffer : public D12Buffer
     {
     public:
-        /**
-         * @brief 索引格式枚举
-         *
-         * 教学要点:
-         * 1. Uint16: 16位索引（0-65535），节省内存
-         * 2. Uint32: 32位索引（0-4294967295），支持大模型
-         * 3. 对应DXGI_FORMAT_R16_UINT和DXGI_FORMAT_R32_UINT
-         */
-        enum class IndexFormat
-        {
-            Uint16, // DXGI_FORMAT_R16_UINT (2字节/索引)
-            Uint32 // DXGI_FORMAT_R32_UINT (4字节/索引)
-        };
+        // ========================================================================
+        // [SIMPLIFIED] Index format is always Uint32 (4 bytes per index)
+        // 
+        // Design Decision:
+        //   - Modern GPUs have abundant memory, Uint32 is standard
+        //   - Simplifies Ring Buffer and immediate mode rendering
+        //   - Eliminates format mismatch errors
+        //   - Consistent with sizeof(unsigned) = 4 bytes
+        // ========================================================================
+
+        static constexpr size_t INDEX_SIZE = sizeof(uint32_t); // 4 bytes
 
         /**
-         * @brief 构造函数：创建索引缓冲区
-         * @param size 缓冲区总大小（字节），必须是索引大小的整数倍
-         * @param format 索引格式（Uint16或Uint32）
-         * @param initialData 初始索引数据（可为nullptr）
-         * @param debugName 调试名称
+         * @brief Constructor: Create index buffer (always Uint32 format)
+         * @param size Buffer size in bytes (must be multiple of 4)
+         * @param initialData Initial index data (can be nullptr)
+         * @param debugName Debug name
          *
-         * 教学要点:
-         * 1. 使用BufferUsage::IndexBuffer标志
-         * 2. 根据initialData选择MemoryAccess模式
-         * 3. 自动创建D3D12_INDEX_BUFFER_VIEW
-         * 4. size必须是索引大小的整数倍（Uint16=2字节，Uint32=4字节）
+         * Teaching points:
+         * 1. Uses BufferUsage::IndexBuffer flag
+         * 2. MemoryAccess mode selected based on initialData
+         * 3. Automatically creates D3D12_INDEX_BUFFER_VIEW
+         * 4. Size must be multiple of INDEX_SIZE (4 bytes)
          */
-        D12IndexBuffer(size_t size, IndexFormat format, const void* initialData = nullptr, const char* debugName = "IndexBuffer");
+        D12IndexBuffer(size_t size, const void* initialData = nullptr, const char* debugName = "IndexBuffer");
 
         /**
-         * @brief 析构函数：自动释放资源
+         * @brief Destructor: Auto-release resources
          */
         ~D12IndexBuffer() override = default;
 
         // ========================================================================
-        // 索引缓冲区特有接口
+        // Index Buffer Specific Interface
         // ========================================================================
 
         /**
-         * @brief 获取索引格式
-         * @return IndexFormat枚举值
-         */
-        IndexFormat GetFormat() const { return m_format; }
-
-        /**
-         * @brief 获取索引数量
-         * @return 索引数量（size / 索引大小）
-         *
-         * 教学要点:
-         * - Uint16: size / 2
-         * - Uint32: size / 4
+         * @brief Get index count
+         * @return Number of indices (size / 4)
          */
         size_t GetIndexCount() const
         {
-            return GetSize() / (m_format == IndexFormat::Uint16 ? 2 : 4);
+            return GetSize() / INDEX_SIZE;
         }
 
         /**
@@ -183,25 +170,14 @@ namespace enigma::graphic
 
     private:
         // ========================================================================
-        // IndexBuffer特有成员变量
+        // IndexBuffer Member Variables
         // ========================================================================
 
-        IndexFormat             m_format; // 索引格式（Uint16/Uint32）
         D3D12_INDEX_BUFFER_VIEW m_view; // DirectX 12 IndexBufferView
 
         /**
-         * @brief 更新IndexBufferView
+         * @brief Update IndexBufferView
          */
         void UpdateView();
-
-        /**
-         * @brief IndexFormat转DXGI_FORMAT
-         * @param format IndexFormat枚举
-         * @return 对应的DXGI_FORMAT
-         */
-        static DXGI_FORMAT IndexFormatToDXGI(IndexFormat format)
-        {
-            return format == IndexFormat::Uint16 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-        }
     };
 } // namespace enigma::graphic
