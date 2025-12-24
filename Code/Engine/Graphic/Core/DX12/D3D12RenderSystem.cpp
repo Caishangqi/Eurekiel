@@ -387,11 +387,11 @@ namespace enigma::graphic
      * 3. 失败时返回nullptr
      */
     std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBuffer(
-        size_t size, D12IndexBuffer::IndexFormat format, const void* initialData, const char* debugName)
+        size_t size, const void* initialData, const char* debugName) // [SIMPLIFIED] Always Uint32
     {
         try
         {
-            return std::make_unique<D12IndexBuffer>(size, format, initialData, debugName);
+            return std::make_unique<D12IndexBuffer>(size, initialData, debugName);
         }
         catch (const std::exception& e)
         {

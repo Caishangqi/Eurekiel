@@ -171,10 +171,9 @@ namespace enigma::graphic
          * @endcode
          */
         static std::unique_ptr<class D12IndexBuffer> CreateIndexBuffer(
-            size_t                      size,
-            D12IndexBuffer::IndexFormat format,
-            const void*                 initialData = nullptr,
-            const char*                 debugName   = "IndexBuffer"
+            size_t      size,
+            const void* initialData = nullptr,
+            const char* debugName   = "IndexBuffer"
         );
 
         /**
