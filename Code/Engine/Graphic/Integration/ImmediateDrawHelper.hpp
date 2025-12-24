@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <cstddef>
+#include <d3d12.h>
 
 namespace enigma::graphic
 {
@@ -9,6 +10,18 @@ namespace enigma::graphic
     class D12VertexBuffer;
     class D12IndexBuffer;
 }
+
+/**
+ * @struct VertexAppendResult
+ * @brief Result of AppendVertexDataWithVBV operation
+ * 
+ * Contains the VBV ready for binding, with BufferLocation pointing
+ * directly to the appended data position in the Ring Buffer.
+ */
+struct VertexAppendResult
+{
+    D3D12_VERTEX_BUFFER_VIEW vbv;
+};
 
 /**
  * @class ImmediateDrawHelper
@@ -78,6 +91,28 @@ public:
         const unsigned*                  indices,
         size_t                           indexCount,
         size_t&                          currentOffset
+    );
+
+    /**
+     * @brief Append vertex data and create VBV with correct BufferLocation
+     * @param buffer VertexBuffer to append to (auto-resizes if needed)
+     * @param vertices Vertex data to append
+     * @param vertexCount Number of vertices
+     * @param currentOffset Current offset in buffer (updated after append)
+     * @param stride Size of each vertex in bytes
+     * @return VertexAppendResult containing VBV ready for binding
+     * 
+     * [FIX] Mixed-stride Ring Buffer solution:
+     * - Records byte offset before append
+     * - Sets VBV.BufferLocation to point directly to data position
+     * - Caller should use startVertex=0 since BufferLocation is already offset
+     */
+    static VertexAppendResult AppendVertexDataWithVBV(
+        std::shared_ptr<D12VertexBuffer>& buffer,
+        const void*                       vertices,
+        size_t                            vertexCount,
+        size_t&                           currentOffset,
+        size_t                            stride
     );
 
 private:

@@ -1,4 +1,5 @@
 #include "Engine/Graphic/Integration/ImmediateDrawHelper.hpp"
+#include "Engine/Graphic/Integration/ImmediateDrawHelper.hpp"
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
@@ -80,4 +81,29 @@ uint32_t ImmediateDrawHelper::AppendIndexData(
     currentOffset += dataSize;
 
     return startIndex;
+}
+
+// [NEW] Append vertex data and create VBV with correct BufferLocation offset
+VertexAppendResult ImmediateDrawHelper::AppendVertexDataWithVBV(
+    std::shared_ptr<D12VertexBuffer>& buffer,
+    const void*                       vertices,
+    size_t                            vertexCount,
+    size_t&                           currentOffset,
+    size_t                            stride)
+{
+    // [FIX] Record byte offset BEFORE AppendVertexData modifies currentOffset
+    // This is critical for mixed-stride Ring Buffer scenarios
+    const size_t dataByteOffset = currentOffset;
+
+    // Append vertex data to Ring Buffer (this updates currentOffset)
+    AppendVertexData(buffer, vertices, vertexCount, currentOffset, stride);
+
+    // Create VBV with BufferLocation pointing directly to data position
+    // This avoids the offset/stride integer division problem (e.g., 3024/60=50.4)
+    VertexAppendResult result = {};
+    result.vbv.BufferLocation = buffer->GetResource()->GetGPUVirtualAddress() + dataByteOffset;
+    result.vbv.SizeInBytes    = static_cast<UINT>(vertexCount * stride);
+    result.vbv.StrideInBytes  = static_cast<UINT>(stride);
+
+    return result;
 }
