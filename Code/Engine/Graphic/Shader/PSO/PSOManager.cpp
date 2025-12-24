@@ -8,6 +8,8 @@
 #include "Engine/Graphic/Shader/Program/ShaderProgram.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Helper/StencilHelper.hpp"
+#include "Engine/Graphic/Resource/VertexLayout/VertexLayout.hpp" // [NEW] VertexLayout for InputLayout
+#include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] Default layout fallback
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include <functional>
 
@@ -16,12 +18,14 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // PSOKey 实现
+    // PSOKey implementation
     // ========================================================================
-
     bool PSOKey::operator==(const PSOKey& other) const
     {
         if (shaderProgram != other.shaderProgram)
+            return false;
+        // [NEW] VertexLayout pointer comparison
+        if (vertexLayout != other.vertexLayout)
             return false;
         if (depthFormat != other.depthFormat)
             return false;
@@ -48,22 +52,25 @@ namespace enigma::graphic
     {
         std::size_t hash = 0;
 
-        // Hash ShaderProgram指针
+        // Hash ShaderProgram pointer
         hash ^= std::hash<const void*>{}(shaderProgram);
 
-        // Hash RT格式
+        // [NEW] Hash VertexLayout pointer
+        hash ^= std::hash<const void*>{}(vertexLayout) << 1;
+
+        // Hash RT format
         for (int i = 0; i < 8; ++i)
         {
             hash ^= std::hash<DXGI_FORMAT>{}(rtFormats[i]) << i;
         }
 
-        // Hash 深度格式
+        // Hash depth format
         hash ^= std::hash<DXGI_FORMAT>{}(depthFormat) << 8;
 
-        // Hash 混合模式
+        // Hash mixed mode
         hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(blendMode)) << 16;
 
-        // Hash 深度模式
+        // Hash depth mode
         hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(depthMode)) << 24;
 
         // Hash StencilTestDetail (all 14 fields)
@@ -112,11 +119,11 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // PSOManager 实现
+    // PSOManager implementation
     // ========================================================================
-
     ID3D12PipelineState* PSOManager::GetOrCreatePSO(
         const ShaderProgram*       shaderProgram,
+        const VertexLayout*        layout, // [NEW] Vertex layout parameters
         const DXGI_FORMAT          rtFormats[8],
         DXGI_FORMAT                depthFormat,
         BlendMode                  blendMode,
@@ -129,9 +136,10 @@ namespace enigma::graphic
         LogInfo("PSOManager", "[GetOrCreatePSO] stencil.enable=%d, func=%d, passOp=%d, writeMask=0x%02X",
                 stencilDetail.enable, stencilDetail.stencilFunc, stencilDetail.stencilPassOp, stencilDetail.stencilWriteMask);
 
-        // 1. 构建PSOKey
+        // 1. Build PSOKey
         PSOKey key;
         key.shaderProgram = shaderProgram;
+        key.vertexLayout  = layout; // [NEW] Set vertex layout
         for (int i = 0; i < 8; ++i)
         {
             key.rtFormats[i] = rtFormats[i];
@@ -142,7 +150,7 @@ namespace enigma::graphic
         key.stencilDetail       = stencilDetail;
         key.rasterizationConfig = rasterizationConfig; // [NEW] Set rasterization config
 
-        // 2. 查找缓存
+        // 2. Find cache
         auto it = m_psoCache.find(key);
         if (it != m_psoCache.end())
         {
@@ -152,14 +160,14 @@ namespace enigma::graphic
 
         LogInfo("PSOManager", "[PSO Cache MISS] Creating new PSO");
 
-        // 3. 创建新PSO
+        // 3. Create a new PSO
         auto pso = CreatePSO(key);
         if (!pso)
         {
             return nullptr;
         }
 
-        // 4. 缓存并返回
+        // 4. Cache and return
         m_psoCache[key] = pso;
         return pso.Get();
     }
@@ -171,7 +179,7 @@ namespace enigma::graphic
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOManager::CreatePSO(const PSOKey& key)
     {
-        // 1. 获取Root Signature
+        // 1. Get Root Signature
         ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
         if (!rootSig)
         {
@@ -179,57 +187,66 @@ namespace enigma::graphic
             return nullptr;
         }
 
-        // 2. 配置PSO描述符
+        // 2. Configure PSO descriptor
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
         psoDesc.pRootSignature                     = rootSig;
 
-        // 2.1 着色器字节码（从ShaderProgram私有成员获取，PSOManager是友元类）
+        // 2.1 Shader bytecode (obtained from ShaderProgram private members, PSOManager is a friend class)
         psoDesc.VS.pShaderBytecode = key.shaderProgram->m_vertexShader.GetBytecodePtr();
         psoDesc.VS.BytecodeLength  = key.shaderProgram->m_vertexShader.GetBytecodeSize();
 
         psoDesc.PS.pShaderBytecode = key.shaderProgram->m_pixelShader.GetBytecodePtr();
         psoDesc.PS.BytecodeLength  = key.shaderProgram->m_pixelShader.GetBytecodeSize();
 
-        // 几何着色器暂不支持
+        // Geometry shaders are not supported yet
         // if (key.shaderProgram->m_geometryShader.has_value())
         // {
-        //     psoDesc.GS.pShaderBytecode = key.shaderProgram->m_geometryShader->GetBytecodePtr();
-        //     psoDesc.GS.BytecodeLength  = key.shaderProgram->m_geometryShader->GetBytecodeSize();
+        // psoDesc.GS.pShaderBytecode = key.shaderProgram->m_geometryShader->GetBytecodePtr();
+        // psoDesc.GS.BytecodeLength = key.shaderProgram->m_geometryShader->GetBytecodeSize();
         // }
 
-        // 2.2 Blend状态（使用key.blendMode）
+        // 2.2 Blend state (using key.blendMode)
         ConfigureBlendState(psoDesc.BlendState, key.blendMode);
 
-        // 2.3 光栅化状态（使用key.rasterizationConfig）
+        // 2.3 Rasterization status (using key.rasterizationConfig)
         ConfigureRasterizerState(psoDesc.RasterizerState, key.rasterizationConfig);
 
-        // 2.4 深度模板状态（使用key.depthMode和key.stencilDetail）
+        // 2.4 Depth template state (using key.depthMode and key.stencilDetail)
         ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthMode, key.stencilDetail);
 
-        // 2.5 Input Layout
-        static const D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            {"BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-            {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 48, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        };
-        psoDesc.InputLayout.pInputElementDescs = inputLayout;
-        psoDesc.InputLayout.NumElements        = _countof(inputLayout);
+        // 2.5 Input Layout - [REFACTORED] Use VertexLayout from key instead of hardcoded array
+        const VertexLayout* layout = key.vertexLayout;
+        if (!layout)
+        {
+            // [FALLBACK] Use default layout if not specified
+            layout = VertexLayoutRegistry::GetDefault();
+            LogWarn("PSOManager", "PSOManager::CreatePSO:: VertexLayout is null, using default layout '%s'", layout ? layout->GetLayoutName() : "NONE");
+        }
 
-        // 2.6 图元拓扑
+        if (layout)
+        {
+            psoDesc.InputLayout.pInputElementDescs = layout->GetInputElements();
+            psoDesc.InputLayout.NumElements        = layout->GetInputElementCount();
+        }
+        else
+        {
+            // [CRITICAL ERROR] No layout available - this should never happen
+            ERROR_RECOVERABLE("PSOManager::CreatePSO:: No VertexLayout available, PSO creation will fail");
+            return nullptr;
+        }
+
+        // 2.6 Graph element topology
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-        // 2.7 渲染目标格式（使用key.rtFormats，修复硬编码问题）
-        // [FIX] 先遍历所有RT，找到最后一个非UNKNOWN的索引
+        // 2.7 Render target format (use key.rtFormats, fix hard coding problem)
+        // [FIX] First traverse all RTs and find the last non-UNKNOWN index
         UINT lastValidRTIndex = 0;
         for (UINT i = 0; i < 8; ++i)
         {
             if (key.rtFormats[i] != DXGI_FORMAT_UNKNOWN)
             {
                 psoDesc.RTVFormats[i] = key.rtFormats[i];
-                lastValidRTIndex      = i; // [FIX] 记录最后一个有效RT的索引
+                lastValidRTIndex      = i; // [FIX] Record the index of the last valid RT
             }
             else
             {
@@ -237,29 +254,29 @@ namespace enigma::graphic
             }
         }
 
-        // [FIX] NumRenderTargets = 最后一个有效RT索引 + 1
+        // [FIX] NumRenderTargets = last valid RT index + 1
         psoDesc.NumRenderTargets = lastValidRTIndex + 1;
 
-        // Fallback: 如果没有任何RT，使用默认配置
+        // Fallback: If there is no RT, use the default configuration
         if (psoDesc.NumRenderTargets == 0)
         {
             psoDesc.NumRenderTargets = 1;
             psoDesc.RTVFormats[0]    = DXGI_FORMAT_R8G8B8A8_UNORM;
         }
 
-        // 2.8 深度格式（使用key.depthFormat）
+        // 2.8 depth format (using key.depthFormat)
         psoDesc.DSVFormat = key.depthFormat;
 
-        // 2.9 采样描述
+        // 2.9 Sampling description
         psoDesc.SampleDesc.Count   = 1;
         psoDesc.SampleDesc.Quality = 0;
         psoDesc.SampleMask         = UINT_MAX;
 
-        // 3. 创建PSO
+        // 3. Create PSO
         auto pso = D3D12RenderSystem::CreateGraphicsPSO(psoDesc);
         if (!pso)
         {
-            // Fallback: 使用默认配置重试
+            // Fallback: Try again with default configuration
             ERROR_RECOVERABLE("PSO creation failed, trying fallback configuration");
 
             PSOKey fallbackKey    = key;
@@ -268,7 +285,7 @@ namespace enigma::graphic
 
             if (fallbackKey == key)
             {
-                return nullptr; // 已经是默认配置，无法Fallback
+                return nullptr; // It is already the default configuration and cannot be Fallback
             }
 
             return CreatePSO(fallbackKey);
@@ -278,15 +295,14 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 状态配置辅助方法
+    // State configuration helper method
     // ========================================================================
-
     void PSOManager::ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, BlendMode blendMode)
     {
         blendDesc.AlphaToCoverageEnable  = FALSE;
         blendDesc.IndependentBlendEnable = FALSE;
 
-        // [FIX] 初始化所有RT为不混合状态
+        // [FIX] Initialize all RTs to unmixed state
         for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
         {
             blendDesc.RenderTarget[i].BlendEnable           = FALSE;
@@ -298,7 +314,7 @@ namespace enigma::graphic
         {
         case BlendMode::Alpha:
         case BlendMode::NonPremultiplied:
-            // [FIX] 为所有RT启用Alpha混合，修复MRT云渲染的黑底Bug
+            // [FIX] Enable Alpha blending for all RTs and fix the black background bug of MRT cloud rendering
             for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
             {
                 blendDesc.RenderTarget[i].BlendEnable    = TRUE;
@@ -312,7 +328,7 @@ namespace enigma::graphic
             break;
 
         case BlendMode::Additive:
-            // [FIX] 为所有RT启用加法混合
+            // [FIX] Enable additive blending for all RTs
             for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
             {
                 blendDesc.RenderTarget[i].BlendEnable    = TRUE;
@@ -326,7 +342,7 @@ namespace enigma::graphic
             break;
 
         case BlendMode::Multiply:
-            // [FIX] 为所有RT启用乘法混合
+            // [FIX] Enable multiplicative blending for all RTs
             for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
             {
                 blendDesc.RenderTarget[i].BlendEnable    = TRUE;
@@ -340,7 +356,7 @@ namespace enigma::graphic
             break;
 
         case BlendMode::Premultiplied:
-            // [FIX] 为所有RT启用预乘Alpha混合
+            // [FIX] Enable premultiplied alpha blending for all RTs
             for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
             {
                 blendDesc.RenderTarget[i].BlendEnable    = TRUE;
@@ -356,7 +372,7 @@ namespace enigma::graphic
         case BlendMode::Opaque:
         case BlendMode::Disabled:
         default:
-            // 默认不混合（已在初始化循环中设置）
+            // No mixing by default (set in the initialization loop)
             break;
         }
     }
