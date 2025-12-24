@@ -5,18 +5,17 @@
 using namespace enigma::graphic;
 
 // ============================================================================
-// 构造函数和析构函数
+// Constructor and destructor
 // ============================================================================
-
 D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* initialData, const char* debugName)
     : D12Buffer([&]()
       {
           BufferCreateInfo info;
           info.size  = size;
           info.usage = BufferUsage::IndexBuffer;
-          // 教学要点: 应用层IndexBuffer需要频繁更新，统一使用CPUWritable
-          // 即使没有initialData，也可能在后续通过UpdateBuffer更新
-          // 参考Iris: 动态索引数据使用UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
+          //Teaching points: The application layer IndexBuffer needs to be updated frequently, and CPUWritable should be used uniformly.
+          // Even if there is no initialData, it may be updated later through UpdateBuffer
+          // Refer to Iris: Dynamic index data uses UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
           info.memoryAccess = MemoryAccess::CPUWritable;
           info.initialData  = initialData;
           info.debugName    = debugName;
@@ -25,18 +24,24 @@ D12IndexBuffer::D12IndexBuffer(size_t size, IndexFormat format, const void* init
       , m_format(format)
       , m_view{}
 {
-    // 教学要点: 参数验证 - 确保size是索引大小的整数倍
+    //Teaching Points: Parameter Validation - Make sure size is an integer multiple of the index size
     const size_t indexSize = (format == IndexFormat::Uint16) ? 2 : 4;
     assert(size % indexSize == 0 && "Buffer size must be multiple of index size");
     UNUSED(indexSize)
-    // 教学要点: 创建D3D12_INDEX_BUFFER_VIEW
+    //Teaching points: Create D3D12_INDEX_BUFFER_VIEW
     UpdateView();
+
+    // [NEW] Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
+    // Teaching points: The IndexBuffer of the UPLOAD heap needs to be persistently mapped so that:
+    // 1. DrawVertexBuffer can read data through GetPersistentMappedData()
+    // 2. Data can be copied to the renderer’s Ring Buffer
+    // 3. Avoid the overhead of Map/Unmap per frame
+    MapPersistent();
 }
 
 // ============================================================================
-// IndexBufferView管理
+// IndexBufferView management
 // ============================================================================
-
 void D12IndexBuffer::UpdateView()
 {
     auto* resource = GetResource();
@@ -46,19 +51,18 @@ void D12IndexBuffer::UpdateView()
         return;
     }
 
-    // 教学要点: 构造D3D12_INDEX_BUFFER_VIEW
-    // 1. BufferLocation: GPU虚拟地址
-    // 2. SizeInBytes: 缓冲区总大小
-    // 3. Format: 索引格式（R16_UINT或R32_UINT）
+    //Teaching points: Construct D3D12_INDEX_BUFFER_VIEW
+    // 1. BufferLocation: GPU virtual address
+    // 2. SizeInBytes: total buffer size
+    // 3. Format: index format (R16_UINT or R32_UINT)
     m_view.BufferLocation = resource->GetGPUVirtualAddress();
     m_view.SizeInBytes    = static_cast<UINT>(GetSize());
     m_view.Format         = IndexFormatToDXGI(m_format);
 }
 
 // ============================================================================
-// Debug接口实现
+// Debug interface implementation
 // ============================================================================
-
 void D12IndexBuffer::SetDebugName(const std::string& name)
 {
     D12Buffer::SetDebugName(name);
@@ -77,9 +81,8 @@ std::string D12IndexBuffer::GetDebugInfo() const
 }
 
 // ============================================================================
-// 资源释放
+// Resource release
 // ============================================================================
-
 void D12IndexBuffer::ReleaseResource()
 {
     m_view = {};

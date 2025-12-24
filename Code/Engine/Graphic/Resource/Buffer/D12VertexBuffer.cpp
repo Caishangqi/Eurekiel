@@ -5,18 +5,17 @@
 using namespace enigma::graphic;
 
 // ============================================================================
-// 构造函数和析构函数
+// Constructor and destructor
 // ============================================================================
-
 D12VertexBuffer::D12VertexBuffer(size_t size, size_t stride, const void* initialData, const char* debugName)
     : D12Buffer([&]()
       {
           BufferCreateInfo info;
           info.size  = size;
           info.usage = BufferUsage::VertexBuffer;
-          // 教学要点: 应用层VertexBuffer需要频繁更新，统一使用CPUWritable
-          // 即使没有initialData，也可能在后续通过UpdateBuffer更新
-          // 参考Iris: 动态顶点数据使用UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
+          // Teaching points: The application layer VertexBuffer needs to be updated frequently, so use CPUWritable uniformly.
+          // Even if there is no initialData, it may be updated later through UpdateBuffer
+          // Refer to Iris: Dynamic vertex data uses UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
           info.memoryAccess = MemoryAccess::CPUWritable;
           info.initialData  = initialData;
           info.debugName    = debugName;
@@ -25,52 +24,57 @@ D12VertexBuffer::D12VertexBuffer(size_t size, size_t stride, const void* initial
       , m_stride(stride)
       , m_view{}
 {
-    // 教学要点: 参数验证 - 确保输入合法性
+    //Teaching points: Parameter verification - ensure the legality of the input
     assert(stride > 0 && "Vertex stride must be greater than 0");
     assert(size % stride == 0 && "Buffer size must be multiple of stride");
 
-    // 教学要点: 创建D3D12_VERTEX_BUFFER_VIEW
-    // 这是DirectX 12绑定顶点缓冲区的关键结构
+    //Teaching points: Create D3D12_VERTEX_BUFFER_VIEW
+    // This is the key structure for DirectX 12 bound vertex buffers
     UpdateView();
+
+    // [NEW] Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
+    // Teaching points: The VertexBuffer of the UPLOAD heap needs to be persistently mapped so that:
+    // 1. DrawVertexBuffer can read data through GetPersistentMappedData()
+    // 2. Data can be copied to the renderer’s Ring Buffer
+    // 3. Avoid the overhead of Map/Unmap per frame
+    MapPersistent();
 }
 
 // ============================================================================
-// VertexBufferView管理
+// VertexBufferView management
 // ============================================================================
-
 void D12VertexBuffer::UpdateView()
 {
-    // 教学要点: 获取基类的资源指针
+    // Teaching points: Obtain the resource pointer of the base class
     auto* resource = GetResource();
     if (!resource)
     {
-        // 资源无效时清空view
+        // Clear the view when the resource is invalid
         m_view = {};
         return;
     }
 
-    // 教学要点: 构造D3D12_VERTEX_BUFFER_VIEW
-    // 1. BufferLocation: GPU虚拟地址（从ID3D12Resource获取）
-    // 2. SizeInBytes: 缓冲区总大小
-    // 3. StrideInBytes: 单个顶点大小
+    // Teaching points: Construct D3D12_VERTEX_BUFFER_VIEW
+    // 1. BufferLocation: GPU virtual address (obtained from ID3D12Resource)
+    // 2. SizeInBytes: total buffer size
+    // 3. StrideInBytes: single vertex size
     m_view.BufferLocation = resource->GetGPUVirtualAddress();
     m_view.SizeInBytes    = static_cast<UINT>(GetSize());
     m_view.StrideInBytes  = static_cast<UINT>(m_stride);
 }
 
 // ============================================================================
-// Debug接口实现
+// Debug interface implementation
 // ============================================================================
-
 void D12VertexBuffer::SetDebugName(const std::string& name)
 {
-    // 教学要点: 调用基类实现，设置DirectX对象名称
+    // Teaching points: Call the base class implementation and set the DirectX object name
     D12Buffer::SetDebugName(name);
 }
 
 std::string D12VertexBuffer::GetDebugInfo() const
 {
-    // 教学要点: 提供顶点缓冲区特有的调试信息
+    // Teaching points: Provide debugging information specific to the vertex buffer
     std::ostringstream oss;
     oss << "VertexBuffer [" << GetDebugName() << "]\n";
     oss << "  Size: " << GetSize() << " bytes\n";
@@ -82,14 +86,13 @@ std::string D12VertexBuffer::GetDebugInfo() const
 }
 
 // ============================================================================
-// 资源释放
+// Resource release
 // ============================================================================
-
 void D12VertexBuffer::ReleaseResource()
 {
-    // 教学要点: 清理VertexBufferView
+    // Teaching points: Clean up VertexBufferView
     m_view = {};
 
-    // 调用基类实现，释放DirectX资源
+    // Call the base class implementation to release DirectX resources
     D12Buffer::ReleaseResource();
 }
