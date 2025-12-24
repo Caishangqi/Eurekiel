@@ -1297,31 +1297,8 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
              size, offset, buffer->GetSize());
 }
 
-void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
+bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList)
 {
-    if (vertexCount == 0)
-    {
-        LogWarn(LogRenderer, "Draw: vertexCount is 0, nothing to draw");
-        return;
-    }
-
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    if (!cmdList)
-    {
-        LogError(LogRenderer, "Draw: CommandList is nullptr");
-        return;
-    }
-
-    // ========================================================================
-    // [REFACTORED] Draw Execution - Inline PSO State + DrawBindingHelper
-    // ========================================================================
-    // Changes:
-    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
-    // 2. [NEW] Inline struct construction for DrawState
-    // 3. [NEW] Use DrawBindingHelper for resource binding
-    // 4. [NEW] Layout retrieval from m_currentVertexLayout for PSO creation
-    // ========================================================================
-
     // Step 1: Prepare custom images (before draw)
     if (m_customImageManager)
     {
@@ -1334,15 +1311,15 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
     }
 
-    // Step 3: [NEW] Get layout from state with fallback to default
+    // Step 3: Get layout from state with fallback to default
     const VertexLayout* layout = m_currentVertexLayout;
     if (!layout)
     {
         layout = VertexLayoutRegistry::GetDefault();
-        LogWarn(LogVertexLayout, "Draw: layout not set, using default");
+        LogWarn(LogVertexLayout, "PreparePSOAndBindings: layout not set, using default");
     }
 
-    // Step 4: Inline PSO state construction (replaces PSOStateCollector)
+    // Step 4: Inline PSO state construction
     RenderStateValidator::DrawState state{};
     state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
     state.blendMode           = m_currentBlendMode;
@@ -1358,14 +1335,14 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     const char* errorMsg = nullptr;
     if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
     {
-        LogError(LogRenderer, "Draw validation failed: %s", errorMsg ? errorMsg : "Unknown error");
-        return;
+        LogError(LogRenderer, "PreparePSOAndBindings validation failed: %s", errorMsg ? errorMsg : "Unknown error");
+        return false;
     }
 
     // Step 6: Get or create PSO (with layout parameter)
     ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
         state.program,
-        layout, // [NEW] Pass layout from state for PSO cache discrimination
+        layout,
         state.rtFormats.data(),
         state.depthFormat,
         state.blendMode,
@@ -1390,24 +1367,46 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
     // Step 9: Set Primitive Topology
     cmdList->IASetPrimitiveTopology(state.topology);
 
-    // Step 10: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
+    // Step 10: Bind Engine Buffers (slots 0-14)
     DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
 
-    // Step 11: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
+    // Step 11: Bind Custom Buffer Table (slot 15)
+    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
 
-    // Step 12: Issue Draw call
+    return true;
+}
+
+void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
+{
+    if (vertexCount == 0)
+    {
+        LogWarn(LogRenderer, "Draw: vertexCount is 0, nothing to draw");
+        return;
+    }
+
+    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "Draw: CommandList is nullptr");
+        return;
+    }
+
+    // [REFACTORED] Use public helper functions to prepare PSO and resource bindings
+    if (!PreparePSOAndBindings(cmdList))
+    {
+        return;
+    }
+
+    // Issue Draw call
     cmdList->DrawInstanced(vertexCount, 1, startVertex, 0);
 
-    // Step 13: Increment draw count
+    // Increment draw count
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
 
-    LogDebug(LogRenderer,
-             "Draw: Drew %u vertices starting from vertex %u",
-             vertexCount, startVertex);
+    LogDebug(LogRenderer, "Draw: Drew %u vertices starting from vertex %u", vertexCount, startVertex);
 }
 
 void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
@@ -1425,101 +1424,22 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    // ========================================================================
-    // [REFACTORED] DrawIndexed Execution - Inline PSO State + DrawBindingHelper
-    // ========================================================================
-    // Changes:
-    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
-    // 2. [NEW] Inline struct construction for DrawState
-    // 3. [NEW] Use DrawBindingHelper for resource binding
-    // 4. [NEW] Layout retrieval from m_currentVertexLayout for PSO creation
-    // ========================================================================
-
-    // Step 1: Prepare custom images (before draw)
-    if (m_customImageManager)
+    // [REFACTORED] Use public helper functions to prepare PSO and resource bindings
+    if (!PreparePSOAndBindings(cmdList))
     {
-        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
-    }
-
-    // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
-    if (m_uniformManager)
-    {
-        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-    }
-
-    // Step 3: [NEW] Get layout from state with fallback to default
-    const VertexLayout* layout = m_currentVertexLayout;
-    if (!layout)
-    {
-        layout = VertexLayoutRegistry::GetDefault();
-        LogWarn(LogVertexLayout, "DrawIndexed: layout not set, using default");
-    }
-
-    // Step 4: Inline PSO state construction (replaces PSOStateCollector)
-    RenderStateValidator::DrawState state{};
-    state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
-    state.blendMode           = m_currentBlendMode;
-    state.depthMode           = m_currentDepthMode;
-    state.stencilDetail       = m_currentStencilTest;
-    state.rasterizationConfig = m_currentRasterizationConfig;
-    state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    m_renderTargetBinder->GetCurrentRTFormats(state.rtFormats.data());
-    state.depthFormat = m_renderTargetBinder->GetCurrentDepthFormat();
-    state.rtCount     = 8;
-
-    // Step 5: Validate Draw state
-    const char* errorMsg = nullptr;
-    if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
-    {
-        LogError(LogRenderer, "DrawIndexed validation failed: %s", errorMsg ? errorMsg : "Unknown error");
         return;
     }
 
-    // Step 6: Get or create PSO (with layout parameter)
-    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
-        state.program,
-        layout, // [NEW] Pass layout from state for PSO cache discrimination
-        state.rtFormats.data(),
-        state.depthFormat,
-        state.blendMode,
-        state.depthMode,
-        state.stencilDetail,
-        state.rasterizationConfig
-    );
-
-    // Step 7: Bind PSO (avoid redundant binding)
-    if (pso != m_lastBoundPSO)
-    {
-        cmdList->SetPipelineState(pso);
-        m_lastBoundPSO = pso;
-    }
-
-    // Step 8: Bind Root Signature
-    if (m_currentShaderProgram)
-    {
-        m_currentShaderProgram->Use(cmdList);
-    }
-
-    // Step 9: Set Primitive Topology
-    cmdList->IASetPrimitiveTopology(state.topology);
-
-    // Step 10: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
-    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
-
-    // Step 11: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
-
-    // Step 12: Issue DrawIndexed call
+    // Issue DrawIndexed call
     D3D12RenderSystem::DrawIndexed(indexCount, startIndex, baseVertex);
 
-    // Step 13: Increment draw count
+    // Increment draw count
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
 
-    LogDebug(LogRenderer,
-             "DrawIndexed: Drew %u indices starting from index %u with base vertex %d",
+    LogDebug(LogRenderer, "DrawIndexed: Drew %u indices starting from index %u with base vertex %d",
              indexCount, startIndex, baseVertex);
 }
 
@@ -1538,101 +1458,22 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         return;
     }
 
-    // ========================================================================
-    // [REFACTORED] DrawInstanced Execution - Inline PSO State + DrawBindingHelper
-    // ========================================================================
-    // Changes:
-    // 1. [DELETE] Removed PSOStateCollector::CollectCurrentState call
-    // 2. [NEW] Inline struct construction for DrawState
-    // 3. [NEW] Use DrawBindingHelper for resource binding
-    // 4. [NEW] Layout retrieval from m_currentVertexLayout for PSO creation
-    // ========================================================================
-
-    // Step 1: Prepare custom images (before draw)
-    if (m_customImageManager)
+    // [REFACTORED] 使用公共辅助函数准备PSO和资源绑定
+    if (!PreparePSOAndBindings(cmdList))
     {
-        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
-    }
-
-    // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
-    if (m_uniformManager)
-    {
-        m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-    }
-
-    // Step 3: [NEW] Get layout from state with fallback to default
-    const VertexLayout* layout = m_currentVertexLayout;
-    if (!layout)
-    {
-        layout = VertexLayoutRegistry::GetDefault();
-        LogWarn(LogVertexLayout, "DrawInstanced: layout not set, using default");
-    }
-
-    // Step 4: Inline PSO state construction (replaces PSOStateCollector)
-    RenderStateValidator::DrawState state{};
-    state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
-    state.blendMode           = m_currentBlendMode;
-    state.depthMode           = m_currentDepthMode;
-    state.stencilDetail       = m_currentStencilTest;
-    state.rasterizationConfig = m_currentRasterizationConfig;
-    state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    m_renderTargetBinder->GetCurrentRTFormats(state.rtFormats.data());
-    state.depthFormat = m_renderTargetBinder->GetCurrentDepthFormat();
-    state.rtCount     = 8;
-
-    // Step 5: Validate Draw state
-    const char* errorMsg = nullptr;
-    if (!RenderStateValidator::ValidateDrawState(state, &errorMsg))
-    {
-        LogError(LogRenderer, "DrawInstanced validation failed: %s", errorMsg ? errorMsg : "Unknown error");
         return;
     }
 
-    // Step 6: Get or create PSO (with layout parameter)
-    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
-        state.program,
-        layout, // [NEW] Pass layout from state for PSO cache discrimination
-        state.rtFormats.data(),
-        state.depthFormat,
-        state.blendMode,
-        state.depthMode,
-        state.stencilDetail,
-        state.rasterizationConfig
-    );
-
-    // Step 7: Bind PSO (avoid redundant binding)
-    if (pso != m_lastBoundPSO)
-    {
-        cmdList->SetPipelineState(pso);
-        m_lastBoundPSO = pso;
-    }
-
-    // Step 8: Bind Root Signature
-    if (m_currentShaderProgram)
-    {
-        m_currentShaderProgram->Use(cmdList);
-    }
-
-    // Step 9: Set Primitive Topology
-    cmdList->IASetPrimitiveTopology(state.topology);
-
-    // Step 10: Bind Engine Buffers (slots 0-14) - Use DrawBindingHelper
-    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
-
-    // Step 11: Bind Custom Buffer Table (slot 15) - Use DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
-
-    // Step 12: Issue DrawInstanced call
+    // Issue DrawInstanced call
     cmdList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
 
-    // Step 13: Increment draw count
+    // Increment draw count
     if (m_uniformManager)
     {
         m_uniformManager->IncrementDrawCount();
     }
 
-    LogDebug(LogRenderer,
-             "DrawInstanced: Drew %u vertices × %u instances starting from vertex %u, instance %u",
+    LogDebug(LogRenderer, "DrawInstanced: Drew %u vertices x %u instances starting from vertex %u, instance %u",
              vertexCount, instanceCount, startVertex, startInstance);
 }
 
@@ -2023,14 +1864,14 @@ void RendererSubsystem::BindRenderTargets(
 
 void RendererSubsystem::CopyDepth(int srcIndex, int dstIndex)
 {
-    // 验证DepthTextureManager已初始化
+    // Verify that DepthTextureManager has been initialized
     if (!m_depthTextureManager)
     {
         LogError(LogRenderer, "CopyDepthBuffer: DepthTextureManager not initialized");
         return;
     }
 
-    // 委托DepthTextureManager执行复制（内部会获取CommandList）
+    // Delegate DepthTextureManager to perform copying (CommandList will be obtained internally)
     try
     {
         m_depthTextureManager->CopyDepth(srcIndex, dstIndex);
@@ -2047,14 +1888,14 @@ void RendererSubsystem::CopyDepth(int srcIndex, int dstIndex)
 
 int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
 {
-    // 验证DepthTextureManager已初始化
+    // Verify that DepthTextureManager has been initialized
     if (!m_depthTextureManager)
     {
         LogWarn(LogRenderer, "GetActiveDepthBufferIndex: DepthTextureManager not initialized, returning 0");
-        return 0; // 返回默认值
+        return 0; // Return to default value
     }
 
-    // 委托DepthTextureManager查询
+    // Delegate DepthTextureManager query
     return m_depthTextureManager->GetActiveDepthBufferIndex();
 }
 
@@ -2069,8 +1910,7 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
-    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu",
-            count, m_immediateVBO.get(), m_currentVertexOffset);
+    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, VBO addr=%p, offset=%zu", count, m_immediateVBO.get(), m_currentVertexOffset);
     // [STEP 3] Append vertex data using ImmediateDrawHelper
     uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(
         m_immediateVBO,
@@ -2100,22 +1940,13 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
 {
     LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, VBO addr=%p, offset=%zu", vertexCount, m_immediateVBO.get(), m_currentVertexOffset);
 
-    // [STEP 1] Prepare CustomImage data before Delayed Fill
-    if (m_customImageManager)
-    {
-        m_customImageManager->PrepareCustomImagesForDraw();
-    }
-
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
-        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data");
+        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data")
         return;
     }
 
-    // [STEP 2] Update Ring Buffer offsets (Delayed Fill)
-    m_uniformManager->UpdateRingBufferOffsets(UpdateFrequency::PerObject);
-
-    // [STEP 3] Append vertex and index data using ImmediateDrawHelper
+    // [STEP 1] Append vertex data to Ring Buffer
     uint32_t baseVertex = ImmediateDrawHelper::AppendVertexData(
         m_immediateVBO,
         vertices,
@@ -2124,6 +1955,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         sizeof(Vertex)
     );
 
+    // [STEP 2] Append index data to Ring Buffer
     uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
         m_immediateIBO,
         indices,
@@ -2131,48 +1963,20 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         m_currentIndexOffset
     );
 
-    // [STEP 4] Set vertex and index buffers
+    // [STEP 3] Set vertex and index buffers
     SetVertexBuffer(m_immediateVBO.get());
     SetIndexBuffer(m_immediateIBO.get());
 
-    // [STEP 5] Get CommandList and set Root Signature
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-    if (!cmdList)
-    {
-        ERROR_AND_DIE("DrawVertexArray: CommandList is nullptr")
-        return;
-    }
-
-    if (m_currentShaderProgram)
-    {
-        m_currentShaderProgram->Use(cmdList);
-    }
-    else
-    {
-        ERROR_RECOVERABLE("DrawVertexArray: No shader program is set");
-        return;
-    }
-
-    // [STEP 6] Bind Engine Buffer Root CBVs (Slot 0-14) using DrawBindingHelper
-    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
-
-    // [STEP 7] Bind Custom Buffer Descriptor Table (Slot 15) using DrawBindingHelper
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get()); // [REFACTORED] Removed redundant ringIndex parameter;
-
-    // [STEP 8] Set primitive topology (implicit in DrawIndexed)
-
-    // [STEP 9] Issue indexed draw call
+    // [STEP 4] Issue indexed draw call
+    // DrawIndexed() will internally call PreparePSOAndBindings() to complete all bindings
+    // And call IncrementDrawCount(), no need to call it repeatedly here
     DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, baseVertex);
-
-    // [STEP 10] Increment Draw count for Ring Buffer
-    if (m_uniformManager)
-    {
-        m_uniformManager->IncrementDrawCount();
-    }
 }
 
-void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount)
+void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo)
 {
+    size_t vertexCount = vbo->GetVertexCount();
+
     if (!vbo || vertexCount == 0)
     {
         ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer or count");
@@ -2219,9 +2023,12 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
     Draw(static_cast<uint32_t>(vertexCount), startVertex);
 }
 
-void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo, size_t indexCount)
+void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo)
 {
-    if (!vbo || !ibo || indexCount == 0)
+    size_t indexCount  = ibo->GetIndexCount();
+    size_t vertexCount = vbo->GetVertexCount();
+
+    if (!vbo || !ibo || indexCount == 0 || vertexCount == 0)
     {
         ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer, index buffer or count");
         return;
@@ -2260,8 +2067,6 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
         ERROR_RECOVERABLE("DrawVertexBuffer: External IBO has no mapped data");
         return;
     }
-    // [FIX] Use GetVertexCount() API instead of manual calculation
-    size_t vertexCount = vbo->GetVertexCount();
 
     // Append vertex data to Ring Buffer using ImmediateDrawHelper
     uint32_t startVertex = ImmediateDrawHelper::AppendVertexData(

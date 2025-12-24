@@ -586,7 +586,6 @@ namespace enigma::graphic
         /**
          * @brief 绘制顶点缓冲区（缓冲区句柄模式 - 非索引）
          * @param vbo 顶点缓冲区智能指针
-         * @param vertexCount 顶点数量
          *
          * 教学要点：
          * - 缓冲区句柄模式：使用用户管理的缓冲区
@@ -594,20 +593,19 @@ namespace enigma::graphic
          * - 性能优势：避免每帧上传数据
          * - 适用场景：静态或低频更新的几何体
          */
-        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, size_t vertexCount);
+        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo);
 
         /**
          * @brief 绘制顶点缓冲区（缓冲区句柄模式 - 索引）
          * @param vbo 顶点缓冲区智能指针
          * @param ibo 索引缓冲区智能指针
-         * @param indexCount 索引数量
          *
          * 教学要点：
          * - 完整缓冲区绘制：VBO + IBO
          * - 智能指针：自动管理资源生命周期
          * - 参考DX11Renderer::DrawVertexIndexed实现
          */
-        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo, size_t indexCount);
+        void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo);
 
         /**
          * @brief 绘制全屏四边形
@@ -1442,6 +1440,30 @@ namespace enigma::graphic
         class UniformManager* GetUniformManager() const noexcept { return m_uniformManager.get(); }
 
     private:
+        /**
+         * @brief Prepare PSO and resource binding (common logic of Draw series functions)
+         * @param cmdList graphics command list
+         * @return true If the preparation is successful, you can initiate a Draw call; false if the preparation fails, you should return early
+         *
+         * [REFACTOR] Common logic extracted from Draw/DrawIndexed/DrawInstanced:
+         * 1. PrepareCustomImages
+         * 2. UpdateRingBufferOffsets
+         * 3. Get layout with fallback
+         * 4. Inline PSO state construction
+         * 5. ValidateDrawState
+         * 6. GetOrCreatePSO
+         * 7. Bind PSO (if changed)
+         * 8. Bind Root Signature
+         * 9. Set Primitive Topology
+         * 10. BindEngineBuffers
+         * 11. BindCustomBufferTable
+         *
+         * @note IncrementDrawCount is not called in this function and is the responsibility of the caller
+         */
+        bool PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList);
+
+        // ==================== 私有成员变量 ====================
+
         /// 交换链 - 双缓冲显示 (需要窗口句柄，由子系统管理)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
 
