@@ -192,15 +192,10 @@ void BufferHelper::EnsureBufferSize(
             newSize = ((newSize + indexSize - 1) / indexSize) * indexSize;
         }
 
-        // 创建新缓冲区
-        buffer = std::make_shared<D12IndexBuffer>(
-            newSize,
-            D12IndexBuffer::IndexFormat::Uint32,
-            nullptr,
-            debugName
-        );
+        //Create new buffer
+        buffer = std::make_shared<D12IndexBuffer>(newSize, nullptr, debugName);
 
-        // 持久映射支持per-frame append策略
+        // Persistent mapping supports per-frame append strategy
         void* mappedPtr = buffer->MapPersistent();
         GUARANTEE_OR_DIE(mappedPtr != nullptr,
                          Stringf("BufferHelper: Failed to persistent map IndexBuffer '%s'", debugName).c_str());
