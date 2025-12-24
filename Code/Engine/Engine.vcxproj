@@ -352,6 +352,8 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\core\Common.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.vs.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcu.ps.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcu.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcutbn.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcutbn.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\fallback_rule.json"/>
@@ -375,85 +377,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_debug.vs.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\include\common_uniforms.hlsl"/>
     <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.ps.hlsl"/>
-    <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.vs.hlsl">
-      <AssemblerOutput>NoListing</AssemblerOutput>
-      <AssemblerListingLocation>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</AssemblerListingLocation>
-      <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-      <BrowseInformation>false</BrowseInformation>
-      <BrowseInformationFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</BrowseInformationFile>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <CompileAs>Default</CompileAs>
-      <UseDynamicDebugging>false</UseDynamicDebugging>
-      <ConformanceMode>true</ConformanceMode>
-      <DiagnosticsFormat>Column</DiagnosticsFormat>
-      <DisableLanguageExtensions>false</DisableLanguageExtensions>
-      <ErrorReporting>Prompt</ErrorReporting>
-      <ExpandAttributedSource>false</ExpandAttributedSource>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <EnableASAN>false</EnableASAN>
-      <EnableFuzzer>false</EnableFuzzer>
-      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <EnableVectorLength>NotSet</EnableVectorLength>
-      <FloatingPointModel>Precise</FloatingPointModel>
-      <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-      <GenerateModuleDependencies>false</GenerateModuleDependencies>
-      <GenerateSourceDependencies>false</GenerateSourceDependencies>
-      <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-      <LanguageStandard>stdcpp17</LanguageStandard>
-      <LanguageStandard_C>Default</LanguageStandard_C>
-      <MinimalRebuild>false</MinimalRebuild>
-      <ModuleDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</ModuleDependenciesFile>
-      <ModuleOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</ModuleOutputFile>
-      <OmitDefaultLibName>false</OmitDefaultLibName>
-      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-      <Optimization>MaxSpeed</Optimization>
-      <ObjectFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</ObjectFileName>
-      <CallingConvention>Cdecl</CallingConvention>
-      <ProgramDataBaseFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\Engine.pdb</ProgramDataBaseFileName>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-      <PrecompiledHeaderOutputFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\Engine.pch</PrecompiledHeaderOutputFile>
-      <PreprocessToFile>false</PreprocessToFile>
-      <PreprocessKeepComments>false</PreprocessKeepComments>
-      <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-      <RuntimeLibrary>MultiThreadedDll</RuntimeLibrary>
-      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-      <ShowIncludes>false</ShowIncludes>
-      <SourceDependenciesFile>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</SourceDependenciesFile>
-      <SuppressStartupBanner>true</SuppressStartupBanner>
-      <BufferSecurityCheck>true</BufferSecurityCheck>
-      <SmallerTypeCheck>false</SmallerTypeCheck>
-      <SpectreMitigation>false</SpectreMitigation>
-      <StructMemberAlignment>Default</StructMemberAlignment>
-      <SupportJustMyCode>false</SupportJustMyCode>
-      <TrackerLogDirectory>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\Engine.tlog\</TrackerLogDirectory>
-      <TranslateIncludes>false</TranslateIncludes>
-      <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-      <UseFullPaths>true</UseFullPaths>
-      <WarningLevel>Level4</WarningLevel>
-      <XMLDocumentationFileName>F:\p4\Personal\SD\Thesis\Temporary\Engine_x64_Release\</XMLDocumentationFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <IntelJCCErratum>false</IntelJCCErratum>
-      <BuildStlModules>false</BuildStlModules>
-      <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-      <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-      <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-      <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-      <PreprocessorDefinitions>NDEBUG;_LIB;ENIGMA_BINDLESS_ENABLED;ENIGMA_DX12_ENABLED;_UNICODE;UNICODE;</PreprocessorDefinitions>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>F:\p4\Personal\SD\Thesis\Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/;F:\p4\Personal\SD\Thesis\../Engine/Code/ThirdParty/DXC/inc;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui;F:\p4\Personal\SD\Thesis\Code/ThirdParty/imgui/backends;F:\p4\Personal\SD\Thesis\..</AdditionalIncludeDirectories>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <LibCompiled>true</LibCompiled>
-    </ClCompile>
+    <ClCompile Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.vs.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
