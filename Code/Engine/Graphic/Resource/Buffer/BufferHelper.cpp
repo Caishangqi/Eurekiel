@@ -139,7 +139,7 @@ void BufferHelper::EnsureBufferSize(
     // 延迟创建或动态扩展
     if (!buffer || buffer->GetSize() < requiredSize)
     {
-        LogWarn(LogRenderer, "[RESIZE] VBO resize triggered! old=%p, oldSize=%zu, requiredSize=%zu", buffer.get(), buffer ? buffer->GetSize() : 0, requiredSize);
+        LogWarn(LogRenderer, "BufferHelper::Resize:: VBO resize triggered! old=%p, oldSize=%zu, requiredSize=%zu", buffer.get(), buffer ? buffer->GetSize() : 0, requiredSize);
 
 
         // 计算新大小：2倍增长策略，最小minSize，最大16MB
@@ -161,7 +161,7 @@ void BufferHelper::EnsureBufferSize(
             debugName
         );
 
-        // 持久映射支持per-frame append策略
+        // Persistent mapping supports per-frame append strategy
         void* mappedPtr = buffer->MapPersistent();
         GUARANTEE_OR_DIE(mappedPtr != nullptr,
                          Stringf("BufferHelper: Failed to persistent map VertexBuffer '%s'", debugName).c_str());
