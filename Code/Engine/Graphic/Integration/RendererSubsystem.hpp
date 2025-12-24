@@ -42,6 +42,8 @@ namespace enigma::graphic
     class PSOManager;
     class CustomImageManager;
     class VertexLayout; // [NEW] Forward declaration for VertexLayout state API
+    class VertexRingBuffer; // [NEW] Forward declaration for RingBuffer wrapper (Option D architecture)
+    class IndexRingBuffer; // [NEW] Forward declaration for RingBuffer wrapper
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -1199,32 +1201,22 @@ namespace enigma::graphic
         std::shared_ptr<D12Texture> CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName = "");
 
         /**
-         * @brief 获取当前帧vertex buffer写入offset
-         * @return 当前offset（字节单位）
+         * @brief Get current frame vertex buffer write offset
+         * @return Current offset in bytes
          * 
-         * @details
-         * 用于实现Per-Frame Append策略，追踪单帧内immediate buffer的写入位置
-         * 每次DrawVertexArray调用后应更新此offset以避免数据覆盖
-         * 
-         * 教学要点：
-         * - 理解persistent mapping的offset管理
-         * - 掌握单帧内多次Draw的数据追加机制
+         * [NEW] Option D: Delegates to VertexRingBuffer::GetCurrentOffset()
+         * Returns 0 if RingBuffer not yet initialized
          */
-        size_t GetCurrentVertexOffset() const noexcept { return m_currentVertexOffset; }
+        size_t GetCurrentVertexOffset() const noexcept;
 
         /**
-         * @brief 获取当前帧index buffer写入offset
-         * @return 当前offset（字节单位）
+         * @brief Get current frame index buffer write offset
+         * @return Current offset in bytes
          * 
-         * @details
-         * 用于实现Per-Frame Append策略，追踪单帧内immediate buffer的写入位置
-         * 每次DrawVertexArray调用后应更新此offset以避免数据覆盖
-         * 
-         * 教学要点：
-         * - 理解persistent mapping的offset管理
-         * - 掌握单帧内多次Draw的数据追加机制
+         * [NEW] Option D: Delegates to IndexRingBuffer::GetCurrentOffset()
+         * Returns 0 if RingBuffer not yet initialized
          */
-        size_t GetCurrentIndexOffset() const noexcept { return m_currentIndexOffset; }
+        size_t GetCurrentIndexOffset() const noexcept;
 
         // ==================== Milestone 4: 深度缓冲管理 ====================
 
@@ -1462,24 +1454,14 @@ namespace enigma::graphic
          */
         bool PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList);
 
-        // ==================== 私有成员变量 ====================
-
-        /// 交换链 - 双缓冲显示 (需要窗口句柄，由子系统管理)
+        /// Swap chain - double buffered display (requires window handle, managed by subsystem)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
 
+        /// Immediate vertex RingBuffer - encapsulates VBO + offset management
+        std::unique_ptr<VertexRingBuffer> m_immediateVertexRingBuffer;
 
-        /// 即时顶点缓冲区 - 用于DrawVertexArray即时数据模式
-        std::shared_ptr<D12VertexBuffer> m_immediateVBO;
-
-        /// 即时索引缓冲区 - 用于DrawVertexArray索引绘制
-        std::shared_ptr<D12IndexBuffer> m_immediateIBO;
-
-        // [NEW] Per-Frame offset management (Per-Frame Append strategy)
-        /// Current frame vertex buffer writing offset (byte unit) - used to track the writing position of the immediate buffer within a single frame
-        size_t m_currentVertexOffset = 0;
-
-        /// Current frame index buffer writing offset (byte unit) - used to track the writing position of the immediate buffer within a single frame
-        size_t m_currentIndexOffset = 0;
+        /// Immediate index RingBuffer - encapsulates IBO + offset management
+        std::unique_ptr<IndexRingBuffer> m_immediateIndexRingBuffer;
 
         /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
         std::unique_ptr<RenderTargetManager> m_renderTargetManager;

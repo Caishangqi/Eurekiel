@@ -33,7 +33,9 @@
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
 #include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
-#include "Engine/Graphic/Integration/ImmediateDrawHelper.hpp" // [NEW] Immediate draw helper
+// [REMOVED] ImmediateDrawHelper.hpp - functionality moved to RingBuffer wrapper classes (Option D)
+#include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // [NEW] Option D: RingBuffer wrapper
+#include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // [NEW] Option D: RingBuffer wrapper
 #include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] VertexLayout state management
@@ -422,6 +424,32 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer, "Failed to create fullscreen triangle VB: {}", e.what());
         ERROR_AND_DIE(Stringf("Fullscreen triangle VB initialization failed! Error: %s", e.what()))
     }
+
+    // ==================== Create Immediate Mode RingBuffers (Option D Architecture) ====================
+    // [NEW] RAII Ring Buffer wrappers encapsulate D12Buffer + offset state together
+    // This fixes the mixed-stride issue by using BufferLocation byte offset instead of startVertex
+    try
+    {
+        LogInfo(LogRenderer, "Creating Immediate Mode RingBuffers...");
+
+        m_immediateVertexRingBuffer = std::make_unique<VertexRingBuffer>(
+            RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE,
+            sizeof(Vertex_PCU),
+            "ImmediateVBO"
+        );
+
+        m_immediateIndexRingBuffer = std::make_unique<IndexRingBuffer>(
+            RendererSubsystemConfig::INITIAL_IMMEDIATE_BUFFER_SIZE,
+            "ImmediateIBO"
+        );
+
+        LogInfo(LogRenderer, "Immediate Mode RingBuffers created successfully");
+    }
+    catch (const RingBufferException& e)
+    {
+        LogError(LogRenderer, "Failed to create Immediate Mode RingBuffers: %s", e.what());
+        ERROR_AND_DIE(Stringf("RingBuffer initialization failed! Error: %s", e.what()))
+    }
 }
 
 void RendererSubsystem::Shutdown()
@@ -485,9 +513,19 @@ void RendererSubsystem::BeginFrame()
     // - 帧内优化 vs 跨帧优化（跨帧缓存是错误的设计）
     // ========================================================================
 
-    // [NEW] 重置immediate buffer offset（Per-Frame Append策略）
-    m_currentVertexOffset = 0;
-    m_currentIndexOffset  = 0;
+    // [NEW] Reset Ring Buffers at frame start (Option D Architecture)
+    // Teaching points:
+    // - Per-Frame Append strategy: reset offset to 0, reuse buffer memory
+    // - RAII wrapper encapsulates reset logic
+    // - No need to recreate buffers each frame
+    if (m_immediateVertexRingBuffer)
+    {
+        m_immediateVertexRingBuffer->Reset();
+    }
+    if (m_immediateIndexRingBuffer)
+    {
+        m_immediateIndexRingBuffer->Reset();
+    }
 
     // [NEW] Reset VertexLayout to default at frame start
     // Teaching points:
@@ -1244,8 +1282,7 @@ void RendererSubsystem::SetIndexBuffer(D12IndexBuffer* buffer)
     LogDebug(LogRenderer,
              "SetIndexBuffer: Bound D12IndexBuffer (size: {}, count: {}, format: {})",
              buffer->GetSize(),
-             buffer->GetIndexCount(),
-             buffer->GetFormat() == D12IndexBuffer::IndexFormat::Uint16 ? "Uint16" : "Uint32");
+             buffer->GetIndexCount());
 }
 
 void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, size_t size, size_t offset)
@@ -1899,6 +1936,28 @@ int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
     return m_depthTextureManager->GetActiveDepthBufferIndex();
 }
 
+size_t RendererSubsystem::GetCurrentVertexOffset() const noexcept
+{
+    // [NEW] Delegate to VertexRingBuffer wrapper
+    // Returns 0 if RingBuffer not yet initialized
+    if (m_immediateVertexRingBuffer)
+    {
+        return m_immediateVertexRingBuffer->GetCurrentOffset();
+    }
+    return 0;
+}
+
+size_t RendererSubsystem::GetCurrentIndexOffset() const noexcept
+{
+    // [NEW] Delegate to IndexRingBuffer wrapper
+    // Returns 0 if RingBuffer not yet initialized
+    if (m_immediateIndexRingBuffer)
+    {
+        return m_immediateIndexRingBuffer->GetCurrentOffset();
+    }
+    return 0;
+}
+
 // ========================================================================
 // DrawVertexArray - instant data non-indexed drawing
 // ========================================================================
@@ -1910,12 +1969,18 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices)
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
 {
-    LogInfo(LogRenderer, "[1-PARAM] DrawVertexArray called, count=%zu, offset=%zu", count, m_currentVertexOffset);
+    if (!m_immediateVertexRingBuffer)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray: ImmediateVBO not initialized");
+        return;
+    }
 
-    // Append vertex data and get VBV with correct BufferLocation
-    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
-        m_immediateVBO, vertices, count, m_currentVertexOffset, sizeof(Vertex)
-    );
+    LogInfo(LogRenderer, "DrawVertexArray:: called, count=%zu, offset=%zu",
+            count, m_immediateVertexRingBuffer->GetCurrentOffset());
+
+    // [NEW] Use RingBuffer wrapper API (Option D Architecture)
+    // Append returns VBV with correct BufferLocation for mixed-stride support
+    auto result = m_immediateVertexRingBuffer->Append(vertices, count, sizeof(Vertex));
 
     D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
     Draw(static_cast<uint32_t>(count), 0);
@@ -1932,36 +1997,43 @@ void RendererSubsystem::DrawVertexArray(const std::vector<Vertex>& vertices, con
 
 void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCount, const unsigned* indices, size_t indexCount)
 {
+    if (!m_immediateVertexRingBuffer || !m_immediateIndexRingBuffer)
+    {
+        ERROR_RECOVERABLE("DrawVertexArray:: Immediate RingBuffers not initialized");
+        return;
+    }
+
     LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, indexCount=%zu", vertexCount, indexCount);
 
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
-        ERROR_RECOVERABLE("DrawVertexArray: Invalid vertex or index data")
+        ERROR_RECOVERABLE("DrawVertexArray:: Invalid vertex or index data")
         return;
     }
 
-    // Append vertex data and get VBV with correct BufferLocation
-    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
-        m_immediateVBO, vertices, vertexCount, m_currentVertexOffset, sizeof(Vertex)
-    );
+    // [NEW] Use RingBuffer wrapper API (Option D Architecture)
+    // Append returns VBV with correct BufferLocation for mixed-stride support
+    auto vbResult = m_immediateVertexRingBuffer->Append(vertices, vertexCount, sizeof(Vertex));
 
     // Append index data to Ring Buffer
-    uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
-        m_immediateIBO, indices, indexCount, m_currentIndexOffset
-    );
+    auto ibResult = m_immediateIndexRingBuffer->Append(indices, indexCount);
 
-    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
-    SetIndexBuffer(m_immediateIBO.get());
-    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, 0);
+    D3D12RenderSystem::BindVertexBuffer(vbResult.vbv, 0);
+    SetIndexBuffer(m_immediateIndexRingBuffer->GetBuffer());
+    DrawIndexed(static_cast<uint32_t>(indexCount), ibResult.startIndex, 0);
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo)
 {
-    size_t vertexCount = vbo->GetVertexCount();
-
-    if (!vbo || vertexCount == 0)
+    if (!m_immediateVertexRingBuffer)
     {
-        ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer or count");
+        ERROR_RECOVERABLE("DrawVertexBuffer:: ImmediateVBO not initialized");
+        return;
+    }
+
+    if (!vbo || vbo->GetVertexCount() == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer:: Invalid vertex buffer or count");
         return;
     }
 
@@ -1979,35 +2051,26 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
                 vbo->GetStride(), layout->GetStride());
     }
 
-    // [FIX] External VBO data is copied to Ring Buffer to maintain
-    // Per-Frame Append strategy consistency. This adds one memcpy but
-    // avoids Pipeline Stall from mixed buffer usage.
-
-    // Get vertex data from external VBO
-    void* externalData = vbo->GetPersistentMappedData();
-    if (!externalData)
-    {
-        ERROR_RECOVERABLE("DrawVertexBuffer: External VBO has no mapped data");
-        return;
-    }
-
-    // Append vertex data and get VBV with correct BufferLocation
-    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
-        m_immediateVBO, externalData, vertexCount, m_currentVertexOffset, vbo->GetStride()
-    );
+    // [REFACTOR] Use new Append(D12VertexBuffer*) overload
+    // - Automatically extracts mapped data, vertex count, and stride
+    // - Reduces boilerplate and improves internal cohesion
+    auto result = m_immediateVertexRingBuffer->Append(vbo.get());
 
     D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
-    Draw(static_cast<uint32_t>(vertexCount), 0);
+    Draw(static_cast<uint32_t>(vbo->GetVertexCount()), 0);
 }
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo)
 {
-    size_t indexCount  = ibo->GetIndexCount();
-    size_t vertexCount = vbo->GetVertexCount();
-
-    if (!vbo || !ibo || indexCount == 0 || vertexCount == 0)
+    if (!m_immediateVertexRingBuffer || !m_immediateIndexRingBuffer)
     {
-        ERROR_RECOVERABLE("DrawVertexBuffer: Invalid vertex buffer, index buffer or count");
+        ERROR_RECOVERABLE("DrawVertexBuffer:: Immediate RingBuffers not initialized");
+        return;
+    }
+
+    if (!vbo || !ibo || ibo->GetIndexCount() == 0 || vbo->GetVertexCount() == 0)
+    {
+        ERROR_RECOVERABLE("DrawVertexBuffer:: Invalid vertex buffer, index buffer or count");
         return;
     }
 
@@ -2025,39 +2088,19 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
                 vbo->GetStride(), layout->GetStride());
     }
 
-    // [FIX] External VBO/IBO data is copied to Ring Buffer to maintain
-    // Per-Frame Append strategy consistency. This adds one memcpy but
-    // avoids Pipeline Stall from mixed buffer usage.
+    // [REFACTOR] Use new Append(D12VertexBuffer*) overload for VBO
+    // - Automatically extracts mapped data, vertex count, and stride
+    // - Reduces boilerplate and improves internal cohesion
+    auto vbResult = m_immediateVertexRingBuffer->Append(vbo.get());
 
-    // Get vertex data from external VBO
-    void* externalVertexData = vbo->GetPersistentMappedData();
-    if (!externalVertexData)
-    {
-        ERROR_RECOVERABLE("DrawVertexBuffer: External VBO has no mapped data");
-        return;
-    }
+    // [REFACTOR] Use new Append(D12IndexBuffer*) overload for IBO
+    // - Automatically extracts mapped data and index count
+    // - Reduces boilerplate and improves internal cohesion
+    auto ibResult = m_immediateIndexRingBuffer->Append(ibo.get());
 
-    // Get index data from external IBO
-    void* externalIndexData = ibo->GetPersistentMappedData();
-    if (!externalIndexData)
-    {
-        ERROR_RECOVERABLE("DrawVertexBuffer: External IBO has no mapped data");
-        return;
-    }
-
-    // Append vertex data and get VBV with correct BufferLocation
-    auto result = ImmediateDrawHelper::AppendVertexDataWithVBV(
-        m_immediateVBO, externalVertexData, vertexCount, m_currentVertexOffset, vbo->GetStride()
-    );
-
-    // Append index data to Ring Buffer
-    uint32_t startIndex = ImmediateDrawHelper::AppendIndexData(
-        m_immediateIBO, static_cast<const unsigned*>(externalIndexData), indexCount, m_currentIndexOffset
-    );
-
-    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
-    SetIndexBuffer(m_immediateIBO.get());
-    DrawIndexed(static_cast<uint32_t>(indexCount), startIndex, 0);
+    D3D12RenderSystem::BindVertexBuffer(vbResult.vbv, 0);
+    SetIndexBuffer(m_immediateIndexRingBuffer->GetBuffer());
+    DrawIndexed(static_cast<uint32_t>(ibo->GetIndexCount()), ibResult.startIndex, 0);
 }
 
 // ============================================================================
@@ -2070,14 +2113,14 @@ void RendererSubsystem::ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearCo
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
-        LogError(LogRenderer, "ClearRenderTarget: No active CommandList");
+        LogError(LogRenderer, "ClearRenderTarget:: No active CommandList");
         return;
     }
 
     // Validate rtIndex range
     if (rtIndex >= static_cast<uint32_t>(m_configuration.gbufferColorTexCount))
     {
-        LogError(LogRenderer, "ClearRenderTarget: Invalid rtIndex=%u (max=%d)",
+        LogError(LogRenderer, "ClearRenderTarget:: Invalid rtIndex=%u (max=%d)",
                  rtIndex, m_configuration.gbufferColorTexCount);
         return;
     }
