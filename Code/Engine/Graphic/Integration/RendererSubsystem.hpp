@@ -608,7 +608,7 @@ namespace enigma::graphic
          * - Direct binding: use VBO/IBO's own BufferView, no data copy
          * - Difference from DrawVertexBuffer:
          * - DrawVertexBuffer: Copy to Ring Buffer (suitable for dynamic data)
-         * - DrawVertexBufferDirect: direct binding (suitable for static data)
+         * - DrawVertexBuffer(vbo, ibo): direct binding (suitable for static data)
          *
          * Reference: DX12Renderer::DrawVertexIndexedInternal implementation
          */

@@ -878,7 +878,7 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
 
 #pragma region Rendering API
 // TODO: M2 - 实现60+ API灵活渲染接口
-// BeginCamera/EndCamera, UseProgram, DrawVertexBuffer等
+// BeginCamera/EndCamera, UseProgram, DrawVertexBuffer, etc.
 // 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
 #pragma endregion
 
@@ -2025,38 +2025,30 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
 
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo)
 {
-    if (!m_immediateVertexRingBuffer)
-    {
-        ERROR_RECOVERABLE("DrawVertexBuffer:: ImmediateVBO not initialized");
-        return;
-    }
-
+    // [VALIDATION] Null and count checks
     if (!vbo || vbo->GetVertexCount() == 0)
     {
         ERROR_RECOVERABLE("DrawVertexBuffer:: Invalid vertex buffer or count");
         return;
     }
 
-    // [NEW] Get layout from state for stride validation
+    // [VALIDATION] Get layout from state for stride validation
     const VertexLayout* layout = m_currentVertexLayout;
     if (!layout)
     {
         layout = VertexLayoutRegistry::GetDefault();
     }
 
-    // [NEW] Stride validation (warning only - does not throw)
+    // [VALIDATION] Stride validation (warning only - does not throw)
     if (vbo->GetStride() != layout->GetStride())
     {
         LogWarn(LogVertexLayout, "DrawVertexBuffer: stride mismatch - buffer=%zu, layout=%zu",
                 vbo->GetStride(), layout->GetStride());
     }
 
-    // [REFACTOR] Use new Append(D12VertexBuffer*) overload
-    // - Automatically extracts mapped data, vertex count, and stride
-    // - Reduces boilerplate and improves internal cohesion
-    auto result = m_immediateVertexRingBuffer->Append(vbo.get());
-
-    D3D12RenderSystem::BindVertexBuffer(result.vbv, 0);
+    // [PERFORMANCE] Direct VBO binding - NO Ring Buffer copy!
+    // VBO already in GPU memory, just bind directly via IA stage
+    D3D12RenderSystem::BindVertexBuffer(vbo->GetView(), 0);
     Draw(static_cast<uint32_t>(vbo->GetVertexCount()), 0);
 }
 
@@ -2069,7 +2061,7 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
     // [VALIDATION] Null and count checks
     if (!vbo || !ibo || ibo->GetIndexCount() == 0 || vbo->GetVertexCount() == 0)
     {
-        ERROR_RECOVERABLE("DrawVertexBufferDirect:: Invalid vertex buffer, index buffer or count");
+        ERROR_RECOVERABLE("DrawVertexBuffer:: Invalid vertex buffer, index buffer or count");
         return;
     }
 
@@ -2083,7 +2075,7 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
     // [VALIDATION] Stride validation (warning only)
     if (vbo->GetStride() != layout->GetStride())
     {
-        LogWarn(LogVertexLayout, "DrawVertexBufferDirect: stride mismatch - buffer=%zu, layout=%zu",
+        LogWarn(LogVertexLayout, "DrawVertexBuffer: stride mismatch - buffer=%zu, layout=%zu",
                 vbo->GetStride(), layout->GetStride());
     }
 
