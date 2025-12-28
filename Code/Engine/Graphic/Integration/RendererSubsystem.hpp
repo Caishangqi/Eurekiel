@@ -598,14 +598,19 @@ namespace enigma::graphic
         void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo);
 
         /**
-         * @brief 绘制顶点缓冲区（缓冲区句柄模式 - 索引）
-         * @param vbo 顶点缓冲区智能指针
-         * @param ibo 索引缓冲区智能指针
+         * @brief [NEW] Directly bind VBO/IBO drawing (skip Ring Buffer, used for static geometry)
+         * @param vbo vertex buffer smart pointer
+         * @param ibo index buffer smart pointer
          *
-         * 教学要点：
-         * - 完整缓冲区绘制：VBO + IBO
-         * - 智能指针：自动管理资源生命周期
-         * - 参考DX11Renderer::DrawVertexIndexed实现
+         *Teaching points:
+         * - Performance optimization: avoid memcpy copying static data in each frame
+         * - Applicable scenarios: static or low-frequency updated geometry such as Chunk Mesh
+         * - Direct binding: use VBO/IBO's own BufferView, no data copy
+         * - Difference from DrawVertexBuffer:
+         * - DrawVertexBuffer: Copy to Ring Buffer (suitable for dynamic data)
+         * - DrawVertexBufferDirect: direct binding (suitable for static data)
+         *
+         * Reference: DX12Renderer::DrawVertexIndexedInternal implementation
          */
         void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo);
 

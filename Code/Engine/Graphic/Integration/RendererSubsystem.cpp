@@ -2060,47 +2060,42 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
     Draw(static_cast<uint32_t>(vbo->GetVertexCount()), 0);
 }
 
+// ============================================================================
+// Direct Vertex Buffer Drawing - Skip Ring Buffer (Static Geometry)
+// ============================================================================
+
 void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo)
 {
-    if (!m_immediateVertexRingBuffer || !m_immediateIndexRingBuffer)
-    {
-        ERROR_RECOVERABLE("DrawVertexBuffer:: Immediate RingBuffers not initialized");
-        return;
-    }
-
+    // [VALIDATION] Null and count checks
     if (!vbo || !ibo || ibo->GetIndexCount() == 0 || vbo->GetVertexCount() == 0)
     {
-        ERROR_RECOVERABLE("DrawVertexBuffer:: Invalid vertex buffer, index buffer or count");
+        ERROR_RECOVERABLE("DrawVertexBufferDirect:: Invalid vertex buffer, index buffer or count");
         return;
     }
 
-    // [NEW] Get layout from state for stride validation
+    // [VALIDATION] Get and validate layout
     const VertexLayout* layout = m_currentVertexLayout;
     if (!layout)
     {
         layout = VertexLayoutRegistry::GetDefault();
     }
 
-    // [NEW] Stride validation (warning only - does not throw)
+    // [VALIDATION] Stride validation (warning only)
     if (vbo->GetStride() != layout->GetStride())
     {
-        LogWarn(LogVertexLayout, "DrawVertexBuffer: stride mismatch - buffer=%zu, layout=%zu",
+        LogWarn(LogVertexLayout, "DrawVertexBufferDirect: stride mismatch - buffer=%zu, layout=%zu",
                 vbo->GetStride(), layout->GetStride());
     }
 
-    // [REFACTOR] Use new Append(D12VertexBuffer*) overload for VBO
-    // - Automatically extracts mapped data, vertex count, and stride
-    // - Reduces boilerplate and improves internal cohesion
-    auto vbResult = m_immediateVertexRingBuffer->Append(vbo.get());
+    // [PERFORMANCE] Direct VBO/IBO binding - NO Ring Buffer copy!
+    // Reference: DX12Renderer::DrawVertexIndexedInternal implementation
+    // - Static geometry (Chunk Mesh) should NOT be copied every frame
+    // - VBO/IBO already in GPU memory, just bind directly via IA stage
+    D3D12RenderSystem::BindVertexBuffer(vbo->GetView(), 0);
+    D3D12RenderSystem::BindIndexBuffer(ibo->GetView());
 
-    // [REFACTOR] Use new Append(D12IndexBuffer*) overload for IBO
-    // - Automatically extracts mapped data and index count
-    // - Reduces boilerplate and improves internal cohesion
-    auto ibResult = m_immediateIndexRingBuffer->Append(ibo.get());
-
-    D3D12RenderSystem::BindVertexBuffer(vbResult.vbv, 0);
-    SetIndexBuffer(m_immediateIndexRingBuffer->GetBuffer());
-    DrawIndexed(static_cast<uint32_t>(ibo->GetIndexCount()), ibResult.startIndex, 0);
+    // [DRAW] Direct indexed draw - startIndex=0 since using original IBO
+    DrawIndexed(static_cast<uint32_t>(ibo->GetIndexCount()), 0, 0);
 }
 
 // ============================================================================
