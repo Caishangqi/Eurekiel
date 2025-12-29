@@ -8,7 +8,7 @@
 // - COLOR (R8G8B8A8_UNORM, offset 12, 4 bytes)
 // - TEXCOORD0 (R32G32_FLOAT, offset 16, 8 bytes) - UV coordinates
 // - NORMAL (R32G32B32_FLOAT, offset 24, 12 bytes)
-// - TEXCOORD1 (R32G32_FLOAT, offset 36, 8 bytes) - Lightmap coordinates
+// - LIGHTMAP (R32G32_FLOAT, offset 36, 8 bytes) - Lightmap coordinates
 //
 // [IMPORTANT] Lightmap data convention:
 // - m_lightmapCoord.x = blocklight (0.0 - 1.0)
@@ -50,7 +50,7 @@ namespace enigma::graphic
      * - COLOR: rgba8 (4 bytes)
      * - TEXCOORD0: float2 (8 bytes) - UV coordinates
      * - NORMAL: float3 (12 bytes)
-     * - TEXCOORD1: float2 (8 bytes) - Lightmap coordinates
+     * - LIGHTMAP: float2 (8 bytes) - Lightmap coordinates
      * 
      * Registered by Game RenderPass (TerrainRenderPass::Initialize()).
      */

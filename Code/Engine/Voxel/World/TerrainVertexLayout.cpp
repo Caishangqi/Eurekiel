@@ -11,7 +11,7 @@ namespace enigma::graphic
     // - COLOR:     rgba8  (4 bytes, offset 12)
     // - TEXCOORD0: float2 (8 bytes, offset 16) - UV coordinates
     // - NORMAL:    float3 (12 bytes, offset 24)
-    // - TEXCOORD1: float2 (8 bytes, offset 36) - Lightmap coordinates
+    // - LIGHTMAP:  float2 (8 bytes, offset 36) - Lightmap coordinates
     // ============================================================================
 
     const D3D12_INPUT_ELEMENT_DESC TerrainVertexLayout::s_elements[5] = {
@@ -19,7 +19,7 @@ namespace enigma::graphic
         {"COLOR", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
         {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-        {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+        {"LIGHTMAP", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     };
 
     // ============================================================================
