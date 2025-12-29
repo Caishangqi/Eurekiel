@@ -111,6 +111,7 @@ void ScheduleSubsystem::Startup()
             m_typeRegistry.GetTotalThreadCount());
 
     CreateWorkerThreads();
+    g_theSchedule = this;
     LogInfo(LogSchedule, "Startup complete");
 }
 
