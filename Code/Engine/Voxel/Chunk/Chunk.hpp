@@ -10,6 +10,7 @@
 
 #include "Engine/Math/AABB3.hpp"
 #include "Engine/Math/IntVec2.hpp"
+#include "Engine/Math/Mat44.hpp"
 
 namespace enigma::voxel
 {
@@ -195,7 +196,6 @@ namespace enigma::voxel
 
         //Update and Management:
         void Update(float deltaTime); // Update chunk
-        void Render(IRenderer* renderer) const; // Render chunk mesh
         void DebugDraw(IRenderer* renderer);
 
         // Utility - PUBLIC for World class
@@ -232,6 +232,12 @@ namespace enigma::voxel
         void SetIsSky(int32_t x, int32_t y, int32_t z, bool value);
         bool GetIsLightDirty(int32_t x, int32_t y, int32_t z) const;
         void SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value);
+
+        // Geometry
+#pragma region GEOMETRY
+        ChunkMesh*          GetChunkMesh() const { return m_mesh.get(); }
+        [[nodiscard]] Mat44 GetModelToWorldTransform() const;
+#pragma endregion GEOMETRY
 
     private:
         //-------------------------------------------------------------------------------------------

@@ -187,7 +187,6 @@ void Chunk::MarkDirty()
 
 void Chunk::RebuildMesh()
 {
-    // Use ChunkMeshHelper to create optimized mesh (Assignment01 approach)
     auto newMesh = ChunkMeshHelper::BuildMesh(this);
 
     if (newMesh)
@@ -428,38 +427,6 @@ bool Chunk::ContainsWorldPos(const BlockPos& worldPos)
 void Chunk::Update(float deltaTime)
 {
     UNUSED(deltaTime)
-}
-
-void Chunk::Render(IRenderer* renderer) const
-{
-    if (!m_mesh || m_mesh->IsEmpty())
-    {
-        //ERROR_RECOVERABLE("Chunk::Render No mesh to render")
-        // No mesh to render
-        return;
-    }
-
-    // Get chunk world position (bottom corner)
-    BlockPos chunkWorldPos = GetWorldPos();
-
-    // Create model-to-world transform matrix 
-    // Chunk coordinates are in block space, so we need to translate to world position
-    Mat44 modelToWorldTransform = Mat44::MakeTranslation3D(
-        Vec3((float)chunkWorldPos.x, (float)chunkWorldPos.y, (float)chunkWorldPos.z)
-    );
-
-    // Set model constants (similar to Prop.cpp:23)
-    // Using white color for now - could be made configurable
-    renderer->SetModelConstants(modelToWorldTransform, Rgba8::WHITE);
-
-    // Set rendering state
-    renderer->SetBlendMode(blend_mode::OPAQUE);
-
-    // Note: Texture binding is now handled by ChunkManager to avoid per-chunk queries
-    // ChunkManager binds the blocks atlas texture once for all chunks (NeoForge pattern)
-
-    // Render the chunk mesh
-    m_mesh->RenderAll(renderer);
 }
 
 void Chunk::DebugDraw(IRenderer* renderer)
@@ -1019,4 +986,14 @@ void Chunk::SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value)
         m_flags[index] |= 0x02;
     else
         m_flags[index] &= ~0x02;
+}
+
+Mat44 Chunk::GetModelToWorldTransform() const
+{
+    // Get chunk world position (bottom corner)
+    BlockPos chunkWorldPos = GetWorldPos();
+    // Create model-to-world transform matrix 
+    // Chunk coordinates are in block space, so we need to translate to world position
+    Mat44 modelToWorld = Mat44::MakeTranslation3D(Vec3((float)chunkWorldPos.x, (float)chunkWorldPos.y, (float)chunkWorldPos.z));
+    return modelToWorld;
 }
