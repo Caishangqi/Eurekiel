@@ -7,6 +7,7 @@
 #include "../../Voxel/Property/PropertyTypes.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
 #include "../Block/BlockIterator.hpp"
+#include "../World/TerrainVertexLayout.hpp"
 
 using namespace enigma::voxel;
 
@@ -15,6 +16,30 @@ using namespace enigma::voxel;
 //--------------------------------------------------------------------------------------------------
 namespace
 {
+    /**
+     * @brief Face normal lookup table for deferred rendering G-Buffer output
+     * @details Engine coordinate system: +X Forward, +Y Left, +Z Up
+     *          Array index matches Direction enum order
+     */
+    static const Vec3 FACE_NORMALS[6] = {
+        Vec3(0.0f, 1.0f, 0.0f), // NORTH (0): +Y (Left)
+        Vec3(0.0f, -1.0f, 0.0f), // SOUTH (1): -Y (Right)
+        Vec3(1.0f, 0.0f, 0.0f), // EAST  (2): +X (Forward)
+        Vec3(-1.0f, 0.0f, 0.0f), // WEST  (3): -X (Backward)
+        Vec3(0.0f, 0.0f, 1.0f), // UP    (4): +Z (Up)
+        Vec3(0.0f, 0.0f, -1.0f), // DOWN  (5): -Z (Down)
+    };
+
+    /**
+     * @brief Get outward-facing normal for a block face
+     * @param direction Block face direction
+     * @return Normal vector pointing outward from the face
+     */
+    static Vec3 GetFaceNormal(Direction direction)
+    {
+        return FACE_NORMALS[static_cast<int>(direction)];
+    }
+
     /**
      * @brief Get directional shade value based on block face direction
      * @details Implements Assignment 05 directional lighting specification:
@@ -44,13 +69,13 @@ namespace
     /**
      * @brief Light data structure containing normalized outdoor and indoor light values
      * @details Stores dual-channel lighting information from a block:
-     *          - outdoorLight: Sky light from above (0.0 = dark, 1.0 = full sunlight)
-     *          - indoorLight: Block light from emissive blocks (0.0 = no emission, 1.0 = max emission)
+     *          - skyLight: Sky light from above (0.0 = dark, 1.0 = full sunlight)
+     *          - blockLight: Block light from emissive blocks (0.0 = no emission, 1.0 = max emission)
      */
     struct LightingData
     {
-        float outdoorLight; // Normalized outdoor light [0.0, 1.0]
-        float indoorLight; // Normalized indoor light [0.0, 1.0]
+        float skyLight; // Normalized outdoor light [0.0, 1.0]
+        float blockLight; // Normalized indoor light [0.0, 1.0]
     };
 
     /**
@@ -61,8 +86,8 @@ namespace
      * 
      * @param neighborIter Neighbor block iterator (obtained via BlockIterator::GetNeighbor())
      * @return LightingData Normalized lighting data
-     *         - outdoorLight: Outdoor light intensity 0.0-1.0 (0=completely dark, 1.0=brightest)
-     *         - indoorLight: Indoor light intensity 0.0-1.0 (from emissive blocks like glowstone)
+     *         - skyLight: Outdoor light intensity 0.0-1.0 (0=completely dark, 1.0=brightest)
+     *         - blockLight: Indoor light intensity 0.0-1.0 (from emissive blocks like glowstone)
      * 
      * BOUNDARY SAFETY:
      * - Returns {0.0f, 0.0f} if neighbor iterator is invalid (out of world bounds)
@@ -74,7 +99,7 @@ namespace
      * - Storage format: high 4 bits = outdoor light, low 4 bits = indoor light
      * - Normalization formula: lightLevel / 15.0f (original range 0-15)
      * 
-     * @note Uses Chunk::GetOutdoorLight() and Chunk::GetIndoorLight() APIs
+     * @note Uses Chunk::GetSkyLight() and Chunk::GetBlockLight() APIs
      * @note Follows DRY principle to avoid repeated boundary checks in mesh building code
      */
     LightingData GetNeighborLighting(const BlockIterator& neighborIter)
@@ -102,19 +127,19 @@ namespace
         neighborIter.GetLocalCoords(x, y, z);
 
         // Query dual-channel light values (raw range 0-15)
-        uint8_t outdoorRaw = neighborChunk->GetOutdoorLight(x, y, z);
-        uint8_t indoorRaw  = neighborChunk->GetIndoorLight(x, y, z);
+        uint8_t outdoorRaw = neighborChunk->GetSkyLight(x, y, z);
+        uint8_t indoorRaw  = neighborChunk->GetBlockLight(x, y, z);
 
         // Normalize to [0.0, 1.0] (divide by max value 15)
-        result.outdoorLight = static_cast<float>(outdoorRaw) / 15.0f;
-        result.indoorLight  = static_cast<float>(indoorRaw) / 15.0f;
+        result.skyLight   = static_cast<float>(outdoorRaw) / 15.0f;
+        result.blockLight = static_cast<float>(indoorRaw) / 15.0f;
 #undef max
         // [FIX] Ensure minimum brightness (light level 1) for visibility
         // This guarantees all block faces are at least slightly visible
-        float totalLight = std::max(result.outdoorLight, result.indoorLight);
+        float totalLight = std::max(result.skyLight, result.blockLight);
         if (totalLight < 1.0f / 15.0f)
         {
-            result.outdoorLight = 1.0f / 15.0f;
+            result.skyLight = 1.0f / 15.0f;
         }
 
         return result;
@@ -255,29 +280,6 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
     return chunkMesh;
 }
 
-void ChunkMeshHelper::RebuildMesh(Chunk* chunk)
-{
-    if (!chunk)
-    {
-        return;
-    }
-
-    // Build new mesh
-    auto newMesh = BuildMesh(chunk);
-
-    // Set the new mesh on the chunk
-    if (newMesh)
-    {
-        newMesh->CompileToGPU(); // Compile before setting
-        chunk->SetMesh(std::move(newMesh));
-        core::LogInfo("ChunkMeshHelper", "Successfully rebuilt and set mesh for chunk");
-    }
-    else
-    {
-        core::LogError("ChunkMeshHelper", "Failed to rebuild mesh for chunk");
-    }
-}
-
 void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, const BlockIterator& iterator)
 {
     if (!chunkMesh || !blockState)
@@ -375,50 +377,46 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
                 continue;
             }
 
-            // Transform vertices from block space to chunk space
-            std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
+            // [OPTIMIZED] Skip faces with insufficient vertices for quad
+            if (renderFace->vertices.size() < 4)
+            {
+                core::LogWarn("ChunkMeshHelper", "Face has %zu vertices, expected 4 for quad conversion", renderFace->vertices.size());
+                continue;
+            }
 
             // [Phase 8] Get neighbor lighting values for this face
-            BlockIterator neighborIter     = iterator.GetNeighbor(direction);
-            LightingData  lighting         = GetNeighborLighting(neighborIter);
-            float         directionalShade = GetDirectionalShade(direction);
+            BlockIterator neighborIter = iterator.GetNeighbor(direction);
+            LightingData  lighting     = GetNeighborLighting(neighborIter);
 
-            // Calculate vertex color from lighting data (manual normalization to uint8_t)
-            uint8_t r = static_cast<uint8_t>(lighting.outdoorLight * 255.0f);
-            uint8_t g = static_cast<uint8_t>(lighting.indoorLight * 255.0f);
-            uint8_t b = static_cast<uint8_t>(directionalShade * 255.0f);
-            Rgba8   vertexColor(r, g, b, 255);
+            // [FIX] Directional shading via vertex color (Minecraft-style)
+            // Reference: Minecraft ClientLevel.getShade() - UP=1.0, N/S=0.8, E/W=0.6, DOWN=0.5
+            // This creates depth perception by darkening faces based on their orientation
+            // Vertex color carries directional shade, lightmap carries light data separately
+            float   directionalShade = GetDirectionalShade(direction);
+            uint8_t shade            = static_cast<uint8_t>(directionalShade * 255.0f);
+            Rgba8   vertexColor(shade, shade, shade, 255);
 
-            for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
+            // Get face normal and lightmap coordinates for G-Buffer output
+            Vec3 faceNormal = GetFaceNormal(direction);
+            // Lightmap: R=blocklight(indoor), G=skylight(outdoor)
+            Vec2 lightmapCoord(lighting.blockLight, lighting.skyLight);
+
+            // [OPTIMIZED] Single-pass: directly build TerrainVertex quad
+            // Eliminates intermediate Vertex_PCU vector allocation and double iteration
+            std::array<graphic::TerrainVertex, 4> terrainQuad;
+            for (int vi = 0; vi < 4; ++vi)
             {
-                Vertex_PCU transformedVertex = renderFace->vertices[i];
-                // Transform position from block space (0,0,0)-(1,1,1) to chunk space
-                transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
-                // [Phase 8] Set vertex color encoding lighting (R=outdoor, G=indoor, B=directional shade)
-                transformedVertex.m_color = vertexColor;
-                transformedVertices[i]    = transformedVertex;
+                const Vertex_PCU& srcVertex = renderFace->vertices[vi];
+
+                terrainQuad[vi].m_position      = blockToChunkTransform.TransformPosition3D(srcVertex.m_position);
+                terrainQuad[vi].m_color         = vertexColor;
+                terrainQuad[vi].m_uvTexCoords   = srcVertex.m_uvTextCoords;
+                terrainQuad[vi].m_normal        = faceNormal;
+                terrainQuad[vi].m_lightmapCoord = lightmapCoord;
             }
 
-            // Convert vertices to quads and add to chunk mesh
-            // Assuming each face has 4 vertices arranged as a quad
-            if (transformedVertices.size() >= 4)
-            {
-                std::array<Vertex_PCU, 4> quad = {
-                    transformedVertices[0],
-                    transformedVertices[1],
-                    transformedVertices[2],
-                    transformedVertices[3]
-                };
-
-                // Add the quad to chunk mesh
-                // For Assignment01, we treat all geometry as opaque
-                chunkMesh->AddOpaqueQuad(quad);
-                if (isDebugBlock) facesAdded++;
-            }
-            else if (transformedVertices.size() > 0)
-            {
-                core::LogWarn("ChunkMeshHelper", "Face has %zu vertices, expected 4 for quad conversion", transformedVertices.size());
-            }
+            chunkMesh->AddOpaqueTerrainQuad(terrainQuad);
+            if (isDebugBlock) facesAdded++;
         }
     }
 

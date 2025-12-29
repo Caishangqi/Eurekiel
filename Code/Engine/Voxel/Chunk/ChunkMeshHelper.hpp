@@ -43,13 +43,6 @@ namespace enigma::voxel
          */
         static std::unique_ptr<ChunkMesh> BuildMesh(Chunk* chunk);
 
-        /**
-         * @brief Rebuild an existing chunk's mesh
-         * 
-         * @param chunk Chunk to rebuild mesh for
-         */
-        static void RebuildMesh(Chunk* chunk);
-
     private:
         /**
          * @brief Add a single block's mesh to the chunk mesh
