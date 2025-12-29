@@ -39,7 +39,7 @@ namespace enigma::graphic
      * @note This effectively limits per-frame draw call count for Custom Buffers
      * @warning Exceeding this limit will cause Ring Buffer index wrap-around
      */
-    static constexpr uint32_t MAX_DRAWS_PER_FRAME = 64;
+    static constexpr uint32_t MAX_DRAWS_PER_FRAME = 1024;
 
     /**
      * @brief Total Custom CBV Descriptor Pool size
