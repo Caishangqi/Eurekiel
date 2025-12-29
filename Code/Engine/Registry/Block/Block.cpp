@@ -193,7 +193,7 @@ namespace enigma::registry::block
         if (!modelSubsystem)
         {
             LogError("Block", "Cannot compile models: missing ModelSubsystem");
-            return;
+            ERROR_AND_DIE("Cannot compile models: missing ModelSubsystem")
         }
 
         LogInfo("Block", "========================================");
