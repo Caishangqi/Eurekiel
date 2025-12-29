@@ -44,22 +44,7 @@ namespace enigma::renderer::model
          * @param faceUVs UV coordinates for each face [down, up, north, south, west, east]
          * @param faceColors Colors for each face (default white)
          */
-        void CreateCube(const std::array<Vec4, 6>&  faceUVs,
-                        const std::array<Rgba8, 6>& faceColors = {
-                            Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE,
-                            Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE
-                        });
-
-        /**
-         * @brief Transform and append this mesh's faces to a chunk mesh
-         * 
-         * Transforms all face vertices by the block position and adds them to the chunk mesh.
-         * Uses the parent class's RenderFace system.
-         * 
-         * @param chunkMesh Target chunk mesh to append to
-         * @param blockPos World position of the block (will be used to offset vertices)
-         */
-        void TransformAndAppendTo(ChunkMesh* chunkMesh, const Vec3& blockPos) const;
+        void CreateCube(const std::array<Vec4, 6>& faceUVs, const std::array<Rgba8, 6>& faceColors = {Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE, Rgba8::WHITE});
 
         /**
          * @brief Create a cube mesh with uniform UV and color

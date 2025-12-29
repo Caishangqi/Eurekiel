@@ -80,36 +80,6 @@ void BlockRenderMesh::CreateCube(const std::array<Vec4, 6>& faceUVs, const std::
             faces.size(), GetVertexCount(), GetTriangleCount());
 }
 
-void BlockRenderMesh::TransformAndAppendTo(ChunkMesh* chunkMesh, const Vec3& blockPos) const
-{
-    if (!chunkMesh || IsEmpty())
-    {
-        return;
-    }
-
-    LogInfo("BlockRenderMesh", "Transforming and appending mesh to chunk at position (%f, %f, %f)",
-            blockPos.x, blockPos.y, blockPos.z);
-
-    // Transform each face and add to chunk mesh
-    for (const auto& face : faces)
-    {
-        if (face.vertices.size() >= 4) // Ensure we have a complete quad
-        {
-            std::array<Vertex_PCU, 4> transformedQuad;
-
-            // Transform the first 4 vertices (assuming quad)
-            for (int i = 0; i < 4; ++i)
-            {
-                transformedQuad[i] = face.vertices[i];
-                transformedQuad[i].m_position += blockPos;
-            }
-
-            // Add the transformed quad to chunk mesh
-            chunkMesh->AddOpaqueQuad(transformedQuad);
-        }
-    }
-}
-
 void BlockRenderMesh::CreateSimpleCube(const Vec4& uv, const Rgba8& color)
 {
     // Create uniform array for all faces
