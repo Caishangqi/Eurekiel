@@ -30,7 +30,7 @@ struct PSInput_Terrain
     float4 Color : COLOR0; // Vertex color
     float2 TexCoord : TEXCOORD0; // UV coordinates
     float3 Normal : NORMAL; // World normal
-    float2 LightmapCoord: TEXCOORD1; // Lightmap (blocklight, skylight)
+    float2 LightmapCoord: LIGHTMAP; // Lightmap (blocklight, skylight)
     float3 WorldPos : TEXCOORD2; // World position
 };
 

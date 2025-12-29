@@ -26,7 +26,7 @@
 // ============================================================================
 // [IMPORTANT] These differ from Common.hlsl VSInput/VSOutput:
 // - No Tangent/Bitangent (terrain uses face normals)
-// - Has LightmapCoord (TEXCOORD1) for blocklight/skylight
+// - Has LightmapCoord (LIGHTMAP) for blocklight/skylight
 
 /**
  * @brief Vertex shader input - matches TerrainVertex (44 bytes)
@@ -37,7 +37,7 @@ struct VSInput_Terrain
     float4 Color : COLOR0; // Vertex color (R8G8B8A8_UNORM unpacked)
     float2 TexCoord : TEXCOORD0; // UV coordinates
     float3 Normal : NORMAL; // Normal vector
-    float2 LightmapCoord: TEXCOORD1; // Lightmap (x=blocklight, y=skylight)
+    float2 LightmapCoord: LIGHTMAP; // Lightmap (x=blocklight, y=skylight)
 };
 
 /**
@@ -49,7 +49,7 @@ struct VSOutput_Terrain
     float4 Color : COLOR0; // Vertex color (passed through)
     float2 TexCoord : TEXCOORD0; // UV coordinates
     float3 Normal : NORMAL; // World normal (normalized)
-    float2 LightmapCoord: TEXCOORD1; // Lightmap (blocklight, skylight)
+    float2 LightmapCoord: LIGHTMAP; // Lightmap (blocklight, skylight)
     float3 WorldPos : TEXCOORD2; // World position (for fog, etc.)
 };
 
