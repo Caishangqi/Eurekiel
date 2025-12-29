@@ -91,7 +91,7 @@ namespace enigma::voxel
         void SetChunkActivationRange(int chunkDistance); // Set activation range in chunks
 
         // Rendering:
-        void Render(IRenderer* renderer); // Render world
+
         bool SetEnableChunkDebug(bool enable = true);
 
         // Utility
@@ -105,7 +105,6 @@ namespace enigma::voxel
 
         // 渲染资源
         Texture* GetBlocksAtlasTexture() const;
-
 
         // World generation integration
         void SetWorldGenerator(std::unique_ptr<enigma::voxel::TerrainGenerator> generator);

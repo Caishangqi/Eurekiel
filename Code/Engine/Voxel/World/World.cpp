@@ -746,26 +746,6 @@ void World::Update(float deltaTime)
     UpdateChunkMeshes();
 }
 
-void World::Render(IRenderer* renderer)
-{
-    // Bind the cached blocks atlas texture once for all chunks (NeoForge pattern)
-    if (m_cachedBlocksAtlasTexture)
-    {
-        //renderer->SetSamplerMode(SamplerMode::TRILINEAR_WRAP);
-        renderer->BindTexture(m_cachedBlocksAtlasTexture);
-    }
-
-    for (const std::pair<const long long, std::unique_ptr<Chunk>>& loaded_chunk : m_loadedChunks)
-    {
-        if (m_enableChunkDebug)
-        {
-            renderer->BindTexture(nullptr);
-            loaded_chunk.second->DebugDraw(renderer);
-        }
-        if (loaded_chunk.second)
-            loaded_chunk.second->Render(renderer);
-    }
-}
 
 bool World::SetEnableChunkDebug(bool enable)
 {
@@ -2364,8 +2344,8 @@ void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::
     Vec3     worldHitPos     = raycast.m_impactPos;
     BlockPos clickedPos      = raycast.m_hitBlockIter.GetBlockPos();
     Vec3     clickedWorldPos = Vec3(static_cast<float>(clickedPos.x),
-                                static_cast<float>(clickedPos.y),
-                                static_cast<float>(clickedPos.z));
+                                    static_cast<float>(clickedPos.y),
+                                    static_cast<float>(clickedPos.z));
     Vec3 localHitPoint = worldHitPos - clickedWorldPos; // Relative to clicked block, not target
 
     // [NEW] Construct PlacementContext
