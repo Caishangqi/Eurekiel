@@ -75,6 +75,40 @@ namespace enigma::graphic
     {
     }
 
+    void UniformManager::IncrementDrawCount()
+    {
+        m_currentDrawCount++;
+        for (auto& [slotId, state] : m_customBufferStates)
+        {
+            state->currentDrawIndex++;
+        }
+
+        for (auto& [typeId, state] : m_perObjectBuffers)
+        {
+            state.currentIndex++;
+        }
+    }
+
+    void UniformManager::ResetDrawCount()
+    {
+        m_currentDrawCount = 0;
+
+        // [FIX] Reset Engine Buffer currentIndex to sync with m_currentDrawCount
+        // Bug: Previously only Custom Buffers were reset, causing Engine Buffers
+        // to write to index N while GetEngineBufferGPUAddress reads from index 0
+        for (auto& [typeId, state] : m_perObjectBuffers)
+        {
+            state.currentIndex = 0;
+        }
+
+
+        // Reset Custom Buffer draw indices
+        for (auto& [slotId, state] : m_customBufferStates)
+        {
+            state->currentDrawIndex = 0;
+        }
+    }
+
     bool UniformManager::IsSlotRegistered(uint32_t slot, uint32_t space) const
     {
         return m_slotToTypeMap.find(SlotSpaceKey{slot, space}) != m_slotToTypeMap.end();

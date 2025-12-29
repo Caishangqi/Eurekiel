@@ -87,24 +87,10 @@ namespace enigma::graphic
         size_t GetCurrentDrawCount() const { return m_currentDrawCount; }
 
         /// @brief Increment draw count (call after each Draw)
-        void IncrementDrawCount()
-        {
-            m_currentDrawCount++;
-            for (auto& [slotId, state] : m_customBufferStates)
-            {
-                state->currentDrawIndex++;
-            }
-        }
+        void IncrementDrawCount();
 
         /// @brief Reset draw count (call in BeginFrame)
-        void ResetDrawCount()
-        {
-            m_currentDrawCount = 0;
-            for (auto& [slotId, state] : m_customBufferStates)
-            {
-                state->currentDrawIndex = 0;
-            }
-        }
+        void ResetDrawCount();
 
         // ========================================================================
         // Slot Management API
