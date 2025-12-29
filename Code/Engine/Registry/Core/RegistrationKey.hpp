@@ -36,7 +36,7 @@ namespace enigma::core
             else
             {
                 // No namespace, use enigma namespace
-                namespaceName = "enigma";
+                namespaceName = "simpleminer";
                 name          = n;
             }
         }
