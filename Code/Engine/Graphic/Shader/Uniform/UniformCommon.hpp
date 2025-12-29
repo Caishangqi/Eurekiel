@@ -122,56 +122,103 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // [MOVE] PerObjectBufferState - from UniformManager.hpp line 32
+    // [REFACTORED] UniformBufferState - Unified Ring Buffer state
     // ========================================================================
 
     /**
-     * @brief Ring Buffer management state
+     * @brief Unified Ring Buffer state for all Uniform buffers
      *
-     * [MOVE] Consolidated from UniformManager.hpp
+     * [REFACTORED] Merged PerObjectBufferState and CustomBufferState into single struct
      * 
-     * Key features:
+     * Key design decisions:
+     * - Uses D12Buffer exclusively (no duplicate resource management)
+     * - Unified naming: ringIndex (was currentIndex/currentDrawIndex)
+     * - Unified naming: maxCount (was maxCount/maxDraws)
+     * - D12Buffer already provides: mappedData, bindlessIndex, gpuResource
+     * 
+     * Ring Buffer mechanism:
      * - 256-byte alignment: elementSize aligned per D3D12 requirements
-     * - Persistent mapping: mappedData pointer remains valid, avoids Map/Unmap overhead
-     * - Delayed Fill: lastUpdatedValue caches value, detects duplicate uploads
-     * - Ring Buffer: currentIndex cycles through maxCount slots
+     * - Persistent mapping: D12Buffer::GetPersistentMappedData()
+     * - ringIndex cycles through maxCount slots for PerObject frequency
+     * 
+     * Binding modes (determined by BufferSpace during registration):
+     * - Engine (space=0): Root CBV, uses GetGPUVirtualAddress()
+     * - Custom (space=1): Descriptor Table, uses GetBindlessIndex()
      */
-    struct PerObjectBufferState
+    struct UniformBufferState
     {
-        std::unique_ptr<D12Buffer> gpuBuffer; // GPU Buffer resource
-        void*                      mappedData  = nullptr; // Persistent mapped pointer
-        size_t                     elementSize = 0; // 256-byte aligned element size
-        size_t                     maxCount    = 0; // Maximum element count
-        UpdateFrequency            frequency; // Update frequency
-        size_t                     currentIndex = 0; // Current write index
-        std::vector<uint8_t>       lastUpdatedValue; // Cached last updated value
-        size_t                     lastUpdatedIndex = SIZE_MAX; // Last updated index
+        // ==================== Core Buffer Resource ====================
+        std::unique_ptr<D12Buffer> buffer; // GPU Buffer (provides resource, mapping, bindless)
+
+        // ==================== Ring Buffer Parameters ====================
+        size_t          elementSize = 0; // 256-byte aligned element size
+        size_t          maxCount    = 0; // Maximum element count in Ring Buffer
+        size_t          ringIndex   = 0; // Current write index (unified naming)
+        UpdateFrequency frequency   = UpdateFrequency::PerObject;
+
+        // ==================== Routing Information ====================
+        uint32_t    slot  = UINT32_MAX; // HLSL register slot (b0-b14 or b15+)
+        BufferSpace space = BufferSpace::Engine; // Engine=Root CBV, Custom=Descriptor Table
+
+        // ==================== Optimization: Delayed Fill ====================
+        std::vector<uint8_t> lastUpdatedValue; // Cached last value (skip duplicate uploads)
+        size_t               lastUpdatedIndex = SIZE_MAX; // Last updated ring index
+
+        // ==================== Convenience Accessors ====================
 
         /**
-         * @brief Get data address at specified index
-         * @param index Index value
-         * @return void* pointer to data
+         * @brief Get persistent mapped data pointer from D12Buffer
+         * @return Mapped pointer, nullptr if not mapped
          */
-        void* GetDataAt(size_t index);
+        void* GetMappedData() const;
 
         /**
-         * @brief Get current index to use
-         * @return For PerObject frequency returns currentIndex % maxCount, others return 0
+         * @brief Get bindless index from D12Buffer (for Custom buffers)
+         * @return Bindless index, UINT32_MAX if not registered
          */
-        size_t GetCurrentIndex() const;
+        uint32_t GetBindlessIndex() const;
+
+        /**
+         * @brief Get GPU virtual address from D12Buffer (for Engine buffers)
+         * @return GPU virtual address
+         */
+        D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;
+
+        /**
+         * @brief Get data address at specified ring index
+         * @param index Ring buffer index
+         * @return void* pointer to data at index
+         */
+        void* GetDataAt(size_t index) const;
+
+        /**
+         * @brief Get current ring index to use (with modulo for PerObject)
+         * @return For PerObject: ringIndex % maxCount, others: 0
+         */
+        size_t GetCurrentRingIndex() const;
+
+        /**
+         * @brief Check if buffer is valid and ready for use
+         * @return true if buffer exists and is mapped
+         */
+        bool IsValid() const;
     };
 
+    // ==================== Legacy Compatibility Aliases ====================
+    // [DEPRECATED] Use UniformBufferState instead
+    using PerObjectBufferState = UniformBufferState;
+
     // ========================================================================
-    // [MOVE] CustomBufferDescriptor - from UniformManager.hpp line 293
+    // [KEEP] CustomBufferDescriptor - Descriptor allocation record
     // ========================================================================
 
     /**
      * @brief Custom Buffer Descriptor allocation record
      *
-     * [MOVE] Consolidated from UniformManager.hpp
+     * [KEEP] This is for descriptor heap allocation tracking, not buffer state
      * 
      * Purpose:
-     * 1. Records CBV Descriptor allocation info for each Custom Buffer
+     * 1. Records CBV Descriptor allocation info for Custom Buffer slots
      * 2. slotId range: 15-114 (corresponds to b15-b114)
      * 3. allocation contains CPU and GPU handles for CBV creation and binding
      */
@@ -186,34 +233,6 @@ namespace enigma::graphic
               , isValid(false)
         {
         }
-    };
-
-    // ========================================================================
-    // [NEW] CustomBufferState - Ring Buffer state for Custom buffers
-    // ========================================================================
-
-    /**
-     * @brief Custom Buffer state for space=1 buffers using Descriptor Table
-     *
-     * [NEW] Introduced for Custom Buffer management with Ring Buffer mechanism
-     * 
-     * Key features:
-     * - Ring Buffer for per-draw data independence
-     * - Bindless integration via bindlessIndex
-     * - Descriptor Table binding via cpuHandle
-     */
-    struct CustomBufferState
-    {
-        size_t                                 elementSize      = 0; // Buffer element size
-        size_t                                 maxDraws         = 0; // Maximum draws for Ring Buffer
-        uint32_t                               currentDrawIndex = 0; // Current draw index
-        Microsoft::WRL::ComPtr<ID3D12Resource> gpuBuffer; // GPU Buffer resource
-        uint8_t*                               mappedPtr     = nullptr; // Persistent mapped pointer
-        uint32_t                               bindlessIndex = 0; // Bindless resource index
-        D3D12_CPU_DESCRIPTOR_HANDLE            cpuHandle     = {}; // CPU Descriptor handle
-        uint32_t                               slot          = 0; // Slot number
-        UpdateFrequency                        frequency     = UpdateFrequency::PerObject; // Update frequency
-        bool                                   isDirty       = false; // Dirty flag for updates
     };
 
     // ========================================================================

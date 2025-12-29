@@ -1,7 +1,8 @@
 #include "UniformCommon.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 
 // ============================================================================
-// UniformCommon.cpp - [NEW] Implementation of common Uniform system types
+// UniformCommon.cpp - [REFACTORED] Implementation of unified UniformBufferState
 // ============================================================================
 
 namespace enigma::graphic
@@ -13,23 +14,54 @@ namespace enigma::graphic
     DEFINE_LOG_CATEGORY(LogUniform);
 
     // ========================================================================
-    // PerObjectBufferState Implementation
+    // [REFACTORED] UniformBufferState Implementation
     // ========================================================================
 
-    void* PerObjectBufferState::GetDataAt(size_t index)
+    void* UniformBufferState::GetMappedData() const
     {
-        // [MOVE] Calculate data address at specified index
+        if (!buffer)
+        {
+            return nullptr;
+        }
+        return buffer->GetPersistentMappedData();
+    }
+
+    uint32_t UniformBufferState::GetBindlessIndex() const
+    {
+        if (!buffer)
+        {
+            return UINT32_MAX;
+        }
+        return buffer->GetBindlessIndex();
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS UniformBufferState::GetGPUVirtualAddress() const
+    {
+        if (!buffer)
+        {
+            return 0;
+        }
+        return buffer->GetGPUVirtualAddress();
+    }
+
+    void* UniformBufferState::GetDataAt(size_t index) const
+    {
+        void* mappedData = GetMappedData();
+        if (!mappedData)
+        {
+            return nullptr;
+        }
         return static_cast<uint8_t*>(mappedData) + index * elementSize;
     }
 
-    size_t PerObjectBufferState::GetCurrentIndex() const
+    size_t UniformBufferState::GetCurrentRingIndex() const
     {
-        // [MOVE] Return appropriate index based on update frequency
+        // Return appropriate index based on update frequency
         switch (frequency)
         {
         case UpdateFrequency::PerObject:
             // Ring Buffer: cycle through maxCount slots
-            return currentIndex % maxCount;
+            return (maxCount > 0) ? (ringIndex % maxCount) : 0;
 
         case UpdateFrequency::PerPass:
         case UpdateFrequency::PerFrame:
@@ -40,5 +72,10 @@ namespace enigma::graphic
         default:
             return 0;
         }
+    }
+
+    bool UniformBufferState::IsValid() const
+    {
+        return buffer && buffer->GetPersistentMappedData() != nullptr;
     }
 } // namespace enigma::graphic
