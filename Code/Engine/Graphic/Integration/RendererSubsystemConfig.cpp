@@ -127,9 +127,7 @@ namespace enigma::graphic
         // - enableShadowMapping: 未来Milestone实现
 
         // 步骤9: 记录配置加载成功信息
-        LogInfo("RendererSubsystemConfig",
-                "Loaded config from {}: resolution={}x{}, colorTex={}, maxFrames={}, immediateMode={}",
-                yamlPath.c_str(),
+        LogInfo("RendererSubsystemConfig", "Loaded config from {}: resolution={}x{}, colorTex={}, maxFrames={}, immediateMode={}", yamlPath.c_str(),
                 result.renderWidth,
                 result.renderHeight,
                 result.gbufferColorTexCount,
