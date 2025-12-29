@@ -28,7 +28,7 @@ task_types:
 
   # Chunk Generation: Procedural world generation (CPU-intensive)
   - type: ChunkGen
-    threads: 12
+    threads: 8
     description: Procedural chunk generation for voxel world
 
   # Mesh Building: Async chunk mesh construction (CPU-intensive, priority-based)
