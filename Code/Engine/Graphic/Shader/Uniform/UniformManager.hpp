@@ -130,11 +130,12 @@ namespace enigma::graphic
 
     private:
         // ========================================================================
-        // Ring Buffer State Management
+        // [REFACTORED] Unified Buffer State Management
         // ========================================================================
 
-        // TypeId -> BufferState mapping
-        std::unordered_map<std::type_index, PerObjectBufferState> m_perObjectBuffers;
+        // TypeId -> UniformBufferState mapping (unified for Engine and Custom buffers)
+        // [REFACTORED] Replaced separate m_perObjectBuffers and m_customBufferStates
+        std::unordered_map<std::type_index, UniformBufferState> m_bufferStates;
 
         // (Slot,Space) -> TypeId mapping for GetBufferStateBySlot()
         std::unordered_map<SlotSpaceKey, std::type_index, SlotSpaceKeyHash> m_slotToTypeMap;
@@ -149,14 +150,11 @@ namespace enigma::graphic
         size_t m_currentDrawCount = 0;
 
         // ========================================================================
-        // Custom Buffer Descriptor Management
+        // Custom Buffer Descriptor Management (for space=1 only)
         // ========================================================================
 
-        // SlotId -> Descriptor allocation mapping
+        // SlotId -> Descriptor allocation mapping (Custom buffers need descriptor table)
         std::unordered_map<uint32_t, CustomBufferDescriptor> m_customBufferDescriptors;
-
-        // Custom Buffer states (space=1)
-        std::unordered_map<uint32_t, std::unique_ptr<CustomBufferState>> m_customBufferStates;
 
         // Pre-allocated Ring Descriptor Pool
         std::vector<GlobalDescriptorHeapManager::DescriptorAllocation> m_customBufferDescriptorPool;
@@ -171,37 +169,24 @@ namespace enigma::graphic
         bool m_initialized = false;
 
         // ========================================================================
-        // Internal Buffer Registration
+        // [REFACTORED] Unified Internal Buffer Operations
         // ========================================================================
 
-        /// @brief Register Engine Buffer (slot 0-14, Root CBV)
+        /// @brief Register buffer internally (unified for Engine and Custom)
         /// @throws UniformBufferException if validation or creation fails
-        bool RegisterEngineBuffer(
+        /// @throws DescriptorHeapException if descriptor allocation fails (Custom only)
+        bool RegisterBufferInternal(
             uint32_t        slotId,
             std::type_index typeId,
             size_t          bufferSize,
             UpdateFrequency freq,
             size_t          maxDraws,
-            uint32_t        space = 0
+            BufferSpace     space
         );
 
-        /// @brief Register Custom Buffer (slot 0-99, Descriptor Table, space1)
-        /// @throws UniformBufferException if validation or creation fails
-        /// @throws DescriptorHeapException if descriptor allocation fails
-        bool RegisterCustomBuffer(
-            uint32_t        slotId,
-            std::type_index typeId,
-            size_t          bufferSize,
-            UpdateFrequency freq,
-            size_t          maxDraws,
-            uint32_t        space = 0
-        );
-
-        /// @brief Upload to Engine Buffer
-        bool UploadEngineBuffer(uint32_t slotId, const void* data, size_t size);
-
-        /// @brief Upload to Custom Buffer
-        bool UploadCustomBuffer(uint32_t slotId, const void* data, size_t size);
+        /// @brief Upload data to buffer (unified for Engine and Custom)
+        /// Routes to correct D12Buffer based on space stored in UniformBufferState
+        bool UploadBufferInternal(const std::type_index& typeId, const void* data, size_t size);
 
         // ========================================================================
         // Ring Buffer Offset Update
@@ -232,13 +217,12 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // Template Method implementation (must be defined in the header file)
+    // [REFACTORED] Template Method implementation
     // ========================================================================
     template <typename T>
     void UniformManager::RegisterBuffer(uint32_t    registerSlot, UpdateFrequency frequency,
                                         BufferSpace space, size_t                 maxDraws)
     {
-        // Convert enum to uint32_t for internal use
         uint32_t spaceValue = static_cast<uint32_t>(space);
 
         try
@@ -246,53 +230,40 @@ namespace enigma::graphic
             std::type_index typeId     = std::type_index(typeid(T));
             size_t          bufferSize = sizeof(T);
 
-            // [NOTE] Duplicate registration is a warning, not an error
-            if (m_perObjectBuffers.find(typeId) != m_perObjectBuffers.end())
+            // [REFACTORED] Check unified m_bufferStates
+            if (m_bufferStates.find(typeId) != m_bufferStates.end())
             {
                 LogWarn(LogUniform, "Buffer already registered: %s", typeid(T).name());
                 return;
             }
 
-            // [REFACTOR] Route by space parameter - internal methods may throw
-            bool success = false;
-            if (space == BufferSpace::Engine)
-            {
-                // Engine Buffer path (space=0, Root CBV)
-                success = RegisterEngineBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, spaceValue);
-            }
-            else
-            {
-                // Custom Buffer path (space=1, Descriptor Table)
-                success = RegisterCustomBuffer(registerSlot, typeId, bufferSize, frequency, maxDraws, spaceValue);
-            }
+            // [REFACTORED] Unified registration path
+            bool success = RegisterBufferInternal(registerSlot, typeId, bufferSize, frequency, maxDraws, space);
 
             if (!success)
             {
                 throw UniformBufferException("Internal registration failed", registerSlot, spaceValue);
             }
 
-            // Record TypeId mapping on success (with slot and space info)
+            // Record TypeId mapping on success
             m_typeToSlotMap[typeId] = SlotSpaceInfo{registerSlot, spaceValue};
             m_slotToTypeMap.insert({SlotSpaceKey{registerSlot, spaceValue}, typeId});
         }
         catch (const UniformBufferException& e)
         {
-            // [ADD] Recoverable error - log and notify via ERROR_RECOVERABLE
             LogError(LogUniform, "RegisterBuffer failed: %s (slot=%u, space=%u)",
                      e.what(), e.GetSlot(), e.GetSpace());
             ERROR_RECOVERABLE(e.what());
-            throw; // Re-throw for caller to handle
+            throw;
         }
         catch (const DescriptorHeapException& e)
         {
-            // [ADD] Fatal error - descriptor exhaustion should never happen
             LogError(LogUniform, "RegisterBuffer descriptor allocation failed: %s (slot=%u, space=%u)",
                      e.what(), registerSlot, spaceValue);
             ERROR_AND_DIE(e.what());
         }
         catch (const std::exception& e)
         {
-            // [ADD] Unexpected error - treat as fatal
             LogError(LogUniform, "RegisterBuffer unexpected error: %s", e.what());
             ERROR_AND_DIE(e.what());
         }
@@ -303,52 +274,32 @@ namespace enigma::graphic
     {
         std::type_index typeId = std::type_index(typeid(T));
 
-        // 获取已注册的(slot, space)信息
-        auto slotIt = m_typeToSlotMap.find(typeId);
-        if (slotIt == m_typeToSlotMap.end())
+        // [REFACTORED] Use unified upload path
+        if (!UploadBufferInternal(typeId, &data, sizeof(T)))
         {
-            LogError(LogUniform, "Buffer not registered: %s", typeid(T).name());
-            return;
-        }
-
-        const SlotSpaceInfo& info = slotIt->second;
-
-        // [FIX] Routing based on the space parameter during registration
-        // space=0: Engine Buffer (Root CBV)
-        // space=1: Custom Buffer (Descriptor Table)
-        if (info.space == 1)
-        {
-            UploadCustomBuffer(info.slot, &data, sizeof(T));
-        }
-        else
-        {
-            UploadEngineBuffer(info.slot, &data, sizeof(T));
+            LogError(LogUniform, "UploadBuffer failed: %s", typeid(T).name());
         }
     }
 
-    // ========================================================================
-    // [ADD] UploadBuffer with explicit slot and space parameter
-    // ========================================================================
     template <typename T>
     void UniformManager::UploadBuffer(const T& data, uint32_t slot, uint32_t space)
     {
-        // [ADD] Validate space parameter
+        // Validate space parameter
         if (space != 0 && space != 1)
         {
             LogError(LogUniform, "Invalid space parameter: %u (must be 0 or 1)", space);
             throw UniformBufferException("Invalid space parameter", slot, space);
         }
 
-        // [ADD] Route to appropriate upload method based on space
-        if (space == 0)
+        // Find TypeId by slot and space
+        auto slotIt = m_slotToTypeMap.find(SlotSpaceKey{slot, space});
+        if (slotIt == m_slotToTypeMap.end())
         {
-            // Engine Buffer path (space=0, Root CBV)
-            UploadEngineBuffer(slot, &data, sizeof(T));
+            LogError(LogUniform, "Buffer not registered: slot=%u, space=%u", slot, space);
+            return;
         }
-        else
-        {
-            // Custom Buffer path (space=1, Descriptor Table)
-            UploadCustomBuffer(slot, &data, sizeof(T));
-        }
+
+        // [REFACTORED] Use unified upload path
+        UploadBufferInternal(slotIt->second, &data, sizeof(T));
     }
 } // namespace enigma::graphic

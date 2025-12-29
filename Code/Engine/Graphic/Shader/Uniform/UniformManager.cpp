@@ -78,34 +78,20 @@ namespace enigma::graphic
     void UniformManager::IncrementDrawCount()
     {
         m_currentDrawCount++;
-        for (auto& [slotId, state] : m_customBufferStates)
+        // [REFACTORED] Unified: use m_bufferStates with ringIndex
+        for (auto& [typeId, state] : m_bufferStates)
         {
-            state->currentDrawIndex++;
-        }
-
-        for (auto& [typeId, state] : m_perObjectBuffers)
-        {
-            state.currentIndex++;
+            state.ringIndex++;
         }
     }
 
     void UniformManager::ResetDrawCount()
     {
         m_currentDrawCount = 0;
-
-        // [FIX] Reset Engine Buffer currentIndex to sync with m_currentDrawCount
-        // Bug: Previously only Custom Buffers were reset, causing Engine Buffers
-        // to write to index N while GetEngineBufferGPUAddress reads from index 0
-        for (auto& [typeId, state] : m_perObjectBuffers)
+        // [REFACTORED] Unified: reset all buffers' ringIndex
+        for (auto& [typeId, state] : m_bufferStates)
         {
-            state.currentIndex = 0;
-        }
-
-
-        // Reset Custom Buffer draw indices
-        for (auto& [slotId, state] : m_customBufferStates)
-        {
-            state->currentDrawIndex = 0;
+            state.ringIndex = 0;
         }
     }
 
@@ -136,16 +122,16 @@ namespace enigma::graphic
             return nullptr;
         }
 
-        // Get TypeId and find BufferState
+        // [REFACTORED] Get TypeId and find in unified m_bufferStates
         const std::type_index& typeId   = slotIt->second;
-        auto                   bufferIt = m_perObjectBuffers.find(typeId);
-        if (bufferIt != m_perObjectBuffers.end())
+        auto                   bufferIt = m_bufferStates.find(typeId);
+        if (bufferIt != m_bufferStates.end())
         {
             return const_cast<PerObjectBufferState*>(&bufferIt->second);
         }
 
         // TypeId registered but buffer not created (abnormal)
-        LogWarn("UniformManager", "Slot %u (space=%u) registered but buffer not found: %s", rootSlot, space, typeId.name());
+        LogWarn(LogUniform, "Slot %u (space=%u) registered but buffer not found: %s", rootSlot, space, typeId.name());
         ERROR_RECOVERABLE(Stringf("Slot %u (space=%u) registered but buffer not found", rootSlot, space));
         return nullptr;
     }
@@ -160,24 +146,21 @@ namespace enigma::graphic
 
         for (uint32_t slotId : slots)
         {
-            // Check if Custom Buffer (skip - handled separately)
-            auto customIt = m_customBufferStates.find(slotId);
-            if (customIt != m_customBufferStates.end())
+            // [REFACTORED] Use unified GetBufferStateBySlot for both Engine and Custom
+            auto* state = GetBufferStateBySlot(slotId);
+            if (!state || !state->buffer)
             {
                 continue;
             }
 
-            // Engine Buffer path
-            auto* state = GetBufferStateBySlot(slotId);
-            if (!state || !state->gpuBuffer)
+            // Skip Custom Buffers (handled separately via Descriptor Table)
+            if (state->space == BufferSpace::Custom)
             {
                 continue;
             }
 
             // Calculate current Ring Buffer index
-            size_t currentIndex = (frequency == UpdateFrequency::PerObject)
-                                      ? (m_currentDrawCount % state->maxCount)
-                                      : 0;
+            size_t currentIndex = state->GetCurrentRingIndex();
 
             // Delayed Fill: copy last value if index not updated
             if (state->lastUpdatedIndex != currentIndex)
@@ -191,38 +174,49 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // RegisterEngineBuffer - Engine slot 0-14, Root CBV binding
+    // [REFACTORED] RegisterBufferInternal - Unified buffer registration
+    // Routes to Engine (Root CBV) or Custom (Descriptor Table) based on space
     // ========================================================================
-    bool UniformManager::RegisterEngineBuffer(
+    bool UniformManager::RegisterBufferInternal(
         uint32_t        slotId,
         std::type_index typeId,
         size_t          bufferSize,
         UpdateFrequency freq,
         size_t          maxDraws,
-        uint32_t        space)
+        BufferSpace     space)
     {
-        // Validate space must be 0 for Engine buffers
-        if (space != 0)
-        {
-            throw UniformBufferException("Engine Buffer must use space=0", slotId, space);
-        }
+        uint32_t spaceValue = static_cast<uint32_t>(space);
 
-        // Validate slot range (0-14)
-        if (!BufferHelper::IsEngineReservedSlot(slotId))
+        // Validate space-specific constraints
+        if (space == BufferSpace::Engine)
         {
-            throw UniformBufferException("Engine Buffer slot must be 0-14", slotId, space);
+            if (!BufferHelper::IsEngineReservedSlot(slotId))
+            {
+                throw UniformBufferException("Engine Buffer slot must be 0-14", slotId, spaceValue);
+            }
+        }
+        else if (space == BufferSpace::Custom)
+        {
+            if (slotId >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
+            {
+                throw UniformBufferException("Custom Buffer slot exceeds MAX_CUSTOM_BUFFERS", slotId, spaceValue);
+            }
+            if (BufferHelper::IsEngineReservedSlot(slotId))
+            {
+                LogWarn(LogUniform, "Custom Buffer slot %u is in engine range (0-14), ensure shader uses register(b%u, space1)", slotId, slotId);
+            }
         }
 
         // Check slot conflict
-        if (IsSlotRegistered(slotId))
+        if (IsSlotRegistered(slotId, spaceValue))
         {
-            throw UniformBufferException("Slot already registered", slotId, space);
+            throw UniformBufferException("Slot already registered", slotId, spaceValue);
         }
 
         // Calculate 256-byte aligned size
         size_t alignedSize = BufferHelper::CalculateAlignedSize(bufferSize);
 
-        // Calculate Ring Buffer count
+        // Calculate Ring Buffer count based on frequency
         size_t ringBufferCount = 1;
         switch (freq)
         {
@@ -237,243 +231,132 @@ namespace enigma::graphic
 
         size_t totalSize = alignedSize * ringBufferCount;
 
-        // Create GPU Buffer
+        // Create GPU Buffer using D12Buffer
         BufferCreateInfo createInfo;
         createInfo.size          = totalSize;
         createInfo.usage         = BufferUsage::ConstantBuffer;
         createInfo.memoryAccess  = MemoryAccess::CPUToGPU;
         createInfo.initialData   = nullptr;
-        std::string debugNameStr = Stringf("EngineBuffer_Slot%u", slotId);
-        createInfo.debugName     = debugNameStr.c_str();
+        std::string debugNameStr = (space == BufferSpace::Engine)
+                                       ? Stringf("EngineBuffer_Slot%u", slotId)
+                                       : Stringf("CustomBuffer_Slot%u_Space1", slotId);
+        createInfo.debugName = debugNameStr.c_str();
 
         auto gpuBuffer = D3D12RenderSystem::CreateBuffer(createInfo);
         if (!gpuBuffer)
         {
-            throw UniformBufferException("Failed to create GPU buffer", slotId, space);
+            throw UniformBufferException("Failed to create GPU buffer", slotId, spaceValue);
         }
 
         // Persistent mapping
         void* mappedData = gpuBuffer->MapPersistent();
         if (!mappedData)
         {
-            throw UniformBufferException("Failed to map GPU buffer", slotId, space);
+            throw UniformBufferException("Failed to map GPU buffer", slotId, spaceValue);
         }
 
-        // Create PerObjectBufferState
-        PerObjectBufferState state;
-        state.gpuBuffer    = std::move(gpuBuffer);
-        state.mappedData   = mappedData;
-        state.elementSize  = alignedSize;
-        state.maxCount     = ringBufferCount;
-        state.frequency    = freq;
-        state.currentIndex = 0;
+        // Custom Buffer needs descriptor allocation and CBV creation
+        if (space == BufferSpace::Custom)
+        {
+            if (!AllocateCustomBufferDescriptor(slotId))
+            {
+                throw DescriptorHeapException("Failed to allocate descriptor for Custom Buffer");
+            }
+
+            // Create CBV for ALL Ring Frames
+            auto* device = D3D12RenderSystem::GetDevice();
+            if (!device)
+            {
+                throw DescriptorHeapException("D3D12 device not available for CBV creation");
+            }
+
+            D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress     = gpuBuffer->GetGPUVirtualAddress();
+            size_t                    effectiveRingCount = std::min(ringBufferCount, static_cast<size_t>(BindlessRootSignature::MAX_RING_FRAMES));
+
+            for (uint32_t ringFrame = 0; ringFrame < BindlessRootSignature::MAX_RING_FRAMES; ++ringFrame)
+            {
+                uint32_t descriptorIndex = ringFrame * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
+                if (descriptorIndex >= m_customBufferDescriptorPool.size())
+                {
+                    LogError(LogUniform, "Descriptor index %u out of range (pool size=%zu)", descriptorIndex, m_customBufferDescriptorPool.size());
+                    continue;
+                }
+
+                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle    = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
+                size_t                      sliceIndex   = ringFrame % effectiveRingCount;
+                D3D12_GPU_VIRTUAL_ADDRESS   sliceAddress = baseGpuAddress + sliceIndex * alignedSize;
+
+                D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+                cbvDesc.BufferLocation                  = sliceAddress;
+                cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
+
+                device->CreateConstantBufferView(&cbvDesc, cpuHandle);
+            }
+
+            LogInfo(LogUniform, "Created %u CBVs for Custom Buffer Slot=%u, Base GPU=0x%llX",
+                    BindlessRootSignature::MAX_RING_FRAMES, slotId, baseGpuAddress);
+        }
+
+        // [REFACTORED] Create unified UniformBufferState
+        UniformBufferState state;
+        state.buffer      = std::move(gpuBuffer);
+        state.elementSize = alignedSize;
+        state.maxCount    = ringBufferCount;
+        state.ringIndex   = 0;
+        state.frequency   = freq;
+        state.slot        = slotId;
+        state.space       = space;
         state.lastUpdatedValue.resize(alignedSize, 0);
         state.lastUpdatedIndex = SIZE_MAX;
 
-        m_perObjectBuffers[typeId] = std::move(state);
+        m_bufferStates[typeId] = std::move(state);
         m_frequencyToSlotsMap[freq].push_back(slotId);
 
-        LogInfo(LogUniform, "Engine Buffer registered: Slot=%u, Size=%zu, Freq=%d, Count=%zu",
-                slotId, alignedSize, static_cast<int>(freq), ringBufferCount);
+        const char* spaceStr = (space == BufferSpace::Engine) ? "Engine" : "Custom";
+        LogInfo(LogUniform, "%s Buffer registered: Slot=%u, Space=%u, Size=%zu, Freq=%d, Count=%zu",
+                spaceStr, slotId, spaceValue, alignedSize, static_cast<int>(freq), ringBufferCount);
         return true;
     }
 
+    // [REMOVED] RegisterCustomBuffer - merged into RegisterBufferInternal
+
     // ========================================================================
-    // RegisterCustomBuffer - Custom slot 0-99, Descriptor Table binding (space1)
+    // [REFACTORED] UploadBufferInternal - Unified buffer upload
+    // Routes based on space stored in UniformBufferState
     // ========================================================================
-    bool UniformManager::RegisterCustomBuffer(
-        uint32_t slotId,
-        std::type_index /*typeId*/,
-        size_t          bufferSize,
-        UpdateFrequency freq,
-        size_t          maxDraws,
-        uint32_t        space)
+    bool UniformManager::UploadBufferInternal(const std::type_index& typeId, const void* data, size_t size)
     {
-        // Validate space must be 1 for Custom buffers
-        if (space != 1)
+        // Find buffer state by TypeId
+        auto it = m_bufferStates.find(typeId);
+        if (it == m_bufferStates.end())
         {
-            throw UniformBufferException("Custom Buffer must use space=1", slotId, space);
-        }
-
-        // Validate slot range (0-99)
-        if (slotId >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
-        {
-            throw UniformBufferException("Custom Buffer slot exceeds MAX_CUSTOM_BUFFERS", slotId, space);
-        }
-
-        // Warn if using engine reserved slot range (0-14)
-        if (BufferHelper::IsEngineReservedSlot(slotId))
-        {
-            LogWarn(LogUniform, "Custom Buffer slot %u is in engine range (0-14), ensure shader uses register(b%u, space1)", slotId, slotId);
-        }
-
-        // Check slot conflict
-        if (IsSlotRegistered(slotId))
-        {
-            throw UniformBufferException("Slot already registered", slotId, space);
-        }
-
-        // Calculate 256-byte aligned size
-        size_t alignedSize = BufferHelper::CalculateAlignedSize(bufferSize);
-
-        // Calculate Ring Buffer count
-        size_t ringBufferCount = 1;
-        switch (freq)
-        {
-        case UpdateFrequency::PerObject: ringBufferCount = maxDraws;
-            break;
-        case UpdateFrequency::PerPass: ringBufferCount = 20;
-            break;
-        case UpdateFrequency::PerFrame:
-        case UpdateFrequency::Static: ringBufferCount = 1;
-            break;
-        }
-
-        size_t totalSize = alignedSize * ringBufferCount;
-
-        // Create GPU Buffer
-        BufferCreateInfo createInfo;
-        createInfo.size          = totalSize;
-        createInfo.usage         = BufferUsage::ConstantBuffer;
-        createInfo.memoryAccess  = MemoryAccess::CPUToGPU;
-        createInfo.initialData   = nullptr;
-        std::string debugNameStr = Stringf("CustomBuffer_Slot%u", slotId);
-        createInfo.debugName     = debugNameStr.c_str();
-
-        auto gpuBuffer = D3D12RenderSystem::CreateBuffer(createInfo);
-        if (!gpuBuffer)
-        {
-            throw UniformBufferException("Failed to create GPU buffer", slotId, space);
-        }
-
-        // Persistent mapping
-        void* mappedData = gpuBuffer->MapPersistent();
-        if (!mappedData)
-        {
-            throw UniformBufferException("Failed to map GPU buffer", slotId, space);
-        }
-
-        // Allocate Descriptor
-        if (!AllocateCustomBufferDescriptor(slotId))
-        {
-            throw DescriptorHeapException("Failed to allocate descriptor for Custom Buffer");
-        }
-
-        // Create CBV for ALL Ring Frames
-        auto* device = D3D12RenderSystem::GetDevice();
-        if (!device)
-        {
-            throw DescriptorHeapException("D3D12 device not available for CBV creation");
-        }
-
-        D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress     = gpuBuffer->GetGPUVirtualAddress();
-        size_t                    effectiveRingCount = std::min(ringBufferCount, static_cast<size_t>(BindlessRootSignature::MAX_RING_FRAMES));
-
-        for (uint32_t ringFrame = 0; ringFrame < BindlessRootSignature::MAX_RING_FRAMES; ++ringFrame)
-        {
-            uint32_t descriptorIndex = ringFrame * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
-            if (descriptorIndex >= m_customBufferDescriptorPool.size())
-            {
-                LogError(LogUniform, "Descriptor index %u out of range (pool size=%zu)", descriptorIndex, m_customBufferDescriptorPool.size());
-                continue;
-            }
-
-            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle    = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
-            size_t                      sliceIndex   = ringFrame % effectiveRingCount;
-            D3D12_GPU_VIRTUAL_ADDRESS   sliceAddress = baseGpuAddress + sliceIndex * alignedSize;
-
-            D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-            cbvDesc.BufferLocation                  = sliceAddress;
-            cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
-
-            device->CreateConstantBufferView(&cbvDesc, cpuHandle);
-        }
-
-        LogInfo(LogUniform, "Created %u CBVs for Custom Buffer Slot=%u, Base GPU=0x%llX",
-                BindlessRootSignature::MAX_RING_FRAMES, slotId, baseGpuAddress);
-
-        // Get first frame CPU handle for compatibility
-        auto                        it             = m_customBufferDescriptors.find(slotId);
-        D3D12_CPU_DESCRIPTOR_HANDLE firstCpuHandle = {};
-        if (it != m_customBufferDescriptors.end() && it->second.isValid)
-        {
-            firstCpuHandle = it->second.allocation.cpuHandle;
-        }
-
-        // Create CustomBufferState
-        auto customState              = std::make_unique<CustomBufferState>();
-        customState->elementSize      = alignedSize;
-        customState->maxDraws         = ringBufferCount;
-        customState->currentDrawIndex = 0;
-        customState->gpuBuffer        = gpuBuffer->GetResource();
-        customState->mappedPtr        = static_cast<uint8_t*>(mappedData);
-        customState->bindlessIndex    = it->second.allocation.heapIndex;
-        customState->cpuHandle        = firstCpuHandle;
-        customState->slot             = slotId;
-        customState->frequency        = freq;
-        customState->isDirty          = false;
-
-        m_customBufferStates[slotId] = std::move(customState);
-        m_frequencyToSlotsMap[freq].push_back(slotId);
-
-        LogInfo(LogUniform, "Custom Buffer registered: Slot=%u, Space=1, Size=%zu, MaxDraws=%zu",
-                slotId, alignedSize, ringBufferCount);
-        return true;
-    }
-
-    // ========================================================================
-    // UploadEngineBuffer
-    // ========================================================================
-    bool UniformManager::UploadEngineBuffer(uint32_t slotId, const void* data, size_t size)
-    {
-        auto* state = GetBufferStateBySlot(slotId);
-        if (!state)
-        {
-            LogError(LogUniform, "Engine Buffer slot %u not registered", slotId);
+            LogError(LogUniform, "Buffer not registered: %s", typeId.name());
             return false;
         }
 
-        if (size > state->elementSize)
+        UniformBufferState& state = it->second;
+
+        if (size > state.elementSize)
         {
-            LogWarn(LogUniform, "Data size (%zu) exceeds element size (%zu)", size, state->elementSize);
+            LogWarn(LogUniform, "Data size (%zu) exceeds element size (%zu)", size, state.elementSize);
         }
 
-        size_t currentIndex = state->GetCurrentIndex();
-        void*  destPtr      = state->GetDataAt(currentIndex);
+        // Calculate current ring index
+        size_t currentIndex = state.GetCurrentRingIndex();
+        void*  destPtr      = state.GetDataAt(currentIndex);
+
+        if (!destPtr)
+        {
+            LogError(LogUniform, "Failed to get mapped data for buffer slot %u", state.slot);
+            return false;
+        }
+
         std::memcpy(destPtr, data, size);
 
         // Update Delayed Fill cache
-        std::memcpy(state->lastUpdatedValue.data(), data, size);
-        state->lastUpdatedIndex = currentIndex;
-        state->currentIndex++;
+        std::memcpy(state.lastUpdatedValue.data(), data, size);
+        state.lastUpdatedIndex = currentIndex;
 
-        return true;
-    }
-
-    // ========================================================================
-    // UploadCustomBuffer
-    // ========================================================================
-    bool UniformManager::UploadCustomBuffer(uint32_t slotId, const void* data, size_t size)
-    {
-        auto it = m_customBufferStates.find(slotId);
-        if (it == m_customBufferStates.end())
-        {
-            LogError(LogUniform, "Custom Buffer slot %u not registered", slotId);
-            return false;
-        }
-
-        CustomBufferState* state = it->second.get();
-
-        if (size > state->elementSize)
-        {
-            LogWarn(LogUniform, "Data size (%zu) exceeds element size (%zu)", size, state->elementSize);
-        }
-
-        uint32_t ringIndex = state->currentDrawIndex % static_cast<uint32_t>(state->maxDraws);
-        size_t   offset    = ringIndex * state->elementSize;
-        std::memcpy(state->mappedPtr + offset, data, size);
-
-        state->isDirty = true;
         return true;
     }
 
@@ -491,8 +374,9 @@ namespace enigma::graphic
     // ========================================================================
     void UniformManager::UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex)
     {
-        auto* state = GetBufferStateBySlot(slotId);
-        if (!state || !state->gpuBuffer)
+        // [REFACTORED] Use unified m_bufferStates
+        auto* state = GetBufferStateBySlot(slotId, 1); // space=1 for Custom
+        if (!state || !state->buffer)
         {
             return;
         }
@@ -504,7 +388,7 @@ namespace enigma::graphic
             return;
         }
 
-        D3D12_GPU_VIRTUAL_ADDRESS bufferAddress = state->gpuBuffer->GetGPUVirtualAddress();
+        D3D12_GPU_VIRTUAL_ADDRESS bufferAddress = state->GetGPUVirtualAddress();
         bufferAddress                           += currentIndex * state->elementSize;
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
@@ -616,25 +500,22 @@ namespace enigma::graphic
             return 0;
         }
 
-        // Skip if slot is registered as Custom Buffer
-        if (m_customBufferStates.find(slotId) != m_customBufferStates.end())
+        // [REFACTORED] Use unified m_bufferStates via GetBufferStateBySlot
+        auto* state = GetBufferStateBySlot(slotId, 0); // space=0 for Engine
+        if (!state || !state->buffer)
         {
             return 0;
         }
 
-        auto* state = GetBufferStateBySlot(slotId);
-        if (!state || !state->gpuBuffer)
+        // Skip if this is a Custom Buffer (space=1)
+        if (state->space == BufferSpace::Custom)
         {
             return 0;
         }
 
-        size_t currentIndex = 0;
-        if (state->frequency == UpdateFrequency::PerObject)
-        {
-            currentIndex = m_currentDrawCount % state->maxCount;
-        }
+        size_t currentIndex = state->GetCurrentRingIndex();
 
-        D3D12_GPU_VIRTUAL_ADDRESS baseAddress    = state->gpuBuffer->GetGPUVirtualAddress();
+        D3D12_GPU_VIRTUAL_ADDRESS baseAddress    = state->GetGPUVirtualAddress();
         D3D12_GPU_VIRTUAL_ADDRESS currentAddress = baseAddress + currentIndex * state->elementSize;
 
         return currentAddress;
