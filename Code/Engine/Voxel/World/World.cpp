@@ -100,7 +100,7 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
     }
 }
 
-uint8_t World::GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
+uint8_t World::GetSkyLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
 {
     // Calculate chunk coordinates
     int32_t chunkX = globalX >> 4; // globalX / 16
@@ -116,10 +116,10 @@ uint8_t World::GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ
     int32_t localZ = globalZ;
 
     // Delegate to Chunk
-    return chunk->GetOutdoorLight(localX, localY, localZ);
+    return chunk->GetSkyLight(localX, localY, localZ);
 }
 
-uint8_t World::GetIndoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
+uint8_t World::GetBlockLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
 {
     // Calculate chunk coordinates
     int32_t chunkX = globalX >> 4;
@@ -135,7 +135,7 @@ uint8_t World::GetIndoorLight(int32_t globalX, int32_t globalY, int32_t globalZ)
     int32_t localZ = globalZ;
 
     // Delegate to Chunk
-    return chunk->GetIndoorLight(localX, localY, localZ);
+    return chunk->GetBlockLight(localX, localY, localZ);
 }
 
 bool World::GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const
@@ -1947,19 +1947,19 @@ void World::ProcessNextDirtyLightBlock()
     chunk->SetIsLightDirty(x, y, z, false);
 
     // [Phase 7] Calculate theoretically correct light values using implemented algorithms
-    uint8_t correctOutdoor = ComputeCorrectOutdoorLight(iter);
-    uint8_t correctIndoor  = ComputeCorrectIndoorLight(iter);
+    uint8_t correctOutdoor = ComputeCorrectSkyLight(iter);
+    uint8_t correctIndoor  = ComputeCorrectBlockLight(iter);
 
     // [NEW] Compare current values with correct values using Chunk interface
-    uint8_t currentOutdoor = chunk->GetOutdoorLight(x, y, z);
-    uint8_t currentIndoor  = chunk->GetIndoorLight(x, y, z);
+    uint8_t currentOutdoor = chunk->GetSkyLight(x, y, z);
+    uint8_t currentIndoor  = chunk->GetBlockLight(x, y, z);
 
     // 6. If values are incorrect, update and propagate
     if (correctOutdoor != currentOutdoor || correctIndoor != currentIndoor)
     {
         // [NEW] Update light values using Chunk interface
-        chunk->SetOutdoorLight(x, y, z, correctOutdoor);
-        chunk->SetIndoorLight(x, y, z, correctIndoor);
+        chunk->SetSkyLight(x, y, z, correctOutdoor);
+        chunk->SetBlockLight(x, y, z, correctIndoor);
 
         // Mark this chunk's mesh as dirty
         chunk->MarkDirty();
@@ -2046,7 +2046,7 @@ void World::UndirtyAllBlocksInChunk(Chunk* chunk)
  * @param iter BlockIterator pointing to the block to compute light for
  * @return Correct outdoor light value (0-15)
  */
-uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
+uint8_t World::ComputeCorrectSkyLight(const BlockIterator& iter) const
 {
     const BlockState* state = iter.GetBlock();
     Chunk*            chunk = iter.GetChunk();
@@ -2086,7 +2086,7 @@ uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
                 {
                     int32_t nbrLocalX, nbrLocalY, nbrLocalZ;
                     neighbor.GetLocalCoords(nbrLocalX, nbrLocalY, nbrLocalZ);
-                    uint8_t neighborLight = neighborChunk->GetOutdoorLight(nbrLocalX, nbrLocalY, nbrLocalZ);
+                    uint8_t neighborLight = neighborChunk->GetSkyLight(nbrLocalX, nbrLocalY, nbrLocalZ);
                     maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
                 }
             }
@@ -2114,12 +2114,12 @@ uint8_t World::ComputeCorrectOutdoorLight(const BlockIterator& iter) const
  * @param iter BlockIterator pointing to the block to compute light for
  * @return Correct indoor light value (0-15)
  */
-uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
+uint8_t World::ComputeCorrectBlockLight(const BlockIterator& iter) const
 {
     const BlockState* state = iter.GetBlock();
 
     // [STEP 1] Get the block's intrinsic light emission level
-    uint8_t emissionLevel = state->GetBlock()->GetIndoorLightEmission();
+    uint8_t emissionLevel = state->GetBlock()->GetBlockLightEmission();
 
     // [STEP 2] Opaque blocks: indoor light = emission level (don't propagate from neighbors)
     // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
@@ -2148,7 +2148,7 @@ uint8_t World::ComputeCorrectIndoorLight(const BlockIterator& iter) const
                 {
                     int32_t localX, localY, localZ;
                     neighbor.GetLocalCoords(localX, localY, localZ);
-                    uint8_t neighborLight = neighborChunk->GetIndoorLight(localX, localY, localZ);
+                    uint8_t neighborLight = neighborChunk->GetBlockLight(localX, localY, localZ);
                     maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
                 }
             }

@@ -71,8 +71,8 @@ namespace enigma::voxel
 
         // Light Data Access (delegate to Chunk via global coordinates)
         // These methods provide global coordinate access, consistent with GetBlockState()
-        uint8_t GetOutdoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
-        uint8_t GetIndoorLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+        uint8_t GetSkyLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+        uint8_t GetBlockLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
         bool    GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const;
 
         // Chunk Operations:
@@ -170,8 +170,8 @@ namespace enigma::voxel
         void UndirtyAllBlocksInChunk(Chunk* chunk);
 
         // [Phase 7] Lighting Calculation - Compute Correct Light Values
-        uint8_t ComputeCorrectOutdoorLight(const BlockIterator& iter) const;
-        uint8_t ComputeCorrectIndoorLight(const BlockIterator& iter) const;
+        uint8_t ComputeCorrectSkyLight(const BlockIterator& iter) const;
+        uint8_t ComputeCorrectBlockLight(const BlockIterator& iter) const;
 
     private:
         //-------------------------------------------------------------------------------------------

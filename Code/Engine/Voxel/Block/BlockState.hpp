@@ -94,7 +94,7 @@ namespace enigma::voxel
         }
 
         // [REMOVED] Light data and flag accessors - migrated to Chunk class
-        // Use Chunk::GetOutdoorLight(), Chunk::SetOutdoorLight(), etc. instead
+        // Use Chunk::GetSkyLight(), Chunk::SetSkyLight(), etc. instead
 
         /**
          * @brief Check if this block is fully opaque (no light passes through)

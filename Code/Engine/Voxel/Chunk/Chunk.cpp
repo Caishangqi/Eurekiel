@@ -140,7 +140,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
 
                         // Flag as SKY and mark dirty
                         SetIsSky(x, y, descendZ, true);
-                        SetOutdoorLight(x, y, descendZ, 15);
+                        SetSkyLight(x, y, descendZ, 15);
 
                         BlockIterator descendIter(this, (int)CoordsToIndex(x, y, descendZ));
                         m_world->MarkLightingDirty(descendIter);
@@ -154,7 +154,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
         {
             // Clear SKY flag and descend downward
             SetIsSky(x, y, z, false);
-            SetOutdoorLight(x, y, z, 0);
+            SetSkyLight(x, y, z, 0);
 
             // Descend downward, clearing SKY flags
             for (int descendZ = z - 1; descendZ >= 0; --descendZ)
@@ -168,7 +168,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
 
                 // Clear SKY flag and mark dirty
                 SetIsSky(x, y, descendZ, false);
-                SetOutdoorLight(x, y, descendZ, 0);
+                SetSkyLight(x, y, descendZ, 0);
 
                 BlockIterator descendIter(this, (int)CoordsToIndex(x, y, descendZ));
                 m_world->MarkLightingDirty(descendIter);
@@ -563,8 +563,8 @@ void Chunk::InitializeLighting(World* world)
     {
         int32_t x, y, z;
         IndexToCoords(i, x, y, z);
-        SetOutdoorLight(x, y, z, 0);
-        SetIndoorLight(x, y, z, 0);
+        SetSkyLight(x, y, z, 0);
+        SetBlockLight(x, y, z, 0);
         SetIsLightDirty(x, y, z, false);
     }
 
@@ -585,7 +585,7 @@ void Chunk::InitializeLighting(World* world)
                     break; // Stop at first opaque block
                 }
                 SetIsSky(x, y, z, true);
-                SetOutdoorLight(x, y, z, 15);
+                SetSkyLight(x, y, z, 15);
             }
         }
     }
@@ -594,7 +594,7 @@ void Chunk::InitializeLighting(World* world)
     for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
     {
         BlockState* state         = m_blocks[i];
-        uint8_t     emissionLevel = state->GetBlock()->GetIndoorLightEmission();
+        uint8_t     emissionLevel = state->GetBlock()->GetBlockLightEmission();
         if (emissionLevel > 0)
         {
             BlockIterator iter(this, i);
@@ -857,7 +857,7 @@ void Chunk::MarkBoundaryBlocksDirty(World* world)
  * @param z Local Z coordinate (0-255)
  * @return Outdoor light level (0-15)
  */
-uint8_t Chunk::GetOutdoorLight(int32_t x, int32_t y, int32_t z) const
+uint8_t Chunk::GetSkyLight(int32_t x, int32_t y, int32_t z) const
 {
     size_t index = CoordsToIndex(x, y, z);
     return (m_lightData[index] >> 4) & 0x0F; // High 4 bits
@@ -874,7 +874,7 @@ uint8_t Chunk::GetOutdoorLight(int32_t x, int32_t y, int32_t z) const
  * @param z Local Z coordinate (0-255)
  * @param light Outdoor light level (0-15)
  */
-void Chunk::SetOutdoorLight(int32_t x, int32_t y, int32_t z, uint8_t light)
+void Chunk::SetSkyLight(int32_t x, int32_t y, int32_t z, uint8_t light)
 {
     size_t index       = CoordsToIndex(x, y, z);
     m_lightData[index] = (m_lightData[index] & 0x0F) | ((light & 0x0F) << 4);
@@ -891,7 +891,7 @@ void Chunk::SetOutdoorLight(int32_t x, int32_t y, int32_t z, uint8_t light)
  * @param z Local Z coordinate (0-255)
  * @return Indoor light level (0-15)
  */
-uint8_t Chunk::GetIndoorLight(int32_t x, int32_t y, int32_t z) const
+uint8_t Chunk::GetBlockLight(int32_t x, int32_t y, int32_t z) const
 {
     size_t index = CoordsToIndex(x, y, z);
     return m_lightData[index] & 0x0F; // Low 4 bits
@@ -908,7 +908,7 @@ uint8_t Chunk::GetIndoorLight(int32_t x, int32_t y, int32_t z) const
  * @param z Local Z coordinate (0-255)
  * @param light Indoor light level (0-15)
  */
-void Chunk::SetIndoorLight(int32_t x, int32_t y, int32_t z, uint8_t light)
+void Chunk::SetBlockLight(int32_t x, int32_t y, int32_t z, uint8_t light)
 {
     size_t index       = CoordsToIndex(x, y, z);
     m_lightData[index] = (m_lightData[index] & 0xF0) | (light & 0x0F);

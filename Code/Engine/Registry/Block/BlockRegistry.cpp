@@ -573,7 +573,7 @@ namespace enigma::registry::block
 
             if (yaml.Contains("light_level"))
             {
-                block->SetIndoorLightEmission(static_cast<uint8_t>(yaml.GetInt("light_level", 0)));
+                block->SetBlockLightEmission(static_cast<uint8_t>(yaml.GetInt("light_level", 0)));
             }
 
             // Set visibility with smart default (air is invisible, others are visible)

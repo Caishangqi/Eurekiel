@@ -220,12 +220,12 @@ namespace enigma::voxel
 
         // [A05] Lighting Data Access - Independent storage in Chunk
         // Outdoor light (0-15)
-        uint8_t GetOutdoorLight(int32_t x, int32_t y, int32_t z) const;
-        void    SetOutdoorLight(int32_t x, int32_t y, int32_t z, uint8_t light);
+        uint8_t GetSkyLight(int32_t x, int32_t y, int32_t z) const;
+        void    SetSkyLight(int32_t x, int32_t y, int32_t z, uint8_t light);
 
         // Indoor light (0-15)
-        uint8_t GetIndoorLight(int32_t x, int32_t y, int32_t z) const;
-        void    SetIndoorLight(int32_t x, int32_t y, int32_t z, uint8_t light);
+        uint8_t GetBlockLight(int32_t x, int32_t y, int32_t z) const;
+        void    SetBlockLight(int32_t x, int32_t y, int32_t z, uint8_t light);
 
         // Flags
         bool GetIsSky(int32_t x, int32_t y, int32_t z) const;
