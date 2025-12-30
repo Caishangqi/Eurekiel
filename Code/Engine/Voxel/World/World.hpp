@@ -1,7 +1,10 @@
 ﻿#pragma once
+#pragma once
 #include "../Block/BlockState.hpp"
 #include "../Block/BlockPos.hpp"
 #include "../Block/BlockIterator.hpp"
+#include "../Light/VoxelLightEngine.hpp"
+#include "../Time/ITimeProvider.hpp"
 
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
 #include "../Chunk/ChunkJob.hpp"
@@ -69,11 +72,23 @@ namespace enigma::voxel
         void PlaceBlock(const BlockIterator&        blockIter, enigma::registry::block::Block* blockType,
                         const VoxelRaycastResult3D& raycast, const Vec3&                       playerLookDir);
 
-        // Light Data Access (delegate to Chunk via global coordinates)
-        // These methods provide global coordinate access, consistent with GetBlockState()
+        //-------------------------------------------------------------------------------------------
+        // [NEW] VoxelLightEngine Integration
+        //-------------------------------------------------------------------------------------------
+        VoxelLightEngine&       GetVoxelLightEngine() { return *m_voxelLightEngine; }
+        const VoxelLightEngine& GetVoxelLightEngine() const { return *m_voxelLightEngine; }
+
+        // Light Data Access (delegate to VoxelLightEngine)
         uint8_t GetSkyLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
         uint8_t GetBlockLight(int32_t globalX, int32_t globalY, int32_t globalZ) const;
         bool    GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const;
+
+        // Sky Darken (calculated from time)
+        int  GetSkyDarken() const { return m_skyDarken; }
+        void UpdateSkyBrightness(const ITimeProvider& timeProvider);
+
+        // Light Dirty Marking (convenience wrapper for Chunk usage)
+        void MarkLightingDirty(const BlockIterator& iter);
 
         // Chunk Operations:
         Chunk* GetChunk(int32_t chunkX, int32_t chunkY); // 改为直接访问 m_loadedChunks
@@ -148,30 +163,11 @@ namespace enigma::voxel
         void ScheduleChunkMeshRebuild(Chunk* chunk);
 
         //-------------------------------------------------------------------------------------------
-        // Phase 7: Lighting System Support
+        // [REFACTORED] Lighting System - Now delegates to VoxelLightEngine
         //-------------------------------------------------------------------------------------------
-
-        // Get the size of the dirty light queue (for debugging and monitoring)
-        size_t GetDirtyLightQueueSize() const { return m_dirtyLightQueue.size(); }
-
-        // Mark a block as needing light recalculation and add to dirty light queue
-        void MarkLightingDirty(const BlockIterator& iter);
-
-        // Mark a block as dirty only if it is not fully opaque (convenience method)
-        void MarkLightingDirtyIfNotOpaque(const BlockIterator& iter);
-
-        // Process one dirty light block from the queue (BFS-style light propagation)
-        void ProcessNextDirtyLightBlock();
-
-        // Process all dirty lighting in a single frame (full queue processing)
-        void ProcessDirtyLighting();
 
         // Clean dirty light queue for a specific chunk (called during chunk unload)
         void UndirtyAllBlocksInChunk(Chunk* chunk);
-
-        // [Phase 7] Lighting Calculation - Compute Correct Light Values
-        uint8_t ComputeCorrectSkyLight(const BlockIterator& iter) const;
-        uint8_t ComputeCorrectBlockLight(const BlockIterator& iter) const;
 
     private:
         //-------------------------------------------------------------------------------------------
@@ -306,8 +302,9 @@ namespace enigma::voxel
         std::atomic<bool> m_isShuttingDown{false}; // Shutdown flag (thread-safe)
 
         //-------------------------------------------------------------------------------------------
-        // Phase 7: Lighting System State
+        // [REFACTORED] Lighting System State - Now uses VoxelLightEngine
         //-------------------------------------------------------------------------------------------
-        std::deque<BlockIterator> m_dirtyLightQueue; // Queue of blocks that need light recalculation
+        std::unique_ptr<VoxelLightEngine> m_voxelLightEngine; // Composite light engine
+        int                               m_skyDarken = 0; // Computed from time (0 at noon, 11 at midnight)
     };
 }

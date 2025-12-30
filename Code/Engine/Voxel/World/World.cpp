@@ -60,6 +60,9 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
 {
     using namespace enigma::voxel;
 
+    // [NEW] Initialize VoxelLightEngine
+    m_voxelLightEngine = std::make_unique<VoxelLightEngine>();
+
     // Create and initialize ChunkManager (follow NeoForge mode)
 
     // Initialize the ESF storage system
@@ -102,40 +105,14 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
 
 uint8_t World::GetSkyLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
 {
-    // Calculate chunk coordinates
-    int32_t chunkX = globalX >> 4; // globalX / 16
-    int32_t chunkY = globalY >> 4; // globalY / 16
-
-    // Get chunk
-    Chunk* chunk = GetChunk(chunkX, chunkY);
-    if (!chunk) return 0;
-
-    // Calculate local coordinates
-    int32_t localX = globalX & 0x0F; // globalX % 16
-    int32_t localY = globalY & 0x0F; // globalY % 16
-    int32_t localZ = globalZ;
-
-    // Delegate to Chunk
-    return chunk->GetSkyLight(localX, localY, localZ);
+    // [REFACTORED] Delegate to VoxelLightEngine
+    return m_voxelLightEngine->GetSkyLight(BlockPos{globalX, globalY, globalZ});
 }
 
 uint8_t World::GetBlockLight(int32_t globalX, int32_t globalY, int32_t globalZ) const
 {
-    // Calculate chunk coordinates
-    int32_t chunkX = globalX >> 4;
-    int32_t chunkY = globalY >> 4;
-
-    // Get chunk
-    Chunk* chunk = GetChunk(chunkX, chunkY);
-    if (!chunk) return 0;
-
-    // Calculate local coordinates
-    int32_t localX = globalX & 0x0F;
-    int32_t localY = globalY & 0x0F;
-    int32_t localZ = globalZ;
-
-    // Delegate to Chunk
-    return chunk->GetBlockLight(localX, localY, localZ);
+    // [REFACTORED] Delegate to VoxelLightEngine
+    return m_voxelLightEngine->GetBlockLight(BlockPos{globalX, globalY, globalZ});
 }
 
 bool World::GetIsSky(int32_t globalX, int32_t globalY, int32_t globalZ) const
@@ -739,8 +716,8 @@ void World::Update(float deltaTime)
     // Process completed chunk tasks from async workers (Phase 3)
     ProcessCompletedChunkTasks();
 
-    // Phase 7: Process dirty lighting before updating chunk meshes
-    ProcessDirtyLighting();
+    // [REFACTORED] Process dirty lighting via VoxelLightEngine
+    m_voxelLightEngine->RunLightUpdates();
 
     // Phase 1: Update chunk meshes on main thread (Assignment 03 requirement)
     UpdateChunkMeshes();
@@ -1850,318 +1827,46 @@ void World::UnloadFarthestChunk()
 }
 
 //-------------------------------------------------------------------------------------------
-// Phase 7: Lighting System Implementation
+// [REFACTORED] Lighting System - Now delegates to VoxelLightEngine
 //-------------------------------------------------------------------------------------------
-
-void World::MarkLightingDirty(const BlockIterator& iter)
-{
-    // 1. Check iterator validity
-    if (!iter.IsValid())
-    {
-        return; // Invalid iterator, cannot mark dirty
-    }
-
-    // 2. [FIX] Use Chunk's independent flag interface instead of BlockState
-    Chunk* chunk = iter.GetChunk();
-    if (!chunk)
-    {
-        return; // No chunk, cannot mark dirty
-    }
-
-    // 3. Get local coordinates within the chunk
-    int32_t x, y, z;
-    iter.GetLocalCoords(x, y, z);
-
-    // 4. Check if already in queue (avoid duplicates)
-    // [FIX] Now each block position has independent dirty flag
-    if (chunk->GetIsLightDirty(x, y, z))
-    {
-        return; // Already marked dirty, skip to avoid duplicate entries
-    }
-
-    // 5. Add to queue tail
-    m_dirtyLightQueue.push_back(iter);
-
-    // 6. Mark as dirty using Chunk interface
-    chunk->SetIsLightDirty(x, y, z, true);
-
-    /*LogDebug("world", "Marked block at (%d, %d, %d) as light dirty (queue size: %zu)",
-             iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z,
-             m_dirtyLightQueue.size());*/
-}
-
-void World::MarkLightingDirtyIfNotOpaque(const BlockIterator& iter)
-{
-    // 1. Check iterator validity
-    if (!iter.IsValid())
-    {
-        return; // Invalid iterator, cannot mark dirty
-    }
-
-    // 2. Get BlockState from iterator
-    BlockState* state = iter.GetBlock();
-    if (!state)
-    {
-        return; // No block state, cannot mark dirty
-    }
-
-    // 3. Only mark non-opaque blocks as dirty
-    // Opaque blocks refuse to become dirty (teacher's rule: "Opaque blocks refuse to become dirty")
-    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
-    if (!state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
-    {
-        MarkLightingDirty(iter);
-    }
-}
-
-void World::ProcessNextDirtyLightBlock()
-{
-    // 1. Check if queue is empty
-    if (m_dirtyLightQueue.empty())
-    {
-        return; // No dirty blocks to process
-    }
-
-    // 2. Pop front block from queue
-    BlockIterator iter = m_dirtyLightQueue.front();
-    m_dirtyLightQueue.pop_front();
-
-    // 3. Get chunk and local coordinates
-    Chunk* chunk = iter.GetChunk();
-    if (!chunk)
-    {
-        return; // Invalid chunk
-    }
-
-    int32_t x, y, z;
-    iter.GetLocalCoords(x, y, z);
-
-    // 4. Get BlockState for opaque check (still needed for propagation logic)
-    BlockState* state = iter.GetBlock();
-    if (!state)
-    {
-        return; // Invalid block state
-    }
-
-    // [NEW] Clear dirty flag using Chunk interface
-    chunk->SetIsLightDirty(x, y, z, false);
-
-    // [Phase 7] Calculate theoretically correct light values using implemented algorithms
-    uint8_t correctOutdoor = ComputeCorrectSkyLight(iter);
-    uint8_t correctIndoor  = ComputeCorrectBlockLight(iter);
-
-    // [NEW] Compare current values with correct values using Chunk interface
-    uint8_t currentOutdoor = chunk->GetSkyLight(x, y, z);
-    uint8_t currentIndoor  = chunk->GetBlockLight(x, y, z);
-
-    // 6. If values are incorrect, update and propagate
-    if (correctOutdoor != currentOutdoor || correctIndoor != currentIndoor)
-    {
-        // [NEW] Update light values using Chunk interface
-        chunk->SetSkyLight(x, y, z, correctOutdoor);
-        chunk->SetBlockLight(x, y, z, correctIndoor);
-
-        // Mark this chunk's mesh as dirty
-        chunk->MarkDirty();
-
-        // Propagate to 6 neighbors (only non-opaque blocks)
-        for (int dir = 0; dir < 6; ++dir)
-        {
-            BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
-            if (neighbor.IsValid())
-            {
-                BlockState* neighborState = neighbor.GetBlock();
-                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
-                if (neighborState && !neighborState->GetBlock()->IsOpaque(const_cast<BlockState*>(neighborState)))
-                {
-                    MarkLightingDirty(neighbor);
-
-                    // Also mark neighbor chunk's mesh as dirty
-                    Chunk* neighborChunk = neighbor.GetChunk();
-                    if (neighborChunk && neighborChunk != chunk)
-                    {
-                        ScheduleChunkMeshRebuild(neighborChunk);
-                    }
-                }
-            }
-        }
-
-        LogDebug("world", "Processed dirty light block at (%d, %d, %d), propagated to neighbors",
-                 iter.GetBlockPos().x, iter.GetBlockPos().y, iter.GetBlockPos().z);
-    }
-}
-
-void World::ProcessDirtyLighting()
-{
-    // Process all dirty lighting in a single frame until queue is empty
-    // This ensures lighting converges completely without multi-frame flickering
-    while (!m_dirtyLightQueue.empty())
-    {
-        ProcessNextDirtyLightBlock();
-    }
-
-    LogDebug("world", "Processed all dirty lighting (queue now empty)");
-}
 
 void World::UndirtyAllBlocksInChunk(Chunk* chunk)
 {
-    if (!chunk)
-    {
-        return; // Null chunk, nothing to clean
-    }
-
-    // Iterate through queue and remove all blocks belonging to this chunk
-    auto it = m_dirtyLightQueue.begin();
-    while (it != m_dirtyLightQueue.end())
-    {
-        if (it->GetChunk() == chunk)
-        {
-            // [FIX] Clear the block's dirty flag using Chunk interface
-            int32_t x, y, z;
-            it->GetLocalCoords(x, y, z);
-            chunk->SetIsLightDirty(x, y, z, false);
-
-            // Remove from queue
-            it = m_dirtyLightQueue.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-
-    LogDebug("world", "Cleaned dirty light queue for chunk at (%d, %d)",
-             chunk->GetChunkCoords().x, chunk->GetChunkCoords().y);
+    // [REFACTORED] Delegate to VoxelLightEngine
+    m_voxelLightEngine->UndirtyAllBlocksInChunk(chunk);
 }
 
-/**
- * @brief Compute the theoretically correct outdoor light value for a block
- *
- * This method calculates what the outdoor light influence should be for a given block
- * based on Assignment 05 rules:
- * - SKY blocks always have outdoor light = 15
- * - Opaque blocks always have outdoor light = 0
- * - Non-opaque blocks have outdoor light = max(neighbors) - 1 (minimum 0)
- *
- * @param iter BlockIterator pointing to the block to compute light for
- * @return Correct outdoor light value (0-15)
- */
-uint8_t World::ComputeCorrectSkyLight(const BlockIterator& iter) const
+//-----------------------------------------------------------------------------------------------
+// [NEW] UpdateSkyBrightness - Calculate sky darken from time
+// Reference: Minecraft Level.java:559-563
+//-----------------------------------------------------------------------------------------------
+
+void World::UpdateSkyBrightness(const ITimeProvider& timeProvider)
 {
-    const BlockState* state = iter.GetBlock();
-    Chunk*            chunk = iter.GetChunk();
+    // Reference: Minecraft Level.updateSkyBrightness()
+    // skyDarken = 0 at noon (max sun), 11 at midnight (dark)
+    float celestialAngle = timeProvider.GetCelestialAngle();
+    float skyBrightness  = 1.0f - (std::cos(celestialAngle * 3.14159f * 2.0f) * 2.0f + 0.2f);
 
-    // [STEP 1] SKY blocks always have maximum outdoor light
-    int32_t localX, localY, localZ;
-    iter.GetLocalCoords(localX, localY, localZ);
-    if (chunk && chunk->GetIsSky(localX, localY, localZ))
-    {
-        return 15;
-    }
+    // Clamp to [0, 1]
+    if (skyBrightness < 0.0f) skyBrightness = 0.0f;
+    if (skyBrightness > 1.0f) skyBrightness = 1.0f;
 
-    // [STEP 2] Opaque blocks block all outdoor light
-    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
-    if (state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
-    {
-        return 0;
-    }
-
-    // [STEP 3] Non-opaque blocks: propagate light from neighbors (max - 1)
-    uint8_t maxNeighborLight = 0;
-#undef max
-    // Check all 6 neighbors (North, South, East, West, Up, Down)
-    for (int dir = 0; dir < 6; ++dir)
-    {
-        BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
-
-        // Check if neighbor is valid (not out of bounds or null chunk)
-        if (neighbor.IsValid())
-        {
-            const BlockState* neighborState = neighbor.GetBlock();
-            if (neighborState)
-            {
-                // [REFACTORED] Use Chunk interface instead of BlockState
-                Chunk* neighborChunk = neighbor.GetChunk();
-                if (neighborChunk)
-                {
-                    int32_t nbrLocalX, nbrLocalY, nbrLocalZ;
-                    neighbor.GetLocalCoords(nbrLocalX, nbrLocalY, nbrLocalZ);
-                    uint8_t neighborLight = neighborChunk->GetSkyLight(nbrLocalX, nbrLocalY, nbrLocalZ);
-                    maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
-                }
-            }
-        }
-    }
-
-    // Light propagates with -1 attenuation per block (minimum 0)
-    return (maxNeighborLight > 0) ? (maxNeighborLight - 1) : 0;
+    m_skyDarken = static_cast<int>((1.0f - skyBrightness) * 11.0f);
 }
 
-/**
- * @brief Compute the theoretically correct indoor light value for a block
- *
- * This method calculates what the indoor light influence should be for a given block
- * based on Assignment 05 rules:
- * - Blocks that emit light have indoor light >= their emission level
- * - Opaque blocks have indoor light = their emission level (don't propagate from neighbors)
- * - Non-opaque blocks have indoor light = max(emission level, max(neighbors) - 1)
- *
- * Key difference from outdoor light:
- * - Emissive blocks (like glowstone) can have indoor light >= their emission level
- * - Glowstone (emission=15) has indoor light=15, but neighbors see 14
- * - Multiple light sources: take maximum, not sum
- *
- * @param iter BlockIterator pointing to the block to compute light for
- * @return Correct indoor light value (0-15)
- */
-uint8_t World::ComputeCorrectBlockLight(const BlockIterator& iter) const
+//-----------------------------------------------------------------------------------------------
+// [NEW] MarkLightingDirty - Convenience wrapper for Chunk usage
+// Delegates to both BlockLightEngine and SkyLightEngine
+//-----------------------------------------------------------------------------------------------
+
+void World::MarkLightingDirty(const BlockIterator& iter)
 {
-    const BlockState* state = iter.GetBlock();
+    if (!m_voxelLightEngine) return;
 
-    // [STEP 1] Get the block's intrinsic light emission level
-    uint8_t emissionLevel = state->GetBlock()->GetBlockLightEmission();
-
-    // [STEP 2] Opaque blocks: indoor light = emission level (don't propagate from neighbors)
-    // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
-    if (state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
-    {
-        return emissionLevel;
-    }
-
-    // [STEP 3] Non-opaque blocks: propagate light from neighbors (max - 1)
-    uint8_t maxNeighborLight = 0;
-#undef max
-    // Check all 6 neighbors (East, West, North, South, Up, Down)
-    for (int dir = 0; dir < 6; ++dir)
-    {
-        BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
-
-        // Check if neighbor is valid (not out of bounds or null chunk)
-        if (neighbor.IsValid())
-        {
-            const BlockState* neighborState = neighbor.GetBlock();
-            if (neighborState)
-            {
-                // [REFACTORED] Use Chunk interface instead of BlockState
-                Chunk* neighborChunk = neighbor.GetChunk();
-                if (neighborChunk)
-                {
-                    int32_t localX, localY, localZ;
-                    neighbor.GetLocalCoords(localX, localY, localZ);
-                    uint8_t neighborLight = neighborChunk->GetBlockLight(localX, localY, localZ);
-                    maxNeighborLight      = std::max(maxNeighborLight, neighborLight);
-                }
-            }
-        }
-    }
-
-    // Light propagates with -1 attenuation per block (minimum 0)
-    uint8_t propagatedLight = (maxNeighborLight > 0) ? (maxNeighborLight - 1) : 0;
-
-    // [STEP 4] Return the maximum of emission level and propagated light
-    // This ensures emissive blocks maintain their light level
-    // and can also accept higher light from neighbors
-    return std::max(emissionLevel, propagatedLight);
+    // Mark dirty in both light engines
+    m_voxelLightEngine->GetBlockEngine().MarkDirty(iter);
+    m_voxelLightEngine->GetSkyEngine().MarkDirty(iter);
 }
 
 //-----------------------------------------------------------------------------------------------
