@@ -7,6 +7,10 @@ using namespace enigma::core;
 
 namespace enigma::voxel
 {
+    LightEngine::LightEngine(World* world) : m_world(world)
+    {
+    }
+
     //-------------------------------------------------------------------------------------------
     // MarkDirty
     //

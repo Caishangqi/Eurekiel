@@ -61,7 +61,7 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
     using namespace enigma::voxel;
 
     // [NEW] Initialize VoxelLightEngine
-    m_voxelLightEngine = std::make_unique<VoxelLightEngine>();
+    m_voxelLightEngine = std::make_unique<VoxelLightEngine>(this);
 
     // Create and initialize ChunkManager (follow NeoForge mode)
 

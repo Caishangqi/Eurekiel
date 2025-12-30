@@ -26,7 +26,7 @@ namespace enigma::voxel
     class SkyLightEngine : public LightEngine
     {
     public:
-        SkyLightEngine() = default;
+        explicit SkyLightEngine(World* world);
 
         //-----------------------------------------------------------------------------------
         // Override from LightEngine

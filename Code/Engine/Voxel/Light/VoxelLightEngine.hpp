@@ -26,7 +26,7 @@ namespace enigma::voxel
     class VoxelLightEngine
     {
     public:
-        VoxelLightEngine();
+        explicit VoxelLightEngine(World* world);
         ~VoxelLightEngine() = default;
 
         //-----------------------------------------------------------------------------------

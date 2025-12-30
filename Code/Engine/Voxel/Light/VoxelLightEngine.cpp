@@ -16,13 +16,10 @@
 
 namespace enigma::voxel
 {
-    //-------------------------------------------------------------------------------------------
-    // Constructor
-    //-------------------------------------------------------------------------------------------
-    VoxelLightEngine::VoxelLightEngine()
-        : m_blockEngine(std::make_unique<BlockLightEngine>())
-          , m_skyEngine(std::make_unique<SkyLightEngine>())
+    VoxelLightEngine::VoxelLightEngine(World* world)
     {
+        m_blockEngine = std::make_unique<BlockLightEngine>(world);
+        m_skyEngine   = std::make_unique<SkyLightEngine>(world);
         LogInfo(LogVoxelLight, "VoxelLightEngine:: Initialized with BlockLightEngine and SkyLightEngine");
     }
 

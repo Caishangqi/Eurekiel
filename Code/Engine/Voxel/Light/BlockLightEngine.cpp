@@ -15,6 +15,10 @@
 #undef max
 namespace enigma::voxel
 {
+    BlockLightEngine::BlockLightEngine(World* world) : LightEngine(world)
+    {
+    }
+
     //-------------------------------------------------------------------------------------------
     // GetLightValue
     //

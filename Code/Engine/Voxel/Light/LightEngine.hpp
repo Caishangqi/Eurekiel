@@ -29,7 +29,8 @@ namespace enigma::voxel
     class LightEngine
     {
     public:
-        virtual ~LightEngine() = default;
+        virtual  ~LightEngine() = default;
+        explicit LightEngine(World* world);
 
         //-----------------------------------------------------------------------------------
         // Pure Virtual Methods - Subclass implements

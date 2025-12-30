@@ -24,7 +24,7 @@ namespace enigma::voxel
     class BlockLightEngine : public LightEngine
     {
     public:
-        BlockLightEngine() = default;
+        explicit BlockLightEngine(World* world);
 
         //-----------------------------------------------------------------------------------
         // Override from LightEngine

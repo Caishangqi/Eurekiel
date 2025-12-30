@@ -13,6 +13,10 @@
 #undef max
 namespace enigma::voxel
 {
+    SkyLightEngine::SkyLightEngine(World* world) : LightEngine(world)
+    {
+    }
+
     //-------------------------------------------------------------------------------------------
     // GetLightValue
     //
