@@ -12,6 +12,7 @@
 #include <algorithm>
 
 #include "Engine/Voxel/Chunk/Chunk.hpp"
+#include "Engine/Voxel/World/World.hpp"
 #undef max
 namespace enigma::voxel
 {
@@ -23,14 +24,23 @@ namespace enigma::voxel
     // GetLightValue
     //
     // Get block light value at world position
-    // [TODO] Requires World reference - implement when VoxelLightEngine is complete
+    // Reference: World::GetBlockLight (before refactoring)
     //-------------------------------------------------------------------------------------------
     uint8_t BlockLightEngine::GetLightValue(const BlockPos& pos) const
     {
-        // [TODO] Need World reference to get chunk and query light
-        // This will be implemented when VoxelLightEngine provides World access
-        UNUSED(pos);
-        return 0;
+        if (!m_world)
+        {
+            return 0;
+        }
+
+        // [SIMPLIFIED] Use World::GetChunkAt and BlockPos helper methods
+        Chunk* chunk = m_world->GetChunk(pos);
+        if (!chunk)
+        {
+            return 0;
+        }
+
+        return chunk->GetBlockLight(pos.GetBlockXInChunk(), pos.GetBlockYInChunk(), pos.z);
     }
 
     //-------------------------------------------------------------------------------------------
