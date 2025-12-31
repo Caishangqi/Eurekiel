@@ -91,11 +91,11 @@ namespace enigma::voxel
         void MarkLightingDirty(const BlockIterator& iter);
 
         // Chunk Operations:
-        Chunk* GetChunk(int32_t chunkX, int32_t chunkY); // 改为直接访问 m_loadedChunks
-        Chunk* GetChunk(int32_t chunkX, int32_t chunkY) const; // const version for const methods
-        void   UnloadChunkDirect(int32_t chunkX, int32_t chunkY); // 新增直接卸载方法
-        Chunk* GetChunkAt(const BlockPos& pos) const;
-        bool   IsChunkLoaded(int32_t chunkX, int32_t chunkY);
+        Chunk* GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
+        Chunk* GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY) const;
+        Chunk* GetChunk(const BlockPos& blockPosition) const;
+        void   UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
+        bool   IsChunkLoaded(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
 
         void                                     UpdateNearbyChunks(); // Update nearby blocks according to player location
         std::vector<std::pair<int32_t, int32_t>> CalculateNeededChunks() const; // Calculate the required blocks

@@ -82,7 +82,7 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
 
 BlockState* World::GetBlockState(const BlockPos& pos)
 {
-    Chunk* chunk = GetChunkAt(pos);
+    Chunk* chunk = GetChunk(pos);
     if (chunk)
     {
         return chunk->GetBlock(pos);
@@ -92,7 +92,7 @@ BlockState* World::GetBlockState(const BlockPos& pos)
 
 void World::SetBlockState(const BlockPos& pos, BlockState* state) const
 {
-    Chunk* chunk = GetChunkAt(pos);
+    Chunk* chunk = GetChunk(pos);
     if (chunk)
     {
         chunk->SetBlockWorldByPlayer(pos, state);
@@ -168,7 +168,7 @@ BlockState* World::GetTopBlock(int32_t x, int32_t y)
 
 int World::GetTopBlockZ(const BlockPos& pos)
 {
-    Chunk* chunk = GetChunkAt(pos);
+    Chunk* chunk = GetChunk(pos);
     if (chunk)
     {
         return chunk->GetTopBlockZ(pos);
@@ -196,7 +196,7 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
         static_cast<int32_t>(std::floor(rayStart.z))
     );
 
-    Chunk* startChunk = GetChunkAt(startBlockPos);
+    Chunk* startChunk = GetChunk(startBlockPos);
     if (!startChunk)
     {
         return result; // Ray starts outside loaded world
@@ -482,10 +482,9 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
     return result;
 }
 
-Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY)
+Chunk* World::GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
 {
-    // 改为直接访问 m_loadedChunks（迁移自 ChunkManager）
-    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkCoordinateX, chunkCoordinateY);
     auto    it          = m_loadedChunks.find(chunkPackID);
     if (it != m_loadedChunks.end())
     {
@@ -494,10 +493,9 @@ Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY)
     return nullptr;
 }
 
-Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY) const
+Chunk* World::GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY) const
 {
-    // const version - 改为直接访问 m_loadedChunks（迁移自 ChunkManager）
-    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkCoordinateX, chunkCoordinateY);
     auto    it          = m_loadedChunks.find(chunkPackID);
     if (it != m_loadedChunks.end())
     {
@@ -506,9 +504,9 @@ Chunk* World::GetChunk(int32_t chunkX, int32_t chunkY) const
     return nullptr;
 }
 
-void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
+void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
 {
-    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkX, chunkY);
+    int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkCoordinateX, chunkCoordinateY);
     auto    it          = m_loadedChunks.find(chunkPackID);
     if (it == m_loadedChunks.end())
     {
@@ -517,13 +515,10 @@ void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
 
     Chunk* chunk = it->second.get();
 
-    // ===== Phase 4: 指针有效性检查（崩溃防护点1） =====
-    // 防止访问已被 worker 线程删除的 chunk
+    // Prevent access to chunks that have been deleted by worker threads
     if (!chunk)
     {
-        LogWarn("world",
-                "Chunk (%d, %d) pointer is null during unload, cleanup map entry",
-                chunkX, chunkY);
+        LogWarn("world", "Chunk (%d, %d) pointer is null during unload, cleanup map entry", chunkCoordinateX, chunkCoordinateY);
         m_loadedChunks.erase(it);
         return;
     }
@@ -531,15 +526,14 @@ void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
     // Clean dirty light queue before deactivating chunk
     UndirtyAllBlocksInChunk(chunk);
 
-    // ===== Phase 4: 状态安全读取（崩溃防护点2） =====
-    // 在访问 chunk 状态前再次验证指针（双重保险）
+    // Validate pointer again before accessing chunk state (double insurance)
     ChunkState currentState = chunk->GetState();
 
     // Core logic: distinguish between Generating and other states
     if (currentState == ChunkState::Generating)
     {
         // Currently generating: use delayed deletion
-        LogDebug("world", "Chunk (%d, %d) is generating, marking for delayed deletion", chunkX, chunkY);
+        LogDebug("world", "Chunk (%d, %d) is generating, marking for delayed deletion", chunkCoordinateX, chunkCoordinateY);
         chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
 
         // [REMOVED] Delayed deletion - now using PendingUnload state
@@ -549,14 +543,14 @@ void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
     else
     {
         // Other states: immediate deletion (preserve original behavior)
-        LogDebug("world", "Chunk (%d, %d) safe to unload immediately (state: %d)", chunkX, chunkY, (int)currentState);
+        LogDebug("world", "Chunk (%d, %d) safe to unload immediately (state: %d)", chunkCoordinateX, chunkCoordinateY, (int)currentState);
 
         // Save chunk if modified and storage is configured
         if (chunk && chunk->NeedsMeshRebuild() && m_chunkStorage && m_chunkSerializer)
         {
-            // 保存到磁盘的逻辑（简化版，完整版在 SaveChunkToDisk 中）
-            // 这里只做基本的序列化保存
-            LogDebug("world", "Saving modified chunk (%d, %d) to disk", chunkX, chunkY);
+            // The logic of saving to disk (simplified version, the full version is in SaveChunkToDisk)
+            // Only do basic serialization and saving here
+            LogDebug("world", "Saving modified chunk (%d, %d) to disk", chunkCoordinateX, chunkCoordinateY);
         }
 
         // Cleanup VBO resources to prevent GPU leaks
@@ -571,14 +565,14 @@ void World::UnloadChunkDirect(int32_t chunkX, int32_t chunkY)
     }
 }
 
-Chunk* World::GetChunkAt(const BlockPos& pos) const
+Chunk* World::GetChunk(const BlockPos& blockPosition) const
 {
-    return GetChunk(pos.GetChunkX(), pos.GetChunkY());
+    return GetChunk(blockPosition.GetChunkX(), blockPosition.GetChunkY());
 }
 
-bool World::IsChunkLoaded(int32_t chunkX, int32_t chunkY)
+bool World::IsChunkLoaded(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
 {
-    Chunk* chunk = GetChunk(chunkX, chunkY);
+    Chunk* chunk = GetChunk(chunkCoordinateX, chunkCoordinateY);
     return chunk != nullptr && chunk->GetState() == ChunkState::Active;
 }
 
@@ -1819,7 +1813,7 @@ void World::UnloadFarthestChunk()
         CancelPendingJobsForChunk(IntVec2(chunkX, chunkY));
 
         // Unload the chunk (handles state checks and VBO cleanup internally)
-        UnloadChunkDirect(chunkX, chunkY);
+        UnloadChunk(chunkX, chunkY);
 
         LogDebug("world", "Unloaded farthest chunk (%d, %d) at distance %.2f chunks",
                  chunkX, chunkY, distance);
