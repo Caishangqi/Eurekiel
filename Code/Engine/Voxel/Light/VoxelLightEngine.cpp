@@ -10,13 +10,14 @@
 
 #include "VoxelLightEngine.hpp"
 #include "LightEngineCommon.hpp"
-#include <algorithm>
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
-
+#include "Engine/Voxel/Chunk/Chunk.hpp"
+#include "Engine/Voxel/World/World.hpp"
+#undef max
 namespace enigma::voxel
 {
-    VoxelLightEngine::VoxelLightEngine(World* world)
+    VoxelLightEngine::VoxelLightEngine(World* world) : m_world(world)
     {
         m_blockEngine = std::make_unique<BlockLightEngine>(world);
         m_skyEngine   = std::make_unique<SkyLightEngine>(world);
@@ -52,9 +53,32 @@ namespace enigma::voxel
     //-------------------------------------------------------------------------------------------
     void VoxelLightEngine::CheckBlock(const BlockPos& pos)
     {
-        // [TODO] Create BlockIterator from pos and mark dirty in both engines
-        // This requires World reference to create BlockIterator
-        // For now, this is a placeholder for future integration
+        // [STEP 1] Validate world reference
+        if (!m_world)
+        {
+            return;
+        }
+
+        // [STEP 2] [SIMPLIFIED] Use World::GetChunkAt and BlockPos helper methods
+        Chunk* chunk = m_world->GetChunk(pos);
+        if (!chunk || !chunk->IsActive())
+        {
+            return;
+        }
+
+        // [STEP 3] Calculate block index using BlockPos helper methods
+        int blockIndex = static_cast<int>(Chunk::CoordsToIndex(pos.GetBlockXInChunk(), pos.GetBlockYInChunk(), pos.z));
+
+        // [STEP 4] Create BlockIterator
+        BlockIterator iter(chunk, blockIndex);
+        if (!iter.IsValid())
+        {
+            return;
+        }
+
+        // [STEP 5] Mark dirty in both engines (Reference: Minecraft LevelLightEngine.checkBlock)
+        m_blockEngine->MarkDirty(iter);
+        m_skyEngine->MarkDirty(iter);
     }
 
     int VoxelLightEngine::RunLightUpdates()

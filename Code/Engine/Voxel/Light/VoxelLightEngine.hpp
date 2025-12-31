@@ -62,6 +62,7 @@ namespace enigma::voxel
         void UndirtyAllBlocksInChunk(Chunk* chunk);
 
     private:
+        World*                            m_world = nullptr; // [NEW] World reference for BlockIterator creation
         std::unique_ptr<BlockLightEngine> m_blockEngine;
         std::unique_ptr<SkyLightEngine>   m_skyEngine;
     };
