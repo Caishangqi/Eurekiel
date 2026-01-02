@@ -1,18 +1,26 @@
 /**
  * @file gbuffers_terrain.ps.hlsl
- * @brief Terrain Pixel Shader - G-Buffer Deferred Output
- * @date 2025-12-25
+ * @brief Terrain Pixel Shader - G-Buffer Output with Vanilla Lighting
+ * @date 2026-01-01
  *
  * G-Buffer Output Layout:
- * - colortex0 (SV_TARGET0): Albedo RGB (texture * vertex color)
+ * - colortex0 (SV_TARGET0): Lit Albedo RGB (with lighting applied)
  * - colortex1 (SV_TARGET1): Lightmap (R=blocklight, G=skylight)
  * - colortex2 (SV_TARGET2): Encoded Normal ([-1,1] -> [0,1])
  *
- * Reference: Engine/Voxel/World/TerrainVertexLayout.hpp
+ * Lighting Model (Minecraft Vanilla):
+ * - effectiveSkyLight = skyLight * skyBrightness
+ * - finalLight = max(blockLight, effectiveSkyLight)
+ * - litColor = albedo * finalLight
+ *
+ * Reference:
+ * - Engine/Voxel/World/TerrainVertexLayout.hpp
+ * - Minecraft LevelLightEngine.getRawBrightness()
+ * - voxel-light-engine/design.md
  */
 
 #include "../core/Common.hlsl"
-#include "../include/common_uniforms.hlsl"
+#include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0,1,2
 // Output: colortex0 (Albedo), colortex1 (Lightmap), colortex2 (Normal)
@@ -53,6 +61,32 @@ float3 EncodeNormal(float3 normal)
 }
 
 /**
+ * @brief Calculate final lighting intensity using Minecraft vanilla formula
+ * @param blockLight Block light value (0.0 - 1.0, from lightmap.r)
+ * @param skyLight Sky light value (0.0 - 1.0, from lightmap.g)
+ * @param skyBrightnessValue Time-based sky brightness (0.2 - 1.0, from celestial uniforms)
+ * @return Final light intensity (0.0 - 1.0)
+ *
+ * Reference: Minecraft LevelLightEngine.getRawBrightness()
+ * Formula: finalLight = max(blockLight, skyLight * skyBrightness)
+ *
+ * [IMPORTANT] This is NOT multiplication! It's max() operation.
+ * - Block light is independent of time
+ * - Sky light is scaled by skyBrightness (time-dependent)
+ * - Final light = whichever is brighter
+ */
+float CalculateLightIntensity(float blockLight, float skyLight, float skyBrightnessValue)
+{
+    // Scale sky light by time-based brightness
+    // skyBrightness: 1.0 at noon, 0.2 at midnight
+    float effectiveSkyLight = skyLight * skyBrightnessValue;
+
+    // Final light = max of block light and effective sky light
+    // [IMPORTANT] This matches Minecraft's lighting model
+    return max(blockLight, effectiveSkyLight);
+}
+
+/**
  * @brief Terrain pixel shader main entry
  * @param input Interpolated vertex data from VS
  * @return G-Buffer output for deferred lighting
@@ -74,9 +108,21 @@ PSOutput_Terrain main(PSInput_Terrain input)
     // [STEP 3] Calculate albedo (texture * vertex color)
     float4 albedo = texColor * input.Color;
 
-    // [STEP 4] Write G-Buffer outputs
-    // colortex0: Albedo with alpha
-    output.Color0 = albedo;
+    // [STEP 4] Calculate lighting using Minecraft vanilla formula
+    // Lightmap: x = blockLight, y = skyLight (both 0.0 - 1.0)
+    // skyBrightness: from celestial_uniforms.hlsl (0.2 - 1.0 based on time)
+    float blockLight     = input.LightmapCoord.x;
+    float skyLight       = input.LightmapCoord.y;
+    float lightIntensity = CalculateLightIntensity(blockLight, skyLight, skyBrightness);
+
+    // [STEP 5] Apply lighting to albedo
+    // Add minimum ambient (0.03) to prevent completely black areas
+    float  finalLight = max(lightIntensity, 0.03);
+    float4 litColor   = float4(albedo.rgb * finalLight, albedo.a); // TODO: Should happen in final or composite pass
+
+    // [STEP 6] Write G-Buffer outputs
+    // colortex0: Lit albedo with alpha
+    output.Color0 = litColor;
 
     // colortex1: Lightmap data (R=blocklight, G=skylight, B=0, A=1)
     output.Color1 = float4(input.LightmapCoord.x, input.LightmapCoord.y, 0.0, 1.0);
