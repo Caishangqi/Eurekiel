@@ -138,38 +138,27 @@ namespace enigma::graphic
 
     void UniformManager::UpdateRingBufferOffsets(UpdateFrequency frequency)
     {
-        const auto& slots = GetSlotsByFrequency(frequency);
-        if (slots.empty())
+        // [REFACTORED] Direct iteration over m_bufferStates instead of m_frequencyToSlotsMap
+        // This avoids the need to try multiple space values since state contains all info
+        for (auto& [typeId, state] : m_bufferStates)
         {
-            return;
-        }
-
-        for (uint32_t slotId : slots)
-        {
-            // [REFACTORED] Use unified GetBufferStateBySlot for both Engine and Custom
-            auto* state = GetBufferStateBySlot(slotId);
-            if (!state || !state->buffer)
-            {
-                continue;
-            }
-
-            // Skip Custom Buffers (handled separately via Descriptor Table)
-            if (state->space == BufferSpace::Custom)
+            // Filter by frequency, skip if not matching or buffer invalid
+            if (state.frequency != frequency || !state.buffer)
             {
                 continue;
             }
 
             // Calculate current Ring Buffer index
-            size_t currentIndex = state->GetCurrentRingIndex();
+            size_t currentIndex = state.GetCurrentRingIndex();
 
             // Delayed Fill: copy last value if index not updated
-            if (state->lastUpdatedIndex != currentIndex)
+            if (state.lastUpdatedIndex != currentIndex)
             {
-                void* destPtr = state->GetDataAt(currentIndex);
-                std::memcpy(destPtr, state->lastUpdatedValue.data(), state->elementSize);
+                void* destPtr = state.GetDataAt(currentIndex);
+                std::memcpy(destPtr, state.lastUpdatedValue.data(), state.elementSize);
             }
 
-            UpdateRootCBVOffset(slotId, currentIndex);
+            UpdateRootCBVOffset(state.slot, currentIndex);
         }
     }
 
