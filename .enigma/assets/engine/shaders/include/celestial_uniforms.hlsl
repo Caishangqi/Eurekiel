@@ -1,107 +1,79 @@
 /**
  * @file celestial_uniforms.hlsl
- * @brief Celestial Data Constant Buffer - For Sky and Cloud Rendering
- * @date 2025-11-26
- * @version v1.0
+ * @brief Celestial Uniforms - Iris Compatible (CelestialUniforms.java:74-82)
+ * @date 2026-01-02
+ * @version v2.0
  *
- * Key Points:
- * 1. Uses cbuffer to store celestial angles, cloud time, sun/moon positions
- * 2. Register b15 - User-defined area (>= 15)
- * 3. PerFrame update frequency - Updated once per frame
- * 4. Field order must match CelestialConstantBuffer.hpp exactly
- * 5. float3 maps to C++ Vec3 (HLSL compiler handles padding automatically)
+ * [Iris Reference]
+ *   Source: CelestialUniforms.java:74-82
+ *   Path: Iris-multiloader-new/common/src/main/java/net/irisshaders/iris/uniforms/CelestialUniforms.java
  *
- * Architecture Benefits:
- * - High performance: Root CBV direct access, no indirection
- * - Memory aligned: 16-byte aligned, GPU friendly
- * - Minecraft compatible: Celestial angle system follows vanilla spec
+ * [Iris Fields] (Line 74-82)
+ *   - sunAngle (celestialAngle)
+ *   - sunPosition
+ *   - moonPosition
+ *   - shadowAngle
+ *   - shadowLightPosition
+ *   - upPosition
  *
- * Usage Scenarios:
- * - gbuffers_skybasic.hlsl - Basic sky rendering
- * - gbuffers_skytextured.hlsl - Sun/moon texture rendering
- * - gbuffers_clouds.hlsl - Cloud rendering
- * - composite.ps.hlsl - Post-processing composition
+ * [Memory Layout] 96 bytes (6 rows x 16 bytes)
+ *   Row 0 [0-15]:   celestialAngle, compensatedCelestialAngle, cloudTime, skyBrightness
+ *   Row 1 [16-31]:  sunPosition.xyz, shadowAngle
+ *   Row 2 [32-47]:  moonPosition.xyz, _padding2
+ *   Row 3 [48-63]:  shadowLightPosition.xyz, _padding3
+ *   Row 4 [64-79]:  upPosition.xyz, _padding4
+ *   Row 5 [80-95]:  colorModulator.xyzw
  *
  * C++ Counterpart: Code/Game/Framework/RenderPass/ConstantBuffer/CelestialConstantBuffer.hpp
  */
 
-/**
- * @brief CelestialUniforms - Celestial Data Constant Buffer (48 bytes)
- *
- * Field Descriptions:
- * - celestialAngle: Celestial angle (0.0-1.0), maps to Minecraft worldTime % 24000
- *   - 0.0 = Sunrise (tick 0)
- *   - 0.25 = Noon (tick 6000)
- *   - 0.5 = Sunset (tick 12000)
- *   - 0.75 = Midnight (tick 18000)
- *
- * - compensatedCelestialAngle: Compensated angle (celestialAngle + 0.25)
- *   - Used for smooth sunrise/sunset transitions
- *   - Prevents sudden sky color changes
- *
- * - cloudTime: Cloud time (tick * 0.03)
- *   - Used for cloud animation offset
- *   - Controls cloud movement speed
- *
- * - sunPosition: Sun position (world coordinates)
- *   - Calculated from celestialAngle via matrix transforms
- *   - Used for lighting and sunrise/sunset gradients
- *
- * - moonPosition: Moon position (world coordinates)
- *   - Opposite to sun position (180 degree offset)
- *   - Used for night lighting
- *
- * Memory Layout (16-byte aligned):
- * [0-15]   celestialAngle, compensatedCelestialAngle, cloudTime, padding
- * [16-31]  sunPosition (float3), padding
- * [32-47]  moonPosition (float3), padding
- */
-cbuffer CelestialUniforms: register(b9,space1)
+cbuffer CelestialUniforms: register(b9, space1)
 {
-    float celestialAngle; // Celestial angle (0.0-1.0)
+    // ==================== Row 0: Angle Data (16 bytes) ====================
+    float celestialAngle; // @iris sunAngle (0.0-1.0)
     float compensatedCelestialAngle; // Compensated angle (+0.25)
     float cloudTime; // Cloud time (tick * 0.03)
-    float skyBrightness; // Sky brightness (0.0-1.0), noon=1.0, midnight=0.0
+    float skyBrightness; // Sky brightness (0.0-1.0)
 
-    float3 sunPosition; // Sun position (world coordinates)
-    // float _padding2;                // [REMOVED] HLSL compiler auto-pads
+    // ==================== Row 1: Sun Position (16 bytes) ====================
+    // @iris sunPosition
+    float3 sunPosition; // Sun direction (view space), length 100
+    float  shadowAngle; // @iris shadowAngle (0.0-0.5)
 
-    float3 moonPosition; // Moon position (world coordinates)
-    //float  _padding3;    // Explicit padding for C++ struct alignment
+    // ==================== Row 2: Moon Position (16 bytes) ====================
+    // @iris moonPosition
+    float3 moonPosition; // Moon direction (view space), length 100
+    float  CelestialUniforms_padding2;
 
-    // ==========================================================================
-    // [NEW] Color Modulator - Matches Minecraft/Iris ColorModulator
-    // ==========================================================================
-    // Reference: Minecraft DynamicTransforms.ColorModulator
-    //            Iris iris_ColorModulator (ExternallyManagedUniforms.java:49)
-    //
-    // Usage: In shader, multiply vertex color by this value
-    //   finalColor = input.Color * colorModulator;
-    //
-    // For sunset strip:
-    //   - CPU sets colorModulator = sunriseColor (from getSunriseColor())
-    //   - Vertex color is pure white (255,255,255)
-    //   - Result: white * sunriseColor = actual sunset color
-    // ==========================================================================
+    // ==================== Row 3: Shadow Light Position (16 bytes) ====================
+    // @iris shadowLightPosition
+    // Logic: isDay() ? sunPosition : moonPosition (CelestialUniforms.java:93-95)
+    float3 shadowLightPosition; // Shadow light source position
+    float  CelestialUniforms_padding3;
+
+    // ==================== Row 4: Up Position (16 bytes) ====================
+    // @iris upPosition
+    float3 upPosition; // Up direction (view space), length 100
+    float  CelestialUniforms_padding4;
+
+    // ==================== Row 5: Color Modulator (16 bytes) ====================
+    // @iris colorModulator (ExternallyManagedUniforms.java:49)
     float4 colorModulator; // Color modulator (RGBA), default (1,1,1,1)
 };
-
 
 /**
  * Usage Example:
  *
- * // In gbuffers_skytextured.ps.hlsl:
- * #include "include/celestial_uniforms.hlsl"
+ * #include "../include/celestial_uniforms.hlsl"
  *
  * float4 main(PSInput input) : SV_TARGET
  * {
- *     // Calculate sky color based on celestial angle
- *     float sunFactor = saturate(1.0 - abs(celestialAngle - 0.25) * 4.0);
- *     float3 skyColor = lerp(nightColor, dayColor, sunFactor);
+ *     // Use shadowLightPosition for shadow calculations
+ *     float3 lightDir = normalize(shadowLightPosition);
  *
- *     // Use sun position for lighting calculations
- *     float3 lightDir = normalize(sunPosition);
+ *     // shadowAngle for shadow intensity
+ *     float shadowIntensity = saturate(shadowAngle * 2.0);
  *
- *     return float4(skyColor, 1.0);
+ *     return float4(litColor, 1.0);
  * }
  */
