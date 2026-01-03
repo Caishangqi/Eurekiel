@@ -42,6 +42,19 @@ namespace enigma::voxel
         virtual float GetSunAngle() const = 0;
 
         //-------------------------------------------------------------------------------------------
+        // [NEW] Day/Night check - Reference: Iris CelestialUniforms.java:60-65
+        // Returns true if sun is above horizon (sunAngle <= 0.5)
+        //-------------------------------------------------------------------------------------------
+        virtual bool IsDay() const = 0;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Shadow angle - Reference: Iris CelestialUniforms.java:34-42
+        // Returns shadow angle in range [0, 0.5]
+        // Day: shadowAngle = sunAngle, Night: shadowAngle = sunAngle - 0.5
+        //-------------------------------------------------------------------------------------------
+        virtual float GetShadowAngle() const = 0;
+
+        //-------------------------------------------------------------------------------------------
         // [NEW] Celestial body direction vectors - Reference: Iris CelestialUniforms.java:119-133
         // Returns VIEW SPACE DIRECTION VECTOR (w=0), not position!
         // The vector points toward the celestial body, ignoring camera translation.
@@ -49,6 +62,22 @@ namespace enigma::voxel
         //-------------------------------------------------------------------------------------------
         virtual Vec3 CalculateSunPosition(const Mat44& gbufferModelView) const = 0;
         virtual Vec3 CalculateMoonPosition(const Mat44& gbufferModelView) const = 0;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Shadow light position - Reference: Iris CelestialUniforms.java:93-95
+        // Returns the position of the current shadow-casting light source (sun or moon)
+        // Day: returns sunPosition, Night: returns moonPosition
+        // @param gbufferModelView The World->Camera transform matrix
+        //-------------------------------------------------------------------------------------------
+        virtual Vec3 CalculateShadowLightPosition(const Mat44& gbufferModelView) const = 0;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Up direction vector - Reference: Iris CelestialUniforms.java:44-58
+        // Returns VIEW SPACE direction pointing toward world "up" (zenith)
+        // Used for atmospheric scattering and sky rendering calculations
+        // @param gbufferModelView The World->Camera transform matrix
+        //-------------------------------------------------------------------------------------------
+        virtual Vec3 CalculateUpPosition(const Mat44& gbufferModelView) const = 0;
 
         //-------------------------------------------------------------------------------------------
         // [NEW] Cloud color calculation - Reference: Minecraft ClientLevel.java:673-703
