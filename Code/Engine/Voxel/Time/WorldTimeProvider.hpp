@@ -51,10 +51,30 @@ namespace enigma::voxel
         float GetSunAngle() const override;
 
         //-------------------------------------------------------------------------------------------
+        // [NEW] Day/Night check - Reference: Iris CelestialUniforms.java:60-65
+        //-------------------------------------------------------------------------------------------
+        bool IsDay() const override;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Shadow angle - Reference: Iris CelestialUniforms.java:34-42
+        //-------------------------------------------------------------------------------------------
+        float GetShadowAngle() const override;
+
+        //-------------------------------------------------------------------------------------------
         // [NEW] Celestial body direction vectors - Reference: Iris CelestialUniforms.java:119-133
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateSunPosition(const Mat44& gbufferModelView) const override;
         Vec3 CalculateMoonPosition(const Mat44& gbufferModelView) const override;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Shadow light position - Reference: Iris CelestialUniforms.java:93-95
+        //-------------------------------------------------------------------------------------------
+        Vec3 CalculateShadowLightPosition(const Mat44& gbufferModelView) const override;
+
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Up direction vector - Reference: Iris CelestialUniforms.java:44-58
+        //-------------------------------------------------------------------------------------------
+        Vec3 CalculateUpPosition(const Mat44& gbufferModelView) const override;
 
         //-------------------------------------------------------------------------------------------
         // [NEW] Cloud color - Reference: Minecraft ClientLevel.java:673-703

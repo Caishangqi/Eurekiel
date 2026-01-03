@@ -87,6 +87,35 @@ namespace enigma::voxel
         }
     }
 
+    //-------------------------------------------------------------------------------------------
+    // [NEW] IsDay - Reference: Iris CelestialUniforms.java:60-65
+    // Determines whether it is day or night based on the sun angle.
+    // Day when sunAngle <= 0.5 (sun above horizon)
+    //-------------------------------------------------------------------------------------------
+    bool WorldTimeProvider::IsDay() const
+    {
+        return GetSunAngle() <= 0.5f;
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // [NEW] GetShadowAngle - Reference: Iris CelestialUniforms.java:34-42
+    // Returns shadow angle in range [0, 0.5]
+    // The shadow angle represents the progress of the shadow-casting celestial body
+    // Day: shadowAngle = sunAngle (sun casts shadows)
+    // Night: shadowAngle = sunAngle - 0.5 (moon casts shadows)
+    //-------------------------------------------------------------------------------------------
+    float WorldTimeProvider::GetShadowAngle() const
+    {
+        float shadowAngle = GetSunAngle();
+
+        if (!IsDay())
+        {
+            shadowAngle -= 0.5f;
+        }
+
+        return shadowAngle;
+    }
+
     // Reference: Sodium CloudRenderer.java - uses continuous ticks for cloudTime
     float WorldTimeProvider::GetCloudTime() const
     {
@@ -230,6 +259,62 @@ namespace enigma::voxel
         // Moon direction: initial magnitude -100 (opposite to sun in local space)
         // Transformed to view space direction vector (w=0)
         return CalculateCelestialPosition(-100.0f, gbufferModelView);
+    }
+
+    //=============================================================================
+    // [NEW] Shadow Light Position - Reference: Iris CelestialUniforms.java:93-95
+    //=============================================================================
+    // Returns the position of the current shadow-casting light source.
+    // During day: sun casts shadows -> return sunPosition
+    // During night: moon casts shadows -> return moonPosition
+    //
+    // Iris implementation:
+    //   public Vector4f getShadowLightPosition() {
+    //       return isDay() ? getSunPosition() : getMoonPosition();
+    //   }
+    //=============================================================================
+    Vec3 WorldTimeProvider::CalculateShadowLightPosition(const Mat44& gbufferModelView) const
+    {
+        return IsDay() ? CalculateSunPosition(gbufferModelView) : CalculateMoonPosition(gbufferModelView);
+    }
+
+    //=============================================================================
+    // [NEW] Up Direction Vector - Reference: Iris CelestialUniforms.java:44-58
+    //=============================================================================
+    // Returns VIEW SPACE direction pointing toward world "up" (zenith).
+    // This is used for atmospheric scattering calculations and determining
+    // the angle between view direction and zenith.
+    //
+    // Iris implementation:
+    //   Vector4f upVector = new Vector4f(0.0F, 100.0F, 0.0F, 0.0F);
+    //   Matrix4f preCelestial = new Matrix4f(gbufferModelView);
+    //   preCelestial.rotate(Axis.YP.rotationDegrees(-90.0F));
+    //   upVector = preCelestial.transform(upVector);
+    //
+    // Coordinate adaptation (Iris Y-up -> Engine Z-up):
+    //   Iris: upVector = (0, 100, 0) pointing up along Y
+    //   Engine: upVector = (0, 0, 100) pointing up along Z
+    //=============================================================================
+    Vec3 WorldTimeProvider::CalculateUpPosition(const Mat44& gbufferModelView) const
+    {
+        // [Step 1] Initial up direction - pointing UP (+Z in our Z-up engine)
+        // In Iris (Y-up), this would be (0, 100, 0)
+        Vec3 upVector(0.0f, 0.0f, 100.0f);
+
+        // [Step 2] Apply gbufferModelView to transform to view space
+        // Note: Unlike celestial positions, we don't apply celestial rotation here
+        // because "up" is always world up, not dependent on time of day
+        Mat44 preCelestial = gbufferModelView;
+
+        // [Step 3] Apply -90 degree Y rotation (matching Iris's YP.rotationDegrees(-90))
+        // This aligns the coordinate system for proper sky orientation
+        Mat44 rotY = Mat44::MakeYRotationDegrees(-90.0f);
+        preCelestial.Append(rotY);
+
+        // [Step 4] Transform as DIRECTION VECTOR (w=0)
+        upVector = preCelestial.TransformVectorQuantity3D(upVector);
+
+        return upVector;
     }
 
     //=============================================================================
