@@ -117,8 +117,11 @@ PSOutput_Terrain main(PSInput_Terrain input)
 
     // [STEP 5] Apply lighting to albedo
     // Add minimum ambient (0.03) to prevent completely black areas
-    float  finalLight = max(lightIntensity, 0.03);
-    float4 litColor   = float4(albedo.rgb * finalLight, albedo.a); // TODO: Should happen in final or composite pass
+    float finalLight = max(lightIntensity, 0.03);
+    // TODO: Should happen in final or composite pass
+    // See https://shaders.properties/current/guides/your-first-shaderpack/3_deferred_lighting/, the deferred light equation should be
+    // color.rgb *= blocklight + skylight + ambient + sunlight;
+    float4 litColor = float4(albedo.rgb * finalLight, albedo.a);
 
     // [STEP 6] Write G-Buffer outputs
     // colortex0: Lit albedo with alpha
