@@ -6,105 +6,42 @@
 namespace enigma::graphic
 {
     /**
-     * @brief World/Weather Uniforms - 世界和天气数据
+     * @brief World/Weather Uniforms - Weather and Time Data
      *
-     * Iris官方文档参考:
-     * https://shaders.properties/current/reference/uniforms/world/
+     * [Iris Reference]
+     *   https://shaders.properties/current/reference/uniforms/world/
      *
-     * 教学要点:
-     * 1. 此结构体对应Iris "World/Weather" Uniform分类
-     * 2. 存储在GPU StructuredBuffer，通过worldAndWeatherBufferIndex访问
-     * 3. 使用alignas确保与HLSL对齐要求一致
-     * 4. 所有字段名称、类型、语义与Iris官方文档完全一致
+     * [IMPORTANT] Celestial fields moved to CelestialUniforms (CelestialConstantBuffer.hpp)
+     *   - sunPosition, moonPosition, shadowLightPosition -> CelestialUniforms
+     *   - sunAngle (celestialAngle), shadowAngle -> CelestialUniforms
+     *   - upPosition -> CelestialUniforms
      *
-     * HLSL访问示例:
+     * This struct now contains ONLY weather and time data:
+     *   - moonPhase, rainStrength, wetness, thunderStrength
+     *   - lightningBoltPosition, worldTime, worldDay
+     *
+     * HLSL Access:
      * ```hlsl
      * StructuredBuffer<WorldAndWeatherUniforms> worldWeatherBuffer =
      *     ResourceDescriptorHeap[worldAndWeatherBufferIndex];
-     * float3 sunPos = worldWeatherBuffer[0].sunPosition;
      * float rainStr = worldWeatherBuffer[0].rainStrength;
      * ```
-     *
-     * @note alignas(16)用于Vec3/Vec4确保16字节对齐（HLSL标准对齐）
-     * @note alignas(4)用于int/float确保4字节对齐
      */
 #pragma warning(push)
-#pragma warning(disable: 4324) // 结构体因alignas而填充 - 预期行为
+#pragma warning(disable: 4324) // structure padding due to alignas - expected
     struct WorldAndWeatherUniforms
     {
         /**
-         * @brief 太阳位置（视图空间）
-         * @type vec3
-         * @iris sunPosition
-         * @range 长度为100
-         *
-         * 教学要点:
-         * - 视图空间中的太阳方向向量
-         * - 长度固定为100（归一化向量 * 100）
-         * - 类似upPosition的表示方式
-         */
-        alignas(16) Vec3 sunPosition;
-
-        /**
-         * @brief 月亮位置（视图空间）
-         * @type vec3
-         * @iris moonPosition
-         * @range 长度为100
-         *
-         * 教学要点:
-         * - 视图空间中的月亮方向向量
-         * - 长度固定为100（归一化向量 * 100）
-         */
-        alignas(16) Vec3 moonPosition;
-
-        /**
-         * @brief 阴影光源位置（视图空间）
-         * @type vec3
-         * @iris shadowLightPosition
-         * @range 长度为100
-         *
-         * 教学要点:
-         * - 指向太阳或月亮（取决于哪个更高）
-         * - 用于阴影计算的主光源方向
-         * - 长度固定为100
-         */
-        alignas(16) Vec3 shadowLightPosition;
-
-        /**
-         * @brief 太阳角度
-         * @type float
-         * @iris sunAngle
-         * @range [0,1]
-         *
-         * 教学要点:
-         * - 太阳在完整昼夜循环中的角度
-         * - 0.0 = 日出, 0.25 = 正午, 0.5 = 日落, 0.75 = 午夜
-         */
-        alignas(4) float sunAngle;
-
-        /**
-         * @brief 阴影角度
-         * @type float
-         * @iris shadowAngle
-         * @range [0,0.5]
-         *
-         * 教学要点:
-         * - 阴影光源（太阳或月亮）的角度
-         * - 范围0-0.5，对应半天周期
-         */
-        alignas(4) float shadowAngle;
-
-        /**
-         * @brief 月相
+         * @brief Moon phase
          * @type int
          * @iris moonPhase
          * @range [0,7]
          *
-         * 教学要点:
-         * - 0: 满月
-         * - 1-3: 渐亏月
-         * - 4: 新月
-         * - 5-7: 渐盈月
+         * Values:
+         * - 0: Full moon
+         * - 1-3: Waning moon
+         * - 4: New moon
+         * - 5-7: Waxing moon
          */
         alignas(4) int moonPhase;
 
@@ -184,21 +121,16 @@ namespace enigma::graphic
         alignas(4) int worldDay;
 
         /**
-         * @brief 默认构造函数 - 初始化为合理默认值
+         * @brief Default constructor
          */
         WorldAndWeatherUniforms()
-            : sunPosition(Vec3(0.0f, 100.0f, 0.0f)) // 默认正上方，长度100
-              , moonPosition(Vec3(0.0f, -100.0f, 0.0f)) // 默认正下方，长度100
-              , shadowLightPosition(Vec3(0.0f, 100.0f, 0.0f)) // 默认太阳方向
-              , sunAngle(0.25f) // 默认正午
-              , shadowAngle(0.25f) // 默认正午阴影角
-              , moonPhase(0) // 默认满月
-              , rainStrength(0.0f) // 默认无雨
-              , wetness(0.0f) // 默认干燥
-              , thunderStrength(0.0f) // 默认无雷暴
-              , lightningBoltPosition(Vec4(0.0f, 0.0f, 0.0f, 0.0f)) // 默认无闪电
-              , worldTime(6000) // 默认正午
-              , worldDay(0) // 默认第0天
+            : moonPhase(0) // Full moon
+              , rainStrength(0.0f) // No rain
+              , wetness(0.0f) // Dry
+              , thunderStrength(0.0f) // No thunder
+              , lightningBoltPosition(Vec4(0.0f, 0.0f, 0.0f, 0.0f)) // No lightning
+              , worldTime(6000) // Noon
+              , worldDay(0) // Day 0
         {
         }
     };
