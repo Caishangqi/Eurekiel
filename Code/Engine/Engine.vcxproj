@@ -451,8 +451,11 @@
     <ClCompile Include="Graphic\Bundle\ShaderBundle.cpp"/>
     <ClCompile Include="Graphic\Bundle\ShaderBundleCommon.cpp"/>
     <ClCompile Include="Graphic\Bundle\UserDefinedBundle.cpp"/>
-    <ClCompile Include="Graphic\Camera\CameraCreateInfo.cpp" />
-    <ClCompile Include="Graphic\Camera\EnigmaCamera.cpp" />
+    <ClCompile Include="Graphic\Camera\CameraBase.cpp"/>
+    <ClCompile Include="Graphic\Camera\CameraCommon.cpp"/>
+    <ClCompile Include="Graphic\Camera\OrthographicCamera.cpp"/>
+    <ClCompile Include="Graphic\Camera\PerspectiveCamera.cpp"/>
+    <ClCompile Include="Graphic\Camera\ShadowCamera.cpp"/>
     <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp" />
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
@@ -519,7 +522,7 @@
     <ClCompile Include="Graphic\Target\RenderTargetManager.cpp" />
     <ClCompile Include="Graphic\Target\RTTypes.cpp" />
     <ClCompile Include="Graphic\Target\ShadowColorManager.cpp" />
-    <ClCompile Include="Graphic\Target\ShadowTargetManager.cpp" />
+    <ClCompile Include="Graphic\Target\ShadowTextureManager.cpp"/>
     <ClCompile Include="Input\AnalogJoystick.cpp" />
     <ClCompile Include="Input\InputSystem.cpp" />
     <ClCompile Include="Input\KeyButtonState.cpp" />
@@ -948,8 +951,12 @@
     <ClInclude Include="Graphic\Bundle\ShaderBundle.hpp"/>
     <ClInclude Include="Graphic\Bundle\ShaderBundleCommon.hpp"/>
     <ClInclude Include="Graphic\Bundle\UserDefinedBundle.hpp"/>
-    <ClInclude Include="Graphic\Camera\CameraCreateInfo.hpp" />
-    <ClInclude Include="Graphic\Camera\EnigmaCamera.hpp" />
+    <ClInclude Include="Graphic\Camera\CameraBase.hpp"/>
+    <ClInclude Include="Graphic\Camera\CameraCommon.hpp"/>
+    <ClInclude Include="Graphic\Camera\ICamera.hpp"/>
+    <ClInclude Include="Graphic\Camera\OrthographicCamera.hpp"/>
+    <ClInclude Include="Graphic\Camera\PerspectiveCamera.hpp"/>
+    <ClInclude Include="Graphic\Camera\ShadowCamera.hpp"/>
     <ClInclude Include="Graphic\Core\EnigmaGraphicCommon.hpp" />
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
@@ -994,7 +1001,7 @@
     <ClInclude Include="Graphic\Target\RenderTargetHelper.hpp" />
     <ClInclude Include="Graphic\Target\RTTypes.hpp" />
     <ClInclude Include="Graphic\Target\ShadowColorManager.hpp" />
-    <ClInclude Include="Graphic\Target\ShadowTargetManager.hpp" />
+    <ClInclude Include="Graphic\Target\ShadowTextureManager.hpp"/>
     <ClInclude Include="Voxel\Biome\Biome.hpp" />
     <ClInclude Include="Voxel\Biome\BiomeSource.hpp" />
     <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp" />
