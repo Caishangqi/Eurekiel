@@ -85,42 +85,81 @@ cbuffer PerObjectUniforms : register(b1)
 
 cbuffer Matrices : register(b7)
 {
-    // =========================================================================
-    // GBuffer矩阵 (主渲染Pass)
-    // =========================================================================
-    float4x4 gbufferModelView; // GBuffer模型视图矩阵
-    float4x4 gbufferModelViewInverse; // GBuffer模型视图逆矩阵
-    float4x4 cameraToRenderTransform; // [NEW] 相机到渲染坐标系转换（Camera → Render）
-    float4x4 gbufferProjection; // GBuffer投影矩阵
-    float4x4 gbufferProjectionInverse; // GBuffer投影逆矩阵
-    float4x4 gbufferPreviousModelView; // 上一帧GBuffer模型视图矩阵
-    float4x4 gbufferPreviousProjection; // 上一帧GBuffer投影矩阵
+    float4x4 gbufferView;
+    float4x4 gbufferViewInverse;
+    float4x4 gbufferProjection;
+    float4x4 gbufferProjectionInverse;
+    float4x4 gbufferRenderer;
 
-    // =========================================================================
-    // Shadow矩阵 (阴影Pass)
-    // =========================================================================
-    float4x4 shadowModelView; // 阴影模型视图矩阵
-    float4x4 shadowModelViewInverse; // 阴影模型视图逆矩阵
-    float4x4 shadowProjection; // 阴影投影矩阵
-    float4x4 shadowProjectionInverse; // 阴影投影逆矩阵
+    /**
+     * @brief 阴影模型视图矩阵
+     * @type mat4
+     * @iris shadowModelView
+     *
+     * 教学要点:
+     * - 将模型空间转换到阴影视图空间
+     * - 用于shadow着色器
+     */
+    float4x4 shadowModelView;
 
-    // =========================================================================
-    // 通用矩阵 (当前几何体)
-    // =========================================================================
-    float4x4 modelViewMatrix; // 当前模型视图矩阵
-    float4x4 modelViewMatrixInverse; // 当前模型视图逆矩阵
-    float4x4 projectionMatrix; // 当前投影矩阵
-    float4x4 projectionMatrixInverse; // 当前投影逆矩阵
-    float4x4 normalMatrix; // 法线矩阵（3x3存储在4x4中）
+    /**
+     * @brief 阴影模型视图逆矩阵
+     * @type mat4
+     * @iris shadowModelViewInverse
+     *
+     * 教学要点: 将阴影视图空间转换回模型空间
+     */
+    float4x4 shadowModelViewInverse;
 
-    // =========================================================================
-    // 辅助矩阵
-    // =========================================================================
-    float4x4 textureMatrix; // 纹理矩阵
+    /**
+     * @brief 阴影投影矩阵
+     * @type mat4
+     * @iris shadowProjection
+     *
+     * 教学要点:
+     * - 将阴影视图空间转换到阴影裁剪空间
+     * - 通常使用正交投影
+     */
+    float4x4 shadowProjection;
 
-    // [REMOVED] modelMatrix 和 modelMatrixInverse 已移至 PerObjectUniforms (register(b1))
-    // 参见上方 cbuffer PerObjectUniforms : register(b1)
-    // 原因：Per-Object 数据应独立于 Camera 矩阵数据，避免职责混淆
+    /**
+     * @brief 阴影投影逆矩阵
+     * @type mat4
+     * @iris shadowProjectionInverse
+     *
+     * 教学要点: 将阴影裁剪/屏幕空间转换回阴影视图空间
+     */
+    float4x4 shadowProjectionInverse;
+
+    /**
+     * @brief 法线矩阵（3x3存储在4x4中）
+     * @type mat3 (stored as mat4)
+     * @iris normalMatrix
+     *
+     * 教学要点:
+     * - 用于变换法线向量
+     * - 通常为ModelView矩阵的逆转置
+     * - HLSL中使用前3x3部分
+     */
+    float4x4 normalMatrix;
+
+    /**
+     * @brief 纹理矩阵
+     * @type mat4
+     * @iris textureMatrix
+     *
+     * 教学要点:
+     * - 用于纹理坐标变换（gl_TextureMatrix[0]）
+     * - 主要用于 gbuffers_armor_glint 的纹理滚动效果
+     * - 也可能被模组应用到其他几何体
+     * - 等价于 GLSL 中的 gl_TextureMatrix[0]
+     *
+     * HLSL使用示例:
+     * ```hlsl
+     * float2 coord = mul(textureMatrix, float4(vaUV0, 0.0, 1.0)).xy;
+     * ```
+     */
+    float4x4 textureMatrix;
 };
 
 
@@ -341,8 +380,8 @@ VSOutput StandardVertexTransform(VSInput input)
     // 1. 顶点位置变换
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
-    float4 cameraPos = mul(gbufferModelView, worldPos);
-    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    float4 cameraPos = mul(gbufferView, worldPos);
+    float4 renderPos = mul(gbufferRenderer, cameraPos);
     float4 clipPos   = mul(gbufferProjection, renderPos);
 
     output.Position = clipPos;
@@ -354,8 +393,8 @@ VSOutput StandardVertexTransform(VSInput input)
     output.Normal = normalize(mul(normalMatrix, float4(input.Normal, 0.0)).xyz);
 
     // 5. 切线和副切线
-    output.Tangent   = normalize(mul(gbufferModelView, float4(input.Tangent, 0.0)).xyz);
-    output.Bitangent = normalize(mul(gbufferModelView, float4(input.Bitangent, 0.0)).xyz);
+    output.Tangent   = normalize(mul(gbufferView, float4(input.Tangent, 0.0)).xyz);
+    output.Bitangent = normalize(mul(gbufferView, float4(input.Bitangent, 0.0)).xyz);
 
     return output;
 }
