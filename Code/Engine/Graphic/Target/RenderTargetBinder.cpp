@@ -4,7 +4,7 @@
 #include "Engine/Graphic/Target/RenderTargetManager.hpp"
 #include "Engine/Graphic/Target/DepthTextureManager.hpp"
 #include "Engine/Graphic/Target/ShadowColorManager.hpp"
-#include "Engine/Graphic/Target/ShadowTargetManager.hpp"
+#include "Engine/Graphic/Target/ShadowTextureManager.hpp"
 #include "Engine/Graphic/Target/D12RenderTarget.hpp"
 #include "Engine/Graphic/Target/D12DepthTexture.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
@@ -18,21 +18,21 @@ namespace enigma::graphic
     // ============================================================================
 
     RenderTargetBinder::RenderTargetBinder(
-        RenderTargetManager* rtManager,
-        DepthTextureManager* depthManager,
-        ShadowColorManager*  shadowColorManager,
-        ShadowTargetManager* shadowTargetManager
+        RenderTargetManager*  rtManager,
+        DepthTextureManager*  depthManager,
+        ShadowColorManager*   shadowColorManager,
+        ShadowTextureManager* ShadowTextureManager
     )
         : m_rtManager(rtManager)
           , m_depthManager(depthManager)
           , m_shadowColorManager(shadowColorManager)
-          , m_shadowTargetManager(shadowTargetManager)
+          , m_ShadowTextureManager(ShadowTextureManager)
           , m_totalBindCalls(0)
           , m_cacheHitCount(0)
           , m_actualBindCalls(0)
     {
         // 验证所有Manager指针
-        if (!m_rtManager || !m_depthManager || !m_shadowColorManager || !m_shadowTargetManager)
+        if (!m_rtManager || !m_depthManager || !m_shadowColorManager || !m_ShadowTextureManager)
         {
             LogError("RenderTargetBinder", "One or more Manager pointers are null!");
         }

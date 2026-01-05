@@ -3,7 +3,7 @@
  * @brief 渲染目标统一绑定器 - 聚合所有RT Manager并提供状态缓存机制
  *
  * 设计要点:
- * 1. 聚合4个Manager（RenderTargetManager, DepthTextureManager, ShadowColorManager, ShadowTargetManager）
+ * 1. 聚合4个Manager（RenderTargetManager, DepthTextureManager, ShadowColorManager, ShadowTextureManager）
  * 2. 提供统一的BindRenderTargets() API，支持RTType分类
  * 3. 状态缓存机制，避免冗余OMSetRenderTargets调用（目标：减少70%+状态切换）
  * 4. 延迟绑定机制，FlushBindings()才实际调用D3D12 API
@@ -34,7 +34,7 @@ namespace enigma::graphic
     class RenderTargetManager;
     class DepthTextureManager;
     class ShadowColorManager;
-    class ShadowTargetManager;
+    class ShadowTextureManager;
 
     /**
      * @class RenderTargetBinder
@@ -68,17 +68,17 @@ namespace enigma::graphic
          * @param rtManager RenderTargetManager指针（管理ColorTex 0-15）
          * @param depthManager DepthTextureManager指针（管理DepthTex 0-2）
          * @param shadowColorManager ShadowColorManager指针（管理ShadowColor 0-7）
-         * @param shadowTargetManager ShadowTargetManager指针（管理ShadowTex 0-1）
+         * @param ShadowTextureManager ShadowTextureManager指针（管理ShadowTex 0-1）
          *
          * 教学要点:
          * - 使用原始指针而不是智能指针（Manager由RendererSubsystem管理生命周期）
          * - 不持有Manager所有权，仅保存引用
          */
         RenderTargetBinder(
-            RenderTargetManager* rtManager,
-            DepthTextureManager* depthManager,
-            ShadowColorManager*  shadowColorManager,
-            ShadowTargetManager* shadowTargetManager
+            RenderTargetManager*  rtManager,
+            DepthTextureManager*  depthManager,
+            ShadowColorManager*   shadowColorManager,
+            ShadowTextureManager* ShadowTextureManager
         );
 
         ~RenderTargetBinder() = default;
@@ -349,10 +349,10 @@ namespace enigma::graphic
         // Manager指针（不持有所有权）
         // ========================================================================
 
-        RenderTargetManager* m_rtManager; ///< ColorTex管理器
-        DepthTextureManager* m_depthManager; ///< DepthTex管理器
-        ShadowColorManager*  m_shadowColorManager; ///< ShadowColor管理器
-        ShadowTargetManager* m_shadowTargetManager; ///< ShadowTex管理器
+        RenderTargetManager*  m_rtManager; ///< ColorTex管理器
+        DepthTextureManager*  m_depthManager; ///< DepthTex管理器
+        ShadowColorManager*   m_shadowColorManager; ///< ShadowColor管理器
+        ShadowTextureManager* m_ShadowTextureManager; ///< ShadowTex管理器
 
         // ========================================================================
         // 状态管理
