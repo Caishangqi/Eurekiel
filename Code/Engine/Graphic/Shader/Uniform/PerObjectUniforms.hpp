@@ -1,6 +1,5 @@
 ﻿#pragma once
-#include "Engine/Core/Rgba8.hpp"
-#include "Engine/Graphic/Camera/EnigmaCamera.hpp"
+#include "Engine/Math/Mat44.hpp"
 
 namespace enigma::graphic
 {
