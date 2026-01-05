@@ -35,10 +35,10 @@ VSOutput main(VSInput input)
 
     // Sky geometry is centered at origin gbufferModelView already transformed in CPU, rotation makes it follow camera orientation
     float4 worldPos  = float4(input.Position, 1.0);
-    float4 cameraPos = mul(gbufferModelView, worldPos);
+    float4 cameraPos = mul(gbufferView, worldPos);
 
     // [STEP 3] Camera to Render Transform (Player rotation)
-    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    float4 renderPos = mul(gbufferRenderer, cameraPos);
 
     // [STEP 4] Render to Clip Transform (Projection)
     float4 clipPos = mul(gbufferProjection, renderPos);

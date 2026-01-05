@@ -148,7 +148,7 @@ PSOutput main(PSInput input)
     if (renderStage == RENDER_STAGE_SKY)
     {
         // Extract camera world position from gbufferModelViewInverse
-        float3 cameraWorldPos = gbufferModelViewInverse[3].xyz;
+        float3 cameraWorldPos = gbufferViewInverse[3].xyz;
         float  cameraZ        = cameraWorldPos.z; // Camera Z-axis (vertical height)
 
         // Calculate Void Gradient (Minecraft Algorithm)

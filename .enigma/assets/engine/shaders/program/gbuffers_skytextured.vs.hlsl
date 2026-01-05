@@ -42,10 +42,10 @@ VSOutput main(VSInput input)
 
     // [STEP 2] Apply view rotation ONLY (translation removed - see SkyRenderPass.cpp:141)
     // This ensures sun/moon stay at infinite distance, unaffected by player movement
-    float4 viewPos = mul(gbufferModelView, rotatedPos);
+    float4 viewPos = mul(gbufferView, rotatedPos);
 
     // [STEP 3] Apply camera-to-render coordinate transform
-    float4 renderPos = mul(cameraToRenderTransform, viewPos);
+    float4 renderPos = mul(gbufferRenderer, viewPos);
 
     // [STEP 4] Apply projection
     float4 clipPos = mul(gbufferProjection, renderPos);

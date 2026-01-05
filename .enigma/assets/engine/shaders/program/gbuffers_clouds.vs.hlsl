@@ -53,8 +53,8 @@ VSOutput main(VSInput input)
     // [FIX] Add modelMatrix transformation for smooth scrolling animation of clouds
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
-    float4 cameraPos = mul(gbufferModelView, worldPos);
-    float4 renderPos = mul(cameraToRenderTransform, cameraPos);
+    float4 cameraPos = mul(gbufferView, worldPos);
+    float4 renderPos = mul(gbufferRenderer, cameraPos);
     float4 clipPos   = mul(gbufferProjection, renderPos);
 
     output.Position = clipPos;

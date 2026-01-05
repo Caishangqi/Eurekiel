@@ -65,8 +65,8 @@ VSOutput_Terrain main(VSInput_Terrain input)
     // [STEP 1] Transform position: Model -> World -> View -> Clip
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
-    float4 viewPos   = mul(gbufferModelView, worldPos);
-    float4 renderPos = mul(cameraToRenderTransform, viewPos);
+    float4 viewPos   = mul(gbufferView, worldPos);
+    float4 renderPos = mul(gbufferRenderer, viewPos);
     float4 clipPos   = mul(gbufferProjection, renderPos);
 
     output.Position = clipPos;
