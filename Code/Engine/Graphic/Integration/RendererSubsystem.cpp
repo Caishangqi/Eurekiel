@@ -14,7 +14,7 @@
 #include "Engine/Graphic/Target/D12RenderTarget.hpp" // D12RenderTarget类定义
 #include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
 #include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
-#include "Engine/Graphic/Target/ShadowTargetManager.hpp" // Shadow Target管理器
+#include "Engine/Graphic/Target/ShadowTextureManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // [ADD] For UniformException hierarchy
@@ -25,7 +25,7 @@
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
 // [DELETE] Removed PSOStateCollector.hpp - class deleted after refactor
 #include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
-#include "Engine/Graphic/Camera/EnigmaCamera.hpp" // EnigmaCamera支持
+#include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // M6.2: ShaderProgram
 #include "Engine/Graphic/Shader/Program/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
 #include "Engine/Graphic/Shader/Program/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
@@ -352,10 +352,10 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("ShadowColorManager initialization failed! Error: %s", e.what()))
     }
 
-    // ==================== 创建ShadowTargetManager (M6.1.5) ====================
+    // ==================== 创建ShadowTextureManager (M6.1.5) ====================
     try
     {
-        LogInfo(LogRenderer, "Creating ShadowTargetManager...");
+        LogInfo(LogRenderer, "Creating ShadowTextureManager...");
 
         std::array<RTConfig, 2> shadowTexConfigs = {};
         for (int i = 0; i < 2; ++i)
@@ -370,13 +370,13 @@ void RendererSubsystem::Startup()
             );
         }
 
-        m_shadowTargetManager = std::make_unique<ShadowTargetManager>(shadowTexConfigs);
-        LogInfo(LogRenderer, "ShadowTargetManager created successfully");
+        m_ShadowTextureManager = std::make_unique<ShadowTextureManager>(shadowTexConfigs);
+        LogInfo(LogRenderer, "ShadowTextureManager created successfully");
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create ShadowTargetManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("ShadowTargetManager initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ShadowTextureManager: {}", e.what());
+        ERROR_AND_DIE(Stringf("ShadowTextureManager initialization failed! Error: %s", e.what()))
     }
 
     // ==================== 创建RenderTargetBinder (M6.1.5) ====================
@@ -388,7 +388,7 @@ void RendererSubsystem::Startup()
             m_renderTargetManager.get(),
             m_depthTextureManager.get(),
             m_shadowColorManager.get(),
-            m_shadowTargetManager.get()
+            m_ShadowTextureManager.get()
         );
 
         LogInfo(LogRenderer, "RenderTargetBinder created successfully");
@@ -1139,72 +1139,47 @@ void RendererSubsystem::FlipRenderTarget(int rtIndex)
     m_renderTargetManager->FlipRenderTarget(rtIndex);
 }
 
-void RendererSubsystem::BeginCamera(const EnigmaCamera& camera)
+// [NEW] BeginCamera - ICamera interface version
+void RendererSubsystem::BeginCamera(const ICamera& camera)
 {
-    LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - Start setting camera parameters");
+    LogInfo(LogRenderer, "BeginCamera(ICamera):: Camera type: %d", static_cast<int>(camera.GetCameraType()));
 
-    // 验证UniformManager是否已初始化
+    // Validate UniformManager
     if (!m_uniformManager)
     {
-        LogError(LogRenderer, "BeginCamera(EnigmaCamera): UniformManager is not initialized");
+        LogError(LogRenderer, "BeginCamera(ICamera):: UniformManager is not initialized");
         ERROR_AND_DIE("UniformManager is not initialized")
     }
 
-    // 验证渲染系统是否准备就绪
+    // Validate rendering system ready
     if (!IsReadyForRendering())
     {
-        LogError(LogRenderer, "BeginCamera(EnigmaCamera): The rendering system is not ready");
+        LogError(LogRenderer, "BeginCamera(ICamera):: The rendering system is not ready");
         ERROR_AND_DIE("The rendering system is not ready")
     }
 
     try
     {
-        // 上传到GPU（新API - 类型安全，自动同步）
-        m_uniformManager->UploadBuffer<MatricesUniforms>(camera.GetMatricesUniforms());
+        // [NEW] Create MatricesUniforms and let camera fill it
+        MatricesUniforms uniforms;
+        camera.UpdateMatrixUniforms(uniforms);
 
-        // Shadow管理由Game侧负责，引擎侧只提供接口
-        // 理由：不是每个场景都需要shadow，且光照类型多样（sun light, point light, spot light等）
-        //
-        // 游戏侧使用方式：
-        // if (sceneHasSunLight) {
-        //     auto shadowMatrices = CalculateSunLightShadows(camera);
-        //     renderer->SetShadowMatrices(shadowMatrices.modelView, shadowMatrices.projection);
-        // } else {
-        //     renderer->ClearShadowMatrices();
-        // }
+        // Upload to GPU
+        m_uniformManager->UploadBuffer<MatricesUniforms>(uniforms);
 
-
-        // ========================================================================
-        // 3. 设置视口（如果需要）
-        // ========================================================================
-
-        // TODO: 设置视口 - 需要根据EnigmaCamera的viewport设置
-        // 可能需要调用 D3D12RenderSystem::SetViewport() 或类似API
-
-        LogInfo(LogRenderer, "BeginCamera(EnigmaCamera) - Camera parameter settings are completed");
-        LogInfo(LogRenderer, " - Camera position: (%f, %f, %f)",
-                camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
-        LogInfo(LogRenderer, " - Camera mode: %s",
-                camera.IsPerspective() ? "Perspective projection" : "Orthogonal projection");
-
-        // TODO: 添加更多调试信息（如FOV、近平面、远平面等）
-        if (camera.IsPerspective())
-        {
-            LogInfo(LogRenderer, " - FOV: %f degrees, aspect ratio: %f",
-                    camera.GetPerspectiveFOV(), camera.GetPerspectiveAspect());
-        }
+        LogInfo(LogRenderer, "BeginCamera(ICamera):: Camera matrices uploaded successfully");
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "BeginCamera(EnigmaCamera): Exception - %s", e.what());
+        LogError(LogRenderer, "BeginCamera(ICamera):: Exception - %s", e.what());
+        ERROR_AND_DIE(e.what())
     }
 }
 
-void RendererSubsystem::EndCamera(const EnigmaCamera& camera)
+void RendererSubsystem::EndCamera(const ICamera& camera)
 {
-    UNUSED(camera);
-    // TODO (M2.1): 实现Camera清理
-    LogWarn(LogRenderer, "EndCamera: Not implemented yet (M2.1)");
+    UNUSED(camera)
+    LogWarn(LogRenderer, "EndCamera:: Not implemented yet");
 }
 
 D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned stride)
@@ -1890,49 +1865,16 @@ void RendererSubsystem::BindRenderTargets(
     int                        depthIndex
 )
 {
-    if (!m_renderTargetBinder)
-    {
-        LogError(LogRenderer, "BindRenderTargets: RenderTargetBinder not initialized");
-        return;
-    }
-
     m_renderTargetBinder->BindRenderTargets(rtTypes, indices, depthType, depthIndex);
 }
 
 void RendererSubsystem::CopyDepth(int srcIndex, int dstIndex)
 {
-    // Verify that DepthTextureManager has been initialized
-    if (!m_depthTextureManager)
-    {
-        LogError(LogRenderer, "CopyDepthBuffer: DepthTextureManager not initialized");
-        return;
-    }
-
-    // Delegate DepthTextureManager to perform copying (CommandList will be obtained internally)
-    try
-    {
-        m_depthTextureManager->CopyDepth(srcIndex, dstIndex);
-
-        const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
-        LogInfo(LogRenderer, "Copied depth buffer {} -> {}",
-                depthNames[srcIndex], depthNames[dstIndex]);
-    }
-    catch (const std::exception& e)
-    {
-        LogError(LogRenderer, "CopyDepthBuffer failed: {}", e.what());
-    }
+    m_depthTextureManager->CopyDepth(srcIndex, dstIndex);
 }
 
 int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
 {
-    // Verify that DepthTextureManager has been initialized
-    if (!m_depthTextureManager)
-    {
-        LogWarn(LogRenderer, "GetActiveDepthBufferIndex: DepthTextureManager not initialized, returning 0");
-        return 0; // Return to default value
-    }
-
-    // Delegate DepthTextureManager query
     return m_depthTextureManager->GetActiveDepthBufferIndex();
 }
 

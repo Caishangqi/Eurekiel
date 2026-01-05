@@ -25,6 +25,7 @@
 #include "../Core/RenderState.hpp"
 #include "RendererSubsystemConfig.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
+#include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
 #include "Engine/Graphic/Target/RenderTargetManager.hpp"
 
@@ -407,16 +408,15 @@ namespace enigma::graphic
         void FlipRenderTarget(int rtIndex);
 
         /**
-         * @brief 开始Camera渲染 - EnigmaCamera重载版本
-         * @param camera 要使用的EnigmaCamera
+         * @brief [NEW] Begin camera rendering - ICamera interface version
+         * @param camera ICamera interface reference (supports all camera types)
          *
-         * 教学要点：
-         * - 从EnigmaCamera读取数据并设置到UniformManager
-         * - 数据流：EnigmaCamera → RendererSubsystem::BeginCamera → UniformManager → GPU
-         * - 调用UploadDirtyBuffersToGPU()确保数据上传到GPU
-         * - 设置视口等渲染状态
+         * Teaching Points:
+         * - Calls camera.UpdateMatrixUniforms() to fill MatricesUniforms
+         * - Data flow: ICamera → UpdateMatrixUniforms → UniformManager → GPU
+         * - Supports PerspectiveCamera, OrthographicCamera, ShadowCamera, etc.
          */
-        void BeginCamera(const class EnigmaCamera& camera);
+        void BeginCamera(const ICamera& camera);
 
         /**
          * @brief 结束Camera渲染
@@ -425,7 +425,7 @@ namespace enigma::graphic
          * - 清理Camera状态
          * - 对应Iris的endCamera()
          */
-        void EndCamera(const EnigmaCamera& camera);
+        void EndCamera(const ICamera& camera);
 
         /**
          * @brief 创建VertexBuffer
@@ -1274,15 +1274,6 @@ namespace enigma::graphic
         void CopyDepth(int srcIndex, int dstIndex);
 
         /**
-         * @brief 复制深度纹理（已弃用，请使用CopyDepth）
-         * @param srcIndex 源深度纹理索引 [0-2]
-         * @param dstIndex 目标深度纹理索引 [0-2]
-         * @deprecated 使用CopyDepth代替
-         */
-        [[deprecated("Use CopyDepth instead")]]
-
-
-        /**
          * @brief 查询当前激活的深度缓冲索引
          * @return 当前活动的深度缓冲索引 [0-2]
          *
@@ -1478,7 +1469,7 @@ namespace enigma::graphic
         std::unique_ptr<class ShadowColorManager> m_shadowColorManager;
 
         /// Shadow Target管理器 - 管理2个shadowtex纹理 (Iris兼容)
-        std::unique_ptr<class ShadowTargetManager> m_shadowTargetManager;
+        std::unique_ptr<class ShadowTextureManager> m_ShadowTextureManager;
 
         /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;
