@@ -27,13 +27,17 @@
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 #include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
-#include "Engine/Graphic/Target/RenderTargetManager.hpp"
+#include "Engine/Graphic/Target/ColorTextureProvider.hpp"
+#include "Engine/Graphic/Target/DepthTextureProvider.hpp"
+#include "Engine/Graphic/Target/ShadowColorProvider.hpp"
+#include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
 
 using namespace enigma::core;
 using namespace enigma::graphic;
 
 namespace enigma::graphic
 {
+    class IRenderTargetProvider;
     class ShaderProgram;
     class ShaderSource;
     class ProgramSet;
@@ -344,68 +348,50 @@ namespace enigma::graphic
 
 #pragma region Rendering API
         /**
-         * @brief 使用ShaderProgram并绑定RenderTarget（Mode A + Mode B）
-         * @param shaderProgram Shader程序指针
-         * @param rtOutputs RT输出索引列表（Mode A），为空时从DRAWBUFFERS读取
-         * @param depthIndex 深度纹理索引（默认0，范围0-2）
+         * @brief Use ShaderProgram and bind RenderTargets (pair-based API)
+         * @param shaderProgram Shader program pointer
+         * @param targets RT binding list as {RTType, index} pairs. Empty = bind SwapChain
          *
          * @details
-         * M6.2核心API - 支持两种RT绑定模式：
-         * - Mode A: 参数指定RT输出 - UseProgram(program, {0,1,2,3})
-         * - Mode B: 显式绑定 - BindRenderTargets() + UseProgram(program)
-         *
-         * 实现逻辑：
-         * 1. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
-         * 2. 如果drawBuffers非空，调用RenderTargetBinder绑定RT
-         * 3. 调用ShaderProgram.Use()设置PSO和Root Signature
-         * 4. 调用RenderTargetBinder.FlushBindings()刷新RT绑定
+         * Unified RT binding with pair-based targets:
+         * - Non-empty targets: call RenderTargetBinder->BindRenderTargets(targets)
+         * - Empty targets: bind SwapChain as default RT
          *
          * @code
-         * // Mode A示例：参数指定RT输出（适合简单场景）
-         * renderer->UseProgram(gbuffersProgram, {0, 1, 2, 3}); // 绑定colortex0-3
-         * renderer->DrawScene();
+         * // GBuffer pass: 4 ColorTex + 1 DepthTex
+         * renderer->UseProgram(gbuffersProgram, {
+         *     {RTType::ColorTex, 0}, {RTType::ColorTex, 1},
+         *     {RTType::ColorTex, 2}, {RTType::ColorTex, 3},
+         *     {RTType::DepthTex, 0}
+         * });
          *
-         * // Mode B示例：显式绑定（适合复杂场景）
-         * renderer->BindRenderTargets({RTType::ColorTex, RTType::ColorTex}, {0, 1});
-         * renderer->UseProgram(gbuffersProgram); // 自动从DRAWBUFFERS读取
-         * renderer->DrawScene();
+         * // Shadow pass: ShadowTex only
+         * renderer->UseProgram(shadowProgram, {{RTType::ShadowTex, 0}});
          *
-         * // 使用depthtex1进行深度测试
-         * renderer->UseProgram(gbuffersProgram, {0, 1, 2, 3}, 1);
-         *
-         * // Flip示例：历史帧访问（TAA、Motion Blur）
-         * renderer->UseProgram(compositeProgram, {0}); // 写入colortex0
-         * renderer->DrawFullscreenQuad();
-         * renderer->FlipRenderTarget(0); // 翻转colortex0，下一帧读取历史数据
+         * // Final pass: output to SwapChain (empty targets)
+         * renderer->UseProgram(finalProgram);
          * @endcode
-         *
-         * 教学要点：
-         * - 理解DirectX 12的PSO（Pipeline State Object）是不可变的
-         * - 学习动态OMSetRenderTargets()的标准做法
-         * - 掌握Iris DRAWBUFFERS指令的解析和应用
          */
-        void UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs = {}, int depthIndex = 0);
+        void UseProgram(
+            std::shared_ptr<ShaderProgram>             shaderProgram,
+            const std::vector<std::pair<RTType, int>>& targets = {}
+        );
 
         /**
-         * @brief 翻转指定RenderTarget的Main/Alt状态
-         * @param rtIndex RenderTarget索引 [0, activeColorTexCount)
+         * @brief [NEW] Get RenderTarget provider by RTType
+         * @param rtType RT type (ColorTex, DepthTex, ShadowColor, ShadowTex)
+         * @return Provider pointer for dynamic RT configuration
          *
          * @details
-         * M6.2.3 - RenderTarget翻转API
+         * Allows App-side to access providers for dynamic resolution changes.
+         * Delegates to m_renderTargetBinder->GetProvider(rtType).
          *
-         * 业务逻辑：
-         * - 当前帧：读Main写Alt → Flip() → 下一帧：读Alt写Main
-         * - 实现历史帧数据访问（TAA、Motion Blur等技术需要）
-         *
-         * 实现：
-         * - 直接调用RenderTargetBinder->GetRenderTargetManager()->FlipRenderTarget(rtIndex)
-         * - 边界检查由RenderTargetManager内部处理
-         *
-         * 教学要点：
-         * - 理解双缓冲Ping-Pong机制
-         * - 学习历史帧数据在时序算法中的应用
+         * @code
+         * auto colorProvider = renderer->GetProvider(RTType::ColorTex);
+         * colorProvider->SetRtConfig(newConfig);
+         * @endcode
          */
-        void FlipRenderTarget(int rtIndex);
+        IRenderTargetProvider* GetProvider(RTType rtType);
 
         /**
          * @brief [NEW] Begin camera rendering - ICamera interface version
@@ -803,27 +789,30 @@ namespace enigma::graphic
 
         /**
          * @brief Clear a specific render target with the given color
-         * @param rtIndex Render target index [0, activeColorTexCount)
+         * @param rtType RT type (ColorTex, ShadowColor)
+         * @param rtIndex Render target index
          * @param clearColor Clear color (default: black)
          *
          * @details
-         * Provides flexible RT clearing without rebinding or affecting other RTs.
-         * Useful for selective clearing in multi-pass rendering.
+         * [REFACTORED] Provider-based Architecture
+         * - 使用 IRenderTargetProvider 统一接口
+         * - 支持 ColorTex 和 ShadowColor 类型
+         * - 符合 SOLID 原则（依赖倒置）
          *
          * @code
          * // Clear colortex0 to red
-         * renderer->ClearRenderTarget(0, Rgba8::RED);
+         * renderer->ClearRenderTarget(RTType::ColorTex, 0, Rgba8::RED);
          *
-         * // Clear colortex1 to black (default)
-         * renderer->ClearRenderTarget(1);
+         * // Clear shadowcolor0 to black
+         * renderer->ClearRenderTarget(RTType::ShadowColor, 0, Rgba8::BLACK);
          * @endcode
          *
          * Teaching Points:
          * - Understand DirectX 12's ClearRenderTargetView API
-         * - Learn selective RT clearing without full rebind
+         * - Learn Provider-based RT architecture
          * - Master flexible render target management
          */
-        void ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearColor = Rgba8::BLACK);
+        void ClearRenderTarget(RTType rtType, int rtIndex, const Rgba8& clearColor = Rgba8::BLACK);
 
         /**
          * @brief Clear a specific depth-stencil texture
@@ -974,46 +963,12 @@ namespace enigma::graphic
 #pragma region RenderTarget Management
 
         /**
-         * @brief 配置GBuffer的colortex数量
-         * @param colorTexCount colortex数量，范围 [1, 16]
-         *
-         * @note 配置时机：
-         *   - 选项1（推荐）: 在Initialize()之前调用ConfigureGBuffer()
-         *   - 选项2: 在Initialize()时从配置文件读取并调用
-         *   - 选项3: 运行时动态调整（需要重新创建RenderTargetManager）
-         *
-         * @note 内存优化示例（1920x1080分辨率）：
-         *   - 4个colortex:  节省 ~99.4MB (75%)
-         *   - 8个colortex:  节省 ~66.3MB (50%)
-         *   - 12个colortex: 节省 ~33.2MB (25%)
-         *
-         * @warning 如果在RenderTargetManager已创建后调用，需要重新创建RenderTargetManager
-         */
-        void ConfigureGBuffer(int colorTexCount);
-
-        /**
          * @brief 获取当前配置的GBuffer colortex数量
          * @return int 当前数量 [1-16]
          *
          * Milestone 3.0: 从m_configuration读取配置值（不再使用m_config）
          */
         int GetGBufferColorTexCount() const { return m_configuration.gbufferColorTexCount; }
-
-        /**
-         * @brief 获取RenderTargetManager实例
-         * @return RenderTargetManager指针，如果未初始化返回nullptr
-         *
-         * Milestone 3.0任务4: 提供对RenderTargetManager的访问
-         * - 用于手动控制RT翻转状态
-         * - 用于查询Bindless索引
-         * - 用于生成Mipmap等高级操作
-         */
-        RenderTargetManager* GetRenderTargetManager() const noexcept
-        {
-            return m_renderTargetManager.get();
-        }
-
-        // ==================== CustomImage管理API ====================
 
         /**
          * @brief 设置CustomImage槽位的纹理
@@ -1226,93 +1181,31 @@ namespace enigma::graphic
         // ==================== Milestone 4: 深度缓冲管理 ====================
 
         /**
-         * @brief 切换活动深度缓冲（depthtex0 ↔ depthtex1 ↔ depthtex2）
-         * @param newActiveIndex 新的活动深度缓冲索引 [0-2]
+         * @brief Bind render targets using pair-based API
+         * @param targets Vector of (RTType, index) pairs specifying targets to bind
          *
-         * **Milestone 4 新增功能**:
-         * - 支持动态切换当前使用的深度纹理
-         * - 更新DSV绑定到新的深度纹理
-         * - 保持Iris语义不变（depthtex0/1/2）
+         * Teaching Points:
+         * - Delegates to RenderTargetBinder::BindRenderTargets
+         * - Unified API: color targets and depth target in single vector
+         * - Depth target identified by RTType::DepthTex or RTType::ShadowTex
          *
-         * **使用场景**:
-         * - 多阶段渲染时切换不同的深度缓冲
-         * - 支持灵活的深度纹理管理策略
-         *
-         * 教学要点:
-         * - 理解活动深度缓冲的概念
-         * - 掌握DirectX 12的DSV切换机制
-         * - 委托DepthTextureManager执行实际操作
-         */
-        void SwitchDepthBuffer(int newActiveIndex);
-
-        /**
-         * @brief 复制深度纹理（推荐使用）
-         * @param srcIndex 源深度纹理索引 [0-2]
-         * @param dstIndex 目标深度纹理索引 [0-2]
-         *
-         * **Milestone 4 新增功能**:
-         * - 提供公共的深度复制接口
-         * - 支持任意深度纹理之间的复制
-         * - 自动处理资源状态转换
-         *
-         * **使用场景**:
-         * - TERRAIN_TRANSLUCENT前：CopyDepth(0, 1) // depthtex0 → depthtex1
-         * - HAND_SOLID前：CopyDepth(0, 2)          // depthtex0 → depthtex2
-         * - 自定义复制：CopyDepth(1, 2)            // depthtex1 → depthtex2
-         *
-         * **业务逻辑**:
-         * 1. 参数验证（范围[0-2]，不能相同）
-         * 2. 转换资源状态：DEPTH_WRITE → COPY_SOURCE/DEST
-         * 3. 执行CopyResource()
-         * 4. 恢复资源状态：COPY_SOURCE/DEST → DEPTH_WRITE
-         *
-         * 教学要点:
-         * - 理解DirectX 12的资源状态转换
-         * - 掌握ResourceBarrier的正确使用
-         * - 委托DepthTextureManager执行实际操作
-         */
-        void CopyDepth(int srcIndex, int dstIndex);
-
-        /**
-         * @brief 查询当前激活的深度缓冲索引
-         * @return 当前活动的深度缓冲索引 [0-2]
-         *
-         * **Milestone 4 新增功能**:
-         * - 查询当前正在使用的深度纹理
-         * - 支持状态查询和调试
-         *
-         * 教学要点:
-         * - noexcept保证（简单getter）
-         * - 状态查询API的设计
-         */
-        int GetActiveDepthBufferIndex() const noexcept;
-
-        /**
-         * @brief 绑定渲染目标组合（支持指定深度纹理索引）
-         * @param rtTypes RT类型数组（ColorTex, ShadowColor等）
-         * @param indices 对应的索引数组
-         * @param depthType 深度纹理类型（默认DepthTex）
-         * @param depthIndex 深度纹理索引（默认0，范围0-2）
-         *
-         * 教学要点:
-         * - 转发到RenderTargetBinder::BindRenderTargets
-         * - 支持灵活指定深度纹理索引（depthtex0/1/2）
-         * - 使用默认参数保持向后兼容
-         *
-         * 使用示例:
+         * Usage:
          * ```cpp
-         * // 绑定ColorTex0-3到GBuffer，使用depthtex1
-         * std::vector<RTType> rtTypes = {RTType::ColorTex, RTType::ColorTex, RTType::ColorTex, RTType::ColorTex};
-         * std::vector<int> indices = {0, 1, 2, 3};
-         * renderer->BindRenderTargets(rtTypes, indices, RTType::DepthTex, 1);
+         * // Bind colortex0-3 + depthtex0
+         * renderer->BindRenderTargets({
+         *     {RTType::ColorTex, 0}, {RTType::ColorTex, 1},
+         *     {RTType::ColorTex, 2}, {RTType::ColorTex, 3},
+         *     {RTType::DepthTex, 0}
+         * });
+         *
+         * // Shadow pass: shadowcolor0 + shadowtex0
+         * renderer->BindRenderTargets({
+         *     {RTType::ShadowColor, 0},
+         *     {RTType::ShadowTex, 0}
+         * });
          * ```
          */
-        void BindRenderTargets(
-            const std::vector<RTType>& rtTypes,
-            const std::vector<int>&    indices,
-            RTType                     depthType  = RTType::DepthTex,
-            int                        depthIndex = 0
-        );
+        void BindRenderTargets(const std::vector<std::pair<RTType, int>>& targets);
 #pragma endregion
 
 #pragma region State Management
@@ -1460,16 +1353,16 @@ namespace enigma::graphic
         std::unique_ptr<IndexRingBuffer> m_immediateIndexRingBuffer;
 
         /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
-        std::unique_ptr<RenderTargetManager> m_renderTargetManager;
+        std::unique_ptr<ColorTextureProvider> m_colorTextureProvider;
 
         /// 深度纹理管理器 - 管理3个深度纹理 (Iris depthtex0/1/2)
-        std::unique_ptr<DepthTextureManager> m_depthTextureManager;
+        std::unique_ptr<DepthTextureProvider> m_depthTextureProvider;
 
         /// Shadow Color管理器 - 管理8个shadowcolor RenderTarget (Iris兼容)
-        std::unique_ptr<class ShadowColorManager> m_shadowColorManager;
+        std::unique_ptr<ShadowColorProvider> m_shadowColorProvider;
 
         /// Shadow Target管理器 - 管理2个shadowtex纹理 (Iris兼容)
-        std::unique_ptr<class ShadowTextureManager> m_ShadowTextureManager;
+        std::unique_ptr<ShadowTextureProvider> m_shadowTextureProvider;
 
         /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;

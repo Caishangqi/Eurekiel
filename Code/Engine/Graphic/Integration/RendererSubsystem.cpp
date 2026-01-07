@@ -1,7 +1,6 @@
 ﻿#include "RendererSubsystem.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Core/Yaml.hpp" // Milestone 3.0 任务3: YAML配置读取
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
@@ -9,12 +8,7 @@
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
-#include "Engine/Graphic/Target/RenderTargetManager.hpp" // Milestone 3.0: GBuffer配置API
 #include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
-#include "Engine/Graphic/Target/D12RenderTarget.hpp" // D12RenderTarget类定义
-#include "Engine/Graphic/Target/DepthTextureManager.hpp" // 深度纹理管理器
-#include "Engine/Graphic/Target/ShadowColorManager.hpp" // Shadow Color管理器
-#include "Engine/Graphic/Target/ShadowTextureManager.hpp" // Shadow Target管理器
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // [ADD] For UniformException hierarchy
@@ -23,7 +17,6 @@
 #include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
-// [DELETE] Removed PSOStateCollector.hpp - class deleted after refactor
 #include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
 #include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // M6.2: ShaderProgram
@@ -32,13 +25,12 @@
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
 #include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
-#include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp" // 阶段2.4: BufferHelper工具类 [REFACTOR 2025-01-06]
-// [REMOVED] ImmediateDrawHelper.hpp - functionality moved to RingBuffer wrapper classes (Option D)
 #include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // [NEW] Option D: RingBuffer wrapper
 #include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // [NEW] Option D: RingBuffer wrapper
 #include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] VertexLayout state management
+#include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 #pragma region Lifecycle Management
@@ -163,39 +155,21 @@ void RendererSubsystem::Startup()
         const int baseHeight    = m_configuration.renderHeight;
         const int colorTexCount = m_configuration.gbufferColorTexCount;
 
-        LogInfo(LogRenderer,
-                "RenderTargetManager configuration: %dx%d, %d colortex (max 16)",
-                baseWidth, baseHeight, colorTexCount);
+        LogInfo(LogRenderer, "RenderTargetManager configuration: %dx%d, %d colortex (max 16)", baseWidth, baseHeight, colorTexCount);
 
-        // Step 3: 创建RenderTargetManager实例（RAII原则，无需单独Initialize）
-        m_renderTargetManager = std::make_unique<RenderTargetManager>(
-            baseWidth,
-            baseHeight,
-            rtConfigs,
-            colorTexCount
-        );
+        LogInfo(LogRenderer, "Creating ColorTextureProvider...");
 
-        // Step 4: 日志输出成功信息
-        LogInfo(LogRenderer,
-                "RenderTargetManager created successfully (%dx%d, %d colortex)",
-                baseWidth, baseHeight, colorTexCount);
+        // Convert std::array to std::vector for use by Provider
+        std::vector<RTConfig> colorConfigs(rtConfigs.begin(), rtConfigs.end());
 
-        // Step 5: 输出内存优化信息（仅当colorTexCount < 16时）
-        if (colorTexCount < RenderTargetManager::MAX_COLOR_TEXTURES)
-        {
-            const float optimization = (1.0f - static_cast<float>(colorTexCount) /
-                static_cast<float>(RenderTargetManager::MAX_COLOR_TEXTURES)) * 100.0f;
-            LogInfo(LogRenderer,
-                    "Memory optimization enabled: ~%.1f%% saved (%d colortex instead of 16)",
-                    optimization, colorTexCount);
-        }
+        m_colorTextureProvider = std::make_unique<ColorTextureProvider>(baseWidth, baseHeight, colorConfigs);
+
+        LogInfo(LogRenderer, "ColorTextureProvider created successfully (%d colortex)", colorTexCount);
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer,
-                 "Failed to create RenderTargetManager: %s",
-                 e.what());
-        ERROR_AND_DIE(Stringf("RenderTargetManager initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create RenderTargetManager/ColorTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("RenderTargetManager/ColorTextureProvider initialization failed! Error: %s", e.what()))
     }
 
     // ==================== Create UniformManager ====================
@@ -296,39 +270,31 @@ void RendererSubsystem::Startup()
     VertexLayoutRegistry::Initialize();
     LogInfo(LogRenderer, "VertexLayoutRegistry initialized with predefined layouts");
 
-    // ==================== 创建DepthTextureManager ====================
     try
     {
-        LogInfo(LogRenderer, "Creating DepthTextureManager...");
-
-        std::array<DepthTextureConfig, 3> depthConfigs = {};
+        std::array<RTConfig, 3> depthConfigs = {};
         for (int i = 0; i < 3; ++i)
         {
-            depthConfigs[i].width        = m_configuration.renderWidth;
-            depthConfigs[i].height       = m_configuration.renderHeight;
-            depthConfigs[i].format       = DepthFormat::D24_UNORM_S8_UINT;
-            depthConfigs[i].semanticName = "depthtex" + std::to_string(i);
+            depthConfigs[i].width  = m_configuration.renderWidth;
+            depthConfigs[i].height = m_configuration.renderHeight;
+            depthConfigs[i].format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            depthConfigs[i].name   = "depthtex" + std::to_string(i);
         }
+        LogInfo(LogRenderer, "Creating DepthTextureProvider...");
 
-        m_depthTextureManager = std::make_unique<DepthTextureManager>(
-            m_configuration.renderWidth,
-            m_configuration.renderHeight,
-            depthConfigs,
-            3
-        );
-        LogInfo(LogRenderer, "DepthTextureManager created successfully");
+        std::vector<RTConfig> depthTextureVec(depthConfigs.begin(), depthConfigs.end());
+        m_depthTextureProvider = std::make_unique<DepthTextureProvider>(m_configuration.renderWidth, m_configuration.renderHeight, depthTextureVec);
+
+        LogInfo(LogRenderer, "DepthTextureProvider created successfully (3 depthtex)");
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create DepthTextureManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("DepthTextureManager initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create DepthTextureManager/DepthTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("DepthTextureManager/DepthTextureProvider initialization failed! Error: %s", e.what()))
     }
 
-    // ==================== 创建ShadowColorManager (M6.1.5) ====================
     try
     {
-        LogInfo(LogRenderer, "Creating ShadowColorManager...");
-
         std::array<RTConfig, 8> shadowColorConfigs = {};
         for (int i = 0; i < 8; ++i)
         {
@@ -342,17 +308,19 @@ void RendererSubsystem::Startup()
                 false, true, 1
             );
         }
+        LogInfo(LogRenderer, "Creating ShadowColorProvider...");
 
-        m_shadowColorManager = std::make_unique<ShadowColorManager>(shadowColorConfigs);
-        LogInfo(LogRenderer, "ShadowColorManager created successfully");
+        // 将std::array转换为std::vector供Provider使用
+        std::vector<RTConfig> shadowColorVec(shadowColorConfigs.begin(), shadowColorConfigs.end());
+        m_shadowColorProvider = std::make_unique<ShadowColorProvider>(m_configuration.renderWidth, m_configuration.renderHeight, shadowColorVec);
+        LogInfo(LogRenderer, "ShadowColorProvider created successfully (8 shadowcolor)");
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create ShadowColorManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("ShadowColorManager initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ShadowColorManager/ShadowColorProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("ShadowColorManager/ShadowColorProvider initialization failed! Error: %s", e.what()))
     }
 
-    // ==================== 创建ShadowTextureManager (M6.1.5) ====================
     try
     {
         LogInfo(LogRenderer, "Creating ShadowTextureManager...");
@@ -370,25 +338,27 @@ void RendererSubsystem::Startup()
             );
         }
 
-        m_ShadowTextureManager = std::make_unique<ShadowTextureManager>(shadowTexConfigs);
-        LogInfo(LogRenderer, "ShadowTextureManager created successfully");
+        LogInfo(LogRenderer, "Creating ShadowTextureProvider...");
+        std::vector<RTConfig> shadowTextureConfigs(shadowTexConfigs.begin(), shadowTexConfigs.end());
+        m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(m_configuration.renderWidth, m_configuration.renderHeight, shadowTextureConfigs);
+
+        LogInfo(LogRenderer, "ShadowTextureProvider created successfully (2 shadowtex)");
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create ShadowTextureManager: {}", e.what());
-        ERROR_AND_DIE(Stringf("ShadowTextureManager initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ShadowTextureManager/ShadowTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("ShadowTextureManager/ShadowTextureProvider initialization failed! Error: %s", e.what()))
     }
 
-    // ==================== 创建RenderTargetBinder (M6.1.5) ====================
     try
     {
         LogInfo(LogRenderer, "Creating RenderTargetBinder...");
 
         m_renderTargetBinder = std::make_unique<RenderTargetBinder>(
-            m_renderTargetManager.get(),
-            m_depthTextureManager.get(),
-            m_shadowColorManager.get(),
-            m_ShadowTextureManager.get()
+            m_colorTextureProvider.get(), // IRenderTargetProvider* (ColorTexture)
+            m_depthTextureProvider.get(), // IRenderTargetProvider* (DepthTexture)
+            m_shadowColorProvider.get(), // IRenderTargetProvider* (ShadowColor)
+            m_shadowTextureProvider.get() // IRenderTargetProvider* (ShadowTexture)
         );
 
         LogInfo(LogRenderer, "RenderTargetBinder created successfully");
@@ -398,7 +368,6 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer, "Failed to create RenderTargetBinder: %s", e.what());
     }
 
-    // ==================== 创建全屏三角形VB (M6.3) ====================
     try
     {
         LogInfo(LogRenderer, "Creating fullscreen triangle VertexBuffer...");
@@ -928,50 +897,6 @@ bool RendererSubsystem::IsInitialized() const noexcept
     return m_isInitialized;
 }
 
-//-----------------------------------------------------------------------------------------------
-// GBuffer配置API (Milestone 3.0 任务2)
-// Teaching Note: 提供运行时配置GBuffer colortex数量的能力，优化内存使用
-//-----------------------------------------------------------------------------------------------
-
-void RendererSubsystem::ConfigureGBuffer(int colorTexCount)
-{
-    // 阶段3.3: 使用RenderTargetHelper进行配置验证
-    constexpr int MAX = RenderTargetManager::MAX_COLOR_TEXTURES;
-
-    // 1. 验证RT配置
-    auto validationResult = RenderTargetHelper::ValidateRTConfiguration(colorTexCount, MAX);
-    if (!validationResult.isValid)
-    {
-        LogError(LogRenderer, "Invalid RT config: {}", validationResult.errorMessage.c_str());
-        colorTexCount = 8; // 使用默认值8
-        LogWarn(LogRenderer, "Using default colorTexCount: 8");
-    }
-
-    // 2. 计算内存使用量
-    size_t memoryUsage = RenderTargetHelper::CalculateRTMemoryUsage(
-        m_configuration.renderWidth,
-        m_configuration.renderHeight,
-        colorTexCount,
-        DXGI_FORMAT_R8G8B8A8_UNORM
-    );
-
-    // 3. 更新配置对象
-    m_configuration.gbufferColorTexCount = colorTexCount;
-
-    // 4. 计算内存优化百分比
-    float optimization = (1.0f - static_cast<float>(colorTexCount) / static_cast<float>(MAX)) * 100.0f;
-
-    // 5. 输出配置信息
-    LogInfo(LogRenderer,
-            "GBuffer configured: {} colortex (max: {}). Memory: {:.2f} MB. Optimization: ~{:.1f}%",
-            colorTexCount, MAX, memoryUsage / (1024.0f * 1024.0f), optimization);
-}
-
-//-----------------------------------------------------------------------------------------------
-// CustomImage管理API实现
-// Teaching Note: 提供高层API，封装CustomImageManager的实现细节
-//-----------------------------------------------------------------------------------------------
-
 void RendererSubsystem::SetCustomImage(int slotIndex, D12Texture* texture)
 {
     // [DELEGATION] 委托给CustomImageManager处理
@@ -1053,10 +978,13 @@ std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(const std::string
 // Teaching Note: 提供高层API，封装DirectX 12复杂性
 // Reference: DX11Renderer.cpp中的类似方法
 //-----------------------------------------------------------------------------------------------
-// M6.2.1: UseProgram RT绑定（两种方式）
+// M6.2.1: UseProgram RT binding (pair-based API)
 //-----------------------------------------------------------------------------------------------
 
-void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram, const std::vector<uint32_t>& rtOutputs, int depthIndex)
+void RendererSubsystem::UseProgram(
+    std::shared_ptr<ShaderProgram>             shaderProgram,
+    const std::vector<std::pair<RTType, int>>& targets
+)
 {
     if (!shaderProgram)
     {
@@ -1064,23 +992,9 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         return;
     }
 
-    // ========================================================================
-    // [REFACTORED] UseProgram - PSO延迟绑定架构 (Phase 2)
-    // ========================================================================
-    // 职责：
-    // 1. 缓存当前ShaderProgram状态
-    // 2. 绑定RenderTarget（三种模式）
-    // 
-    // PSO创建和绑定已移至Draw()方法（延迟到实际绘制时执行）
-    // ========================================================================
-
-    // 1. 缓存当前ShaderProgram（供后续Draw()使用）
+    // Cache current ShaderProgram for subsequent Draw() calls
     m_currentShaderProgram = shaderProgram.get();
 
-    // 2. 确定RT输出：优先使用rtOutputs参数，否则读取DRAWBUFFERS指令
-    const auto& drawBuffers = rtOutputs.empty() ? shaderProgram->GetDirectives().GetDrawBuffers() : rtOutputs;
-
-    // 3. RT绑定逻辑（三种模式）
     auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
@@ -1088,55 +1002,36 @@ void RendererSubsystem::UseProgram(std::shared_ptr<ShaderProgram> shaderProgram,
         return;
     }
 
-    if (drawBuffers.empty())
+    if (!targets.empty())
     {
-        // Mode B: 空数组绑定SwapChain后台缓冲区
-        auto rtvHandle = D3D12RenderSystem::GetBackBufferRTV();
-        cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
-        LogDebug(LogRenderer, "UseProgram: Bound SwapChain as default RT (Mode B)");
-
-        // 清除RenderTargetBinder状态缓存
+        // Bind specified RenderTargets using pair-based API
         if (m_renderTargetBinder)
         {
-            m_renderTargetBinder->ClearBindings();
+            m_renderTargetBinder->BindRenderTargets(targets);
+            m_renderTargetBinder->FlushBindings(cmdList);
         }
     }
-    else if (m_renderTargetBinder)
+    else
     {
-        // Mode A/C: 绑定指定的RenderTarget
-        std::vector<RTType> rtTypes(drawBuffers.size(), RTType::ColorTex);
-        std::vector<int>    indices(drawBuffers.begin(), drawBuffers.end());
-
-        std::vector<ClearValue> clearValues(drawBuffers.size(), ClearValue::Color(Rgba8::BLACK));
-        m_renderTargetBinder->BindRenderTargets(
-            rtTypes, indices,
-            RTType::DepthTex, depthIndex,
-            false,
-            LoadAction::Load,
-            clearValues,
-            ClearValue::Depth(1.0f, 0)
-        );
-
-        // 刷新RT绑定（延迟提交）
-        m_renderTargetBinder->FlushBindings(cmdList);
+        LogDebug(LogRenderer, "UseProgram: Bound SwapChain as default RT");
     }
 
     LogDebug(LogRenderer, "UseProgram: ShaderProgram cached, RenderTargets bound (PSO deferred to Draw)");
 }
 
 //-----------------------------------------------------------------------------------------------
-// M6.2.3: FlipRenderTarget API
+// [NEW] GetProvider - Access RT provider for dynamic configuration
 //-----------------------------------------------------------------------------------------------
 
-void RendererSubsystem::FlipRenderTarget(int rtIndex)
+IRenderTargetProvider* RendererSubsystem::GetProvider(RTType rtType)
 {
-    if (!m_renderTargetManager)
+    if (!m_renderTargetBinder)
     {
-        LogError(LogRenderer, "FlipRenderTarget: RenderTargetManager is nullptr");
-        return;
+        LogError(LogRenderer, "GetProvider: RenderTargetBinder is nullptr");
+        return nullptr;
     }
 
-    m_renderTargetManager->FlipRenderTarget(rtIndex);
+    return m_renderTargetBinder->GetProvider(rtType);
 }
 
 // [NEW] BeginCamera - ICamera interface version
@@ -1547,101 +1442,72 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
 void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
 {
     // ========================================================================
-    // Step 1: 参数验证
+    // [REFACTORED] Provider-based Architecture
+    // ========================================================================
+    // 重构说明：
+    // - 使用 IRenderTargetProvider 统一接口替代废弃的 m_renderTargetManager
+    // - 支持所有四种 RTType（ColorTex, DepthTex, ShadowColor, ShadowTex）
+    // - 使用 GetMainResource()/GetAltResource() 获取 ID3D12Resource*
+    // - 符合 SOLID 原则（依赖倒置）
     // ========================================================================
 
-    // 1.1 验证rtType（仅支持RTType::ColorTex）
-    if (rtType != RTType::ColorTex)
-    {
-        char errorMsg[256];
-        sprintf_s(errorMsg, sizeof(errorMsg),
-                  "PresentRenderTarget: Unsupported RTType (%d), only ColorTex is supported",
-                  static_cast<int>(rtType));
-        LogWarn(LogRenderer, errorMsg);
-        return;
-    }
+    // ========================================================================
+    // Step 1: 获取对应的 Provider
+    // ========================================================================
 
-    // 1.2 验证m_renderTargetManager指针非空
-    if (!m_renderTargetManager)
+    IRenderTargetProvider* provider = GetProvider(rtType);
+    if (!provider)
     {
-        LogError(LogRenderer, "PresentRenderTarget: RenderTargetManager is null");
-        return;
-    }
-
-    // 1.3 验证rtIndex范围 [0, gbufferColorTexCount)
-    const int colorTexCount = m_configuration.gbufferColorTexCount;
-    if (rtIndex < 0 || rtIndex >= colorTexCount)
-    {
-        char errorMsg[256];
-        sprintf_s(errorMsg, sizeof(errorMsg),
-                  "PresentRenderTarget: rtIndex %d out of range [0, %d)",
-                  rtIndex, colorTexCount);
-        LogError(LogRenderer, errorMsg);
+        LogError(LogRenderer, "PresentRenderTarget: Provider is null for RTType %d", static_cast<int>(rtType));
         return;
     }
 
     // ========================================================================
-    // Step 2: 获取RenderTarget实例
+    // Step 2: 验证 rtIndex 范围
     // ========================================================================
 
-    std::shared_ptr<D12RenderTarget> renderTarget = nullptr;
-    try
+    const int rtCount = provider->GetCount();
+    if (rtIndex < 0 || rtIndex >= rtCount)
     {
-        renderTarget = m_renderTargetManager->GetRenderTarget(rtIndex);
-    }
-    catch (const std::exception& e)
-    {
-        char errorMsg[256];
-        sprintf_s(errorMsg, sizeof(errorMsg),
-                  "PresentRenderTarget: Failed to get RenderTarget %d: %s",
-                  rtIndex, e.what());
-        LogError(LogRenderer, errorMsg);
-        return;
-    }
-
-    // 2.1 检查返回值是否有效
-    if (!renderTarget)
-    {
-        char errorMsg[256];
-        sprintf_s(errorMsg, sizeof(errorMsg),
-                  "PresentRenderTarget: RenderTarget %d is null",
-                  rtIndex);
-        LogError(LogRenderer, errorMsg);
+        LogError(LogRenderer, "PresentRenderTarget: rtIndex %d out of range [0, %d) for RTType %d",
+                 rtIndex, rtCount, static_cast<int>(rtType));
         return;
     }
 
     // ========================================================================
-    // Step 3: 根据FlipState选择Main或Alt纹理
+    // Step 3: 根据 FlipState 选择 Main 或 Alt 资源
     // ========================================================================
 
-    ID3D12Resource* sourceRT  = nullptr;
-    bool            isFlipped = m_renderTargetManager->IsFlipped(rtIndex);
+    ID3D12Resource* sourceRT       = nullptr;
+    bool            useAltResource = false;
 
-    // BufferFlipState逻辑：
-    // - IsFlipped() == false: 使用Main纹理（默认状态）
-    // - IsFlipped() == true:  使用Alt纹理（翻转后状态）
-    if (!isFlipped)
+    // 检查 Provider 是否支持 FlipState
+    if (provider->SupportsFlipState())
     {
-        sourceRT = renderTarget->GetMainTextureResource();
+        // 对于支持 FlipState 的 Provider（ColorTex, ShadowColor）：
+        // - 默认状态（未翻转）：使用 Main 资源
+        // - 翻转后状态：使用 Alt 资源
+        // 注意：这里我们总是使用 Main 资源作为呈现源
+        // 因为 Main 是当前帧渲染的目标
+        sourceRT = provider->GetMainResource(rtIndex);
     }
     else
     {
-        sourceRT = renderTarget->GetAltTextureResource();
+        // 对于不支持 FlipState 的 Provider（DepthTex, ShadowTex）：
+        // - 只有 Main 资源
+        sourceRT = provider->GetMainResource(rtIndex);
     }
 
-    // 3.1 验证源纹理资源
+    // 验证源资源
     if (!sourceRT)
     {
-        char errorMsg[256];
-        sprintf_s(errorMsg, sizeof(errorMsg),
-                  "PresentRenderTarget: Source texture resource is null (rtIndex=%d, isFlipped=%d)",
-                  rtIndex, isFlipped ? 1 : 0);
-        LogError(LogRenderer, errorMsg);
+        LogError(LogRenderer, "PresentRenderTarget: Source resource is null (rtIndex=%d, rtType=%d, useAlt=%d)",
+                 rtIndex, static_cast<int>(rtType), useAltResource ? 1 : 0);
         return;
     }
 
     // ========================================================================
-    // Step 4: 获取BackBuffer资源
+    // Step 4: 获取 BackBuffer 资源
     // ========================================================================
 
     ID3D12Resource* backBuffer = D3D12RenderSystem::GetBackBufferResource();
@@ -1650,9 +1516,12 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
         LogError(LogRenderer, "PresentRenderTarget: BackBuffer resource is null");
         return;
     }
+
+    // [NOTE] ImGui 渲染在 Present 之前执行
     g_theImGui->Render();
+
     // ========================================================================
-    // Step 5: 获取CommandList
+    // Step 5: 获取 CommandList
     // ========================================================================
 
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
@@ -1663,17 +1532,29 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     }
 
     // ========================================================================
-    // Step 6: 创建资源屏障数组
+    // Step 6: 确定源资源的初始状态
     // ========================================================================
-    // 参考 DepthTextureManager.cpp:338-365 的实现模式
+    // 不同 RTType 的资源可能处于不同的初始状态：
+    // - ColorTex/ShadowColor: D3D12_RESOURCE_STATE_RENDER_TARGET
+    // - DepthTex/ShadowTex: D3D12_RESOURCE_STATE_DEPTH_WRITE
+
+    D3D12_RESOURCE_STATES sourceInitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    if (rtType == RTType::DepthTex || rtType == RTType::ShadowTex)
+    {
+        sourceInitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    }
+
+    // ========================================================================
+    // Step 7: 创建资源屏障数组
+    // ========================================================================
 
     D3D12_RESOURCE_BARRIER barriers[2];
 
-    // barriers[0]: sourceRT (RENDER_TARGET → COPY_SOURCE)
+    // barriers[0]: sourceRT (初始状态 → COPY_SOURCE)
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[0].Transition.pResource   = sourceRT;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateBefore = sourceInitialState;
     barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
@@ -1686,23 +1567,22 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
     // ========================================================================
-    // Step 7: 执行GPU拷贝
+    // Step 8: 执行 GPU 拷贝
     // ========================================================================
 
-    // 7.1 转换资源状态
+    // 8.1 转换资源状态
     D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PreCopy");
 
-    // 7.2 执行拷贝
+    // 8.2 执行拷贝
     cmdList->CopyResource(backBuffer, sourceRT);
 
     // ========================================================================
-    // Step 8: 恢复资源状态
+    // Step 9: 恢复资源状态
     // ========================================================================
 
-    // 交换 StateBefore 和 StateAfter
-    // barriers[0]: COPY_SOURCE → RENDER_TARGET
+    // barriers[0]: COPY_SOURCE → 初始状态
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter  = sourceInitialState;
 
     // barriers[1]: COPY_DEST → RENDER_TARGET
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
@@ -1711,14 +1591,24 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PostCopy");
 
     // ========================================================================
-    // Step 9: 输出日志
+    // Step 10: 输出日志
     // ========================================================================
 
-    char successMsg[256];
-    sprintf_s(successMsg, sizeof(successMsg),
-              "PresentRenderTarget: Successfully copied colortex%d (%s texture) to BackBuffer",
-              rtIndex, isFlipped ? "Alt" : "Main");
-    LogInfo(LogRenderer, successMsg);
+    const char* rtTypeName = "Unknown";
+    switch (rtType)
+    {
+    case RTType::ColorTex: rtTypeName = "colortex";
+        break;
+    case RTType::DepthTex: rtTypeName = "depthtex";
+        break;
+    case RTType::ShadowColor: rtTypeName = "shadowcolor";
+        break;
+    case RTType::ShadowTex: rtTypeName = "shadowtex";
+        break;
+    }
+
+    LogInfo(LogRenderer, "PresentRenderTarget: Successfully copied %s%d to BackBuffer",
+            rtTypeName, rtIndex);
 }
 
 void RendererSubsystem::PresentCustomTexture(std::shared_ptr<D12Texture> texture)
@@ -1830,52 +1720,9 @@ const VertexLayout* RendererSubsystem::GetCurrentVertexLayout() const noexcept
     return m_currentVertexLayout;
 }
 
-// ============================================================================
-// Milestone 4: 深度缓冲管理实现
-// ============================================================================
-
-void RendererSubsystem::SwitchDepthBuffer(int newActiveIndex)
+void RendererSubsystem::BindRenderTargets(const std::vector<std::pair<RTType, int>>& targets)
 {
-    // 验证DepthTextureManager已初始化
-    if (!m_depthTextureManager)
-    {
-        LogError(LogRenderer, "SwitchDepthBuffer: DepthTextureManager not initialized");
-        return;
-    }
-
-    // 委托DepthTextureManager执行切换
-    try
-    {
-        m_depthTextureManager->SwitchDepthBuffer(newActiveIndex);
-
-        const char* depthNames[3] = {"depthtex0", "depthtex1", "depthtex2"};
-        LogInfo(LogRenderer, "Switched active depth buffer to {} (index {})",
-                depthNames[newActiveIndex], newActiveIndex);
-    }
-    catch (const std::exception& e)
-    {
-        LogError(LogRenderer, "SwitchDepthBuffer failed: {}", e.what());
-    }
-}
-
-void RendererSubsystem::BindRenderTargets(
-    const std::vector<RTType>& rtTypes,
-    const std::vector<int>&    indices,
-    RTType                     depthType,
-    int                        depthIndex
-)
-{
-    m_renderTargetBinder->BindRenderTargets(rtTypes, indices, depthType, depthIndex);
-}
-
-void RendererSubsystem::CopyDepth(int srcIndex, int dstIndex)
-{
-    m_depthTextureManager->CopyDepth(srcIndex, dstIndex);
-}
-
-int RendererSubsystem::GetActiveDepthBufferIndex() const noexcept
-{
-    return m_depthTextureManager->GetActiveDepthBufferIndex();
+    m_renderTargetBinder->BindRenderTargets(targets);
 }
 
 size_t RendererSubsystem::GetCurrentVertexOffset() const noexcept
@@ -2036,28 +1883,55 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
 // Clear Operations - Flexible RT Management
 // ============================================================================
 
-void RendererSubsystem::ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearColor)
+void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba8& clearColor)
 {
-    // Get active CommandList
+    // ========================================================================
+    // [REFACTORED] Provider-based Architecture
+    // ========================================================================
+    // 重构说明：
+    // - 使用 IRenderTargetProvider 统一接口替代废弃的 m_renderTargetManager
+    // - 支持 ColorTex 和 ShadowColor 类型（RTV-based）
+    // - DepthTex 和 ShadowTex 应使用 ClearDepthStencil 方法
+    // - 符合 SOLID 原则（依赖倒置）
+    // ========================================================================
+
+    // Step 1: 验证 RTType 是否支持 RTV Clear
+    if (rtType == RTType::DepthTex || rtType == RTType::ShadowTex)
+    {
+        LogError(LogRenderer, "ClearRenderTarget: RTType %d is depth-based, use ClearDepthStencil instead",
+                 static_cast<int>(rtType));
+        return;
+    }
+
+    // Step 2: 获取 CommandList
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
     if (!cmdList)
     {
-        LogError(LogRenderer, "ClearRenderTarget:: No active CommandList");
+        LogError(LogRenderer, "ClearRenderTarget: No active CommandList");
         return;
     }
 
-    // Validate rtIndex range
-    if (rtIndex >= static_cast<uint32_t>(m_configuration.gbufferColorTexCount))
+    // Step 3: 获取对应的 Provider
+    IRenderTargetProvider* provider = GetProvider(rtType);
+    if (!provider)
     {
-        LogError(LogRenderer, "ClearRenderTarget:: Invalid rtIndex=%u (max=%d)",
-                 rtIndex, m_configuration.gbufferColorTexCount);
+        LogError(LogRenderer, "ClearRenderTarget: Provider is null for RTType %d", static_cast<int>(rtType));
         return;
     }
 
-    // Get RTV handle for specified RT
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_renderTargetManager->GetMainRTV(static_cast<int>(rtIndex));
+    // Step 4: 验证 rtIndex 范围
+    const int rtCount = provider->GetCount();
+    if (rtIndex < 0 || rtIndex >= rtCount)
+    {
+        LogError(LogRenderer, "ClearRenderTarget: rtIndex %d out of range [0, %d) for RTType %d",
+                 rtIndex, rtCount, static_cast<int>(rtType));
+        return;
+    }
 
-    // Convert Rgba8 to float array
+    // Step 5: 获取 RTV handle
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = provider->GetMainRTV(rtIndex);
+
+    // Step 6: 转换 Rgba8 到 float 数组
     float clearColorFloat[4] = {
         clearColor.r / 255.0f,
         clearColor.g / 255.0f,
@@ -2065,11 +1939,13 @@ void RendererSubsystem::ClearRenderTarget(uint32_t rtIndex, const Rgba8& clearCo
         clearColor.a / 255.0f
     };
 
-    // Clear the RT
+    // Step 7: 执行 Clear
     cmdList->ClearRenderTargetView(rtvHandle, clearColorFloat, 0, nullptr);
 
-    LogDebug(LogRenderer, "ClearRenderTarget: Cleared colortex%u to RGBA(%u,%u,%u,%u)",
-             rtIndex, clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+    // Step 8: 输出日志
+    const char* rtTypeName = (rtType == RTType::ColorTex) ? "colortex" : "shadowcolor";
+    LogDebug(LogRenderer, "ClearRenderTarget: Cleared %s%d to RGBA(%u,%u,%u,%u)",
+             rtTypeName, rtIndex, clearColor.r, clearColor.g, clearColor.b, clearColor.a);
 }
 
 void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth, uint8_t clearStencil)
@@ -2090,17 +1966,10 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
     }
 
     // Get DSV handle for specified depth texture
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthTextureManager->GetDSV(static_cast<int>(depthIndex));
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_depthTextureProvider->GetDSV(static_cast<int>(depthIndex));
 
     // Clear depth and stencil
-    cmdList->ClearDepthStencilView(
-        dsvHandle,
-        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
-        clearDepth,
-        clearStencil,
-        0,
-        nullptr
-    );
+    cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, clearDepth, clearStencil, 0, nullptr);
     LogInfo(LogRenderer, "ClearDepthStencil: depthIndex=%u, depth=%.2f, stencil=%u",
             depthIndex, clearDepth, clearStencil);
 }
@@ -2110,7 +1979,7 @@ void RendererSubsystem::ClearAllRenderTargets(const Rgba8& clearColor)
     // Clear all active colortex (0 to gbufferColorTexCount-1)
     for (int i = 0; i < m_configuration.gbufferColorTexCount; ++i)
     {
-        ClearRenderTarget(static_cast<uint32_t>(i), clearColor);
+        ClearRenderTarget(RTType::ColorTex, i, clearColor);
     }
 
     // Clear all 3 depthtex (0 to 2)
