@@ -1,211 +1,230 @@
-﻿#include "Engine/Graphic/Target/RenderTargetBinder.hpp"
+﻿/**
+ * @file RenderTargetBinder.cpp
+ * @brief [REFACTOR] Implementation of Provider-based RenderTargetBinder
+ */
+
+#include "Engine/Graphic/Target/RenderTargetBinder.hpp"
 
 #include "Engine/Core/Logger/Logger.hpp"
-#include "Engine/Graphic/Target/RenderTargetManager.hpp"
-#include "Engine/Graphic/Target/DepthTextureManager.hpp"
-#include "Engine/Graphic/Target/ShadowColorManager.hpp"
-#include "Engine/Graphic/Target/ShadowTextureManager.hpp"
-#include "Engine/Graphic/Target/D12RenderTarget.hpp"
-#include "Engine/Graphic/Target/D12DepthTexture.hpp"
-#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
+#include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
+#include "Engine/Graphic/Target/DepthTextureProvider.hpp"
 
 using namespace enigma::core;
 
 namespace enigma::graphic
 {
     // ============================================================================
-    // 构造函数
+    // Constructor
     // ============================================================================
 
     RenderTargetBinder::RenderTargetBinder(
-        RenderTargetManager*  rtManager,
-        DepthTextureManager*  depthManager,
-        ShadowColorManager*   shadowColorManager,
-        ShadowTextureManager* ShadowTextureManager
+        IRenderTargetProvider* colorProvider,
+        IRenderTargetProvider* depthProvider,
+        IRenderTargetProvider* shadowColorProvider,
+        IRenderTargetProvider* shadowTexProvider
     )
-        : m_rtManager(rtManager)
-          , m_depthManager(depthManager)
-          , m_shadowColorManager(shadowColorManager)
-          , m_ShadowTextureManager(ShadowTextureManager)
+        : m_colorProvider(colorProvider)
+          , m_depthProvider(depthProvider)
+          , m_shadowColorProvider(shadowColorProvider)
+          , m_shadowTexProvider(shadowTexProvider)
+          , m_cachedDSVHandle{0}
+          , m_hasDepthBinding(false)
           , m_totalBindCalls(0)
           , m_cacheHitCount(0)
           , m_actualBindCalls(0)
+          , m_currentDepthFormat(DXGI_FORMAT_UNKNOWN)
     {
-        // 验证所有Manager指针
-        if (!m_rtManager || !m_depthManager || !m_shadowColorManager || !m_ShadowTextureManager)
+        // Validate all provider pointers
+        if (!m_colorProvider || !m_depthProvider || !m_shadowColorProvider || !m_shadowTexProvider)
         {
-            LogError("RenderTargetBinder", "One or more Manager pointers are null!");
+            LogError("RenderTargetBinder", "One or more Provider pointers are null!");
         }
 
-        LogInfo("RenderTargetBinder", "Created with all Managers aggregated");
+        // Initialize format cache
+        for (int i = 0; i < 8; ++i)
+        {
+            m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
+        }
+
+        LogInfo("RenderTargetBinder", "Created with all Providers aggregated");
     }
 
     // ============================================================================
-    // 统一绑定接口
+    // Unified Binding Interface
     // ============================================================================
 
     void RenderTargetBinder::BindRenderTargets(
-        const std::vector<RTType>&     rtTypes,
-        const std::vector<int>&        indices,
-        RTType                         depthType,
-        int                            depthIndex,
-        bool                           useAlt,
-        LoadAction                     loadAction,
-        const std::vector<ClearValue>& clearValues,
-        const ClearValue&              depthClearValue
+        const std::vector<std::pair<RTType, int>>& targets
     )
     {
-        if (rtTypes.size() != indices.size())
+        // ========== Validate depth binding constraints ==========
+        int                                 shadowTexCount = 0;
+        int                                 depthTexCount  = 0;
+        std::pair<RTType, int>              depthTarget    = {RTType::DepthTex, -1}; // -1 = not specified
+        std::vector<std::pair<RTType, int>> colorTargets;
+
+        for (const auto& target : targets)
         {
-            LogError("RenderTargetBinder", "rtTypes.size() (%zu) != indices.size() (%zu)", rtTypes.size(), indices.size());
-            return;
+            switch (target.first)
+            {
+            case RTType::ShadowTex:
+                shadowTexCount++;
+                depthTarget = target;
+                break;
+            case RTType::DepthTex:
+                depthTexCount++;
+                depthTarget = target;
+                break;
+            case RTType::ColorTex:
+            case RTType::ShadowColor:
+                colorTargets.push_back(target);
+                break;
+            }
         }
 
-        // 清空pendingState
+        // Validate: cannot bind both ShadowTex and DepthTex
+        if (shadowTexCount > 0 && depthTexCount > 0)
+        {
+            throw InvalidBindingException(InvalidBindingException::Reason::DualDepthBinding);
+        }
+
+        // Validate: cannot bind multiple ShadowTex
+        if (shadowTexCount > 1)
+        {
+            throw InvalidBindingException(InvalidBindingException::Reason::MultipleShadowTex);
+        }
+
+        // Validate: cannot bind multiple DepthTex
+        if (depthTexCount > 1)
+        {
+            throw InvalidBindingException(InvalidBindingException::Reason::MultipleDepthTex);
+        }
+
+        // ========== Execute binding ==========
+        // Reset pending state
         m_pendingState.Reset();
 
-        // 设置LoadAction
-        m_pendingState.loadAction = loadAction;
-
-        // [FIX] 保存useAlt标志
-        m_pendingState.useAlt = useAlt;
-
-        // 填充RTV句柄和ClearValue
-        m_pendingState.rtvHandles.reserve(rtTypes.size());
-        m_pendingState.clearValues.reserve(rtTypes.size());
-
-        for (size_t i = 0; i < rtTypes.size(); ++i)
+        // Collect RTV handles
+        m_pendingState.rtvHandles.reserve(colorTargets.size());
+        for (const auto& colorTarget : colorTargets)
         {
-            RTType type  = rtTypes[i];
-            int    index = indices[i];
-
-            D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = GetRTVHandle(type, index, useAlt);
-            if (rtvHandle.ptr == 0)
+            auto* provider = GetProvider(colorTarget.first);
+            if (provider)
             {
-                LOG_WARN_F("RenderTargetBinder", "Failed to get RTV handle for type=%d, index=%d",
-                           static_cast<int>(type), index);
-                continue;
-            }
-
-            m_pendingState.rtvHandles.push_back(rtvHandle);
-
-            // 如果提供了clearValues且数量匹配，使用提供的值；否则使用默认黑色
-            if (!clearValues.empty() && i < clearValues.size())
-            {
-                m_pendingState.clearValues.push_back(clearValues[i]);
-            }
-            else
-            {
-                m_pendingState.clearValues.push_back(ClearValue::Color(Rgba8::BLACK));
+                D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = provider->GetMainRTV(colorTarget.second);
+                if (rtvHandle.ptr != 0)
+                {
+                    m_pendingState.rtvHandles.push_back(rtvHandle);
+                    m_pendingState.clearValues.push_back(ClearValue::Color(Rgba8::BLACK));
+                }
+                else
+                {
+                    LOG_WARN_F("RenderTargetBinder", "Failed to get RTV for type=%d, index=%d",
+                               static_cast<int>(colorTarget.first), colorTarget.second);
+                }
             }
         }
 
-        // 设置DSV句柄和ClearValue
-        m_pendingState.dsvHandle       = GetDSVHandle(depthType, depthIndex);
-        m_pendingState.depthClearValue = depthClearValue;
+        // Get DSV handle (if depth target exists)
+        m_hasDepthBinding = (depthTarget.second >= 0);
+        if (m_hasDepthBinding)
+        {
+            m_pendingState.dsvHandle = GetDSVHandle(depthTarget.first, depthTarget.second);
+        }
+        else
+        {
+            m_pendingState.dsvHandle = D3D12_CPU_DESCRIPTOR_HANDLE{0};
+        }
 
-        // 计算Hash
+        // Compute hash
         m_pendingState.stateHash = m_pendingState.ComputeHash();
 
-        // [NEW] 更新格式缓存
-        // 清空格式数组
+        // Cache for FlushBindings
+        m_cachedRTVHandles = m_pendingState.rtvHandles;
+        m_cachedDSVHandle  = m_pendingState.dsvHandle;
+
+        // Update format cache
         for (int i = 0; i < 8; ++i)
         {
             m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
         }
         m_currentDepthFormat = DXGI_FORMAT_UNKNOWN;
 
-        // 填充RT格式
-        for (size_t i = 0; i < rtTypes.size() && i < 8; ++i)
+        // [FIX] Fill format cache from providers for PSO creation
+        // Color targets: fill m_currentRTFormats[] in order
+        int rtIndex = 0;
+        for (const auto& colorTarget : colorTargets)
         {
-            RTType type  = rtTypes[i];
-            int    index = indices[i];
+            if (rtIndex >= 8) break; // Max 8 RTVs
 
-            // Get the format based on RT type
-            if (type == RTType::ColorTex && m_rtManager)
+            auto* provider = GetProvider(colorTarget.first);
+            if (provider)
             {
-                m_currentRTFormats[i] = m_rtManager->GetRenderTargetFormat(index);
+                try
+                {
+                    m_currentRTFormats[rtIndex] = provider->GetFormat(colorTarget.second);
+                }
+                catch (const std::exception& e)
+                {
+                    LOG_WARN_F("RenderTargetBinder", "Failed to get format for RT[%d]: %s", rtIndex, e.what());
+                    m_currentRTFormats[rtIndex] = DXGI_FORMAT_UNKNOWN;
+                }
             }
-            else if (type == RTType::ShadowColor && m_shadowColorManager)
-            {
-                /// TODO: Currently not implement the ShadowColorManager
-                m_currentRTFormats[i] = m_shadowColorManager->GetRenderTargetFormat(index);
-            }
+            ++rtIndex;
         }
 
-        // 填充深度格式
-        if (depthType == RTType::DepthTex && m_depthManager)
+        // Depth target: fill m_currentDepthFormat
+        if (m_hasDepthBinding && depthTarget.second >= 0)
         {
-            auto depthTex = m_depthManager->GetDepthTexture(depthIndex);
-            if (depthTex)
+            auto* provider = GetProvider(depthTarget.first);
+            if (provider)
             {
-                m_currentDepthFormat = depthTex->GetDepthFormat();
+                try
+                {
+                    m_currentDepthFormat = provider->GetFormat(depthTarget.second);
+                }
+                catch (const std::exception& e)
+                {
+                    LOG_WARN_F("RenderTargetBinder", "Failed to get depth format: %s", e.what());
+                    m_currentDepthFormat = DXGI_FORMAT_UNKNOWN;
+                }
             }
         }
 
         ++m_totalBindCalls;
 
-        LogDebug("RenderTargetBinder", "BindRenderTargets: %zu RTVs, LoadAction=%d, Hash=0x%08X",
-                 m_pendingState.rtvHandles.size(), static_cast<int>(loadAction), m_pendingState.stateHash);
+        LogDebug("RenderTargetBinder", "BindRenderTargets: %zu RTVs, hasDepth=%d, Hash=0x%08X",
+                 m_pendingState.rtvHandles.size(), m_hasDepthBinding ? 1 : 0, m_pendingState.stateHash);
     }
 
-    void RenderTargetBinder::BindSingleRenderTarget(
-        RTType            rtType,
-        int               rtIndex,
-        RTType            depthType,
-        int               depthIndex,
-        bool              useAlt,
-        LoadAction        loadAction,
-        const ClearValue& clearValue,
-        const ClearValue& depthClearValue
-    )
+    IRenderTargetProvider* RenderTargetBinder::GetProvider(RTType rtType)
     {
-        std::vector<RTType>     rtTypes     = {rtType};
-        std::vector<int>        indices     = {rtIndex};
-        std::vector<ClearValue> clearValues = {clearValue};
-        BindRenderTargets(rtTypes, indices, depthType, depthIndex, useAlt, loadAction, clearValues, depthClearValue);
-    }
-
-    // ============================================================================
-    // 便捷绑定API
-    // ============================================================================
-
-    void RenderTargetBinder::BindGBuffer()
-    {
-        // GBuffer典型布局：4个ColorTex + 1个DepthTex
-        std::vector<RTType> rtTypes = {
-            RTType::ColorTex,
-            RTType::ColorTex,
-            RTType::ColorTex,
-            RTType::ColorTex
-        };
-        std::vector<int> indices = {0, 1, 2, 3};
-
-        BindRenderTargets(rtTypes, indices, RTType::DepthTex, 0, false);
-
-        LogDebug("RenderTargetBinder", "BindGBuffer: 4 ColorTex + 1 DepthTex");
-    }
-
-    void RenderTargetBinder::BindShadowPass(int shadowIndex, int depthIndex)
-    {
-        BindSingleRenderTarget(RTType::ShadowColor, shadowIndex, RTType::DepthTex, depthIndex, false);
-        LogDebug("RenderTargetBinder", "BindShadowPass: ShadowColor[%d] + DepthTex[%d]",
-                 shadowIndex, depthIndex);
-    }
-
-    void RenderTargetBinder::BindCompositePass(int colorIndex)
-    {
-        BindSingleRenderTarget(RTType::ColorTex, colorIndex, RTType::DepthTex, 0, false);
-
-        LogDebug("RenderTargetBinder", "BindCompositePass: ColorTex[%d]", colorIndex);
+        switch (rtType)
+        {
+        case RTType::ColorTex:
+            return m_colorProvider;
+        case RTType::DepthTex:
+            return m_depthProvider;
+        case RTType::ShadowColor:
+            return m_shadowColorProvider;
+        case RTType::ShadowTex:
+            return m_shadowTexProvider;
+        default:
+            LogError("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(rtType));
+            throw std::invalid_argument("Unknown RTType");
+        }
     }
 
     void RenderTargetBinder::ClearBindings()
     {
         m_pendingState.Reset();
         m_currentState.Reset();
+        m_cachedRTVHandles.clear();
+        m_cachedDSVHandle = D3D12_CPU_DESCRIPTOR_HANDLE{0};
+        m_hasDepthBinding = false;
 
-        // [NEW] 清空格式缓存
+        // Clear format cache
         for (int i = 0; i < 8; ++i)
         {
             m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
@@ -216,7 +235,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // 状态管理接口
+    // State Management Interface
     // ============================================================================
 
     void RenderTargetBinder::FlushBindings(ID3D12GraphicsCommandList* cmdList)
@@ -227,31 +246,24 @@ namespace enigma::graphic
             return;
         }
 
-        // 计算pendingState的Hash（防止外部修改）
+        // Compute pending state hash (prevent external modification)
         uint32_t newHash = m_pendingState.ComputeHash();
 
-        // 状态缓存：Hash比较
+        // State cache: hash comparison
         if (newHash == m_currentState.stateHash && newHash != 0)
         {
             ++m_cacheHitCount;
             LogDebug("RenderTargetBinder", "FlushBindings: Cache HIT (Hash=0x%08X), skipping OMSetRenderTargets",
                      newHash);
-            return; // 早期退出优化
+            return; // Early exit optimization
         }
 
-        // [REMOVED] 资源状态转换代码已删除
-        // 教学要点:
-        // - RenderTarget现在以正确的初始状态（RENDER_TARGET）创建
-        // - DepthTexture以正确的初始状态（DEPTH_WRITE）创建
-        // - 不需要在首次绑定时进行状态转换
-        // - 状态转换应该在实际需要时（如从RTV切换到SRV）才执行
-
-        // 状态变化，调用D3D12 API
+        // State changed, call D3D12 API
         UINT numRTVs = static_cast<UINT>(m_pendingState.rtvHandles.size());
 
         if (numRTVs > 0)
         {
-            // 有RTV绑定
+            // Has RTV bindings
             cmdList->OMSetRenderTargets(
                 numRTVs,
                 m_pendingState.rtvHandles.data(),
@@ -261,26 +273,23 @@ namespace enigma::graphic
         }
         else
         {
-            // 无RTV绑定（清除所有RT）
+            // No RTV bindings (clear all RTs)
             cmdList->OMSetRenderTargets(
                 0,
                 nullptr,
                 FALSE,
-                nullptr
+                m_pendingState.dsvHandle.ptr != 0 ? &m_pendingState.dsvHandle : nullptr
             );
         }
 
-        // 更新currentState
+        // Update current state
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
 
         LogDebug("RenderTargetBinder", "FlushBindings: OMSetRenderTargets called (%u RTVs, Hash=0x%08X)",
                  numRTVs, newHash);
 
-        // 执行Clear操作（如果LoadAction为Clear）
-        // 教学要点: 
-        // - Clear操作必须在OMSetRenderTargets之后执行
-        // - 这确保清空的是正确绑定的渲染目标
+        // Perform clear operations (if LoadAction is Clear)
         PerformClearOperations(cmdList);
     }
 
@@ -292,7 +301,7 @@ namespace enigma::graphic
             return;
         }
 
-        // 强制调用OMSetRenderTargets（跳过Hash检查）
+        // Force call OMSetRenderTargets (skip hash check)
         UINT numRTVs = static_cast<UINT>(m_pendingState.rtvHandles.size());
 
         if (numRTVs > 0)
@@ -306,17 +315,22 @@ namespace enigma::graphic
         }
         else
         {
-            cmdList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+            cmdList->OMSetRenderTargets(
+                0,
+                nullptr,
+                FALSE,
+                m_pendingState.dsvHandle.ptr != 0 ? &m_pendingState.dsvHandle : nullptr
+            );
         }
 
-        // 更新currentState
+        // Update current state
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
 
         LogDebug("RenderTargetBinder", "ForceFlushBindings: OMSetRenderTargets called (%u RTVs, forced)",
                  numRTVs);
 
-        // 执行Clear操作（如果LoadAction为Clear）
+        // Perform clear operations (if LoadAction is Clear)
         PerformClearOperations(cmdList);
     }
 
@@ -326,61 +340,49 @@ namespace enigma::graphic
         return pendingHash != m_currentState.stateHash;
     }
 
-    // ============================================================================
-    // 内部辅助方法
-    // ============================================================================
-
-    D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetBinder::GetRTVHandle(RTType type, int index, bool useAlt) const
+    void RenderTargetBinder::GetCurrentRTFormats(DXGI_FORMAT outFormats[8]) const
     {
-        switch (type)
+        for (int i = 0; i < 8; ++i)
         {
-        case RTType::ColorTex:
-            if (m_rtManager)
-            {
-                return useAlt ? m_rtManager->GetAltRTV(index) : m_rtManager->GetMainRTV(index);
-            }
-            break;
-
-        case RTType::ShadowColor:
-            if (m_shadowColorManager)
-            {
-                return useAlt ? m_shadowColorManager->GetAltRTV(index) : m_shadowColorManager->GetMainRTV(index);
-            }
-            break;
-
-        case RTType::DepthTex:
-            // DepthTex不应该作为RTV使用
-            LOG_WARN("RenderTargetBinder", "DepthTex cannot be used as RTV");
-            ERROR_RECOVERABLE("DepthTex cannot be used as RTV")
-            break;
-
-        case RTType::ShadowTex:
-            // ShadowTex是只读纹理，不能作为RTV使用
-            LOG_WARN("RenderTargetBinder", "ShadowTex cannot be used as RTV (read-only texture)");
-            ERROR_RECOVERABLE("ShadowTex cannot be used as RTV (read-only texture)")
-            break;
-
-        default:
-            LogError("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(type));
-            ERROR_RECOVERABLE("Unknown RTType")
-            break;
+            outFormats[i] = m_currentRTFormats[i];
         }
-
-        return D3D12_CPU_DESCRIPTOR_HANDLE{0};
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetBinder::GetDSVHandle(RTType type, int index) const
+    DXGI_FORMAT RenderTargetBinder::GetCurrentDepthFormat() const
     {
-        if (type == RTType::DepthTex && m_depthManager)
+        return m_currentDepthFormat;
+    }
+
+    // ============================================================================
+    // Internal Implementation
+    // ============================================================================
+
+    D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetBinder::GetDSVHandle(RTType rtType, int index) const
+    {
+        if (rtType == RTType::DepthTex && m_depthProvider)
         {
-            return m_depthManager->GetDSV(index);
+            // DepthTextureProvider supports DSV
+            if (m_depthProvider->SupportsDSV())
+            {
+                auto* depthProvider = static_cast<DepthTextureProvider*>(m_depthProvider);
+                return depthProvider->GetDSV(index);
+            }
+        }
+        else if (rtType == RTType::ShadowTex && m_shadowTexProvider)
+        {
+            // ShadowTextureProvider supports DSV
+            if (m_shadowTexProvider->SupportsDSV())
+            {
+                auto* shadowTexProvider = static_cast<ShadowTextureProvider*>(m_shadowTexProvider);
+                return shadowTexProvider->GetDSV(index);
+            }
         }
 
-        // 其他类型不能作为DSV使用
-        if (type != RTType::DepthTex)
+        // Other types cannot be used as DSV
+        if (rtType != RTType::DepthTex && rtType != RTType::ShadowTex)
         {
-            LogWarn("RenderTargetBinder", "Only DepthTex can be used as DSV, got type=%d", static_cast<int>(type));
-            ERROR_RECOVERABLE("Only DepthTex can be used as DSV")
+            LogWarn("RenderTargetBinder", "Only DepthTex/ShadowTex can be used as DSV, got type=%d",
+                    static_cast<int>(rtType));
         }
 
         return D3D12_CPU_DESCRIPTOR_HANDLE{0};
@@ -391,27 +393,22 @@ namespace enigma::graphic
         if (!cmdList)
         {
             LogError("RenderTargetBinder", "PerformClearOperations: cmdList is null");
-            ERROR_AND_DIE("PerformClearOperations: cmdList is null")
-        }
-
-        // [OPTIMIZATION] Early exit for LoadAction::Load
-        // Most cases use LoadAction::Load (UseProgram fixed to Load in Task 3)
-        // This avoids unnecessary checks and reduces CPU overhead
-        if (m_pendingState.loadAction != LoadAction::Clear)
-        {
-            LogDebug("RenderTargetBinder", "PerformClearOperations: Early exit (LoadAction=%d, not Clear)",
-                     static_cast<int>(m_pendingState.loadAction));
             return;
         }
 
-        // LoadAction::Clear - 清空所有RTV和DSV
+        // Early exit for LoadAction::Load (most common case)
+        if (m_pendingState.loadAction != LoadAction::Clear)
+        {
+            return;
+        }
 
-        // 清空所有RTV
+        // LoadAction::Clear - clear all RTVs and DSV
+
+        // Clear all RTVs
         for (size_t i = 0; i < m_pendingState.rtvHandles.size(); ++i)
         {
             const auto& rtvHandle = m_pendingState.rtvHandles[i];
 
-            // 获取清空值的float数组
             float clearColor[4];
             if (i < m_pendingState.clearValues.size())
             {
@@ -419,30 +416,20 @@ namespace enigma::graphic
             }
             else
             {
-                // 如果没有提供清空值，使用默认黑色
                 ClearValue::Color(Rgba8::BLACK).GetColorAsFloats(clearColor);
             }
 
-            // 调用DirectX 12 API清空RTV
-            // 教学要点: 
-            // - 虽然项目有CommandListManager封装，但这里直接使用DX12 API也是可以接受的
-            // - ClearRenderTargetView是底层操作，通常不需要额外封装
             cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
             LogDebug("RenderTargetBinder", "Cleared RTV[%zu] to color (%f, %f, %f, %f)",
                      i, clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
         }
 
-        // 清空DSV（如果存在）
+        // Clear DSV (if exists)
         if (m_pendingState.dsvHandle.ptr != 0)
         {
-            // 构造清空标志
             D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL;
 
-            // 调用DirectX 12 API清空DSV
-            // 教学要点:
-            // - ClearDepthStencilView同样是底层操作
-            // - depth和stencil值从depthClearValue获取
             cmdList->ClearDepthStencilView(
                 m_pendingState.dsvHandle,
                 clearFlags,
@@ -458,16 +445,8 @@ namespace enigma::graphic
         }
     }
 
-    void RenderTargetBinder::GetCurrentRTFormats(DXGI_FORMAT outFormats[8]) const
+    uint32_t RenderTargetBinder::ComputeStateHash() const
     {
-        for (int i = 0; i < 8; ++i)
-        {
-            outFormats[i] = m_currentRTFormats[i];
-        }
-    }
-
-    DXGI_FORMAT RenderTargetBinder::GetCurrentDepthFormat() const
-    {
-        return m_currentDepthFormat;
+        return m_pendingState.ComputeHash();
     }
 } // namespace enigma::graphic
