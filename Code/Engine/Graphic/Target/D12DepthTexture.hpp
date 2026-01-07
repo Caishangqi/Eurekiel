@@ -34,197 +34,10 @@
 namespace enigma::graphic
 {
     /**
-     * @brief 深度纹理格式枚举
-     *
-     * **行业标准**:
-     * - D32_FLOAT: 最高精度，用于主深度和精确计算
-     * - D24_UNORM_S8_UINT: 平衡精度和性能，带模板缓冲
-     * - D16_UNORM: 性能优化，用于低精度场景
-     *
-     * 教学要点:
-     * - 深度格式的精度 vs 性能权衡
-     * - 模板缓冲的用途（轮廓、蒙版）
-     *
-     * 注意: 这个枚举从 DepthTextureConfig.hpp 移动到这里，统一深度格式定义
-     */
-    enum class DepthFormat : uint8_t
-    {
-        D32_FLOAT, ///< 32位浮点深度（最高精度）- 对应旧 DepthType::DepthOnly 和 ShadowMap
-        D24_UNORM_S8_UINT, ///< 24位深度 + 8位模板（标准配置）- 对应旧 DepthType::DepthStencil
-        D16_UNORM ///< 16位深度（性能优化）
-    };
-
-    /**
-     * @brief 深度纹理配置结构体
-     *
-     * **M3.1核心数据结构**:
-     * - 支持每个深度纹理独立配置分辨率
-     * - 支持不同深度格式（D32/D24/D16）
-     * - 语义化命名（depthtex0/1/2，Iris兼容）
-     *
-     * **行业标准实践**:
-     * - 主深度（depthtex0）: 必须=渲染分辨率
-     * - 辅助深度（depthtex1-N）: 可降低分辨率优化内存
-     *
-     * 教学要点:
-     * - C++20聚合初始化（.width = 1920语法）
-     * - 配置结构体的设计原则
-     * - 深度纹理的语义化命名
-     *
-     * 注意: 这个结构体从 DepthTextureConfig.hpp 移动到这里
-     */
-    struct DepthTextureConfig
-    {
-        int         width        = 0; ///< 深度纹理宽度（像素）
-        int         height       = 0; ///< 深度纹理高度（像素）
-        DepthFormat format       = DepthFormat::D24_UNORM_S8_UINT; ///< 深度格式（默认最高精度）
-        std::string semanticName = ""; ///< 语义化名称（如"depthtex0"）
-
-        /**
-         * @brief 验证配置是否有效
-         * @return 宽高>0且名称非空则有效
-         *
-         * 教学要点:
-         * - noexcept保证（简单验证逻辑）
-         * - 配置验证的设计模式
-         */
-        [[nodiscard]] bool IsValid() const noexcept
-        {
-            return width > 0 && height > 0 && !semanticName.empty();
-        }
-    };
-
-    /**
-     * @brief 深度纹理配置预设函数集合
-     *
-     * **设计模式**: Preset Pattern（预设模式）
-     * - 提供常用配置的便捷创建方法
-     * - 减少用户配置负担
-     * - 确保配置的合法性和一致性
-     *
-     * **使用示例**:
-     * ```cpp
-     * // 全分辨率
-     * auto config1 = DepthTexturePresets::FullResolution(1920, 1080, "depthtex1");
-     *
-     * // 半分辨率（节省75%内存）
-     * auto config2 = DepthTexturePresets::HalfResolution(1920, 1080, "depthtex2");
-     * ```
-     *
-     * 教学要点:
-     * - 静态工厂方法模式
-     * - 便捷API的设计原则
-     * - 性能 vs 质量的权衡策略
-     *
-     * 注意: 这个类从 DepthTextureConfig.hpp 移动到这里
-     */
-    class DepthTexturePresets
-    {
-    public:
-        /**
-         * @brief 创建全分辨率深度纹理配置
-         * @param renderWidth 渲染宽度（1:1匹配）
-         * @param renderHeight 渲染高度（1:1匹配）
-         * @param name 语义化名称
-         * @return 全分辨率配置
-         *
-         * **适用场景**:
-         * - 主深度纹理（depthtex0）- 强制使用
-         * - 需要精确屏幕空间效果的辅助深度
-         */
-        [[nodiscard]] static DepthTextureConfig FullResolution(
-            int                renderWidth,
-            int                renderHeight,
-            const std::string& name
-        )
-        {
-            DepthTextureConfig config;
-            config.width        = renderWidth;
-            config.height       = renderHeight;
-            config.format       = DepthFormat::D32_FLOAT;
-            config.semanticName = name;
-            return config;
-        }
-
-        /**
-         * @brief 创建半分辨率深度纹理配置
-         * @param renderWidth 渲染宽度（除以2）
-         * @param renderHeight 渲染高度（除以2）
-         * @param name 语义化名称
-         * @return 半分辨率配置
-         *
-         * **内存节省**: 75%（单个纹理）
-         *
-         * **适用场景**:
-         * - 辅助深度纹理（depthtex1/2）
-         * - 不需要精确像素级对应的屏幕空间效果
-         */
-        [[nodiscard]] static DepthTextureConfig HalfResolution(
-            int                renderWidth,
-            int                renderHeight,
-            const std::string& name
-        )
-        {
-            DepthTextureConfig config;
-            config.width        = renderWidth / 2;
-            config.height       = renderHeight / 2;
-            config.format       = DepthFormat::D32_FLOAT;
-            config.semanticName = name;
-            return config;
-        }
-
-        /**
-         * @brief 创建四分之一分辨率深度纹理配置
-         * @param renderWidth 渲染宽度（除以4）
-         * @param renderHeight 渲染高度（除以4）
-         * @param name 语义化名称
-         * @return 四分之一分辨率配置
-         *
-         * **内存节省**: 93.75%（单个纹理）
-         */
-        [[nodiscard]] static DepthTextureConfig QuarterResolution(
-            int                renderWidth,
-            int                renderHeight,
-            const std::string& name
-        )
-        {
-            DepthTextureConfig config;
-            config.width        = renderWidth / 4;
-            config.height       = renderHeight / 4;
-            config.format       = DepthFormat::D32_FLOAT;
-            config.semanticName = name;
-            return config;
-        }
-
-        /**
-         * @brief 创建自定义分辨率深度纹理配置
-         * @param width 自定义宽度
-         * @param height 自定义高度
-         * @param format 深度格式
-         * @param name 语义化名称
-         * @return 自定义配置
-         */
-        [[nodiscard]] static DepthTextureConfig Custom(
-            int                width,
-            int                height,
-            DepthFormat        format,
-            const std::string& name
-        )
-        {
-            DepthTextureConfig config;
-            config.width        = width;
-            config.height       = height;
-            config.format       = format;
-            config.semanticName = name;
-            return config;
-        }
-    };
-
-    /**
      * @brief 深度纹理创建信息结构
      * @details 对应Iris DepthTexture构造参数，但适配DirectX 12
      *
-     * 注意: depthType 已重命名为 depthFormat，使用 DepthFormat 枚举
+     * 注意: 统一使用 DXGI_FORMAT 作为深度格式类型
      */
     struct DepthTextureCreateInfo
     {
@@ -232,7 +45,7 @@ namespace enigma::graphic
         std::string name; ///< 深度纹理名称 - 对应Iris的name参数
         uint32_t    width; ///< 宽度 - 对应Iris的width参数
         uint32_t    height; ///< 高度 - 对应Iris的height参数
-        DepthFormat depthFormat; ///< 深度格式 - 对应Iris的DepthBufferFormat（原 depthType）
+        DXGI_FORMAT depthFormat; ///< 深度格式 - 使用DXGI_FORMAT
 
         // 清除值设置
         float   clearDepth; ///< 默认清除深度值
@@ -245,7 +58,7 @@ namespace enigma::graphic
         DepthTextureCreateInfo()
             : name("")
               , width(0), height(0)
-              , depthFormat(DepthFormat::D24_UNORM_S8_UINT) // 对应旧 DepthType::DepthStencil
+              , depthFormat(DXGI_FORMAT_D24_UNORM_S8_UINT)
               , clearDepth(1.0f), clearStencil(0)
               , debugName(nullptr)
         {
@@ -255,7 +68,7 @@ namespace enigma::graphic
         DepthTextureCreateInfo(
             const std::string& texName,
             uint32_t           w, uint32_t h,
-            DepthFormat        format  = DepthFormat::D24_UNORM_S8_UINT, // 对应旧 DepthType::DepthStencil
+            DXGI_FORMAT        format  = DXGI_FORMAT_D24_UNORM_S8_UINT,
             float              depth   = 1.0f,
             uint8_t            stencil = 0
         )
@@ -303,8 +116,7 @@ namespace enigma::graphic
         std::string m_name; ///< 深度纹理名称 - 对应Iris构造函数的name参数
         uint32_t    m_width; ///< 宽度 - 对应Iris构造函数的width参数
         uint32_t    m_height; ///< 高度 - 对应Iris构造函数的height参数
-        DXGI_FORMAT m_depthFormat; ///< DXGI深度格式 - 从 DepthFormat 转换而来
-        DepthFormat m_format; ///< 深度格式枚举 - 对应Iris的DepthBufferFormat（原 m_depthType）
+        DXGI_FORMAT m_depthFormat; ///< DXGI深度格式
 
         // ==================== 状态管理 ====================
         float               m_clearDepth; ///< 默认清除深度值
@@ -415,12 +227,6 @@ namespace enigma::graphic
          * @return DXGI深度格式
          */
         DXGI_FORMAT GetDepthFormat() const { return m_depthFormat; }
-
-        /**
-         * @brief 获取深度格式
-         * @return 深度格式枚举
-         */
-        DepthFormat GetFormat() const { return m_format; }
 
         /**
          * @brief 获取名称
@@ -537,16 +343,6 @@ namespace enigma::graphic
         // ==================== 静态辅助方法 ====================
 
         /**
-         * @brief 将深度格式转换为DXGI格式
-         * @param format 深度格式枚举
-         * @return 对应的DXGI格式
-         *
-         * 注意: 方法从 GetFormatFromDepthType 重命名为 GetDXGIFormat
-         *       参数从 DepthType 改为 DepthFormat
-         */
-        static DXGI_FORMAT GetDXGIFormat(DepthFormat format);
-
-        /**
          * @brief 获取对应的类型化格式 (用于SRV)
          * @param depthFormat 深度格式
          * @return 类型化格式 (如果支持)
@@ -593,15 +389,15 @@ namespace enigma::graphic
     //
     // 建议的函数：
     // - static DepthTexturePtr CreateDepthOnlyTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DepthFormat::D32_FLOAT
+    //   - 使用 DXGI_FORMAT_D32_FLOAT
     //   - 仅用于深度测试，不支持采样
     //
     // - static DepthTexturePtr CreateDepthStencilTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DepthFormat::D24_UNORM_S8_UINT
+    //   - 使用 DXGI_FORMAT_D24_UNORM_S8_UINT
     //   - 支持深度+模板操作
     //
     // - static DepthTexturePtr CreateShadowMapTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DepthFormat::D32_FLOAT
+    //   - 使用 DXGI_FORMAT_D32_FLOAT
     //   - 支持着色器采样（用于阴影贴图）
     //
     // - static DepthTexturePtr CreateFromConfig(const DepthTextureConfig& config);
