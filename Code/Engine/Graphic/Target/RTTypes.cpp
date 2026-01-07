@@ -157,4 +157,51 @@ namespace enigma::graphic
 
         return config;
     }
+
+    // ============================================================================
+    // [NEW] Shadow Render Target Factory Methods Implementation
+    // ============================================================================
+
+    RTConfig RTConfig::ShadowColorTarget(
+        const std::string& name,
+        int                resolution,
+        DXGI_FORMAT        format,
+        bool               enableFlipper,
+        LoadAction         loadAction,
+        ClearValue         clearValue)
+    {
+        // Shadow color targets use square resolution
+        return ColorTarget(
+            name,
+            resolution, resolution, // width = height = resolution
+            format,
+            enableFlipper,
+            loadAction,
+            clearValue,
+            false, // enableMipmap - shadow maps typically don't use mipmaps
+            true, // allowLinearFilter
+            1 // sampleCount - no MSAA for shadow maps
+        );
+    }
+
+    RTConfig RTConfig::ShadowDepthTarget(
+        const std::string& name,
+        int                resolution,
+        DXGI_FORMAT        format,
+        LoadAction         loadAction,
+        ClearValue         clearValue)
+    {
+        // Shadow depth targets use square resolution, no flipper
+        return DepthTarget(
+            name,
+            resolution, resolution, // width = height = resolution
+            format,
+            false, // enableFlipper - shadow depth doesn't need flipper
+            loadAction,
+            clearValue,
+            false, // enableMipmap - shadow maps typically don't use mipmaps
+            true, // allowLinearFilter
+            1 // sampleCount - no MSAA for shadow maps
+        );
+    }
 } // namespace enigma::graphic

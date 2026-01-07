@@ -290,5 +290,46 @@ namespace enigma::graphic
             ClearValue         clearValue  = ClearValue::Depth(1.0f, 0),
             int                sampleCount = 1
         );
+
+        // ========================================================================
+        // [NEW] Shadow Render Target Factory Methods
+        // Shadow textures use square resolution (width = height = resolution)
+        // ========================================================================
+
+        /**
+         * @brief Create shadow color render target config
+         * @param name Target name for debugging
+         * @param resolution Square resolution (width = height)
+         * @param format Pixel format (default: R8G8B8A8_UNORM)
+         * @param enableFlipper Enable Main/Alt flip mechanism
+         * @param loadAction Load action
+         * @param clearValue Clear value (default: black)
+         * @return RTConfig instance
+         */
+        static RTConfig ShadowColorTarget(
+            const std::string& name,
+            int                resolution,
+            DXGI_FORMAT        format        = DXGI_FORMAT_R8G8B8A8_UNORM,
+            bool               enableFlipper = true,
+            LoadAction         loadAction    = LoadAction::Clear,
+            ClearValue         clearValue    = ClearValue::Color(Rgba8::BLACK)
+        );
+
+        /**
+         * @brief Create shadow depth render target config
+         * @param name Target name for debugging
+         * @param resolution Square resolution (width = height)
+         * @param format Pixel format (default: D32_FLOAT)
+         * @param loadAction Load action
+         * @param clearValue Clear value (default: 1.0 depth + 0 stencil)
+         * @return RTConfig instance
+         */
+        static RTConfig ShadowDepthTarget(
+            const std::string& name,
+            int                resolution,
+            DXGI_FORMAT        format     = DXGI_FORMAT_D32_FLOAT,
+            LoadAction         loadAction = LoadAction::Clear,
+            ClearValue         clearValue = ClearValue::Depth(1.0f, 0)
+        );
     };
 } // namespace enigma::graphic
