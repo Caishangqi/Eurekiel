@@ -514,15 +514,20 @@
     <ClCompile Include="Graphic\Sprite\Sprite.cpp" />
     <ClCompile Include="Graphic\Sprite\SpriteAtlas.cpp" />
     <ClCompile Include="Graphic\Sprite\SpriteAtlasHelper.cpp" />
+    <ClCompile Include="Graphic\Target\ColorTextureProvider.cpp"/>
     <ClCompile Include="Graphic\Target\D12DepthTexture.cpp" />
     <ClCompile Include="Graphic\Target\D12RenderTarget.cpp" />
-    <ClCompile Include="Graphic\Target\DepthTextureManager.cpp" />
+
+    <ClCompile Include="Graphic\Target\DepthTextureProvider.cpp"/>
     <ClCompile Include="Graphic\Target\RenderTargetBinder.cpp" />
     <ClCompile Include="Graphic\Target\RenderTargetHelper.cpp" />
-    <ClCompile Include="Graphic\Target\RenderTargetManager.cpp" />
+
+    <ClCompile Include="Graphic\Target\RenderTargetProviderCommon.cpp"/>
+
+    <ClCompile Include="Graphic\Target\RenderTargetProviderException.cpp"/>
     <ClCompile Include="Graphic\Target\RTTypes.cpp" />
-    <ClCompile Include="Graphic\Target\ShadowColorManager.cpp" />
-    <ClCompile Include="Graphic\Target\ShadowTextureManager.cpp"/>
+    <ClCompile Include="Graphic\Target\ShadowColorProvider.cpp"/>
+    <ClCompile Include="Graphic\Target\ShadowTextureProvider.cpp"/>
     <ClCompile Include="Input\AnalogJoystick.cpp" />
     <ClCompile Include="Input\InputSystem.cpp" />
     <ClCompile Include="Input\KeyButtonState.cpp" />
@@ -995,13 +1000,18 @@
     <ClInclude Include="Graphic\Sprite\Sprite.hpp" />
     <ClInclude Include="Graphic\Sprite\SpriteAtlas.hpp" />
     <ClInclude Include="Graphic\Sprite\SpriteAtlasHelper.hpp" />
+    <ClInclude Include="Graphic\Target\ColorTextureProvider.hpp"/>
     <!-- DepthTextureConfig.hpp 已合并到 D12DepthTexture.hpp 中 -->
-    <ClInclude Include="Graphic\Target\DepthTextureManager.hpp" />
+
+    <ClInclude Include="Graphic\Target\DepthTextureProvider.hpp"/>
+    <ClInclude Include="Graphic\Target\IRenderTargetProvider.hpp"/>
     <ClInclude Include="Graphic\Target\RenderTargetBinder.hpp" />
     <ClInclude Include="Graphic\Target\RenderTargetHelper.hpp" />
+    <ClInclude Include="Graphic\Target\RenderTargetProviderCommon.hpp"/>
+    <ClInclude Include="Graphic\Target\RenderTargetProviderException.hpp"/>
     <ClInclude Include="Graphic\Target\RTTypes.hpp" />
-    <ClInclude Include="Graphic\Target\ShadowColorManager.hpp" />
-    <ClInclude Include="Graphic\Target\ShadowTextureManager.hpp"/>
+    <ClInclude Include="Graphic\Target\ShadowColorProvider.hpp"/>
+    <ClInclude Include="Graphic\Target\ShadowTextureProvider.hpp"/>
     <ClInclude Include="Voxel\Biome\Biome.hpp" />
     <ClInclude Include="Voxel\Biome\BiomeSource.hpp" />
     <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp" />
@@ -1112,7 +1122,7 @@
     <ClInclude Include="Graphic\Target\BufferFlipState.hpp" />
     <ClInclude Include="Graphic\Target\D12DepthTexture.hpp" />
     <ClInclude Include="Graphic\Target\D12RenderTarget.hpp" />
-    <ClInclude Include="Graphic\Target\RenderTargetManager.hpp" />
+
     <ClInclude Include="Input\AnalogJoystick.hpp" />
     <ClInclude Include="Input\InputSystem.hpp" />
     <ClInclude Include="Input\KeyButtonState.hpp" />
