@@ -75,24 +75,24 @@ namespace enigma::graphic
     {
     public:
         /**
-         * @brief Builder类 - 流式构建器 (对应Iris RenderTarget.Builder)
+         * @brief Builder class - flow builder (corresponds to Iris RenderTarget.Builder)
          *
-         * 教学要点:
-         * - 完全对应Iris的Builder设计模式
-         * - 流式接口提升代码可读性
-         * - 参数验证确保构建的RenderTarget有效
+         *Teaching points:
+         * - Completely corresponds to Iris's Builder design pattern
+         * - Streaming interface improves code readability
+         * - Parameter validation ensures that the built RenderTarget is valid
          */
         class Builder
         {
         private:
-            DXGI_FORMAT m_format            = DXGI_FORMAT_R8G8B8A8_UNORM; // 对应Iris InternalTextureFormat
-            int         m_width             = 0; // 对应Iris width
-            int         m_height            = 0; // 对应Iris height
-            std::string m_name              = ""; // 对应Iris name
-            bool        m_allowLinearFilter = true; // 对应Iris allowsLinear判断
-            int         m_sampleCount       = 1; // DirectX专有: MSAA采样数
-            bool        m_enableMipmap      = false; // 🔥 Milestone 3.0: Mipmap支持
-            ClearValue  m_clearValue        = ClearValue::Color(Rgba8::BLACK); // Clear value for Fast Clear optimization
+            DXGI_FORMAT m_format            = DXGI_FORMAT_R8G8B8A8_UNORM;
+            int         m_width             = 0;
+            int         m_height            = 0;
+            std::string m_name              = "";
+            bool        m_allowLinearFilter = true;
+            int         m_sampleCount       = 1;
+            bool        m_enableMipmap      = false;
+            ClearValue  m_clearValue        = ClearValue::Color(Rgba8::BLACK);
 
         public:
             /**
@@ -237,10 +237,6 @@ namespace enigma::graphic
         };
 
     private:
-        // ========================================================================
-        // 核心成员变量 (直接对应Iris RenderTarget字段)
-        // ========================================================================
-
         std::shared_ptr<D12Texture> m_mainTexture; // 对应Iris mainTexture
         std::shared_ptr<D12Texture> m_altTexture; // 对应Iris altTexture
 
@@ -252,7 +248,6 @@ namespace enigma::graphic
         bool        m_enableMipmap; // Milestone 3.0: Mipmap支持
         ClearValue  m_clearValue; // Clear value for Fast Clear optimization
 
-        // Milestone 3.0: Bindless索引支持 🔥
         uint32_t m_mainTextureIndex; // 主纹理在Bindless堆中的索引 (对应架构文档RenderTargetPair)
         uint32_t m_altTextureIndex; // 替代纹理在Bindless堆中的索引
 
@@ -317,37 +312,37 @@ namespace enigma::graphic
          */
         virtual ~D12RenderTarget() = default;
 
-        // ========================================================================
-        // 纹理访问接口 (对应Iris getter方法)
-        // ========================================================================
+        /**
+         * @brief Rewrite IsValid() - composite resource validity check
+         * @return Returns true when both the main texture and the alternative texture are valid
+         *
+         * [FIX] Bug Fix: D12RenderTarget is a composite resource and does not have its own m_resource
+         * Base class D12Resource::IsValid() checks m_isValid && m_resource != nullptr
+         * But m_resource of D12RenderTarget is always nullptr, causing IsValid() to always return false
+         *
+         * Solution: Rewrite IsValid() to check the validity of the sub-texture instead of m_resource
+         */
+        bool IsValid() const;
 
         /**
-         * @brief 获取主纹理 (对应Iris getMainTexture)
-         * @return 主纹理智能指针
+         * @brief Get the main texture (corresponds to Iris getMainTexture)
+         * @return main texture smart pointer
          *
-         * 教学要点:
-         * - Iris返回int纹理ID，我们返回封装的D12Texture
-         * - 智能指针确保安全的内存管理
+         *Teaching points:
+         * - Iris returns the int texture ID, we return the encapsulated D12Texture
+         * - Smart pointers ensure safe memory management
          */
-        std::shared_ptr<D12Texture> GetMainTexture() const
-        {
-            RequireValid();
-            return m_mainTexture;
-        }
+        std::shared_ptr<D12Texture> GetMainTexture() const;
 
         /**
-         * @brief 获取替代纹理 (对应Iris getAltTexture)
-         * @return 替代纹理智能指针
+         * @brief Get the alternative texture (corresponds to Iris getAltTexture)
+         * @return alternative texture smart pointer
          *
-         * 教学要点:
-         * - 双纹理设计是Iris的核心特性
-         * - 支持Ping-Pong渲染和历史帧访问
+         *Teaching points:
+         * - Dual texture design is the core feature of Iris
+         * - Support Ping-Pong rendering and historical frame access
          */
-        std::shared_ptr<D12Texture> GetAltTexture() const
-        {
-            RequireValid();
-            return m_altTexture;
-        }
+        std::shared_ptr<D12Texture> GetAltTexture() const;
 
         /**
          * @brief 获取宽度 (对应Iris getWidth)
@@ -614,19 +609,6 @@ namespace enigma::graphic
          */
         void CreateDescriptors();
 
-        /**
-         * @brief 验证有效性 (对应Iris requireValid方法)
-         *
-         * 教学要点: 防御性编程，确保对象处于有效状态
-         */
-        void RequireValid() const
-        {
-            if (!IsValid())
-            {
-                throw std::runtime_error("Attempted to use an invalid D12RenderTarget");
-            }
-        }
-
         // 禁用拷贝语义，强制使用智能指针管理
         D12RenderTarget(const D12RenderTarget&)            = delete;
         D12RenderTarget& operator=(const D12RenderTarget&) = delete;
@@ -635,7 +617,7 @@ namespace enigma::graphic
         D12RenderTarget(D12RenderTarget&&)            = default;
         D12RenderTarget& operator=(D12RenderTarget&&) = default;
 
-        // Builder需要访问私有构造函数
+        // Builder needs to access the private constructor
         friend class Builder;
     };
 } // namespace enigma::graphic

@@ -468,6 +468,29 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
     return m_mainTextureIndex; // 返回主纹理索引
 }
 
+bool D12RenderTarget::IsValid() const
+{
+    return m_isValid && m_mainTexture && m_altTexture;
+}
+
+std::shared_ptr<D12Texture> D12RenderTarget::GetMainTexture() const
+{
+    if (!IsValid())
+    {
+        throw std::runtime_error("Attempted to use an invalid D12RenderTarget");
+    }
+    return m_mainTexture;
+}
+
+std::shared_ptr<D12Texture> D12RenderTarget::GetAltTexture() const
+{
+    if (!IsValid())
+    {
+        throw std::runtime_error("Attempted to use an invalid D12RenderTarget");
+    }
+    return m_altTexture;
+}
+
 // ============================================================================
 // GPU资源上传 (重写D12Resource纯虚函数)
 // ============================================================================
