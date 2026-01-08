@@ -1988,8 +1988,25 @@ void RendererSubsystem::ClearAllRenderTargets(const Rgba8& clearColor)
         ClearDepthStencil(i, 1.0f, 0);
     }
 
-    LogDebug(LogRenderer, "ClearAllRenderTargets: Cleared %d colortex and 3 depthtex",
-             m_configuration.gbufferColorTexCount);
+    // [FIX] Clear shadowtex (0 to 1) - shadow depth buffers
+    // Without this, shadow depth test always fails (depth buffer contains garbage/0.0)
+    if (m_shadowTextureProvider)
+    {
+        float clearDepth = 1.0f;
+        for (int i = 0; i < m_shadowTextureProvider->GetCount(); ++i)
+        {
+            m_shadowTextureProvider->Clear(i, &clearDepth);
+        }
+    }
+
+    // [FIX] Clear shadowcolor (0 to 1) - shadow color buffers
+    if (m_shadowColorProvider)
+    {
+        for (int i = 0; i < m_shadowColorProvider->GetCount(); ++i)
+        {
+            ClearRenderTarget(RTType::ShadowColor, i, clearColor);
+        }
+    }
 }
 
 #pragma endregion
