@@ -94,22 +94,22 @@ cbuffer Matrices : register(b7)
     /**
      * @brief 阴影模型视图矩阵
      * @type mat4
-     * @iris shadowModelView
+     * @iris shadowView
      *
      * 教学要点:
      * - 将模型空间转换到阴影视图空间
      * - 用于shadow着色器
      */
-    float4x4 shadowModelView;
+    float4x4 shadowView;
 
     /**
      * @brief 阴影模型视图逆矩阵
      * @type mat4
-     * @iris shadowModelViewInverse
+     * @iris shadowViewInverse
      *
      * 教学要点: 将阴影视图空间转换回模型空间
      */
-    float4x4 shadowModelViewInverse;
+    float4x4 shadowViewInverse;
 
     /**
      * @brief 阴影投影矩阵
@@ -399,105 +399,6 @@ VSOutput StandardVertexTransform(VSInput input)
     return output;
 }
 
-//──────────────────────────────────────────────────────
-// 数学常量
-//──────────────────────────────────────────────────────
-
 #define PI 3.14159265359
 #define TWO_PI 6.28318530718
 #define HALF_PI 1.57079632679
-
-//──────────────────────────────────────────────────────
-// 架构说明和使用示例
-//──────────────────────────────────────────────────────
-
-/**
- * ========== 使用示例 ==========
- *
- * 1. Composite Pass Shader (全屏后处理):
- * ```hlsl
- * #include "Common.hlsl"
- *
- * // PSOutput由ShaderCodeGenerator动态生成
- * // 例如: struct PSOutput { float4 Color0:SV_Target0; ... }
- *
- * PSOutput PSMain(PSInput input)
- * {
- *     PSOutput output;
- *
- *     // 读取纹理（Bindless，自动处理Main/Alt）
- *     float4 color0 = colortex0.Sample(linearSampler, input.TexCoord);
- *     float4 color8 = colortex8.Sample(linearSampler, input.TexCoord);
- *
- *     // 输出到多个RT
- *     output.Color0 = color0 * 0.5;    // 写入colortex0
- *     output.Color1 = color8 * 2.0;    // 写入colortex3
- *
- *     return output;
- * }
- * ```
- *
- * 1.5. CustomImage使用示例（延迟渲染PBR材质）新增:
- * ```hlsl
- * #include "Common.hlsl"
- *
- * PSOutput PSMain(PSInput input)
- * {
- *     PSOutput output;
- *
- *     // 方式1：通过宏直接访问（推荐）
- *     float4 albedo = customImage0.Sample(linearSampler, input.TexCoord);    // Albedo贴图
- *     float roughness = customImage1.Sample(linearSampler, input.TexCoord).r; // Roughness贴图
- *     float metallic = customImage2.Sample(linearSampler, input.TexCoord).r;  // Metallic贴图
- *     float3 normal = customImage3.Sample(linearSampler, input.TexCoord).rgb; // Normal贴图
- *
- *     // 方式2：通过索引访问（动态槽位）
- *     uint slotIndex = 5;
- *     Texture2D dynamicTex = GetCustomImage(slotIndex);
- *     float4 data = dynamicTex.Sample(linearSampler, input.TexCoord);
- *
- *     // 方式3：检查槽位有效性（安全访问）
- *     uint bindlessIndex = GetCustomImageIndex(4);
- *     if (bindlessIndex != 0xFFFFFFFF) // 检查是否为无效索引
- *     {
- *         Texture2D aoMap = GetCustomImage(4); // AO贴图
- *         float ao = aoMap.Sample(linearSampler, input.TexCoord).r;
- *         albedo.rgb *= ao; // 应用AO
- *     }
- *
- *     // PBR光照计算
- *     float3 finalColor = CalculatePBR(albedo.rgb, roughness, metallic, normal);
- *     output.Color0 = float4(finalColor, 1.0);
- *
- *     return output;
- * }
- * ```
- *
- * 2. RENDERTARGETS注释:
- * ```hlsl
- * RENDERTARGETS: 0,3,7,12
- * // ShaderCodeGenerator解析此注释，生成4个输出的PSOutput
- * ```
- *
- * 3. Main/Alt自动处理:
- * - colortex0自动访问Main或Alt（根据flip状态）
- * - 无需手动管理双缓冲
- * - 无需ResourceBarrier同步
- *
- * ========== 架构优势 ==========
- *
- * 1. Iris完全兼容:
- *    - colortex0-15宏自动映射
- *    - RENDERTARGETS注释支持
- *    - depthtex0/depthtex1支持
- *
- * 2. 性能优化:
- *    - Main/Alt消除90%+ ResourceBarrier
- *    - Bindless零绑定开销
- *    - Root Signature全局共享
- *
- * 3. 现代化设计:
- *    - Shader Model 6.6真正Bindless
- *    - MRT动态生成（不浪费）
- *    - 声明式编程（注释驱动）
- */
