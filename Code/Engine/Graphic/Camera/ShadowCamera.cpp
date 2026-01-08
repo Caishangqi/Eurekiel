@@ -37,8 +37,8 @@ namespace enigma::graphic
         Mat44 cameraToWorld = GetCameraToWorldTransform();
 
         // [NEW] Fill ONLY shadow matrices (not gbuffer matrices)
-        uniforms.shadowModelView         = view;
-        uniforms.shadowModelViewInverse  = cameraToWorld;
+        uniforms.shadowView              = view;
+        uniforms.shadowViewInverse       = cameraToWorld;
         uniforms.shadowProjection        = proj;
         uniforms.shadowProjectionInverse = proj.GetOrthonormalInverse();
         uniforms.gbufferRenderer         = m_rendererCanonicalMatrix;

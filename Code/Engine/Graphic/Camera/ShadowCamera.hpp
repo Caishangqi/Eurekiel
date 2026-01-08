@@ -75,8 +75,8 @@ namespace enigma::graphic
          * @param uniforms Reference to uniforms struct for GPU upload
          * 
          * [IMPORTANT] Fills ONLY shadow matrices:
-         * - shadowModelView
-         * - shadowModelViewInverse
+         * - shadowView
+         * - shadowViewInverse
          * - shadowProjection
          * - shadowProjectionInverse
          * 
