@@ -378,6 +378,8 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\common_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.vs.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\program\shadow.ps.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\program\shadow.vs.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
