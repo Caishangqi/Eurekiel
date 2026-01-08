@@ -82,7 +82,7 @@ namespace enigma::graphic
          * 
          * Template Method hook - implementations fill relevant matrix fields:
          * - Perspective: gbufferModelView, gbufferProjection, etc.
-         * - Shadow: shadowModelView, shadowProjection, etc.
+         * - Shadow: shadowView, shadowProjection, etc.
          */
         virtual void             UpdateMatrixUniforms(MatricesUniforms& uniforms) const = 0;
         virtual MatricesUniforms GetMatrixUniforms() = 0;
