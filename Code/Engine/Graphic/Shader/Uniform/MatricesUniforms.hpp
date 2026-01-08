@@ -39,26 +39,8 @@ namespace enigma::graphic
         alignas(16) Mat44 gbufferProjection;
         alignas(16) Mat44 gbufferProjectionInverse;
         alignas(16) Mat44 gbufferRenderer;
-
-        /**
-         * @brief 阴影模型视图矩阵
-         * @type mat4
-         * @iris shadowModelView
-         *
-         * 教学要点:
-         * - 将模型空间转换到阴影视图空间
-         * - 用于shadow着色器
-         */
-        alignas(16) Mat44 shadowModelView;
-
-        /**
-         * @brief 阴影模型视图逆矩阵
-         * @type mat4
-         * @iris shadowModelViewInverse
-         *
-         * 教学要点: 将阴影视图空间转换回模型空间
-         */
-        alignas(16) Mat44 shadowModelViewInverse;
+        alignas(16) Mat44 shadowView;
+        alignas(16) Mat44 shadowViewInverse;
 
         /**
          * @brief 阴影投影矩阵
