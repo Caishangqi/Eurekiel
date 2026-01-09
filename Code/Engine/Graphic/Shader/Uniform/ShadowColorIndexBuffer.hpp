@@ -1,179 +1,82 @@
-﻿#pragma once
+#pragma once
+
+// ============================================================================
+// ShadowColorIndexBuffer.hpp - [REFACTOR] Shadow color texture index management
+// Part of Shader RT Fetching Feature for Flexible Deferred Rendering
+// ============================================================================
 
 #include <cstdint>
+#include "Engine/Graphic/Target/RenderTargetProviderCommon.hpp"
 
 namespace enigma::graphic
 {
     /**
-     * @brief ShadowColorIndexBuffer - Shadow Color 纹理索引管理（shadowcolor0-7）
+     * @brief ShadowColorIndexBuffer - Main/Alt double-buffer index management for shadowcolor0-7
      *
-     * 教学要点:
-     * 1. 专门管理 shadowcolor0-7 的 Main/Alt 双缓冲索引
-     * 2. 支持 Ping-Pong Flip 机制，消除 ResourceBarrier 开销
-     * 3. 与 ShadowTexturesIndexBuffer 分离，职责单一
-     * 4. 与 Common.hlsl 中的 ShadowColorBuffer 结构体完全对应（64 bytes）
+     * Key points:
+     * 1. Manages shadowcolor0-7 Main/Alt double-buffer indices
+     * 2. Supports Ping-Pong Flip mechanism (eliminates ResourceBarrier overhead)
+     * 3. Separated from ShadowTexturesIndexBuffer (single responsibility)
+     * 4. Must match HLSL ShadowColorBuffer struct (64 bytes)
      *
-     * Iris架构参考:
-     * - ShadowRenderTargets.java: 管理 shadowcolor 纹理
-     * - https://shaders.properties/current/reference/buffers/shadowcolor/
+     * Flip state behavior:
+     * - flip = false: Main as read source, Alt as write target
+     * - flip = true:  Alt as read source, Main as write target
      *
-     * 设计优势:
-     * - 职责单一：只管理需要 flip 的 shadowcolor 纹理
-     * - 清晰分离：与 shadowtex（只读深度）完全独立
-     * - Ping-Pong 优化：通过索引切换避免 GPU 同步等待
-     *
-     * 对应HLSL (Common.hlsl):
-     * ```hlsl
-     * struct ShadowColorBuffer {
-     *     // Shadow Color Targets (需要flip) - 64 bytes
-     *     uint shadowColorReadIndices[8];   // shadowcolor0-7读取索引
-     *     uint shadowColorWriteIndices[8];  // shadowcolor0-7写入索引（预留）
-     * };
-     *
-     * // HLSL访问示例
-     * StructuredBuffer<ShadowColorBuffer> shadowColorBuffer =
-     *     ResourceDescriptorHeap[shadowColorBufferIndex];
-     *
-     * // 访问shadowcolor0
-     * uint colorIndex = shadowColorBuffer[0].shadowColorReadIndices[0];
-     * Texture2D color = ResourceDescriptorHeap[colorIndex];
-     * ```
-     *
-     * 使用示例（C++端）:
-     * ```cpp
-     * ShadowColorIndexBuffer shadowColorBuffer;
-     *
-     * // 设置shadowcolor（需要flip）
-     * shadowColorBuffer.Flip(mainShadowColorIndices, altShadowColorIndices, false);
-     *
-     * // 上传到GPU
-     * d12Buffer->UploadData(&shadowColorBuffer, sizeof(shadowColorBuffer));
-     * ```
-     *
-     * @note 此结构体必须与Common.hlsl中的ShadowColorBuffer严格对应（64 bytes）
+     * @note Size must be exactly 64 bytes to match HLSL cbuffer
      */
     struct ShadowColorIndexBuffer
     {
-        // ========== Shadow Color Targets（需要Flip）==========
+        // Read indices for shadowcolor0-7 (points to Main or Alt based on flip state)
+        uint32_t readIndices[CBUFFER_SHADOW_COLORS_SIZE];
+
+        // Write indices for shadowcolor0-7 (reserved for UAV extension)
+        uint32_t writeIndices[CBUFFER_SHADOW_COLORS_SIZE];
+
+        // ===== Total: (8 + 8) * 4 = 64 bytes =====
 
         /**
-         * @brief shadowcolor读取索引数组 - shadowcolor0-7
-         *
-         * 教学要点:
-         * 1. 存储8个shadowcolor的当前读取索引
-         * 2. 根据flip状态指向Main或Alt纹理
-         * 3. 支持多Pass阴影渲染（shadowcomp阶段）
-         *
-         * flip状态管理:
-         * - flip = false: shadowColorReadIndices[i] = mainIndices[i]
-         * - flip = true:  shadowColorReadIndices[i] = altIndices[i]
-         *
-         * HLSL访问:
-         * ```hlsl
-         * Texture2D GetShadowColor(uint shadowIndex) {
-         *     StructuredBuffer<ShadowColorBuffer> shadowColorBuffer =
-         *         ResourceDescriptorHeap[shadowColorBufferIndex];
-         *     uint textureIndex = shadowColorBuffer[0].shadowColorReadIndices[shadowIndex];
-         *     return ResourceDescriptorHeap[textureIndex];
-         * }
-         * ```
-         */
-        uint32_t shadowColorReadIndices[8];
-
-        /**
-         * @brief shadowcolor写入索引数组（预留UAV扩展）
-         *
-         * 教学要点:
-         * 1. 预留给UAV扩展
-         * 2. 当前RTV直接绑定，无需此索引
-         * 3. 未来可用于Compute Shader写入shadowcolor
-         *
-         * flip状态管理（如果使用）:
-         * - flip = false: shadowColorWriteIndices[i] = altIndices[i]
-         * - flip = true:  shadowColorWriteIndices[i] = mainIndices[i]
-         */
-        uint32_t shadowColorWriteIndices[8];
-
-        // ===== 总计: (8 + 8) × 4 = 64 bytes =====
-
-        /**
-         * @brief 默认构造函数 - 初始化为0
+         * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
         ShadowColorIndexBuffer()
         {
-            for (int i = 0; i < 8; ++i)
-            {
-                shadowColorReadIndices[i]  = 0;
-                shadowColorWriteIndices[i] = 0;
-            }
+            Reset();
         }
 
-        // ========== ShadowColor操作（Flip机制）==========
+        // ========== [NEW] Unified API ==========
 
         /**
-         * @brief 设置所有shadowColor readIndices
-         * @param indices 索引数组（至少8个元素）
+         * @brief Set single read index (unified API)
+         * @param slot Slot index (0-7)
+         * @param bindlessIndex Bindless texture index
          */
-        void SetShadowColorReadIndices(const uint32_t indices[8])
+        void SetIndex(uint32_t slot, uint32_t bindlessIndex)
         {
-            for (int i = 0; i < 8; ++i)
+            if (slot < CBUFFER_SHADOW_COLORS_SIZE)
             {
-                shadowColorReadIndices[i] = indices[i];
+                readIndices[slot] = bindlessIndex;
             }
         }
 
         /**
-         * @brief 设置所有shadowColor writeIndices
-         * @param indices 索引数组（至少8个元素）
+         * @brief Get single read index (unified API)
+         * @param slot Slot index (0-7)
+         * @return Bindless index, or INVALID_BINDLESS_INDEX if out of range
          */
-        void SetShadowColorWriteIndices(const uint32_t indices[8])
+        uint32_t GetIndex(uint32_t slot) const
         {
-            for (int i = 0; i < 8; ++i)
-            {
-                shadowColorWriteIndices[i] = indices[i];
-            }
+            return (slot < CBUFFER_SHADOW_COLORS_SIZE) ? readIndices[slot] : INVALID_BINDLESS_INDEX;
         }
 
         /**
-         * @brief Flip操作 - 交换shadowcolor的Main和Alt索引
-         * @param mainIndices Main纹理索引数组（shadowcolor）
-         * @param altIndices Alt纹理索引数组（shadowcolor）
-         * @param useAlt true=读Alt写Main, false=读Main写Alt
-         *
-         * 教学要点:
-         * 1. Ping-Pong核心机制，实现双缓冲切换
-         * 2. 消除shadowcolor的ResourceBarrier需求
-         * 3. 提升渲染性能，避免GPU同步等待
+         * @brief Check if buffer has any valid indices
+         * @return true if at least one index is valid
          */
-        void Flip(const uint32_t mainIndices[8],
-                  const uint32_t altIndices[8],
-                  bool           useAlt)
+        bool IsValid() const
         {
-            if (useAlt)
+            for (uint32_t i = 0; i < CBUFFER_SHADOW_COLORS_SIZE; ++i)
             {
-                // 读Alt, 写Main
-                SetShadowColorReadIndices(altIndices);
-                SetShadowColorWriteIndices(mainIndices);
-            }
-            else
-            {
-                // 读Main, 写Alt
-                SetShadowColorReadIndices(mainIndices);
-                SetShadowColorWriteIndices(altIndices);
-            }
-        }
-
-        // ========== 验证和工具方法 ==========
-
-        /**
-         * @brief 验证shadowcolor有效性
-         * @return true 如果至少有一个shadowcolor被设置
-         */
-        bool HasValidShadowColor() const
-        {
-            for (int i = 0; i < 8; ++i)
-            {
-                if (shadowColorReadIndices[i] != 0)
+                if (readIndices[i] != INVALID_BINDLESS_INDEX)
                 {
                     return true;
                 }
@@ -182,48 +85,92 @@ namespace enigma::graphic
         }
 
         /**
-         * @brief 验证整体有效性
-         * @return true 如果至少有一个shadowcolor被设置
+         * @brief Reset all indices to invalid state
          */
-        bool IsValid() const
+        void Reset()
         {
-            return HasValidShadowColor();
+            for (uint32_t i = 0; i < CBUFFER_SHADOW_COLORS_SIZE; ++i)
+            {
+                readIndices[i]  = INVALID_BINDLESS_INDEX;
+                writeIndices[i] = INVALID_BINDLESS_INDEX;
+            }
+        }
+
+        // ========== Batch Operations ==========
+
+        /**
+         * @brief Set all read indices (batch operation)
+         * @param indices Array of indices (must have CBUFFER_SHADOW_COLORS_SIZE elements)
+         */
+        void SetReadIndices(const uint32_t indices[CBUFFER_SHADOW_COLORS_SIZE])
+        {
+            for (uint32_t i = 0; i < CBUFFER_SHADOW_COLORS_SIZE; ++i)
+            {
+                readIndices[i] = indices[i];
+            }
         }
 
         /**
-         * @brief 获取使用的shadowcolor数量
+         * @brief Set all write indices (batch operation)
+         * @param indices Array of indices (must have CBUFFER_SHADOW_COLORS_SIZE elements)
          */
-        uint32_t GetActiveShadowColorCount() const
+        void SetWriteIndices(const uint32_t indices[CBUFFER_SHADOW_COLORS_SIZE])
+        {
+            for (uint32_t i = 0; i < CBUFFER_SHADOW_COLORS_SIZE; ++i)
+            {
+                writeIndices[i] = indices[i];
+            }
+        }
+
+        /**
+         * @brief Flip operation - swap Main and Alt indices
+         * @param mainIndices Main texture index array
+         * @param altIndices Alt texture index array
+         * @param useAlt true=read Alt write Main, false=read Main write Alt
+         */
+        void Flip(const uint32_t mainIndices[CBUFFER_SHADOW_COLORS_SIZE],
+                  const uint32_t altIndices[CBUFFER_SHADOW_COLORS_SIZE],
+                  bool           useAlt)
+        {
+            if (useAlt)
+            {
+                // Read Alt, Write Main
+                SetReadIndices(altIndices);
+                SetWriteIndices(mainIndices);
+            }
+            else
+            {
+                // Read Main, Write Alt
+                SetReadIndices(mainIndices);
+                SetWriteIndices(altIndices);
+            }
+        }
+
+        // ========== Utility Methods ==========
+
+        /**
+         * @brief Get count of active (valid) shadow colors
+         * @return Number of valid indices
+         */
+        uint32_t GetActiveCount() const
         {
             uint32_t count = 0;
-            for (int i = 0; i < 8; ++i)
+            for (uint32_t i = 0; i < CBUFFER_SHADOW_COLORS_SIZE; ++i)
             {
-                if (shadowColorReadIndices[i] != 0)
+                if (readIndices[i] != INVALID_BINDLESS_INDEX)
                 {
                     ++count;
                 }
             }
             return count;
         }
-
-        /**
-         * @brief 重置所有索引
-         */
-        void Reset()
-        {
-            for (int i = 0; i < 8; ++i)
-            {
-                shadowColorReadIndices[i]  = 0;
-                shadowColorWriteIndices[i] = 0;
-            }
-        }
     };
 
-    // 编译期验证: 确保结构体大小为64字节
+    // Compile-time validation: ensure struct size is 64 bytes
     static_assert(sizeof(ShadowColorIndexBuffer) == 64,
-                  "ShadowColorIndexBuffer must be exactly 64 bytes to match HLSL ShadowColorBuffer struct");
+                  "ShadowColorIndexBuffer must be exactly 64 bytes to match HLSL cbuffer");
 
-    // 编译期验证: 确保对齐
+    // Compile-time validation: ensure proper alignment
     static_assert(alignof(ShadowColorIndexBuffer) == 4,
                   "ShadowColorIndexBuffer must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

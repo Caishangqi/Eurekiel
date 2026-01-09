@@ -1,6 +1,7 @@
 #include "ShadowColorProvider.hpp"
 #include "D12RenderTarget.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 
 #include <sstream>
 
@@ -221,6 +222,9 @@ namespace enigma::graphic
         LogInfo(LogRenderTargetProvider,
                 "ShadowColorProvider:: Reconfigured shadowcolor%d (%dx%d)",
                 index, config.width, config.height);
+
+        // [NEW] Re-upload indices after resource recreation
+        UpdateIndices();
     }
 
     // ============================================================================
@@ -342,6 +346,71 @@ namespace enigma::graphic
         }
 
         return oss.str();
+    }
+
+    // ============================================================================
+    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // ============================================================================
+
+    void ShadowColorProvider::RegisterUniform(UniformManager* uniformMgr)
+    {
+        if (!uniformMgr)
+        {
+            LogError(LogRenderTargetProvider,
+                     "ShadowColorProvider::RegisterUniform - UniformManager is nullptr");
+            return;
+        }
+
+        m_uniformManager = uniformMgr;
+
+        // Register ShadowColorIndexBuffer to slot b5 with PerFrame frequency
+        m_uniformManager->RegisterBuffer<ShadowColorIndexBuffer>(
+            SLOT_SHADOW_COLOR,
+            UpdateFrequency::PerFrame,
+            BufferSpace::Engine
+        );
+
+        LogInfo(LogRenderTargetProvider,
+                "ShadowColorProvider::RegisterUniform - Registered at slot b%u",
+                SLOT_SHADOW_COLOR);
+
+        // Initial upload of indices
+        UpdateIndices();
+    }
+
+    void ShadowColorProvider::UpdateIndices()
+    {
+        if (!m_uniformManager)
+        {
+            // Not registered yet, skip silently
+            return;
+        }
+
+        // Collect bindless indices for all active shadowcolor slots
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            bool isFlipped = m_flipState.IsFlipped(i);
+
+            // Read index: Main if not flipped, Alt if flipped
+            uint32_t readIdx = isFlipped
+                                   ? m_renderTargets[i]->GetAltTextureIndex()
+                                   : m_renderTargets[i]->GetMainTextureIndex();
+
+            // Write index: Alt if not flipped, Main if flipped
+            uint32_t writeIdx = isFlipped
+                                    ? m_renderTargets[i]->GetMainTextureIndex()
+                                    : m_renderTargets[i]->GetAltTextureIndex();
+
+            m_indexBuffer.SetIndex(static_cast<uint32_t>(i), readIdx);
+            m_indexBuffer.writeIndices[i] = writeIdx;
+        }
+
+        // Upload to GPU via UniformManager
+        m_uniformManager->UploadBuffer(m_indexBuffer);
+
+        LogDebug(LogRenderTargetProvider,
+                 "ShadowColorProvider::UpdateIndices - Uploaded %d shadowcolor indices",
+                 m_activeCount);
     }
 
     // ============================================================================
