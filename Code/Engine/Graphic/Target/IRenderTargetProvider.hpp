@@ -10,6 +10,7 @@ namespace enigma::graphic
 {
     // Forward declarations
     struct RTConfig;
+    class UniformManager;
 
     /**
      * @brief Unified interface for RenderTarget providers
@@ -169,5 +170,26 @@ namespace enigma::graphic
          * - Runtime resolution adjustment
          */
         virtual void SetRtConfig(int index, const RTConfig& config) = 0;
+
+        // ========== [NEW] Uniform Registration ==========
+
+        /**
+         * @brief Register IndexBuffer to UniformManager for GPU upload
+         * @param uniformMgr Pointer to UniformManager instance
+         * 
+         * Called during provider initialization to register the provider's
+         * IndexBuffer (e.g., ColorTargetsIndexBuffer) to UniformManager.
+         * This enables automatic GPU synchronization of bindless indices.
+         */
+        virtual void RegisterUniform(UniformManager* uniformMgr) = 0;
+
+        /**
+         * @brief Collect and upload bindless indices to GPU
+         * 
+         * Called each frame or after Flip operations to synchronize
+         * the provider's bindless indices with GPU constant buffer.
+         * Shader can then access RT via GetColorTexture(slot) etc.
+         */
+        virtual void UpdateIndices() = 0;
     };
 } // namespace enigma::graphic
