@@ -1,228 +1,183 @@
-﻿#pragma once
+#pragma once
+
+// ============================================================================
+// ColorTargetsIndexBuffer.hpp - [REFACTOR] Main/Alt double-buffer index management
+// Part of Shader RT Fetching Feature for Flexible Deferred Rendering
+// ============================================================================
 
 #include <cstdint>
+#include "Engine/Graphic/Target/RenderTargetProviderCommon.hpp"
 
 namespace enigma::graphic
 {
     /**
-     * @brief RenderTargetsBuffer - Main/Alt双缓冲索引管理
+     * @brief ColorTargetsIndexBuffer - Main/Alt double-buffer index management for colortex0-15
      *
-     * 教学要点:
-     * 1. 存储16个colortex的读写索引（对应Iris colortex0-15）
-     * 2. Main/Alt Ping-Pong双缓冲机制：消除ResourceBarrier开销
-     * 3. 每个Pass执行前上传到GPU StructuredBuffer
-     * 4. 与Common.hlsl中的RenderTargetsBuffer结构体完全对应
+     * Key points:
+     * 1. Stores read/write indices for 16 colortex slots (Iris colortex0-15)
+     * 2. Main/Alt Ping-Pong mechanism: eliminates ResourceBarrier overhead
+     * 3. Uploaded to GPU cbuffer before each Pass execution
+     * 4. Must match HLSL ColorTargetsBuffer struct (128 bytes)
      *
-     * Iris架构参考:
-     * - RenderTargets.java: 16个RenderTarget管理
-     * - RenderTarget.java: Main + Alt纹理对（Ping-Pong机制）
-     * - https://shaders.properties/current/reference/buffers/overview/
+     * Flip state behavior:
+     * - flip = false: Main as read source, Alt as write target
+     * - flip = true:  Alt as read source, Main as write target
      *
-     * Main/Alt双缓冲工作原理:
-     * 1. flip = false时: Main作为读取源, Alt作为写入目标
-     * 2. flip = true时:  Alt作为读取源, Main作为写入目标
-     * 3. readIndices自动指向正确的纹理（flip状态切换）
-     * 4. 无需ResourceBarrier同步（90%+性能提升）
-     *
-     * 对应HLSL (Common.hlsl):
-     * ```hlsl
-     * struct ColorTargetsIndexBuffer {
-     *     uint readIndices[16];   // 读取索引（Main或Alt的Bindless索引）
-     *     uint writeIndices[16];  // 写入索引（预留，当前未使用）
-     * };
-     *
-     * // HLSL访问示例
-     * StructuredBuffer<RenderTargetsBuffer> rtBuffer =
-     *     ResourceDescriptorHeap[renderTargetsBufferIndex];
-     * uint textureIndex = rtBuffer[0].readIndices[0];  // colortex0
-     * Texture2D tex = ResourceDescriptorHeap[textureIndex];
-     * ```
-     *
-     * 使用示例（C++端）:
-     * ```cpp
-     * ColorTargetsIndexBuffer rtBuffer;
-     *
-     * // 场景1: flip = false (Pass A写Alt，Pass B读Main)
-     * rtBuffer.readIndices[0] = mainTextureIndices[0];  // 指向Main
-     * rtBuffer.writeIndices[0] = altTextureIndices[0];  // 指向Alt
-     *
-     * // 场景2: flip = true (Pass C写Main，Pass D读Alt)
-     * rtBuffer.readIndices[0] = altTextureIndices[0];   // 指向Alt
-     * rtBuffer.writeIndices[0] = mainTextureIndices[0]; // 指向Main
-     *
-     * // 上传到GPU
-     * d12Buffer->UploadData(&rtBuffer, sizeof(rtBuffer));
-     * ```
-     *
-     * @note 此结构体必须与Common.hlsl中的RenderTargetsBuffer严格对应（128 bytes）
+     * @note Size must be exactly 128 bytes to match HLSL cbuffer
      */
     struct ColorTargetsIndexBuffer
     {
-        /**
-         * @brief 读取索引数组 - colortex0-15
-         *
-         * 教学要点:
-         * 1. 存储16个RenderTarget的当前读取索引
-         * 2. 根据flip状态指向Main或Alt纹理
-         * 3. 着色器通过GetRenderTarget(rtIndex)访问
-         *
-         * 索引含义:
-         * - readIndices[0]: colortex0的Bindless纹理索引
-         * - readIndices[1]: colortex1的Bindless纹理索引
-         * - ... 依此类推
-         * - readIndices[15]: colortex15的Bindless纹理索引
-         *
-         * flip状态管理:
-         * - flip = false: readIndices[i] = mainTextureIndices[i]
-         * - flip = true:  readIndices[i] = altTextureIndices[i]
-         *
-         * HLSL访问:
-         * ```hlsl
-         * Texture2D GetRenderTarget(uint rtIndex) {
-         *     StructuredBuffer<RenderTargetsBuffer> rtBuffer =
-         *         ResourceDescriptorHeap[renderTargetsBufferIndex];
-         *     uint textureIndex = rtBuffer[0].readIndices[rtIndex];
-         *     return ResourceDescriptorHeap[textureIndex];
-         * }
-         * ```
-         */
-        uint32_t readIndices[16];
+        // Read indices for colortex0-15 (points to Main or Alt based on flip state)
+        uint32_t readIndices[CBUFFER_COLOR_TARGETS_SIZE];
+
+        // Write indices for colortex0-15 (reserved for UAV extension)
+        uint32_t writeIndices[CBUFFER_COLOR_TARGETS_SIZE];
+
+        // ===== Total: (16 + 16) * 4 = 128 bytes =====
 
         /**
-         * @brief 写入索引数组 - colortex0-15（预留）
-         *
-         * 教学要点:
-         * 1. 预留给UAV扩展（Unordered Access View）
-         * 2. 当前RTV（Render Target View）直接绑定，无需此索引
-         * 3. 未来可用于Compute Shader写入RenderTarget
-         *
-         * 预留原因:
-         * - 当前架构: RTV直接绑定到CommandList（OMSetRenderTargets）
-         * - 未来扩展: Compute Shader需要UAV访问RenderTarget
-         * - 一致性: 与Iris架构保持对齐
-         *
-         * flip状态管理（如果使用）:
-         * - flip = false: writeIndices[i] = altTextureIndices[i]
-         * - flip = true:  writeIndices[i] = mainTextureIndices[i]
-         *
-         * @note 当前实现中可设置为0，未来扩展时再使用
-         */
-        uint32_t writeIndices[16];
-
-        // ===== 总计: (16 + 16) × 4 = 128 bytes =====
-
-        /**
-         * @brief 默认构造函数 - 初始化为0
+         * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
         ColorTargetsIndexBuffer()
         {
-            for (int i = 0; i < 16; ++i)
+            Reset();
+        }
+
+        // ========== [NEW] Unified API ==========
+
+        /**
+         * @brief Set single read index (unified API)
+         * @param slot Slot index (0-15)
+         * @param bindlessIndex Bindless texture index
+         */
+        void SetIndex(uint32_t slot, uint32_t bindlessIndex)
+        {
+            if (slot < CBUFFER_COLOR_TARGETS_SIZE)
             {
-                readIndices[i]  = 0;
-                writeIndices[i] = 0;
+                readIndices[slot] = bindlessIndex;
             }
         }
 
         /**
-         * @brief 设置所有readIndices（批量设置）
-         * @param indices 索引数组（至少16个元素）
-         *
-         * 使用示例:
-         * ```cpp
-         * uint32_t mainIndices[16] = { ... };
-         * rtBuffer.SetReadIndices(mainIndices);
-         * ```
+         * @brief Get single read index (unified API)
+         * @param slot Slot index (0-15)
+         * @return Bindless index, or INVALID_BINDLESS_INDEX if out of range
          */
-        void SetReadIndices(const uint32_t indices[16])
+        uint32_t GetIndex(uint32_t slot) const
         {
-            for (int i = 0; i < 16; ++i)
+            return (slot < CBUFFER_COLOR_TARGETS_SIZE) ? readIndices[slot] : INVALID_BINDLESS_INDEX;
+        }
+
+        /**
+         * @brief Check if buffer has any valid indices
+         * @return true if at least one index is valid
+         */
+        bool IsValid() const
+        {
+            for (uint32_t i = 0; i < CBUFFER_COLOR_TARGETS_SIZE; ++i)
+            {
+                if (readIndices[i] != INVALID_BINDLESS_INDEX)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * @brief Reset all indices to invalid state
+         */
+        void Reset()
+        {
+            for (uint32_t i = 0; i < CBUFFER_COLOR_TARGETS_SIZE; ++i)
+            {
+                readIndices[i]  = INVALID_BINDLESS_INDEX;
+                writeIndices[i] = INVALID_BINDLESS_INDEX;
+            }
+        }
+
+        // ========== Batch Operations ==========
+
+        /**
+         * @brief Set all read indices (batch operation)
+         * @param indices Array of indices (must have CBUFFER_COLOR_TARGETS_SIZE elements)
+         */
+        void SetReadIndices(const uint32_t indices[CBUFFER_COLOR_TARGETS_SIZE])
+        {
+            for (uint32_t i = 0; i < CBUFFER_COLOR_TARGETS_SIZE; ++i)
             {
                 readIndices[i] = indices[i];
             }
         }
 
         /**
-         * @brief 设置所有writeIndices（批量设置）
-         * @param indices 索引数组（至少16个元素）
+         * @brief Set all write indices (batch operation)
+         * @param indices Array of indices (must have CBUFFER_COLOR_TARGETS_SIZE elements)
          */
-        void SetWriteIndices(const uint32_t indices[16])
+        void SetWriteIndices(const uint32_t indices[CBUFFER_COLOR_TARGETS_SIZE])
         {
-            for (int i = 0; i < 16; ++i)
+            for (uint32_t i = 0; i < CBUFFER_COLOR_TARGETS_SIZE; ++i)
             {
                 writeIndices[i] = indices[i];
             }
         }
 
         /**
-         * @brief 设置单个readIndex
-         * @param rtIndex RenderTarget索引（0-15）
-         * @param textureIndex Bindless纹理索引
+         * @brief Set single read index
+         * @param rtIndex RenderTarget index (0-15)
+         * @param textureIndex Bindless texture index
          */
         void SetReadIndex(uint32_t rtIndex, uint32_t textureIndex)
         {
-            if (rtIndex < 16)
+            if (rtIndex < CBUFFER_COLOR_TARGETS_SIZE)
             {
                 readIndices[rtIndex] = textureIndex;
             }
         }
 
         /**
-         * @brief 设置单个writeIndex
-         * @param rtIndex RenderTarget索引（0-15）
-         * @param textureIndex Bindless纹理索引
+         * @brief Set single write index
+         * @param rtIndex RenderTarget index (0-15)
+         * @param textureIndex Bindless texture index
          */
         void SetWriteIndex(uint32_t rtIndex, uint32_t textureIndex)
         {
-            if (rtIndex < 16)
+            if (rtIndex < CBUFFER_COLOR_TARGETS_SIZE)
             {
                 writeIndices[rtIndex] = textureIndex;
             }
         }
 
         /**
-         * @brief Flip操作 - 交换Main和Alt索引
-         * @param mainIndices Main纹理索引数组
-         * @param altIndices Alt纹理索引数组
-         * @param useAlt true=读Alt写Main, false=读Main写Alt
-         *
-         * 教学要点:
-         * 1. Ping-Pong核心机制
-         * 2. useAlt控制读写方向
-         * 3. 消除ResourceBarrier需求
-         *
-         * 使用示例:
-         * ```cpp
-         * // Pass A写Alt，Pass B读Main
-         * rtBuffer.Flip(mainIndices, altIndices, false);
-         *
-         * // Pass C写Main，Pass D读Alt
-         * rtBuffer.Flip(mainIndices, altIndices, true);
-         * ```
+         * @brief Flip operation - swap Main and Alt indices
+         * @param mainIndices Main texture index array
+         * @param altIndices Alt texture index array
+         * @param useAlt true=read Alt write Main, false=read Main write Alt
          */
-        void Flip(const uint32_t mainIndices[16],
-                  const uint32_t altIndices[16],
+        void Flip(const uint32_t mainIndices[CBUFFER_COLOR_TARGETS_SIZE],
+                  const uint32_t altIndices[CBUFFER_COLOR_TARGETS_SIZE],
                   bool           useAlt)
         {
             if (useAlt)
             {
-                // 读Alt, 写Main
+                // Read Alt, Write Main
                 SetReadIndices(altIndices);
                 SetWriteIndices(mainIndices);
             }
             else
             {
-                // 读Main, 写Alt
+                // Read Main, Write Alt
                 SetReadIndices(mainIndices);
                 SetWriteIndices(altIndices);
             }
         }
     };
 
-    // 编译期验证: 确保结构体大小为128字节
+    // Compile-time validation: ensure struct size is 128 bytes
     static_assert(sizeof(ColorTargetsIndexBuffer) == 128,
-                  "ColorTargetsIndexBuffer must be exactly 128 bytes to match HLSL ColorTargetsIndexBuffer struct");
+                  "ColorTargetsIndexBuffer must be exactly 128 bytes to match HLSL cbuffer");
 
-    // 编译期验证: 确保数组对齐
+    // Compile-time validation: ensure proper alignment
     static_assert(alignof(ColorTargetsIndexBuffer) == 4,
                   "ColorTargetsIndexBuffer must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

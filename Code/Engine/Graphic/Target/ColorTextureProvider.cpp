@@ -1,6 +1,7 @@
 #include "ColorTextureProvider.hpp"
 #include "D12RenderTarget.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 
 #include <sstream>
 
@@ -168,11 +169,17 @@ namespace enigma::graphic
     {
         ValidateIndex(index);
         m_flipState.Flip(index);
+
+        // [NEW] Re-upload indices after flip state change
+        UpdateIndices();
     }
 
     void ColorTextureProvider::FlipAll()
     {
         m_flipState.FlipAll();
+
+        // [NEW] Re-upload indices after flip state change
+        UpdateIndices();
     }
 
     void ColorTextureProvider::Reset()
@@ -217,6 +224,74 @@ namespace enigma::graphic
         LogInfo(LogRenderTargetProvider,
                 "ColorTextureProvider:: Reconfigured colortex%d (%dx%d)",
                 index, rtWidth, rtHeight);
+
+        // [NEW] Re-upload indices after resource recreation (bindless index changed)
+        UpdateIndices();
+    }
+
+    // ============================================================================
+    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // ============================================================================
+
+    void ColorTextureProvider::RegisterUniform(UniformManager* uniformMgr)
+    {
+        if (!uniformMgr)
+        {
+            LogError(LogRenderTargetProvider,
+                     "ColorTextureProvider::RegisterUniform - UniformManager is nullptr");
+            return;
+        }
+
+        m_uniformManager = uniformMgr;
+
+        // Register ColorTargetsIndexBuffer to slot b3 with PerFrame frequency
+        m_uniformManager->RegisterBuffer<ColorTargetsIndexBuffer>(
+            SLOT_COLOR_TARGETS,
+            UpdateFrequency::PerFrame,
+            BufferSpace::Engine
+        );
+
+        LogInfo(LogRenderTargetProvider,
+                "ColorTextureProvider::RegisterUniform - Registered at slot b%u",
+                SLOT_COLOR_TARGETS);
+
+        // Initial upload of indices
+        UpdateIndices();
+    }
+
+    void ColorTextureProvider::UpdateIndices()
+    {
+        if (!m_uniformManager)
+        {
+            // Not registered yet, skip silently
+            return;
+        }
+
+        // Collect bindless indices for all active colortex slots
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            bool isFlipped = m_flipState.IsFlipped(i);
+
+            // Read index: Main if not flipped, Alt if flipped
+            uint32_t readIdx = isFlipped
+                                   ? m_renderTargets[i]->GetAltTextureIndex()
+                                   : m_renderTargets[i]->GetMainTextureIndex();
+
+            // Write index: Alt if not flipped, Main if flipped
+            uint32_t writeIdx = isFlipped
+                                    ? m_renderTargets[i]->GetMainTextureIndex()
+                                    : m_renderTargets[i]->GetAltTextureIndex();
+
+            m_indexBuffer.SetReadIndex(static_cast<uint32_t>(i), readIdx);
+            m_indexBuffer.SetWriteIndex(static_cast<uint32_t>(i), writeIdx);
+        }
+
+        // Upload to GPU via UniformManager
+        m_uniformManager->UploadBuffer(m_indexBuffer);
+
+        LogDebug(LogRenderTargetProvider,
+                 "ColorTextureProvider::UpdateIndices - Uploaded %d colortex indices",
+                 m_activeCount);
     }
 
     // ============================================================================
