@@ -1,87 +1,137 @@
 /**
  * @file Common.hlsl
- * @brief Bindless资源访问核心库 - Iris完全兼容架构 + CustomImage扩展
+ * @brief Bindless resource access core library - Iris fully compatible architecture + CustomImage extension
  * @date 2025-11-04
- * @version v3.3 - 完整注释更新（T2-T10结构体文档化）
+ * @version v3.3 - Full comment update (T2-T10 structure documentation)
  *
- * 教学要点:
- * 1. 所有着色器必须 #include "Common.hlsl"
- * 2. 支持完整Iris纹理系统: colortex, shadowcolor, depthtex, shadowtex, noisetex
- * 3. 新增CustomImage系统: customImage0-15 (自定义材质槽位)
- * 4. Main/Alt双缓冲 - 消除ResourceBarrier开销
- * 5. Bindless资源访问 - Shader Model 6.6
- * 6. MRT动态生成 - PSOutput由ShaderCodeGenerator动态创建
- * 7. Shadow系统拆分设计 - shadowcolor和shadowtex独立Buffer管理
+ *Teaching points:
+ * 1. All shaders must #include "Common.hlsl"
+ * 2. Supports the complete Iris texture system: colortex, shadowcolor, depthtex, shadowtex, noisetex
+ * 3. Added CustomImage system: customImage0-15 (custom material slot)
+ * 4. Main/Alt double buffering - eliminate ResourceBarrier overhead
+ * 5. Bindless resource access - Shader Model 6.6
+ * 6. MRT dynamic generation - PSOutput is dynamically created by ShaderCodeGenerator
+ * 7. Shadow system split design - shadowcolor and shadowtex independent Buffer management
  *
- * 主要变更 (v3.3):
- * - T2: IDData结构体完整Iris文档化（9个字段，entity/block/item ID系统）
- * - T3: BiomeAndDimensionData结构体完整文档化（12个字段，生物群系+维度属性）
- * - T4: RenderingData结构体完整文档化（17个字段，渲染阶段+雾参数+Alpha测试）
- * - T5: WorldAndWeatherData结构体完整文档化（12个字段，太阳/月亮位置+天气系统）
- * - T6: CameraAndPlayerData结构体完整文档化（相机位置+玩家状态）
- * - T7: DepthTexturesBuffer结构体文档化（depthtex0/1/2语义说明）
- * - T8: CustomImageUniforms结构体文档化（自定义材质槽位系统）
- * - T9: ShadowTexturesBuffer注释更新（独立Buffer管理，非"激进合并"）
- * - T10: 宏定义注释更新（Iris兼容性+统一接口设计）
+ *Major changes (v3.3):
+ * - T2: Complete Iris documentation of IDData structure (9 fields, entity/block/item ID system)
+ * - T3: Complete documentation of BiomeAndDimensionData structure (12 fields, biome + dimension attributes)
+ * - T4: Complete documentation of RenderingData structure (17 fields, rendering phase + fog parameters + Alpha test)
+ * - T5: WorldAndWeatherData structure fully documented (12 fields, sun/moon position + weather system)
+ * - T6: Complete documentation of CameraAndPlayerData structure (camera position + player status)
+ * - T7: DepthTexturesBuffer structure documentation (depthtex0/1/2 semantic description)
+ * - T8: CustomImageUniforms structure documentation (custom material slot system)
+ * - T9: ShadowTexturesBuffer annotation update (independent Buffer management, not "aggressive merging")
+ * - T10: Macro definition comment update (Iris compatibility + unified interface design)
  *
- * 架构参考:
+ * Architecture reference:
  * - DirectX12-Bindless-MRT-RENDERTARGETS-Architecture.md
- * - RootConstant-Redesign-v3.md (56字节拆分设计)
- * - CustomImageUniform.hpp (自定义材质槽位系统)
+ * - RootConstant-Redesign-v3.md (56-byte split design)
+ * - CustomImageUniform.hpp (custom material slot system)
  */
 
 /**
- * @brief CustomImageUniforms - 自定义材质槽位常量缓冲区（64 bytes）
+ * @brief CustomImageUniforms - Custom material slot constant buffer (64 bytes)
  *
- * 教学要点:
- * 1. 使用cbuffer存储16个自定义材质槽位（customImage0-15）的Bindless索引
- * 2. PerObject频率 - 每次Draw Call可以独立更新不同材质
- * 3. 通过Root CBV直接访问 - 高性能，无需StructuredBuffer间接
- * 4. 64字节对齐 - GPU友好，无需额外padding
+ *Teaching points:
+ * 1. Use cbuffer to store the Bindless index of 16 custom material slots (customImage0-15)
+ * 2. PerObject frequency - each Draw Call can independently update different materials
+ * 3. Direct access through Root CBV - high performance, no need for StructuredBuffer indirection
+ * 4. 64-byte alignment - GPU friendly, no additional padding required
  *
- * 架构设计:
- * - 结构体大小：64字节（16个uint索引）
- * - PerObject频率，支持每个物体独立材质
- * - Root CBV绑定，零间接开销
- * - 与Iris风格兼容（customImage0-15宏）
+ * Architectural design:
+ * - Structure size: 64 bytes (16 uint indexes)
+ * - PerObject frequency, supports independent materials for each object
+ * - Root CBV binding, zero overhead
+ * - Compatible with Iris style (customImage0-15 macro)
  *
- * 使用场景:
- * - 延迟渲染PBR材质贴图
- * - 自定义后处理LUT纹理
- * - 特效贴图（噪声、遮罩等）
+ * Usage scenarios:
+ * - Deferred rendering PBR material map
+ * - Custom post-processing LUT texture
+ * - Special effect maps (noise, mask, etc.)
  *
- * 对应C++: CustomImageUniform.hpp（注意：C++端是单数命名）
+ * Corresponding to C++: CustomImageUniform.hpp (note: the C++ side is named in the singular)
  */
 cbuffer CustomImageUniforms: register(b2)
 {
-    uint customImageIndices[16]; // customImage0-15的Bindless索引
+    uint customImageIndices[16]; // customImage0-15 Bindless indices
 };
 
+//──────────────────────────────────────────────────────────────────────────────
+// [NEW] RenderTarget Index Buffers - Shader RT Fetching Feature
+//──────────────────────────────────────────────────────────────────────────────
 
 /**
- * @brief PerObjectUniforms - Per-Object数据常量缓冲区 (cbuffer register(b1))
+ * @brief ColorTargetsBuffer - Color RT indices (128 bytes)
+ * @register b3
+ * Stores Bindless indices for colortex0-15 with flip support.
+ * C++ counterpart: ColorTargetsIndexBuffer.hpp
+ */
+cbuffer ColorTargetsBuffer : register(b3)
+{
+    uint colorReadIndices[16]; // colortex0-15 read indices
+    uint colorWriteIndices[16]; // colortex0-15 write indices (ping-pong)
+};
+
+/**
+ * @brief DepthTexturesBuffer - Depth RT indices (64 bytes)
+ * @register b4
+ * Stores Bindless indices for depthtex0-15. No flip mechanism.
+ * C++ counterpart: DepthTexturesIndexBuffer.hpp
+ */
+cbuffer DepthTexturesBuffer : register(b4)
+{
+    uint depthTextureIndices[16]; // depthtex0-15 indices
+};
+
+/**
+ * @brief ShadowColorBuffer - Shadow color RT indices (64 bytes)
+ * @register b5
+ * Stores Bindless indices for shadowcolor0-7 with flip support.
+ * C++ counterpart: ShadowColorIndexBuffer.hpp
+ */
+cbuffer ShadowColorBuffer : register(b5)
+{
+    uint shadowColorReadIndices[8]; // shadowcolor0-7 read indices
+    uint shadowColorWriteIndices[8]; // shadowcolor0-7 write indices
+};
+
+/**
+ * @brief ShadowTexturesBuffer - Shadow depth RT indices (16 bytes)
+ * @register b6
+ * Stores Bindless indices for shadowtex0-1. No flip mechanism.
+ * C++ counterpart: ShadowTexturesIndexBuffer.hpp
+ */
+cbuffer ShadowTexturesBuffer : register(b6)
+{
+    uint shadowtex0Index; // shadowtex0 Bindless index
+    uint shadowtex1Index; // shadowtex1 Bindless index
+    uint _shadowTexPad[2]; // Padding for 16-byte alignment
+};
+
+/**
+ * @brief PerObjectUniforms - Per-Object data constant buffer (cbuffer register(b1))
  *
- * 教学要点:
- * 1. 使用 cbuffer 存储每个物体的变换矩阵和颜色
- * 2. GPU 硬件直接优化 cbuffer 访问
- * 3. 支持 Per-Object draw 模式（每次 Draw Call 更新）
- * 4. 字段顺序必须与 PerObjectUniforms.hpp 完全一致
- * 5. 使用 float4 存储 Rgba8 颜色（已在 CPU 侧转换）
+ *Teaching points:
+ * 1. Use cbuffer to store the transformation matrix and color of each object
+ * 2. GPU hardware directly optimizes cbuffer access
+ * 3. Support Per-Object draw mode (updated every Draw Call)
+ * 4. The field order must be exactly the same as PerObjectUniforms.hpp
+ * 5. Use float4 to store Rgba8 colors (converted on CPU side)
  *
- * 架构优势:
- * - 高性能: Root CBV 直接访问，无需 StructuredBuffer indirection
- * - 内存对齐: 16字节对齐，GPU 友好
- * - 兼容性: 支持 Instancing 和 Per-Object 数据
+ * Architectural advantages:
+ * - High performance: Root CBV direct access, no StructuredBuffer indirection required
+ * - Memory alignment: 16-byte alignment, GPU friendly
+ * - Compatibility: Supports Instancing and Per-Object data
  *
- * 对应 C++: PerObjectUniforms.hpp
+ * Corresponding to C++: PerObjectUniforms.hpp
  */
 cbuffer PerObjectUniforms : register(b1)
 {
-    float4x4 modelMatrix; // 模型矩阵（模型空间 → 世界空间）
-    float4x4 modelMatrixInverse; // 模型逆矩阵（世界空间 → 模型空间）
-    float4   modelColor; // 模型颜色（RGBA，已归一化到 [0,1]）
+    float4x4 modelMatrix; // Model matrix (model space → world space)
+    float4x4 modelMatrixInverse; // Model inverse matrix (world space → model space)
+    float4   modelColor; // Model color (RGBA, normalized to [0,1])
 };
-
 
 cbuffer Matrices : register(b7)
 {
@@ -91,151 +141,89 @@ cbuffer Matrices : register(b7)
     float4x4 gbufferProjectionInverse;
     float4x4 gbufferRenderer;
 
-    /**
-     * @brief 阴影模型视图矩阵
-     * @type mat4
-     * @iris shadowView
-     *
-     * 教学要点:
-     * - 将模型空间转换到阴影视图空间
-     * - 用于shadow着色器
-     */
     float4x4 shadowView;
-
-    /**
-     * @brief 阴影模型视图逆矩阵
-     * @type mat4
-     * @iris shadowViewInverse
-     *
-     * 教学要点: 将阴影视图空间转换回模型空间
-     */
     float4x4 shadowViewInverse;
-
-    /**
-     * @brief 阴影投影矩阵
-     * @type mat4
-     * @iris shadowProjection
-     *
-     * 教学要点:
-     * - 将阴影视图空间转换到阴影裁剪空间
-     * - 通常使用正交投影
-     */
     float4x4 shadowProjection;
-
-    /**
-     * @brief 阴影投影逆矩阵
-     * @type mat4
-     * @iris shadowProjectionInverse
-     *
-     * 教学要点: 将阴影裁剪/屏幕空间转换回阴影视图空间
-     */
     float4x4 shadowProjectionInverse;
 
-    /**
-     * @brief 法线矩阵（3x3存储在4x4中）
-     * @type mat3 (stored as mat4)
-     * @iris normalMatrix
-     *
-     * 教学要点:
-     * - 用于变换法线向量
-     * - 通常为ModelView矩阵的逆转置
-     * - HLSL中使用前3x3部分
-     */
     float4x4 normalMatrix;
 
-    /**
-     * @brief 纹理矩阵
-     * @type mat4
-     * @iris textureMatrix
-     *
-     * 教学要点:
-     * - 用于纹理坐标变换（gl_TextureMatrix[0]）
-     * - 主要用于 gbuffers_armor_glint 的纹理滚动效果
-     * - 也可能被模组应用到其他几何体
-     * - 等价于 GLSL 中的 gl_TextureMatrix[0]
-     *
-     * HLSL使用示例:
-     * ```hlsl
-     * float2 coord = mul(textureMatrix, float4(vaUV0, 0.0, 1.0)).xy;
-     * ```
-     */
     float4x4 textureMatrix;
 };
 
 
 /**
- * @brief 获取自定义材质槽位的Bindless索引 新增
- * @param slotIndex 槽位索引（0-15）
- * @return Bindless索引，如果槽位未设置则返回UINT32_MAX (0xFFFFFFFF)
+ * @brief Get the Bindless index of the custom material slot Newly added
+ * @param slotIndex slot index (0-15)
+ * @return Bindless index, if the slot is not set, return UINT32_MAX (0xFFFFFFFF)
  *
- * 教学要点:
- * - 直接访问cbuffer CustomImageUniforms获取Bindless索引
- * - 返回值为Bindless索引，可直接访问ResourceDescriptorHeap
- * - UINT32_MAX表示槽位未设置，使用前应检查有效性
+ *Teaching points:
+ * - Directly access cbuffer CustomImageUniforms to obtain Bindless index
+ * - The return value is a Bindless index, which can directly access ResourceDescriptorHeap
+ * - UINT32_MAX indicates that the slot is not set and the validity should be checked before use.
  *
- * 工作原理:
- * 1. 直接从cbuffer CustomImageUniforms读取索引（Root CBV高性能访问）
- * 2. 查询customImageIndices[slotIndex]获取Bindless索引
- * 3. 返回索引供GetCustomImage()使用
+ * Working principle:
+ * 1. Read the index directly from cbuffer CustomImageUniforms (Root CBV high-performance access)
+ * 2. Query customImageIndices[slotIndex] to obtain the Bindless index
+ * 3. Return the index for use by GetCustomImage()
  *
- * 安全性:
- * - 槽位索引会被限制在0-15范围内
- * - 超出范围返回UINT32_MAX（无效索引）
+ * Security:
+ * - Slot index will be limited to the range 0-15
+ * - Out of range returns UINT32_MAX (invalid index)
  */
 uint GetCustomImageIndex(uint slotIndex)
 {
-    // 防止越界访问
+    // Prevent out-of-bounds access
     if (slotIndex >= 16)
     {
-        return 0xFFFFFFFF; // UINT32_MAX - 无效索引
+        return 0xFFFFFFFF; // UINT32_MAX - invalid index
     }
-    // 2. 查询指定槽位的Bindless索引
+    // 2. Query the Bindless index of the specified slot
     uint bindlessIndex = customImageIndices[slotIndex];
 
-    // 3. 返回Bindless索引
+    // 3. Return the Bindless index
     return bindlessIndex;
 }
 
 /**
- * @brief 获取自定义材质纹理（便捷访问函数）新增
- * @param slotIndex 槽位索引（0-15）
- * @return 对应的Bindless纹理（Texture2D）
+ * @brief Get custom material texture (convenient access function) added
+ * @param slotIndex slot index (0-15)
+ * @return corresponding Bindless texture (Texture2D)
  *
- * 教学要点:
- * - 封装GetCustomImageIndex() + ResourceDescriptorHeap访问
- * - 自动处理无效索引情况（返回黑色纹理或默认纹理）
- * - 遵循Iris纹理访问模式
+ *Teaching points:
+ * - Encapsulates GetCustomImageIndex() + ResourceDescriptorHeap access
+ * - Automatically handle invalid index cases (return black texture or default texture)
+ * - Follows the Iris texture access pattern
  *
- * 使用示例:
+ * Usage example:
  * ```hlsl
- * // 获取albedo贴图（假设slot 0存储albedo）
+ * // Get the albedo map (assuming slot 0 stores albedo)
  * Texture2D albedoTex = GetCustomImage(0);
  * float4 albedo = albedoTex.Sample(linearSampler, uv);
  *
- * // 获取roughness贴图（假设slot 1存储roughness）
+ * // Get the roughness map (assuming slot 1 stores roughness)
  * Texture2D roughnessTex = GetCustomImage(1);
  * float roughness = roughnessTex.Sample(linearSampler, uv).r;
  * ```
  *
- * 注意:
- * - 如果槽位未设置（UINT32_MAX），访问ResourceDescriptorHeap可能导致未定义行为
- * - 调用前应确保槽位已正确设置，或使用默认值处理
+ * Note:
+ * - If slot is not set (UINT32_MAX), accessing ResourceDescriptorHeap may cause undefined behavior
+ * - Before calling, make sure the slot is set correctly, or use the default value.
  */
 Texture2D GetCustomImage(uint slotIndex)
 {
-    // 1. 获取Bindless索引
+    // 1. Get the Bindless index
     uint bindlessIndex = GetCustomImageIndex(slotIndex);
 
-    // 2. 通过Bindless索引访问全局描述符堆
-    // 注意：如果bindlessIndex为UINT32_MAX，这里可能需要额外的有效性检查
-    // 当前设计假设C++端会确保所有使用的槽位都已正确设置
+    // 2. Access the global descriptor heap through Bindless index
+    // Note: If bindlessIndex is UINT32_MAX, additional validity checks may be required here.
+    // The current design assumes that the C++ side will ensure that all used slots are set correctly
     return ResourceDescriptorHeap[bindlessIndex];
 }
 
-//──────────────────────────────────────────────────────
-// Iris兼容宏（完整纹理系统）
-//──────────────────────────────────────────────────────
-
+//─────────────────────────────────────────────────
+// Iris compatible macros (full texture system)
+//─────────────────────────────────────────────────
 #define customImage0  GetCustomImage(0)
 #define customImage1  GetCustomImage(1)
 #define customImage2  GetCustomImage(2)
@@ -252,6 +240,96 @@ Texture2D GetCustomImage(uint slotIndex)
 #define customImage13 GetCustomImage(13)
 #define customImage14 GetCustomImage(14)
 #define customImage15 GetCustomImage(15)
+
+//──────────────────────────────────────────────────────────────────────────────
+// [NEW] RenderTarget Access Functions - Shader RT Fetching Feature
+//──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @brief Get color texture by slot index (colortex0-15)
+ * @param slot Slot index [0-15]
+ * @return Texture2D from ResourceDescriptorHeap
+ */
+Texture2D GetColorTexture(uint slot)
+{
+    if (slot >= 16) return ResourceDescriptorHeap[0]; // Safe fallback
+    return ResourceDescriptorHeap[colorReadIndices[slot]];
+}
+
+/**
+ * @brief Get depth texture by slot index (depthtex0-15)
+ * @param slot Slot index [0-15]
+ * @return Texture2D from ResourceDescriptorHeap
+ */
+Texture2D GetDepthTexture(uint slot)
+{
+    if (slot >= 16) return ResourceDescriptorHeap[0];
+    return ResourceDescriptorHeap[depthTextureIndices[slot]];
+}
+
+/**
+ * @brief Get shadow color texture by slot index (shadowcolor0-7)
+ * @param slot Slot index [0-7]
+ * @return Texture2D from ResourceDescriptorHeap
+ */
+Texture2D GetShadowColor(uint slot)
+{
+    if (slot >= 8) return ResourceDescriptorHeap[0];
+    return ResourceDescriptorHeap[shadowColorReadIndices[slot]];
+}
+
+/**
+ * @brief Get shadow depth texture by slot index (shadowtex0-1)
+ * @param slot Slot index [0-1]
+ * @return Texture2D from ResourceDescriptorHeap
+ */
+Texture2D GetShadowTexture(uint slot)
+{
+    if (slot == 0) return ResourceDescriptorHeap[shadowtex0Index];
+    if (slot == 1) return ResourceDescriptorHeap[shadowtex1Index];
+    return ResourceDescriptorHeap[0];
+}
+
+//──────────────────────────────────────────────────────────────────────────────
+// Iris Compatibility Macros - colortex, depthtex, shadowcolor, shadowtex
+//──────────────────────────────────────────────────────────────────────────────
+
+// colortex0-15
+#define colortex0  GetColorTexture(0)
+#define colortex1  GetColorTexture(1)
+#define colortex2  GetColorTexture(2)
+#define colortex3  GetColorTexture(3)
+#define colortex4  GetColorTexture(4)
+#define colortex5  GetColorTexture(5)
+#define colortex6  GetColorTexture(6)
+#define colortex7  GetColorTexture(7)
+#define colortex8  GetColorTexture(8)
+#define colortex9  GetColorTexture(9)
+#define colortex10 GetColorTexture(10)
+#define colortex11 GetColorTexture(11)
+#define colortex12 GetColorTexture(12)
+#define colortex13 GetColorTexture(13)
+#define colortex14 GetColorTexture(14)
+#define colortex15 GetColorTexture(15)
+
+// depthtex0-2 (commonly used)
+#define depthtex0  GetDepthTexture(0)
+#define depthtex1  GetDepthTexture(1)
+#define depthtex2  GetDepthTexture(2)
+
+// shadowcolor0-7
+#define shadowcolor0 GetShadowColor(0)
+#define shadowcolor1 GetShadowColor(1)
+#define shadowcolor2 GetShadowColor(2)
+#define shadowcolor3 GetShadowColor(3)
+#define shadowcolor4 GetShadowColor(4)
+#define shadowcolor5 GetShadowColor(5)
+#define shadowcolor6 GetShadowColor(6)
+#define shadowcolor7 GetShadowColor(7)
+
+// shadowtex0-1
+#define shadowtex0 GetShadowTexture(0)
+#define shadowtex1 GetShadowTexture(1)
 
 
 /**
@@ -271,35 +349,9 @@ SamplerState pointSampler: register(s1); // point sampling
 SamplerState shadowSampler: register(s2); // Shadow comparison sampler
 SamplerState wrapSampler : register(s3); // Point sampling with WRAP mode
 
-//──────────────────────────────────────────────────────
-// 注意事项
-//──────────────────────────────────────────────────────
-
-/**
- * 不在Common.hlsl中定义固定的PSOutput！
- * + PSOutput由ShaderCodeGenerator动态生成
- *
- * 原因:
- * 1. 每个Shader的RENDERTARGETS注释不同
- * 2. PSOutput必须与实际输出RT数量匹配
- * 3. 固定16个输出会浪费寄存器和性能
- *
- * 示例:
- * cpp
- * // ShaderCodeGenerator根据 RENDERTARGETS: 0,3,7,12 动态生成:
- * struct PSOutput {
- *     float4 Color0 : SV_Target0;  // → colortex0
- *     float4 Color1 : SV_Target1;  // → colortex3
- *     float4 Color2 : SV_Target2;  // → colortex7
- *     float4 Color3 : SV_Target3;  // → colortex12
- * };
- * 
- */
-
-//──────────────────────────────────────────────────────
-// 固定 Input Layout (顶点格式) - 保留用于Gbuffers
-//──────────────────────────────────────────────────────
-
+//─────────────────────────────────────────────────
+// Fixed Input Layout (vertex format) - reserved for Gbuffers
+//─────────────────────────────────────────────────
 /**
  * @brief vertex shader input structure
  *
@@ -334,17 +386,13 @@ struct VSOutput
     float3 WorldPos : TEXCOORD1; // World space position
 };
 
-// 像素着色器输入 (与 VSOutput 相同)
+// Pixel shader input (same as VSOutput)
 typedef VSOutput PSInput;
 
-//──────────────────────────────────────────────────────
-// 辅助函数
-//──────────────────────────────────────────────────────
-
 /**
- * @brief 解包 Rgba8 颜色 (uint → float4)
- * @param packedColor 打包的 RGBA8 颜色 (0xAABBGGRR)
- * @return 解包后的 float4 颜色 (0.0-1.0 范围)
+ * @brief Unpack Rgba8 color (uint → float4)
+ * @param packedColor packed RGBA8 color (0xAABBGGRR)
+ * @return unpacked float4 color (0.0-1.0 range)
  */
 float4 UnpackRgba8(uint packedColor)
 {
@@ -356,28 +404,28 @@ float4 UnpackRgba8(uint packedColor)
 }
 
 /**
- * @brief 标准顶点变换函数（用于Fallback Shader）
- * @param input 顶点输入（VSInput结构体）
- * @return VSOutput - 变换后的顶点输出
+ * @brief Standard vertex transformation function (for Fallback Shader)
+ * @param input vertex input (VSInput structure)
+ * @return VSOutput - transformed vertex output
  *
- * 教学要点:
- * 1. 用于 gbuffers_basic 和 gbuffers_textured 的 Fallback 着色器
- * 2. 自动处理 MVP 变换、颜色解包、数据传递
- * 3. 从 Uniform Buffers 获取变换矩阵
- * 4. KISS 原则 - 极简实现，无额外计算
+ * Teaching points:
+ * 1. Fallback shader for gbuffers_basic and gbuffers_textured
+ * 2. Automatically handle MVP transformation, color unpacking, and data transfer
+ * 3. Get the transformation matrix from Uniform Buffers
+ * 4. KISS principle - minimalist implementation, no additional calculations
  *
- * 工作流程:
- * 1. [NEW] 直接访问 cbuffer Matrices 获取变换矩阵 (无需函数调用)
- * 2. 顶点位置变换: Position → ViewSpace → ClipSpace
- * 3. 法线变换: normalMatrix 变换法线向量
- * 4. 颜色解包: uint → float4
- * 5. 传递所有顶点属性到像素着色器
+ * Workflow:
+ * 1. [NEW] Directly access cbuffer Matrices to obtain the transformation matrix (no function call required)
+ * 2. Vertex position transformation: Position → ViewSpace → ClipSpace
+ * 3. Normal transformation: normalMatrix transforms the normal vector
+ * 4. Color unpacking: uint → float4
+ * 5. Pass all vertex attributes to the pixel shader
  */
 VSOutput StandardVertexTransform(VSInput input)
 {
     VSOutput output;
 
-    // 1. 顶点位置变换
+    // 1. Vertex position transformation
     float4 localPos  = float4(input.Position, 1.0);
     float4 worldPos  = mul(modelMatrix, localPos);
     float4 cameraPos = mul(gbufferView, worldPos);
@@ -389,10 +437,10 @@ VSOutput StandardVertexTransform(VSInput input)
     output.Color    = input.Color;
     output.TexCoord = input.TexCoord;
 
-    // 4. 法线变换
+    // 4. Normal transformation
     output.Normal = normalize(mul(normalMatrix, float4(input.Normal, 0.0)).xyz);
 
-    // 5. 切线和副切线
+    // 5. Tangents and secondary tangents
     output.Tangent   = normalize(mul(gbufferView, float4(input.Tangent, 0.0)).xyz);
     output.Bitangent = normalize(mul(gbufferView, float4(input.Bitangent, 0.0)).xyz);
 
