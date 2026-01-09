@@ -11,6 +11,7 @@
 #include "RenderTargetProviderException.hpp"
 #include "RTTypes.hpp"
 #include "D12DepthTexture.hpp"
+#include "Engine/Graphic/Shader/Uniform/DepthTexturesIndexBuffer.hpp"
 
 #include <vector>
 #include <memory>
@@ -20,6 +21,7 @@ namespace enigma::graphic
 {
     // Forward declarations
     class D3D12RenderSystem;
+    class UniformManager;
 
     /**
      * @class DepthTextureProvider
@@ -41,13 +43,6 @@ namespace enigma::graphic
     class DepthTextureProvider : public IRenderTargetProvider
     {
     public:
-        // ========================================================================
-        // Constants
-        // ========================================================================
-
-        static constexpr int MAX_DEPTH_TEXTURES = 3;
-        static constexpr int MIN_DEPTH_TEXTURES = 1;
-
         // ========================================================================
         // Constructor / Destructor
         // ========================================================================
@@ -120,6 +115,23 @@ namespace enigma::graphic
 
         // Dynamic Configuration
         void SetRtConfig(int index, const RTConfig& config) override;
+
+        // ========================================================================
+        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // ========================================================================
+
+        /**
+         * @brief Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (dependency injection)
+         * @note Must be called before UpdateIndices()
+         */
+        void RegisterUniform(UniformManager* uniformMgr);
+
+        /**
+         * @brief Update and upload bindless indices to GPU
+         * @note Call after resource recreation (SetRtConfig)
+         */
+        void UpdateIndices();
 
         // ========================================================================
         // Extended API (DepthTexture-specific)
@@ -202,5 +214,9 @@ namespace enigma::graphic
         int m_baseWidth   = 0;
         int m_baseHeight  = 0;
         int m_activeCount = 0;
+
+        // [NEW] Uniform registration for Shader RT Fetching
+        UniformManager*          m_uniformManager = nullptr;
+        DepthTexturesIndexBuffer m_indexBuffer;
     };
 } // namespace enigma::graphic

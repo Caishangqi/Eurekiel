@@ -5,6 +5,7 @@
 
 #include "DepthTextureProvider.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 
 #include <sstream>
 #include <stdexcept>
@@ -247,6 +248,62 @@ namespace enigma::graphic
 
         LogInfo(LogRenderTargetProvider, "depthtex%d reconfigured to %dx%d",
                 index, config.width, config.height);
+
+        // [NEW] Re-upload indices after resource recreation
+        UpdateIndices();
+    }
+
+    // ============================================================================
+    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // ============================================================================
+
+    void DepthTextureProvider::RegisterUniform(UniformManager* uniformMgr)
+    {
+        if (!uniformMgr)
+        {
+            LogError(LogRenderTargetProvider,
+                     "DepthTextureProvider::RegisterUniform - UniformManager is nullptr");
+            return;
+        }
+
+        m_uniformManager = uniformMgr;
+
+        // Register buffer at slot b4 (SLOT_DEPTH_TEXTURES)
+        m_uniformManager->RegisterBuffer<DepthTexturesIndexBuffer>(
+            SLOT_DEPTH_TEXTURES,
+            UpdateFrequency::PerFrame,
+            BufferSpace::Engine
+        );
+
+        LogInfo(LogRenderTargetProvider,
+                "DepthTextureProvider::RegisterUniform - Registered at slot b%u",
+                SLOT_DEPTH_TEXTURES);
+
+        // Initial upload
+        UpdateIndices();
+    }
+
+    void DepthTextureProvider::UpdateIndices()
+    {
+        if (!m_uniformManager)
+        {
+            return;
+        }
+
+        // Collect bindless indices for all active depth textures
+        // Note: Depth textures have no flip mechanism - only read indices
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            uint32_t bindlessIdx = GetMainTextureIndex(i);
+            m_indexBuffer.SetIndex(static_cast<uint32_t>(i), bindlessIdx);
+        }
+
+        // Upload to GPU
+        m_uniformManager->UploadBuffer(m_indexBuffer);
+
+        LogDebug(LogRenderTargetProvider,
+                 "DepthTextureProvider::UpdateIndices - Uploaded %d depthtex indices",
+                 m_activeCount);
     }
 
     // ============================================================================
