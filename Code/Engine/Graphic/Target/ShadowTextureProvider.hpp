@@ -10,6 +10,7 @@
 #include "RenderTargetProviderCommon.hpp"
 #include "RenderTargetProviderException.hpp"
 #include "D12DepthTexture.hpp"
+#include "Engine/Graphic/Shader/Uniform/ShadowTexturesIndexBuffer.hpp"
 
 #include <vector>
 #include <memory>
@@ -19,6 +20,7 @@ namespace enigma::graphic
 {
     // Forward declarations
     class D3D12RenderSystem;
+    class UniformManager;
 
     /**
      * @class ShadowTextureProvider
@@ -44,13 +46,6 @@ namespace enigma::graphic
     class ShadowTextureProvider : public IRenderTargetProvider
     {
     public:
-        // ========================================================================
-        // Constants
-        // ========================================================================
-
-        static constexpr int MAX_SHADOW_TEXTURES = 2;
-        static constexpr int MIN_SHADOW_TEXTURES = 1;
-
         // ========================================================================
         // Constructor / Destructor
         // ========================================================================
@@ -111,6 +106,23 @@ namespace enigma::graphic
 
         // Dynamic Configuration
         void SetRtConfig(int index, const RTConfig& config) override;
+
+        // ========================================================================
+        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // ========================================================================
+
+        /**
+         * @brief Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (dependency injection)
+         * @note Must be called before UpdateIndices()
+         */
+        void RegisterUniform(UniformManager* uniformMgr);
+
+        /**
+         * @brief Update and upload bindless indices to GPU
+         * @note Call after resource recreation (no flip for shadow textures)
+         */
+        void UpdateIndices();
 
         // ========================================================================
         // Extended API (ShadowTexture-specific)
@@ -200,5 +212,9 @@ namespace enigma::graphic
         int m_baseWidth   = 0; // Base width (can be non-square)
         int m_baseHeight  = 0; // Base height (can be non-square)
         int m_activeCount = 0;
+
+        // [NEW] Uniform registration for Shader RT Fetching
+        UniformManager*           m_uniformManager = nullptr;
+        ShadowTexturesIndexBuffer m_indexBuffer;
     };
 } // namespace enigma::graphic

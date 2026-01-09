@@ -5,6 +5,7 @@
 
 #include "ShadowTextureProvider.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 
 #include <sstream>
 #include <stdexcept>
@@ -244,6 +245,9 @@ namespace enigma::graphic
 
         LogInfo(LogRenderTargetProvider, "shadowtex%d reconfigured to %dx%d",
                 index, config.width, config.height);
+
+        // [NEW] Re-upload indices after resource recreation
+        UpdateIndices();
     }
 
     // ============================================================================
@@ -378,6 +382,60 @@ namespace enigma::graphic
         }
 
         return oss.str();
+    }
+
+    // ============================================================================
+    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // ============================================================================
+
+    void ShadowTextureProvider::RegisterUniform(UniformManager* uniformMgr)
+    {
+        if (!uniformMgr)
+        {
+            LogError(LogRenderTargetProvider,
+                     "ShadowTextureProvider::RegisterUniform - UniformManager is nullptr");
+            return;
+        }
+
+        m_uniformManager = uniformMgr;
+
+        // Register ShadowTexturesIndexBuffer to slot b6 with PerFrame frequency
+        m_uniformManager->RegisterBuffer<ShadowTexturesIndexBuffer>(
+            SLOT_SHADOW_TEXTURES,
+            UpdateFrequency::PerFrame,
+            BufferSpace::Engine
+        );
+
+        LogInfo(LogRenderTargetProvider,
+                "ShadowTextureProvider::RegisterUniform - Registered at slot b%u",
+                SLOT_SHADOW_TEXTURES);
+
+        // Initial upload of indices
+        UpdateIndices();
+    }
+
+    void ShadowTextureProvider::UpdateIndices()
+    {
+        if (!m_uniformManager)
+        {
+            // Not registered yet, skip silently
+            return;
+        }
+
+        // Collect bindless indices for shadowtex0 and shadowtex1
+        // Note: Shadow textures have no flip mechanism - only read indices
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            uint32_t bindlessIdx = GetMainTextureIndex(i);
+            m_indexBuffer.SetIndex(static_cast<uint32_t>(i), bindlessIdx);
+        }
+
+        // Upload to GPU via UniformManager
+        m_uniformManager->UploadBuffer(m_indexBuffer);
+
+        LogDebug(LogRenderTargetProvider,
+                 "ShadowTextureProvider::UpdateIndices - Uploaded %d shadowtex indices",
+                 m_activeCount);
     }
 
     // ============================================================================
