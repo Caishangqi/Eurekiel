@@ -11,6 +11,7 @@
 #include <stdexcept>
 
 #include "RTTypes.hpp"
+#include "ShadowColorProvider.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 namespace enigma::graphic
@@ -22,7 +23,8 @@ namespace enigma::graphic
     ShadowTextureProvider::ShadowTextureProvider(
         int                          baseWidth,
         int                          baseHeight,
-        const std::vector<RTConfig>& configs
+        const std::vector<RTConfig>& configs,
+        UniformManager*              uniformMgr
     )
         : m_activeCount(static_cast<int>(configs.size()))
     {
@@ -30,6 +32,12 @@ namespace enigma::graphic
         if (configs.empty() || configs.size() > MAX_SHADOW_TEXTURES)
         {
             throw std::out_of_range("ShadowTextureProvider: config count must be in [1-2]");
+        }
+
+        // [RAII] Validate UniformManager - required for Shader RT Fetching
+        if (!uniformMgr)
+        {
+            throw std::invalid_argument("ShadowTextureProvider: UniformManager cannot be null (RAII requirement)");
         }
 
         // Determine actual dimensions:
@@ -82,6 +90,9 @@ namespace enigma::graphic
 
             m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
         }
+
+        // [RAII] Register uniform buffer and perform initial upload
+        ShadowTextureProvider::RegisterUniform(uniformMgr);
 
         LogInfo(LogRenderTargetProvider, "ShadowTextureProvider created: %d textures, %dx%d",
                 m_activeCount, m_baseWidth, m_baseHeight);

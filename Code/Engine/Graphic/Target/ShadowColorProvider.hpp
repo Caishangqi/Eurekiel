@@ -52,7 +52,8 @@ namespace enigma::graphic
          * @param baseWidth Base width (for interface consistency, shadow uses fixed resolution from config)
          * @param baseHeight Base height (for interface consistency, shadow uses fixed resolution from config)
          * @param configs Vector of RTConfig for each shadowcolor (resolution from config)
-         * @throws std::invalid_argument if configs empty or invalid
+         * @param uniformMgr UniformManager pointer for Bindless index upload (required)
+         * @throws std::invalid_argument if configs empty, invalid, or uniformMgr null
          * 
          * Note: Shadow textures use fixed resolution from config, not screen-dependent.
          * Resolution is taken from configs[0].width/height (typically square).
@@ -60,7 +61,8 @@ namespace enigma::graphic
         ShadowColorProvider(
             int                          baseWidth,
             int                          baseHeight,
-            const std::vector<RTConfig>& configs
+            const std::vector<RTConfig>& configs,
+            UniformManager*              uniformMgr
         );
 
         ~ShadowColorProvider() override = default;
@@ -107,15 +109,8 @@ namespace enigma::graphic
         void SetRtConfig(int index, const RTConfig& config) override;
 
         // ========================================================================
-        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // [NEW] Uniform Update API - Shader RT Fetching Feature
         // ========================================================================
-
-        /**
-         * @brief Register index buffer to UniformManager for GPU upload
-         * @param uniformMgr UniformManager pointer (dependency injection)
-         * @note Must be called before UpdateIndices()
-         */
-        void RegisterUniform(UniformManager* uniformMgr);
 
         /**
          * @brief Update and upload bindless indices to GPU
@@ -198,6 +193,13 @@ namespace enigma::graphic
          * @return true if valid
          */
         bool IsValidIndex(int index) const;
+
+        /**
+         * @brief [RAII] Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (required, validated in constructor)
+         * @note Called internally by constructor - private to enforce RAII pattern
+         */
+        void RegisterUniform(UniformManager* uniformMgr) override;
 
         // ========================================================================
         // Private Members

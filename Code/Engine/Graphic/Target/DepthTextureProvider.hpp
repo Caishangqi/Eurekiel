@@ -52,7 +52,8 @@ namespace enigma::graphic
          * @param baseWidth Base screen width
          * @param baseHeight Base screen height
          * @param configs Vector of RTConfig for each depthtex (size determines count)
-         * @throws std::invalid_argument if dimensions invalid or configs empty
+         * @param uniformMgr UniformManager pointer for Bindless index upload (required)
+         * @throws std::invalid_argument if dimensions invalid, configs empty, or uniformMgr null
          * @throws std::out_of_range if configs.size() out of range [1-3]
          * 
          * @note Use RTConfig::DepthTarget() to create depth texture configs
@@ -60,7 +61,8 @@ namespace enigma::graphic
         DepthTextureProvider(
             int                          baseWidth,
             int                          baseHeight,
-            const std::vector<RTConfig>& configs
+            const std::vector<RTConfig>& configs,
+            UniformManager*              uniformMgr
         );
 
         ~DepthTextureProvider() override = default;
@@ -117,15 +119,8 @@ namespace enigma::graphic
         void SetRtConfig(int index, const RTConfig& config) override;
 
         // ========================================================================
-        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // [NEW] Uniform Update API - Shader RT Fetching Feature
         // ========================================================================
-
-        /**
-         * @brief Register index buffer to UniformManager for GPU upload
-         * @param uniformMgr UniformManager pointer (dependency injection)
-         * @note Must be called before UpdateIndices()
-         */
-        void RegisterUniform(UniformManager* uniformMgr);
 
         /**
          * @brief Update and upload bindless indices to GPU
@@ -203,6 +198,13 @@ namespace enigma::graphic
          * @param dstIndex Destination index
          */
         void CopyDepthInternal(ID3D12GraphicsCommandList* cmdList, int srcIndex, int dstIndex);
+
+        /**
+         * @brief [RAII] Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (required, validated in constructor)
+         * @note Called internally by constructor - private to enforce RAII pattern
+         */
+        void RegisterUniform(UniformManager* uniformMgr) override;
 
         // ========================================================================
         // Private Members

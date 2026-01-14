@@ -22,7 +22,8 @@ namespace enigma::graphic
     DepthTextureProvider::DepthTextureProvider(
         int                          baseWidth,
         int                          baseHeight,
-        const std::vector<RTConfig>& configs
+        const std::vector<RTConfig>& configs,
+        UniformManager*              uniformMgr
     )
         : m_baseWidth(baseWidth)
           , m_baseHeight(baseHeight)
@@ -38,6 +39,12 @@ namespace enigma::graphic
         if (configs.empty() || configs.size() > MAX_DEPTH_TEXTURES)
         {
             throw std::out_of_range("DepthTextureProvider: config count must be in [1-3]");
+        }
+
+        // [RAII] Validate UniformManager - required for Shader RT Fetching
+        if (!uniformMgr)
+        {
+            throw std::invalid_argument("DepthTextureProvider: UniformManager cannot be null (RAII requirement)");
         }
 
         // Reserve space
@@ -73,6 +80,9 @@ namespace enigma::graphic
 
             m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
         }
+
+        // [RAII] Register uniform buffer and perform initial upload
+        DepthTextureProvider::RegisterUniform(uniformMgr);
 
         LogInfo(LogRenderTargetProvider, "DepthTextureProvider created with %d textures", m_activeCount);
     }

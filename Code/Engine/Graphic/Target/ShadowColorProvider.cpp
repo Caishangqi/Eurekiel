@@ -16,13 +16,20 @@ namespace enigma::graphic
     ShadowColorProvider::ShadowColorProvider(
         int                          baseWidth,
         int                          baseHeight,
-        const std::vector<RTConfig>& configs)
+        const std::vector<RTConfig>& configs,
+        UniformManager*              uniformMgr)
         : m_flipState()
     {
         // Validate parameters
         if (configs.empty())
         {
             throw std::invalid_argument("ShadowColorProvider:: Config vector cannot be empty");
+        }
+
+        // [RAII] Validate UniformManager - required for Shader RT Fetching
+        if (!uniformMgr)
+        {
+            throw std::invalid_argument("ShadowColorProvider:: UniformManager cannot be null (RAII requirement)");
         }
 
         // Determine actual dimensions:
@@ -89,6 +96,9 @@ namespace enigma::graphic
             m_renderTargets[i]->Upload();
             m_renderTargets[i]->RegisterBindless();
         }
+
+        // [RAII] Register uniform buffer and perform initial upload
+        ShadowColorProvider::RegisterUniform(uniformMgr);
 
         LogInfo(LogRenderTargetProvider,
                 "ShadowColorProvider:: Initialized with %d/%d shadowcolor (%dx%d resolution)",

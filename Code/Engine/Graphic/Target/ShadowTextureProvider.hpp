@@ -55,13 +55,15 @@ namespace enigma::graphic
          * @param baseWidth Base width (for interface consistency, shadow uses fixed resolution from config)
          * @param baseHeight Base height (for interface consistency, shadow uses fixed resolution from config)
          * @param configs Vector of RTConfig for each shadowtex (use ShadowDepthTarget factory)
-         * @throws std::invalid_argument if renderSystem is null or configs invalid
+         * @param uniformMgr UniformManager pointer for Bindless index upload (required)
+         * @throws std::invalid_argument if configs invalid or uniformMgr null
          * @throws std::out_of_range if config count out of range [1-2]
          */
         ShadowTextureProvider(
             int                          baseWidth,
             int                          baseHeight,
-            const std::vector<RTConfig>& configs
+            const std::vector<RTConfig>& configs,
+            UniformManager*              uniformMgr
         );
 
         ~ShadowTextureProvider() override = default;
@@ -108,15 +110,8 @@ namespace enigma::graphic
         void SetRtConfig(int index, const RTConfig& config) override;
 
         // ========================================================================
-        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // [NEW] Uniform Update API - Shader RT Fetching Feature
         // ========================================================================
-
-        /**
-         * @brief Register index buffer to UniformManager for GPU upload
-         * @param uniformMgr UniformManager pointer (dependency injection)
-         * @note Must be called before UpdateIndices()
-         */
-        void RegisterUniform(UniformManager* uniformMgr);
 
         /**
          * @brief Update and upload bindless indices to GPU
@@ -201,6 +196,13 @@ namespace enigma::graphic
         bool IsValidIndex(int index) const;
 
         void CopyDepth(ID3D12GraphicsCommandList* cmdList, int srcIndex, int dstIndex);
+
+        /**
+         * @brief [RAII] Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (required, validated in constructor)
+         * @note Called internally by constructor - private to enforce RAII pattern
+         */
+        void RegisterUniform(UniformManager* uniformMgr) override;
 
         // ========================================================================
         // Private Members

@@ -51,12 +51,14 @@ namespace enigma::graphic
          * @param baseWidth Base screen width
          * @param baseHeight Base screen height
          * @param configs Vector of RTConfig for each colortex
-         * @throws std::invalid_argument if dimensions invalid or configs empty
+         * @param uniformMgr UniformManager pointer for Bindless index upload (required)
+         * @throws std::invalid_argument if dimensions invalid, configs empty, or uniformMgr null
          */
         ColorTextureProvider(
             int                          baseWidth,
             int                          baseHeight,
-            const std::vector<RTConfig>& configs
+            const std::vector<RTConfig>& configs,
+            UniformManager*              uniformMgr
         );
 
         ~ColorTextureProvider() override = default;
@@ -107,17 +109,22 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief Register index buffer to UniformManager for GPU upload
-         * @param uniformMgr UniformManager pointer (dependency injection)
-         * @note Must be called before UpdateIndices()
-         */
-        void RegisterUniform(UniformManager* uniformMgr);
-
-        /**
          * @brief Update and upload bindless indices to GPU
          * @note Call after Flip operations or resource recreation
          */
         void UpdateIndices();
+
+    private:
+        // ========================================================================
+        // Private Methods
+        // ========================================================================
+
+        /**
+         * @brief Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (dependency injection)
+         * @note Called internally by constructor (RAII pattern)
+         */
+        void RegisterUniform(UniformManager* uniformMgr) override;
 
         // ========================================================================
         // Extended API (ColorTexture-specific)

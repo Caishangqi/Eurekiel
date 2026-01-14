@@ -16,7 +16,8 @@ namespace enigma::graphic
     ColorTextureProvider::ColorTextureProvider(
         int                          baseWidth,
         int                          baseHeight,
-        const std::vector<RTConfig>& configs)
+        const std::vector<RTConfig>& configs,
+        UniformManager*              uniformMgr)
         : m_baseWidth(baseWidth)
           , m_baseHeight(baseHeight)
           , m_flipState()
@@ -30,6 +31,11 @@ namespace enigma::graphic
         if (configs.empty())
         {
             throw std::invalid_argument("ColorTextureProvider:: Config vector cannot be empty");
+        }
+
+        if (!uniformMgr)
+        {
+            throw std::invalid_argument("ColorTextureProvider:: UniformManager cannot be null (RAII requirement)");
         }
 
         // Clamp config count to valid range
@@ -81,6 +87,9 @@ namespace enigma::graphic
         LogInfo(LogRenderTargetProvider,
                 "ColorTextureProvider:: Initialized with %d/%d colortex (%dx%d base)",
                 m_activeCount, MAX_COLOR_TEXTURES, baseWidth, baseHeight);
+
+        // [RAII] Register uniform buffer and perform initial upload
+        ColorTextureProvider::RegisterUniform(uniformMgr);
     }
 
     // ============================================================================
@@ -273,14 +282,10 @@ namespace enigma::graphic
             bool isFlipped = m_flipState.IsFlipped(i);
 
             // Read index: Main if not flipped, Alt if flipped
-            uint32_t readIdx = isFlipped
-                                   ? m_renderTargets[i]->GetAltTextureIndex()
-                                   : m_renderTargets[i]->GetMainTextureIndex();
+            uint32_t readIdx = isFlipped ? m_renderTargets[i]->GetAltTextureIndex() : m_renderTargets[i]->GetMainTextureIndex();
 
             // Write index: Alt if not flipped, Main if flipped
-            uint32_t writeIdx = isFlipped
-                                    ? m_renderTargets[i]->GetMainTextureIndex()
-                                    : m_renderTargets[i]->GetAltTextureIndex();
+            uint32_t writeIdx = isFlipped ? m_renderTargets[i]->GetMainTextureIndex() : m_renderTargets[i]->GetAltTextureIndex();
 
             m_indexBuffer.SetReadIndex(static_cast<uint32_t>(i), readIdx);
             m_indexBuffer.SetWriteIndex(static_cast<uint32_t>(i), writeIdx);
@@ -289,9 +294,7 @@ namespace enigma::graphic
         // Upload to GPU via UniformManager
         m_uniformManager->UploadBuffer(m_indexBuffer);
 
-        LogDebug(LogRenderTargetProvider,
-                 "ColorTextureProvider::UpdateIndices - Uploaded %d colortex indices",
-                 m_activeCount);
+        LogDebug(LogRenderTargetProvider, "ColorTextureProvider::UpdateIndices - Uploaded %d colortex indices", m_activeCount);
     }
 
     // ============================================================================
