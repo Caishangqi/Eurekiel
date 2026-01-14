@@ -189,6 +189,10 @@ namespace enigma::graphic
          * Called each frame or after Flip operations to synchronize
          * the provider's bindless indices with GPU constant buffer.
          * Shader can then access RT via GetColorTexture(slot) etc.
+         * 
+         * @note RegisterUniform() is now a private implementation detail
+         *       called internally by each Provider's constructor (RAII pattern).
+         *       It is NOT part of the interface contract.
          */
         virtual void UpdateIndices() = 0;
     };
