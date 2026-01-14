@@ -14,6 +14,10 @@ namespace enigma::graphic
           , m_bottomLeft(bottomLeft)
           , m_topRight(topRight)
     {
+        // [FIX] 2D-specific RendererMatrix - identity matrix, no 3D coordinate system conversion
+        // Avoid the "one line" problem caused by Z=0 (3D matrix will compress Z=0 vertices to X=0)
+        // Y flipping is handled in GetProjectionMatrix() instead
+        m_rendererCanonicalMatrix = Mat44();
     }
 
     // ========================================================================
@@ -44,11 +48,14 @@ namespace enigma::graphic
         Vec2 size   = m_topRight - m_bottomLeft;
         Vec2 center = (m_topRight + m_bottomLeft) * 0.5f;
 
+        // [FIX] Flip Y axis for DirectX texture coordinate system (top-left origin)
+        // OpenGL: bottom = -size.y/2, top = +size.y/2
+        // DirectX: bottom = +size.y/2, top = -size.y/2 (flipped)
         Mat44 projection = Mat44::MakeOrthoProjection(
             -size.x * 0.5f,
             size.x * 0.5f,
-            -size.y * 0.5f,
-            size.y * 0.5f,
+            size.y * 0.5f, // [FIX] Swapped: was -size.y * 0.5f
+            -size.y * 0.5f, // [FIX] Swapped: was size.y * 0.5f
             m_nearPlane,
             m_farPlane
         );
