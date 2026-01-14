@@ -106,74 +106,13 @@ void RendererSubsystem::Initialize()
 void RendererSubsystem::Startup()
 {
     LogInfo(LogRenderer, "Starting up...");
-    // ==================== 创建RenderTargetManager (Milestone 3.0任务4) ====================
-    // 初始化GBuffer管理器 - 管理16个colortex RenderTarget（Iris兼容）
-    try
-    {
-        LogInfo(LogRenderer, "Creating RenderTargetManager...");
 
-        // Step 1: 准备RTConfig配置数组（16个）
-        // 参考Iris的colortex配置，使用RGBA16F（高精度）和RGBA8（辅助数据）
-        std::array<RTConfig, 16> rtConfigs = {};
-
-        // colortex0-7: RGBA16F格式（高精度渲染，适合HDR/法线/位置等）
-        for (int i = 0; i < 8; ++i)
-        {
-            rtConfigs[i] = RTConfig::ColorTargetWithScale(
-                "colortex" + std::to_string(i), // name
-                1.0f, // widthScale - 全分辨率
-                1.0f, // heightScale
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                true, // enableFlipper
-                LoadAction::Clear, // loadAction
-                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
-                false, // enableMipmap - 默认关闭
-                true, // allowLinearFilter
-                1 // sampleCount - 无MSAA
-            );
-        }
-
-        // colortex8-15: RGBA8格式（辅助数据，节省内存）
-        for (int i = 8; i < 16; ++i)
-        {
-            rtConfigs[i] = RTConfig::ColorTargetWithScale(
-                "colortex" + std::to_string(i), // name
-                1.0f, // widthScale
-                1.0f, // heightScale
-                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA8
-                true, // enableFlipper
-                LoadAction::Clear, // loadAction
-                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
-                false, // enableMipmap
-                true, // allowLinearFilter
-                1 // sampleCount
-            );
-        }
-
-        // Step 2: 从配置读取渲染尺寸和colortex数量
-        const int baseWidth     = m_configuration.renderWidth;
-        const int baseHeight    = m_configuration.renderHeight;
-        const int colorTexCount = m_configuration.gbufferColorTexCount;
-
-        LogInfo(LogRenderer, "RenderTargetManager configuration: %dx%d, %d colortex (max 16)", baseWidth, baseHeight, colorTexCount);
-
-        LogInfo(LogRenderer, "Creating ColorTextureProvider...");
-
-        // Convert std::array to std::vector for use by Provider
-        std::vector<RTConfig> colorConfigs(rtConfigs.begin(), rtConfigs.end());
-
-        m_colorTextureProvider = std::make_unique<ColorTextureProvider>(baseWidth, baseHeight, colorConfigs);
-
-        LogInfo(LogRenderer, "ColorTextureProvider created successfully (%d colortex)", colorTexCount);
-    }
-    catch (const std::exception& e)
-    {
-        LogError(LogRenderer, "Failed to create RenderTargetManager/ColorTextureProvider: %s", e.what());
-        ERROR_AND_DIE(Stringf("RenderTargetManager/ColorTextureProvider initialization failed! Error: %s", e.what()))
-    }
-
-    // ==================== Create UniformManager ====================
-    // Initialize the Uniform Buffer Manager - manage all Uniform Buffers
+    // ==================== [RAII REFACTOR] Create UniformManager FIRST ====================
+    // UniformManager must be created before all Providers (RAII dependency injection)
+    // Teaching points:
+    // - Providers require UniformManager* in constructor for Shader RT Fetching feature
+    // - RAII pattern: objects fully initialized upon construction
+    // - Dependency injection via constructor parameter
     try
     {
         LogInfo(LogRenderer, "Creating UniformManager...");
@@ -244,6 +183,75 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("UniformManager construction failed! Error: %s", e.what()))
     }
 
+    // ==================== Create ColorTextureProvider (with UniformManager) ====================
+    // Initialize GBuffer manager - manages 16 colortex RenderTargets (Iris compatible)
+    try
+    {
+        LogInfo(LogRenderer, "Creating RenderTargetManager...");
+
+        // Step 1: Prepare RTConfig array (16 configs)
+        // Reference Iris colortex config, using RGBA16F (high precision) and RGBA8 (auxiliary data)
+        std::array<RTConfig, 16> rtConfigs = {};
+
+        // colortex0-7: RGBA16F format (high precision rendering, suitable for HDR/normal/position etc.)
+        for (int i = 0; i < 8; ++i)
+        {
+            rtConfigs[i] = RTConfig::ColorTargetWithScale(
+                "colortex" + std::to_string(i), // name
+                1.0f, // widthScale - full resolution
+                1.0f, // heightScale
+                DXGI_FORMAT_R8G8B8A8_UNORM,
+                true, // enableFlipper
+                LoadAction::Clear, // loadAction
+                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
+                false, // enableMipmap - disabled by default
+                true, // allowLinearFilter
+                1 // sampleCount - no MSAA
+            );
+        }
+
+        // colortex8-15: RGBA8 format (auxiliary data, saves memory)
+        for (int i = 8; i < 16; ++i)
+        {
+            rtConfigs[i] = RTConfig::ColorTargetWithScale(
+                "colortex" + std::to_string(i), // name
+                1.0f, // widthScale
+                1.0f, // heightScale
+                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA8
+                true, // enableFlipper
+                LoadAction::Clear, // loadAction
+                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
+                false, // enableMipmap
+                true, // allowLinearFilter
+                1 // sampleCount
+            );
+        }
+
+        // Step 2: Read render dimensions and colortex count from config
+        const int baseWidth     = m_configuration.renderWidth;
+        const int baseHeight    = m_configuration.renderHeight;
+        const int colorTexCount = m_configuration.gbufferColorTexCount;
+
+        LogInfo(LogRenderer, "RenderTargetManager configuration: %dx%d, %d colortex (max 16)", baseWidth, baseHeight, colorTexCount);
+
+        LogInfo(LogRenderer, "Creating ColorTextureProvider...");
+
+        // Convert std::array to std::vector for use by Provider
+        std::vector<RTConfig> colorConfigs(rtConfigs.begin(), rtConfigs.end());
+
+        // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        m_colorTextureProvider = std::make_unique<ColorTextureProvider>(
+            baseWidth, baseHeight, colorConfigs, m_uniformManager.get()
+        );
+
+        LogInfo(LogRenderer, "ColorTextureProvider created successfully (%d colortex)", colorTexCount);
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create RenderTargetManager/ColorTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("RenderTargetManager/ColorTextureProvider initialization failed! Error: %s", e.what()))
+    }
+
     // ==================== Create CustomImageManager ====================
     // Initialize CustomImage Manager - manage 16 CustomImage slots
     try
@@ -270,6 +278,7 @@ void RendererSubsystem::Startup()
     VertexLayoutRegistry::Initialize();
     LogInfo(LogRenderer, "VertexLayoutRegistry initialized with predefined layouts");
 
+    // ==================== Create DepthTextureProvider (with UniformManager) ====================
     try
     {
         std::array<RTConfig, 3> depthConfigs = {};
@@ -283,7 +292,11 @@ void RendererSubsystem::Startup()
         LogInfo(LogRenderer, "Creating DepthTextureProvider...");
 
         std::vector<RTConfig> depthTextureVec(depthConfigs.begin(), depthConfigs.end());
-        m_depthTextureProvider = std::make_unique<DepthTextureProvider>(m_configuration.renderWidth, m_configuration.renderHeight, depthTextureVec);
+
+        // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        m_depthTextureProvider = std::make_unique<DepthTextureProvider>(
+            m_configuration.renderWidth, m_configuration.renderHeight, depthTextureVec, m_uniformManager.get()
+        );
 
         LogInfo(LogRenderer, "DepthTextureProvider created successfully (3 depthtex)");
     }
@@ -293,6 +306,7 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("DepthTextureManager/DepthTextureProvider initialization failed! Error: %s", e.what()))
     }
 
+    // ==================== Create ShadowColorProvider (with UniformManager) ====================
     try
     {
         std::array<RTConfig, 8> shadowColorConfigs = {};
@@ -310,9 +324,14 @@ void RendererSubsystem::Startup()
         }
         LogInfo(LogRenderer, "Creating ShadowColorProvider...");
 
-        // 将std::array转换为std::vector供Provider使用
+        // Convert std::array to std::vector for Provider
         std::vector<RTConfig> shadowColorVec(shadowColorConfigs.begin(), shadowColorConfigs.end());
-        m_shadowColorProvider = std::make_unique<ShadowColorProvider>(m_configuration.renderWidth, m_configuration.renderHeight, shadowColorVec);
+
+        // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        m_shadowColorProvider = std::make_unique<ShadowColorProvider>(
+            m_configuration.renderWidth, m_configuration.renderHeight, shadowColorVec, m_uniformManager.get()
+        );
+
         LogInfo(LogRenderer, "ShadowColorProvider created successfully (8 shadowcolor)");
     }
     catch (const std::exception& e)
@@ -321,6 +340,7 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("ShadowColorManager/ShadowColorProvider initialization failed! Error: %s", e.what()))
     }
 
+    // ==================== Create ShadowTextureProvider (with UniformManager) ====================
     try
     {
         LogInfo(LogRenderer, "Creating ShadowTextureManager...");
@@ -340,7 +360,11 @@ void RendererSubsystem::Startup()
 
         LogInfo(LogRenderer, "Creating ShadowTextureProvider...");
         std::vector<RTConfig> shadowTextureConfigs(shadowTexConfigs.begin(), shadowTexConfigs.end());
-        m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(m_configuration.renderWidth, m_configuration.renderHeight, shadowTextureConfigs);
+
+        // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(
+            m_configuration.renderWidth, m_configuration.renderHeight, shadowTextureConfigs, m_uniformManager.get()
+        );
 
         LogInfo(LogRenderer, "ShadowTextureProvider created successfully (2 shadowtex)");
     }
@@ -535,19 +559,19 @@ void RendererSubsystem::BeginFrame()
         LogDebug(LogRenderer, "BeginFrame: RT bindings cleared for new frame");
     }
 
-    // TODO: M2 - 准备当前维度的渲染资源
-    // 替代 PreparePipeline 调用
-    LogDebug(LogRenderer, "BeginFrame - Render resources prepared for current dimension");
+    m_colorTextureProvider->UpdateIndices();
+    m_depthTextureProvider->UpdateIndices();
+    m_shadowColorProvider->UpdateIndices();
+    m_shadowTextureProvider->UpdateIndices();
+    LogDebug(LogRenderer, "BeginFrame - RT Provider indices uploaded to GPU");
 
-    // 3. 执行清屏操作 (对应 Minecraft CLEAR 注入点)
-    // 教学要点: 这是 MixinLevelRenderer 中 CLEAR target 所在位置
     if (m_configuration.enableAutoClearColor)
     {
         // Clear SwapChain BackBuffer first
         bool success = D3D12RenderSystem::BeginFrame(
-            m_configuration.defaultClearColor, // 配置的默认颜色
-            m_configuration.defaultClearDepth, // 深度清除值
-            m_configuration.defaultClearStencil // 模板清除值
+            m_configuration.defaultClearColor, //Configured default color
+            m_configuration.defaultClearDepth, // Depth clear value
+            m_configuration.defaultClearStencil // Template clear value
         );
 
         if (!success)
