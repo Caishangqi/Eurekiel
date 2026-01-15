@@ -79,6 +79,11 @@ namespace enigma::graphic
             );
 
             m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
+
+            // [FIX] True Bindless Flow: Create() -> Upload() -> RegisterBindless()
+            // Without this, GetBindlessIndex() returns INVALID_BINDLESS_INDEX (-1)
+            m_depthTextures.back()->Upload();
+            m_depthTextures.back()->RegisterBindless();
         }
 
         // [RAII] Register uniform buffer and perform initial upload
@@ -109,7 +114,7 @@ namespace enigma::graphic
             throw CopyOperationFailedException("DepthTextureProvider", srcIndex, dstIndex);
         }
 
-        CopyDepthInternal(cmdList, srcIndex, dstIndex);
+        CopyDepth(cmdList, srcIndex, dstIndex);
     }
 
     void DepthTextureProvider::Clear(int index, const float* clearValue)
@@ -368,7 +373,7 @@ namespace enigma::graphic
             return;
         }
 
-        CopyDepthInternal(cmdList, 0, 1);
+        CopyDepth(cmdList, 0, 1);
     }
 
     void DepthTextureProvider::CopyPreHandDepth(ID3D12GraphicsCommandList* cmdList)
@@ -379,7 +384,171 @@ namespace enigma::graphic
             return;
         }
 
-        CopyDepthInternal(cmdList, 0, 2);
+        CopyDepth(cmdList, 0, 2);
+    }
+
+    // ============================================================================
+    // [NEW] Resource State Transition API - For Shader Sampling
+    // ============================================================================
+
+    void DepthTextureProvider::TransitionToShaderResource(int index)
+    {
+        ValidateIndex(index);
+
+        ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        if (!cmdList)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToShaderResource: No active command list");
+            return;
+        }
+
+        auto depthTex = m_depthTextures[index];
+        if (!depthTex)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToShaderResource: depthtex%d is null", index);
+            return;
+        }
+
+        auto resource = depthTex->GetDepthTextureResource();
+        if (!resource)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToShaderResource: depthtex%d resource is null", index);
+            return;
+        }
+
+        // Transition: DEPTH_WRITE -> PIXEL_SHADER_RESOURCE
+        D3D12_RESOURCE_BARRIER barrier;
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = resource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        D3D12RenderSystem::TransitionResources(cmdList, &barrier, 1, "DepthTextureProvider::ToShaderResource");
+
+        LogDebug(LogRenderTargetProvider, "depthtex%d transitioned to PIXEL_SHADER_RESOURCE", index);
+    }
+
+    void DepthTextureProvider::TransitionToDepthWrite(int index)
+    {
+        ValidateIndex(index);
+
+        ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        if (!cmdList)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToDepthWrite: No active command list");
+            return;
+        }
+
+        auto depthTex = m_depthTextures[index];
+        if (!depthTex)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToDepthWrite: depthtex%d is null", index);
+            return;
+        }
+
+        auto resource = depthTex->GetDepthTextureResource();
+        if (!resource)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionToDepthWrite: depthtex%d resource is null", index);
+            return;
+        }
+
+        // Transition: PIXEL_SHADER_RESOURCE -> DEPTH_WRITE
+        D3D12_RESOURCE_BARRIER barrier;
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource   = resource;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+        D3D12RenderSystem::TransitionResources(cmdList, &barrier, 1, "DepthTextureProvider::ToDepthWrite");
+
+        LogDebug(LogRenderTargetProvider, "depthtex%d transitioned to DEPTH_WRITE", index);
+    }
+
+    void DepthTextureProvider::TransitionAllToShaderResource()
+    {
+        ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        if (!cmdList)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionAllToShaderResource: No active command list");
+            return;
+        }
+
+        // Batch all transitions for efficiency
+        std::vector<D3D12_RESOURCE_BARRIER> barriers;
+        barriers.reserve(m_activeCount);
+
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            auto depthTex = m_depthTextures[i];
+            if (!depthTex) continue;
+
+            auto resource = depthTex->GetDepthTextureResource();
+            if (!resource) continue;
+
+            D3D12_RESOURCE_BARRIER barrier;
+            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            barrier.Transition.pResource   = resource;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            barriers.push_back(barrier);
+        }
+
+        if (!barriers.empty())
+        {
+            D3D12RenderSystem::TransitionResources(cmdList, barriers.data(),
+                                                   static_cast<UINT>(barriers.size()), "DepthTextureProvider::AllToShaderResource");
+        }
+
+        LogDebug(LogRenderTargetProvider, "All %d depthtex transitioned to PIXEL_SHADER_RESOURCE", m_activeCount);
+    }
+
+    void DepthTextureProvider::TransitionAllToDepthWrite()
+    {
+        ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        if (!cmdList)
+        {
+            LogWarn(LogRenderTargetProvider, "TransitionAllToDepthWrite: No active command list");
+            return;
+        }
+
+        // Batch all transitions for efficiency
+        std::vector<D3D12_RESOURCE_BARRIER> barriers;
+        barriers.reserve(m_activeCount);
+
+        for (int i = 0; i < m_activeCount; ++i)
+        {
+            auto depthTex = m_depthTextures[i];
+            if (!depthTex) continue;
+
+            auto resource = depthTex->GetDepthTextureResource();
+            if (!resource) continue;
+
+            D3D12_RESOURCE_BARRIER barrier;
+            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            barrier.Transition.pResource   = resource;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+            barriers.push_back(barrier);
+        }
+
+        if (!barriers.empty())
+        {
+            D3D12RenderSystem::TransitionResources(cmdList, barriers.data(),
+                                                   static_cast<UINT>(barriers.size()), "DepthTextureProvider::AllToDepthWrite");
+        }
+
+        LogDebug(LogRenderTargetProvider, "All %d depthtex transitioned to DEPTH_WRITE", m_activeCount);
     }
 
     // ============================================================================
@@ -486,7 +655,12 @@ namespace enigma::graphic
         return index >= 0 && index < m_activeCount;
     }
 
-    void DepthTextureProvider::CopyDepthInternal(
+
+    // ============================================================================
+    // Private Methods - Copy
+    // ============================================================================
+
+    void DepthTextureProvider::CopyDepth(
         ID3D12GraphicsCommandList* cmdList,
         int                        srcIndex,
         int                        dstIndex
