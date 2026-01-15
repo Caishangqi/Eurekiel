@@ -208,6 +208,19 @@ namespace enigma::graphic
 
         bool                  UploadToGPU(ID3D12GraphicsCommandList* commandList, class UploadContext& uploadContext) override;
         D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
+
+        /**
+         * @brief Override D12Resource virtual function: depth texture does not require CPU data
+         * @return always returns false
+         *
+         *Teaching points:
+         * 1. The depth texture is the GPU rendering output target and is written directly by the GPU.
+         * 2. Unlike Input Texture (texture), depth texture does not require CPU data to be uploaded.
+         * 3. Override this method to let the base class Upload() skip CPU data checking
+         * 4. Consistent with the design of D12RenderTarget::RequiresCPUData()
+         */
+        bool RequiresCPUData() const override { return false; }
+
         // ==================== 尺寸和属性管理 ====================
 
         /**
@@ -348,6 +361,18 @@ namespace enigma::graphic
          * @return 类型化格式 (如果支持)
          */
         static DXGI_FORMAT GetTypedFormat(DXGI_FORMAT depthFormat);
+
+        /**
+         * @brief [NEW] 获取对应的 TYPELESS 格式 (用于资源创建)
+         * @param depthFormat 深度格式
+         * @return TYPELESS 格式
+         *
+         * D3D12 规则: 同时作为 DSV 和 SRV 使用，必须用 TYPELESS 格式创建资源
+         * - D32_FLOAT -> R32_TYPELESS
+         * - D24_UNORM_S8_UINT -> R24G8_TYPELESS
+         * - D16_UNORM -> R16_TYPELESS
+         */
+        static DXGI_FORMAT GetTypelessFormat(DXGI_FORMAT depthFormat);
 
     private:
         // ==================== 内部辅助方法 ====================

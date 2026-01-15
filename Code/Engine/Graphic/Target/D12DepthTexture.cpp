@@ -36,7 +36,9 @@ namespace enigma::graphic
           , m_depthFormat(createInfo.depthFormat)
           , m_clearDepth(createInfo.clearDepth)
           , m_clearStencil(createInfo.clearStencil)
-          , m_supportSampling(createInfo.depthFormat == DXGI_FORMAT_D32_FLOAT) // D32_FLOAT 支持采样（对应旧 ShadowMap）
+          // [FIX] Sampling is supported in all depth formats since resources are now created using the TYPELESS format
+          // Previously, only D32_FLOAT supported sampling, now D24_UNORM_S8_UINT can also be supported through R24G8_TYPELESS
+          , m_supportSampling(true)
           , m_hasValidDSV(false)
           , m_hasValidSRV(false)
           , m_formattedDebugName() // 初始化格式化调试名称
@@ -65,8 +67,8 @@ namespace enigma::graphic
             CreateShaderResourceView();
         }
 
-        // 4. 设置调试名称 - 对应Iris的GLDebug.nameObject()
-        SetDebugName(createInfo.name);
+        // 4. Set the debugging name - corresponding to Iris' GLDebug.nameObject()
+        D12DepthTexture::SetDebugName(createInfo.name);
 
         // 资源创建成功后，基类的SetResource方法已经设置了有效状态
         // 不需要手动设置m_isValid
@@ -213,6 +215,15 @@ namespace enigma::graphic
             &srvDesc,
             GetBindlessIndex()
         );
+
+        // [FIX] Mark SRV created
+        m_hasValidSRV = true;
+
+        // Add log
+        LogInfo(LogRenderer, "[D12DepthTexture] Created SRV in GlobalHeap for '%s': Format=0x%X, BindlessIndex=%u",
+                m_name.c_str(),
+                static_cast<unsigned int>(srvFormat),
+                GetBindlessIndex());
 
         // 教学要点:
         // - 深度纹理的SRV允许在着色器中读取深度值
@@ -519,6 +530,30 @@ namespace enigma::graphic
         }
     }
 
+    /**
+         * [NEW] Get the corresponding TYPELESS format (for resource creation)
+         *
+         * D3D12 rules: To be used as both DSV and SRV, resources must be created in TYPEELESS format
+         * Format mapping:
+         * - D32_FLOAT -> R32_TYPELESS
+         * - D24_UNORM_S8_UINT -> R24G8_TYPELESS
+         * - D16_UNORM -> R16_TYPELESS
+         */
+    DXGI_FORMAT D12DepthTexture::GetTypelessFormat(DXGI_FORMAT depthFormat)
+    {
+        switch (depthFormat)
+        {
+        case DXGI_FORMAT_D32_FLOAT:
+            return DXGI_FORMAT_R32_TYPELESS;
+        case DXGI_FORMAT_D24_UNORM_S8_UINT:
+            return DXGI_FORMAT_R24G8_TYPELESS;
+        case DXGI_FORMAT_D16_UNORM:
+            return DXGI_FORMAT_R16_TYPELESS;
+        default:
+            return depthFormat; //Unsupported format, return to original format
+        }
+    }
+
     // ==================== 内部辅助方法 ====================
 
     /**
@@ -549,7 +584,7 @@ namespace enigma::graphic
         resourceDesc.Height              = m_height; // 深度纹理高度
         resourceDesc.DepthOrArraySize    = 1; // 深度固定为1
         resourceDesc.MipLevels           = 1; // 深度纹理通常不需要Mip
-        resourceDesc.Format              = m_depthFormat; // 深度格式
+        resourceDesc.Format              = GetTypelessFormat(m_depthFormat);
         resourceDesc.SampleDesc.Count    = 1; // 无多重采样
         resourceDesc.SampleDesc.Quality  = 0; // 质量级别0
         resourceDesc.Layout              = D3D12_TEXTURE_LAYOUT_UNKNOWN; // 让DirectX优化
@@ -691,6 +726,14 @@ namespace enigma::graphic
 
     /**
      * 创建着色器资源视图 (如果支持)
+     * 
+     * [IMPORTANT] 这个方法只标记 m_hasSRV = true
+     * 实际的 SRV 创建在 CreateDescriptorInGlobalHeap() 中完成
+     * 因为构造函数调用时 Bindless 索引还没有分配
+     * 
+     * 流程:
+     * 1. 构造函数 → CreateShaderResourceView() → 标记 m_hasSRV = true
+     * 2. Upload() → RegisterBindless() → CreateDescriptorInGlobalHeap() → 实际创建 SRV
      */
     bool D12DepthTexture::CreateShaderResourceView()
     {
@@ -699,25 +742,13 @@ namespace enigma::graphic
             return true; // 不需要SRV
         }
 
-        // TODO: 实现SRV创建
-        // 需要使用GetTypedFormat()获取类型化格式
-        //
-        // 伪代码:
-        // auto device = D3D12RenderSystem::GetDevice();
-        // auto srvHeap = D3D12RenderSystem::GetSRVDescriptorHeap();
-        // m_srvHandle = D3D12RenderSystem::AllocateSRVDescriptor();
-        //
-        // DXGI_FORMAT srvFormat = GetTypedFormat(m_depthFormat);
-        // D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        // srvDesc.Format = srvFormat;
-        // srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-        // srvDesc.Texture2D.MipLevels = 1;
-        // srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        //
-        // device->CreateShaderResourceView(GetResource(), &srvDesc, m_srvHandle);
-
-        // 临时实现：标记为已创建
+        // 只标记需要 SRV，实际创建在 CreateDescriptorInGlobalHeap() 中
+        // 因为此时 Bindless 索引还没有分配
         m_hasSRV = true;
+
+        LogInfo(LogRenderer, "[D12DepthTexture] SRV marked for '%s', will be created during RegisterBindless()",
+                m_name.c_str());
+
         return true;
     }
 } // namespace enigma::graphic
