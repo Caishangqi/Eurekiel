@@ -552,3 +552,26 @@ ID3D12Resource* D12RenderTarget::GetAltTextureResource() const
     }
     return nullptr;
 }
+
+// ============================================================================
+// Resource State Transition API (Component 6: Shader RT Fetching)
+// ============================================================================
+
+void D12RenderTarget::TransitionToShaderResource()
+{
+    // Transition main texture to PIXEL_SHADER_RESOURCE for sampling
+    // D12RenderTarget is a composite resource - transition the underlying texture
+    if (m_mainTexture)
+    {
+        m_mainTexture->TransitionResourceTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+}
+
+void D12RenderTarget::TransitionToRenderTarget()
+{
+    // Transition main texture back to RENDER_TARGET for rendering output
+    if (m_mainTexture)
+    {
+        m_mainTexture->TransitionResourceTo(D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
+}

@@ -446,6 +446,26 @@ namespace enigma::graphic
         ID3D12Resource* GetAltTextureResource() const;
 
         // ========================================================================
+        // Resource State Transition API (Component 6: Shader RT Fetching)
+        // ========================================================================
+
+        /**
+         * @brief Transition main texture to PIXEL_SHADER_RESOURCE state for sampling
+         *
+         * Call BEFORE sampling render target in shader (e.g., Composite pass).
+         * Transitions: RENDER_TARGET -> PIXEL_SHADER_RESOURCE
+         */
+        void TransitionToShaderResource();
+
+        /**
+         * @brief Transition main texture back to RENDER_TARGET state for rendering
+         *
+         * Call BEFORE using render target as output (e.g., G-Buffer pass).
+         * Transitions: PIXEL_SHADER_RESOURCE -> RENDER_TARGET
+         */
+        void TransitionToRenderTarget();
+
+        // ========================================================================
         // 尺寸管理 (对应Iris resize方法)
         // ========================================================================
 
