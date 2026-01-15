@@ -125,6 +125,58 @@ namespace enigma::graphic
     }
 
     // ========================================================================
+    // Resource State Transition Implementation (Component 6: Shader RT Fetching)
+    // ========================================================================
+
+    /**
+     * @brief Transition resource to specified state
+     *
+     * Default implementation uses D3D12RenderSystem::TransitionResource.
+     * Subclasses can override for specialized behavior.
+     *
+     * @param targetState Target resource state
+     */
+    void D12Resource::TransitionResourceTo(D3D12_RESOURCE_STATES targetState)
+    {
+        // Skip if already in target state
+        if (m_currentState == targetState)
+        {
+            return;
+        }
+
+        // Validate resource
+        if (!m_resource)
+        {
+            LogError(LogRenderer,
+                     "TransitionResourceTo: Resource '%s' is null, cannot transition",
+                     m_debugName.c_str());
+            return;
+        }
+
+        // Get current command list from render system
+        auto* commandList = D3D12RenderSystem::GetCurrentCommandList();
+        if (!commandList)
+        {
+            LogError(LogRenderer,
+                     "TransitionResourceTo: No command list available for '%s'",
+                     m_debugName.c_str());
+            return;
+        }
+
+        // Execute transition using D3D12RenderSystem helper
+        D3D12RenderSystem::TransitionResource(
+            commandList,
+            m_resource,
+            m_currentState,
+            targetState,
+            m_debugName.c_str()
+        );
+
+        // Update tracked state
+        m_currentState = targetState;
+    }
+
+    // ========================================================================
     // CPU数据管理实现 (Milestone 2.7)
     // ========================================================================
 

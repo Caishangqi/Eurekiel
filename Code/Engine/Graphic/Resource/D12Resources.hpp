@@ -95,6 +95,25 @@ namespace enigma::graphic
          */
         void SetCurrentState(D3D12_RESOURCE_STATES newState) { m_currentState = newState; }
 
+        // ========================================================================
+        // Resource State Transition API (Component 6: Shader RT Fetching)
+        // ========================================================================
+
+        /**
+         * @brief Transition resource to specified state (virtual - subclass can override)
+         * @param targetState Target resource state
+         *
+         * Design Notes:
+         * - Uses D3D12RenderSystem::GetCurrentCommandList() internally
+         * - Base class provides default implementation using D3D12RenderSystem::TransitionResource
+         * - Subclasses (D12RenderTarget, D12DepthTexture) can override for specialized behavior
+         * - Convenience methods (TransitionToShaderResource, etc.) are in subclasses per OCP
+         *
+         * @see D12RenderTarget::TransitionToShaderResource
+         * @see D12DepthTexture::TransitionToDepthWrite
+         */
+        virtual void TransitionResourceTo(D3D12_RESOURCE_STATES targetState);
+
         /**
          * @brief 获取资源大小
          * @return 资源大小 (字节)
