@@ -173,42 +173,24 @@ namespace enigma::graphic
         std::string GetDebugInfo() const;
 
         // ========================================================================
-        // [NEW] Resource State Transition API - For Shader Sampling
+        // [REMOVED] Resource State Transition API - Moved to D12DepthTexture
         // ========================================================================
-
-        /**
-         * @brief Transition depth texture to PIXEL_SHADER_RESOURCE state for sampling
-         * @param index Depth texture index [0-2]
-         *
-         * [IMPORTANT] Call this BEFORE sampling depth texture in shader (e.g., Composite pass)
-         * Transitions: DEPTH_WRITE -> PIXEL_SHADER_RESOURCE
-         *
-         * D3D12 Rule: Cannot read (SRV) and write (DSV) same resource simultaneously
-         */
-        void TransitionToShaderResource(int index);
-
-        /**
-         * @brief Transition depth texture back to DEPTH_WRITE state for rendering
-         * @param index Depth texture index [0-2]
-         *
-         * [IMPORTANT] Call this BEFORE using depth texture as DSV (e.g., G-Buffer pass)
-         * Transitions: PIXEL_SHADER_RESOURCE -> DEPTH_WRITE
-         */
-        void TransitionToDepthWrite(int index);
-
-        /**
-         * @brief Transition ALL depth textures to PIXEL_SHADER_RESOURCE state
-         *
-         * Convenience method for Composite/Deferred passes that sample multiple depth textures
-         */
-        void TransitionAllToShaderResource();
-
-        /**
-         * @brief Transition ALL depth textures back to DEPTH_WRITE state
-         *
-         * Convenience method to restore depth textures for next frame's G-Buffer pass
-         */
-        void TransitionAllToDepthWrite();
+        // 
+        // The following methods have been REMOVED per OCP (Open-Closed Principle):
+        // - TransitionToShaderResource(int index)
+        // - TransitionToDepthWrite(int index)
+        // - TransitionAllToShaderResource()
+        // - TransitionAllToDepthWrite()
+        //
+        // [MIGRATION] Use D12DepthTexture methods directly:
+        //   Old: provider->TransitionToShaderResource(0);
+        //   New: provider->GetDepthTexture(0)->TransitionToShaderResource();
+        //
+        // For batch operations, iterate manually:
+        //   for (int i = 0; i < provider->GetCount(); ++i) {
+        //       provider->GetDepthTexture(i)->TransitionToShaderResource();
+        //   }
+        // ========================================================================
 
     private:
         // ========================================================================
