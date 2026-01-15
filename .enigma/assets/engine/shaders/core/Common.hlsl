@@ -66,11 +66,16 @@ cbuffer CustomImageUniforms: register(b2)
  * @register b3
  * Stores Bindless indices for colortex0-15 with flip support.
  * C++ counterpart: ColorTargetsIndexBuffer.hpp
+ *
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Scalar arrays (uint[16]) align each element to 16 bytes (float4 boundary)
+ * - Using uint4[4] ensures tight packing matching C++ uint32_t[16] layout
+ * - Memory layout: [0-3][4-7][8-11][12-15] = 4 * 16 = 64 bytes per array
  */
 cbuffer ColorTargetsBuffer : register(b3)
 {
-    uint colorReadIndices[16]; // colortex0-15 read indices
-    uint colorWriteIndices[16]; // colortex0-15 write indices (ping-pong)
+    uint4 colorReadIndicesPacked[4]; // colortex0-15 read indices (64 bytes)
+    uint4 colorWriteIndicesPacked[4]; // colortex0-15 write indices (64 bytes)
 };
 
 /**
@@ -78,10 +83,14 @@ cbuffer ColorTargetsBuffer : register(b3)
  * @register b4
  * Stores Bindless indices for depthtex0-15. No flip mechanism.
  * C++ counterpart: DepthTexturesIndexBuffer.hpp
+ *
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Using uint4[4] ensures tight packing matching C++ uint32_t[16] layout
+ * - Memory layout: [0-3][4-7][8-11][12-15] = 4 * 16 = 64 bytes
  */
 cbuffer DepthTexturesBuffer : register(b4)
 {
-    uint depthTextureIndices[16]; // depthtex0-15 indices
+    uint4 depthTextureIndicesPacked[4]; // depthtex0-15 indices (64 bytes)
 };
 
 /**
@@ -89,11 +98,15 @@ cbuffer DepthTexturesBuffer : register(b4)
  * @register b5
  * Stores Bindless indices for shadowcolor0-7 with flip support.
  * C++ counterpart: ShadowColorIndexBuffer.hpp
+ *
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Using uint4[2] ensures tight packing matching C++ uint32_t[8] layout
+ * - Memory layout: [0-3][4-7] = 2 * 16 = 32 bytes per array
  */
 cbuffer ShadowColorBuffer : register(b5)
 {
-    uint shadowColorReadIndices[8]; // shadowcolor0-7 read indices
-    uint shadowColorWriteIndices[8]; // shadowcolor0-7 write indices
+    uint4 shadowColorReadIndicesPacked[2]; // shadowcolor0-7 read indices (32 bytes)
+    uint4 shadowColorWriteIndicesPacked[2]; // shadowcolor0-7 write indices (32 bytes)
 };
 
 /**
@@ -101,12 +114,14 @@ cbuffer ShadowColorBuffer : register(b5)
  * @register b6
  * Stores Bindless indices for shadowtex0-1. No flip mechanism.
  * C++ counterpart: ShadowTexturesIndexBuffer.hpp
+ *
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Using uint4 ensures tight packing matching C++ uint32_t[4] layout
+ * - Memory layout: [shadowtex0, shadowtex1, pad, pad] = 16 bytes
  */
 cbuffer ShadowTexturesBuffer : register(b6)
 {
-    uint shadowtex0Index; // shadowtex0 Bindless index
-    uint shadowtex1Index; // shadowtex1 Bindless index
-    uint _shadowTexPad[2]; // Padding for 16-byte alignment
+    uint4 shadowTexIndicesPacked; // [shadowtex0, shadowtex1, pad, pad] (16 bytes)
 };
 
 /**
@@ -249,44 +264,66 @@ Texture2D GetCustomImage(uint slotIndex)
  * @brief Get color texture by slot index (colortex0-15)
  * @param slot Slot index [0-15]
  * @return Texture2D from ResourceDescriptorHeap
+ *
+ * [IMPORTANT] uint4 unpacking:
+ * - slot >> 2 = which uint4 (0-3)
+ * - slot & 3  = which component (x=0, y=1, z=2, w=3)
  */
 Texture2D GetColorTexture(uint slot)
 {
     if (slot >= 16) return ResourceDescriptorHeap[0]; // Safe fallback
-    return ResourceDescriptorHeap[colorReadIndices[slot]];
+    uint4 packed = colorReadIndicesPacked[slot >> 2];
+    uint  index  = packed[slot & 3];
+    return ResourceDescriptorHeap[index];
 }
 
 /**
  * @brief Get depth texture by slot index (depthtex0-15)
  * @param slot Slot index [0-15]
  * @return Texture2D from ResourceDescriptorHeap
+ *
+ * [IMPORTANT] uint4 unpacking:
+ * - slot >> 2 = which uint4 (0-3)
+ * - slot & 3  = which component (x=0, y=1, z=2, w=3)
  */
 Texture2D GetDepthTexture(uint slot)
 {
     if (slot >= 16) return ResourceDescriptorHeap[0];
-    return ResourceDescriptorHeap[depthTextureIndices[slot]];
+    uint4 packed = depthTextureIndicesPacked[slot >> 2];
+    uint  index  = packed[slot & 3];
+    return ResourceDescriptorHeap[index];
 }
 
 /**
  * @brief Get shadow color texture by slot index (shadowcolor0-7)
  * @param slot Slot index [0-7]
  * @return Texture2D from ResourceDescriptorHeap
+ *
+ * [IMPORTANT] uint4 unpacking:
+ * - slot >> 2 = which uint4 (0-1)
+ * - slot & 3  = which component (x=0, y=1, z=2, w=3)
  */
 Texture2D GetShadowColor(uint slot)
 {
     if (slot >= 8) return ResourceDescriptorHeap[0];
-    return ResourceDescriptorHeap[shadowColorReadIndices[slot]];
+    uint4 packed = shadowColorReadIndicesPacked[slot >> 2];
+    uint  index  = packed[slot & 3];
+    return ResourceDescriptorHeap[index];
 }
 
 /**
  * @brief Get shadow depth texture by slot index (shadowtex0-1)
  * @param slot Slot index [0-1]
  * @return Texture2D from ResourceDescriptorHeap
+ *
+ * [IMPORTANT] uint4 unpacking:
+ * - shadowTexIndicesPacked.x = shadowtex0
+ * - shadowTexIndicesPacked.y = shadowtex1
  */
 Texture2D GetShadowTexture(uint slot)
 {
-    if (slot == 0) return ResourceDescriptorHeap[shadowtex0Index];
-    if (slot == 1) return ResourceDescriptorHeap[shadowtex1Index];
+    if (slot == 0) return ResourceDescriptorHeap[shadowTexIndicesPacked.x];
+    if (slot == 1) return ResourceDescriptorHeap[shadowTexIndicesPacked.y];
     return ResourceDescriptorHeap[0];
 }
 
