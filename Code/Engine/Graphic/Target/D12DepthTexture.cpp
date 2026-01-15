@@ -358,6 +358,23 @@ namespace enigma::graphic
         );
     }
 
+    // ============================================================================
+    // Resource State Transition API (Component 6: Shader RT Fetching)
+    // ============================================================================
+
+    void D12DepthTexture::TransitionToShaderResource()
+    {
+        // Transition depth texture to PIXEL_SHADER_RESOURCE for sampling
+        // D12DepthTexture directly inherits D12Resource, call base class method
+        TransitionResourceTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+
+    void D12DepthTexture::TransitionToDepthWrite()
+    {
+        // Transition depth texture back to DEPTH_WRITE for rendering
+        TransitionResourceTo(D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    }
+
     // ==================== 调试支持 ====================
 
     /**

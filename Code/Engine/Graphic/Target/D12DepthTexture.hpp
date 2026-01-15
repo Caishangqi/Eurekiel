@@ -287,6 +287,30 @@ namespace enigma::graphic
          */
         void BindAsDepthTarget(ID3D12GraphicsCommandList* cmdList);
 
+        // ========================================================================
+        // Resource State Transition API (Component 6: Shader RT Fetching)
+        // ========================================================================
+
+        /**
+         * @brief Transition depth texture to PIXEL_SHADER_RESOURCE state for sampling
+         *
+         * Call BEFORE sampling depth texture in shader (e.g., shadow mapping, depth-based effects).
+         * Transitions: DEPTH_WRITE -> PIXEL_SHADER_RESOURCE
+         *
+         * Design Notes:
+         * - D12DepthTexture directly inherits D12Resource, so we call base class method
+         * - Unlike D12RenderTarget (composite pattern), this is a direct inheritance
+         */
+        void TransitionToShaderResource();
+
+        /**
+         * @brief Transition depth texture back to DEPTH_WRITE state for rendering
+         *
+         * Call BEFORE using depth texture as depth target (e.g., G-Buffer pass, shadow pass).
+         * Transitions: PIXEL_SHADER_RESOURCE -> DEPTH_WRITE
+         */
+        void TransitionToDepthWrite();
+
         // ==================== 调试支持 ====================
 
         /**
