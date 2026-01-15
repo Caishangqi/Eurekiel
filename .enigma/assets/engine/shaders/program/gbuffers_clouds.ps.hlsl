@@ -35,7 +35,8 @@
  */
 struct PSOutput
 {
-    float4 Color : SV_Target0; // colortex0: Cloud color (RGBA)
+    float4 Color0 : SV_Target0; // colortex0: Cloud color (RGBA)
+    float4 Color1 : SV_Target1; // colortex3: Cloud color (RGBA)
 };
 
 /**
@@ -68,7 +69,7 @@ PSOutput main(VSOutput input)
     float4 finalColor = input.Color * modelColor;
 
     // [STEP 3] Output Final Color
-    output.Color = finalColor;
-
+    output.Color0 = finalColor;
+    output.Color1 = finalColor;
     return output;
 }
