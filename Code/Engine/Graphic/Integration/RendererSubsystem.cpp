@@ -1254,7 +1254,7 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
     RenderStateValidator::DrawState state{};
     state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
     state.blendMode           = m_currentBlendMode;
-    state.depthMode           = m_currentDepthMode;
+    state.depthConfig         = m_currentDepthConfig; // [REFACTORED] Use DepthConfig
     state.stencilDetail       = m_currentStencilTest;
     state.rasterizationConfig = m_currentRasterizationConfig;
     state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1277,7 +1277,7 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
         state.rtFormats.data(),
         state.depthFormat,
         state.blendMode,
-        state.depthMode,
+        state.depthConfig, // [REFACTORED] Use DepthConfig
         state.stencilDetail,
         state.rasterizationConfig
     );
@@ -1654,16 +1654,17 @@ void RendererSubsystem::SetBlendMode(BlendMode mode)
     LogDebug(LogRenderer, "SetBlendMode: Blend mode updated to {}", static_cast<int>(mode));
 }
 
-void RendererSubsystem::SetDepthMode(DepthMode mode)
+void RendererSubsystem::SetDepthConfig(const DepthConfig& config)
 {
     // 避免重复设置
-    if (m_currentDepthMode == mode)
+    if (m_currentDepthConfig == config)
     {
         return;
     }
 
-    m_currentDepthMode = mode;
-    LogDebug(LogRenderer, "SetDepthMode: Depth mode updated to {}", static_cast<int>(mode));
+    m_currentDepthConfig = config;
+    LogDebug(LogRenderer, "SetDepthConfig: test=%d, write=%d, func=%d",
+             config.depthTestEnabled, config.depthWriteEnabled, static_cast<int>(config.depthFunc));
 }
 
 void RendererSubsystem::SetStencilTest(const StencilTestDetail& detail)

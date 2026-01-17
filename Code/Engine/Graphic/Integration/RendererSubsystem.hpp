@@ -873,14 +873,47 @@ namespace enigma::graphic
         void SetBlendMode(BlendMode mode);
 
         /**
-         * @brief 设置深度模式
-         * @param mode 深度模式
+         * @brief Get current blend mode
+         * @return Current BlendMode
          *
-         * 教学要点：
-         * - 控制深度测试
-         * - 对应OpenGL的glDepthFunc
+         * Teaching Points:
+         * - Used for saving/restoring blend state in RenderPass
+         * - Returns copy of current mode (not reference)
          */
-        void SetDepthMode(DepthMode mode);
+        [[nodiscard]] BlendMode GetBlendMode() const noexcept { return m_currentBlendMode; }
+
+        /**
+         * @brief [REFACTORED] Set depth configuration (replaces SetDepthMode)
+         * @param config Depth configuration (test enable, write enable, comparison function)
+         *
+         * Teaching Points:
+         * - More flexible than DepthMode enum
+         * - Follows RasterizationConfig design pattern
+         * - Use static presets: DepthConfig::Enabled(), ReadOnly(), Disabled(), etc.
+         *
+         * Usage Examples:
+         * @code
+         * // Standard depth test (read + write)
+         * renderer->SetDepthConfig(DepthConfig::Enabled());
+         *
+         * // Read-only depth (for translucent objects)
+         * renderer->SetDepthConfig(DepthConfig::ReadOnly());
+         *
+         * // Custom configuration
+         * renderer->SetDepthConfig(DepthConfig::Custom(true, false, DepthComparison::Greater));
+         * @endcode
+         */
+        void SetDepthConfig(const DepthConfig& config);
+
+        /**
+         * @brief Get current depth configuration
+         * @return Current DepthConfig (test enable, write enable, comparison function)
+         *
+         * Teaching Points:
+         * - Used for saving/restoring depth state in RenderPass
+         * - Returns copy of current config (not reference)
+         */
+        [[nodiscard]] DepthConfig GetDepthConfig() const noexcept { return m_currentDepthConfig; }
 
         /**
          * @brief Set stencil test configuration (for PSO)
@@ -1388,7 +1421,7 @@ namespace enigma::graphic
         // [NEW] PSO state caching for deferred binding
         ShaderProgram*       m_currentShaderProgram       = nullptr;
         BlendMode            m_currentBlendMode           = BlendMode::Opaque;
-        DepthMode            m_currentDepthMode           = DepthMode::Enabled;
+        DepthConfig          m_currentDepthConfig         = DepthConfig::Enabled();
         StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
         RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::CullBack();
         const VertexLayout*  m_currentVertexLayout        = nullptr; // [NEW] Current vertex layout state
