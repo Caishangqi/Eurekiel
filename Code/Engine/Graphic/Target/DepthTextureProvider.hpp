@@ -148,18 +148,6 @@ namespace enigma::graphic
         std::shared_ptr<D12DepthTexture> GetDepthTexture(int index) const;
 
         /**
-         * @brief Copy depthtex0 -> depthtex1 (Iris CopyPreTranslucentDepth)
-         * @param cmdList Command list
-         */
-        void CopyPreTranslucentDepth(ID3D12GraphicsCommandList* cmdList);
-
-        /**
-         * @brief Copy depthtex0 -> depthtex2 (Iris CopyPreHandDepth)
-         * @param cmdList Command list
-         */
-        void CopyPreHandDepth(ID3D12GraphicsCommandList* cmdList);
-
-        /**
          * @brief Handle window resize
          * @param newWidth New base width
          * @param newHeight New base height
@@ -171,26 +159,6 @@ namespace enigma::graphic
          * @return Debug string
          */
         std::string GetDebugInfo() const;
-
-        // ========================================================================
-        // [REMOVED] Resource State Transition API - Moved to D12DepthTexture
-        // ========================================================================
-        // 
-        // The following methods have been REMOVED per OCP (Open-Closed Principle):
-        // - TransitionToShaderResource(int index)
-        // - TransitionToDepthWrite(int index)
-        // - TransitionAllToShaderResource()
-        // - TransitionAllToDepthWrite()
-        //
-        // [MIGRATION] Use D12DepthTexture methods directly:
-        //   Old: provider->TransitionToShaderResource(0);
-        //   New: provider->GetDepthTexture(0)->TransitionToShaderResource();
-        //
-        // For batch operations, iterate manually:
-        //   for (int i = 0; i < provider->GetCount(); ++i) {
-        //       provider->GetDepthTexture(i)->TransitionToShaderResource();
-        //   }
-        // ========================================================================
 
     private:
         // ========================================================================

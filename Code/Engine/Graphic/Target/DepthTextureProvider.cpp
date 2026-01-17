@@ -365,28 +365,6 @@ namespace enigma::graphic
     // Extended API - Iris-compatible Copy Methods
     // ============================================================================
 
-    void DepthTextureProvider::CopyPreTranslucentDepth(ID3D12GraphicsCommandList* cmdList)
-    {
-        if (m_activeCount < 2)
-        {
-            LogWarn(LogRenderTargetProvider, "CopyPreTranslucentDepth: depthtex1 not available");
-            return;
-        }
-
-        CopyDepth(cmdList, 0, 1);
-    }
-
-    void DepthTextureProvider::CopyPreHandDepth(ID3D12GraphicsCommandList* cmdList)
-    {
-        if (m_activeCount < 3)
-        {
-            LogWarn(LogRenderTargetProvider, "CopyPreHandDepth: depthtex2 not available");
-            return;
-        }
-
-        CopyDepth(cmdList, 0, 2);
-    }
-
     // ============================================================================
     // [REMOVED] Resource State Transition API - Moved to D12DepthTexture
     // ============================================================================
