@@ -54,7 +54,7 @@ namespace enigma::graphic
         DXGI_FORMAT          rtFormats[8]        = {}; ///< 8 RT formats (corresponding to colortex0-7)
         DXGI_FORMAT          depthFormat         = DXGI_FORMAT_UNKNOWN; ///< depth format
         BlendMode            blendMode           = BlendMode::Opaque; ///< blend mode
-        DepthMode            depthMode           = DepthMode::Enabled; ///< depth mode
+        DepthConfig          depthConfig         = DepthConfig::Enabled(); ///< [REFACTORED] depth configuration (replaces DepthMode)
         StencilTestDetail    stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
         RasterizationConfig  rasterizationConfig = RasterizationConfig::CullBack(); ///< Rasterization configuration
         /**
@@ -153,7 +153,7 @@ namespace enigma::graphic
             const DXGI_FORMAT          rtFormats[8],
             DXGI_FORMAT                depthFormat,
             BlendMode                  blendMode,
-            DepthMode                  depthMode,
+            const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
             const StencilTestDetail&   stencilDetail,
             const RasterizationConfig& rasterizationConfig
         );
@@ -192,14 +192,14 @@ namespace enigma::graphic
         static void ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, BlendMode blendMode);
 
         /**
-         * @brief configure depth template status
-         * @param depthStencilDesc depth template descriptor
-         * @param depthMode depth mode
+         * @brief configure depth stencil state
+         * @param depthStencilDesc depth stencil descriptor
+         * @param depthConfig depth configuration (replaces DepthMode)
          * @param stencilDetail Stencil test configuration
          */
         static void ConfigureDepthStencilState(
             D3D12_DEPTH_STENCIL_DESC& depthStencilDesc,
-            DepthMode                 depthMode,
+            const DepthConfig&        depthConfig,
             const StencilTestDetail&  stencilDetail
         );
 

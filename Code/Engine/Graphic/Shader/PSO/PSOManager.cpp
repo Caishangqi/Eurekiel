@@ -31,7 +31,7 @@ namespace enigma::graphic
             return false;
         if (blendMode != other.blendMode)
             return false;
-        if (depthMode != other.depthMode)
+        if (depthConfig != other.depthConfig)
             return false;
         if (!(stencilDetail == other.stencilDetail))
             return false;
@@ -70,8 +70,10 @@ namespace enigma::graphic
         // Hash mixed mode
         hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(blendMode)) << 16;
 
-        // Hash depth mode
-        hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(depthMode)) << 24;
+        // Hash depth config (3 fields)
+        hash ^= std::hash<bool>{}(depthConfig.depthTestEnabled) << 24;
+        hash ^= std::hash<bool>{}(depthConfig.depthWriteEnabled) << 25;
+        hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(depthConfig.depthFunc)) << 26;
 
         // Hash StencilTestDetail (all 14 fields)
         hash ^= std::hash<bool>{}(stencilDetail.enable) << 25;
@@ -127,7 +129,7 @@ namespace enigma::graphic
         const DXGI_FORMAT          rtFormats[8],
         DXGI_FORMAT                depthFormat,
         BlendMode                  blendMode,
-        DepthMode                  depthMode,
+        const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
         const StencilTestDetail&   stencilDetail,
         const RasterizationConfig& rasterizationConfig
     )
@@ -146,7 +148,7 @@ namespace enigma::graphic
         }
         key.depthFormat         = depthFormat;
         key.blendMode           = blendMode;
-        key.depthMode           = depthMode;
+        key.depthConfig         = depthConfig; // [REFACTORED] Use DepthConfig
         key.stencilDetail       = stencilDetail;
         key.rasterizationConfig = rasterizationConfig; // [NEW] Set rasterization config
 
@@ -211,8 +213,8 @@ namespace enigma::graphic
         // 2.3 Rasterization status (using key.rasterizationConfig)
         ConfigureRasterizerState(psoDesc.RasterizerState, key.rasterizationConfig);
 
-        // 2.4 Depth template state (using key.depthMode and key.stencilDetail)
-        ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthMode, key.stencilDetail);
+        // 2.4 Depth stencil state (using key.depthConfig and key.stencilDetail)
+        ConfigureDepthStencilState(psoDesc.DepthStencilState, key.depthConfig, key.stencilDetail);
 
         // 2.5 Input Layout - [REFACTORED] Use VertexLayout from key instead of hardcoded array
         const VertexLayout* layout = key.vertexLayout;
@@ -279,9 +281,9 @@ namespace enigma::graphic
             // Fallback: Try again with default configuration
             ERROR_RECOVERABLE("PSO creation failed, trying fallback configuration");
 
-            PSOKey fallbackKey    = key;
-            fallbackKey.blendMode = BlendMode::Opaque;
-            fallbackKey.depthMode = DepthMode::Enabled;
+            PSOKey fallbackKey      = key;
+            fallbackKey.blendMode   = BlendMode::Opaque;
+            fallbackKey.depthConfig = DepthConfig::Enabled(); // [REFACTORED] Use DepthConfig
 
             if (fallbackKey == key)
             {
@@ -379,65 +381,16 @@ namespace enigma::graphic
 
     void PSOManager::ConfigureDepthStencilState(
         D3D12_DEPTH_STENCIL_DESC& depthStencilDesc,
-        DepthMode                 depthMode,
+        const DepthConfig&        depthConfig,
         const StencilTestDetail&  stencilDetail)
     {
-        // [STEP 1] Configure depth test (existing logic)
-        switch (depthMode)
-        {
-        case DepthMode::Enabled:
-        case DepthMode::LessEqual:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-            break;
+        // [REFACTORED] Direct configuration from DepthConfig struct
+        // No more switch-case on DepthMode enum - cleaner and more flexible
+        depthStencilDesc.DepthEnable    = depthConfig.depthTestEnabled ? TRUE : FALSE;
+        depthStencilDesc.DepthWriteMask = depthConfig.depthWriteEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+        depthStencilDesc.DepthFunc      = depthConfig.depthFunc;
 
-        case DepthMode::Less:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS;
-            break;
-
-        case DepthMode::ReadOnly:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-            break;
-
-        case DepthMode::WriteOnly:
-        case DepthMode::Always:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS;
-            break;
-
-        case DepthMode::GreaterEqual:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-            break;
-
-        case DepthMode::Greater:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_GREATER;
-            break;
-
-        case DepthMode::Equal:
-            depthStencilDesc.DepthEnable = TRUE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_EQUAL;
-            break;
-
-        case DepthMode::Disabled:
-        default:
-            depthStencilDesc.DepthEnable = FALSE;
-            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-            depthStencilDesc.DepthFunc      = D3D12_COMPARISON_FUNC_ALWAYS;
-            break;
-        }
-
-        // [STEP 2] Configure stencil test (new integration)
+        // [STEP 2] Configure stencil test (existing integration)
         StencilHelper::ConfigureStencilState(depthStencilDesc, stencilDetail);
     }
 
