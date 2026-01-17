@@ -31,7 +31,7 @@ namespace enigma::graphic
         {
             ShaderProgram*             program;
             BlendMode                  blendMode;
-            DepthMode                  depthMode;
+            DepthConfig                depthConfig; // [REFACTORED] DepthConfig replaces DepthMode
             StencilTestDetail          stencilDetail;
             RasterizationConfig        rasterizationConfig;
             D3D12_PRIMITIVE_TOPOLOGY   topology;
