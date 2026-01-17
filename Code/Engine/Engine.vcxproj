@@ -380,6 +380,8 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\shadow.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\shadow.vs.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_water.ps.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_water.vs.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -966,6 +968,10 @@
     <ClInclude Include="Graphic\Camera\ShadowCamera.hpp"/>
     <ClInclude Include="Graphic\Core\EnigmaGraphicCommon.hpp" />
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
+    <ClInclude Include="Graphic\Core\RenderState\BlendState.hpp"/>
+    <ClInclude Include="Graphic\Core\RenderState\DepthState.hpp"/>
+    <ClInclude Include="Graphic\Core\RenderState\RasterizeState.hpp"/>
+    <ClInclude Include="Graphic\Core\RenderState\StencilState.hpp"/>
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
     <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
