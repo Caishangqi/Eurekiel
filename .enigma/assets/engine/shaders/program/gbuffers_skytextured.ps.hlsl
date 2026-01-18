@@ -40,7 +40,7 @@ PSOutput main(PSInput input)
 
     // [STEP 1] Sample sun/moon texture from customImage0
     Texture2D celestialTexture = GetCustomImage(0);
-    float4    texColor         = celestialTexture.Sample(pointSampler, input.TexCoord);
+    float4    texColor         = celestialTexture.Sample(sampler1, input.TexCoord);
 
     // [STEP 2] Discard fully transparent pixels (Minecraft style)
     if (texColor.a == 0.0)

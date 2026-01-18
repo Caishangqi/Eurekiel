@@ -41,10 +41,10 @@ PSOutput main(PSInput input)
     // Sky pixels have depth = 1.0 (far plane)
     // Terrain pixels have depth < 1.0
     Texture2D<float4> depthTex = depthtex0;
-    float             depth    = depthTex.Sample(linearSampler, input.TexCoord).r;
+    float             depth    = depthTex.Sample(sampler0, input.TexCoord).r;
 
     // [STEP 2] Sample albedo color
-    float4 albedo = colortex0.Sample(pointSampler, input.TexCoord);
+    float4 albedo = colortex0.Sample(sampler1, input.TexCoord);
 
     // [STEP 3] Sky detection - skip lighting for sky pixels
     // Reference: ComplementaryReimagined deferred1.glsl Line 175, 240
@@ -57,8 +57,8 @@ PSOutput main(PSInput input)
     }
 
     // [STEP 4] Sample lightmap for terrain
-    float blockLight = colortex1.Sample(pointSampler, input.TexCoord).r;
-    float skyLight   = colortex1.Sample(pointSampler, input.TexCoord).g;
+    float blockLight = colortex1.Sample(sampler1, input.TexCoord).r;
+    float skyLight   = colortex1.Sample(sampler1, input.TexCoord).g;
 
     // [STEP 5] Cloud detection - skip lighting if no lightmap data
     // Clouds don't write to colortex1, so lightmap values are 0

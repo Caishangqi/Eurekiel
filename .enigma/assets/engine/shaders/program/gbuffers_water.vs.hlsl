@@ -1,7 +1,7 @@
 /**
- * @file gbuffers_terrain.vs.hlsl
- * @brief Terrain Vertex Shader - TerrainVertex Layout (54 bytes)
- * @date 2025-12-25
+ * @file gbuffers_water.vs.hlsl
+ * @brief Water Vertex Shader - TerrainVertex Layout (54 bytes)
+ * @date 2026-01-17
  *
  * Input Layout (matches TerrainVertex):
  * - POSITION (float3, offset 0)
@@ -12,7 +12,9 @@
  * - TEXCOORD2 (uint16, offset 44) - Block entity ID (mc_Entity)
  * - TEXCOORD3 (float2, offset 46) - Texture center (mc_midTexCoord)
  *
- * Output: G-Buffer data for gbuffers_terrain.ps.hlsl
+ * Phase 1: No TBN matrix calculation (normals already in world space)
+ *
+ * Output: G-Buffer data for gbuffers_water.ps.hlsl
  *
  * Reference: Engine/Voxel/World/TerrainVertexLayout.hpp
  */
@@ -24,18 +26,18 @@
 // Output: colortex0 (Albedo), colortex1 (Lightmap), colortex2 (Normal)
 
 // ============================================================================
-// Terrain-Specific Vertex Structures
+// Water-Specific Vertex Structures
 // ============================================================================
-// [IMPORTANT] These differ from Common.hlsl VSInput/VSOutput:
-// - No Tangent/Bitangent (terrain uses face normals)
-// - Has LightmapCoord (LIGHTMAP) for blocklight/skylight
+// [IMPORTANT] Phase 1: No TBN matrix calculation
+// - Normal is already transformed to world space
+// - entityId and midTexCoord passed through unchanged
 
 /**
  * @brief Vertex shader input - matches TerrainVertex (54 bytes)
  */
-struct VSInput_Terrain
+struct VSInput_Water
 {
-    float3 Position : POSITION; // Vertex position (world space)
+    float3 Position : POSITION; // Vertex position (local space)
     float4 Color : COLOR0; // Vertex color (R8G8B8A8_UNORM unpacked)
     float2 TexCoord : TEXCOORD0; // UV coordinates
     float3 Normal : NORMAL; // Normal vector
@@ -47,7 +49,7 @@ struct VSInput_Terrain
 /**
  * @brief Vertex shader output / pixel shader input
  */
-struct VSOutput_Terrain
+struct VSOutput_Water
 {
     float4 Position : SV_POSITION; // Clip space position
     float4 Color : COLOR0; // Vertex color (passed through)
@@ -55,18 +57,18 @@ struct VSOutput_Terrain
     float3 Normal : NORMAL; // World normal (normalized)
     float2 LightmapCoord: LIGHTMAP; // Lightmap (blocklight, skylight)
     float3 WorldPos : TEXCOORD2; // World position (for fog, etc.)
-    uint   entityId : TEXCOORD5; // Block entity ID (pass-through)
-    float2 midTexCoord : TEXCOORD6; // Texture center (pass-through)
+    uint   entityId : TEXCOORD3; // Block entity ID (pass-through)
+    float2 midTexCoord : TEXCOORD4; // Texture center (pass-through)
 };
 
 /**
- * @brief Terrain vertex shader main entry
+ * @brief Water vertex shader main entry
  * @param input TerrainVertex data from VBO
  * @return Transformed vertex with G-Buffer data
  */
-VSOutput_Terrain main(VSInput_Terrain input)
+VSOutput_Water main(VSInput_Water input)
 {
-    VSOutput_Terrain output;
+    VSOutput_Water output;
 
     // [STEP 1] Transform position: Model -> World -> View -> Clip
     float4 localPos  = float4(input.Position, 1.0);

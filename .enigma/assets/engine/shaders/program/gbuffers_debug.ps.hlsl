@@ -11,7 +11,7 @@ PSOutput main(PSInput input)
 
     // Sample CustomImage0 texture (using linear sampler and UV coordinates)
     // The CustomImage slot is set on the CPU side through SetCustomImage(0, texture)
-    float4 texColor = customImage0.Sample(wrapSampler, input.TexCoord);
+    float4 texColor = customImage0.Sample(sampler3, input.TexCoord);
 
     // Blend texture color with vertex color and model color
     // Final color = texture color × vertex color × model color

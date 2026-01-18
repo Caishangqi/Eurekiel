@@ -28,7 +28,7 @@ PSOutput_PCU main(VSOutput_PCU input)
     PSOutput_PCU output;
     // Sample CustomImage0 texture (using linear sampler and UV coordinates)
     // The CustomImage slot is set on the CPU side through SetCustomImage(0, texture)
-    float4 texColor = customImage0.Sample(pointSampler, input.TexCoord);
+    float4 texColor = customImage0.Sample(sampler1, input.TexCoord);
 
     // [NEW] Multi-draw data independence test
     // Final color = Custom Buffer color (should be Red/Green/Blue for each cube)

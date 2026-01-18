@@ -39,6 +39,8 @@ struct PSInput_Terrain
     float3 Normal : NORMAL; // World normal
     float2 LightmapCoord: LIGHTMAP; // Lightmap (blocklight, skylight)
     float3 WorldPos : TEXCOORD2; // World position
+    uint   entityId : TEXCOORD5; // Block entity ID (unused)
+    float2 midTexCoord : TEXCOORD6; // Texture center (unused)
 };
 
 /**
@@ -70,7 +72,7 @@ PSOutput_Terrain main(PSInput_Terrain input)
 
     // [STEP 1] Sample terrain atlas (customImage0 = gtexture)
     Texture2D gtexture = GetCustomImage(0);
-    float4    texColor = gtexture.Sample(pointSampler, input.TexCoord);
+    float4    texColor = gtexture.Sample(sampler1, input.TexCoord);
 
     // [STEP 2] Alpha test - discard transparent pixels
     if (texColor.a < 0.1)
