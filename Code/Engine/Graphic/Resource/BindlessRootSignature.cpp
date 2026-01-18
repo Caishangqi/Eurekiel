@@ -7,14 +7,14 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // BindlessRootSignature 实现
+    // BindlessRootSignature Implementation
     // ========================================================================
 
     BindlessRootSignature::BindlessRootSignature()
         : m_rootSignature(nullptr)
           , m_initialized(false)
     {
-        // 构造函数：只初始化成员变量，实际创建在Initialize()
+        // Constructor: Only initialize members, actual creation in Initialize()
     }
 
     bool BindlessRootSignature::Initialize()
@@ -25,7 +25,7 @@ namespace enigma::graphic
             return true;
         }
 
-        // 1. 获取D3D12设备
+        // 1. Get D3D12 device
         auto device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
@@ -33,7 +33,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // 2. 创建Root Signature
+        // 2. Create Root Signature
         if (!CreateRootSignature(device))
         {
             core::LogError("BindlessRootSignature", "Failed to create root signature");
@@ -43,7 +43,7 @@ namespace enigma::graphic
         m_initialized = true;
 
         core::LogInfo("BindlessRootSignature",
-                      "Initialized successfully (Root CBV架构)");
+                      "Initialized successfully (Root CBV + Dynamic Sampler)"); // [REFACTORED]
         core::LogInfo("BindlessRootSignature",
                       "  - Root Signature: %u DWORDs (%.1f%% budget)", // [NEW]
                       ROOT_SIGNATURE_DWORD_COUNT,
@@ -55,7 +55,7 @@ namespace enigma::graphic
         core::LogInfo("BindlessRootSignature",
                       "  - Phase 1: Slot 7 (Matrices) active");
         core::LogInfo("BindlessRootSignature",
-                      "  - Flags: CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED");
+                      "  - Flags: CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED"); // [REFACTORED]
 
         return true;
     }
@@ -84,139 +84,78 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 私有辅助方法
+    // Private Helper Methods
     // ========================================================================
 
     bool BindlessRootSignature::CreateRootSignature(ID3D12Device* device)
     {
-        // 1. 创建Root Parameters数组 (16个参数: Slot 0-15)
-        std::vector<CD3DX12_ROOT_PARAMETER> rootParameters(ROOT_PARAMETER_COUNT); // 0-15 [NEW]
+        // 1. Create Root Parameters array (16 parameters: Slot 0-15)
+        std::vector<CD3DX12_ROOT_PARAMETER> rootParameters(ROOT_PARAMETER_COUNT);
 
-        // [NEW] Slot 0-13: 14个Root CBV (Phase 1只初始化结构,Slot 7激活)
+        // Slot 0-14: 15 Root CBVs
         for (uint32_t i = ROOT_CBV_UNDEFINE_0; i <= ROOT_CBV_UNDEFINE_14; ++i)
         {
             rootParameters[i].InitAsConstantBufferView(
                 i, // shaderRegister (b0-b14)
                 0, // registerSpace (space0)
-                D3D12_SHADER_VISIBILITY_ALL); // visibility
+                D3D12_SHADER_VISIBILITY_ALL);
         }
 
         // ============================================================================
-        // [Slot 15] Custom Buffer Descriptor Table (space1隔离)
+        // [Slot 15] Custom Buffer Descriptor Table (space1 isolation)
         // ============================================================================
         // 
-        // 设计决策：使用registerSpace=1 (space1)实现与Root CBV的完全隔离
+        // Design: Use registerSpace=1 (space1) for isolation from Root CBV
         // 
-        // 架构说明：
-        // - Root CBV (Slot 0-14): 使用space0的b0-b14，直接绑定
-        // - Custom Buffer Table:  使用space1，支持b0-b99
+        // Architecture:
+        // - Root CBV (Slot 0-14): space0 b0-b14, direct binding
+        // - Custom Buffer Table:  space1, supports b0-b99
         // 
-        // 映射关系：Table[N] → register(bN, space1)
-        // 例如：Table[88] → register(b88, space1)
-        // 
-        // [IMPORTANT] Shader编写规则：
-        // - slot < 15:  cbuffer MyBuffer : register(bN) { ... }
-        // - slot >= 15: cbuffer MyBuffer : register(bN, space1) { ... }
-        // 
-        // 参考：2025-11-27-custom-buffer-api-design-research.md
+        // Mapping: Table[N] -> register(bN, space1)
+        // Example: Table[88] -> register(b88, space1)
         // ============================================================================
         CD3DX12_DESCRIPTOR_RANGE customBufferRange;
         customBufferRange.Init(
-            D3D12_DESCRIPTOR_RANGE_TYPE_CBV, // rangeType
-            MAX_CUSTOM_BUFFERS, // numDescriptors (100个CBV)
-            0, // baseShaderRegister (b0起始，在space1中)
-            1); // registerSpace = space1 (与Root CBV的space0隔离)
+            D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            MAX_CUSTOM_BUFFERS, // 100 CBVs
+            0, // baseShaderRegister (b0 in space1)
+            1); // registerSpace = space1
 
         rootParameters[ROOT_DESCRIPTOR_TABLE_CUSTOM].InitAsDescriptorTable(
-            1, // numDescriptorRanges
-            &customBufferRange, // pDescriptorRanges
-            D3D12_SHADER_VISIBILITY_ALL); // visibility
+            1,
+            &customBufferRange,
+            D3D12_SHADER_VISIBILITY_ALL);
 
-        // 2. 创建Static Sampler数组（与Common.hlsl中的Sampler声明对应）
-        // TODO: 未来可以改为动态配置SetSamplerState()
-        // 当前使用Static Sampler以实现零预算开销和最优性能
-        // Static Sampler是编译时确定的，无法运行时修改
-        // 注意：Static Sampler不占用Root Signature预算，是性能最优的采样器配置方式
-        std::array<CD3DX12_STATIC_SAMPLER_DESC, 4> staticSamplers;
+        // ============================================================================
+        // [REFACTORED] Dynamic Sampler System - Remove Static Samplers
+        // ============================================================================
+        // 
+        // Design Decision: Use Dynamic Sampler via SAMPLER_HEAP_DIRECTLY_INDEXED flag
+        // instead of Static Samplers for runtime flexibility.
+        // 
+        // Benefits:
+        // - Runtime sampler configuration (SetSamplerState API)
+        // - Shader uses SamplerDescriptorHeap[index] for dynamic access
+        // - SamplerIndicesBuffer (b7) provides bindless indices
+        // 
+        // Migration from Static Sampler:
+        // - [OLD] SamplerState linearSampler : register(s0);
+        // - [NEW] SamplerDescriptorHeap[samplerIndices.linearSampler]
+        // ============================================================================
 
-        // 2.1 Linear Sampler (s0) - 线性过滤，用于常规纹理采样
-        staticSamplers[0].Init(
-            0, // shaderRegister (s0)
-            D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter - 三线性过滤
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressU - U轴重复寻址
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressV - V轴重复寻址
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressW - W轴重复寻址
-            0.0f, // mipLODBias
-            16, // maxAnisotropy - 各向异性过滤级别
-            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, // borderColor
-            0.0f, // minLOD
-            D3D12_FLOAT32_MAX, // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL, // visibility - 所有着色器阶段可见
-            0); // registerSpace (space0)
-
-        // 2.2 Point Sampler (s1) - 点采样，用于精确像素访问
-        staticSamplers[1].Init(
-            1, // shaderRegister (s1)
-            D3D12_FILTER_MIN_MAG_MIP_POINT, // filter - 点采样无过滤
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressU - U轴钳位寻址
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressV - V轴钳位寻址
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, // addressW - W轴钳位寻址
-            0.0f, // mipLODBias
-            1, // maxAnisotropy - 点采样不使用各向异性
-            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, // borderColor
-            0.0f, // minLOD
-            D3D12_FLOAT32_MAX, // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL, // visibility
-            0); // registerSpace (space0)
-
-        // 2.3 Shadow Comparison Sampler (s2) - 阴影比较采样器
-        staticSamplers[2].Init(
-            2, // shaderRegister (s2)
-            D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, // filter - 比较采样线性过滤
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressU - 边界寻址
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressV - 边界寻址
-            D3D12_TEXTURE_ADDRESS_MODE_BORDER, // addressW - 边界寻址
-            0.0f, // mipLODBias
-            0, // maxAnisotropy - 比较采样器不使用各向异性
-            D3D12_COMPARISON_FUNC_LESS_EQUAL, // comparisonFunc - 深度比较函数
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, // borderColor
-            0.0f, // minLOD
-            D3D12_FLOAT32_MAX, // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL, // visibility
-            0); // registerSpace (space0)
-
-        // 2.4 Wrap Point Sampler (s3) - Point sampling with WRAP mode for cloud textures
-        // Used for pixel-perfect infinite scrolling textures (e.g., clouds.png)
-        staticSamplers[3].Init(
-            3, // shaderRegister (s3)
-            D3D12_FILTER_MIN_MAG_MIP_POINT, // filter - Point sampling for pixel-perfect look
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressU - WRAP mode for infinite scrolling
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressV - WRAP mode for infinite scrolling
-            D3D12_TEXTURE_ADDRESS_MODE_WRAP, // addressW - WRAP mode for consistency
-            0.0f, // mipLODBias
-            1, // maxAnisotropy - Not used for point sampling
-            D3D12_COMPARISON_FUNC_NEVER, // comparisonFunc
-            D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK, // borderColor
-            0.0f, // minLOD
-            D3D12_FLOAT32_MAX, // maxLOD
-            D3D12_SHADER_VISIBILITY_ALL, // visibility
-            0); // registerSpace (space0)
-
-        // 3. 创建Root Signature描述 - SM6.6关键配置
+        // 3. Create Root Signature Desc - SM6.6 Key Configuration
+        // [REFACTORED] Remove static samplers, add SAMPLER_HEAP_DIRECTLY_INDEXED flag
         CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
         rootSignatureDesc.Init(
-            static_cast<UINT>(rootParameters.size()), // 16个参数 (Slot 0-15) [NEW]
+            static_cast<UINT>(rootParameters.size()), // 16 parameters (Slot 0-15)
             rootParameters.data(),
-            static_cast<UINT>(staticSamplers.size()), // NumStaticSamplers - 3个Static Sampler
-            staticSamplers.data(), // pStaticSamplers - Static Sampler数组
+            0, // [REFACTORED] NumStaticSamplers = 0 (Dynamic Sampler System)
+            nullptr, // [REFACTORED] pStaticSamplers = nullptr
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
-        // 注意：移除了 D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED
-        // 原因：使用Static Sampler时不需要动态Sampler堆索引
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
+            D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED); // [NEW] Enable dynamic sampler access
 
-        // 4. 序列化Root Signature
+        // 4. Serialize Root Signature
         Microsoft::WRL::ComPtr<ID3DBlob> signature;
         Microsoft::WRL::ComPtr<ID3DBlob> error;
 
@@ -242,9 +181,9 @@ namespace enigma::graphic
             return false;
         }
 
-        // 5. 创建Root Signature对象
+        // 5. Create Root Signature object
         hr = device->CreateRootSignature(
-            0, // NodeMask (单GPU为0)
+            0, // NodeMask (0 for single GPU)
             signature->GetBufferPointer(),
             signature->GetBufferSize(),
             IID_PPV_ARGS(&m_rootSignature));
@@ -256,23 +195,23 @@ namespace enigma::graphic
             return false;
         }
 
-        // 6. 设置调试名称
-        m_rootSignature->SetName(L"Root CBV架构 Bindless Root Signature (31 DWORDs)"); // [NEW]
+        // 6. Set debug name
+        m_rootSignature->SetName(L"Bindless Root Signature (Dynamic Sampler, 31 DWORDs)"); // [REFACTORED]
 
         core::LogInfo("BindlessRootSignature",
-                      "CreateRootSignature: Root CBV架构 created successfully");
+                      "CreateRootSignature: Root CBV + Dynamic Sampler created successfully"); // [REFACTORED]
         core::LogInfo("BindlessRootSignature",
-                      "  - 15 Root CBV slots (b0-b14, 30 DWORDs)"); // [NEW]
+                      "  - 15 Root CBV slots (b0-b14, 30 DWORDs)");
         core::LogInfo("BindlessRootSignature",
-                      "  - 1 Descriptor Table (Custom Buffers, 1 DWORD)"); // [NEW]
+                      "  - 1 Descriptor Table (Custom Buffers, 1 DWORD)");
         core::LogInfo("BindlessRootSignature",
-                      "  - 4 Static Samplers (s0-s3, 0 DWORDs)");
+                      "  - Dynamic Samplers via SAMPLER_HEAP_DIRECTLY_INDEXED (0 DWORDs)"); // [REFACTORED]
         core::LogInfo("BindlessRootSignature",
-                      "  - Custom Buffer Descriptor Table initialized: %u CBVs, b15-b%u", // [NEW]
+                      "  - Custom Buffer Descriptor Table initialized: %u CBVs, b15-b%u",
                       MAX_CUSTOM_BUFFERS,
                       14 + MAX_CUSTOM_BUFFERS);
         core::LogInfo("BindlessRootSignature",
-                      "  - Total: 31 DWORDs (48.4%% budget)"); // [NEW]
+                      "  - Total: 31 DWORDs (48.4%% budget)");
 
         return true;
     }

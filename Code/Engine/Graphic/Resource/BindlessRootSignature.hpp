@@ -9,74 +9,48 @@
 namespace enigma::graphic
 {
     /**
-     * @brief BindlessRootSignature类 - Root CBV架构Root Signature
+     * @brief BindlessRootSignature - Root CBV Architecture with Dynamic Sampler
      *
-     * 教学要点:
-     * 1. Root CBV架构 - 14个Root Descriptor (b0-b13)，性能最优
-     * 2. SM6.6 Bindless架构：移除Descriptor Table，全局堆直接索引
-     * 3. 全局共享Root Signature：所有PSO使用同一个Root Signature
-     * 4. 30 DWORDs预算：28 (Root CBV) + 1 (Root Constants) + 1 (Descriptor Table预留)
+     * Key Features:
+     * 1. Root CBV Architecture - 15 Root Descriptors (b0-b14), optimal performance
+     * 2. SM6.6 Bindless: CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED for textures/buffers
+     * 3. [NEW] Dynamic Sampler: SAMPLER_HEAP_DIRECTLY_INDEXED for runtime sampler config
+     * 4. Global shared Root Signature: All PSOs use the same Root Signature
      *
-     * Root Signature布局 (30 DWORDs = 46.9% budget):
+     * Root Signature Layout (31 DWORDs = 48.4% budget):
      * ```
-     * Slot 0-13:  Root CBV (28 DWORDs, 2 DWORDs each)
-     *   - b0:  CameraAndPlayerUniforms
-     *   - b1:  ScreenUniforms
-     *   - b2:  IdUniforms
-     *   - b3:  WorldUniforms
-     *   - b4:  BiomeUniforms
-     *   - b5:  RenderingUniforms
-     *   - b6:  RenderTargetsIndexBuffer
-     *   - b7:  MatricesUniforms [PHASE 1 ACTIVE]
-     *   - b8:  DepthTexturesIndexBuffer
-     *   - b9:  ShadowUniforms
-     *   - b10: [Reserved]
-     *   - b11: ColorTargetsIndexBuffer
-     *   - b12: ShadowColorIndexBuffer
-     *   - b13: PlayerUniforms
-     * Slot 14:    Root Constants (1 DWORD) - NoiseTexture index (b14 space1)
-     * Slot 15:    Custom Buffer Descriptor Table (1 DWORD) - space1隔离
+     * Slot 0-14:  Root CBV (30 DWORDs, 2 DWORDs each)
+     *   - b0-b6:  Various uniforms
+     *   - b7:     MatricesUniforms / SamplerIndicesBuffer
+     *   - b8-b14: Reserved
+     * Slot 15:    Custom Buffer Descriptor Table (1 DWORD) - space1 isolation
      * ```
      *
-     * 对应HLSL:
+     * Dynamic Sampler Access (HLSL):
      * ```hlsl
-     * // Slot 0-14: Root CBV使用space0
-     * cbuffer Matrices : register(b7) {
-     *     MatricesUniforms matrices;
-     * };
-     * cbuffer RootConstants : register(b14, space1) {
-     *     uint noiseTextureIndex;
-     * };
-     * 
-     * // Slot 15+: Custom Buffer必须使用space1
-     * cbuffer MyCustomBuffer : register(b88, space1) {
-     *     float4 myData;
-     * };
+     * // [NEW] Dynamic sampler via SamplerDescriptorHeap
+     * SamplerState GetSampler(uint index) {
+     *     return SamplerDescriptorHeap[index];
+     * }
+     * // Usage: texture.Sample(GetSampler(samplerIndices.linear), uv);
      * ```
      *
-     * 架构优势:
-     * - Root CBV性能最优（GPU硬件优化路径）
-     * - 无需offset参数，Shader代码简化
-     * - 避免StructuredBuffer覆写Bug
-     *
-     * @note Phase 1只激活Slot 7 (Matrices)，其他Slot预留
+     * Architecture Benefits:
+     * - Root CBV: Optimal GPU hardware path
+     * - Dynamic Sampler: Runtime configuration via SetSamplerState API
+     * - No static sampler limitations
      */
     class BindlessRootSignature final
     {
     public:
         /**
-         * @brief Root Signature布局枚举 (30 DWORDs总预算)
+         * @brief Root Signature Layout Enum (31 DWORDs total budget)
          *
-         * 教学要点:
-         * 1. Root CBV: 每个占用2 DWORDs (64位GPU虚拟地址)
-         * 2. Root Constants: 每个DWORD占用1 DWORD
-         * 3. Descriptor Table: 占用1 DWORD (GPU Heap偏移)
-         * 4. DX12限制：最多64 DWORDs（256字节）
-         *
-         * Phase 1实现:
-         * - 激活Slot 7 (MatricesUniforms)
-         * - 保留其他13个Root CBV槽位
-         * - 预算使用: 30/64 DWORDs (46.9%)
+         * Key Points:
+         * 1. Root CBV: 2 DWORDs each (64-bit GPU virtual address)
+         * 2. Root Constants: 1 DWORD each
+         * 3. Descriptor Table: 1 DWORD (GPU Heap offset)
+         * 4. DX12 Limit: Max 64 DWORDs (256 bytes)
          */
         enum RootParameterIndex : uint32_t
         {
@@ -89,7 +63,7 @@ namespace enigma::graphic
             ROOT_CBV_UNDEFINE_5 = 5,
             ROOT_CBV_UNDEFINE_6 = 6,
             ROOT_CBV_MATRICES = 7, // b7  - MatricesUniforms
-            ROOT_CBV_UNDEFINE_8 = 8,
+            ROOT_CBV_UNDEFINE_8 = 8, // SamplerIndicesUniforms
             ROOT_CBV_UNDEFINE_9 = 9,
             ROOT_CBV_UNDEFINE_10 = 10,
             ROOT_CBV_UNDEFINE_11 = 11,
@@ -136,112 +110,91 @@ namespace enigma::graphic
 
     public:
         /**
-         * @brief 构造函数
+         * @brief Constructor
          */
         BindlessRootSignature();
 
         /**
-         * @brief 析构函数 - RAII自动释放
+         * @brief Destructor - RAII auto release
          */
         ~BindlessRootSignature() = default;
 
-        // 禁用拷贝，支持移动
+        // Disable copy, support move
         BindlessRootSignature(const BindlessRootSignature&)            = delete;
         BindlessRootSignature& operator=(const BindlessRootSignature&) = delete;
         BindlessRootSignature(BindlessRootSignature&&)                 = default;
         BindlessRootSignature& operator=(BindlessRootSignature&&)      = default;
 
         // ========================================================================
-        // 生命周期管理
+        // Lifecycle Management
         // ========================================================================
 
         /**
-         * @brief 初始化Root Signature
-         * @return 成功返回true，失败返回false
+         * @brief Initialize Root Signature
+         * @return true on success, false on failure
          *
-         * 教学要点:
-         * 1. 从D3D12RenderSystem::GetDevice()获取设备
-         * 2. 创建Root Signature描述（1个Root Constants参数，11个DWORDs）
-         * 3. 设置SM6.6 Bindless标志：D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
-         * 4. 序列化并创建Root Signature对象
-         *
-         * Root Signature配置:
-         * ```cpp
-         * D3D12_ROOT_SIGNATURE_DESC desc = {};
-         * desc.NumParameters = 1;  // 只有1个Root Constants参数
-         * desc.pParameters = &rootParameter;
-         * desc.Flags =
-         *     D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-         *     D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |  // SM6.6关键
-         *     D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;        // Sampler也直接索引
-         * ```
-         *
-         * Root Parameter配置:
-         * ```cpp
-         * D3D12_ROOT_PARAMETER rootParameter = {};
-         * rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-         * rootParameter.Constants.ShaderRegister = 0;  // b0
-         * rootParameter.Constants.RegisterSpace = 0;   // space0
-         * rootParameter.Constants.Num32BitValues = 13; // 13 DWORDs = 52 bytes
-         * rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-         * ```
+         * Key Steps:
+         * 1. Get device from D3D12RenderSystem::GetDevice()
+         * 2. Create Root Signature desc with Root CBV parameters
+         * 3. Set SM6.6 Bindless flags:
+         *    - D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
+         *    - D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED [NEW]
+         * 4. Serialize and create Root Signature object
          */
         bool Initialize();
 
         /**
-         * @brief 释放所有资源
+         * @brief Release all resources
          */
         void Shutdown();
 
         /**
-         * @brief 检查是否已初始化
+         * @brief Check if initialized
          */
         bool IsInitialized() const { return m_initialized; }
 
         // ========================================================================
-        // Root Signature访问接口
+        // Root Signature Access Interface
         // ========================================================================
 
         /**
-         * @brief 获取Root Signature对象
-         * @return Root Signature指针
-         *
-         * 教学要点: 用于PSO创建和命令列表绑定
+         * @brief Get Root Signature object
+         * @return Root Signature pointer (for PSO creation and command list binding)
          */
         ID3D12RootSignature* GetRootSignature() const { return m_rootSignature.Get(); }
 
         /**
-         * @brief 绑定Root Signature到命令列表
-         * @param commandList 命令列表
+         * @brief Bind Root Signature to command list
+         * @param commandList Command list
          *
-         * 教学要点:
-         * 1. 每帧只需绑定一次（不像传统方式需要每个Pass绑定）
-         * 2. 通常在BeginFrame时调用
-         * 3. 全局共享 - 所有PSO使用同一个Root Signature
+         * Notes:
+         * 1. Only need to bind once per frame (not per Pass)
+         * 2. Usually called in BeginFrame
+         * 3. Global shared - all PSOs use the same Root Signature
          */
         void BindToCommandList(ID3D12GraphicsCommandList* commandList) const;
 
     private:
-        // Root Signature对象
+        // Root Signature object
         Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
 
-        // 初始化状态
+        // Initialization state
         bool m_initialized = false;
 
         // ========================================================================
-        // 私有辅助方法
+        // Private Helper Methods
         // ========================================================================
 
         /**
-         * @brief 创建Root Signature
-         * @param device DX12设备
-         * @return 成功返回true
+         * @brief Create Root Signature
+         * @param device DX12 device
+         * @return true on success
          *
-         * 实现指导:
-         * 1. 创建Root Parameter数组（只有1个32位常量参数，11个DWORDs）
-         * 2. 设置Root Signature描述
-         * 3. 添加SM6.6 Bindless标志
-         * 4. 序列化并创建Root Signature
+         * Implementation:
+         * 1. Create Root Parameter array (16 slots)
+         * 2. Set Root Signature desc with SM6.6 flags
+         * 3. No static samplers (dynamic sampler system)
+         * 4. Serialize and create Root Signature
          */
         bool CreateRootSignature(ID3D12Device* device);
     };
