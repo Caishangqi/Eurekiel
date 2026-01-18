@@ -53,7 +53,7 @@ namespace enigma::graphic
         const VertexLayout*  vertexLayout        = nullptr; ///< [NEW] Vertex layout pointer
         DXGI_FORMAT          rtFormats[8]        = {}; ///< 8 RT formats (corresponding to colortex0-7)
         DXGI_FORMAT          depthFormat         = DXGI_FORMAT_UNKNOWN; ///< depth format
-        BlendMode            blendMode           = BlendMode::Opaque; ///< blend mode
+        BlendConfig          blendConfig         = BlendConfig::Opaque(); ///< [REFACTORED] blend configuration (replaces BlendMode)
         DepthConfig          depthConfig         = DepthConfig::Enabled(); ///< [REFACTORED] depth configuration (replaces DepthMode)
         StencilTestDetail    stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
         RasterizationConfig  rasterizationConfig = RasterizationConfig::CullBack(); ///< Rasterization configuration
@@ -149,10 +149,10 @@ namespace enigma::graphic
          */
         ID3D12PipelineState* GetOrCreatePSO(
             const ShaderProgram*       shaderProgram,
-            const VertexLayout*        layout, // [NEW] 顶点布局
+            const VertexLayout*        layout, // [NEW] Vertex layout
             const DXGI_FORMAT          rtFormats[8],
             DXGI_FORMAT                depthFormat,
-            BlendMode                  blendMode,
+            const BlendConfig&         blendConfig, // [REFACTORED] BlendConfig replaces BlendMode
             const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
             const StencilTestDetail&   stencilDetail,
             const RasterizationConfig& rasterizationConfig
@@ -185,11 +185,11 @@ namespace enigma::graphic
         Microsoft::WRL::ComPtr<ID3D12PipelineState> CreatePSO(const PSOKey& key);
 
         /**
-         * @brief configure mixed state
+         * @brief Configure blend state
          * @param blendDesc blend descriptor
-         * @param blendMode blending mode
+         * @param blendConfig blend configuration
          */
-        static void ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, BlendMode blendMode);
+        static void ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const BlendConfig& blendConfig);
 
         /**
          * @brief configure depth stencil state

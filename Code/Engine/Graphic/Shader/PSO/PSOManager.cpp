@@ -29,7 +29,7 @@ namespace enigma::graphic
             return false;
         if (depthFormat != other.depthFormat)
             return false;
-        if (blendMode != other.blendMode)
+        if (blendConfig != other.blendConfig)
             return false;
         if (depthConfig != other.depthConfig)
             return false;
@@ -67,8 +67,16 @@ namespace enigma::graphic
         // Hash depth format
         hash ^= std::hash<DXGI_FORMAT>{}(depthFormat) << 8;
 
-        // Hash mixed mode
-        hash ^= std::hash<uint8_t>{}(static_cast<uint8_t>(blendMode)) << 16;
+        // [REFACTORED] Hash BlendConfig (8 fields packed)
+        uint32_t blendKey = (blendConfig.blendEnabled ? 1u : 0u) |
+            (static_cast<uint32_t>(blendConfig.srcBlend) << 1) |
+            (static_cast<uint32_t>(blendConfig.destBlend) << 6) |
+            (static_cast<uint32_t>(blendConfig.blendOp) << 11) |
+            (static_cast<uint32_t>(blendConfig.srcBlendAlpha) << 14) |
+            (static_cast<uint32_t>(blendConfig.destBlendAlpha) << 19) |
+            (static_cast<uint32_t>(blendConfig.blendOpAlpha) << 24) |
+            (static_cast<uint32_t>(blendConfig.renderTargetWriteMask) << 27);
+        hash ^= std::hash<uint32_t>{}(blendKey) << 16;
 
         // Hash depth config (3 fields)
         hash ^= std::hash<bool>{}(depthConfig.depthTestEnabled) << 24;
@@ -128,7 +136,7 @@ namespace enigma::graphic
         const VertexLayout*        layout, // [NEW] Vertex layout parameters
         const DXGI_FORMAT          rtFormats[8],
         DXGI_FORMAT                depthFormat,
-        BlendMode                  blendMode,
+        const BlendConfig&         blendConfig, // [REFACTORED] BlendConfig replaces BlendMode
         const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
         const StencilTestDetail&   stencilDetail,
         const RasterizationConfig& rasterizationConfig
@@ -147,7 +155,7 @@ namespace enigma::graphic
             key.rtFormats[i] = rtFormats[i];
         }
         key.depthFormat         = depthFormat;
-        key.blendMode           = blendMode;
+        key.blendConfig         = blendConfig; // [REFACTORED] Use BlendConfig
         key.depthConfig         = depthConfig; // [REFACTORED] Use DepthConfig
         key.stencilDetail       = stencilDetail;
         key.rasterizationConfig = rasterizationConfig; // [NEW] Set rasterization config
@@ -207,8 +215,8 @@ namespace enigma::graphic
         // psoDesc.GS.BytecodeLength = key.shaderProgram->m_geometryShader->GetBytecodeSize();
         // }
 
-        // 2.2 Blend state (using key.blendMode)
-        ConfigureBlendState(psoDesc.BlendState, key.blendMode);
+        // 2.2 Blend state (using key.blendConfig)
+        ConfigureBlendState(psoDesc.BlendState, key.blendConfig);
 
         // 2.3 Rasterization status (using key.rasterizationConfig)
         ConfigureRasterizerState(psoDesc.RasterizerState, key.rasterizationConfig);
@@ -282,7 +290,7 @@ namespace enigma::graphic
             ERROR_RECOVERABLE("PSO creation failed, trying fallback configuration");
 
             PSOKey fallbackKey      = key;
-            fallbackKey.blendMode   = BlendMode::Opaque;
+            fallbackKey.blendConfig = BlendConfig::Opaque(); // [REFACTORED] Use BlendConfig
             fallbackKey.depthConfig = DepthConfig::Enabled(); // [REFACTORED] Use DepthConfig
 
             if (fallbackKey == key)
@@ -299,83 +307,24 @@ namespace enigma::graphic
     // ========================================================================
     // State configuration helper method
     // ========================================================================
-    void PSOManager::ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, BlendMode blendMode)
+    void PSOManager::ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const BlendConfig& blendConfig)
     {
         blendDesc.AlphaToCoverageEnable  = FALSE;
         blendDesc.IndependentBlendEnable = FALSE;
 
-        // [FIX] Initialize all RTs to unmixed state
+        // [REFACTORED] Direct configuration from BlendConfig struct
+        // No more switch-case on BlendMode enum - cleaner and more flexible
         for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
         {
-            blendDesc.RenderTarget[i].BlendEnable           = FALSE;
+            blendDesc.RenderTarget[i].BlendEnable           = blendConfig.blendEnabled ? TRUE : FALSE;
             blendDesc.RenderTarget[i].LogicOpEnable         = FALSE;
-            blendDesc.RenderTarget[i].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        }
-
-        switch (blendMode)
-        {
-        case BlendMode::Alpha:
-        case BlendMode::NonPremultiplied:
-            // [FIX] Enable Alpha blending for all RTs and fix the black background bug of MRT cloud rendering
-            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-            {
-                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
-                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_SRC_ALPHA;
-                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
-                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
-                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
-                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
-            }
-            break;
-
-        case BlendMode::Additive:
-            // [FIX] Enable additive blending for all RTs
-            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-            {
-                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
-                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
-                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
-            }
-            break;
-
-        case BlendMode::Multiply:
-            // [FIX] Enable multiplicative blending for all RTs
-            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-            {
-                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
-                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_DEST_COLOR;
-                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_ZERO;
-                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
-                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_DEST_ALPHA;
-                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_ZERO;
-                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
-            }
-            break;
-
-        case BlendMode::Premultiplied:
-            // [FIX] Enable premultiplied alpha blending for all RTs
-            for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
-            {
-                blendDesc.RenderTarget[i].BlendEnable    = TRUE;
-                blendDesc.RenderTarget[i].SrcBlend       = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
-                blendDesc.RenderTarget[i].BlendOp        = D3D12_BLEND_OP_ADD;
-                blendDesc.RenderTarget[i].SrcBlendAlpha  = D3D12_BLEND_ONE;
-                blendDesc.RenderTarget[i].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-                blendDesc.RenderTarget[i].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
-            }
-            break;
-
-        case BlendMode::Opaque:
-        case BlendMode::Disabled:
-        default:
-            // No mixing by default (set in the initialization loop)
-            break;
+            blendDesc.RenderTarget[i].SrcBlend              = blendConfig.srcBlend;
+            blendDesc.RenderTarget[i].DestBlend             = blendConfig.destBlend;
+            blendDesc.RenderTarget[i].BlendOp               = blendConfig.blendOp;
+            blendDesc.RenderTarget[i].SrcBlendAlpha         = blendConfig.srcBlendAlpha;
+            blendDesc.RenderTarget[i].DestBlendAlpha        = blendConfig.destBlendAlpha;
+            blendDesc.RenderTarget[i].BlendOpAlpha          = blendConfig.blendOpAlpha;
+            blendDesc.RenderTarget[i].RenderTargetWriteMask = blendConfig.renderTargetWriteMask;
         }
     }
 
