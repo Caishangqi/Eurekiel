@@ -392,6 +392,48 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer, "Failed to create RenderTargetBinder: %s", e.what());
     }
 
+    // ==================== Create SamplerProvider (Dynamic Sampler System) ====================
+    // [NEW] Initialize SamplerProvider with 4 default samplers
+    // Teaching points:
+    // - sampler0: Linear (default texture sampling)
+    // - sampler1: Point (pixel-perfect sampling)
+    // - sampler2: Shadow (depth comparison)
+    // - sampler3: PointWrap (tiled textures)
+    try
+    {
+        LogInfo(LogRenderer, "Creating SamplerProvider...");
+
+        // Get GlobalDescriptorHeapManager for sampler allocation
+        auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+        if (!heapManager)
+        {
+            LogError(LogRenderer, "Failed to get GlobalDescriptorHeapManager for SamplerProvider");
+            ERROR_AND_DIE("GlobalDescriptorHeapManager not available for SamplerProvider")
+        }
+
+        // Default sampler configurations (matches Static Sampler slots)
+        std::vector<SamplerConfig> defaultSamplerConfigs = {
+            SamplerConfig::Linear(), // sampler0: Linear filtering, clamp
+            SamplerConfig::Point(), // sampler1: Point filtering, clamp
+            SamplerConfig::Shadow(), // sampler2: Shadow comparison
+            SamplerConfig::PointWrap() // sampler3: Point filtering, wrap
+        };
+
+        // [RAII] Create SamplerProvider with UniformManager dependency injection
+        m_samplerProvider = std::make_unique<SamplerProvider>(
+            *heapManager,
+            defaultSamplerConfigs,
+            m_uniformManager.get()
+        );
+
+        LogInfo(LogRenderer, "SamplerProvider created successfully (4 default samplers)");
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer, "Failed to create SamplerProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("SamplerProvider initialization failed! Error: %s", e.what()))
+    }
+
     try
     {
         LogInfo(LogRenderer, "Creating fullscreen triangle VertexBuffer...");
@@ -563,6 +605,10 @@ void RendererSubsystem::BeginFrame()
     m_depthTextureProvider->UpdateIndices();
     m_shadowColorProvider->UpdateIndices();
     m_shadowTextureProvider->UpdateIndices();
+    if (m_samplerProvider)
+    {
+        m_samplerProvider->UpdateIndices();
+    }
     LogDebug(LogRenderer, "BeginFrame - RT Provider indices uploaded to GPU");
 
     if (m_configuration.enableAutoClearColor)
@@ -1253,7 +1299,7 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
     // Step 4: Inline PSO state construction
     RenderStateValidator::DrawState state{};
     state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
-    state.blendMode           = m_currentBlendMode;
+    state.blendConfig         = m_currentBlendConfig; // [REFACTORED] Use BlendConfig
     state.depthConfig         = m_currentDepthConfig; // [REFACTORED] Use DepthConfig
     state.stencilDetail       = m_currentStencilTest;
     state.rasterizationConfig = m_currentRasterizationConfig;
@@ -1276,7 +1322,7 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
         layout,
         state.rtFormats.data(),
         state.depthFormat,
-        state.blendMode,
+        state.blendConfig,
         state.depthConfig, // [REFACTORED] Use DepthConfig
         state.stencilDetail,
         state.rasterizationConfig
@@ -1644,14 +1690,60 @@ void RendererSubsystem::PresentCustomTexture(std::shared_ptr<D12Texture> texture
 
 void RendererSubsystem::SetBlendMode(BlendMode mode)
 {
-    // 避免重复设置
-    if (m_currentBlendMode == mode)
+    // [DEPRECATED] Delegate to SetBlendConfig for backward compatibility
+    // Map BlendMode enum to BlendConfig preset
+    BlendConfig config;
+    switch (mode)
+    {
+    case BlendMode::Opaque:
+        config = BlendConfig::Opaque();
+        break;
+    case BlendMode::Alpha:
+        config = BlendConfig::Alpha();
+        break;
+    case BlendMode::Additive:
+        config = BlendConfig::Additive();
+        break;
+    case BlendMode::Multiply:
+        config = BlendConfig::Multiply();
+        break;
+    case BlendMode::Premultiplied:
+        config = BlendConfig::Premultiplied();
+        break;
+    default:
+        config = BlendConfig::Opaque();
+        break;
+    }
+
+    m_currentBlendMode = mode; // Keep for backward compatibility getter
+    SetBlendConfig(config);
+}
+
+void RendererSubsystem::SetBlendConfig(const BlendConfig& config)
+{
+    // [NEW] Dynamic Sampler System - BlendConfig API
+    // Skip if config unchanged
+    if (m_currentBlendConfig == config)
     {
         return;
     }
 
-    m_currentBlendMode = mode;
-    LogDebug(LogRenderer, "SetBlendMode: Blend mode updated to {}", static_cast<int>(mode));
+    m_currentBlendConfig = config;
+    LogDebug(LogRenderer, "SetBlendConfig: enabled=%d, srcBlend=%d, destBlend=%d",
+             config.blendEnabled, static_cast<int>(config.srcBlend), static_cast<int>(config.destBlend));
+}
+
+void RendererSubsystem::SetSamplerConfig(uint32_t index, const SamplerConfig& config)
+{
+    // [NEW] Dynamic Sampler System - Delegate to SamplerProvider
+    if (!m_samplerProvider)
+    {
+        LogWarn(LogRenderer, "SetSamplerConfig: SamplerProvider not initialized");
+        return;
+    }
+
+    m_samplerProvider->SetSamplerConfig(index, config);
+    LogDebug(LogRenderer, "SetSamplerConfig: Updated sampler%u", index);
 }
 
 void RendererSubsystem::SetDepthConfig(const DepthConfig& config)

@@ -31,6 +31,8 @@
 #include "Engine/Graphic/Target/DepthTextureProvider.hpp"
 #include "Engine/Graphic/Target/ShadowColorProvider.hpp"
 #include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
+#include "Engine/Graphic/Sampler/SamplerConfig.hpp" // [NEW] Dynamic Sampler System
+#include "Engine/Graphic/Sampler/SamplerProvider.hpp" // [NEW] Dynamic Sampler System
 
 using namespace enigma::core;
 using namespace enigma::graphic;
@@ -863,24 +865,78 @@ namespace enigma::graphic
         void ClearAllRenderTargets(const Rgba8& clearColor = Rgba8::BLACK);
 
         /**
-         * @brief 设置混合模式
-         * @param mode 混合模式
+         * @brief [DEPRECATED] Set blend mode (use SetBlendConfig instead)
+         * @param mode Blend mode enum
          *
-         * 教学要点：
-         * - 控制颜色混合
-         * - 对应OpenGL的glBlendFunc
+         * Teaching Points:
+         * - Kept for backward compatibility
+         * - Internally delegates to SetBlendConfig
          */
         void SetBlendMode(BlendMode mode);
 
         /**
-         * @brief Get current blend mode
+         * @brief [DEPRECATED] Get current blend mode
          * @return Current BlendMode
          *
          * Teaching Points:
-         * - Used for saving/restoring blend state in RenderPass
-         * - Returns copy of current mode (not reference)
+         * - Kept for backward compatibility
+         * - Returns mode derived from m_currentBlendConfig
          */
         [[nodiscard]] BlendMode GetBlendMode() const noexcept { return m_currentBlendMode; }
+
+        /**
+         * @brief [NEW] Set blend configuration (replaces SetBlendMode)
+         * @param config Blend configuration (blend enable, factors, operations)
+         *
+         * Teaching Points:
+         * - More flexible than BlendMode enum
+         * - Follows RasterizationConfig design pattern
+         * - Use static presets: BlendConfig::Opaque(), Alpha(), Additive(), etc.
+         *
+         * Usage Examples:
+         * @code
+         * // Standard opaque rendering
+         * renderer->SetBlendConfig(BlendConfig::Opaque());
+         *
+         * // Alpha blending for translucent objects
+         * renderer->SetBlendConfig(BlendConfig::Alpha());
+         *
+         * // Additive blending for particles
+         * renderer->SetBlendConfig(BlendConfig::Additive());
+         * @endcode
+         */
+        void SetBlendConfig(const BlendConfig& config);
+
+        /**
+         * @brief [NEW] Get current blend configuration
+         * @return Current BlendConfig
+         *
+         * Teaching Points:
+         * - Used for saving/restoring blend state in RenderPass
+         * - Returns copy of current config (not reference)
+         */
+        [[nodiscard]] BlendConfig GetBlendConfig() const noexcept { return m_currentBlendConfig; }
+
+        /**
+         * @brief [NEW] Set sampler configuration at index
+         * @param index Sampler slot (0-15)
+         * @param config Sampler configuration
+         *
+         * Teaching Points:
+         * - Part of Dynamic Sampler System
+         * - Delegates to SamplerProvider
+         * - Default samplers: Linear(0), Point(1), Shadow(2), PointWrap(3)
+         *
+         * Usage Examples:
+         * @code
+         * // Change sampler0 to anisotropic filtering
+         * renderer->SetSamplerConfig(0, SamplerConfig::Anisotropic(16));
+         *
+         * // Reset to default linear
+         * renderer->SetSamplerConfig(0, SamplerConfig::Linear());
+         * @endcode
+         */
+        void SetSamplerConfig(uint32_t index, const SamplerConfig& config);
 
         /**
          * @brief [REFACTORED] Set depth configuration (replaces SetDepthMode)
@@ -1420,12 +1476,18 @@ namespace enigma::graphic
 
         // [NEW] PSO state caching for deferred binding
         ShaderProgram*       m_currentShaderProgram       = nullptr;
-        BlendMode            m_currentBlendMode           = BlendMode::Opaque;
+        BlendMode            m_currentBlendMode           = BlendMode::Opaque; // [DEPRECATED] Kept for backward compatibility
+        BlendConfig          m_currentBlendConfig         = BlendConfig::Opaque(); // [NEW] Dynamic Sampler System
         DepthConfig          m_currentDepthConfig         = DepthConfig::Enabled();
         StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
         RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::CullBack();
         const VertexLayout*  m_currentVertexLayout        = nullptr; // [NEW] Current vertex layout state
         ID3D12PipelineState* m_lastBoundPSO               = nullptr;
+
+        // ==================== Dynamic Sampler System ====================
+
+        /// [NEW] SamplerProvider - Manages bindless samplers (Linear, Point, Shadow, PointWrap)
+        std::unique_ptr<SamplerProvider> m_samplerProvider;
 
         /// Current stencil reference value (CommandList dynamic state)
         uint8_t m_currentStencilRef = 0;
