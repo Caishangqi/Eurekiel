@@ -56,7 +56,7 @@ PSOutput_Shadow main(PSInput_Shadow input)
     // [STEP 1] Sample texture for alpha testing (cutout geometry support)
     // Uses customImage0 as the terrain atlas (same as gbuffers_terrain)
     Texture2D gtexture = GetCustomImage(0);
-    float4    texColor = gtexture.Sample(pointSampler, input.TexCoord);
+    float4    texColor = gtexture.Sample(sampler1, input.TexCoord);
 
 
     // [STEP 3] Output shadowcolor0
