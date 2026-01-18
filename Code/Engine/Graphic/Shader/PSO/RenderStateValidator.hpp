@@ -30,7 +30,7 @@ namespace enigma::graphic
         struct DrawState
         {
             ShaderProgram*             program;
-            BlendMode                  blendMode;
+            BlendConfig                blendConfig; // [REFACTORED] BlendConfig replaces BlendMode
             DepthConfig                depthConfig; // [REFACTORED] DepthConfig replaces DepthMode
             StencilTestDetail          stencilDetail;
             RasterizationConfig        rasterizationConfig;
