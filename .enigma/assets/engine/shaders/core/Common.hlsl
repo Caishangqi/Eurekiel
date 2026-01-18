@@ -369,22 +369,17 @@ Texture2D GetShadowTexture(uint slot)
 #define shadowtex1 GetShadowTexture(1)
 
 
-/**
- * @brief global sampler definition
- *
- *Teaching points:
- * 1. Static sampler - fixedly bound to register(s0-s2)
- * 2. Linear sampling: used for texture filtering
- * 3. Point sampling: for precise pixel access
- * 4. Shadow sampling: Comparison Sampler
- *
- *Shader Model 6.6 also supports:
- * - SamplerDescriptorHeap[index] dynamic sampler access
- */
-SamplerState linearSampler : register(s0); // Linear filtering
-SamplerState pointSampler: register(s1); // point sampling
-SamplerState shadowSampler: register(s2); // Shadow comparison sampler
-SamplerState wrapSampler : register(s3); // Point sampling with WRAP mode
+//──────────────────────────────────────────────────────────────────────────────
+// [REFACTOR] Dynamic Sampler System - Replaces Static Samplers
+//──────────────────────────────────────────────────────────────────────────────
+// Static samplers (linearSampler, pointSampler, etc.) have been replaced with
+// dynamic samplers via SamplerDescriptorHeap. Include sampler_uniforms.hlsl
+// for GetSampler() function and sampler0-3 macros.
+//
+// Migration: linearSampler -> sampler0, pointSampler -> sampler1, etc.
+// Legacy aliases are provided in sampler_uniforms.hlsl for backward compatibility.
+//──────────────────────────────────────────────────────────────────────────────
+#include "../include/sampler_uniforms.hlsl"
 
 //─────────────────────────────────────────────────
 // Fixed Input Layout (vertex format) - reserved for Gbuffers
