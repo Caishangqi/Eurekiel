@@ -1,144 +1,241 @@
 /**
  * @file BlendState.hpp
- * @brief Mixed state enumeration definition - BlendMode
+ * @brief [REFACTOR] Blend state configuration - BlendConfig struct
  *
- * Teaching focus:
- * 1. Mixed state in DirectX 12 is part of PSO (Pipeline State Object)
- * 2. Understand the application scenarios of different mixing modes
- * 3. Learn static state management of modern graphics API
+ * Follows RasterizationConfig pattern:
+ * - Type aliases mapping to D3D12 types
+ * - Constexpr namespaces for constants
+ * - Static preset methods for common configurations
+ * - operator== for PSO caching
  */
 
 #pragma once
 
 #include <cstdint>
+#include <d3d12.h>
 
 namespace enigma::graphic
 {
+    // ========================================
+    // [NEW] Blend Configuration Type Aliases
+    // ========================================
+
     /**
-     * @brief mixed mode enumeration
-     * @details
-     * Defines commonly used color mixing modes for configuring the mixing state of PSO.
-     * The blending state in DirectX 12 is static and needs to be specified when creating the PSO.
-     *
-     * Teaching points:
-     * - Opaque: opaque rendering, the most commonly used modes (skybox, solid object)
-     * - Alpha: Standard Alpha blending, used for translucent objects (glass, particle effects)
-     * - Additive: Additive blending, used for glowing effects (halos, flames)
-     * - Multiply: Multiplicative blending, used for shadow and darkening effects
-     * - Premultiplied: Premultiplied Alpha for correct translucent blending
+     * @brief Blend factor type alias
+     * @details Maps to D3D12_BLEND for source/dest blend factors
      */
-    enum class BlendMode : uint8_t
+    using BlendFactor = D3D12_BLEND;
+
+    /**
+     * @brief Blend operation type alias
+     * @details Maps to D3D12_BLEND_OP for blend operations
+     */
+    using BlendOp = D3D12_BLEND_OP;
+
+    /**
+     * @brief Color write mask type alias
+     * @details Maps to D3D12_COLOR_WRITE_ENABLE for render target write mask
+     */
+    using ColorWriteMask = uint8_t;
+
+    // ========================================
+    // [NEW] Blend Factor Constants
+    // ========================================
+
+    namespace BlendFactorMode
     {
+        constexpr BlendFactor Zero         = D3D12_BLEND_ZERO;
+        constexpr BlendFactor One          = D3D12_BLEND_ONE;
+        constexpr BlendFactor SrcColor     = D3D12_BLEND_SRC_COLOR;
+        constexpr BlendFactor InvSrcColor  = D3D12_BLEND_INV_SRC_COLOR;
+        constexpr BlendFactor SrcAlpha     = D3D12_BLEND_SRC_ALPHA;
+        constexpr BlendFactor InvSrcAlpha  = D3D12_BLEND_INV_SRC_ALPHA;
+        constexpr BlendFactor DestAlpha    = D3D12_BLEND_DEST_ALPHA;
+        constexpr BlendFactor InvDestAlpha = D3D12_BLEND_INV_DEST_ALPHA;
+        constexpr BlendFactor DestColor    = D3D12_BLEND_DEST_COLOR;
+        constexpr BlendFactor InvDestColor = D3D12_BLEND_INV_DEST_COLOR;
+        constexpr BlendFactor SrcAlphaSat  = D3D12_BLEND_SRC_ALPHA_SAT;
+    }
+
+    // ========================================
+    // [NEW] Blend Operation Constants
+    // ========================================
+
+    namespace BlendOperation
+    {
+        constexpr BlendOp Add         = D3D12_BLEND_OP_ADD;
+        constexpr BlendOp Subtract    = D3D12_BLEND_OP_SUBTRACT;
+        constexpr BlendOp RevSubtract = D3D12_BLEND_OP_REV_SUBTRACT;
+        constexpr BlendOp Min         = D3D12_BLEND_OP_MIN;
+        constexpr BlendOp Max         = D3D12_BLEND_OP_MAX;
+    }
+
+    // ========================================
+    // [NEW] Color Write Mask Constants
+    // ========================================
+
+    namespace ColorWriteEnable
+    {
+        constexpr ColorWriteMask Red   = D3D12_COLOR_WRITE_ENABLE_RED;
+        constexpr ColorWriteMask Green = D3D12_COLOR_WRITE_ENABLE_GREEN;
+        constexpr ColorWriteMask Blue  = D3D12_COLOR_WRITE_ENABLE_BLUE;
+        constexpr ColorWriteMask Alpha = D3D12_COLOR_WRITE_ENABLE_ALPHA;
+        constexpr ColorWriteMask All   = D3D12_COLOR_WRITE_ENABLE_ALL;
+    }
+
+    // ========================================
+    // [NEW] BlendConfig Structure
+    // ========================================
+
+    /**
+     * @brief Blend configuration structure
+     * @details
+     * Complete blend state mapping to D3D12_RENDER_TARGET_BLEND_DESC.
+     * Controls color and alpha blending for render targets.
+     */
+    struct BlendConfig
+    {
+        // [KEY] Enable/disable blending
+        bool blendEnabled = false;
+
+        // [KEY] Color blend configuration
+        BlendFactor srcBlend  = BlendFactorMode::One;
+        BlendFactor destBlend = BlendFactorMode::Zero;
+        BlendOp     blendOp   = BlendOperation::Add;
+
+        // [KEY] Alpha blend configuration
+        BlendFactor srcBlendAlpha  = BlendFactorMode::One;
+        BlendFactor destBlendAlpha = BlendFactorMode::Zero;
+        BlendOp     blendOpAlpha   = BlendOperation::Add;
+
+        // [KEY] Render target write mask
+        ColorWriteMask renderTargetWriteMask = ColorWriteEnable::All;
+
+        // ========================================
+        // Static Preset Methods
+        // ========================================
+
         /**
-         * @brief opacity mode - no blending
-         * @details Completely opaque, directly covering the target color
-         *
-         * DirectX 12 configuration:
-         * - BlendEnable = FALSE
-         *
-         * Application scenarios:
-         * - All solid objects (terrain, buildings, characters)
-         * - skybox
-         * - G-Buffer Pass for deferred rendering
+         * @brief Opaque rendering - no blending
+         * @return BlendConfig for solid objects, G-Buffer pass
          */
-        Opaque,
+        static inline BlendConfig Opaque()
+        {
+            BlendConfig config;
+            config.blendEnabled = false;
+            return config;
+        }
 
         /**
          * @brief Standard Alpha blending
-         * @details Linear interpolation blending based on source Alpha value
-         *
-         * DirectX 12 configuration:
-         * - BlendEnable = TRUE
-         * - SrcBlend = D3D12_BLEND_SRC_ALPHA
-         * - DestBlend = D3D12_BLEND_INV_SRC_ALPHA
-         * - BlendOp = D3D12_BLEND_OP_ADD
-         *
-         * Mixing formula: FinalColor = SrcColor * SrcAlpha + DstColor * (1 - SrcAlpha)
-         *
-         * Application scenarios:
-         * - Translucent objects (glass, water)
-         * - UI elements
-         * - Particle effects (smoke, fog)
+         * @return BlendConfig for translucent objects (glass, particles)
+         * @details Formula: Final = Src * SrcAlpha + Dst * (1 - SrcAlpha)
          */
-        Alpha,
+        static inline BlendConfig Alpha()
+        {
+            BlendConfig config;
+            config.blendEnabled   = true;
+            config.srcBlend       = BlendFactorMode::SrcAlpha;
+            config.destBlend      = BlendFactorMode::InvSrcAlpha;
+            config.blendOp        = BlendOperation::Add;
+            config.srcBlendAlpha  = BlendFactorMode::One;
+            config.destBlendAlpha = BlendFactorMode::InvSrcAlpha;
+            config.blendOpAlpha   = BlendOperation::Add;
+            return config;
+        }
 
         /**
-         * @brief additive mixing
-         * @details Source and target colors are added together for glowing effects
-         *
-         * DirectX 12 configuration:
-         * - BlendEnable = TRUE
-         * - SrcBlend = D3D12_BLEND_ONE
-         * - DestBlend = D3D12_BLEND_ONE
-         * - BlendOp = D3D12_BLEND_OP_ADD
-         *
-         * Mixing formula: FinalColor = SrcColor + DstColor
-         *
-         * Application scenarios:
-         * - Glowing effects (halo, Bloom)
-         * - Fire, explosion
-         * - Particle accumulation effect
-         *
-         *Note: Color values will overlap, possibly resulting in overexposure
+         * @brief Additive blending
+         * @return BlendConfig for glow effects (bloom, fire, explosions)
+         * @details Formula: Final = Src + Dst
          */
-        Additive,
+        static inline BlendConfig Additive()
+        {
+            BlendConfig config;
+            config.blendEnabled   = true;
+            config.srcBlend       = BlendFactorMode::One;
+            config.destBlend      = BlendFactorMode::One;
+            config.blendOp        = BlendOperation::Add;
+            config.srcBlendAlpha  = BlendFactorMode::One;
+            config.destBlendAlpha = BlendFactorMode::One;
+            config.blendOpAlpha   = BlendOperation::Add;
+            return config;
+        }
 
         /**
-         * @brief multiplicative mixing
-         * @details Source and target colors are multiplied for darkening effects
-         *
-         * DirectX 12 configuration:
-         * - BlendEnable = TRUE
-         * - SrcBlend = D3D12_BLEND_DEST_COLOR
-         * - DestBlend = D3D12_BLEND_ZERO
-         * - BlendOp = D3D12_BLEND_OP_ADD
-         *
-         * Mixing formula: FinalColor = SrcColor * DstColor
-         *
-         * Application scenarios:
-         * - Shadow map blending
-         * - Light falloff
-         * - color filter
+         * @brief Multiplicative blending
+         * @return BlendConfig for shadow, darkening effects
+         * @details Formula: Final = Src * Dst
          */
-        Multiply,
+        static inline BlendConfig Multiply()
+        {
+            BlendConfig config;
+            config.blendEnabled   = true;
+            config.srcBlend       = BlendFactorMode::DestColor;
+            config.destBlend      = BlendFactorMode::Zero;
+            config.blendOp        = BlendOperation::Add;
+            config.srcBlendAlpha  = BlendFactorMode::DestAlpha;
+            config.destBlendAlpha = BlendFactorMode::Zero;
+            config.blendOpAlpha   = BlendOperation::Add;
+            return config;
+        }
 
         /**
          * @brief Premultiplied Alpha blending
-         * @details Assume source color is alpha premultiplied for correct translucent blending
-         *
-         * DirectX 12 configuration:
-         * - BlendEnable = TRUE
-         * - SrcBlend = D3D12_BLEND_ONE
-         * - DestBlend = D3D12_BLEND_INV_SRC_ALPHA
-         * - BlendOp = D3D12_BLEND_OP_ADD
-         *
-         * Mixing formula: FinalColor = SrcColor + DstColor * (1 - SrcAlpha)
-         * Note: SrcColor has been pre-multiplied by Alpha, that is, SrcColor = OriginalColor * SrcAlpha
-         *
-         * Application scenarios:
-         * - Premultiplied Alpha texture for image library
-         * - Correct mix of UI frameworks
-         * - Avoid black border problem
+         * @return BlendConfig for premultiplied alpha textures (UI frameworks)
+         * @details Formula: Final = Src + Dst * (1 - SrcAlpha)
          */
+        static inline BlendConfig Premultiplied()
+        {
+            BlendConfig config;
+            config.blendEnabled   = true;
+            config.srcBlend       = BlendFactorMode::One;
+            config.destBlend      = BlendFactorMode::InvSrcAlpha;
+            config.blendOp        = BlendOperation::Add;
+            config.srcBlendAlpha  = BlendFactorMode::One;
+            config.destBlendAlpha = BlendFactorMode::InvSrcAlpha;
+            config.blendOpAlpha   = BlendOperation::Add;
+            return config;
+        }
+
+        // ========================================
+        // Comparison Operators
+        // ========================================
+
+        /**
+         * @brief Equality comparison for PSO caching
+         */
+        bool operator==(const BlendConfig& other) const
+        {
+            return blendEnabled == other.blendEnabled &&
+                srcBlend == other.srcBlend &&
+                destBlend == other.destBlend &&
+                blendOp == other.blendOp &&
+                srcBlendAlpha == other.srcBlendAlpha &&
+                destBlendAlpha == other.destBlendAlpha &&
+                blendOpAlpha == other.blendOpAlpha &&
+                renderTargetWriteMask == other.renderTargetWriteMask;
+        }
+
+        bool operator!=(const BlendConfig& other) const
+        {
+            return !(*this == other);
+        }
+    };
+
+    // ========================================
+    // [OLD] BlendMode enum - DEPRECATED
+    // Keep for backward compatibility, will be removed
+    // ========================================
+
+    enum class BlendMode : uint8_t
+    {
+        Opaque,
+        Alpha,
+        Additive,
+        Multiply,
         Premultiplied,
-
-        /**
-         * @brief Non-premultiplied Alpha blending (same as Alpha)
-         * @details The source color is not premultiplied by Alpha, the same as Alpha mode
-         *
-         * Application scenarios:
-         * - Explicitly mark non-premultiplied textures
-         * - Same functionality as Alpha mode
-         */
         NonPremultiplied,
-
-        /**
-         * @brief disable mixing
-         * @details Explicitly disable mixing, the same function as Opaque
-         *
-         * Application scenarios:
-         * - Explicitly mark Passes that do not require mixing
-         */
         Disabled
     };
 } // namespace enigma::graphic
