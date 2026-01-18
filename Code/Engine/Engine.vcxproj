@@ -382,6 +382,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\program\shadow.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_water.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_water.vs.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\sampler_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -489,6 +490,10 @@
     <ClCompile Include="Graphic\Resource\VertexLayout\VertexLayoutCommon.cpp"/>
     <ClCompile Include="Graphic\Resource\VertexLayout\VertexLayoutException.cpp"/>
     <ClCompile Include="Graphic\Resource\VertexLayout\VertexLayoutRegistry.cpp"/>
+    <ClCompile Include="Graphic\Sampler\Sampler.cpp"/>
+    <ClCompile Include="Graphic\Sampler\SamplerProvider.cpp"/>
+    <ClCompile Include="Graphic\Sampler\SamplerProviderCommon.cpp"/>
+    <ClCompile Include="Graphic\Sampler\SamplerProviderException.cpp"/>
     <ClCompile Include="Graphic\Shader\Common\FileSystemReader.cpp" />
     <ClCompile Include="Graphic\Shader\Common\ShaderCompilationHelper.cpp" />
     <ClCompile Include="Graphic\Shader\Common\ShaderIncludeHelper.cpp" />
@@ -988,6 +993,11 @@
     <ClInclude Include="Graphic\Resource\VertexLayout\VertexLayoutCommon.hpp"/>
     <ClInclude Include="Graphic\Resource\VertexLayout\VertexLayoutException.hpp"/>
     <ClInclude Include="Graphic\Resource\VertexLayout\VertexLayoutRegistry.hpp"/>
+    <ClInclude Include="Graphic\Sampler\Sampler.hpp"/>
+    <ClInclude Include="Graphic\Sampler\SamplerConfig.hpp"/>
+    <ClInclude Include="Graphic\Sampler\SamplerProvider.hpp"/>
+    <ClInclude Include="Graphic\Sampler\SamplerProviderCommon.hpp"/>
+    <ClInclude Include="Graphic\Sampler\SamplerProviderException.hpp"/>
     <ClInclude Include="Graphic\Shader\Common\FileSystemReader.hpp" />
     <ClInclude Include="Graphic\Shader\Common\IFileReader.hpp" />
     <ClInclude Include="Graphic\Shader\Common\ShaderCompilationHelper.hpp" />
@@ -1000,6 +1010,7 @@
     <ClInclude Include="Graphic\Shader\Uniform\CustomImageManager.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\CustomImageUniform.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\PerObjectUniforms.hpp" />
+    <ClInclude Include="Graphic\Shader\Uniform\SamplerIndicesBuffer.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\ShadowColorIndexBuffer.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexBuffer.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\UniformCommon.hpp"/>
