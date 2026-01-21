@@ -1,6 +1,7 @@
 ﻿engine:
   modules:
     - logger
+    - event
     - renderer
     - input
     - audio
