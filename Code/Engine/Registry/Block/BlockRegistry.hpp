@@ -3,12 +3,21 @@
 #include "../Core/RegisterSubsystem.hpp"
 #include "../../Core/Engine.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
+#include "../../Core/Event/EventBus.hpp"
 #include "../../Resource/BlockState/BlockStateBuilder.hpp"
 #include "../../Resource/BlockState/BlockStateDefinition.hpp"
 #include "../../Resource/ResourceMapper.hpp"
 #include "Block.hpp"
+#include "BlockRegisterEvent.hpp"
 #include "../../Voxel/Block/SlabBlock.hpp"
 #include "../../Voxel/Block/StairsBlock.hpp"
+#include "HalfTransparentBlock.hpp"
+#include "TransparentBlock.hpp"
+#include "LeavesBlock.hpp"
+#include "LiquidBlock.hpp"
+#include "FluidType.hpp"
+#include "RenderType.hpp"
+#include "RenderShape.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -177,6 +186,39 @@ namespace enigma::registry::block
          * @brief Get the underlying registry (for advanced usage)
          */
         static Registry<Block>* GetRegistry();
+
+        // ============================================================
+        // Freeze Mechanism (NeoForge-style)
+        // ============================================================
+
+        /**
+         * @brief Freeze the block registry, preventing further registrations
+         * 
+         * Should be called after all blocks are registered during startup.
+         * Once frozen, RegisterBlock() calls will throw RegistryFrozenException.
+         */
+        static void Freeze();
+
+        /**
+         * @brief Check if the block registry is frozen
+         */
+        static bool IsFrozen();
+
+        /**
+         * @brief Unfreeze the registry (use with caution, mainly for testing)
+         */
+        static void Unfreeze();
+
+        /**
+         * @brief Fire BlockRegisterEvent to trigger deferred registrations
+         * 
+         * This method posts a BlockRegisterEvent to the mod event bus,
+         * allowing DeferredRegister instances to perform their registrations.
+         * Should be called during game initialization before Freeze().
+         * 
+         * @param eventBus The event bus to post the event to
+         */
+        static void FireRegisterEvent(enigma::event::EventBus& eventBus);
 
         // Type-erased registry access methods
 
