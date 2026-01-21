@@ -77,7 +77,7 @@ BlockStateBuilder::VariantBuilder& BlockStateBuilder::VariantBuilder::UVLock(boo
     m_variant.uvlock = uvlock;
     return *this;
 }
-
+#undef max
 BlockStateBuilder::VariantBuilder& BlockStateBuilder::VariantBuilder::Weight(int weight)
 {
     m_variant.weight = std::max(1, weight);
