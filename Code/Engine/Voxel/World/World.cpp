@@ -215,7 +215,7 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
     BlockState*   startState = currentIter.GetBlock();
     if (startState)
     {
-        if (startState->IsFullOpaque())
+        if (startState->CanOcclude())
         {
             // Starting inside full opaque block - immediate hit
             result.m_didImpact    = true;
@@ -302,7 +302,7 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
             BlockState* state = currentIter.GetBlock();
             if (state)
             {
-                if (state->IsFullOpaque())
+                if (state->CanOcclude())
                 {
                     // Full opaque block - immediate hit
                     result.m_didImpact    = true;
@@ -366,7 +366,7 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
             BlockState* state = currentIter.GetBlock();
             if (state)
             {
-                if (state->IsFullOpaque())
+                if (state->CanOcclude())
                 {
                     // Full opaque block - immediate hit
                     result.m_didImpact    = true;
@@ -430,7 +430,7 @@ VoxelRaycastResult3D World::RaycastVsBlocks(const Vec3& rayStart, const Vec3& ra
             BlockState* state = currentIter.GetBlock();
             if (state)
             {
-                if (state->IsFullOpaque())
+                if (state->CanOcclude())
                 {
                     // Full opaque block - immediate hit
                     result.m_didImpact    = true;
