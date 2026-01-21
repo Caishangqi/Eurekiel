@@ -81,6 +81,336 @@ namespace
         float blockLight; // Normalized indoor light [0.0, 1.0]
     };
 
+    // ========================================================================
+    // Ambient Occlusion (AO) Calculation
+    // ========================================================================
+    // [MINECRAFT REF] Smooth lighting / AO algorithm
+    // For each vertex of a face, check 3 adjacent blocks (corner + 2 edges)
+    // AO value is determined by the number of occluding blocks
+    //
+    // Vertex layout for a face (looking at face from outside):
+    //   v3 ---- v2
+    //   |       |
+    //   |       |
+    //   v0 ---- v1
+    //
+    // For each vertex, we check:
+    //   - side1: one edge neighbor
+    //   - side2: other edge neighbor  
+    //   - corner: diagonal neighbor
+    //
+    // AO formula (Minecraft-style):
+    //   if (side1 && side2) ao = 0 (fully occluded corner)
+    //   else ao = 3 - (side1 + side2 + corner)
+    //   Normalized: ao / 3.0
+    // ========================================================================
+
+    /**
+     * @brief AO lookup table for vertex brightness
+     * @details Maps occlusion count (0-3) to brightness value (0.0-1.0)
+     *          0 occluders = 1.0 (full bright)
+     *          1 occluder  = 0.7
+     *          2 occluders = 0.5
+     *          3 occluders = 0.2 (darkest)
+     */
+    static const float AO_CURVE[4] = {1.0f, 0.7f, 0.5f, 0.2f};
+
+    /**
+     * @brief Check if a block at given iterator position can occlude light for AO
+     * @param iter Block iterator to check
+     * @return true if block is solid and can occlude, false otherwise
+     */
+    static bool IsOccluder(const BlockIterator& iter)
+    {
+        if (!iter.IsValid())
+        {
+            return false;
+        }
+
+        BlockState* block = iter.GetBlock();
+        if (!block || !block->GetBlock())
+        {
+            return false; // Air or invalid block
+        }
+
+        return block->CanOcclude();
+    }
+
+    /**
+     * @brief Calculate AO value for a single vertex based on 3 neighbor blocks
+     * @param side1 First edge neighbor is occluder
+     * @param side2 Second edge neighbor is occluder
+     * @param corner Corner neighbor is occluder
+     * @return AO value in range [0.2, 1.0]
+     *
+     * [MINECRAFT REF] vertexAO algorithm from smooth lighting
+     * Special case: if both sides are occluders, corner is fully occluded
+     */
+    static float CalculateVertexAO(bool side1, bool side2, bool corner)
+    {
+        int occluderCount;
+        if (side1 && side2)
+        {
+            // Both sides occlude = corner is fully dark (can't see corner block)
+            occluderCount = 3;
+        }
+        else
+        {
+            occluderCount = (side1 ? 1 : 0) + (side2 ? 1 : 0) + (corner ? 1 : 0);
+        }
+        return AO_CURVE[occluderCount];
+    }
+
+    // ========================================================================
+    // [FLIPPED QUADS] Adaptive Quad Triangulation for Smooth AO
+    // ========================================================================
+    // [SODIUM REF] ModelQuadOrientation.java - orientByBrightness() method
+    // File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
+    //
+    // When a quad has non-uniform AO values at its 4 corners, the triangulation
+    // direction affects how the GPU interpolates the AO across the face.
+    // Fixed triangulation (always 0-2 diagonal) can cause visible "diagonal crease"
+    // artifacts when AO values are anisotropic.
+    //
+    // Solution: Compare the sum of AO values along both diagonals:
+    //   - Diagonal 0-2: ao[0] + ao[2]
+    //   - Diagonal 1-3: ao[1] + ao[3]
+    // Choose the diagonal with the HIGHER sum (brighter) as the split line.
+    // This produces smoother interpolation results.
+    //
+    // [SODIUM REF] Vertex index remapping:
+    //   NORMAL: {0, 1, 2, 3} - triangles: (0,1,2) and (0,2,3) - split along 0-2
+    //   FLIP:   {1, 2, 3, 0} - triangles: (1,2,3) and (1,3,0) - split along 1-3
+    // ========================================================================
+
+    /**
+     * @brief Determine if quad triangulation should be flipped based on AO values
+     * @param aoValues Array of 4 AO values for quad vertices [v0, v1, v2, v3]
+     * @return true if quad should use FLIP triangulation (1-3 diagonal),
+     *         false for NORMAL triangulation (0-2 diagonal)
+     *
+     * [SODIUM REF] ModelQuadOrientation.orientByBrightness()
+     * File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
+     * Lines 19-45
+     */
+    static bool ShouldFlipQuad(const float aoValues[4])
+    {
+        // Calculate brightness sum for each diagonal
+        float brightness02 = aoValues[0] + aoValues[2]; // Diagonal 0-2
+        float brightness13 = aoValues[1] + aoValues[3]; // Diagonal 1-3
+
+        // [SODIUM REF] Choose diagonal with higher brightness sum
+        // If 0-2 is brighter or equal, use NORMAL (no flip)
+        // If 1-3 is brighter, use FLIP
+        return brightness13 > brightness02;
+    }
+
+    /**
+     * @brief Offset table for AO neighbor sampling
+     * @details For each face direction, defines the offsets to sample for each vertex's
+     *          side1, side2, and corner neighbors.
+     *
+     * Index: [direction][vertex][neighbor_type]
+     * - direction: 0-5 (NORTH, SOUTH, EAST, WEST, UP, DOWN)
+     * - vertex: 0-3 (v0, v1, v2, v3 in CCW order)
+     * - neighbor_type: 0=side1, 1=side2, 2=corner
+     *
+     * Each offset is {dx, dy, dz} relative to the block position
+     */
+    struct AOOffset
+    {
+        int dx, dy, dz;
+    };
+
+    // ========================================================================
+    // [ENGINE COORDINATE SYSTEM] +X Forward, +Y Left, +Z Up
+    // ========================================================================
+    // [FIX] AO offset tables must match BlockModelCompiler::CreateElementFace vertex order!
+    //
+    // BlockModelCompiler vertex order (from CreateElementFace):
+    //   EAST (+X):  v0=(to.x,to.y,from.z), v1=(to.x,to.y,to.z), v2=(to.x,from.y,to.z), v3=(to.x,from.y,from.z)
+    //   WEST (-X):  v0=(from.x,from.y,from.z), v1=(from.x,from.y,to.z), v2=(from.x,to.y,to.z), v3=(from.x,to.y,from.z)
+    //   NORTH (+Y): v0=(from.x,to.y,from.z), v1=(from.x,to.y,to.z), v2=(to.x,to.y,to.z), v3=(to.x,to.y,from.z)
+    //   SOUTH (-Y): v0=(to.x,from.y,from.z), v1=(to.x,from.y,to.z), v2=(from.x,from.y,to.z), v3=(from.x,from.y,from.z)
+    //   UP (+Z):    v0=(from.x,from.y,to.z), v1=(to.x,from.y,to.z), v2=(to.x,to.y,to.z), v3=(from.x,to.y,to.z)
+    //   DOWN (-Z):  v0=(from.x,from.y,from.z), v1=(from.x,to.y,from.z), v2=(to.x,to.y,from.z), v3=(to.x,from.y,from.z)
+    //
+    // For standard block: from=(0,0,0), to=(1,1,1)
+    // ========================================================================
+
+    // UP face (+Z): vertices at z=1
+    // v0=(0,0,1)=西南, v1=(1,0,1)=东南, v2=(1,1,1)=东北, v3=(0,1,1)=西北
+    static const AOOffset AO_OFFSETS_UP[4][3] = {
+        // v0: 西南角 (x=0, y=0, z=1)
+        {{-1, 0, 1}, {0, -1, 1}, {-1, -1, 1}}, // side1=west(-X), side2=south(-Y), corner=west-south
+        // v1: 东南角 (x=1, y=0, z=1)
+        {{1, 0, 1}, {0, -1, 1}, {1, -1, 1}}, // side1=east(+X), side2=south(-Y), corner=east-south
+        // v2: 东北角 (x=1, y=1, z=1)
+        {{1, 0, 1}, {0, 1, 1}, {1, 1, 1}}, // side1=east(+X), side2=north(+Y), corner=east-north
+        // v3: 西北角 (x=0, y=1, z=1)
+        {{-1, 0, 1}, {0, 1, 1}, {-1, 1, 1}}, // side1=west(-X), side2=north(+Y), corner=west-north
+    };
+
+    // DOWN face (-Z): vertices at z=0
+    // v0=(0,0,0)=西南, v1=(0,1,0)=西北, v2=(1,1,0)=东北, v3=(1,0,0)=东南
+    static const AOOffset AO_OFFSETS_DOWN[4][3] = {
+        // v0: 西南角 (x=0, y=0, z=0)
+        {{-1, 0, -1}, {0, -1, -1}, {-1, -1, -1}}, // side1=west, side2=south, corner=west-south
+        // v1: 西北角 (x=0, y=1, z=0)
+        {{-1, 0, -1}, {0, 1, -1}, {-1, 1, -1}}, // side1=west, side2=north, corner=west-north
+        // v2: 东北角 (x=1, y=1, z=0)
+        {{1, 0, -1}, {0, 1, -1}, {1, 1, -1}}, // side1=east, side2=north, corner=east-north
+        // v3: 东南角 (x=1, y=0, z=0)
+        {{1, 0, -1}, {0, -1, -1}, {1, -1, -1}}, // side1=east, side2=south, corner=east-south
+    };
+
+    // NORTH face (+Y): vertices at y=1
+    // v0=(0,1,0)=西下, v1=(0,1,1)=西上, v2=(1,1,1)=东上, v3=(1,1,0)=东下
+    static const AOOffset AO_OFFSETS_NORTH[4][3] = {
+        // v0: 西下角 (x=0, y=1, z=0)
+        {{-1, 1, 0}, {0, 1, -1}, {-1, 1, -1}}, // side1=west, side2=down, corner=west-down
+        // v1: 西上角 (x=0, y=1, z=1)
+        {{-1, 1, 0}, {0, 1, 1}, {-1, 1, 1}}, // side1=west, side2=up, corner=west-up
+        // v2: 东上角 (x=1, y=1, z=1)
+        {{1, 1, 0}, {0, 1, 1}, {1, 1, 1}}, // side1=east, side2=up, corner=east-up
+        // v3: 东下角 (x=1, y=1, z=0)
+        {{1, 1, 0}, {0, 1, -1}, {1, 1, -1}}, // side1=east, side2=down, corner=east-down
+    };
+
+    // SOUTH face (-Y): vertices at y=0
+    // v0=(1,0,0)=东下, v1=(1,0,1)=东上, v2=(0,0,1)=西上, v3=(0,0,0)=西下
+    static const AOOffset AO_OFFSETS_SOUTH[4][3] = {
+        // v0: 东下角 (x=1, y=0, z=0)
+        {{1, -1, 0}, {0, -1, -1}, {1, -1, -1}}, // side1=east, side2=down, corner=east-down
+        // v1: 东上角 (x=1, y=0, z=1)
+        {{1, -1, 0}, {0, -1, 1}, {1, -1, 1}}, // side1=east, side2=up, corner=east-up
+        // v2: 西上角 (x=0, y=0, z=1)
+        {{-1, -1, 0}, {0, -1, 1}, {-1, -1, 1}}, // side1=west, side2=up, corner=west-up
+        // v3: 西下角 (x=0, y=0, z=0)
+        {{-1, -1, 0}, {0, -1, -1}, {-1, -1, -1}}, // side1=west, side2=down, corner=west-down
+    };
+
+    // EAST face (+X): vertices at x=1
+    // v0=(1,1,0)=北下, v1=(1,1,1)=北上, v2=(1,0,1)=南上, v3=(1,0,0)=南下
+    static const AOOffset AO_OFFSETS_EAST[4][3] = {
+        // v0: 北下角 (x=1, y=1, z=0)
+        {{1, 1, 0}, {1, 0, -1}, {1, 1, -1}}, // side1=north, side2=down, corner=north-down
+        // v1: 北上角 (x=1, y=1, z=1)
+        {{1, 1, 0}, {1, 0, 1}, {1, 1, 1}}, // side1=north, side2=up, corner=north-up
+        // v2: 南上角 (x=1, y=0, z=1)
+        {{1, -1, 0}, {1, 0, 1}, {1, -1, 1}}, // side1=south, side2=up, corner=south-up
+        // v3: 南下角 (x=1, y=0, z=0)
+        {{1, -1, 0}, {1, 0, -1}, {1, -1, -1}}, // side1=south, side2=down, corner=south-down
+    };
+
+    // WEST face (-X): vertices at x=0
+    // v0=(0,0,0)=南下, v1=(0,0,1)=南上, v2=(0,1,1)=北上, v3=(0,1,0)=北下
+    static const AOOffset AO_OFFSETS_WEST[4][3] = {
+        // v0: 南下角 (x=0, y=0, z=0)
+        {{-1, -1, 0}, {-1, 0, -1}, {-1, -1, -1}}, // side1=south, side2=down, corner=south-down
+        // v1: 南上角 (x=0, y=0, z=1)
+        {{-1, -1, 0}, {-1, 0, 1}, {-1, -1, 1}}, // side1=south, side2=up, corner=south-up
+        // v2: 北上角 (x=0, y=1, z=1)
+        {{-1, 1, 0}, {-1, 0, 1}, {-1, 1, 1}}, // side1=north, side2=up, corner=north-up
+        // v3: 北下角 (x=0, y=1, z=0)
+        {{-1, 1, 0}, {-1, 0, -1}, {-1, 1, -1}}, // side1=north, side2=down, corner=north-down
+    };
+
+    /**
+     * @brief Get AO offset table for a given face direction
+     */
+    static const AOOffset (* GetAOOffsets(Direction direction))[3]
+    {
+        switch (direction)
+        {
+        case Direction::NORTH: return AO_OFFSETS_NORTH;
+        case Direction::SOUTH: return AO_OFFSETS_SOUTH;
+        case Direction::EAST: return AO_OFFSETS_EAST;
+        case Direction::WEST: return AO_OFFSETS_WEST;
+        case Direction::UP: return AO_OFFSETS_UP;
+        case Direction::DOWN: return AO_OFFSETS_DOWN;
+        default: return AO_OFFSETS_UP;
+        }
+    }
+
+    /**
+     * @brief Get block iterator at offset from current position
+     * @param baseIter Base block iterator
+     * @param dx X offset
+     * @param dy Y offset
+     * @param dz Z offset
+     * @return BlockIterator at offset position (may be invalid if out of bounds)
+     */
+    static BlockIterator GetBlockAtOffset(const BlockIterator& baseIter, int dx, int dy, int dz)
+    {
+        BlockIterator result = baseIter;
+
+        // Apply X offset
+        if (dx > 0)
+        {
+            for (int i = 0; i < dx; ++i)
+                result = result.GetEast();
+        }
+        else if (dx < 0)
+        {
+            for (int i = 0; i < -dx; ++i)
+                result = result.GetWest();
+        }
+
+        // Apply Y offset
+        if (dy > 0)
+        {
+            for (int i = 0; i < dy; ++i)
+                result = result.GetNorth();
+        }
+        else if (dy < 0)
+        {
+            for (int i = 0; i < -dy; ++i)
+                result = result.GetSouth();
+        }
+
+        // Apply Z offset
+        if (dz > 0)
+        {
+            for (int i = 0; i < dz; ++i)
+                result = result.GetUp();
+        }
+        else if (dz < 0)
+        {
+            for (int i = 0; i < -dz; ++i)
+                result = result.GetDown();
+        }
+
+        return result;
+    }
+
+    /**
+     * @brief Calculate AO values for all 4 vertices of a face
+     * @param iterator Block iterator at current block position
+     * @param direction Face direction
+     * @param outAO Output array of 4 AO values [0.2, 1.0]
+     *
+     * [IRIS REF] separateAo mode: AO stored in vertex color alpha channel
+     */
+    static void CalculateFaceAO(const BlockIterator& iterator, Direction direction, float outAO[4])
+    {
+        const AOOffset (*offsets)[3] = GetAOOffsets(direction);
+
+        for (int v = 0; v < 4; ++v)
+        {
+            // Get the 3 neighbor blocks for this vertex
+            BlockIterator side1Iter  = GetBlockAtOffset(iterator, offsets[v][0].dx, offsets[v][0].dy, offsets[v][0].dz);
+            BlockIterator side2Iter  = GetBlockAtOffset(iterator, offsets[v][1].dx, offsets[v][1].dy, offsets[v][1].dz);
+            BlockIterator cornerIter = GetBlockAtOffset(iterator, offsets[v][2].dx, offsets[v][2].dy, offsets[v][2].dz);
+
+            bool side1  = IsOccluder(side1Iter);
+            bool side2  = IsOccluder(side2Iter);
+            bool corner = IsOccluder(cornerIter);
+
+            outAO[v] = CalculateVertexAO(side1, side2, corner);
+        }
+    }
+
     /**
      * @brief Get normalized lighting values from a neighbor block
      * 
@@ -384,10 +714,13 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
             BlockIterator neighborIter = iterator.GetNeighbor(direction);
             LightingData  lighting     = GetNeighborLighting(neighborIter);
 
+            // [AO] Calculate per-vertex AO values for smooth lighting
+            float aoValues[4];
+            CalculateFaceAO(iterator, direction, aoValues);
+
             // [FIX] Directional shading via vertex color (Minecraft-style)
             float   directionalShade = GetDirectionalShade(direction);
             uint8_t shade            = static_cast<uint8_t>(directionalShade * 255.0f);
-            Rgba8   vertexColor(shade, shade, shade, 255);
 
             // Get face normal and lightmap coordinates for G-Buffer output
             Vec3 faceNormal = GetFaceNormal(direction);
@@ -400,23 +733,43 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
                 const Vertex_PCU& srcVertex = renderFace->vertices[vi];
 
                 terrainQuad[vi].m_position      = blockToChunkTransform.TransformPosition3D(srcVertex.m_position);
-                terrainQuad[vi].m_color         = vertexColor;
                 terrainQuad[vi].m_uvTexCoords   = srcVertex.m_uvTextCoords;
                 terrainQuad[vi].m_normal        = faceNormal;
                 terrainQuad[vi].m_lightmapCoord = lightmapCoord;
+
+                // [AO] Store AO based on render type (Iris-compatible)
+                // - SOLID/CUTOUT: separateAo mode - AO in alpha channel, RGB = directional shade
+                // - TRANSLUCENT: traditional mode - AO premultiplied to RGB, alpha = 255 (for blending)
+                if (renderType == RenderType::TRANSLUCENT)
+                {
+                    // Traditional mode: premultiply AO to RGB for translucent blocks
+                    uint8_t shadedValue     = static_cast<uint8_t>(shade * aoValues[vi]);
+                    terrainQuad[vi].m_color = Rgba8(shadedValue, shadedValue, shadedValue, 255);
+                }
+                else
+                {
+                    // Separate AO mode: store AO in alpha channel for SOLID/CUTOUT
+                    uint8_t ao              = static_cast<uint8_t>(aoValues[vi] * 255.0f);
+                    terrainQuad[vi].m_color = Rgba8(shade, shade, shade, ao);
+                }
             }
+
+            // [FLIPPED QUADS] Determine triangulation based on AO values
+            // [SODIUM REF] ModelQuadOrientation.orientByBrightness()
+            // File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
+            bool flipQuad = ShouldFlipQuad(aoValues);
 
             // [REFACTORED] Route to appropriate mesh based on render type
             switch (renderType)
             {
             case RenderType::SOLID:
-                chunkMesh->AddOpaqueTerrainQuad(terrainQuad);
+                chunkMesh->AddOpaqueTerrainQuad(terrainQuad, flipQuad);
                 break;
             case RenderType::CUTOUT:
-                chunkMesh->AddCutoutTerrainQuad(terrainQuad);
+                chunkMesh->AddCutoutTerrainQuad(terrainQuad, flipQuad);
                 break;
             case RenderType::TRANSLUCENT:
-                chunkMesh->AddTranslucentTerrainQuad(terrainQuad);
+                chunkMesh->AddTranslucentTerrainQuad(terrainQuad, flipQuad);
                 break;
             }
             if (isDebugBlock) facesAdded++;
