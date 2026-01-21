@@ -1,6 +1,7 @@
 #pragma once
 #include "../../Core/SubsystemManager.hpp"
-#include "../../Core/EventSystem.hpp"
+#include "../../Core/Event/EventSubsystem.hpp"
+#include "../../Core/Event/StringEventBus.hpp"
 #include "IRegistrable.hpp"
 #include "RegistrationKey.hpp"
 #include "IRegistry.hpp"
@@ -11,6 +12,9 @@
 #include <string>
 #include <shared_mutex>
 #include <typeindex>
+
+// Import EventArgs type alias for legacy compatibility
+using enigma::event::EventArgs;
 
 namespace enigma::core
 {

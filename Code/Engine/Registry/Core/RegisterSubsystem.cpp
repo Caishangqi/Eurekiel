@@ -1,5 +1,5 @@
 #include "RegisterSubsystem.hpp"
-#include "../../Core/EventSystem.hpp"
+#include "../../Core/Event/EventSubsystem.hpp"
 #include "../../Core/Logger/LoggerSubsystem.hpp"
 #include "../../Core/NamedStrings.hpp"
 #include "Engine/Core/EngineCommon.hpp"
@@ -52,8 +52,12 @@ namespace enigma::core
         // Register event handlers if events are enabled
         if (m_config.enableEvents)
         {
-            SubscribeEventCallbackFunction("RegisterItem", Event_RegistrationChanged);
-            SubscribeEventCallbackFunction("UnregisterItem", Event_RegistrationChanged);
+            auto* eventSubsystem = SubsystemManager{}.GetSubsystem<enigma::event::EventSubsystem>();
+            if (eventSubsystem)
+            {
+                eventSubsystem->SubscribeStringEvent("RegisterItem", Event_RegistrationChanged);
+                eventSubsystem->SubscribeStringEvent("UnregisterItem", Event_RegistrationChanged);
+            }
         }
 
         // Initialize default namespaces
@@ -79,8 +83,12 @@ namespace enigma::core
         // Unregister event handlers
         if (m_config.enableEvents)
         {
-            UnsubscribeEventCallbackFunction("RegisterItem", Event_RegistrationChanged);
-            UnsubscribeEventCallbackFunction("UnregisterItem", Event_RegistrationChanged);
+            auto* eventSubsystem = SubsystemManager{}.GetSubsystem<enigma::event::EventSubsystem>();
+            if (eventSubsystem)
+            {
+                eventSubsystem->UnsubscribeStringEvent("RegisterItem", Event_RegistrationChanged);
+                eventSubsystem->UnsubscribeStringEvent("UnregisterItem", Event_RegistrationChanged);
+            }
         }
 
         // Clear all registries
@@ -141,6 +149,12 @@ namespace enigma::core
     {
         std::unique_lock<std::shared_mutex> lock(m_registriesMutex);
 
+        // [FIX] Unfreeze all registries before clearing (shutdown phase)
+        for (auto& pair : m_registriesByType)
+        {
+            pair.second->Unfreeze();
+        }
+
         // Clear all registrations in each registry
         for (auto& pair : m_registriesByType)
         {
@@ -176,16 +190,12 @@ namespace enigma::core
             return;
         }
 
-        // Create event arguments
-        EventArgs args;
-
-        // Use the event system's NamedStrings functionality
-        // Note: We need to check how NamedStrings works in the engine
-        // For now, we'll fire a simple event
-
-        FireEvent(eventType);
-
-        UNUSED(args)
+        // Fire event through EventSubsystem
+        auto* eventSubsystem = SubsystemManager{}.GetSubsystem<enigma::event::EventSubsystem>();
+        if (eventSubsystem)
+        {
+            eventSubsystem->FireStringEvent(eventType);
+        }
     }
 
     bool RegisterSubsystem::Event_RegistrationChanged(EventArgs& args)
