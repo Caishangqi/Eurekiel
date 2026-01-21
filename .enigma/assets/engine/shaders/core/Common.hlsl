@@ -286,7 +286,7 @@ Texture2D GetColorTexture(uint slot)
  * - slot >> 2 = which uint4 (0-3)
  * - slot & 3  = which component (x=0, y=1, z=2, w=3)
  */
-Texture2D GetDepthTexture(uint slot)
+Texture2D<float> GetDepthTexture(uint slot)
 {
     if (slot >= 16) return ResourceDescriptorHeap[0];
     uint4 packed = depthTextureIndicesPacked[slot >> 2];
