@@ -285,7 +285,7 @@ namespace enigma::voxel
          *
          * Architecture:
          * - m_lightData: 1 byte per block (high 4 bits: outdoor light 0-15, low 4 bits: indoor light 0-15)
-         * - m_flags: 1 byte per block (IsSky, IsLightDirty, IsFullOpaque, IsSolid, IsVisible)
+         * - m_flags: 1 byte per block (IsSky, IsLightDirty, CanOcclude, IsSolid, IsVisible)
          * - Total memory: 2 bytes per block × 65536 blocks = 131 KB per chunk
          *
          * Benefits:
@@ -298,7 +298,7 @@ namespace enigma::voxel
          * @see Task 2: Implement light data access interface
          */
         std::vector<uint8_t> m_lightData; // Light data: high 4 bits = outdoor (0-15), low 4 bits = indoor (0-15)
-        std::vector<uint8_t> m_flags; // Flags: IsSky, IsLightDirty, IsFullOpaque, IsSolid, IsVisible
+        std::vector<uint8_t> m_flags; // Flags: IsSky, IsLightDirty, CanOcclude, IsSolid, IsVisible
 
         //-------------------------------------------------------------------------------------------
         // [Phase 2] Neighbor Notification for Cross-Chunk Hidden Face Culling
