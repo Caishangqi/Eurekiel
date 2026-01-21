@@ -51,6 +51,21 @@ namespace enigma::voxel
         mutable std::shared_ptr<enigma::renderer::model::RenderMesh> m_cachedMesh;
         mutable bool                                                 m_meshCacheValid = false;
 
+        // ============================================================
+        // [NEW] Light property cache
+        // [MINECRAFT REF] BlockBehaviour.java:1234-1247 Cache inner class
+        // Cached at BlockState creation time for O(1) light queries
+        // ============================================================
+        struct LightCache
+        {
+            int8_t lightBlock             = -1; // Light attenuation (0-15), -1 = not cached
+            int8_t lightEmission          = 0; // Light emission (0-15)
+            bool   propagatesSkylightDown = true; // Whether skylight passes through
+            bool   isValid                = false; // Whether cache has been initialized
+        };
+
+        mutable LightCache m_lightCache;
+
     public:
         BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex);
 
@@ -97,12 +112,20 @@ namespace enigma::voxel
         // Use Chunk::GetSkyLight(), Chunk::SetSkyLight(), etc. instead
 
         /**
-         * @brief Check if this block is fully opaque (no light passes through)
-         * Delegates to the Block type's per-state opacity check
+         * @brief Check if this block can occlude adjacent faces for face culling
+         * @details Used by ChunkMeshHelper::ShouldRenderFace() to determine if
+         *          a neighbor block should cause the current block's face to be culled.
+         *          
+         * [MINECRAFT REF] BlockStateBase.canOcclude() - Returns true for full solid blocks
+         * that can hide adjacent faces. Blocks like leaves return false even though
+         * they may block light, because they have transparent parts.
+         * 
+         * @return true if this block can occlude adjacent faces (full solid blocks)
+         * @return false if adjacent faces should always render (leaves, glass, etc.)
          */
-        inline bool IsFullOpaque() const
+        inline bool CanOcclude() const
         {
-            return m_blockType ? m_blockType->IsOpaque(const_cast<BlockState*>(this)) : true;
+            return m_blockType ? m_blockType->CanOcclude() : true;
         }
 
         // Block behavior delegation
@@ -157,6 +180,60 @@ namespace enigma::voxel
          * @brief Check if this block state blocks light
          */
         virtual bool BlocksLight() const { return IsOpaque(); }
+
+        // ============================================================
+        // [NEW] Light cache methods
+        // [MINECRAFT REF] BlockBehaviour.java:865-870 cache access
+        // ============================================================
+
+        /**
+         * @brief Get light attenuation value with caching
+         * @param world The world (may be nullptr for cached value)
+         * @param pos The block position
+         * @return Light attenuation 0-15
+         * 
+         * [MINECRAFT REF] BlockBehaviour.java:869-870
+         * return this.cache != null ? this.cache.lightBlock : this.getBlock().getLightBlock(...)
+         */
+        int GetLightBlock(World* world, const BlockPos& pos) const;
+
+        /**
+         * @brief Check if skylight propagates down through this block with caching
+         * @param world The world (may be nullptr for cached value)
+         * @param pos The block position
+         * @return True if skylight passes through vertically
+         * 
+         * [MINECRAFT REF] BlockBehaviour.java:865-866
+         */
+        bool PropagatesSkylightDown(World* world, const BlockPos& pos) const;
+
+        /**
+         * @brief Get light emission value with caching
+         * @return Light emission 0-15
+         */
+        int GetLightEmission() const;
+
+        /**
+         * @brief Initialize the light cache
+         * Called after BlockState creation to pre-compute light properties.
+         * 
+         * [MINECRAFT REF] BlockBehaviour.java:1246-1247
+         * Cache is populated during block registration.
+         * 
+         * @param world The world (may be nullptr for default calculation)
+         * @param pos The block position (may be origin for default calculation)
+         */
+        void InitializeLightCache(World* world = nullptr, const BlockPos& pos = BlockPos(0, 0, 0)) const;
+
+        /**
+         * @brief Check if light cache is valid
+         */
+        bool IsLightCacheValid() const { return m_lightCache.isValid; }
+
+        /**
+         * @brief Invalidate light cache (call when block properties change)
+         */
+        void InvalidateLightCache() const { m_lightCache.isValid = false; }
     };
 }
 

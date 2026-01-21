@@ -52,37 +52,20 @@ namespace enigma::voxel
 
     std::shared_ptr<enigma::renderer::model::RenderMesh> BlockState::GetRenderMesh() const
     {
-        // [DEBUG] Track slab/stairs mesh lookup
-        bool isDebugBlock = m_blockType && (m_blockType->GetRegistryName().find("slab") != std::string::npos ||
-            m_blockType->GetRegistryName().find("stairs") != std::string::npos);
-
         if (!m_meshCacheValid || !m_cachedMesh)
         {
-            // Get the BlockStateDefinition from the registry to access compiled mesh
             if (m_blockType)
             {
-                std::string blockName = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
-
-                if (isDebugBlock)
-                {
-                    core::LogInfo("BlockState", "[DEBUG] GetRenderMesh() for %s (cache invalid)", blockName.c_str());
-                }
-
-                auto blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
-
-                if (isDebugBlock)
-                {
-                    core::LogInfo("BlockState", "  GetBlockStateDefinition() = %s", blockStateDefinition ? "valid" : "NULL");
-                }
+                std::string blockName            = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
+                auto        blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
 
                 if (blockStateDefinition)
                 {
-                    // Convert our property map to string for variant lookup
+                    // Convert property map to string for variant lookup
                     std::string propertyString = "";
                     if (!m_properties.Empty())
                     {
                         std::string fullString = m_properties.ToString();
-                        // Remove braces {} from the string
                         if (fullString.size() >= 2 && fullString.front() == '{' && fullString.back() == '}')
                         {
                             propertyString = fullString.substr(1, fullString.size() - 2);
@@ -93,51 +76,15 @@ namespace enigma::voxel
                         }
                     }
 
-                    // Get the variants for this property combination
-                    if (isDebugBlock)
-                    {
-                        core::LogInfo("BlockState", "  propertyString = '%s'", propertyString.c_str());
-                    }
-
                     const auto* variants = blockStateDefinition->GetVariants(propertyString);
-
-                    if (isDebugBlock)
-                    {
-                        core::LogInfo("BlockState", "  GetVariants() = %s, count=%zu",
-                                      variants ? "valid" : "NULL",
-                                      variants ? variants->size() : 0);
-                    }
-
                     if (variants && !variants->empty())
                     {
-                        // Use the first variant (in the future, we might support weighted random selection)
-                        const auto& variant = variants->front();
-                        m_cachedMesh        = variant.compiledMesh;
-
-                        if (isDebugBlock)
-                        {
-                            core::LogInfo("BlockState", "  variant.compiledMesh = %s", m_cachedMesh ? "valid" : "NULL");
-                        }
+                        m_cachedMesh = variants->front().compiledMesh;
                     }
-                    else if (isDebugBlock)
-                    {
-                        core::LogWarn("BlockState", "  [FAIL] No variants found for propertyString='%s'", propertyString.c_str());
-                    }
-                }
-                else if (isDebugBlock)
-                {
-                    core::LogWarn("BlockState", "  [FAIL] BlockStateDefinition is NULL!");
                 }
             }
-
             m_meshCacheValid = true;
         }
-
-        if (isDebugBlock)
-        {
-            core::LogInfo("BlockState", "[DEBUG] GetRenderMesh() returning: %s", m_cachedMesh ? "valid" : "NULL");
-        }
-
         return m_cachedMesh;
     }
 
@@ -178,4 +125,97 @@ namespace enigma::voxel
     template BlockState* BlockState::With<bool>(std::shared_ptr<Property<bool>>, const bool&) const;
     template BlockState* BlockState::With<int>(std::shared_ptr<Property<int>>, const int&) const;
     template BlockState* BlockState::With<Direction>(std::shared_ptr<Property<Direction>>, const Direction&) const;
+
+    // ============================================================
+    // [NEW] Light cache methods implementation
+    // [MINECRAFT REF] BlockBehaviour.java:865-870, 1234-1247
+    // ============================================================
+
+    int BlockState::GetLightBlock(World* world, const BlockPos& pos) const
+    {
+        // [MINECRAFT REF] BlockBehaviour.java:869-870
+        // return this.cache != null ? this.cache.lightBlock : this.getBlock().getLightBlock(...)
+
+        // If cache is valid and has a computed value, use it
+        if (m_lightCache.isValid && m_lightCache.lightBlock >= 0)
+        {
+            return m_lightCache.lightBlock;
+        }
+
+        // Otherwise, compute from block type
+        if (m_blockType)
+        {
+            return m_blockType->GetLightBlock(const_cast<BlockState*>(this), world, pos);
+        }
+
+        // Default: fully opaque
+        return 15;
+    }
+
+    bool BlockState::PropagatesSkylightDown(World* world, const BlockPos& pos) const
+    {
+        // [MINECRAFT REF] BlockBehaviour.java:865-866
+        // return this.cache != null ? this.cache.propagatesSkylightDown : ...
+
+        // If cache is valid, use cached value
+        if (m_lightCache.isValid)
+        {
+            return m_lightCache.propagatesSkylightDown;
+        }
+
+        // Otherwise, compute from block type
+        if (m_blockType)
+        {
+            return m_blockType->PropagatesSkylightDown(const_cast<BlockState*>(this), world, pos);
+        }
+
+        // Default: opaque blocks don't propagate skylight
+        return false;
+    }
+
+    int BlockState::GetLightEmission() const
+    {
+        // If cache is valid, use cached value
+        if (m_lightCache.isValid)
+        {
+            return m_lightCache.lightEmission;
+        }
+
+        // Otherwise, compute from block type
+        if (m_blockType)
+        {
+            return m_blockType->GetLightEmission(const_cast<BlockState*>(this));
+        }
+
+        // Default: no light emission
+        return 0;
+    }
+
+    void BlockState::InitializeLightCache(World* world, const BlockPos& pos) const
+    {
+        // [MINECRAFT REF] BlockBehaviour.java:1246-1247
+        // Cache is populated during block registration for O(1) access
+
+        if (!m_blockType)
+        {
+            // No block type, use defaults
+            m_lightCache.lightBlock             = 15;
+            m_lightCache.lightEmission          = 0;
+            m_lightCache.propagatesSkylightDown = false;
+            m_lightCache.isValid                = true;
+            return;
+        }
+
+        // Compute and cache all light properties
+        m_lightCache.propagatesSkylightDown = m_blockType->PropagatesSkylightDown(
+            const_cast<BlockState*>(this), world, pos);
+
+        m_lightCache.lightBlock = static_cast<int8_t>(m_blockType->GetLightBlock(
+            const_cast<BlockState*>(this), world, pos));
+
+        m_lightCache.lightEmission = static_cast<int8_t>(m_blockType->GetLightEmission(
+            const_cast<BlockState*>(this)));
+
+        m_lightCache.isValid = true;
+    }
 }
