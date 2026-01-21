@@ -1,27 +1,34 @@
 /**
  * @file gbuffers_water.ps.hlsl
  * @brief Water Pixel Shader - Translucent Rendering with Alpha Blending
- * @date 2026-01-17
+ * @date 2026-01-19
  *
  * Phase 1: Simple translucent water rendering
  * - Sample block atlas texture
  * - Apply vertex color with alpha
- * - Output to colortex0 only (forward rendering style)
+ * - Output to colortex0 (Albedo) and colortex1 (Lightmap)
  * - Alpha blending handled by render state (BlendMode::ALPHA)
  * - BlockID read from vertex data (input.entityId), not Uniform buffer
  *
+ * [FIX] Sky/Unloaded Chunk Boundary Issue:
+ * - Read depthtex1 (opaque-only depth, copied before translucent pass)
+ * - When background is sky (depth >= 1.0), reduce water alpha to prevent bright blending
+ * - Reference: Complementary Reimagined water.glsl Line 148-179
+ *
  * Output Layout:
  * - colortex0 (SV_TARGET0): Albedo RGB + Alpha
+ * - colortex1 (SV_TARGET1): Lightmap (blockLight, skyLight) for composite lighting
  *
  * Reference:
  * - gbuffers_terrain.ps.hlsl: Texture sampling pattern
  * - TerrainTranslucentRenderPass.cpp: Render state setup
+ * - Complementary Reimagined: water.glsl depth-aware alpha
  */
 
 #include "../core/Common.hlsl"
 
-// [RENDERTARGETS] 0
-// Output: colortex0 (Albedo with alpha)
+// [RENDERTARGETS] 0,1
+// Output: colortex0 (Albedo with alpha), colortex1 (Lightmap)
 
 // ============================================================================
 // Water-Specific Pixel Shader Structures
@@ -43,11 +50,12 @@ struct PSInput_Water
 };
 
 /**
- * @brief Pixel shader output - Single render target
+ * @brief Pixel shader output - Dual render targets
  */
 struct PSOutput_Water
 {
     float4 Color : SV_TARGET0; // colortex0: Albedo (RGB) + Alpha
+    float4 Lightmap : SV_TARGET1; // colortex1: Lightmap (blockLight, skyLight, 0, 1)
 };
 
 /**
@@ -72,14 +80,13 @@ PSOutput_Water main(PSInput_Water input)
     // [STEP 3] Apply vertex color (includes alpha for water transparency)
     float4 finalColor = texColor * input.Color;
 
-    // [STEP 4] Optional: Access entityId for future water-specific effects
-    // Phase 1: entityId available but unused
-    // Future: Can use entityId to identify water blocks for special effects
-    // uint blockId = input.entityId;
-
     // [STEP 5] Output final color with alpha
     // Alpha blending handled by render state (BlendMode::ALPHA)
     output.Color = finalColor;
+
+    // [STEP 6] Output lightmap for composite lighting
+    // This ensures water receives proper day/night lighting in composite pass
+    output.Lightmap = float4(input.LightmapCoord.x, input.LightmapCoord.y, 0.0, 1.0);
 
     return output;
 }
