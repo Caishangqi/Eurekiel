@@ -1,6 +1,7 @@
 #pragma once
 #include "../../Core/SubsystemManager.hpp"
 #include "../../Core/Event/EventSubsystem.hpp"
+#include "../../Core/Event/EventBus.hpp"
 #include "../../Core/Event/StringEventBus.hpp"
 #include "IRegistrable.hpp"
 #include "RegistrationKey.hpp"
@@ -12,6 +13,7 @@
 #include <string>
 #include <shared_mutex>
 #include <typeindex>
+#include <functional>
 
 // Import EventArgs type alias for legacy compatibility
 using enigma::event::EventArgs;
@@ -50,10 +52,21 @@ namespace enigma::core
 
     /**
      * @class RegisterSubsystem
-     * @brief Main registry management subsystem
+     * @brief Main registry management subsystem with lifecycle control
      * 
-     * Similar to Minecraft Neoforge's registry system, this manages multiple
+     * Similar to Minecraft NeoForge's registry system, this manages multiple
      * registries for different types of objects (blocks, items, entities, etc.)
+     * 
+     * DESIGN PHILOSOPHY (Reference: NeoForge GameData.java):
+     * - Centralized management of all registry lifecycles
+     * - Controls registration order (Block -> Item -> Entity -> ...)
+     * - Provides freeze mechanism to prevent late registrations
+     * - Single point of control for registration phase
+     *
+     * LIFECYCLE (Reference: GameData.java:78-107):
+     * 1. UnfreezeAllRegistries() - Prepare registries for registration (optional, for reload)
+     * 2. PostRegisterEvents() - Fire RegisterEvent for each registry in order
+     * 3. FreezeAllRegistries() - Lock all registries, prevent further modifications
      */
     class RegisterSubsystem : public EngineSubsystem
     {
@@ -75,7 +88,89 @@ namespace enigma::core
         // Configuration access
         const RegisterConfig& GetConfig() const { return m_config; }
 
-        // Registry management
+        // ============================================================
+        // Registry Lifecycle Management (Merged from GameData)
+        // Reference: NeoForge GameData.java
+        // ============================================================
+
+        /**
+         * @brief Register a registry's lifecycle callbacks
+         * 
+         * Allows adding new registry types to the registration order.
+         * Should be called during subsystem initialization.
+         * 
+         * @param name Registry name (for logging)
+         * @param eventPoster Function that posts the RegisterEvent
+         * @param freezer Function that freezes the registry
+         * @param unfreezer Function that unfreezes the registry
+         * @param isFrozenChecker Function that checks if registry is frozen
+         */
+        void RegisterRegistryLifecycle(
+            const std::string&                    name,
+            std::function<void(event::EventBus&)> eventPoster,
+            std::function<void()>                 freezer,
+            std::function<void()>                 unfreezer,
+            std::function<bool()>                 isFrozenChecker
+        );
+
+        /**
+         * @brief Post RegisterEvent for all registries in order
+         * 
+         * Triggers registration events in the following order:
+         * 1. Block
+         * 2. Item (future)
+         * 3. Entity (future)
+         * 
+         * Reference: GameData.java:78-107
+         * 
+         * @note Uses ModBus from EventSubsystem
+         */
+        void PostRegisterEvents();
+
+        /**
+         * @brief Post RegisterEvent using a specific EventBus
+         * @param eventBus The event bus to post events to
+         */
+        void PostRegisterEvents(event::EventBus& eventBus);
+
+        /**
+         * @brief Freeze all registries, preventing further registrations
+         * 
+         * Once frozen:
+         * - All Register() calls will throw RegistryFrozenException
+         * - Read operations remain available
+         * - Model compilation can safely proceed
+         * 
+         * Reference: GameData.java:65-76
+         */
+        void FreezeAllRegistries();
+
+        /**
+         * @brief Unfreeze all registries (use with caution)
+         * 
+         * [WARNING] This should only be used for:
+         * - Testing scenarios
+         * - Hot-reload functionality (future)
+         * - Shutdown cleanup
+         */
+        void UnfreezeAllRegistries();
+
+        /**
+         * @brief Check if all registries are frozen
+         * @return true if FreezeAllRegistries() has been called
+         */
+        bool AreRegistriesFrozen() const;
+
+        /**
+         * @brief Check if registration events have been posted
+         * @return true if PostRegisterEvents() has been called
+         */
+        bool IsRegistrationComplete() const;
+
+        // ============================================================
+        // Registry Instance Management
+        // ============================================================
+
         template <typename T>
         Registry<T>* CreateRegistry(const std::string& typeName)
         {
@@ -124,7 +219,10 @@ namespace enigma::core
 
         void ClearAllRegistries();
 
-        // Convenience registration methods
+        // ============================================================
+        // Convenience Registration Methods
+        // ============================================================
+
         template <typename T>
         void RegisterItem(const RegistrationKey& key, std::shared_ptr<T> item)
         {
@@ -184,15 +282,32 @@ namespace enigma::core
 
     private:
         void        InitializeDefaultNamespaces();
+        void        InitializeDefaultRegistryLifecycles();
         void        FireRegistrationEvent(const std::string& eventType, const RegistrationKey& key, const std::string& typeName);
         static bool Event_RegistrationChanged(EventArgs& args);
 
     private:
         RegisterConfig m_config;
-        bool           m_initialized = false;
+        bool           m_initialized          = false;
+        bool           m_frozen               = false;
+        bool           m_registrationComplete = false;
 
         mutable std::shared_mutex                                       m_registriesMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IRegistry>> m_registriesByType;
         std::unordered_map<std::string, IRegistry*>                     m_registriesByName;
+
+        // ============================================================
+        // Registry Lifecycle Entries (Merged from GameData)
+        // ============================================================
+        struct RegistryLifecycleEntry
+        {
+            std::string                           name;
+            std::function<void(event::EventBus&)> postEvent;
+            std::function<void()>                 freeze;
+            std::function<void()>                 unfreeze;
+            std::function<bool()>                 isFrozen;
+        };
+
+        std::vector<RegistryLifecycleEntry> m_lifecycleEntries;
     };
 }

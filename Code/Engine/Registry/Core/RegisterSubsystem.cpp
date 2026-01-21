@@ -1,8 +1,13 @@
 #include "RegisterSubsystem.hpp"
 #include "../../Core/Event/EventSubsystem.hpp"
 #include "../../Core/Logger/LoggerSubsystem.hpp"
+#include "../../Core/Logger/LoggerAPI.hpp"
 #include "../../Core/NamedStrings.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Registry/Block/BlockRegistry.hpp"
+
+DECLARE_LOG_CATEGORY_EXTERN(LogRegisterSubsystem)
+DEFINE_LOG_CATEGORY(LogRegisterSubsystem)
 
 namespace enigma::core
 {
@@ -63,14 +68,12 @@ namespace enigma::core
         // Initialize default namespaces
         InitializeDefaultNamespaces();
 
+        // Initialize default registry lifecycles (Block, Item, Entity, etc.)
+        InitializeDefaultRegistryLifecycles();
+
         m_initialized = true;
 
-        // Log initialization
-        auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
-        if (logger)
-        {
-            logger->LogInfo("RegisterSubsystem", "RegisterSubsystem initialized successfully");
-        }
+        LogInfo(LogRegisterSubsystem, "RegisterSubsystem initialized successfully");
     }
 
     void RegisterSubsystem::Shutdown()
@@ -91,18 +94,202 @@ namespace enigma::core
             }
         }
 
-        // Clear all registries
+        // Clear all registries (this will unfreeze first)
         ClearAllRegistries();
+
+        // Clear lifecycle entries
+        m_lifecycleEntries.clear();
+        m_frozen               = false;
+        m_registrationComplete = false;
 
         m_initialized = false;
 
-        // Log shutdown
-        auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
-        if (logger)
-        {
-            logger->LogInfo("RegisterSubsystem", "RegisterSubsystem shutdown complete");
-        }
+        LogInfo(LogRegisterSubsystem, "RegisterSubsystem shutdown complete");
     }
+
+    // ============================================================
+    // Registry Lifecycle Management Implementation
+    // ============================================================
+
+    void RegisterSubsystem::InitializeDefaultRegistryLifecycles()
+    {
+        LogInfo(LogRegisterSubsystem, "Registering default registry lifecycles");
+
+        // Register Block registry lifecycle
+        // Reference: NeoForge registers BLOCK first in GameData.java
+        RegisterRegistryLifecycle(
+            "Block",
+            [](event::EventBus& bus)
+            {
+                registry::block::BlockRegistry::FireRegisterEvent(bus);
+            },
+            []()
+            {
+                registry::block::BlockRegistry::Freeze();
+            },
+            []()
+            {
+                registry::block::BlockRegistry::Unfreeze();
+            },
+            []()
+            {
+                return registry::block::BlockRegistry::IsFrozen();
+            }
+        );
+
+        // Future: Register Item registry lifecycle
+        // RegisterRegistryLifecycle(
+        //     "Item",
+        //     [](event::EventBus& bus) { item::ItemRegistry::FireRegisterEvent(bus); },
+        //     []() { item::ItemRegistry::Freeze(); },
+        //     []() { item::ItemRegistry::Unfreeze(); },
+        //     []() { return item::ItemRegistry::IsFrozen(); }
+        // );
+
+        LogInfo(LogRegisterSubsystem, "Registered %zu registry lifecycles", m_lifecycleEntries.size());
+    }
+
+    void RegisterSubsystem::RegisterRegistryLifecycle(
+        const std::string&                    name,
+        std::function<void(event::EventBus&)> eventPoster,
+        std::function<void()>                 freezer,
+        std::function<void()>                 unfreezer,
+        std::function<bool()>                 isFrozenChecker)
+    {
+        RegistryLifecycleEntry entry;
+        entry.name      = name;
+        entry.postEvent = std::move(eventPoster);
+        entry.freeze    = std::move(freezer);
+        entry.unfreeze  = std::move(unfreezer);
+        entry.isFrozen  = std::move(isFrozenChecker);
+
+        m_lifecycleEntries.push_back(std::move(entry));
+
+        LogDebug(LogRegisterSubsystem, "Added registry lifecycle '%s' (order: %zu)",
+                 name.c_str(), m_lifecycleEntries.size());
+    }
+
+    void RegisterSubsystem::PostRegisterEvents()
+    {
+        // Get ModBus from EventSubsystem
+        auto* eventSubsystem = SubsystemManager{}.GetSubsystem<event::EventSubsystem>();
+        if (!eventSubsystem)
+        {
+            LogError(LogRegisterSubsystem, "PostRegisterEvents: EventSubsystem not available");
+            return;
+        }
+
+        PostRegisterEvents(eventSubsystem->GetModBus());
+    }
+
+    void RegisterSubsystem::PostRegisterEvents(event::EventBus& eventBus)
+    {
+        if (m_registrationComplete)
+        {
+            LogWarn(LogRegisterSubsystem, "PostRegisterEvents: Already called, ignoring");
+            return;
+        }
+
+        LogInfo(LogRegisterSubsystem, "PostRegisterEvents: Starting registration phase");
+
+        // Post RegisterEvent for each registry in order
+        // Reference: GameData.java:78-107 iterates through ORDERED_REGISTRIES
+        for (const auto& entry : m_lifecycleEntries)
+        {
+            LogInfo(LogRegisterSubsystem, "PostRegisterEvents: Posting RegisterEvent for '%s'", entry.name.c_str());
+
+            try
+            {
+                entry.postEvent(eventBus);
+                LogInfo(LogRegisterSubsystem, "PostRegisterEvents: '%s' registration completed", entry.name.c_str());
+            }
+            catch (const std::exception& e)
+            {
+                LogError(LogRegisterSubsystem, "PostRegisterEvents: '%s' registration failed: %s",
+                         entry.name.c_str(), e.what());
+                throw;
+            }
+        }
+
+        m_registrationComplete = true;
+        LogInfo(LogRegisterSubsystem, "PostRegisterEvents: Registration phase completed");
+    }
+
+    void RegisterSubsystem::FreezeAllRegistries()
+    {
+        if (m_frozen)
+        {
+            LogWarn(LogRegisterSubsystem, "FreezeAllRegistries: Already frozen, ignoring");
+            return;
+        }
+
+        LogInfo(LogRegisterSubsystem, "FreezeAllRegistries: Freezing all registries");
+
+        // Freeze all registry lifecycles
+        // Reference: GameData.java:65-76 calls freeze() on each MappedRegistry
+        for (const auto& entry : m_lifecycleEntries)
+        {
+            LogDebug(LogRegisterSubsystem, "FreezeAllRegistries: Freezing '%s'", entry.name.c_str());
+            entry.freeze();
+        }
+
+        // Also freeze registries managed by this subsystem
+        {
+            std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
+            for (auto& pair : m_registriesByType)
+            {
+                pair.second->Freeze();
+            }
+        }
+
+        m_frozen = true;
+        LogInfo(LogRegisterSubsystem, "FreezeAllRegistries: All registries frozen");
+    }
+
+    void RegisterSubsystem::UnfreezeAllRegistries()
+    {
+        if (!m_frozen)
+        {
+            LogWarn(LogRegisterSubsystem, "UnfreezeAllRegistries: Not frozen, ignoring");
+            return;
+        }
+
+        LogWarn(LogRegisterSubsystem, "UnfreezeAllRegistries: [WARNING] Unfreezing registries - use with caution!");
+
+        // Unfreeze all registry lifecycles
+        for (const auto& entry : m_lifecycleEntries)
+        {
+            LogDebug(LogRegisterSubsystem, "UnfreezeAllRegistries: Unfreezing '%s'", entry.name.c_str());
+            entry.unfreeze();
+        }
+
+        // Also unfreeze registries managed by this subsystem
+        {
+            std::shared_lock<std::shared_mutex> lock(m_registriesMutex);
+            for (auto& pair : m_registriesByType)
+            {
+                pair.second->Unfreeze();
+            }
+        }
+
+        m_frozen               = false;
+        m_registrationComplete = false; // Allow re-registration
+        LogInfo(LogRegisterSubsystem, "UnfreezeAllRegistries: All registries unfrozen");
+    }
+
+    bool RegisterSubsystem::AreRegistriesFrozen() const
+    {
+        return m_frozen;
+    }
+
+    bool RegisterSubsystem::IsRegistrationComplete() const
+    {
+        return m_registrationComplete;
+    }
+
+    // ============================================================
+    // Registry Instance Management Implementation
+    // ============================================================
 
     IRegistry* RegisterSubsystem::GetRegistry(const std::string& typeName)
     {
@@ -149,7 +336,7 @@ namespace enigma::core
     {
         std::unique_lock<std::shared_mutex> lock(m_registriesMutex);
 
-        // [FIX] Unfreeze all registries before clearing (shutdown phase)
+        // Unfreeze all registries before clearing (shutdown phase)
         for (auto& pair : m_registriesByType)
         {
             pair.second->Unfreeze();
@@ -171,12 +358,11 @@ namespace enigma::core
         // Default namespaces are primarily for organizational purposes
         // The actual namespace handling is done at the registration level
 
-        auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
-        if (logger && m_config.enableNamespaces)
+        if (m_config.enableNamespaces)
         {
             for (const auto& ns : m_config.defaultNamespaces)
             {
-                logger->LogInfo("RegisterSubsystem", ("Initialized namespace: " + ns.name).c_str());
+                LogInfo(LogRegisterSubsystem, "Initialized namespace: %s", ns.name.c_str());
             }
         }
     }
@@ -205,11 +391,7 @@ namespace enigma::core
         // Handle registration change events
         // This could be used for logging, validation, or other system notifications
 
-        auto* logger = enigma::core::SubsystemManager{}.GetSubsystem<LoggerSubsystem>();
-        if (logger)
-        {
-            logger->LogDebug("RegisterSubsystem", "Registration changed event fired");
-        }
+        LogDebug(LogRegisterSubsystem, "Registration changed event fired");
 
         return false; // Allow other handlers to process
     }
