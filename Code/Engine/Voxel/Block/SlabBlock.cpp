@@ -25,7 +25,7 @@ namespace enigma::voxel
 
         // [NEW] Set block-level properties
         // Only DOUBLE slabs are opaque, so block-level opaque = false
-        SetOpaque(false);
+        SetCanOcclude(false);
         SetFullBlock(false); // Slabs are not full blocks (except DOUBLE, but YAML can override)
 
         // [NEW] Generate all possible block states (3 states: BOTTOM, TOP, DOUBLE)

@@ -48,7 +48,7 @@ namespace enigma::voxel
 
         // [NEW] Set block-level properties
         // Stairs are not fully opaque (have empty spaces in corners)
-        SetOpaque(false);
+        SetCanOcclude(false);
         SetFullBlock(false);
 
         // [NEW] Generate all possible block states
