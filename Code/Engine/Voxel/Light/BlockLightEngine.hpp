@@ -2,10 +2,16 @@
 //-----------------------------------------------------------------------------------------------
 // BlockLightEngine.hpp
 //
-// [NEW] Block light engine for emission-based light calculation
-// Handles light sources like torches, glowstone, lava
+// [REFACTORED] Block light engine for emission-based light calculation
+// Handles light sources like torches, glowstone, lava with proper attenuation
 //
-// Reference: Minecraft BlockLightEngine.java
+// [MINECRAFT REF] BlockLightEngine.java - Block light propagation
+// [MINECRAFT REF] LightEngine.java - Base light engine with attenuation
+//
+// Key features:
+// - GetLightBlock-based attenuation (not just opaque/transparent)
+// - GetLightEmission from BlockState cache
+// - Attenuation is max(1, lightBlock) per block
 //
 //-----------------------------------------------------------------------------------------------
 
@@ -19,7 +25,9 @@ namespace enigma::voxel
     // BlockLightEngine
     //
     // Handles block light (emission-based) calculation and propagation.
-    // Light propagates from emissive blocks with -1 attenuation per block.
+    // Light propagates from emissive blocks with variable attenuation based on GetLightBlock().
+    //
+    // [MINECRAFT REF] LightEngine.java:79 - Math.max(1, blockState.getLightBlock(...))
     //-------------------------------------------------------------------------------------------
     class BlockLightEngine : public LightEngine
     {
