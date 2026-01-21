@@ -1,9 +1,11 @@
 #include "WindowsConsole.hpp"
-#include "Engine/Core/EventSystem.hpp"
+#include "Engine/Core/Event/EventSubsystem.hpp"
 #include "Engine/Core/NamedStrings.hpp"
 #include <iostream>
 #include <io.h>
 #include <fcntl.h>
+
+#include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::core
 {

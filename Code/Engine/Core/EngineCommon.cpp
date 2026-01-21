@@ -1,2 +1,4 @@
 ﻿#include "EngineCommon.hpp"
-NamedStrings g_gameConfigBlackboard;
+
+NamedStrings                   g_gameConfigBlackboard;
+enigma::event::EventSubsystem* g_theEventSubsystem = nullptr;

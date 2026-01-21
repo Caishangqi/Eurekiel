@@ -3,7 +3,8 @@
 #include <string>
 
 #include "Engine/Core/SubsystemManager.hpp"
-#include "Engine/Core/EventSystem.hpp"
+#include "Engine/Core/Event/EventSubsystem.hpp"
+#include "Engine/Core/Event/StringEventBus.hpp"
 #include "Engine/Core/Logger/LogLevel.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "ConsoleConfig.hpp"
@@ -11,6 +12,9 @@
 
 // Forward declarations
 class DevConsole;
+
+// Import EventArgs type alias for legacy compatibility
+using enigma::event::EventArgs;
 
 namespace enigma::core
 {

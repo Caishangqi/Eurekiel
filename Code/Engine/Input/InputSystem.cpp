@@ -44,8 +44,8 @@ void InputSystem::Startup()
         m_controllers[controllerID].m_id = controllerID;
     }
     printf("InputSystem::Startup    Initialize input system\n");
-    g_theEventSystem->SubscribeEventCallbackFunction("KeyPressed", Event_KeyPressed);
-    g_theEventSystem->SubscribeEventCallbackFunction("KeyReleased", Event_KeyReleased);
+    g_theEventSubsystem->SubscribeStringEvent("KeyPressed", Event_KeyPressed);
+    g_theEventSubsystem->SubscribeStringEvent("KeyReleased", Event_KeyReleased);
 }
 
 void InputSystem::Shutdown()

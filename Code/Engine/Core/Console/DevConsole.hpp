@@ -2,10 +2,14 @@
 #include <string>
 #include <vector>
 
-#include "../EventSystem.hpp"
+#include "../Event/StringEventBus.hpp"
 #include "../NamedStrings.hpp"
 #include "../Rgba8.hpp"
 #include "Engine/Math/AABB2.hpp"
+
+// Import types from enigma::event namespace for legacy compatibility
+using enigma::event::EventArgs;
+using enigma::event::EventCallbackFunction;
 
 class Timer;
 class Camera;

@@ -2,10 +2,12 @@
 #include <string>
 
 #include "BitmapFont.hpp"
-#include "Engine/Core/EventSystem.hpp"
+#include "Engine/Core/Event/StringEventBus.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Math/Vec2.hpp"
 
+// Import EventArgs type alias for legacy compatibility
+using enigma::event::EventArgs;
 
 class IRenderer;
 class Camera;

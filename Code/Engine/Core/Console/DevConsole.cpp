@@ -330,7 +330,7 @@ bool DevConsole::Command_Help(EventArgs& args)
 bool DevConsole::Command_Quit(EventArgs& args)
 {
     UNUSED(args)
-    g_theEventSystem->FireEvent("WindowCloseEvent");
+    g_theEventSubsystem->FireStringEvent("WindowCloseEvent");
     return true;
 }
 
@@ -351,13 +351,13 @@ DevConsole::~DevConsole()
 
 void DevConsole::Startup()
 {
-    g_theEventSystem->SubscribeEventCallbackFunction("KeyPressed", Event_KeyPressed);
-    g_theEventSystem->SubscribeEventCallbackFunction("CharInput", Event_CharInput);
-    g_theEventSystem->SubscribeEventCallbackFunction("PasteClipboard", Event_PasteClipboard);
-    g_theEventSystem->SubscribeEventCallbackFunction("quit", Command_Quit);
-    g_theEventSystem->SubscribeEventCallbackFunction("clear", Command_Clear);
-    g_theEventSystem->SubscribeEventCallbackFunction("help", Command_Help);
-    g_theEventSystem->SubscribeEventCallbackFunction("ecoargs", Command_EcoArgs);
+    g_theEventSubsystem->SubscribeStringEvent("KeyPressed", Event_KeyPressed);
+    g_theEventSubsystem->SubscribeStringEvent("CharInput", Event_CharInput);
+    g_theEventSubsystem->SubscribeStringEvent("PasteClipboard", Event_PasteClipboard);
+    g_theEventSubsystem->SubscribeStringEvent("quit", Command_Quit);
+    g_theEventSubsystem->SubscribeStringEvent("clear", Command_Clear);
+    g_theEventSubsystem->SubscribeStringEvent("help", Command_Help);
+    g_theEventSubsystem->SubscribeStringEvent("ecoargs", Command_EcoArgs);
 
 
     m_fontFullPath = m_config.m_fontPath.append(m_config.m_defaultFontName);
@@ -379,7 +379,7 @@ void DevConsole::Startup()
     ///
 
     /// Broadcast the Console initialize event
-    g_theEventSystem->FireEvent("Event.Console.Startup");
+    g_theEventSubsystem->FireStringEvent("Event.Console.Startup");
 }
 
 void DevConsole::Shutdown()
@@ -492,7 +492,7 @@ void DevConsole::RegisterCommand(const std::string& commandHeader, const std::st
 {
     UNUSED(description)
     m_registerCommands.push_back(commandHeader);
-    g_theEventSystem->SubscribeEventCallbackFunction(commandHeader, functionPtr);
+    g_theEventSubsystem->SubscribeStringEvent(commandHeader, functionPtr);
 }
 
 void DevConsole::ToggleOpen()
@@ -575,8 +575,8 @@ void DevConsole::Render_OpenFull(const AABB2& bounds, IRenderer& renderer, Bitma
         }
         DevConsoleLine devConsoleLine = m_lines[line];
         Vec2           linePos        = actualBounds.m_mins + Vec2(0, lineHeight * static_cast<float>(lineIndexFromBottom));
-        linePos.y += lineHeight; /// This is the offset that split inputline and coonsole line
-        float lineWidth = font.GetTextWidth(lineHeight, devConsoleLine.m_text, fontAspect);
+        linePos.y                     += lineHeight; /// This is the offset that split inputline and coonsole line
+        float lineWidth               = font.GetTextWidth(lineHeight, devConsoleLine.m_text, fontAspect);
         if (lineWidth > bounds.GetDimensions().x) // If bigger than console width, we use advance box alignment method
         {
             auto lineBounds = AABB2(linePos, linePos + Vec2(bounds.GetDimensions().x, lineHeight));
@@ -652,7 +652,7 @@ bool DevConsole::ExecuteSingleCommand(const std::string& consoleCommandText)
     {
         if (IsCommandRegistered(consoleCommandText))
         {
-            g_theEventSystem->FireEvent(commandSegment[0]); // Fire no args event
+            g_theEventSubsystem->FireStringEvent(commandSegment[0]); // Fire no args event
             return true;
         }
         return false;
@@ -685,7 +685,7 @@ bool DevConsole::ExecuteSingleCommand(const std::string& consoleCommandText)
                 commandArg.append(" " + commandSegment[i]);
             }
             args.SetValue("args", commandArg);
-            g_theEventSystem->FireEvent(commandHeader, args);
+            g_theEventSubsystem->FireStringEvent(commandHeader, args);
             return true;
         }
         return false;

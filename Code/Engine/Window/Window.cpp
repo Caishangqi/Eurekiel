@@ -50,7 +50,7 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
     // App close requested via "X" button, or right-click "Close Window" on task bar, or "Close" from system menu, or Alt-F4
     case WM_CLOSE:
         {
-            g_theEventSystem->FireEvent("WindowCloseEvent"); // Fire the WindowCloseEvent
+            g_theEventSubsystem->FireStringEvent("WindowCloseEvent"); // Fire the WindowCloseEvent
             return 0;
         }
 
@@ -269,7 +269,7 @@ void Window::SetAlwaysOnTop(bool alwaysOnTop)
     if (m_windowHandle)
     {
         auto windowHandle = static_cast<HWND>(m_windowHandle);
-        HWND insertAfter = alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
+        HWND insertAfter  = alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
         SetWindowPos(windowHandle, insertAfter, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
 
@@ -525,7 +525,7 @@ void Window::RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreproce
 
     m_messagePreprocessors.push_back(preprocessor);
     SortPreprocessors();
-    
+
     DebuggerPrintf("[Window] Registered message preprocessor: %s (priority: %d)\n",
                    preprocessor->GetName(), preprocessor->GetPriority());
 }
@@ -548,8 +548,8 @@ void Window::UnregisterMessagePreprocessor(enigma::window::IWindowsMessagePrepro
 void Window::SortPreprocessors()
 {
     std::sort(m_messagePreprocessors.begin(), m_messagePreprocessors.end(),
-        [](const enigma::window::IWindowsMessagePreprocessor* a, const enigma::window::IWindowsMessagePreprocessor* b)
-        {
-            return a->GetPriority() < b->GetPriority();
-        });
+              [](const enigma::window::IWindowsMessagePreprocessor* a, const enigma::window::IWindowsMessagePreprocessor* b)
+              {
+                  return a->GetPriority() < b->GetPriority();
+              });
 }

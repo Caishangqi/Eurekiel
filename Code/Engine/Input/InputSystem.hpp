@@ -2,9 +2,13 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include "Engine/Core/EventSystem.hpp"
+#include "Engine/Core/Event/StringEventBus.hpp"
 #include "Engine/Input/XboxController.hpp"
 #include "Engine/Math/IntVec2.hpp"
+
+// Import EventArgs type alias for legacy compatibility
+using enigma::event::EventArgs;
+
 /**
  * An InputSystem instance should be owned (created, managed, destroyed) by the App, much like Renderer.
  */
