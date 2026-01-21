@@ -106,34 +106,19 @@ size_t ChunkMesh::GetTranslucentTriangleCount() const
 }
 
 // ============================================================
-// [DEPRECATED] Legacy Transparent API - Routes to Translucent
+// [FLIPPED QUADS] Adaptive Quad Triangulation for Smooth AO
+// ============================================================
+// [SODIUM REF] ModelQuadOrientation.java - orientByBrightness() method
+// File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
+//
+// When flipQuad is true, we change the triangulation from:
+//   NORMAL: (0,1,2) + (0,2,3) - split along 0-2 diagonal
+//   FLIP:   (0,1,3) + (1,2,3) - split along 1-3 diagonal
+//
+// This eliminates the "diagonal crease" artifact when AO values are anisotropic.
 // ============================================================
 
-bool ChunkMesh::HasTransparentGeometry() const
-{
-    return HasTranslucentGeometry();
-}
-
-size_t ChunkMesh::GetTransparentVertexCount() const
-{
-    return GetTranslucentVertexCount();
-}
-
-size_t ChunkMesh::GetTransparentIndexCount() const
-{
-    return GetTranslucentIndexCount();
-}
-
-size_t ChunkMesh::GetTransparentTriangleCount() const
-{
-    return GetTranslucentTriangleCount();
-}
-
-// ============================================================
-// Quad Addition Methods
-// ============================================================
-
-void ChunkMesh::AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices)
+void ChunkMesh::AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad)
 {
     uint32_t baseIndex = static_cast<uint32_t>(m_opaqueTerrainVertices.size());
 
@@ -143,18 +128,33 @@ void ChunkMesh::AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>
         m_opaqueTerrainVertices.push_back(vertex);
     }
 
-    // Add indices for two triangles (quad)
-    m_opaqueIndices.push_back(baseIndex + 0);
-    m_opaqueIndices.push_back(baseIndex + 1);
-    m_opaqueIndices.push_back(baseIndex + 2);
-    m_opaqueIndices.push_back(baseIndex + 0);
-    m_opaqueIndices.push_back(baseIndex + 2);
-    m_opaqueIndices.push_back(baseIndex + 3);
+    // Add indices for two triangles (quad) with adaptive triangulation
+    // [SODIUM REF] ModelQuadOrientation indices remapping
+    if (flipQuad)
+    {
+        // FLIP: triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
+        m_opaqueIndices.push_back(baseIndex + 0);
+        m_opaqueIndices.push_back(baseIndex + 1);
+        m_opaqueIndices.push_back(baseIndex + 3);
+        m_opaqueIndices.push_back(baseIndex + 1);
+        m_opaqueIndices.push_back(baseIndex + 2);
+        m_opaqueIndices.push_back(baseIndex + 3);
+    }
+    else
+    {
+        // NORMAL: triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
+        m_opaqueIndices.push_back(baseIndex + 0);
+        m_opaqueIndices.push_back(baseIndex + 1);
+        m_opaqueIndices.push_back(baseIndex + 2);
+        m_opaqueIndices.push_back(baseIndex + 0);
+        m_opaqueIndices.push_back(baseIndex + 2);
+        m_opaqueIndices.push_back(baseIndex + 3);
+    }
 
     InvalidateGPUData();
 }
 
-void ChunkMesh::AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices)
+void ChunkMesh::AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad)
 {
     uint32_t baseIndex = static_cast<uint32_t>(m_cutoutTerrainVertices.size());
 
@@ -164,18 +164,32 @@ void ChunkMesh::AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>
         m_cutoutTerrainVertices.push_back(vertex);
     }
 
-    // Add indices for two triangles (quad)
-    m_cutoutIndices.push_back(baseIndex + 0);
-    m_cutoutIndices.push_back(baseIndex + 1);
-    m_cutoutIndices.push_back(baseIndex + 2);
-    m_cutoutIndices.push_back(baseIndex + 0);
-    m_cutoutIndices.push_back(baseIndex + 2);
-    m_cutoutIndices.push_back(baseIndex + 3);
+    // Add indices for two triangles (quad) with adaptive triangulation
+    if (flipQuad)
+    {
+        // FLIP: triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
+        m_cutoutIndices.push_back(baseIndex + 0);
+        m_cutoutIndices.push_back(baseIndex + 1);
+        m_cutoutIndices.push_back(baseIndex + 3);
+        m_cutoutIndices.push_back(baseIndex + 1);
+        m_cutoutIndices.push_back(baseIndex + 2);
+        m_cutoutIndices.push_back(baseIndex + 3);
+    }
+    else
+    {
+        // NORMAL: triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
+        m_cutoutIndices.push_back(baseIndex + 0);
+        m_cutoutIndices.push_back(baseIndex + 1);
+        m_cutoutIndices.push_back(baseIndex + 2);
+        m_cutoutIndices.push_back(baseIndex + 0);
+        m_cutoutIndices.push_back(baseIndex + 2);
+        m_cutoutIndices.push_back(baseIndex + 3);
+    }
 
     InvalidateGPUData();
 }
 
-void ChunkMesh::AddTranslucentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices)
+void ChunkMesh::AddTranslucentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad)
 {
     uint32_t baseIndex = static_cast<uint32_t>(m_translucentTerrainVertices.size());
 
@@ -185,21 +199,29 @@ void ChunkMesh::AddTranslucentTerrainQuad(const std::array<graphic::TerrainVerte
         m_translucentTerrainVertices.push_back(vertex);
     }
 
-    // Add indices for two triangles (quad)
-    m_translucentIndices.push_back(baseIndex + 0);
-    m_translucentIndices.push_back(baseIndex + 1);
-    m_translucentIndices.push_back(baseIndex + 2);
-    m_translucentIndices.push_back(baseIndex + 0);
-    m_translucentIndices.push_back(baseIndex + 2);
-    m_translucentIndices.push_back(baseIndex + 3);
+    // Add indices for two triangles (quad) with adaptive triangulation
+    if (flipQuad)
+    {
+        // FLIP: triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 3);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 3);
+    }
+    else
+    {
+        // NORMAL: triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 3);
+    }
 
     InvalidateGPUData();
-}
-
-// [DEPRECATED] Legacy API - routes to Translucent
-void ChunkMesh::AddTransparentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices)
-{
-    AddTranslucentTerrainQuad(vertices);
 }
 
 // ============================================================

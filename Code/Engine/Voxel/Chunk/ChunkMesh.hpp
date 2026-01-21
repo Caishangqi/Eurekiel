@@ -30,13 +30,23 @@ namespace enigma::voxel
 
         // Data Management
         void Clear();
-        void AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices);
-        void AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices);
-        void AddTranslucentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices);
         void Reserve(size_t opaqueQuads, size_t cutoutQuads, size_t translucentQuads);
 
-        // [DEPRECATED] Legacy API - routes to Translucent for backward compatibility
-        void AddTransparentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices);
+        // ========================================================================
+        // [FLIPPED QUADS] Adaptive Quad Triangulation for Smooth AO
+        // ========================================================================
+        // [SODIUM REF] ModelQuadOrientation.java - orientByBrightness() method
+        // File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
+        //
+        // The 'flipQuad' parameter controls triangulation:
+        //   - flipQuad=false (NORMAL): triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
+        //   - flipQuad=true  (FLIP):   triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
+        //
+        // Use ShouldFlipQuad() in ChunkMeshHelper to determine the flip based on AO values.
+        // ========================================================================
+        void AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
+        void AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
+        void AddTranslucentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
 
         // Statistics - Opaque
         size_t GetOpaqueVertexCount() const;
@@ -56,12 +66,6 @@ namespace enigma::voxel
         size_t GetTranslucentTriangleCount() const;
         bool   HasTranslucentGeometry() const;
 
-        // [DEPRECATED] Legacy API - returns Translucent counts
-        size_t GetTransparentVertexCount() const;
-        size_t GetTransparentIndexCount() const;
-        size_t GetTransparentTriangleCount() const;
-        bool   HasTransparentGeometry() const;
-
         bool IsEmpty() const;
 
         // GPU Buffer Management
@@ -80,16 +84,10 @@ namespace enigma::voxel
         [[nodiscard]] std::shared_ptr<graphic::D12VertexBuffer> GetTranslucentD12VertexBuffer() { return m_d12TranslucentVertexBuffer; }
         [[nodiscard]] std::shared_ptr<graphic::D12IndexBuffer>  GetTranslucentD12IndexBuffer() { return m_d12TranslucentIndexBuffer; }
 
-        // [DEPRECATED] Legacy API - returns Translucent buffers
-        [[nodiscard]] std::shared_ptr<graphic::D12VertexBuffer> GetTransparentD12VertexBuffer() { return m_d12TranslucentVertexBuffer; }
-        [[nodiscard]] std::shared_ptr<graphic::D12IndexBuffer>  GetTransparentD12IndexBuffer() { return m_d12TranslucentIndexBuffer; }
-
         // Raw vertex data access (for mesh building)
         std::vector<graphic::TerrainVertex>& GetOpaqueTerrainVertices() { return m_opaqueTerrainVertices; }
         std::vector<graphic::TerrainVertex>& GetCutoutTerrainVertices() { return m_cutoutTerrainVertices; }
         std::vector<graphic::TerrainVertex>& GetTranslucentTerrainVertices() { return m_translucentTerrainVertices; }
-        // [DEPRECATED] Legacy API
-        std::vector<graphic::TerrainVertex>& GetTransparentTerrainVertices() { return m_translucentTerrainVertices; }
 
     private:
         // TerrainVertex geometry data - Three render types
