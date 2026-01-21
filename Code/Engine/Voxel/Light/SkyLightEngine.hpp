@@ -2,10 +2,16 @@
 //-----------------------------------------------------------------------------------------------
 // SkyLightEngine.hpp
 //
-// [NEW] Sky light engine for outdoor light calculation
-// Handles sunlight propagation from sky blocks downward
+// [REFACTORED] Sky light engine for outdoor light calculation
+// Handles sunlight propagation from sky blocks downward with proper attenuation
 //
-// Reference: Minecraft SkyLightEngine.java
+// [MINECRAFT REF] SkyLightEngine.java - Sky light propagation
+// [MINECRAFT REF] LightEngine.java - Base light engine with attenuation
+//
+// Key features:
+// - PropagatesSkylightDown support for leaves, glass, etc.
+// - GetLightBlock-based attenuation (not just opaque/transparent)
+// - Skylight passes through vertically without loss when PropagatesSkylightDown is true
 //
 //-----------------------------------------------------------------------------------------------
 
@@ -20,8 +26,12 @@ namespace enigma::voxel
     //
     // Calculates sky light values based on:
     // - Sky blocks (direct sunlight) = 15
-    // - Opaque blocks = 0
-    // - Transparent blocks = max(neighbors) - 1
+    // - Blocks with lightBlock >= 15 = 0 (fully opaque)
+    // - PropagatesSkylightDown = true: skylight from above passes without attenuation
+    // - Other cases: max(neighbors) - max(1, lightBlock)
+    //
+    // [MINECRAFT REF] BlockBehaviour.java:368-370 - propagatesSkylightDown
+    // [MINECRAFT REF] LightEngine.java:79 - Math.max(1, blockState.getLightBlock(...))
     //-------------------------------------------------------------------------------------------
     class SkyLightEngine : public LightEngine
     {

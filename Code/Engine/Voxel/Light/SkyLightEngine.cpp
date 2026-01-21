@@ -1,8 +1,15 @@
 ﻿//-----------------------------------------------------------------------------------------------
 // SkyLightEngine.cpp
 //
-// [NEW] Sky light engine implementation
-// Migrated from World::ComputeCorrectSkyLight (World.cpp:2049-2098)
+// [REFACTORED] Sky light engine implementation with PropagatesSkylightDown support
+// 
+// [MINECRAFT REF] SkyLightEngine.java - Sky light propagation algorithm
+// [MINECRAFT REF] LightEngine.java:79 - Light attenuation: Math.max(1, blockState.getLightBlock(...))
+//
+// Key changes from original:
+// - Uses BlockState::PropagatesSkylightDown() for vertical skylight propagation
+// - Uses BlockState::GetLightBlock() for proper light attenuation
+// - Skylight propagates without attenuation when PropagatesSkylightDown is true
 //
 //-----------------------------------------------------------------------------------------------
 
@@ -44,13 +51,17 @@ namespace enigma::voxel
     //-------------------------------------------------------------------------------------------
     // ComputeCorrectLight
     //
-    // [OVERRIDE] Calculate correct sky light value for a block
-    // Algorithm migrated from World::ComputeCorrectSkyLight (World.cpp:2049-2098)
+    // [REFACTORED] Calculate correct sky light value for a block
+    // 
+    // [MINECRAFT REF] SkyLightEngine.java - propagateIncrease/propagateDecrease
+    // [MINECRAFT REF] LightEngine.java:79 - getOpacity calculation
     //
-    // Steps:
-    // 1. Sky blocks always have max light (15)
-    // 2. Opaque blocks block all sky light (0)
-    // 3. Transparent blocks: max(neighbors) - 1
+    // Algorithm:
+    // 1. Sky blocks (direct sky access) always have max light (15)
+    // 2. For each neighbor direction:
+    //    - DOWN direction: If PropagatesSkylightDown is true, no attenuation
+    //    - Other directions: Attenuate by max(1, GetLightBlock())
+    // 3. Return maximum propagated light value
     //-------------------------------------------------------------------------------------------
     uint8_t SkyLightEngine::ComputeCorrectLight(const BlockIterator& iter) const
     {
@@ -65,25 +76,38 @@ namespace enigma::voxel
             return 0;
         }
 
-        // [STEP 1] SKY blocks always have maximum outdoor light
+        // [STEP 1] SKY blocks always have maximum outdoor light (15)
+        // [MINECRAFT REF] SkyLightEngine.java - isSourceLevel(15)
         if (IsSkyBlock(iter))
         {
             return 15;
         }
 
-        // [STEP 2] Opaque blocks block all outdoor light
-        if (state->GetBlock()->IsOpaque(const_cast<BlockState*>(state)))
+        // Get block position for light cache queries
+        BlockPos blockPos = iter.GetBlockPos();
+
+        // [STEP 2] Get light attenuation value from BlockState cache
+        // [MINECRAFT REF] LightEngine.java:79 - Math.max(1, blockState.getLightBlock(...))
+        int lightBlock = state->GetLightBlock(m_world, blockPos);
+
+        // Fully opaque blocks (lightBlock >= 15) block all light
+        if (lightBlock >= 15)
         {
             return 0;
         }
 
-        // [STEP 3] Non-opaque blocks: propagate light from neighbors (max - 1)
-        uint8_t maxNeighborLight = 0;
+        // [STEP 3] Check if this block propagates skylight downward
+        // [MINECRAFT REF] BlockBehaviour.java:368-370 - propagatesSkylightDown
+        bool propagatesSkylight = state->PropagatesSkylightDown(m_world, blockPos);
+
+        // [STEP 4] Propagate light from neighbors
+        uint8_t maxLight = 0;
 
         // Check all 6 neighbors (North, South, East, West, Up, Down)
         for (int dir = 0; dir < 6; ++dir)
         {
-            BlockIterator neighbor = iter.GetNeighbor(static_cast<Direction>(dir));
+            Direction     direction = static_cast<Direction>(dir);
+            BlockIterator neighbor  = iter.GetNeighbor(direction);
 
             if (!neighbor.IsValid())
             {
@@ -100,11 +124,36 @@ namespace enigma::voxel
             neighbor.GetLocalCoords(localX, localY, localZ);
             uint8_t neighborLight = neighborChunk->GetSkyLight(localX, localY, localZ);
 
-            maxNeighborLight = std::max(maxNeighborLight, neighborLight);
+            if (neighborLight == 0)
+            {
+                continue;
+            }
+
+            // [STEP 5] Calculate propagated light based on direction
+            uint8_t propagatedLight = 0;
+
+            // [MINECRAFT REF] SkyLightEngine.java - Skylight from above propagates without loss
+            // if PropagatesSkylightDown is true
+            if (direction == Direction::UP && propagatesSkylight && neighborLight == 15)
+            {
+                // Skylight from directly above passes through without attenuation
+                // This is the key behavior for leaves, glass, etc.
+                propagatedLight = 15;
+            }
+            else
+            {
+                // [MINECRAFT REF] LightEngine.java:79 - Standard attenuation
+                // Attenuation is max(1, lightBlock) for horizontal and non-skylight vertical
+                int attenuation = std::max(1, lightBlock);
+                propagatedLight = (neighborLight > attenuation)
+                                      ? static_cast<uint8_t>(neighborLight - attenuation)
+                                      : 0;
+            }
+
+            maxLight = std::max(maxLight, propagatedLight);
         }
 
-        // Light propagates with -1 attenuation per block (minimum 0)
-        return (maxNeighborLight > 0) ? (maxNeighborLight - 1) : 0;
+        return maxLight;
     }
 
     //-------------------------------------------------------------------------------------------
