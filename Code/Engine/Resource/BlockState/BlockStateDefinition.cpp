@@ -326,31 +326,15 @@ bool BlockStateDefinition::LoadFromJson(const JsonObject& json)
 
 const std::vector<BlockStateVariant>* BlockStateDefinition::GetVariants(const std::string& propertyString) const
 {
-    // [FIX] Normalize the property string before lookup to ensure consistent matching
     std::string normalizedString = NormalizePropertyString(propertyString);
-
-    // [DEBUG] Log normalization and lookup
-    bool isDebug = (m_metadata.location.ToString().find("stairs") != std::string::npos);
-    if (isDebug)
-    {
-        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] GetVariants() input='%s' normalized='%s'",
-                              propertyString.c_str(), normalizedString.c_str());
-        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] Available variants (%zu):", m_variants.size());
-        int idx = 0;
-        for (const auto& pair : m_variants)
-        {
-            if (idx < 5) // Only log first 5
-                enigma::core::LogInfo("BlockStateDefinition", "[DEBUG]   [%d] '%s'", idx, pair.first.c_str());
-            idx++;
-        }
-    }
 
     auto it = m_variants.find(normalizedString);
 
-    if (isDebug)
+    // Fallback to empty variant "" if exact match not found
+    // Handles blocks like water where JSON defines "" but block has properties (e.g., "level=0")
+    if (it == m_variants.end() && !normalizedString.empty())
     {
-        enigma::core::LogInfo("BlockStateDefinition", "[DEBUG] find() result: %s",
-                              (it != m_variants.end()) ? "FOUND" : "NOT FOUND");
+        it = m_variants.find("");
     }
 
     return (it != m_variants.end()) ? &it->second : nullptr;
