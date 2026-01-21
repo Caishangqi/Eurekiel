@@ -11,6 +11,11 @@ namespace enigma::core
      *
      * Provides type-erased operations for registry management.
      * Supports both string-based keys (for compatibility) and numeric IDs (for performance).
+     * 
+     * Freeze Mechanism (NeoForge-style):
+     * - Registry can be frozen after registration phase completes
+     * - Once frozen, no new registrations are allowed
+     * - Prevents accidental late registrations that could cause inconsistencies
      */
     class IRegistry
     {
@@ -42,7 +47,38 @@ namespace enigma::core
          */
         virtual bool HasRegistration(const RegistrationKey& key) const = 0;
 
+        // ============================================================
+        // Freeze Mechanism (NeoForge-style)
+        // ============================================================
+
+        /**
+         * @brief Freeze the registry, preventing further registrations
+         * 
+         * Once frozen:
+         * - Register() calls will throw RegistryFrozenException
+         * - Unregister() calls will throw RegistryFrozenException
+         * - Clear() calls will throw RegistryFrozenException
+         * - Read operations remain available
+         */
+        virtual void Freeze() = 0;
+
+        /**
+         * @brief Check if the registry is frozen
+         * @return true if frozen, false otherwise
+         */
+        virtual bool IsFrozen() const = 0;
+
+        /**
+         * @brief Unfreeze the registry (use with caution, mainly for testing)
+         * 
+         * [WARNING] This should only be used in testing scenarios.
+         * In production, registries should remain frozen after initialization.
+         */
+        virtual void Unfreeze() = 0;
+
+        // ============================================================
         // Numeric ID System - Added for performance optimization
+        // ============================================================
 
         /**
          * @brief Get the next available numeric ID
