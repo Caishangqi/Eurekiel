@@ -199,7 +199,7 @@ namespace enigma::graphic
 
         // 2. 创建着色器资源视图描述符
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format                          = srvFormat;
+        srvDesc.Format                          = srvFormat; //DXGI_FORMAT_D32_FLOAT_S8_UINT
         srvDesc.ViewDimension                   = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Shader4ComponentMapping         = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.Texture2D.MostDetailedMip       = 0;
@@ -323,7 +323,9 @@ namespace enigma::graphic
 
         // DirectX 12 API: ID3D12GraphicsCommandList::ClearDepthStencilView()
         D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH;
-        if (m_depthFormat == DXGI_FORMAT_D24_UNORM_S8_UINT) // 只有D24格式支持模板
+        // [FIX] Both D24_UNORM_S8_UINT and D32_FLOAT_S8X24_UINT support stencil
+        if (m_depthFormat == DXGI_FORMAT_D24_UNORM_S8_UINT ||
+            m_depthFormat == DXGI_FORMAT_D32_FLOAT_S8X24_UINT)
         {
             clearFlags |= D3D12_CLEAR_FLAG_STENCIL;
         }
@@ -426,6 +428,9 @@ namespace enigma::graphic
             case DXGI_FORMAT_D24_UNORM_S8_UINT:
                 m_formattedDebugName += ", D24S8";
                 break;
+            case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+                m_formattedDebugName += ", D32FS8X24"; // [NEW] 64-bit depth-stencil format
+                break;
             case DXGI_FORMAT_D16_UNORM:
                 m_formattedDebugName += ", D16";
                 break;
@@ -465,6 +470,9 @@ namespace enigma::graphic
             break;
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             info += "24-bit Depth + 8-bit Stencil (D24_UNORM_S8_UINT)\n";
+            break;
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+            info += "32-bit Float Depth + 8-bit Stencil + 24-bit Padding (D32_FLOAT_S8X24_UINT) - 64-bit\n"; // [NEW]
             break;
         case DXGI_FORMAT_D16_UNORM:
             info += "16-bit Depth (D16_UNORM)\n";
@@ -531,6 +539,14 @@ namespace enigma::graphic
 
     /**
      * 获取对应的类型化格式 (用于SRV)
+     * 
+     * Format chain for depth texture sampling:
+     * - D32_FLOAT -> R32_FLOAT (32-bit float depth)
+     * - D24_UNORM_S8_UINT -> R24_UNORM_X8_TYPELESS (24-bit normalized depth, 8-bit ignored)
+     * - D32_FLOAT_S8X24_UINT -> R32_FLOAT_X8X24_TYPELESS (32-bit float depth, stencil separate)
+     * - D16_UNORM -> R16_UNORM (16-bit normalized depth)
+     * 
+     * Reference: https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/hardware-support-for-direct3d-12-1-formats
      */
     DXGI_FORMAT D12DepthTexture::GetTypedFormat(DXGI_FORMAT depthFormat)
     {
@@ -540,6 +556,8 @@ namespace enigma::graphic
             return DXGI_FORMAT_R32_FLOAT; // 深度作为单通道浮点纹理读取
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             return DXGI_FORMAT_R24_UNORM_X8_TYPELESS; // 深度部分作为24位归一化值
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+            return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; // [NEW] 32-bit float depth, stencil in separate plane
         case DXGI_FORMAT_D16_UNORM:
             return DXGI_FORMAT_R16_UNORM; // 16位深度
         default:
@@ -550,11 +568,14 @@ namespace enigma::graphic
     /**
          * [NEW] Get the corresponding TYPELESS format (for resource creation)
          *
-         * D3D12 rules: To be used as both DSV and SRV, resources must be created in TYPEELESS format
+         * D3D12 rules: To be used as both DSV and SRV, resources must be created in TYPELESS format
          * Format mapping:
          * - D32_FLOAT -> R32_TYPELESS
          * - D24_UNORM_S8_UINT -> R24G8_TYPELESS
+         * - D32_FLOAT_S8X24_UINT -> R32G8X24_TYPELESS (64-bit, 32-bit depth + 8-bit stencil + 24-bit padding)
          * - D16_UNORM -> R16_TYPELESS
+         * 
+         * Reference: https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/hardware-support-for-direct3d-12-1-formats
          */
     DXGI_FORMAT D12DepthTexture::GetTypelessFormat(DXGI_FORMAT depthFormat)
     {
@@ -564,6 +585,8 @@ namespace enigma::graphic
             return DXGI_FORMAT_R32_TYPELESS;
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             return DXGI_FORMAT_R24G8_TYPELESS;
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+            return DXGI_FORMAT_R32G8X24_TYPELESS; // [NEW] 64-bit typeless for D32_FLOAT_S8X24_UINT
         case DXGI_FORMAT_D16_UNORM:
             return DXGI_FORMAT_R16_TYPELESS;
         default:
@@ -652,6 +675,9 @@ namespace enigma::graphic
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             depthTextureSize *= 4; // 24+8位 = 4字节
             break;
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+            depthTextureSize *= 8; // [NEW] 64位 = 8字节 (32-bit depth + 8-bit stencil + 24-bit padding)
+            break;
         case DXGI_FORMAT_D16_UNORM:
             depthTextureSize *= 2; // 16位 = 2字节
             break;
@@ -723,6 +749,9 @@ namespace enigma::graphic
             break;
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             formatStr = "D24_UNORM_S8_UINT";
+            break;
+        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+            formatStr = "D32_FLOAT_S8X24_UINT"; // [NEW] 64-bit depth-stencil
             break;
         case DXGI_FORMAT_D16_UNORM:
             formatStr = "D16_UNORM";
