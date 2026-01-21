@@ -94,12 +94,15 @@ PSOutput_TerrainCutout main(PSInput_TerrainCutout input)
         discard;
     }
 
-    // [STEP 3] Calculate albedo (texture * vertex color)
-    float4 albedo = texColor * input.Color;
+    // [STEP 3] Calculate albedo (texture * vertex color RGB)
+    // [AO] In separateAo mode, Color.a contains AO value, not alpha
+    // RGB = directional shade, A = AO
+    float3 albedoRGB = texColor.rgb * input.Color.rgb;
+    float  ao        = input.Color.a; // AO from vertex color alpha
 
     // [STEP 4] Write G-Buffer outputs
-    // colortex0: Albedo with alpha (alpha preserved for potential blending info)
-    output.Color0 = albedo;
+    // colortex0: Albedo RGB + AO in alpha channel (for composite pass)
+    output.Color0 = float4(albedoRGB, ao);
 
     // colortex1: Lightmap data (R=blocklight, G=skylight, B=0, A=1)
     output.Color1 = float4(input.LightmapCoord.x, input.LightmapCoord.y, 0.0, 1.0);

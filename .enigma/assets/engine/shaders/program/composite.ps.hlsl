@@ -65,15 +65,20 @@ PSOutput main(PSInput input)
     return output;
     */
 
-    // [STEP 2] Sample albedo color (use Linear sampler for color)
-    float4 albedo = colortex0.Sample(sampler0, input.TexCoord);
+    // [STEP 2] Sample albedo color and AO (use Linear sampler for color)
+    // [AO] colortex0.rgb = albedo, colortex0.a = AO (from separateAo mode)
+    // For SOLID/CUTOUT blocks: AO stored in alpha channel
+    // For TRANSLUCENT blocks: AO already premultiplied to RGB, alpha = blend alpha
+    float4 albedoAO = colortex0.Sample(sampler0, input.TexCoord);
+    float3 albedo   = albedoAO.rgb;
+    float  ao       = albedoAO.a; // AO value (1.0 = no occlusion, 0.0 = full occlusion)
 
     // [STEP 3] Pure sky detection - both depths are far plane
     // When depthAll >= 1.0: no geometry at all (pure sky)
     if (depthAll >= 1.0)
     {
         // Pure sky - no lighting applied, direct output
-        output.color0 = albedo;
+        output.color0 = float4(albedo, 1.0);
         return output;
     }
 
@@ -87,14 +92,16 @@ PSOutput main(PSInput input)
     if (blockLight == 0.0 && skyLight == 0.0)
     {
         // Cloud or unlit pixel - no lighting applied
-        output.color0 = albedo;
+        output.color0 = float4(albedo, 1.0);
         return output;
     }
 
-    // [STEP 7] Apply lighting to terrain
+    // [STEP 7] Apply lighting to terrain with AO
+    // [AO] Final formula: albedo * lightIntensity * ao
+    // AO darkens corners and crevices where light would naturally be occluded
     float lightIntensity = CalculateLightIntensity(blockLight, skyLight, skyBrightness);
     float finalLight     = max(lightIntensity, 0.03);
-    output.color0        = float4(albedo.rgb * finalLight, albedo.a);
+    output.color0        = float4(albedo * finalLight * ao, 1.0);
 
     return output;
 }
