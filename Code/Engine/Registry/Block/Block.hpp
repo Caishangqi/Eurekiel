@@ -1,5 +1,6 @@
 #pragma once
 #include "../Core/IRegistrable.hpp"
+#include "BlockBehaviour.hpp"
 #include "../../Voxel/Block/VoxelShape.hpp"
 #include "../../Voxel/Property/Property.hpp"
 #include "../../Voxel/Property/PropertyMap.hpp"
@@ -47,8 +48,11 @@ namespace enigma::registry::block
      * 
      * Similar to Minecraft's Block class, this defines the behavior and properties
      * of a block type. Individual BlockState instances represent specific configurations.
+     * 
+     * [MINECRAFT REF] Block.java extends BlockBehaviour
+     * Inherits overridable behaviors from BlockBehaviour (light, rendering, collision)
      */
-    class Block : public IRegistrable
+    class Block : public IRegistrable, public BlockBehaviour
     {
     protected:
         std::string                             m_registryName;
@@ -61,7 +65,7 @@ namespace enigma::registry::block
         // Block behavior properties
         float       m_hardness    = 1.0f;
         float       m_resistance  = 1.0f;
-        bool        m_isOpaque    = true;
+        bool        m_canOcclude  = true; // Whether this block can occlude neighbor faces (face culling)
         bool        m_isFullBlock = true;
         bool        m_isVisible   = true; // Block visibility flag (default: visible)
         std::string m_blockstatePath; // Path to blockstate definition
@@ -124,8 +128,8 @@ namespace enigma::registry::block
         float GetResistance() const { return m_resistance; }
         void  SetResistance(float resistance) { m_resistance = resistance; }
 
-        bool IsOpaque() const { return m_isOpaque; }
-        void SetOpaque(bool opaque) { m_isOpaque = opaque; }
+        bool CanOcclude() const { return m_canOcclude; }
+        void SetCanOcclude(bool canOcclude) { m_canOcclude = canOcclude; }
 
         bool IsFullBlock() const { return m_isFullBlock; }
         void SetFullBlock(bool fullBlock) { m_isFullBlock = fullBlock; }
@@ -244,6 +248,48 @@ namespace enigma::registry::block
          * Default implementation returns false (blocks cannot be replaced).
          */
         virtual bool CanBeReplaced(enigma::voxel::BlockState* state, const PlacementContext& ctx) const;
+
+        // ============================================================
+        // BlockBehaviour overrides
+        // [MINECRAFT REF] Block.java overrides from BlockBehaviour
+        // ============================================================
+
+        /**
+         * @brief Get light attenuation value for this block state
+         * Override from BlockBehaviour - uses m_canOcclude for default calculation
+         */
+        int GetLightBlock(voxel::BlockState* state, voxel::World* world, const voxel::BlockPos& pos) const override;
+
+        /**
+         * @brief Check if skylight propagates downward through this block
+         * Override from BlockBehaviour - uses m_canOcclude and m_isFullBlock
+         */
+        bool PropagatesSkylightDown(voxel::BlockState* state, voxel::World* world, const voxel::BlockPos& pos) const override;
+
+        /**
+         * @brief Get light emission level for this block state
+         * Override from BlockBehaviour - uses m_blockLightEmission
+         */
+        int GetLightEmission(voxel::BlockState* state) const override;
+
+        /**
+         * @brief Check if face should be skipped when rendering
+         * Override from BlockBehaviour - default returns false
+         * Subclasses (HalfTransparentBlock, LiquidBlock) override for same-type culling
+         */
+        bool SkipRendering(voxel::BlockState* self, voxel::BlockState* neighbor, voxel::Direction dir) const override;
+
+        /**
+         * @brief Get render shape type for this block state
+         * Override from BlockBehaviour - returns MODEL by default
+         */
+        RenderShape GetRenderShape(voxel::BlockState* state) const override;
+
+        /**
+         * @brief Get render type for pass classification
+         * Override from BlockBehaviour - returns SOLID by default
+         */
+        RenderType GetRenderType() const override;
 
     protected:
         /**

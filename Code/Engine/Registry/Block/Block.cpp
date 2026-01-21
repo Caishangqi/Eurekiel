@@ -162,8 +162,8 @@ namespace enigma::registry::block
     bool Block::IsOpaque(enigma::voxel::BlockState* state) const
     {
         UNUSED(state);
-        // Default: use block-level opaque flag
-        return m_isOpaque;
+        // Default: use block-level canOcclude flag for light blocking
+        return m_canOcclude;
     }
 
     VoxelShape Block::GetCollisionShape(enigma::voxel::BlockState* state) const
@@ -244,5 +244,88 @@ namespace enigma::registry::block
 
             GenerateStatesRecursive(propertyIndex + 1, nextMap, allCombinations);
         }
+    }
+
+    // ============================================================
+    // BlockBehaviour overrides implementation
+    // [MINECRAFT REF] Block.java overrides from BlockBehaviour
+    // ============================================================
+
+    int Block::GetLightBlock(voxel::BlockState* state, voxel::World* world, const voxel::BlockPos& pos) const
+    {
+        UNUSED(state);
+        UNUSED(world);
+        UNUSED(pos);
+
+        // [MINECRAFT REF] BlockBehaviour.java:278-284
+        // Default logic based on block properties:
+        // - Occluding blocks: return 15 (fully blocks light)
+        // - Non-occluding but full block: return 1
+        // - Otherwise: return 0
+
+        if (m_canOcclude)
+        {
+            return 15;
+        }
+
+        if (m_isFullBlock)
+        {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    bool Block::PropagatesSkylightDown(voxel::BlockState* state, voxel::World* world, const voxel::BlockPos& pos) const
+    {
+        UNUSED(state);
+        UNUSED(world);
+        UNUSED(pos);
+
+        // [MINECRAFT REF] BlockBehaviour.java:368-370
+        // Default: !IsShapeFullBlock(shape) && fluidState.IsEmpty()
+        // Simplified: non-occluding blocks propagate skylight
+
+        return !m_canOcclude;
+    }
+
+    int Block::GetLightEmission(voxel::BlockState* state) const
+    {
+        UNUSED(state);
+
+        // Use the block's light emission value
+        return static_cast<int>(m_blockLightEmission);
+    }
+
+    bool Block::SkipRendering(voxel::BlockState* self, voxel::BlockState* neighbor, voxel::Direction dir) const
+    {
+        UNUSED(self);
+        UNUSED(neighbor);
+        UNUSED(dir);
+
+        // [MINECRAFT REF] BlockBehaviour.java default returns false
+        // Subclasses (HalfTransparentBlock, LiquidBlock) override for same-type culling
+        return false;
+    }
+
+    RenderShape Block::GetRenderShape(voxel::BlockState* state) const
+    {
+        UNUSED(state);
+
+        // Default: use standard model rendering
+        // Subclasses (LiquidBlock) override to return INVISIBLE
+        return RenderShape::MODEL;
+    }
+
+    RenderType Block::GetRenderType() const
+    {
+        // Default: solid rendering for occluding blocks
+        // Subclasses override based on transparency needs
+        if (!m_canOcclude)
+        {
+            // Non-occluding blocks default to CUTOUT (alpha test)
+            return RenderType::CUTOUT;
+        }
+        return RenderType::SOLID;
     }
 }
