@@ -44,14 +44,21 @@
  * @brief SamplerIndices - Bindless Sampler Index Buffer
  *
  * Memory Layout (16-byte aligned):
- * [0-63]  samplerIndices[16] (16 * 4 = 64 bytes)
+ * [0-63]  samplerIndicesPacked[4] (4 * 16 = 64 bytes)
  *
  * Each index points to a sampler in the SamplerDescriptorHeap.
  * Use GetSampler(index) to retrieve the actual SamplerState.
+ *
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Scalar arrays (uint[16]) align each element to 16 bytes (float4 boundary)
+ * - Using uint4[4] ensures tight packing matching C++ uint32_t[16] layout
+ * - Memory layout: [0-3][4-7][8-11][12-15] = 4 * 16 = 64 bytes
+ *
+ * C++ counterpart: SamplerIndicesBuffer.hpp
  */
 cbuffer SamplerIndices : register(b8)
 {
-    uint samplerIndices[MAX_SAMPLERS];
+    uint4 samplerIndicesPacked[4]; // sampler0-15 indices (64 bytes)
 };
 
 // =============================================================================
@@ -63,11 +70,18 @@ cbuffer SamplerIndices : register(b8)
  * @return SamplerState from the descriptor heap
  *
  * Uses SM6.6 SamplerDescriptorHeap keyword for direct heap access.
- * The samplerIndices buffer contains the actual heap indices.
+ * The samplerIndicesPacked buffer contains the actual heap indices.
+ *
+ * [IMPORTANT] uint4 unpacking:
+ * - index >> 2 = which uint4 (0-3)
+ * - index & 3  = which component (x=0, y=1, z=2, w=3)
  */
 SamplerState GetSampler(uint index)
 {
-    return SamplerDescriptorHeap[samplerIndices[index]];
+    if (index >= 16) return SamplerDescriptorHeap[0]; // Safe fallback
+    uint4 packed    = samplerIndicesPacked[index >> 2];
+    uint  heapIndex = packed[index & 3];
+    return SamplerDescriptorHeap[heapIndex];
 }
 
 // =============================================================================
