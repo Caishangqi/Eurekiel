@@ -3,6 +3,8 @@
 #include "ChunkMesh.hpp"
 #include "../Block/BlockState.hpp"
 #include "../../Voxel/Property/PropertyTypes.hpp"
+#include "Engine/Registry/Block/RenderType.hpp"
+#include "Engine/Registry/Block/RenderShape.hpp"
 #include <memory>
 
 namespace enigma::voxel
@@ -15,10 +17,13 @@ namespace enigma::voxel
      * - Completely stateless
      * - Single responsibility: chunk mesh generation
      * 
-     * Assignment 1 simplified implementation:
-     * - No face culling (renders all faces of all blocks)
-     * - No greedy meshing optimization
-     * - Direct block mesh copying to chunk mesh
+     * [REFACTORED] Now supports three render types:
+     * - SOLID: Fully opaque blocks (stone, dirt)
+     * - CUTOUT: Alpha-tested blocks (leaves, grass) - no depth sorting
+     * - TRANSLUCENT: Alpha-blended blocks (water, glass) - requires depth sorting
+     * 
+     * [MINECRAFT REF] ItemBlockRenderTypes / RenderType classification
+     * [MINECRAFT REF] ModelBlockRenderer face culling with SkipRendering
      */
     class ChunkMeshHelper
     {
@@ -32,11 +37,12 @@ namespace enigma::voxel
         /**
          * @brief Build a mesh from chunk data
          * 
-         * Assignment 1 simplified algorithm:
+         * [REFACTORED] Algorithm:
          * 1. Iterate through all blocks in chunk
-         * 2. Skip air blocks
-         * 3. Get BlockState's compiled BlockRenderMesh
-         * 4. Transform and append mesh vertices to chunk mesh
+         * 2. Skip air blocks and INVISIBLE render shape blocks
+         * 3. Determine render type (SOLID/CUTOUT/TRANSLUCENT)
+         * 4. Apply face culling with SkipRendering support
+         * 5. Route faces to appropriate mesh buffer
          * 
          * @param chunk Source chunk data
          * @return Compiled chunk mesh ready for rendering
@@ -57,7 +63,9 @@ namespace enigma::voxel
         /**
          * @brief Check if a block should be rendered
          *
-         * Assignment 1: Simply check if block is not air
+         * [REFACTORED] Checks:
+         * 1. Block is not air
+         * 2. RenderShape is not INVISIBLE (liquids handled by dedicated renderer)
          *
          * @param blockState Block state to check
          * @param air Cached air block reference for comparison
@@ -68,7 +76,11 @@ namespace enigma::voxel
         /**
          * @brief Check if a block face should be rendered (face culling)
          *
-         * Assignment 2: Face culling implementation
+         * [REFACTORED] Now uses Block::SkipRendering for same-type culling:
+         * - HalfTransparentBlock: culls same-type faces (glass-glass)
+         * - LiquidBlock: culls same-fluid faces (water-water)
+         *
+         * [MINECRAFT REF] ModelBlockRenderer face culling
          *
          * @param iterator Block iterator at current position
          * @param direction Direction of the face to check
@@ -76,6 +88,19 @@ namespace enigma::voxel
          */
         static bool ShouldRenderFace(const class BlockIterator& iterator, Direction direction);
 
+        /**
+         * @brief Determine render type for a block
+         *
+         * [NEW] Priority:
+         * 1. RenderShape::INVISIBLE -> skip entirely
+         * 2. Block's explicit RenderType from GetRenderType()
+         *
+         * [MINECRAFT REF] ItemBlockRenderTypes classification
+         *
+         * @param blockState Block state to classify
+         * @return RenderType (SOLID, CUTOUT, or TRANSLUCENT)
+         */
+        static registry::block::RenderType GetBlockRenderType(BlockState* blockState);
 
         /**
          * @brief Get block position in chunk coordinates

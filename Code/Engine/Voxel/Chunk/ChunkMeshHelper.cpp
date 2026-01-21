@@ -8,8 +8,11 @@
 #include "Engine/Registry/Block/BlockRegistry.hpp"
 #include "../Block/BlockIterator.hpp"
 #include "../World/TerrainVertexLayout.hpp"
+#include "Engine/Registry/Block/RenderType.hpp"
+#include "Engine/Registry/Block/RenderShape.hpp"
 
 using namespace enigma::voxel;
+using namespace enigma::registry::block;
 
 //--------------------------------------------------------------------------------------------------
 // Anonymous namespace for helper functions
@@ -151,7 +154,7 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
     // Static local variable to cache air block reference (C++11 thread-safe initialization)
     static auto air = registry::block::BlockRegistry::GetBlock("simpleminer", "air");
 
-    // ===== Phase 4: 入口状态检查（防护点1） =====
+    // ===== Phase 4: Entry state check (guard point 1) =====
     if (!chunk)
     {
         core::LogWarn("ChunkMeshHelper", "Attempted to build mesh for null chunk");
@@ -166,24 +169,13 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
     }
 
     //--------------------------------------------------------------------------------------------------
-    // Phase 2: 跨边界隐藏面剔除 - 4邻居激活检查
-    //
-    // 问题：如果邻居Chunk未激活，边界Block的ShouldRenderFace()会返回true（保守策略），
-    //       导致不必要的面被渲染。
-    //
-    // 解决：延迟Mesh构建直到4个水平邻居全部激活。当邻居激活时，Chunk::SetState()会
-    //       通知本Chunk重建Mesh（参见Task 2.2）。
-    //
-    // 性能影响：微小（仅4次指针检查 + 4次bool检查）
-    // 收益：边界Block顶点数减少30-40%
+    // Phase 2: Cross-boundary hidden face culling - 4 neighbor activation check
     //--------------------------------------------------------------------------------------------------
     Chunk* eastNeighbor  = chunk->GetEastNeighbor();
     Chunk* westNeighbor  = chunk->GetWestNeighbor();
     Chunk* northNeighbor = chunk->GetNorthNeighbor();
     Chunk* southNeighbor = chunk->GetSouthNeighbor();
 
-    // [FIX] Assignment requirement: "Only construct meshes for chunks with all 4 neighbors active"
-    // Must check IsActive(), not just pointer existence
     bool hasAllActiveNeighbors =
         eastNeighbor != nullptr && eastNeighbor->IsActive() &&
         westNeighbor != nullptr && westNeighbor->IsActive() &&
@@ -192,7 +184,6 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
 
     if (!hasAllActiveNeighbors)
     {
-        // 邻居未激活，延迟Mesh构建（稍后由邻居激活时触发重建）
         core::LogDebug("ChunkMeshHelper",
                        "BuildMesh: skipping chunk (%d, %d) - not all 4 neighbors are active (E=%s W=%s N=%s S=%s)",
                        chunk->GetChunkX(), chunk->GetChunkY(),
@@ -209,12 +200,11 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
 
     core::LogInfo("ChunkMeshHelper", "Building mesh for chunk...");
 
-    // Assignment 2: Two-pass optimization
-    // First pass: Count visible faces to pre-allocate memory
+    // [REFACTORED] Three-pass optimization: Count visible faces for each render type
     size_t opaqueQuadCount      = 0;
-    size_t transparentQuadCount = 0;
+    size_t cutoutQuadCount      = 0;
+    size_t translucentQuadCount = 0;
 
-    // First pass: Count quads needed
     static const std::vector<enigma::voxel::Direction> allDirections = {
         enigma::voxel::Direction::NORTH,
         enigma::voxel::Direction::SOUTH,
@@ -224,6 +214,7 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
         enigma::voxel::Direction::DOWN
     };
 
+    // First pass: Count quads needed for each render type
     for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
@@ -236,11 +227,25 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
 
                 if (ShouldRenderBlock(blockState, air))
                 {
+                    // [REFACTORED] Get render type from block
+                    RenderType renderType = GetBlockRenderType(blockState);
+
                     for (const auto& direction : allDirections)
                     {
                         if (ShouldRenderFace(iterator, direction))
                         {
-                            opaqueQuadCount++;
+                            switch (renderType)
+                            {
+                            case RenderType::SOLID:
+                                opaqueQuadCount++;
+                                break;
+                            case RenderType::CUTOUT:
+                                cutoutQuadCount++;
+                                break;
+                            case RenderType::TRANSLUCENT:
+                                translucentQuadCount++;
+                                break;
+                            }
                         }
                     }
                 }
@@ -249,7 +254,7 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
     }
 
     // Pre-allocate memory based on count
-    chunkMesh->Reserve(opaqueQuadCount, transparentQuadCount);
+    chunkMesh->Reserve(opaqueQuadCount, cutoutQuadCount, translucentQuadCount);
 
     // Second pass: Actually build the mesh
     for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
@@ -274,8 +279,10 @@ std::unique_ptr<ChunkMesh> ChunkMeshHelper::BuildMesh(Chunk* chunk)
         }
     }
 
-    core::LogInfo("ChunkMeshHelper", "Chunk mesh built successfully. Blocks: %d, Vertices: %zu, Triangles: %zu",
-                  blockCount, chunkMesh->GetOpaqueVertexCount(), chunkMesh->GetOpaqueTriangleCount());
+    core::LogInfo("ChunkMeshHelper", "Chunk mesh built: Blocks=%d, Opaque=%zu, Cutout=%zu, Translucent=%zu",
+                  blockCount, chunkMesh->GetOpaqueVertexCount() / 4,
+                  chunkMesh->GetCutoutVertexCount() / 4,
+                  chunkMesh->GetTranslucentVertexCount() / 4);
 
     return chunkMesh;
 }
@@ -300,19 +307,6 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
 
     auto blockRenderMesh = blockState->GetRenderMesh();
 
-    // [DEBUG] Log detailed info for slab/stairs blocks
-    if (isDebugBlock)
-    {
-        core::LogInfo("ChunkMeshHelper", "[DEBUG] Processing block: %s at (%d,%d,%d)",
-                      blockName.c_str(), blockPos.x, blockPos.y, blockPos.z);
-        core::LogInfo("ChunkMeshHelper", "  GetRenderMesh() = %s", blockRenderMesh ? "valid" : "NULL");
-        if (blockRenderMesh)
-        {
-            core::LogInfo("ChunkMeshHelper", "  IsEmpty() = %s", blockRenderMesh->IsEmpty() ? "true" : "false");
-            core::LogInfo("ChunkMeshHelper", "  faces.size() = %zu", blockRenderMesh->faces.size());
-        }
-    }
-
     if (!blockRenderMesh || blockRenderMesh->IsEmpty())
     {
         if (isDebugBlock)
@@ -321,6 +315,9 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
         }
         return;
     }
+
+    // [REFACTORED] Get render type for this block
+    RenderType renderType = GetBlockRenderType(blockState);
 
     static const std::vector<enigma::voxel::Direction> allDirections = {
         enigma::voxel::Direction::NORTH,
@@ -354,7 +351,6 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
         }
 
         // [FIX] Use GetFaces() to handle multi-element models (stairs have 11 faces)
-        // GetFace() only returns the first match, missing faces from second element
         auto renderFaces = blockRenderMesh->GetFaces(direction);
 
         if (renderFaces.empty())
@@ -389,20 +385,15 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
             LightingData  lighting     = GetNeighborLighting(neighborIter);
 
             // [FIX] Directional shading via vertex color (Minecraft-style)
-            // Reference: Minecraft ClientLevel.getShade() - UP=1.0, N/S=0.8, E/W=0.6, DOWN=0.5
-            // This creates depth perception by darkening faces based on their orientation
-            // Vertex color carries directional shade, lightmap carries light data separately
             float   directionalShade = GetDirectionalShade(direction);
             uint8_t shade            = static_cast<uint8_t>(directionalShade * 255.0f);
             Rgba8   vertexColor(shade, shade, shade, 255);
 
             // Get face normal and lightmap coordinates for G-Buffer output
             Vec3 faceNormal = GetFaceNormal(direction);
-            // Lightmap: R=blocklight(indoor), G=skylight(outdoor)
             Vec2 lightmapCoord(lighting.blockLight, lighting.skyLight);
 
             // [OPTIMIZED] Single-pass: directly build TerrainVertex quad
-            // Eliminates intermediate Vertex_PCU vector allocation and double iteration
             std::array<graphic::TerrainVertex, 4> terrainQuad;
             for (int vi = 0; vi < 4; ++vi)
             {
@@ -415,7 +406,19 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
                 terrainQuad[vi].m_lightmapCoord = lightmapCoord;
             }
 
-            chunkMesh->AddOpaqueTerrainQuad(terrainQuad);
+            // [REFACTORED] Route to appropriate mesh based on render type
+            switch (renderType)
+            {
+            case RenderType::SOLID:
+                chunkMesh->AddOpaqueTerrainQuad(terrainQuad);
+                break;
+            case RenderType::CUTOUT:
+                chunkMesh->AddCutoutTerrainQuad(terrainQuad);
+                break;
+            case RenderType::TRANSLUCENT:
+                chunkMesh->AddTranslucentTerrainQuad(terrainQuad);
+                break;
+            }
             if (isDebugBlock) facesAdded++;
         }
     }
@@ -435,9 +438,6 @@ bool ChunkMeshHelper::ShouldRenderBlock(BlockState* blockState, const std::share
         return false;
     }
 
-    // Assignment 1 simplified: render all non-air blocks
-    // Air blocks should have a specific registry name or be null
-
     if (!blockState->GetBlock())
     {
         return false; // No block type (air)
@@ -449,11 +449,26 @@ bool ChunkMeshHelper::ShouldRenderBlock(BlockState* blockState, const std::share
         return false;
     }
 
+    // [REFACTORED] Check RenderShape - INVISIBLE blocks are handled by dedicated renderers
+    // [MINECRAFT REF] LiquidBlock.getRenderShape() returns INVISIBLE
+    RenderShape renderShape = blockState->GetBlock()->GetRenderShape(blockState);
+    if (renderShape == RenderShape::INVISIBLE)
+    {
+        return false;
+    }
+
     return true;
 }
 
 bool ChunkMeshHelper::ShouldRenderFace(const BlockIterator& iterator, Direction direction)
 {
+    // Get current block state
+    BlockState* currentBlock = iterator.GetBlock();
+    if (!currentBlock || !currentBlock->GetBlock())
+    {
+        return false;
+    }
+
     // Get neighbor block in the specified direction
     BlockIterator neighborIterator = iterator.GetNeighbor(direction);
 
@@ -467,20 +482,63 @@ bool ChunkMeshHelper::ShouldRenderFace(const BlockIterator& iterator, Direction 
     BlockState* neighborBlock = neighborIterator.GetBlock();
 
     // Render face if neighbor is air (null pointer)
-    if (!neighborBlock)
+    if (!neighborBlock || !neighborBlock->GetBlock())
     {
         return true;
     }
 
-    // [Phase 3] Use IsFullOpaque flag for precise face culling
-    // If neighbor is fully opaque, this face is hidden and should not be rendered
-    if (neighborBlock->IsFullOpaque())
+    // [REFACTORED] Check Block::SkipRendering for same-type culling
+    // [MINECRAFT REF] HalfTransparentBlock.skipRendering - same block type culling
+    // [MINECRAFT REF] LiquidBlock.skipRendering - same fluid type culling
+    if (currentBlock->GetBlock()->SkipRendering(currentBlock, neighborBlock, direction))
     {
         return false;
     }
 
+    // [FIX] Get current block's render type for proper face culling
+    // Cutout/Translucent blocks should NOT be culled by opaque neighbors
+    // because they have transparent parts that need to show the neighbor behind
+    RenderType currentRenderType = currentBlock->GetBlock()->GetRenderType();
+
+    // [REFACTORED] Use CanOcclude() for Minecraft-style face culling
+    // [MINECRAFT REF] Block.shouldRenderFace() core logic:
+    //   if (neighborState.canOcclude()) { /* compare VoxelShapes */ }
+    //   else { return true; /* neighbor can't occlude, must render face */ }
+    // 
+    // Only cull faces when neighbor CanOcclude() == true (full solid blocks)
+    // Cutout blocks (leaves) and Translucent blocks (glass) have canOcclude=false
+    if (neighborBlock->CanOcclude())
+    {
+        // Only cull if current block is also SOLID (fully opaque rendering)
+        if (currentRenderType == RenderType::SOLID)
+        {
+            return false;
+        }
+        // Cutout and Translucent blocks: always render face against opaque neighbors
+        // This ensures leaves render properly against logs/dirt
+        return true;
+    }
+
     // Render face for translucent or non-full blocks (water, glass, etc.)
     return true;
+}
+
+// ============================================================
+// [NEW] GetBlockRenderType - Determine render pass for a block
+// [MINECRAFT REF] ItemBlockRenderTypes classification
+// ============================================================
+RenderType ChunkMeshHelper::GetBlockRenderType(BlockState* blockState)
+{
+    if (!blockState || !blockState->GetBlock())
+    {
+        return RenderType::SOLID;
+    }
+
+    // Get render type from block's GetRenderType() method
+    // This is set by:
+    // - Block subclass override (LeavesBlock -> CUTOUT, HalfTransparentBlock -> TRANSLUCENT)
+    // - YAML configuration (render_type: cutout/translucent/opaque)
+    return blockState->GetBlock()->GetRenderType();
 }
 
 BlockPos ChunkMeshHelper::GetBlockPosition(int x, int y, int z)
