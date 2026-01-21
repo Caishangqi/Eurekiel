@@ -588,7 +588,7 @@
     <ClCompile Include="Registry\Block\LeavesBlock.cpp"/>
     <ClCompile Include="Registry\Block\LiquidBlock.cpp"/>
     <ClCompile Include="Registry\Block\TransparentBlock.cpp"/>
-    <ClCompile Include="Registry\Core\GameData.cpp"/>
+
     <ClCompile Include="Registry\Core\RegisterSubsystem.cpp" />
     <ClCompile Include="Registry\Core\Registry.cpp"/>
     <ClCompile Include="Registry\Entity\EntityRegistry.cpp" />
@@ -1064,7 +1064,7 @@
     <ClInclude Include="Registry\Block\TransparentBlock.hpp"/>
     <ClInclude Include="Registry\Core\DeferredHolder.hpp"/>
     <ClInclude Include="Registry\Core\DeferredRegister.hpp"/>
-    <ClInclude Include="Registry\Core\GameData.hpp"/>
+
     <ClInclude Include="Voxel\Biome\Biome.hpp" />
     <ClInclude Include="Voxel\Biome\BiomeSource.hpp" />
     <ClInclude Include="Voxel\Biome\MultiNoiseBiomeSource.hpp" />
