@@ -26,6 +26,10 @@ float CalculateLightIntensity(float blockLight, float skyLight, float skyBrightn
     return max(blockLight, effectiveSkyLight);
 }
 
+float NDCDepthToViewDepth(float ndcDepth, float near, float far)
+{
+    return (near * far) / (far - ndcDepth * (far - near));
+}
 
 struct PSOutput
 {
@@ -36,31 +40,49 @@ PSOutput main(PSInput input)
 {
     PSOutput output;
 
-    // [STEP 1] Sample depth to detect sky/cloud pixels
-    // Reference: ComplementaryReimagined deferred1.glsl Line 146
-    // Sky pixels have depth = 1.0 (far plane)
-    // Terrain pixels have depth < 1.0
-    Texture2D<float4> depthTex = depthtex0;
-    float             depth    = depthTex.Sample(sampler0, input.TexCoord).r;
+    // [STEP 1] Sample depth textures
+    // [IMPORTANT] Use sampler1 (Point filtering) for depth textures!
+    // Depth values must NOT be interpolated - use Point sampling only.
+    // sampler0 = Linear (for color textures)
+    // sampler1 = Point (for depth textures)
+    //
+    // [FIX] Correct depth texture semantics based on actual pipeline:
+    // - depthtex0: Main depth buffer, written by ALL passes (opaque + translucent)
+    // - depthtex1: Snapshot copied BEFORE translucent pass (opaque only)
+    //
+    // Pipeline flow:
+    //   TerrainSolid   -> writes depthtex0
+    //   TerrainCutout  -> writes depthtex0, then Copy(0,1) in EndPass
+    //   TerrainTranslucent -> writes depthtex0 (now includes water)
+    //   Composite      -> reads both for depth comparison
+    float depthOpaque = depthtex1.Sample(sampler1, input.TexCoord).r; // Opaque only (snapshot before translucent)
+    float depthAll    = depthtex0.Sample(sampler0, input.TexCoord).r; // All objects (main depth buffer)
 
-    // [STEP 2] Sample albedo color
-    float4 albedo = colortex0.Sample(sampler1, input.TexCoord);
+    /*
+    float linearDepthOpaque = NDCDepthToViewDepth(depthOpaque, 0.01, 1);
+    float linearDepthAll = NDCDepthToViewDepth(depthAll, 0.01, 1);
+    output.color0 = float4(linearDepthOpaque, linearDepthAll, 0.0, 1.0);
+    return output;
+    */
 
-    // [STEP 3] Sky detection - skip lighting for sky pixels
-    // Reference: ComplementaryReimagined deferred1.glsl Line 175, 240
-    // if (z0 < 1.0) { terrain } else { sky }
-    if (depth >= 1.0)
+    // [STEP 2] Sample albedo color (use Linear sampler for color)
+    float4 albedo = colortex0.Sample(sampler0, input.TexCoord);
+
+    // [STEP 3] Pure sky detection - both depths are far plane
+    // When depthAll >= 1.0: no geometry at all (pure sky)
+    if (depthAll >= 1.0)
     {
-        // Sky - no lighting applied, direct output
+        // Pure sky - no lighting applied, direct output
         output.color0 = albedo;
         return output;
     }
 
-    // [STEP 4] Sample lightmap for terrain
-    float blockLight = colortex1.Sample(sampler1, input.TexCoord).r;
-    float skyLight   = colortex1.Sample(sampler1, input.TexCoord).g;
 
-    // [STEP 5] Cloud detection - skip lighting if no lightmap data
+    // [STEP 5] Sample lightmap for terrain (use Linear sampler for color data)
+    float blockLight = colortex1.Sample(sampler0, input.TexCoord).r;
+    float skyLight   = colortex1.Sample(sampler0, input.TexCoord).g;
+
+    // [STEP 6] Cloud detection - skip lighting if no lightmap data
     // Clouds don't write to colortex1, so lightmap values are 0
     if (blockLight == 0.0 && skyLight == 0.0)
     {
@@ -69,7 +91,7 @@ PSOutput main(PSInput input)
         return output;
     }
 
-    // [STEP 6] Apply lighting to terrain
+    // [STEP 7] Apply lighting to terrain
     float lightIntensity = CalculateLightIntensity(blockLight, skyLight, skyBrightness);
     float finalLight     = max(lightIntensity, 0.03);
     output.color0        = float4(albedo.rgb * finalLight, albedo.a);
