@@ -1,6 +1,6 @@
 #pragma once
 
-namespace enigma::registry::block
+namespace enigma::voxel
 {
     /**
      * @brief Fluid type enumeration for liquid blocks

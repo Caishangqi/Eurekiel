@@ -1,6 +1,7 @@
 #include "LiquidBlock.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"
 #include "Engine/Voxel/Block/VoxelShape.hpp"
+#include "Engine/Voxel/Fluid/FluidState.hpp"
 #include "Engine/Core/EngineCommon.hpp"
 
 namespace enigma::registry::block
@@ -128,5 +129,36 @@ namespace enigma::registry::block
         // Liquids have no collision - entities pass through them
         // (Swimming physics are handled separately)
         return voxel::Shapes::Empty();
+    }
+
+    voxel::FluidState LiquidBlock::GetFluidState(voxel::BlockState* state) const
+    {
+        UNUSED(state);
+
+        // [MINECRAFT REF] LiquidBlock.java getFluidState()
+        // File: net/minecraft/world/level/block/LiquidBlock.java:67-70
+        //
+        // Minecraft uses stateCache list with 9 pre-created FluidStates.
+        // Our simplified version caches a single FluidState per fluid type.
+
+        // Return cached FluidState for O(1) access
+        if (!m_fluidStateCacheInitialized)
+        {
+            switch (m_fluidType)
+            {
+            case FluidType::WATER:
+                m_cachedFluidState = voxel::FluidState::Water();
+                break;
+            case FluidType::LAVA:
+                m_cachedFluidState = voxel::FluidState::Lava();
+                break;
+            default:
+                m_cachedFluidState = voxel::FluidState::Empty();
+                break;
+            }
+            m_fluidStateCacheInitialized = true;
+        }
+
+        return m_cachedFluidState;
     }
 }

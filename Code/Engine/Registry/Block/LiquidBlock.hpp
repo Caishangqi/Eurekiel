@@ -1,6 +1,7 @@
 #pragma once
 #include "Block.hpp"
-#include "FluidType.hpp"
+#include "Engine/Voxel/Fluid/FluidState.hpp"
+#include "Engine/Voxel/Fluid/FluidType.hpp"
 #include "Engine/Voxel/Property/PropertyTypes.hpp"
 
 namespace enigma::registry::block
@@ -85,8 +86,41 @@ namespace enigma::registry::block
          */
         voxel::VoxelShape GetCollisionShape(voxel::BlockState* state) const override;
 
+        /**
+         * @brief Get the fluid state for this liquid block (cached)
+         *
+         * [MINECRAFT REF] LiquidBlock.java getFluidState()
+         * File: net/minecraft/world/level/block/LiquidBlock.java:67-70
+         *
+         * ```java
+         * protected FluidState getFluidState(BlockState blockState) {
+         *     int i = (Integer)blockState.getValue(LEVEL);
+         *     return (FluidState)this.stateCache.get(Math.min(i, 8));
+         * }
+         * ```
+         *
+         * [OPTIMIZATION] Returns cached FluidState for O(1) access.
+         * Since our FluidState is simplified (no LEVEL property in FluidState),
+         * we cache a single FluidState per fluid type.
+         *
+         * @param state The block state (unused in simplified version)
+         * @return Cached FluidState with the appropriate fluid type
+         */
+        voxel::FluidState GetFluidState(voxel::BlockState* state) const override;
+
     private:
         FluidType m_fluidType;
+
+        // ============================================================
+        // [NEW] FluidState cache
+        // [MINECRAFT REF] LiquidBlock.java stateCache
+        // File: net/minecraft/world/level/block/LiquidBlock.java:35
+        //
+        // Minecraft caches 9 FluidStates (source + 7 flowing + 1 falling).
+        // Our simplified version caches a single FluidState per fluid type.
+        // ============================================================
+        mutable FluidState m_cachedFluidState;
+        mutable bool       m_fluidStateCacheInitialized = false;
 
         /**
          * @brief Initialize the static property instances
