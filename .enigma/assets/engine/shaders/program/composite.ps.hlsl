@@ -56,7 +56,7 @@ PSOutput main(PSInput input)
     //   TerrainTranslucent -> writes depthtex0 (now includes water)
     //   Composite      -> reads both for depth comparison
     float depthOpaque = depthtex1.Sample(sampler1, input.TexCoord).r; // Opaque only (snapshot before translucent)
-    float depthAll    = depthtex0.Sample(sampler0, input.TexCoord).r; // All objects (main depth buffer)
+    float depthAll    = depthtex0.Sample(sampler1, input.TexCoord).r; // All objects (main depth buffer)
 
     /*
     float linearDepthOpaque = NDCDepthToViewDepth(depthOpaque, 0.01, 1);
