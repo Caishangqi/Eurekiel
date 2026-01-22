@@ -587,6 +587,8 @@
     <ClCompile Include="Registry\Block\HalfTransparentBlock.cpp"/>
     <ClCompile Include="Registry\Block\LeavesBlock.cpp"/>
     <ClCompile Include="Registry\Block\LiquidBlock.cpp"/>
+    <ClCompile Include="Registry\Block\SlabBlock.cpp"/>
+    <ClCompile Include="Registry\Block\StairsBlock.cpp"/>
     <ClCompile Include="Registry\Block\TransparentBlock.cpp"/>
 
     <ClCompile Include="Registry\Core\RegisterSubsystem.cpp" />
@@ -640,8 +642,6 @@
     <ClCompile Include="Voxel\Biome\MultiNoiseBiomeSource.cpp" />
     <ClCompile Include="Voxel\Block\BlockIterator.cpp" />
     <ClCompile Include="Voxel\Block\BlockStateSerializer.cpp" />
-    <ClCompile Include="Voxel\Block\SlabBlock.cpp"/>
-    <ClCompile Include="Voxel\Block\StairsBlock.cpp"/>
     <ClCompile Include="Voxel\Block\VoxelShape.cpp"/>
     <ClCompile Include="Voxel\Chunk\ChunkHelper.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkMeshHelper.cpp" />
@@ -1055,12 +1055,13 @@
     <ClInclude Include="Registry\Block\BlockBehaviour.hpp"/>
     <ClInclude Include="Registry\Block\BlockBehaviourProperties.hpp"/>
     <ClInclude Include="Registry\Block\BlockRegisterEvent.hpp"/>
-    <ClInclude Include="Registry\Block\FluidType.hpp"/>
     <ClInclude Include="Registry\Block\HalfTransparentBlock.hpp"/>
     <ClInclude Include="Registry\Block\LeavesBlock.hpp"/>
     <ClInclude Include="Registry\Block\LiquidBlock.hpp"/>
     <ClInclude Include="Registry\Block\RenderShape.hpp"/>
     <ClInclude Include="Registry\Block\RenderType.hpp"/>
+    <ClInclude Include="Registry\Block\SlabBlock.hpp"/>
+    <ClInclude Include="Registry\Block\StairsBlock.hpp"/>
     <ClInclude Include="Registry\Block\TransparentBlock.hpp"/>
     <ClInclude Include="Registry\Core\DeferredHolder.hpp"/>
     <ClInclude Include="Registry\Core\DeferredRegister.hpp"/>
@@ -1072,15 +1073,15 @@
     <ClInclude Include="Voxel\Block\BlockStateSerializer.hpp" />
     <ClInclude Include="Voxel\Block\HalfType.hpp"/>
     <ClInclude Include="Voxel\Block\PlacementContext.hpp"/>
-    <ClInclude Include="Voxel\Block\SlabBlock.hpp"/>
     <ClInclude Include="Voxel\Block\SlabType.hpp"/>
-    <ClInclude Include="Voxel\Block\StairsBlock.hpp"/>
     <ClInclude Include="Voxel\Block\StairsShape.hpp"/>
     <ClInclude Include="Voxel\Block\VoxelShape.hpp"/>
     <ClInclude Include="Voxel\Chunk\ChunkHelper.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkMeshHelper.hpp" />
     <ClInclude Include="Voxel\Climate\Climate.hpp" />
     <ClInclude Include="Voxel\Feature\TreeStamp.hpp" />
+    <ClInclude Include="Voxel\Fluid\FluidState.hpp"/>
+    <ClInclude Include="Voxel\Fluid\FluidType.hpp"/>
     <ClInclude Include="Voxel\Function\BinaryOperationDensityFunction.hpp" />
     <ClInclude Include="Voxel\Function\ConstantDensityFunction.hpp" />
     <ClInclude Include="Voxel\Function\DensityFunction.hpp" />
@@ -1099,6 +1100,7 @@
     <ClInclude Include="Voxel\NoiseGenerator\NoiseRouter.hpp" />
     <ClInclude Include="Voxel\NoiseGenerator\PerlinNoiseGenerator.hpp" />
     <ClInclude Include="Voxel\NoiseGenerator\RawNoiseGenerator.hpp" />
+    <ClInclude Include="Voxel\State\StateHolder.hpp"/>
     <ClInclude Include="Voxel\Time\FixedTimeProvider.hpp"/>
     <ClInclude Include="Voxel\Time\ITimeProvider.hpp"/>
     <ClInclude Include="Voxel\Time\WorldTimeProvider.hpp"/>

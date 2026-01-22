@@ -12,60 +12,61 @@ namespace enigma::voxel
     BlockState* BlockState::With(std::shared_ptr<Property<T>> property, const T& value) const
     {
         // Get the new property map
-        PropertyMap newProperties = m_properties.With(property, value);
+        PropertyMap newProperties = m_values.With(property, value);
 
         // Find the corresponding state in the block's state list
-        return m_blockType->GetState(newProperties);
+        return m_owner->GetState(newProperties);
     }
 
     BlockState::BlockState(enigma::registry::block::Block* blockType, const PropertyMap& properties, size_t stateIndex)
-        : m_blockType(blockType), m_properties(properties), m_stateIndex(stateIndex)
+        : StateHolder<enigma::registry::block::Block, BlockState>(blockType, properties)
+          , m_stateIndex(stateIndex)
     {
-        // [REMOVED] Flag initialization - flags now managed by Chunk class
-        // No initialization needed here
+        // [MINECRAFT REF] BlockStateBase constructor
+        // Caches are initialized lazily or via InitCache()
     }
 
     bool BlockState::IsOpaque() const
     {
-        return m_blockType ? m_blockType->IsOpaque(const_cast<BlockState*>(this)) : true;
+        return m_owner ? m_owner->IsOpaque(const_cast<BlockState*>(this)) : true;
     }
 
     bool BlockState::IsFullBlock() const
     {
-        return m_blockType ? m_blockType->IsFullBlock() : true;
+        return m_owner ? m_owner->IsFullBlock() : true;
     }
 
     float BlockState::GetHardness() const
     {
-        return m_blockType ? m_blockType->GetHardness() : 1.0f;
+        return m_owner ? m_owner->GetHardness() : 1.0f;
     }
 
     float BlockState::GetResistance() const
     {
-        return m_blockType ? m_blockType->GetResistance() : 1.0f;
+        return m_owner ? m_owner->GetResistance() : 1.0f;
     }
 
     std::string BlockState::GetModelPath() const
     {
-        return m_blockType ? m_blockType->GetModelPath(const_cast<BlockState*>(this)) : "";
+        return m_owner ? m_owner->GetModelPath(const_cast<BlockState*>(this)) : "";
     }
 
     std::shared_ptr<enigma::renderer::model::RenderMesh> BlockState::GetRenderMesh() const
     {
         if (!m_meshCacheValid || !m_cachedMesh)
         {
-            if (m_blockType)
+            if (m_owner)
             {
-                std::string blockName            = m_blockType->GetNamespace() + ":" + m_blockType->GetRegistryName();
+                std::string blockName            = m_owner->GetNamespace() + ":" + m_owner->GetRegistryName();
                 auto        blockStateDefinition = enigma::registry::block::BlockRegistry::GetBlockStateDefinition(blockName);
 
                 if (blockStateDefinition)
                 {
                     // Convert property map to string for variant lookup
                     std::string propertyString = "";
-                    if (!m_properties.Empty())
+                    if (!m_values.Empty())
                     {
-                        std::string fullString = m_properties.ToString();
+                        std::string fullString = m_values.ToString();
                         if (fullString.size() >= 2 && fullString.front() == '{' && fullString.back() == '}')
                         {
                             propertyString = fullString.substr(1, fullString.size() - 2);
@@ -90,34 +91,34 @@ namespace enigma::voxel
 
     std::string BlockState::ToString() const
     {
-        if (m_blockType)
+        if (m_owner)
         {
-            return m_blockType->GetRegistryName() + m_properties.ToString();
+            return m_owner->GetRegistryName() + m_values.ToString();
         }
-        return m_properties.ToString();
+        return m_values.ToString();
     }
 
     void BlockState::OnPlaced(enigma::voxel::World* world, const BlockPos& pos) const
     {
-        if (m_blockType)
+        if (m_owner)
         {
-            m_blockType->OnPlaced(world, pos, const_cast<BlockState*>(this));
+            m_owner->OnPlaced(world, pos, const_cast<BlockState*>(this));
         }
     }
 
     void BlockState::OnBroken(enigma::voxel::World* world, const BlockPos& pos) const
     {
-        if (m_blockType)
+        if (m_owner)
         {
-            m_blockType->OnBroken(world, pos, const_cast<BlockState*>(this));
+            m_owner->OnBroken(world, pos, const_cast<BlockState*>(this));
         }
     }
 
     void BlockState::OnNeighborChanged(enigma::voxel::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const
     {
-        if (m_blockType)
+        if (m_owner)
         {
-            m_blockType->OnNeighborChanged(world, pos, const_cast<BlockState*>(this), neighborBlock);
+            m_owner->OnNeighborChanged(world, pos, const_cast<BlockState*>(this), neighborBlock);
         }
     }
 
@@ -127,7 +128,26 @@ namespace enigma::voxel
     template BlockState* BlockState::With<Direction>(std::shared_ptr<Property<Direction>>, const Direction&) const;
 
     // ============================================================
-    // [NEW] Light cache methods implementation
+    // Cache Initialization
+    // [MINECRAFT REF] BlockBehaviour.BlockStateBase.initCache()
+    // ============================================================
+
+    void BlockState::InitCache(World* world, const BlockPos& pos) const
+    {
+        // Initialize FluidState cache
+        // [MINECRAFT REF] this.fluidState = ((Block)this.owner).getFluidState(this.asState());
+        if (!m_fluidStateCached)
+        {
+            m_fluidState       = m_owner ? m_owner->GetFluidState(const_cast<BlockState*>(this)) : FluidState::Empty();
+            m_fluidStateCached = true;
+        }
+
+        // Initialize light cache
+        InitializeLightCache(world, pos);
+    }
+
+    // ============================================================
+    // Light cache methods implementation
     // [MINECRAFT REF] BlockBehaviour.java:865-870, 1234-1247
     // ============================================================
 
@@ -143,9 +163,9 @@ namespace enigma::voxel
         }
 
         // Otherwise, compute from block type
-        if (m_blockType)
+        if (m_owner)
         {
-            return m_blockType->GetLightBlock(const_cast<BlockState*>(this), world, pos);
+            return m_owner->GetLightBlock(const_cast<BlockState*>(this), world, pos);
         }
 
         // Default: fully opaque
@@ -164,9 +184,9 @@ namespace enigma::voxel
         }
 
         // Otherwise, compute from block type
-        if (m_blockType)
+        if (m_owner)
         {
-            return m_blockType->PropagatesSkylightDown(const_cast<BlockState*>(this), world, pos);
+            return m_owner->PropagatesSkylightDown(const_cast<BlockState*>(this), world, pos);
         }
 
         // Default: opaque blocks don't propagate skylight
@@ -182,9 +202,9 @@ namespace enigma::voxel
         }
 
         // Otherwise, compute from block type
-        if (m_blockType)
+        if (m_owner)
         {
-            return m_blockType->GetLightEmission(const_cast<BlockState*>(this));
+            return m_owner->GetLightEmission(const_cast<BlockState*>(this));
         }
 
         // Default: no light emission
@@ -196,7 +216,7 @@ namespace enigma::voxel
         // [MINECRAFT REF] BlockBehaviour.java:1246-1247
         // Cache is populated during block registration for O(1) access
 
-        if (!m_blockType)
+        if (!m_owner)
         {
             // No block type, use defaults
             m_lightCache.lightBlock             = 15;
@@ -207,13 +227,13 @@ namespace enigma::voxel
         }
 
         // Compute and cache all light properties
-        m_lightCache.propagatesSkylightDown = m_blockType->PropagatesSkylightDown(
+        m_lightCache.propagatesSkylightDown = m_owner->PropagatesSkylightDown(
             const_cast<BlockState*>(this), world, pos);
 
-        m_lightCache.lightBlock = static_cast<int8_t>(m_blockType->GetLightBlock(
+        m_lightCache.lightBlock = static_cast<int8_t>(m_owner->GetLightBlock(
             const_cast<BlockState*>(this), world, pos));
 
-        m_lightCache.lightEmission = static_cast<int8_t>(m_blockType->GetLightEmission(
+        m_lightCache.lightEmission = static_cast<int8_t>(m_owner->GetLightEmission(
             const_cast<BlockState*>(this)));
 
         m_lightCache.isValid = true;

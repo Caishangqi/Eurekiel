@@ -1,13 +1,11 @@
 ﻿#include "StairsBlock.hpp"
-#include "VoxelShape.hpp"
-
-#include "PlacementContext.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"
 #include "Engine/Voxel/Block/BlockIterator.hpp"
 #include "Engine/Voxel/Block/BlockPos.hpp"
 #include "Engine/Voxel/Property/PropertyMap.hpp"
 #include "Engine/Voxel/World/World.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Voxel/Block/PlacementContext.hpp"
 
 namespace enigma::voxel
 {

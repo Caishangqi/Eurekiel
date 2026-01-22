@@ -2,6 +2,7 @@
 #include "BlockRegistry.hpp"
 #include "../../Voxel/Block/VoxelShape.hpp"
 #include "../../Voxel/Block/BlockState.hpp"
+#include "../../Voxel/Fluid/FluidState.hpp"
 #include "../../Model/ModelSubsystem.hpp"
 #include "../../Resource/Atlas/AtlasManager.hpp"
 #include "../../Resource/BlockState/BlockStateDefinition.hpp"
@@ -327,5 +328,19 @@ namespace enigma::registry::block
             return RenderType::CUTOUT;
         }
         return RenderType::SOLID;
+    }
+
+    voxel::FluidState Block::GetFluidState(voxel::BlockState* state) const
+    {
+        UNUSED(state);
+
+        // [MINECRAFT REF] BlockBehaviour.java:214-216
+        // protected FluidState getFluidState(BlockState state) {
+        //     return Fluids.EMPTY.defaultFluidState();
+        // }
+        //
+        // Default: return empty fluid state (no fluid)
+        // LiquidBlock overrides to return water/lava fluid state
+        return voxel::FluidState::Empty();
     }
 }

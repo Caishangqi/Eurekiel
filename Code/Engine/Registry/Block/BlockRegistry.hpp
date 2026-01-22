@@ -9,13 +9,10 @@
 #include "../../Resource/ResourceMapper.hpp"
 #include "Block.hpp"
 #include "BlockRegisterEvent.hpp"
-#include "../../Voxel/Block/SlabBlock.hpp"
-#include "../../Voxel/Block/StairsBlock.hpp"
 #include "HalfTransparentBlock.hpp"
 #include "TransparentBlock.hpp"
 #include "LeavesBlock.hpp"
 #include "LiquidBlock.hpp"
-#include "FluidType.hpp"
 #include "RenderType.hpp"
 #include "RenderShape.hpp"
 #include <memory>

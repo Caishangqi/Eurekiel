@@ -1,5 +1,4 @@
 ﻿#include "SlabBlock.hpp"
-#include "VoxelShape.hpp"
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Voxel/Block/BlockState.hpp"

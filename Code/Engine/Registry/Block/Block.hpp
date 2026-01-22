@@ -24,6 +24,7 @@ namespace enigma::resource
 namespace enigma::voxel
 {
     class BlockState;
+    class FluidState;
     struct BlockPos;
     struct PlacementContext; // [NEW] Forward declaration for placement logic
 }
@@ -290,6 +291,36 @@ namespace enigma::registry::block
          * Override from BlockBehaviour - returns SOLID by default
          */
         RenderType GetRenderType() const override;
+
+        // ============================================================
+        // Fluid State
+        // [MINECRAFT REF] BlockBehaviour.getFluidState()
+        // ============================================================
+
+        /**
+         * @brief Get the fluid state for this block state
+         *
+         * [MINECRAFT REF] BlockBehaviour.java:214-216
+         * protected FluidState getFluidState(BlockState state) {
+         *     return Fluids.EMPTY.defaultFluidState();
+         * }
+         *
+         * Default implementation returns empty fluid state.
+         * LiquidBlock overrides to return water/lava fluid state.
+         *
+         * Usage (replaces deprecated liquid() method):
+         * ```cpp
+         * // [OLD - Deprecated]
+         * if (blockState->IsLiquid()) { ... }
+         *
+         * // [NEW - Recommended]
+         * if (!block->GetFluidState(blockState).IsEmpty()) { ... }
+         * ```
+         *
+         * @param state The block state to get fluid state for
+         * @return FluidState (Empty for most blocks, Water/Lava for LiquidBlock)
+         */
+        virtual voxel::FluidState GetFluidState(voxel::BlockState* state) const;
 
     protected:
         /**

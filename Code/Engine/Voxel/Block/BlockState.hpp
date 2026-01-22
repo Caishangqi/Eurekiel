@@ -1,6 +1,8 @@
 #pragma once
+#include "../State/StateHolder.hpp"
 #include "../Property/PropertyMap.hpp"
 #include "BlockPos.hpp"
+#include "../Fluid/FluidState.hpp"
 #include <memory>
 
 #include "Engine/Registry/Block/Block.hpp"
@@ -25,35 +27,53 @@ namespace enigma::voxel
 {
     /**
      * @brief Runtime instance representing a specific configuration of a Block
-     * 
+     *
+     * [MINECRAFT REF] BlockBehaviour.BlockStateBase extends StateHolder<Block, BlockState>
+     * File: net/minecraft/world/level/block/state/BlockBehaviour.java:1180
+     *
      * Similar to Minecraft's BlockState, this represents a Block with specific
      * property values. Each unique combination of properties gets its own BlockState.
-     * 
+     *
+     * [REFACTORED - 2026-01-22]
+     * Now inherits from StateHolder<Block, BlockState> following Minecraft's architecture:
+     * - StateHolder provides: owner, values (PropertyMap), neighbours table, setValue/cycle
+     * - BlockStateBase adds: fluidState cache, lightCache, rendering cache
+     *
      * [ARCHITECTURE CHANGE - 2025-11-15]
      * Light data (outdoor/indoor light) and flags (IsSky, IsLightDirty) have been
      * moved to Chunk's independent arrays (Chunk::m_lightData, Chunk::m_flags) to
      * avoid data pollution from shared BlockState instances.
-     * 
-     * BlockState now only stores:
-     * - Block type pointer (m_blockType)
-     * - Property values (m_properties)
+     *
+     * BlockState now stores:
+     * - [From StateHolder] owner (Block*), values (PropertyMap)
      * - State index (m_stateIndex)
+     * - Cached FluidState (m_fluidState) - [NEW]
      * - Cached rendering data (m_cachedMesh)
+     * - Cached light properties (m_lightCache)
      */
-    class BlockState
+    class BlockState : public StateHolder<enigma::registry::block::Block, BlockState>
     {
     private:
-        enigma::registry::block::Block* m_blockType;
-        PropertyMap                     m_properties;
-        size_t                          m_stateIndex;
+        // State index within Block's state list
+        size_t m_stateIndex = 0;
+
+        // ============================================================
+        // [NEW] FluidState cache
+        // [MINECRAFT REF] BlockBehaviour.BlockStateBase.fluidState
+        // File: net/minecraft/world/level/block/state/BlockBehaviour.java:1195
+        // Cached at initCache() time for O(1) access
+        // ============================================================
+        mutable FluidState m_fluidState;
+        mutable bool       m_fluidStateCached = false;
 
         // Cached rendering data
         mutable std::shared_ptr<enigma::renderer::model::RenderMesh> m_cachedMesh;
         mutable bool                                                 m_meshCacheValid = false;
 
         // ============================================================
-        // [NEW] Light property cache
-        // [MINECRAFT REF] BlockBehaviour.java:1234-1247 Cache inner class
+        // Light property cache
+        // [MINECRAFT REF] BlockBehaviour.BlockStateBase.Cache inner class
+        // File: net/minecraft/world/level/block/state/BlockBehaviour.java:1234-1247
         // Cached at BlockState creation time for O(1) light queries
         // ============================================================
         struct LightCache
@@ -71,28 +91,56 @@ namespace enigma::voxel
 
         virtual ~BlockState() = default;
 
-        // Basic accessors
-        enigma::registry::block::Block* GetBlock() const { return m_blockType; }
-        const PropertyMap&              GetProperties() const { return m_properties; }
-        size_t                          GetStateIndex() const { return m_stateIndex; }
+        // ============================================================
+        // Basic Accessors
+        // [MINECRAFT REF] BlockStateBase.getBlock()
+        // ============================================================
 
-        // Property access
+        /**
+         * @brief Get the Block type for this state
+         * [MINECRAFT REF] BlockStateBase.getBlock() -> returns (Block)this.owner
+         */
+        enigma::registry::block::Block* GetBlock() const { return m_owner; }
+
+        /**
+         * @brief Get property values (alias for StateHolder::GetValues())
+         */
+        const PropertyMap& GetProperties() const { return m_values; }
+
+        /**
+         * @brief Get state index within Block's state list
+         */
+        size_t GetStateIndex() const { return m_stateIndex; }
+
+        // ============================================================
+        // Property Access
+        // [MINECRAFT REF] StateHolder.getValue() - inherited
+        // ============================================================
+
+        /**
+         * @brief Get a property value (type-safe)
+         * Delegates to StateHolder::GetValue()
+         */
         template <typename T>
         T Get(std::shared_ptr<Property<T>> property) const
         {
-            return m_properties.Get(property);
+            return GetValue(property);
         }
 
         /**
          * @brief Create a new BlockState with one property changed
+         * [MINECRAFT REF] StateHolder.setValue()
          */
         template <typename T>
         BlockState* With(std::shared_ptr<Property<T>> property, const T& value) const;
 
-        // Comparison (used for fast state lookup)
+        // ============================================================
+        // Comparison and Hashing
+        // ============================================================
+
         bool operator==(const BlockState& other) const
         {
-            return m_blockType == other.m_blockType && m_properties == other.m_properties;
+            return m_owner == other.m_owner && m_values == other.m_values;
         }
 
         bool operator!=(const BlockState& other) const
@@ -100,140 +148,148 @@ namespace enigma::voxel
             return !(*this == other);
         }
 
-        // Hash for fast lookup
         size_t GetHash() const
         {
-            size_t hash = std::hash<void*>{}(m_blockType);
-            hash        ^= m_properties.GetHash() + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-            return hash;
+            return StateHolder::GetHash();
         }
 
-        // [REMOVED] Light data and flag accessors - migrated to Chunk class
-        // Use Chunk::GetSkyLight(), Chunk::SetSkyLight(), etc. instead
+        // ============================================================
+        // Block Behavior Delegation
+        // [MINECRAFT REF] BlockStateBase delegates to Block methods
+        // ============================================================
 
         /**
          * @brief Check if this block can occlude adjacent faces for face culling
-         * @details Used by ChunkMeshHelper::ShouldRenderFace() to determine if
-         *          a neighbor block should cause the current block's face to be culled.
-         *          
-         * [MINECRAFT REF] BlockStateBase.canOcclude() - Returns true for full solid blocks
-         * that can hide adjacent faces. Blocks like leaves return false even though
-         * they may block light, because they have transparent parts.
-         * 
-         * @return true if this block can occlude adjacent faces (full solid blocks)
-         * @return false if adjacent faces should always render (leaves, glass, etc.)
+         * [MINECRAFT REF] BlockStateBase.canOcclude()
          */
         inline bool CanOcclude() const
         {
-            return m_blockType ? m_blockType->CanOcclude() : true;
+            return m_owner ? m_owner->CanOcclude() : true;
         }
 
-        // Block behavior delegation
         bool  IsOpaque() const;
         bool  IsFullBlock() const;
         float GetHardness() const;
         float GetResistance() const;
 
-        // Model and rendering
+        // ============================================================
+        // Model and Rendering
+        // ============================================================
+
         std::string                                          GetModelPath() const;
         std::shared_ptr<enigma::renderer::model::RenderMesh> GetRenderMesh() const;
 
-        /**
-         * @brief Set the cached render mesh for this block state
-         * Called by BlockModelCompiler after compiling the model
-         */
         void SetRenderMesh(std::shared_ptr<enigma::renderer::model::RenderMesh> mesh) const
         {
             m_cachedMesh     = mesh;
             m_meshCacheValid = true;
         }
 
-        /**
-         * @brief Invalidate cached rendering data
-         * Call when model resources change
-         */
         void InvalidateRenderCache() const
         {
             m_meshCacheValid = false;
         }
 
-        // World interaction
+        // ============================================================
+        // World Interaction
+        // ============================================================
+
         void OnPlaced(enigma::voxel::World* world, const BlockPos& pos) const;
         void OnBroken(enigma::voxel::World* world, const BlockPos& pos) const;
         void OnNeighborChanged(enigma::voxel::World* world, const BlockPos& pos, enigma::registry::block::Block* neighborBlock) const;
 
+        // ============================================================
         // Utility
+        // ============================================================
+
         std::string ToString() const;
 
-        /**
-         * @brief Check if this state can be replaced by another block
-         * (e.g., air, water, tall grass can usually be replaced)
-         */
         virtual bool CanBeReplaced() const { return false; }
-
-        /**
-         * @brief Get light level emitted by this block state
-         */
-        virtual int GetLightLevel() const { return 0; }
-
-        /**
-         * @brief Check if this block state blocks light
-         */
+        virtual int  GetLightLevel() const { return 0; }
         virtual bool BlocksLight() const { return IsOpaque(); }
 
         // ============================================================
-        // [NEW] Light cache methods
-        // [MINECRAFT REF] BlockBehaviour.java:865-870 cache access
+        // Fluid State (with caching)
+        // [MINECRAFT REF] BlockBehaviour.BlockStateBase.getFluidState()
+        // File: net/minecraft/world/level/block/state/BlockBehaviour.java:1195
         // ============================================================
 
         /**
-         * @brief Get light attenuation value with caching
-         * @param world The world (may be nullptr for cached value)
-         * @param pos The block position
-         * @return Light attenuation 0-15
-         * 
-         * [MINECRAFT REF] BlockBehaviour.java:869-870
-         * return this.cache != null ? this.cache.lightBlock : this.getBlock().getLightBlock(...)
+         * @brief Get the fluid state for this block state (cached)
+         *
+         * [MINECRAFT REF] BlockBehaviour.BlockStateBase.getFluidState()
+         * Returns cached fluidState member, initialized in initCache()
+         *
+         * [OPTIMIZATION] FluidState is now cached instead of computed on every call.
+         * Cache is initialized via InitCache() after BlockState creation.
+         *
+         * Usage (replaces deprecated liquid() method):
+         * ```cpp
+         * // [OLD - Deprecated in Minecraft]
+         * if (blockState->IsLiquid()) { ... }
+         *
+         * // [NEW - Recommended]
+         * if (!blockState->GetFluidState().IsEmpty()) { ... }
+         * ```
+         *
+         * @return FluidState (Empty for most blocks, Water/Lava for LiquidBlock)
          */
-        int GetLightBlock(World* world, const BlockPos& pos) const;
+        FluidState GetFluidState() const
+        {
+            if (!m_fluidStateCached)
+            {
+                m_fluidState       = m_owner ? m_owner->GetFluidState(const_cast<BlockState*>(this)) : FluidState::Empty();
+                m_fluidStateCached = true;
+            }
+            return m_fluidState;
+        }
 
         /**
-         * @brief Check if skylight propagates down through this block with caching
-         * @param world The world (may be nullptr for cached value)
-         * @param pos The block position
-         * @return True if skylight passes through vertically
-         * 
-         * [MINECRAFT REF] BlockBehaviour.java:865-866
+         * @brief Check if fluid state cache is valid
          */
+        bool IsFluidStateCached() const { return m_fluidStateCached; }
+
+        /**
+         * @brief Invalidate fluid state cache
+         */
+        void InvalidateFluidStateCache() const { m_fluidStateCached = false; }
+
+        // ============================================================
+        // Light Cache Methods
+        // [MINECRAFT REF] BlockBehaviour.java:865-870 cache access
+        // ============================================================
+
+        int  GetLightBlock(World* world, const BlockPos& pos) const;
         bool PropagatesSkylightDown(World* world, const BlockPos& pos) const;
+        int  GetLightEmission() const;
 
         /**
-         * @brief Get light emission value with caching
-         * @return Light emission 0-15
+         * @brief Initialize all caches (light, fluid state)
+         *
+         * [MINECRAFT REF] BlockBehaviour.BlockStateBase.initCache()
+         * File: net/minecraft/world/level/block/state/BlockBehaviour.java:1246-1247
+         *
+         * Called after BlockState creation to pre-compute cached properties.
          */
-        int GetLightEmission() const;
+        void InitCache(World* world = nullptr, const BlockPos& pos = BlockPos(0, 0, 0)) const;
 
         /**
-         * @brief Initialize the light cache
-         * Called after BlockState creation to pre-compute light properties.
-         * 
-         * [MINECRAFT REF] BlockBehaviour.java:1246-1247
-         * Cache is populated during block registration.
-         * 
-         * @param world The world (may be nullptr for default calculation)
-         * @param pos The block position (may be origin for default calculation)
+         * @brief Initialize light cache only (legacy compatibility)
          */
         void InitializeLightCache(World* world = nullptr, const BlockPos& pos = BlockPos(0, 0, 0)) const;
 
-        /**
-         * @brief Check if light cache is valid
-         */
         bool IsLightCacheValid() const { return m_lightCache.isValid; }
+        void InvalidateLightCache() const { m_lightCache.isValid = false; }
 
         /**
-         * @brief Invalidate light cache (call when block properties change)
+         * @brief Invalidate all caches
          */
-        void InvalidateLightCache() const { m_lightCache.isValid = false; }
+        void InvalidateAllCaches() const
+        {
+            m_fluidStateCached   = false;
+            m_lightCache.isValid = false;
+            m_meshCacheValid     = false;
+        }
     };
 }
 

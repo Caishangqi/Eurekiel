@@ -7,13 +7,13 @@
 #include "TransparentBlock.hpp"
 #include "LeavesBlock.hpp"
 #include "LiquidBlock.hpp"
-#include "FluidType.hpp"
-#include "RenderType.hpp"
-#include "RenderShape.hpp"
 #include "../../Core/Logger/LoggerAPI.hpp"
 #include "../../Resource/ResourceSubsystem.hpp"
 #include "../../Model/ModelSubsystem.hpp"
 #include <filesystem>
+
+#include "SlabBlock.hpp"
+#include "StairsBlock.hpp"
 
 DEFINE_LOG_CATEGORY(LogRegistryBlock)
 
