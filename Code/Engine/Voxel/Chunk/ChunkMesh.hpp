@@ -48,6 +48,21 @@ namespace enigma::voxel
         void AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
         void AddTranslucentTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
 
+        // ========================================================================
+        // [WATER BACKFACE] Generate backface for water surface (underwater view)
+        // ========================================================================
+        // [SODIUM REF] DefaultFluidRenderer.java - flip parameter for backface generation
+        // File: net/caffeinemc/mods/sodium/client/render/chunk/compile/pipeline/DefaultFluidRenderer.java
+        //
+        // When rendering water surface from below, we need a separate backface with:
+        // - Flipped vertex order (winding order) to pass backface culling
+        // - Flipped normal for correct lighting
+        //
+        // Vertex order flip: {0,1,2,3} -> {0,3,2,1}
+        // This changes winding from CCW to CW (or vice versa)
+        // ========================================================================
+        void AddTranslucentTerrainQuadBackface(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
+
         // Statistics - Opaque
         size_t GetOpaqueVertexCount() const;
         size_t GetOpaqueIndexCount() const;

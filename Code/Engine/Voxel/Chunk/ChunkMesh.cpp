@@ -225,6 +225,55 @@ void ChunkMesh::AddTranslucentTerrainQuad(const std::array<graphic::TerrainVerte
 }
 
 // ============================================================
+// [WATER BACKFACE] Generate backface for water surface (underwater view)
+// ============================================================
+// [SODIUM REF] DefaultFluidRenderer.java line 289:
+//   int vertexIndex = flip ? (3 - i + 1) & 3 : i;
+// This flips vertex order: 0->0, 1->3, 2->2, 3->1
+//
+// For our implementation, we flip the vertex order in the array itself:
+//   Original: {v0, v1, v2, v3} with indices (0,1,2), (0,2,3)
+//   Backface: {v0, v3, v2, v1} with same indices -> reversed winding
+// ============================================================
+void ChunkMesh::AddTranslucentTerrainQuadBackface(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad)
+{
+    uint32_t baseIndex = static_cast<uint32_t>(m_translucentTerrainVertices.size());
+
+    // [SODIUM REF] Flip vertex order to reverse winding: {0,1,2,3} -> {0,3,2,1}
+    // This changes the triangle winding from CCW to CW (or vice versa)
+    // allowing the backface to pass culling when viewed from behind
+    m_translucentTerrainVertices.push_back(vertices[0]);
+    m_translucentTerrainVertices.push_back(vertices[3]);
+    m_translucentTerrainVertices.push_back(vertices[2]);
+    m_translucentTerrainVertices.push_back(vertices[1]);
+
+    // Add indices for two triangles (quad) with adaptive triangulation
+    // Note: We use the same index pattern, but vertices are already reordered
+    if (flipQuad)
+    {
+        // FLIP: triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 3);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 3);
+    }
+    else
+    {
+        // NORMAL: triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 1);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 0);
+        m_translucentIndices.push_back(baseIndex + 2);
+        m_translucentIndices.push_back(baseIndex + 3);
+    }
+
+    InvalidateGPUData();
+}
+
+// ============================================================
 // GPU Buffer Management
 // ============================================================
 

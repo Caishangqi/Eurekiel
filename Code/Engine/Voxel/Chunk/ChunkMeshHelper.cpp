@@ -10,6 +10,7 @@
 #include "../World/TerrainVertexLayout.hpp"
 #include "Engine/Registry/Block/RenderType.hpp"
 #include "Engine/Registry/Block/RenderShape.hpp"
+#include "../Fluid/FluidState.hpp"
 
 using namespace enigma::voxel;
 using namespace enigma::registry::block;
@@ -770,6 +771,55 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
                 break;
             case RenderType::TRANSLUCENT:
                 chunkMesh->AddTranslucentTerrainQuad(terrainQuad, flipQuad);
+
+                // ============================================================
+                // [WATER BACKFACE] Generate backface for water surface (underwater view)
+                // ============================================================
+                // [SODIUM REF] DefaultFluidRenderer.java - generates separate backface
+                // When water surface UP face is rendered and above is air/non-water,
+                // we generate an additional backface with flipped vertex order.
+                // This allows seeing the water surface from below (underwater).
+                //
+                // Conditions for backface generation:
+                // 1. Current block is a fluid (water/lava)
+                // 2. Current face is UP (top surface)
+                // 3. Neighbor above is air or non-same-fluid
+                // ============================================================
+                if (direction == Direction::UP && !blockState->GetFluidState().IsEmpty())
+                {
+                    // Check if above is air or different fluid (backface needed)
+                    BlockIterator upIter       = iterator.GetNeighbor(Direction::UP);
+                    bool          needBackface = true;
+
+                    if (upIter.IsValid())
+                    {
+                        BlockState* upBlock = upIter.GetBlock();
+                        if (upBlock && !upBlock->GetFluidState().IsEmpty())
+                        {
+                            // Same fluid above - no backface needed (would be culled anyway)
+                            if (upBlock->GetFluidState().IsSame(blockState->GetFluidState()))
+                            {
+                                needBackface = false;
+                            }
+                        }
+                    }
+
+                    if (needBackface)
+                    {
+                        // Generate backface with flipped vertex order and flipped normal
+                        std::array<graphic::TerrainVertex, 4> backfaceQuad = terrainQuad;
+
+                        // Flip normal for correct lighting from below
+                        Vec3 flippedNormal = -faceNormal;
+                        for (int vi = 0; vi < 4; ++vi)
+                        {
+                            backfaceQuad[vi].m_normal = flippedNormal;
+                        }
+
+                        // AddTranslucentTerrainQuadBackface will flip vertex order internally
+                        chunkMesh->AddTranslucentTerrainQuadBackface(backfaceQuad, flipQuad);
+                    }
+                }
                 break;
             }
             if (isDebugBlock) facesAdded++;
