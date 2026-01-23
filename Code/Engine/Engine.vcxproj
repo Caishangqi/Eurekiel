@@ -385,6 +385,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\sampler_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain_cutout.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain_cutout.vs.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\fog_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -1168,7 +1169,6 @@
     <ClInclude Include="Graphic\Shader\Uniform\DepthTexturesIndexBuffer.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\IDUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\MatricesUniforms.hpp" />
-    <ClInclude Include="Graphic\Shader\Uniform\PlayerStatusUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\RenderingUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\ColorTargetsIndexBuffer.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\ScreenAndSystemUniforms.hpp" />
