@@ -8,6 +8,7 @@
 // ============================================================================
 
 #include "CameraCommon.hpp"
+#include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 
 #include "Engine/Math/Mat44.hpp"
 
@@ -86,5 +87,6 @@ namespace enigma::graphic
          */
         virtual void             UpdateMatrixUniforms(MatricesUniforms& uniforms) const = 0;
         virtual MatricesUniforms GetMatrixUniforms() = 0;
+        virtual CameraUniforms   GetCameraUniforms() = 0;
     };
 } // namespace enigma::graphic

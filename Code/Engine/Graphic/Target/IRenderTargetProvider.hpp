@@ -178,7 +178,7 @@ namespace enigma::graphic
          * @param uniformMgr Pointer to UniformManager instance
          * 
          * Called during provider initialization to register the provider's
-         * IndexBuffer (e.g., ColorTargetsIndexBuffer) to UniformManager.
+         * IndexBuffer (e.g., ColorTargetsIndexUniforms) to UniformManager.
          * This enables automatic GPU synchronization of bindless indices.
          */
         virtual void RegisterUniform(UniformManager* uniformMgr) = 0;

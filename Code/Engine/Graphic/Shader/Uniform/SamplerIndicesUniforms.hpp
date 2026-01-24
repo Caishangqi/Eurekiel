@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// SamplerIndicesBuffer.hpp - [NEW] Sampler bindless indices uniform buffer
+// SamplerIndicesUniforms.hpp - [NEW] Sampler bindless indices uniform buffer
 // Part of Dynamic Sampler System
 // ============================================================================
 
@@ -21,7 +21,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 64 bytes to match HLSL cbuffer
      */
-    struct SamplerIndicesBuffer
+    struct SamplerIndicesUniforms
     {
         // Bindless indices for sampler0-15
         uint32_t samplerIndices[MAX_SAMPLERS];
@@ -31,7 +31,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_SAMPLER_INDEX
          */
-        SamplerIndicesBuffer()
+        SamplerIndicesUniforms()
         {
             Reset();
         }
@@ -104,10 +104,10 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 64 bytes
-    static_assert(sizeof(SamplerIndicesBuffer) == 64,
-                  "SamplerIndicesBuffer must be exactly 64 bytes to match HLSL cbuffer");
+    static_assert(sizeof(SamplerIndicesUniforms) == 64,
+                  "SamplerIndicesUniforms must be exactly 64 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure proper alignment
-    static_assert(alignof(SamplerIndicesBuffer) == 4,
-                  "SamplerIndicesBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(SamplerIndicesUniforms) == 4,
+                  "SamplerIndicesUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShadowTexturesIndexBuffer.hpp - [REFACTOR] Shadow depth texture index management
+// ShadowTexturesIndexUniforms.hpp - [REFACTOR] Shadow depth texture index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 16 bytes to match HLSL cbuffer
      */
-    struct ShadowTexturesIndexBuffer
+    struct ShadowTexturesIndexUniforms
     {
         // Shadow texture indices array (shadowtex0-1)
         uint32_t indices[CBUFFER_SHADOW_TEXTURES_SIZE];
@@ -38,7 +38,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        ShadowTexturesIndexBuffer()
+        ShadowTexturesIndexUniforms()
             : indices{INVALID_BINDLESS_INDEX, INVALID_BINDLESS_INDEX}
               , padding{0, 0}
         {
@@ -123,14 +123,14 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 16 bytes
-    static_assert(sizeof(ShadowTexturesIndexBuffer) == 16,
-                  "ShadowTexturesIndexBuffer must be exactly 16 bytes to match HLSL cbuffer");
+    static_assert(sizeof(ShadowTexturesIndexUniforms) == 16,
+                  "ShadowTexturesIndexUniforms must be exactly 16 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure 16-byte alignment for GPU
-    static_assert(sizeof(ShadowTexturesIndexBuffer) % 16 == 0,
-                  "ShadowTexturesIndexBuffer must be aligned to 16 bytes for GPU upload");
+    static_assert(sizeof(ShadowTexturesIndexUniforms) % 16 == 0,
+                  "ShadowTexturesIndexUniforms must be aligned to 16 bytes for GPU upload");
 
     // Compile-time validation: ensure proper element alignment
-    static_assert(alignof(ShadowTexturesIndexBuffer) == 4,
-                  "ShadowTexturesIndexBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(ShadowTexturesIndexUniforms) == 4,
+                  "ShadowTexturesIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

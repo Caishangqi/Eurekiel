@@ -30,6 +30,7 @@
 #include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] VertexLayout state management
+#include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 #include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
@@ -107,78 +108,22 @@ void RendererSubsystem::Startup()
 {
     LogInfo(LogRenderer, "Starting up...");
 
-    // ==================== [RAII REFACTOR] Create UniformManager FIRST ====================
-    // UniformManager must be created before all Providers (RAII dependency injection)
-    // Teaching points:
-    // - Providers require UniformManager* in constructor for Shader RT Fetching feature
-    // - RAII pattern: objects fully initialized upon construction
-    // - Dependency injection via constructor parameter
     try
     {
         LogInfo(LogRenderer, "Creating UniformManager...");
-
-        // [RAII] UniformManager constructor automatically completes all initialization:
-        // 1. Allocates Custom Buffer Descriptor pool (100 contiguous descriptors)
-        // 2. Validates descriptor continuity (required for Descriptor Table)
-        // 3. Stores first descriptor's GPU handle as Descriptor Table base address
-        // [IMPORTANT] Shader must use register(bN, space1) for slot >= 15
         m_uniformManager = std::make_unique<UniformManager>();
-
-        LogInfo(LogRenderer, "UniformManager created successfully (RAII initialization complete)");
-
-        //Register MatricesUniforms as PerObject Buffer, allocate 10000 draws
-        //Teaching points:
-        // 1. The original size of MatricesUniforms is 1152 bytes, and it is 1280 bytes after alignment.
-        // 2. 10000 × 1280 = 12.8 MB
-        // 4. [NEW] Explicitly specify slot 7
-        m_uniformManager->RegisterBuffer<MatricesUniforms>(
-            7, // registerSlot: Slot 7 for Matrices
-            UpdateFrequency::PerObject,
-            BufferSpace::Engine, // space=0 (Engine Root CBV)
-            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant instead of hardcoded 10000
-        );
-
-        LogInfo(LogRenderer, "Matrices Ring Buffer allocated: %u × 1280 bytes", ENGINE_BUFFER_RING_CAPACITY);
-
-        // ==================== Register PerObjectUniforms Ring Buffer ====================
-        // Register PerObjectUniforms as PerObject Buffer
-        // Teaching points:
-        // 1. PerObjectUniforms original size 128 bytes (2 Mat44), 256 bytes after alignment
-        // 2. ENGINE_BUFFER_RING_CAPACITY × 256 = 2.5 MB (reasonable memory overhead)
-        // 3. This is the second PerObject Buffer (the first is MatricesUniforms)
-        // 4. [NEW] Explicitly specify slot 1
-        m_uniformManager->RegisterBuffer<PerObjectUniforms>(
-            1, // registerSlot: Slot 1 for PerObjectUniforms (Iris-compatible)
-            UpdateFrequency::PerObject,
-            BufferSpace::Engine, // space=0 (Engine Root CBV)
-            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
-        );
-
-        // ==================== Register CustomImageUniform Ring Buffer ====================
-        // Register CustomImageUniform as PerObject Buffer
-        // Teaching points:
-        // 1. CustomImageUniform size 64 bytes (16 × uint32_t), 256 bytes after alignment
-        // 2. ENGINE_BUFFER_RING_CAPACITY × 256 = 2.5 MB (reasonable memory overhead)
-        // 3. This is the third PerObject Buffer (after MatricesUniforms and PerObjectUniforms)
-        // 4. [NEW] Explicitly specify slot 2 for CustomImage
-        m_uniformManager->RegisterBuffer<CustomImageUniform>(
-            2, // registerSlot: Slot 2 for CustomImage (Iris-compatible)
-            UpdateFrequency::PerObject,
-            BufferSpace::Engine, // space=0 (Engine Root CBV)
-            ENGINE_BUFFER_RING_CAPACITY // [REFACTORED] Use unified constant
-        );
-
-        LogInfo(LogRenderer, "CustomImageUniform Ring Buffer registered: slot 2, %u × 256 bytes", ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<CameraUniforms>(9, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<PerObjectUniforms>(1, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<CustomImageUniforms>(2, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
     }
     catch (const UniformException& e)
     {
-        // [ADD] Catch Uniform system specific exceptions (UniformBufferException, DescriptorHeapException)
         LogError(LogRenderer, "UniformManager initialization failed: %s", e.what());
         ERROR_AND_DIE(Stringf("UniformManager initialization failed: %s", e.what()))
     }
     catch (const std::exception& e)
     {
-        // [ADD] Fallback for unexpected exceptions
         LogError(LogRenderer, "UniformManager unexpected error: %s", e.what());
         ERROR_AND_DIE(Stringf("UniformManager construction failed! Error: %s", e.what()))
     }

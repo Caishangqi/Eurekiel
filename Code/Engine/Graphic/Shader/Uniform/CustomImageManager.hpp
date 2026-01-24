@@ -2,7 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include "Engine/Graphic/Shader/Uniform/CustomImageUniform.hpp"
+#include "Engine/Graphic/Shader/Uniform/CustomImageUniforms.hpp"
 
 namespace enigma::graphic
 {
@@ -301,7 +301,7 @@ namespace enigma::graphic
          * - 在PrepareCustomImagesForDraw()时上传到GPU
          * - 保留数据供下次Draw使用（无需显式复制）
          */
-        CustomImageUniform m_currentCustomImage;
+        CustomImageUniforms m_currentCustomImage;
 
         /**
          * @brief 上一次Draw的CustomImage数据
@@ -311,7 +311,7 @@ namespace enigma::graphic
          * - 实现"复制上一次Draw的数据"机制
          * - 用于调试和状态追踪
          */
-        CustomImageUniform m_lastDrawCustomImage;
+        CustomImageUniforms m_lastDrawCustomImage;
 
         /**
          * @brief 纹理指针数组 - 16个CustomImage槽位

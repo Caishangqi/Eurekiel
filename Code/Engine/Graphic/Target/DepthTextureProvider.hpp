@@ -11,7 +11,7 @@
 #include "RenderTargetProviderException.hpp"
 #include "RTTypes.hpp"
 #include "D12DepthTexture.hpp"
-#include "Engine/Graphic/Shader/Uniform/DepthTexturesIndexBuffer.hpp"
+#include "Engine/Graphic/Shader/Uniform/DepthTexturesIndexUniforms.hpp"
 
 #include <vector>
 #include <memory>
@@ -206,7 +206,7 @@ namespace enigma::graphic
         int m_activeCount = 0;
 
         // [NEW] Uniform registration for Shader RT Fetching
-        UniformManager*          m_uniformManager = nullptr;
-        DepthTexturesIndexBuffer m_indexBuffer;
+        UniformManager*            m_uniformManager = nullptr;
+        DepthTexturesIndexUniforms m_indexBuffer;
     };
 } // namespace enigma::graphic

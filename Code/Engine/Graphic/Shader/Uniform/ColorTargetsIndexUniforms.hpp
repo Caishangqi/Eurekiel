@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ColorTargetsIndexBuffer.hpp - [REFACTOR] Main/Alt double-buffer index management
+// ColorTargetsIndexUniforms.hpp - [REFACTOR] Main/Alt double-buffer index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 128 bytes to match HLSL cbuffer
      */
-    struct ColorTargetsIndexBuffer
+    struct ColorTargetsIndexUniforms
     {
         // Read indices for colortex0-15 (points to Main or Alt based on flip state)
         uint32_t readIndices[CBUFFER_COLOR_TARGETS_SIZE];
@@ -38,7 +38,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        ColorTargetsIndexBuffer()
+        ColorTargetsIndexUniforms()
         {
             Reset();
         }
@@ -174,10 +174,10 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 128 bytes
-    static_assert(sizeof(ColorTargetsIndexBuffer) == 128,
-                  "ColorTargetsIndexBuffer must be exactly 128 bytes to match HLSL cbuffer");
+    static_assert(sizeof(ColorTargetsIndexUniforms) == 128,
+                  "ColorTargetsIndexUniforms must be exactly 128 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure proper alignment
-    static_assert(alignof(ColorTargetsIndexBuffer) == 4,
-                  "ColorTargetsIndexBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(ColorTargetsIndexUniforms) == 4,
+                  "ColorTargetsIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

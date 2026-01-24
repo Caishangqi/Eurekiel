@@ -88,6 +88,7 @@ namespace enigma::graphic
         uniforms.gbufferProjection        = proj;
         uniforms.gbufferProjectionInverse = proj.GetOrthonormalInverse();
         uniforms.gbufferRenderer          = m_rendererCanonicalMatrix;
+        uniforms.gbufferRendererInverse   = m_rendererCanonicalMatrix.GetOrthonormalInverse();
     }
 
     MatricesUniforms OrthographicCamera::GetMatrixUniforms()

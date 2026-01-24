@@ -5,12 +5,9 @@ VSOutput main(VSInput input)
     VSOutput output;
 
     // 1. Vertex position transformation
-    float4 localPos  = float4(input.Position, 1.0);
-    float4 cameraPos = mul(gbufferView, localPos);
-    float4 renderPos = mul(gbufferRenderer, cameraPos);
-    float4 clipPos   = mul(gbufferProjection, renderPos);
+    float4 localPos = float4(input.Position, 1.0);
 
-    output.Position = clipPos;
+    output.Position = localPos;
     output.WorldPos = localPos.xyz;
     output.Color    = input.Color;
     output.TexCoord = input.TexCoord;

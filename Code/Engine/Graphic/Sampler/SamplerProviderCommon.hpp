@@ -20,7 +20,7 @@ namespace enigma::graphic
     // Sampler Provider Constants
     // ========================================================================
 
-    // Sampler slot count (matches SamplerIndicesBuffer capacity)
+    // Sampler slot count (matches SamplerIndicesUniforms capacity)
     constexpr uint32_t MAX_SAMPLERS = 16; // sampler0-15
 
     // cbuffer register slot (must match HLSL declaration)

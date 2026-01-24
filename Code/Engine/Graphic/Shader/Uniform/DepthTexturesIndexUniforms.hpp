@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// DepthTexturesIndexBuffer.hpp - [REFACTOR] Depth texture index management
+// DepthTexturesIndexUniforms.hpp - [REFACTOR] Depth texture index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -26,7 +26,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 64 bytes to match HLSL cbuffer
      */
-    struct DepthTexturesIndexBuffer
+    struct DepthTexturesIndexUniforms
     {
         // Depth texture indices array (depthtex0-15)
         uint32_t depthTextureIndices[CBUFFER_DEPTH_TEXTURES_SIZE];
@@ -36,7 +36,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        DepthTexturesIndexBuffer()
+        DepthTexturesIndexUniforms()
         {
             Reset();
         }
@@ -129,14 +129,14 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 64 bytes
-    static_assert(sizeof(DepthTexturesIndexBuffer) == 64,
-                  "DepthTexturesIndexBuffer must be exactly 64 bytes to match HLSL cbuffer");
+    static_assert(sizeof(DepthTexturesIndexUniforms) == 64,
+                  "DepthTexturesIndexUniforms must be exactly 64 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure 16-byte alignment for GPU
-    static_assert(sizeof(DepthTexturesIndexBuffer) % 16 == 0,
-                  "DepthTexturesIndexBuffer must be aligned to 16 bytes for GPU upload");
+    static_assert(sizeof(DepthTexturesIndexUniforms) % 16 == 0,
+                  "DepthTexturesIndexUniforms must be aligned to 16 bytes for GPU upload");
 
     // Compile-time validation: ensure proper element alignment
-    static_assert(alignof(DepthTexturesIndexBuffer) == 4,
-                  "DepthTexturesIndexBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(DepthTexturesIndexUniforms) == 4,
+                  "DepthTexturesIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

@@ -39,6 +39,7 @@ namespace enigma::graphic
         alignas(16) Mat44 gbufferProjection;
         alignas(16) Mat44 gbufferProjectionInverse;
         alignas(16) Mat44 gbufferRenderer;
+        alignas(16) Mat44 gbufferRendererInverse;
         alignas(16) Mat44 shadowView;
         alignas(16) Mat44 shadowViewInverse;
 

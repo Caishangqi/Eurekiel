@@ -42,6 +42,7 @@ namespace enigma::graphic
         uniforms.shadowProjection        = proj;
         uniforms.shadowProjectionInverse = proj.GetOrthonormalInverse();
         uniforms.gbufferRenderer         = m_rendererCanonicalMatrix;
+        uniforms.gbufferRendererInverse  = m_rendererCanonicalMatrix.GetOrthonormalInverse();
     }
 
     MatricesUniforms ShadowCamera::GetMatrixUniforms()

@@ -2,14 +2,14 @@
 
 // ============================================================================
 // SamplerProvider.hpp - [NEW] Sampler provider for Dynamic Sampler System
-// Manages multiple Sampler objects and registers SamplerIndicesBuffer
+// Manages multiple Sampler objects and registers SamplerIndicesUniforms
 // ============================================================================
 
 #include "Sampler.hpp"
 #include "SamplerConfig.hpp"
 #include "SamplerProviderCommon.hpp"
 #include "SamplerProviderException.hpp"
-#include "Engine/Graphic/Shader/Uniform/SamplerIndicesBuffer.hpp"
+#include "Engine/Graphic/Shader/Uniform/SamplerIndicesUniforms.hpp"
 
 #include <vector>
 #include <memory>
@@ -138,7 +138,7 @@ namespace enigma::graphic
         uint32_t m_activeCount = 0;
 
         // Uniform registration
-        UniformManager*      m_uniformManager = nullptr;
-        SamplerIndicesBuffer m_indexBuffer;
+        UniformManager*        m_uniformManager = nullptr;
+        SamplerIndicesUniforms m_indexBuffer;
     };
 } // namespace enigma::graphic

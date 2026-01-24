@@ -37,6 +37,18 @@ namespace enigma::graphic
     // [NEW] Public Setters
     // ========================================================================
 
+    CameraUniforms CameraBase::GetCameraUniforms()
+    {
+        CameraUniforms cameraUniform;
+        cameraUniform.cameraPosition      = m_position;
+        cameraUniform.cameraPositionFract = m_position;
+        cameraUniform.cameraPositionInt   = IntVec3(m_position);
+        cameraUniform.eyeAltitude         = m_position.y;
+        cameraUniform.nearPlane           = m_nearPlane;
+        cameraUniform.farPlane            = m_farPlane;
+        return cameraUniform;
+    }
+
     void CameraBase::SetPosition(const Vec3& position)
     {
         m_position = position;

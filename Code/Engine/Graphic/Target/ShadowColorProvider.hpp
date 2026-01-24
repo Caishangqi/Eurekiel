@@ -11,7 +11,7 @@
 #include "RenderTargetProviderException.hpp"
 #include "BufferFlipState.hpp"
 #include "RTTypes.hpp"
-#include "Engine/Graphic/Shader/Uniform/ShadowColorIndexBuffer.hpp"
+#include "Engine/Graphic/Shader/Uniform/ShadowColorIndexUniforms.hpp"
 
 #include <vector>
 #include <memory>
@@ -214,7 +214,7 @@ namespace enigma::graphic
         int m_activeCount = 0;
 
         // [NEW] Uniform registration for Shader RT Fetching
-        UniformManager*        m_uniformManager = nullptr;
-        ShadowColorIndexBuffer m_indexBuffer;
+        UniformManager*          m_uniformManager = nullptr;
+        ShadowColorIndexUniforms m_indexBuffer;
     };
 } // namespace enigma::graphic

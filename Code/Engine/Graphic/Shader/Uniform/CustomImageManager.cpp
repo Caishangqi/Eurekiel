@@ -17,7 +17,7 @@ namespace enigma::graphic
         // [INIT] Initialize all texture pointers to nullptr
         m_textures.fill(nullptr);
 
-        // [INIT] Initialize CustomImageUniform data (the constructor has been automatically initialized to 0)
+        // [INIT] Initialize CustomImageUniforms data (the constructor has been automatically initialized to 0)
         // The constructors of m_currentCustomImage and m_lastDrawCustomImage will initialize all indexes to 0
 
         LogInfo(core::LogRenderer, "[CustomImageManager] Initialized with %d slots", MAX_CUSTOM_IMAGE_SLOTS);
@@ -122,8 +122,8 @@ namespace enigma::graphic
         }
 
         // [REQUIRED] 通过UniformManager上传m_currentCustomImage到GPU
-        // [IMPORTANT] 使用模板方法UploadBuffer<CustomImageUniform>()
-        m_uniformManager->UploadBuffer<CustomImageUniform>(m_currentCustomImage);
+        // [IMPORTANT] 使用模板方法UploadBuffer<CustomImageUniforms>()
+        m_uniformManager->UploadBuffer<CustomImageUniforms>(m_currentCustomImage);
 
         // [REQUIRED] 保存当前状态到m_lastDrawCustomImage
         // [IMPORTANT] 实现"复制上一次Draw的数据"机制

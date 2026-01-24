@@ -284,7 +284,7 @@ namespace enigma::graphic
         m_uniformManager = uniformMgr;
 
         // Register buffer at slot b4 (SLOT_DEPTH_TEXTURES)
-        m_uniformManager->RegisterBuffer<DepthTexturesIndexBuffer>(
+        m_uniformManager->RegisterBuffer<DepthTexturesIndexUniforms>(
             SLOT_DEPTH_TEXTURES,
             UpdateFrequency::PerFrame,
             BufferSpace::Engine

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShadowColorIndexBuffer.hpp - [REFACTOR] Shadow color texture index management
+// ShadowColorIndexUniforms.hpp - [REFACTOR] Shadow color texture index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 64 bytes to match HLSL cbuffer
      */
-    struct ShadowColorIndexBuffer
+    struct ShadowColorIndexUniforms
     {
         // Read indices for shadowcolor0-7 (points to Main or Alt based on flip state)
         uint32_t readIndices[CBUFFER_SHADOW_COLORS_SIZE];
@@ -38,7 +38,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        ShadowColorIndexBuffer()
+        ShadowColorIndexUniforms()
         {
             Reset();
         }
@@ -167,10 +167,10 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 64 bytes
-    static_assert(sizeof(ShadowColorIndexBuffer) == 64,
-                  "ShadowColorIndexBuffer must be exactly 64 bytes to match HLSL cbuffer");
+    static_assert(sizeof(ShadowColorIndexUniforms) == 64,
+                  "ShadowColorIndexUniforms must be exactly 64 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure proper alignment
-    static_assert(alignof(ShadowColorIndexBuffer) == 4,
-                  "ShadowColorIndexBuffer must be 4-byte aligned for GPU upload");
+    static_assert(alignof(ShadowColorIndexUniforms) == 4,
+                  "ShadowColorIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

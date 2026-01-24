@@ -155,6 +155,7 @@ cbuffer Matrices : register(b7)
     float4x4 gbufferProjection;
     float4x4 gbufferProjectionInverse;
     float4x4 gbufferRenderer;
+    float4x4 gbufferRendererInverse;
 
     float4x4 shadowView;
     float4x4 shadowViewInverse;

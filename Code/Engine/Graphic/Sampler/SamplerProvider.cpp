@@ -110,9 +110,9 @@ namespace enigma::graphic
 
         m_uniformManager = uniformMgr;
 
-        // Register SamplerIndicesBuffer to slot b8 with PerFrame frequency
+        // Register SamplerIndicesUniforms to slot b8 with PerFrame frequency
         // [FIX] Use slot 8 to avoid conflict with MatricesUniforms (b7)
-        m_uniformManager->RegisterBuffer<SamplerIndicesBuffer>(
+        m_uniformManager->RegisterBuffer<SamplerIndicesUniforms>(
             SLOT_SAMPLER_INDICES,
             UpdateFrequency::PerFrame,
             BufferSpace::Engine

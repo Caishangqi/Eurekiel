@@ -410,8 +410,8 @@ namespace enigma::graphic
 
         m_uniformManager = uniformMgr;
 
-        // Register ShadowTexturesIndexBuffer to slot b6 with PerFrame frequency
-        m_uniformManager->RegisterBuffer<ShadowTexturesIndexBuffer>(
+        // Register ShadowTexturesIndexUniforms to slot b6 with PerFrame frequency
+        m_uniformManager->RegisterBuffer<ShadowTexturesIndexUniforms>(
             SLOT_SHADOW_TEXTURES,
             UpdateFrequency::PerFrame,
             BufferSpace::Engine
