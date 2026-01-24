@@ -375,12 +375,6 @@ const Mat44 Mat44::GetInverse() const
     // Calculate determinant
     float det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
 
-    if (fabsf(det) < 1e-10f)
-    {
-        // Singular matrix, return identity as fallback
-        return Mat44::IDENTITY;
-    }
-
     float invDet = 1.0f / det;
 
     Mat44 inv;
