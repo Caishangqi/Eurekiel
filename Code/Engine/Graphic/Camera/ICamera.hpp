@@ -87,6 +87,6 @@ namespace enigma::graphic
          */
         virtual void             UpdateMatrixUniforms(MatricesUniforms& uniforms) const = 0;
         virtual MatricesUniforms GetMatrixUniforms() = 0;
-        virtual CameraUniforms   GetCameraUniforms() = 0;
+        virtual CameraUniforms   GetCameraUniforms() const = 0;
     };
 } // namespace enigma::graphic

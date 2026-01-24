@@ -62,7 +62,7 @@ namespace enigma::graphic
         Mat44                    GetRendererCanonicalMatrix() const override;
         void                     UpdateMatrixUniforms(MatricesUniforms& uniforms) const override = 0;
         MatricesUniforms         GetMatrixUniforms() override = 0;
-        CameraUniforms           GetCameraUniforms() override;
+        CameraUniforms           GetCameraUniforms() const override;
 
         // ====================================================================
         // [NEW] Public Setters

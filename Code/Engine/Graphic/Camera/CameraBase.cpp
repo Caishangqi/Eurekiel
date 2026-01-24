@@ -37,7 +37,7 @@ namespace enigma::graphic
     // [NEW] Public Setters
     // ========================================================================
 
-    CameraUniforms CameraBase::GetCameraUniforms()
+    CameraUniforms CameraBase::GetCameraUniforms() const
     {
         CameraUniforms cameraUniform;
         cameraUniform.cameraPosition      = m_position;
@@ -89,6 +89,7 @@ namespace enigma::graphic
     Mat44 CameraBase::CalculateViewMatrix() const
     {
         // View matrix = inverse of camera-to-world transform
-        return GetCameraToWorldTransform().GetInverse();
+        // Camera transform is rotation + translation only (orthonormal), use fast inverse
+        return GetCameraToWorldTransform().GetOrthonormalInverse();
     }
 } // namespace enigma::graphic

@@ -47,7 +47,7 @@ namespace enigma::graphic
         uniforms.gbufferView              = view;
         uniforms.gbufferViewInverse       = cameraToWorld;
         uniforms.gbufferProjection        = proj;
-        uniforms.gbufferProjectionInverse = proj.GetOrthonormalInverse();
+        uniforms.gbufferProjectionInverse = proj.GetInverse();
         uniforms.gbufferRenderer          = m_rendererCanonicalMatrix;
         uniforms.gbufferRendererInverse   = m_rendererCanonicalMatrix.GetOrthonormalInverse();
     }

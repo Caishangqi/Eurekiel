@@ -40,7 +40,7 @@ namespace enigma::graphic
         uniforms.shadowView              = view;
         uniforms.shadowViewInverse       = cameraToWorld;
         uniforms.shadowProjection        = proj;
-        uniforms.shadowProjectionInverse = proj.GetOrthonormalInverse();
+        uniforms.shadowProjectionInverse = proj.GetInverse();
         uniforms.gbufferRenderer         = m_rendererCanonicalMatrix;
         uniforms.gbufferRendererInverse  = m_rendererCanonicalMatrix.GetOrthonormalInverse();
     }
