@@ -387,6 +387,8 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_terrain_cutout.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\fog_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\camera_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\lib\fog.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\lib\math.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -1306,7 +1308,6 @@
     <ClInclude Include="Window\Window.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="..\..\.enigma\assets\engine\shaders\lib\"/>
     <Folder Include="..\..\.enigma\assets\engine\shaders\post\" />
     <Folder Include="Core\Logger\Appender\" />
   </ItemGroup>

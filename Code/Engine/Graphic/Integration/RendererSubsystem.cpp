@@ -1052,38 +1052,10 @@ IRenderTargetProvider* RendererSubsystem::GetProvider(RTType rtType)
 // [NEW] BeginCamera - ICamera interface version
 void RendererSubsystem::BeginCamera(const ICamera& camera)
 {
-    LogInfo(LogRenderer, "BeginCamera(ICamera):: Camera type: %d", static_cast<int>(camera.GetCameraType()));
-
-    // Validate UniformManager
-    if (!m_uniformManager)
-    {
-        LogError(LogRenderer, "BeginCamera(ICamera):: UniformManager is not initialized");
-        ERROR_AND_DIE("UniformManager is not initialized")
-    }
-
-    // Validate rendering system ready
-    if (!IsReadyForRendering())
-    {
-        LogError(LogRenderer, "BeginCamera(ICamera):: The rendering system is not ready");
-        ERROR_AND_DIE("The rendering system is not ready")
-    }
-
-    try
-    {
-        // [NEW] Create MatricesUniforms and let camera fill it
-        MatricesUniforms uniforms;
-        camera.UpdateMatrixUniforms(uniforms);
-
-        // Upload to GPU
-        m_uniformManager->UploadBuffer<MatricesUniforms>(uniforms);
-
-        LogInfo(LogRenderer, "BeginCamera(ICamera):: Camera matrices uploaded successfully");
-    }
-    catch (const std::exception& e)
-    {
-        LogError(LogRenderer, "BeginCamera(ICamera):: Exception - %s", e.what());
-        ERROR_AND_DIE(e.what())
-    }
+    MatricesUniforms matricesUniforms;
+    camera.UpdateMatrixUniforms(matricesUniforms);
+    m_uniformManager->UploadBuffer<MatricesUniforms>(matricesUniforms);
+    m_uniformManager->UploadBuffer<CameraUniforms>(camera.GetCameraUniforms());
 }
 
 void RendererSubsystem::EndCamera(const ICamera& camera)
