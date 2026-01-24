@@ -1,5 +1,9 @@
 #include "../core/Common.hlsl"
 #include "../include/celestial_uniforms.hlsl"
+#include "../include/common_uniforms.hlsl"
+#include "../include/fog_uniforms.hlsl"
+#include "../lib/math.hlsl"
+#include "../lib/fog.hlsl"
 /**
  * @brief Calculate final lighting intensity using Minecraft vanilla formula
  * @param blockLight Block light value (0.0 - 1.0, from lightmap.r)
@@ -75,9 +79,30 @@ PSOutput main(PSInput input)
 
     // [STEP 3] Pure sky detection - both depths are far plane
     // When depthAll >= 1.0: no geometry at all (pure sky)
+    // [FIX] When underwater, sky should be completely obscured by water fog
     if (depthAll >= 1.0)
     {
-        // Pure sky - no lighting applied, direct output
+        if (isEyeInWater == EYE_IN_WATER)
+        {
+            // [NEW] Underwater sky: completely obscured by fog color
+            // This handles unloaded chunks and sky visible through water
+            output.color0 = float4(fogColor, 1.0);
+            return output;
+        }
+        else if (isEyeInWater == EYE_IN_LAVA)
+        {
+            // [NEW] In lava: sky obscured by lava fog color
+            output.color0 = float4(LAVA_FOG_COLOR, 1.0);
+            return output;
+        }
+        else if (isEyeInWater == EYE_IN_POWDER_SNOW)
+        {
+            // [NEW] In powder snow: sky obscured by snow fog color
+            output.color0 = float4(POWDER_SNOW_FOG_COLOR, 1.0);
+            return output;
+        }
+
+        // Normal sky - no lighting applied, direct output
         output.color0 = float4(albedo, 1.0);
         return output;
     }
@@ -102,6 +127,27 @@ PSOutput main(PSInput input)
     float lightIntensity = CalculateLightIntensity(blockLight, skyLight, skyBrightness);
     float finalLight     = max(lightIntensity, 0.03);
     output.color0        = float4(albedo * finalLight * ao, 1.0);
+
+    // [STEP 8] Underwater/Fluid Fog Effects
+    // Only apply to non-sky pixels (already handled above with early return)
+    // gbufferRendererInverse is required for DX12 API coordinate system correction
+    float3 viewPos      = ReconstructViewPosition(input.TexCoord, depthAll, gbufferProjectionInverse, gbufferRendererInverse);
+    float  viewDistance = length(viewPos);
+
+    if (isEyeInWater == EYE_IN_WATER)
+    {
+        output.color0.rgb = ApplyUnderwaterFog(
+            output.color0.rgb, viewDistance, fogColor, fogStart, fogEnd
+        );
+    }
+    else if (isEyeInWater == EYE_IN_LAVA)
+    {
+        output.color0.rgb = ApplyLavaFog(output.color0.rgb, viewDistance);
+    }
+    else if (isEyeInWater == EYE_IN_POWDER_SNOW)
+    {
+        output.color0.rgb = ApplyPowderSnowFog(output.color0.rgb, viewDistance);
+    }
 
     return output;
 }
