@@ -24,6 +24,7 @@
 #include <string>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 
@@ -52,6 +53,13 @@ namespace enigma::graphic
     //
     // [NEW] Metadata for a discovered ShaderBundle
     // Populated from bundle.json parsing or directory discovery
+    //
+    // Factory Method:
+    //   FromBundlePath() - Create meta from bundle directory path by parsing bundle.json
+    //
+    // Usage:
+    //   auto meta = ShaderBundleMeta::FromBundlePath(bundlePath, true);  // Engine bundle
+    //   auto meta = ShaderBundleMeta::FromBundlePath(bundlePath, false); // User bundle
     //-------------------------------------------------------------------------------------------
     struct ShaderBundleMeta
     {
@@ -60,6 +68,26 @@ namespace enigma::graphic
         std::string           description; // Description text (optional)
         std::filesystem::path path; // Full path to bundle directory
         bool                  isEngineBundle = false; // True if this is the engine default bundle
+
+        //-------------------------------------------------------------------------------------------
+        // FromBundlePath
+        //
+        // [NEW] Static factory method to create ShaderBundleMeta from bundle directory path
+        //
+        // Parameters:
+        //   bundlePath     - Path to bundle root directory (e.g., ".enigma/assets/engine")
+        //   isEngineBundle - Whether this is the engine default bundle
+        //
+        // Returns:
+        //   std::optional<ShaderBundleMeta> - Parsed metadata, or std::nullopt if:
+        //     - bundle.json doesn't exist at {bundlePath}/shaders/bundle.json
+        //     - JSON parsing fails
+        //     - Required 'name' field is missing
+        //
+        // Note: This method internally calls JsonHelper::ParseBundleJson and sets
+        //       the path and isEngineBundle fields appropriately.
+        //-------------------------------------------------------------------------------------------
+        static std::optional<ShaderBundleMeta> FromBundlePath(const std::filesystem::path& bundlePath, bool isEngineBundle = false);
     };
 
     //-------------------------------------------------------------------------------------------
