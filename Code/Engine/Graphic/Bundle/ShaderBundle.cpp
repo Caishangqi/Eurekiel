@@ -203,8 +203,8 @@ namespace enigma::graphic
             results.insert(results.end(), bundlePrograms.begin(), bundlePrograms.end());
         }
 
-        // If fallback enabled, also search program/ folder cache
-        if (enableFallback)
+        // If fallback enabled and can not search in current user defined bundle, then we also search program/ folder cache
+        if (enableFallback && results.size() == 0)
         {
             // Build regex pattern
             try
