@@ -28,7 +28,7 @@
  * - Vertex color = textureColor * brightness
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (main color)

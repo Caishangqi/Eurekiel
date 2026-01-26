@@ -19,7 +19,7 @@
  * 5. Far plane override: z = 1.0
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (sky color)

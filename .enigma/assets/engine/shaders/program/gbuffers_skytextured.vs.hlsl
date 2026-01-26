@@ -19,7 +19,7 @@
  * 4. gbufferProjection: Projection to clip space
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // [RENDERTARGETS] 0
 // Output to colortex0 (sky color with sun/moon)

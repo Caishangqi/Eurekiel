@@ -1,4 +1,4 @@
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 /**
  * @brief 顶点着色器主函数

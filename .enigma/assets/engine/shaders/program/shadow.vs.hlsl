@@ -14,7 +14,7 @@
  * Output: Light space position + UV for shadow.ps.hlsl
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // ============================================================================
 // Shadow Pass Vertex Structures

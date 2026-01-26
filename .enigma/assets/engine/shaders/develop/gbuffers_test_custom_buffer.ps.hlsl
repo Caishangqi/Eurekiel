@@ -1,4 +1,4 @@
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 #include "../include/developer_uniforms.hlsl"
 /**
  * @brief 像素着色器输出结构体 - 多RT输出

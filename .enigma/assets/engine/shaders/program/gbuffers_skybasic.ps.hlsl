@@ -28,7 +28,7 @@
  * - Minecraft FogRenderer.java:45-150
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 #include "../include/common_uniforms.hlsl"
 #include "../include/celestial_uniforms.hlsl"
 

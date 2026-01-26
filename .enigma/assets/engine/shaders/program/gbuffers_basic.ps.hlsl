@@ -18,7 +18,7 @@
  * - 可通过 ShaderDirectiveParser 解析
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 /**
  * @brief 像素着色器输出结构体 - 多RT输出

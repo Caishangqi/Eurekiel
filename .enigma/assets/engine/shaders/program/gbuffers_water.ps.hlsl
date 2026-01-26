@@ -25,7 +25,7 @@
  * - Complementary Reimagined: water.glsl depth-aware alpha
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // [RENDERTARGETS] 0,1
 // Output: colortex0 (Albedo with alpha), colortex1 (Lightmap)

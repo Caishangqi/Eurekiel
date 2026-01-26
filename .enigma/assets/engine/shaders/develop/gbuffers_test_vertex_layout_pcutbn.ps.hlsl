@@ -1,4 +1,4 @@
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 #include "../include/developer_uniforms.hlsl"
 /**
  * @brief Pixel shader output structure - multi-RT output

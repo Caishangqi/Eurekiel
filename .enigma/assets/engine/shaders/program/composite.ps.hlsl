@@ -1,7 +1,4 @@
-#include "../core/Common.hlsl"
-#include "../include/celestial_uniforms.hlsl"
-#include "../include/common_uniforms.hlsl"
-#include "../include/fog_uniforms.hlsl"
+#include "../core/core.hlsl"
 #include "../lib/math.hlsl"
 #include "../lib/fog.hlsl"
 /**

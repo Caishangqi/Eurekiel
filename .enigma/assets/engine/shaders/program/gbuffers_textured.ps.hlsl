@@ -18,7 +18,7 @@
  * - SV_Target0 (colortex0) - 纹理颜色 × 顶点颜色
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 /**
  * @brief 像素着色器主函数

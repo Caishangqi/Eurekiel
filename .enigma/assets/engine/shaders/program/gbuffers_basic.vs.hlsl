@@ -20,7 +20,7 @@
  * - 纯色几何体渲染 (UI 元素、调试线框等)
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 /**
  * @brief 顶点着色器主函数

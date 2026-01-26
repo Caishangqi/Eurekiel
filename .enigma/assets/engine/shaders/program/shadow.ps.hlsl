@@ -15,7 +15,7 @@
  * - Discards pixel if alpha < 0.5 (cutout threshold)
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // ============================================================================
 // Shadow Pass Pixel Structures

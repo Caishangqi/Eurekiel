@@ -15,7 +15,7 @@
  *   fragColor = color * ColorModulator;
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 #include "../include/celestial_uniforms.hlsl"
 
 // [RENDERTARGETS] 0

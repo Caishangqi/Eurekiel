@@ -1,4 +1,4 @@
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 VSOutput main(VSInput input)
 {

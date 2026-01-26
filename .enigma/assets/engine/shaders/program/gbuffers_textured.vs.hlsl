@@ -19,7 +19,7 @@
  * - 需要纹理但不需要光照的场景
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 /**
  * @brief 顶点着色器主函数

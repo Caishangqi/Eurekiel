@@ -22,7 +22,7 @@
  * - Iris ShaderKey.java: TERRAIN_CUTOUT(AlphaTests.ONE_TENTH_ALPHA)
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 
 // [RENDERTARGETS] 0,1,2
 // Output: colortex0 (Albedo), colortex1 (Lightmap), colortex2 (Normal)

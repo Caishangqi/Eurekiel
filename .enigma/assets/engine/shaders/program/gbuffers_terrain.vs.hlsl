@@ -17,7 +17,7 @@
  * Reference: Engine/Voxel/World/TerrainVertexLayout.hpp
  */
 
-#include "../core/Common.hlsl"
+#include "../core/core.hlsl"
 #include "../include/common_uniforms.hlsl"
 
 // [RENDERTARGETS] 0,1,2
