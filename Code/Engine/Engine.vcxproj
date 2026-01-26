@@ -486,6 +486,7 @@
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
     <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\FullQuadsRenderer.cpp"/>
     <ClCompile Include="Graphic\Integration\RingBuffer\IndexRingBuffer.cpp"/>
     <ClCompile Include="Graphic\Integration\RingBuffer\VertexRingBuffer.cpp"/>
     <ClCompile Include="Graphic\Resource\Buffer\BufferHelper.cpp" />
@@ -1020,6 +1021,7 @@
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
     <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\FullQuadsRenderer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\IndexRingBuffer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\VertexRingBuffer.hpp"/>
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />

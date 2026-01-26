@@ -17,6 +17,7 @@
 #include <array>
 #include <filesystem>
 
+#include "FullQuadsRenderer.hpp"
 #include "Engine/Core/SubsystemManager.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "Engine/Resource/ResourceCommon.hpp"
@@ -601,15 +602,6 @@ namespace enigma::graphic
          * Reference: DX12Renderer::DrawVertexIndexedInternal implementation
          */
         void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo);
-
-        /**
-         * @brief 绘制全屏四边形
-         *
-         * 教学要点：
-         * - 便捷方法用于后处理
-         * - 自动管理顶点数据
-         */
-        void DrawFullscreenQuad();
 
         /**
          * @brief 使用Shader处理后输出到BackBuffer（M6.3核心API）
@@ -1456,10 +1448,8 @@ namespace enigma::graphic
         /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;
 
-        // ==================== 全屏绘制资源 (M6.3) ====================
-
-        /// 全屏三角形VertexBuffer - 用于后处理Pass和Present操作
-        std::unique_ptr<D12VertexBuffer> m_fullscreenTriangleVB;
+        /// Full Screen Draw
+        std::unique_ptr<class FullQuadsRenderer> m_fullQuadsRenderer;
 
         // ==================== Uniform管理组件 (Phase 3) ====================
 

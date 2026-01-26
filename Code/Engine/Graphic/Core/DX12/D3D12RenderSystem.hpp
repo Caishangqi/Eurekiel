@@ -80,8 +80,7 @@ namespace enigma::graphic
          * @param renderHeight 渲染分辨率高度（默认720）
          * @return 是否初始化成功
          */
-        static bool Initialize(bool enableDebugLayer = true, bool        enableGPUValidation = false,
-                               HWND hwnd             = nullptr, uint32_t renderWidth         = 1280, uint32_t renderHeight = 720);
+        static bool Initialize(bool enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1280, uint32_t renderHeight = 720);
         static bool PrepareDefaultTextures();
         /**
          * 关闭渲染系统，释放所有资源

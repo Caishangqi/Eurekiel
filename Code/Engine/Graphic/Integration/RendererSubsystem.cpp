@@ -379,33 +379,7 @@ void RendererSubsystem::Startup()
         ERROR_AND_DIE(Stringf("SamplerProvider initialization failed! Error: %s", e.what()))
     }
 
-    try
-    {
-        LogInfo(LogRenderer, "Creating fullscreen triangle VertexBuffer...");
-
-        Vec2 vertices[] = {
-            Vec2(-1.0f, -1.0f), // 左下
-            Vec2(3.0f, -1.0f), // 右下（超出屏幕）
-            Vec2(-1.0f, 3.0f) // 左上（超出屏幕）
-        };
-
-        m_fullscreenTriangleVB.reset(CreateVertexBuffer(sizeof(vertices), sizeof(Vec2)));
-        if (!m_fullscreenTriangleVB)
-        {
-            LogError(LogRenderer, "Failed to create fullscreen triangle VertexBuffer");
-        }
-
-        UpdateBuffer(m_fullscreenTriangleVB.get(), vertices, sizeof(vertices));
-
-        LogInfo(LogRenderer, "Fullscreen triangle VertexBuffer created successfully");
-    }
-    catch (const std::exception& e)
-    {
-        LogError(LogRenderer, "Failed to create fullscreen triangle VB: {}", e.what());
-        ERROR_AND_DIE(Stringf("Fullscreen triangle VB initialization failed! Error: %s", e.what()))
-    }
-
-    // ==================== Create Immediate Mode RingBuffers (Option D Architecture) ====================
+    // ==================== Create Immediate Mode RingBuffers ====================
     // [NEW] RAII Ring Buffer wrappers encapsulate D12Buffer + offset state together
     // This fixes the mixed-stride issue by using BufferLocation byte offset instead of startVertex
     try
@@ -430,6 +404,9 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer, "Failed to create Immediate Mode RingBuffers: %s", e.what());
         ERROR_AND_DIE(Stringf("RingBuffer initialization failed! Error: %s", e.what()))
     }
+
+    /// Full Screen Quads Renderer
+    m_fullQuadsRenderer = std::make_unique<FullQuadsRenderer>();
 }
 
 void RendererSubsystem::Shutdown()
@@ -1371,22 +1348,6 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
              vertexCount, instanceCount, startVertex, startInstance);
 }
 
-void RendererSubsystem::DrawFullscreenQuad()
-{
-    // M6.3: 全屏三角形技术（3个顶点覆盖整个屏幕）
-    // 教学要点：比四边形更高效（3个顶点 vs 6个顶点），业界标准做法
-    // VB已在Startup()中预创建，避免首帧卡顿
-
-    if (!m_fullscreenTriangleVB)
-    {
-        LogError(LogRenderer, "DrawFullscreenQuad: VB not initialized (call Startup first)");
-        return;
-    }
-
-    SetVertexBuffer(m_fullscreenTriangleVB.get());
-    Draw(3);
-}
-
 // ============================================================================
 // M6.3: Present RT输出API
 // ============================================================================
@@ -1421,7 +1382,6 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
     UNUSED(inputRTs);
 
     UseProgram(finalProgram);
-    DrawFullscreenQuad();
 
     LogDebug(LogRenderer, "PresentWithShader: Rendered to BackBuffer");
 }
