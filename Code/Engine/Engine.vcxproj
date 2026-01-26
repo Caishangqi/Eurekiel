@@ -349,7 +349,7 @@
     <Content Include="..\..\.enigma\assets\engine\models\block\slab_top.json"/>
     <Content Include="..\..\.enigma\assets\engine\models\block\stairs.json"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\bundle.json"/>
-    <Content Include="..\..\.enigma\assets\engine\shaders\core\Common.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\core\core.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_custom_buffer.vs.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcu.ps.hlsl"/>
@@ -357,6 +357,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcutbn.ps.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\develop\gbuffers_test_vertex_layout_pcutbn.vs.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\fallback_rule.json"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\custom_image_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_basic.ps.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_basic.vs.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\program\gbuffers_textured.ps.hlsl" />
@@ -389,6 +390,12 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\camera_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\lib\fog.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\lib\math.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\color_texture_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\depth_texture_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\matrices_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\perobject_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\shadow_color_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\shadow_texture_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -459,11 +466,15 @@
     <ClCompile Include="Graphic\Bundle\Helper\JsonHelper.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\ShaderBundleFileHelper.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\ShaderScanHelper.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundle.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.cpp"/>
     <ClCompile Include="Graphic\Bundle\ProgramFallbackChain.cpp"/>
     <ClCompile Include="Graphic\Bundle\ShaderBundle.cpp"/>
     <ClCompile Include="Graphic\Bundle\ShaderBundleCommon.cpp"/>
+    <ClCompile Include="Graphic\Bundle\ShaderBundleEvents.cpp"/>
     <ClCompile Include="Graphic\Bundle\UserDefinedBundle.cpp"/>
     <ClCompile Include="Graphic\Camera\CameraBase.cpp"/>
     <ClCompile Include="Graphic\Camera\CameraCommon.cpp"/>
@@ -984,11 +995,15 @@
     <ClInclude Include="Graphic\Bundle\Helper\JsonHelper.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\ShaderBundleFileHelper.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\ShaderScanHelper.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundle.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.hpp"/>
     <ClInclude Include="Graphic\Bundle\ProgramFallbackChain.hpp"/>
     <ClInclude Include="Graphic\Bundle\ShaderBundle.hpp"/>
     <ClInclude Include="Graphic\Bundle\ShaderBundleCommon.hpp"/>
+    <ClInclude Include="Graphic\Bundle\ShaderBundleEvents.hpp"/>
     <ClInclude Include="Graphic\Bundle\UserDefinedBundle.hpp"/>
     <ClInclude Include="Graphic\Camera\CameraBase.hpp"/>
     <ClInclude Include="Graphic\Camera\CameraCommon.hpp"/>
@@ -1169,11 +1184,11 @@
     <ClInclude Include="Graphic\Resource\Texture\D12Texture.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\BiomeAndDimensionUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\CameraUniforms.hpp"/>
-    <ClInclude Include="Graphic\Shader\Uniform\DepthTexturesIndexUniforms.hpp"/>
+    <ClInclude Include="Graphic\Shader\Uniform\DepthTextureIndexUniforms.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\IDUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\MatricesUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\RenderingUniforms.hpp" />
-    <ClInclude Include="Graphic\Shader\Uniform\ColorTargetsIndexUniforms.hpp"/>
+    <ClInclude Include="Graphic\Shader\Uniform\ColorTextureIndexUniforms.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\ScreenAndSystemUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\UniformManager.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\WorldAndWeatherUniforms.hpp" />

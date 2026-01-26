@@ -1,5 +1,5 @@
 {
-  "name": "Engine Default",
+  "name": "Engine Builtin",
   "author": "Caizii",
-  "shaderDescription": "Engine Default Shader Bundle, Provided by Enigma Engine"
+  "shaderDescription": "Engine BuiltIn Shader Resource, Provided by Enigma Engine"
 }
