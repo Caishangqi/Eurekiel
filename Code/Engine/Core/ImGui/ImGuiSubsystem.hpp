@@ -50,7 +50,7 @@ namespace enigma::core
         void Render();
 
         // 子系统信息
-        DECLARE_SUBSYSTEM(ImGuiSubsystem, "ImGuiSubsystem", 400);
+        DECLARE_SUBSYSTEM(ImGuiSubsystem, "ImGuiSubsystem", 200);
 
         // 需要早期初始化（在Startup之前）
         bool RequiresInitialize() const override { return true; }
