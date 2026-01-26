@@ -17,7 +17,7 @@ namespace enigma::graphic
      * 1. Manages shadowcolor0-7 Main/Alt double-buffer indices
      * 2. Supports Ping-Pong Flip mechanism (eliminates ResourceBarrier overhead)
      * 3. Separated from ShadowTexturesIndexBuffer (single responsibility)
-     * 4. Must match HLSL ShadowColorBuffer struct (64 bytes)
+     * 4. Must match HLSL ShadowColorIndexUniforms struct (64 bytes)
      *
      * Flip state behavior:
      * - flip = false: Main as read source, Alt as write target

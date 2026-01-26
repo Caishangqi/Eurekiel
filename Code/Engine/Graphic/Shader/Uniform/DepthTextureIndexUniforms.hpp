@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// DepthTexturesIndexUniforms.hpp - [REFACTOR] Depth texture index management
+// DepthTextureIndexUniforms.hpp - [REFACTOR] Depth texture index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -17,7 +17,7 @@ namespace enigma::graphic
      * 1. Stores indices for up to 16 depth textures (Iris depthtex0-2 + custom)
      * 2. No Main/Alt flip needed (depth textures are generated each frame)
      * 3. Uploaded to GPU cbuffer before each Pass execution
-     * 4. Must match HLSL DepthTexturesBuffer struct (64 bytes)
+     * 4. Must match HLSL ColorTextureIndexUniforms struct (64 bytes)
      *
      * Iris depth texture semantics:
      * - depthtex0: Full depth (after translucent objects)
@@ -26,7 +26,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 64 bytes to match HLSL cbuffer
      */
-    struct DepthTexturesIndexUniforms
+    struct DepthTextureIndexUniforms
     {
         // Depth texture indices array (depthtex0-15)
         uint32_t depthTextureIndices[CBUFFER_DEPTH_TEXTURES_SIZE];
@@ -36,7 +36,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        DepthTexturesIndexUniforms()
+        DepthTextureIndexUniforms()
         {
             Reset();
         }
@@ -129,14 +129,14 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 64 bytes
-    static_assert(sizeof(DepthTexturesIndexUniforms) == 64,
-                  "DepthTexturesIndexUniforms must be exactly 64 bytes to match HLSL cbuffer");
+    static_assert(sizeof(DepthTextureIndexUniforms) == 64,
+                  "DepthTextureIndexUniforms must be exactly 64 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure 16-byte alignment for GPU
-    static_assert(sizeof(DepthTexturesIndexUniforms) % 16 == 0,
-                  "DepthTexturesIndexUniforms must be aligned to 16 bytes for GPU upload");
+    static_assert(sizeof(DepthTextureIndexUniforms) % 16 == 0,
+                  "DepthTextureIndexUniforms must be aligned to 16 bytes for GPU upload");
 
     // Compile-time validation: ensure proper element alignment
-    static_assert(alignof(DepthTexturesIndexUniforms) == 4,
-                  "DepthTexturesIndexUniforms must be 4-byte aligned for GPU upload");
+    static_assert(alignof(DepthTextureIndexUniforms) == 4,
+                  "DepthTextureIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic

@@ -17,7 +17,7 @@ namespace enigma::graphic
      * 1. Manages shadowtex0/1 read-only depth texture indices
      * 2. No Flip mechanism needed (generated each frame by Shadow Pass)
      * 3. Separated from ShadowColorIndexBuffer (single responsibility)
-     * 4. Must match HLSL ShadowTexturesBuffer struct (16 bytes)
+     * 4. Must match HLSL ShadowTexturesIndexUniforms struct (16 bytes)
      *
      * Shadow depth texture semantics:
      * - shadowtex0: Full shadow depth (all objects including translucent)

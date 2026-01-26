@@ -253,8 +253,8 @@ namespace enigma::graphic
 
         m_uniformManager = uniformMgr;
 
-        // Register ColorTargetsIndexUniforms to slot b3 with PerFrame frequency
-        m_uniformManager->RegisterBuffer<ColorTargetsIndexUniforms>(
+        // Register ColorTextureIndexUniforms to slot b3 with PerFrame frequency
+        m_uniformManager->RegisterBuffer<ColorTextureIndexUniforms>(
             SLOT_COLOR_TARGETS,
             UpdateFrequency::PerFrame,
             BufferSpace::Engine

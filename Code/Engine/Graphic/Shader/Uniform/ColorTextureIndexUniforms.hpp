@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ColorTargetsIndexUniforms.hpp - [REFACTOR] Main/Alt double-buffer index management
+// ColorTextureIndexUniforms.hpp - [REFACTOR] Main/Alt double-buffer index management
 // Part of Shader RT Fetching Feature for Flexible Deferred Rendering
 // ============================================================================
 
@@ -17,7 +17,7 @@ namespace enigma::graphic
      * 1. Stores read/write indices for 16 colortex slots (Iris colortex0-15)
      * 2. Main/Alt Ping-Pong mechanism: eliminates ResourceBarrier overhead
      * 3. Uploaded to GPU cbuffer before each Pass execution
-     * 4. Must match HLSL ColorTargetsBuffer struct (128 bytes)
+     * 4. Must match HLSL ColorTextureIndexUniforms struct (128 bytes)
      *
      * Flip state behavior:
      * - flip = false: Main as read source, Alt as write target
@@ -25,7 +25,7 @@ namespace enigma::graphic
      *
      * @note Size must be exactly 128 bytes to match HLSL cbuffer
      */
-    struct ColorTargetsIndexUniforms
+    struct ColorTextureIndexUniforms
     {
         // Read indices for colortex0-15 (points to Main or Alt based on flip state)
         uint32_t readIndices[CBUFFER_COLOR_TARGETS_SIZE];
@@ -38,7 +38,7 @@ namespace enigma::graphic
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
-        ColorTargetsIndexUniforms()
+        ColorTextureIndexUniforms()
         {
             Reset();
         }
@@ -174,10 +174,10 @@ namespace enigma::graphic
     };
 
     // Compile-time validation: ensure struct size is 128 bytes
-    static_assert(sizeof(ColorTargetsIndexUniforms) == 128,
-                  "ColorTargetsIndexUniforms must be exactly 128 bytes to match HLSL cbuffer");
+    static_assert(sizeof(ColorTextureIndexUniforms) == 128,
+                  "ColorTextureIndexUniforms must be exactly 128 bytes to match HLSL cbuffer");
 
     // Compile-time validation: ensure proper alignment
-    static_assert(alignof(ColorTargetsIndexUniforms) == 4,
-                  "ColorTargetsIndexUniforms must be 4-byte aligned for GPU upload");
+    static_assert(alignof(ColorTextureIndexUniforms) == 4,
+                  "ColorTextureIndexUniforms must be 4-byte aligned for GPU upload");
 } // namespace enigma::graphic
