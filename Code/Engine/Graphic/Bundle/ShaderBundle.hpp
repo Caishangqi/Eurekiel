@@ -156,7 +156,7 @@ namespace enigma::graphic
         //
         // Note: Does NOT throw exception if not found at all levels
         //-------------------------------------------------------------------------------------------
-        ShaderProgram* GetProgram(const std::string& programName, bool enableFallback = true);
+        std::shared_ptr<ShaderProgram> GetProgram(const std::string& programName, bool enableFallback = true);
 
         //-------------------------------------------------------------------------------------------
         // GetProgram (single program, specific bundle)
@@ -179,9 +179,9 @@ namespace enigma::graphic
         //
         // Note: If bundleName not found, returns nullptr (no exception)
         //-------------------------------------------------------------------------------------------
-        ShaderProgram* GetProgram(const std::string& bundleName,
-                                  const std::string& programName,
-                                  bool               enableFallback = true);
+        std::shared_ptr<ShaderProgram> GetProgram(const std::string& bundleName,
+                                                  const std::string& programName,
+                                                  bool               enableFallback = true);
 
         //-------------------------------------------------------------------------------------------
         // GetPrograms (batch query)
@@ -199,8 +199,8 @@ namespace enigma::graphic
         //
         // Note: Only searches current UserDefinedBundle and program/ folder
         //-------------------------------------------------------------------------------------------
-        std::vector<ShaderProgram*> GetPrograms(const std::string& searchRule,
-                                                bool               enableFallback = true);
+        std::vector<std::shared_ptr<ShaderProgram>> GetPrograms(const std::string& searchRule,
+                                                                bool               enableFallback = true);
 
         //-------------------------------------------------------------------------------------------
         // SwitchBundle
@@ -264,7 +264,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
 
         // Load shader program from program/ folder cache, compile if not cached
-        ShaderProgram* LoadFromProgramFolder(const std::string& programName);
+        std::shared_ptr<ShaderProgram> LoadFromProgramFolder(const std::string& programName);
 
         // Find UserDefinedBundle by name, returns nullptr if not found
         UserDefinedBundle* FindUserBundle(const std::string& bundleName);
