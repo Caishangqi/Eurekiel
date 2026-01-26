@@ -140,7 +140,7 @@ namespace enigma::graphic
         //
         // Note: Does NOT throw exception if not found
         //-------------------------------------------------------------------------------------------
-        ShaderProgram* GetProgram(const std::string& programName);
+        std::shared_ptr<ShaderProgram> GetProgram(const std::string& programName);
 
         //-------------------------------------------------------------------------------------------
         // GetPrograms
@@ -155,7 +155,7 @@ namespace enigma::graphic
         //   Empty vector if no matches (does NOT throw)
         //   Caller does NOT take ownership
         //-------------------------------------------------------------------------------------------
-        std::vector<ShaderProgram*> GetPrograms(const std::string& searchRule);
+        std::vector<std::shared_ptr<ShaderProgram>> GetPrograms(const std::string& searchRule);
 
         //-------------------------------------------------------------------------------------------
         // HasProgram

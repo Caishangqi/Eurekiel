@@ -123,12 +123,12 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // GetProgram
     //-------------------------------------------------------------------------------------------
-    ShaderProgram* UserDefinedBundle::GetProgram(const std::string& programName)
+    std::shared_ptr<ShaderProgram> UserDefinedBundle::GetProgram(const std::string& programName)
     {
         auto it = m_programs.find(programName);
         if (it != m_programs.end())
         {
-            return it->second.get(); // Return raw pointer, no ownership transfer
+            return it->second;
         }
         return nullptr; // Not found, return nullptr (no exception)
     }
@@ -136,7 +136,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // GetPrograms
     //-------------------------------------------------------------------------------------------
-    std::vector<ShaderProgram*> UserDefinedBundle::GetPrograms(const std::string& searchRule)
+    std::vector<std::shared_ptr<ShaderProgram>> UserDefinedBundle::GetPrograms(const std::string& searchRule)
     {
         // 1. Collect all program names from cache
         std::vector<std::string> allNames;
@@ -151,14 +151,14 @@ namespace enigma::graphic
             ShaderScanHelper::MatchProgramsByPattern(allNames, searchRule);
 
         // 3. Build result vector of raw pointers
-        std::vector<ShaderProgram*> result;
+        std::vector<std::shared_ptr<ShaderProgram>> result;
         result.reserve(matchedNames.size());
         for (const auto& name : matchedNames)
         {
             auto it = m_programs.find(name);
             if (it != m_programs.end())
             {
-                result.push_back(it->second.get());
+                result.push_back(it->second);
             }
         }
 
