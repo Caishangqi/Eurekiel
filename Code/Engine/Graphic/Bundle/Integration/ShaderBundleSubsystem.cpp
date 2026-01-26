@@ -13,13 +13,18 @@
 
 #include "ShaderBundleSubsystem.hpp"
 
+#include <utility>
+
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/Event/EventSubsystem.hpp"
 #include "Engine/Core/FileSystemHelper.hpp"
+#include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Bundle/BundleException.hpp"
 #include "Engine/Graphic/Bundle/Helper/JsonHelper.hpp"
 #include "Engine/Graphic/Bundle/Helper/ShaderBundleFileHelper.hpp"
+#include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
+#include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 
 using namespace enigma::graphic;
 
@@ -31,8 +36,8 @@ enigma::graphic::ShaderBundleSubsystem* g_theShaderBundleSubsystem = nullptr;
 //-----------------------------------------------------------------------------------------------
 using namespace enigma::core;
 
-ShaderBundleSubsystem::ShaderBundleSubsystem(ShaderBundleSubsystemConfiguration& config)
-    : m_config(config)
+ShaderBundleSubsystem::ShaderBundleSubsystem(ShaderBundleSubsystemConfiguration config)
+    : m_config(std::move(config))
 {
 }
 
@@ -45,19 +50,22 @@ void ShaderBundleSubsystem::Startup()
 {
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Starting up...");
 
-    // Step 1: Load Engine ShaderBundle
-    ShaderBundleMeta engineMeta;
-    engineMeta.name           = "Engine Default";
-    engineMeta.author         = "Enigma Engine";
-    engineMeta.description    = "Default engine shaders";
-    engineMeta.path           = m_config.shaderBundleEnginePath;
-    engineMeta.isEngineBundle = true;
+    // Step 1: Load Engine ShaderBundle metadata from bundle.json
+    auto engineMetaOpt = ShaderBundleMeta::FromBundlePath(m_config.GetEnginePath(), true);
+
+    if (!engineMetaOpt)
+    {
+        ERROR_AND_DIE("Can not find Engine Builtin shader bundle meta.")
+    }
+
+    ShaderBundleMeta engineMeta = engineMetaOpt.value();
 
     try
     {
         // [RAII] ShaderBundle initializes in constructor
         m_engineBundle = std::make_shared<ShaderBundle>(engineMeta, nullptr);
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Engine bundle loaded from: %s", m_config.shaderBundleEnginePath.c_str());
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Engine bundle '%s' loaded from: %s",
+                engineMeta.name.c_str(), m_config.GetEnginePath().c_str());
     }
     catch (const ShaderBundleException& e)
     {
@@ -70,12 +78,70 @@ void ShaderBundleSubsystem::Startup()
     // Step 3: Discover user bundles
     DiscoverUserBundles();
 
-    // Step 4: Fire OnShaderBundleLoaded event
-    EventArgs args;
-    args.SetValue("bundleName", m_engineBundle->GetName());
-    FireEvent(EVENT_SHADER_BUNDLE_LOADED, args);
+    // Step 4: [AUTO-LOAD] Check if there's a previously loaded bundle to restore
+    std::string savedBundleName = m_config.GetCurrentLoadedBundle();
+    if (!savedBundleName.empty())
+    {
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Found saved bundle to restore: %s", savedBundleName.c_str());
+
+        // Find the bundle in discovered list by name
+        bool bundleFound = false;
+        for (const auto& meta : m_discoveredListMeta)
+        {
+            if (meta.name == savedBundleName)
+            {
+                // Try to load the saved bundle
+                ShaderBundleResult result = LoadShaderBundle(meta);
+                if (result.success)
+                {
+                    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Successfully restored bundle: %s", savedBundleName.c_str());
+                    bundleFound = true;
+                }
+                else
+                {
+                    LogWarn(LogShaderBundle, "ShaderBundleSubsystem:: Failed to restore bundle '%s': %s. Using engine default.",
+                            savedBundleName.c_str(), result.errorMessage.c_str());
+                    // Clear the saved bundle name since it failed to load
+                    m_config.SetCurrentLoadedBundle("");
+                    m_config.SaveToYaml(CONFIG_FILE_PATH);
+                }
+                break;
+            }
+        }
+
+        if (!bundleFound && !savedBundleName.empty())
+        {
+            LogWarn(LogShaderBundle, "ShaderBundleSubsystem:: Saved bundle '%s' not found in discovered bundles. Using engine default.",
+                    savedBundleName.c_str());
+            // Clear the saved bundle name since it's no longer available
+            m_config.SetCurrentLoadedBundle("");
+            m_config.SaveToYaml(CONFIG_FILE_PATH);
+        }
+    }
+
+    // Step 5: Fire OnShaderBundleLoaded event (EventSystem for backward compatibility)
+    // Only fire if we're still using engine bundle (LoadShaderBundle already fires events)
+    if (m_currentBundle == m_engineBundle)
+    {
+        EventArgs args;
+        args.SetValue("bundleName", m_engineBundle->GetName());
+        FireEvent(EVENT_SHADER_BUNDLE_LOADED, args);
+
+        // Step 6: Broadcast MulticastDelegate event
+        ShaderBundleEvents::OnBundleLoaded.Broadcast(m_engineBundle.get());
+    }
+
+    if (g_theImGui)
+    {
+        g_theImGui->RegisterWindow("ShaderBundle", [this]() { ImguiShaderBundle::Show(this); });
+    }
+
     g_theShaderBundleSubsystem = this;
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Startup complete. Engine bundle active.");
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Startup complete. %s bundle active.", m_currentBundle == m_engineBundle ? "Engine" : m_currentBundle->GetName().c_str());
+}
+
+void ShaderBundleSubsystem::Initialize()
+{
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -110,13 +176,14 @@ void ShaderBundleSubsystem::Update(float deltaTime)
 //-----------------------------------------------------------------------------------------------
 // DiscoverUserBundles
 //
-// [NEW] Internal helper to scan .enigma/shaderpacks for valid bundles
+// [REFACTOR] Internal helper to scan .enigma/shaderbundles for valid bundles
+// Uses ShaderBundleMeta::FromBundlePath for consistent metadata loading
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::DiscoverUserBundles()
 {
     m_discoveredListMeta.clear();
 
-    std::filesystem::path userPath = m_config.shaderBundleUserDiscoveryPath;
+    std::filesystem::path userPath = m_config.GetUserDiscoveryPath();
 
     // Check if discovery path exists
     if (!FileSystemHelper::DirectoryExists(userPath))
@@ -134,27 +201,24 @@ void ShaderBundleSubsystem::DiscoverUserBundles()
         // Validate each subdirectory as a potential ShaderBundle
         if (ShaderBundleFileHelper::IsValidShaderBundleDirectory(subdir))
         {
-            // [FIX] Parse bundle.json for metadata (name, author, description)
-            std::filesystem::path bundleJsonPath = FileSystemHelper::CombinePath(subdir, "shaders/bundle.json");
-            auto                  metaOpt        = JsonHelper::ParseBundleJson(bundleJsonPath);
+            // [REFACTOR] Use ShaderBundleMeta::FromBundlePath for consistent metadata loading
+            auto metaOpt = ShaderBundleMeta::FromBundlePath(subdir, false);
 
             if (metaOpt)
             {
                 // Use parsed metadata from bundle.json
-                ShaderBundleMeta meta = metaOpt.value();
-                meta.path             = subdir;
-                meta.isEngineBundle   = false;
-
-                m_discoveredListMeta.push_back(meta);
+                m_discoveredListMeta.push_back(metaOpt.value());
 
                 LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Discovered user bundle: %s (by %s) at %s",
-                        meta.name.c_str(), meta.author.c_str(), meta.path.string().c_str());
+                        metaOpt->name.c_str(), metaOpt->author.c_str(), metaOpt->path.string().c_str());
             }
             else
             {
                 // Fallback: use directory name if bundle.json parsing fails
                 ShaderBundleMeta meta;
                 meta.name           = subdir.filename().string();
+                meta.author         = "Unknown";
+                meta.description    = "";
                 meta.path           = subdir;
                 meta.isEngineBundle = false;
 
@@ -237,10 +301,17 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
         // Set as current bundle
         m_currentBundle = bundle;
 
-        // Fire OnShaderBundleLoaded event
+        // Fire OnShaderBundleLoaded event (EventSystem for backward compatibility)
         EventArgs args;
         args.SetValue("bundleName", bundle->GetName());
         FireEvent(EVENT_SHADER_BUNDLE_LOADED, args);
+
+        // Broadcast MulticastDelegate event
+        ShaderBundleEvents::OnBundleLoaded.Broadcast(m_currentBundle.get());
+
+        // [AUTO-SAVE] Save current loaded bundle name to config file
+        m_config.SetCurrentLoadedBundle(meta.name);
+        m_config.SaveToYaml(CONFIG_FILE_PATH);
 
         // Return success
         result.success = true;
@@ -280,13 +351,23 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
         previousBundleName = m_currentBundle->GetName();
     }
 
+    // Broadcast MulticastDelegate unload event (before reset)
+    ShaderBundleEvents::OnBundleUnloaded.Broadcast();
+
     // Reset to engine bundle
     m_currentBundle = m_engineBundle;
 
-    // Fire OnShaderBundleUnloaded event
+    // Fire OnShaderBundleUnloaded event (EventSystem for backward compatibility)
     EventArgs args;
     args.SetValue("bundleName", previousBundleName);
     FireEvent(EVENT_SHADER_BUNDLE_UNLOADED, args);
+
+    // Broadcast MulticastDelegate load event (engine bundle now active)
+    ShaderBundleEvents::OnBundleLoaded.Broadcast(m_engineBundle.get());
+
+    // [AUTO-SAVE] Clear current loaded bundle name and save to config file
+    m_config.SetCurrentLoadedBundle("");
+    m_config.SaveToYaml(CONFIG_FILE_PATH);
 
     // Always succeeds
     result.success = true;

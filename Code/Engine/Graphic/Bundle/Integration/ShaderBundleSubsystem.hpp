@@ -52,7 +52,7 @@ namespace enigma::graphic
 {
     class ShaderBundleSubsystem : public enigma::core::EngineSubsystem
     {
-        DECLARE_SUBSYSTEM(ShaderBundleSubsystem, "ShaderBundleSubsystem", 100)
+        DECLARE_SUBSYSTEM(ShaderBundleSubsystem, "ShaderBundleSubsystem", 300)
 
 #pragma region SUBSYSTEM_LIFECYCLE
 
@@ -65,7 +65,7 @@ namespace enigma::graphic
         // Parameters:
         //   config - Configuration with shaderBundleEnginePath and shaderBundleUserDiscoveryPath
         //-------------------------------------------------------------------------------------------
-        ShaderBundleSubsystem(ShaderBundleSubsystemConfiguration& config);
+        explicit ShaderBundleSubsystem(ShaderBundleSubsystemConfiguration config);
 
         //-------------------------------------------------------------------------------------------
         // Startup
@@ -79,6 +79,8 @@ namespace enigma::graphic
         //   4. Fire OnShaderBundleLoaded event
         //-------------------------------------------------------------------------------------------
         void Startup() override;
+
+        void Initialize() override;
 
         //-------------------------------------------------------------------------------------------
         // Shutdown
@@ -104,6 +106,12 @@ namespace enigma::graphic
 #pragma region SHADER_BUNDLE_OPERATION
 
     public:
+        //-------------------------------------------------------------------------------------------
+        // Configuration file path constant
+        // Used for loading/saving ShaderBundle configuration
+        //-------------------------------------------------------------------------------------------
+        static constexpr const char* CONFIG_FILE_PATH = ".enigma/config/engine/shaderbundle.yml";
+
         //-------------------------------------------------------------------------------------------
         // ListDiscoveredShaderBundles
         //
