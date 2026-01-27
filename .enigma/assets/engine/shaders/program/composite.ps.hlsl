@@ -34,12 +34,13 @@ float NDCDepthToViewDepth(float ndcDepth, float near, float far)
 
 struct PSOutput
 {
-    float4 color0 : SV_Target0; // colortex4
+    float4 color0 : SV_Target0;
 };
 
 PSOutput main(PSInput input)
 {
     PSOutput output;
+    /* RENDERTARGETS: 0 */
 
     // [STEP 1] Sample depth textures
     // [IMPORTANT] Use sampler1 (Point filtering) for depth textures!
