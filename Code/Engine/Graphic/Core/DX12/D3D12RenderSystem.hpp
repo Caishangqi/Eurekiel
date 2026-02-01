@@ -517,6 +517,38 @@ namespace enigma::graphic
                                       float                              clearDepth  = 1.0f, uint8_t clearStencil = 0,
                                       D3D12_CLEAR_FLAGS                  clearFlags  = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL);
 
+        // ===== [NEW] Config-based Clear API - RenderTarget Format Refactor =====
+
+        /**
+         * @brief Clear render target using RTConfig settings
+         * @param commandList Command list to record clear command
+         * @param rtvHandle RTV handle of the render target
+         * @param config RTConfig containing clearValue and loadAction
+         *
+         * Only clears if config.loadAction == LoadAction::Clear.
+         * Uses config.clearValue for the clear color.
+         */
+        static void ClearRenderTargetByConfig(
+            ID3D12GraphicsCommandList*  commandList,
+            D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
+            const struct RTConfig&      config
+        );
+
+        /**
+         * @brief Clear depth-stencil using RTConfig settings
+         * @param commandList Command list to record clear command
+         * @param dsvHandle DSV handle of the depth-stencil buffer
+         * @param config RTConfig containing clearValue and loadAction
+         *
+         * Only clears if config.loadAction == LoadAction::Clear.
+         * Uses config.clearValue.depthStencil for clear values.
+         */
+        static void ClearDepthStencilByConfig(
+            ID3D12GraphicsCommandList*  commandList,
+            D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle,
+            const struct RTConfig&      config
+        );
+
         // ===== 资源创建API =====
 
         /**

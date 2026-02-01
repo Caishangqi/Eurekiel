@@ -5,9 +5,11 @@
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
+#include "Engine/Graphic/Target/RTTypes.hpp"
 #include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
@@ -107,13 +109,13 @@ void RendererSubsystem::Initialize()
 void RendererSubsystem::Startup()
 {
     LogInfo(LogRenderer, "Starting up...");
-
     try
     {
         LogInfo(LogRenderer, "Creating UniformManager...");
         m_uniformManager = std::make_unique<UniformManager>();
         m_uniformManager->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<CameraUniforms>(9, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<ViewportUniforms>(10, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(1, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<CustomImageUniforms>(2, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
     }
@@ -129,72 +131,33 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ColorTextureProvider (with UniformManager) ====================
-    // Initialize GBuffer manager - manages 16 colortex RenderTargets (Iris compatible)
+    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
+    // Reference: requirements.md - Requirement 1: RendererSubsystemConfig 扩展
     try
     {
-        LogInfo(LogRenderer, "Creating RenderTargetManager...");
-
-        // Step 1: Prepare RTConfig array (16 configs)
-        // Reference Iris colortex config, using RGBA16F (high precision) and RGBA8 (auxiliary data)
-        std::array<RTConfig, 16> rtConfigs = {};
-
-        // colortex0-7: RGBA16F format (high precision rendering, suitable for HDR/normal/position etc.)
-        for (int i = 0; i < 8; ++i)
-        {
-            rtConfigs[i] = RTConfig::ColorTargetWithScale(
-                "colortex" + std::to_string(i), // name
-                1.0f, // widthScale - full resolution
-                1.0f, // heightScale
-                DXGI_FORMAT_R8G8B8A8_UNORM,
-                true, // enableFlipper
-                LoadAction::Clear, // loadAction
-                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
-                false, // enableMipmap - disabled by default
-                true, // allowLinearFilter
-                1 // sampleCount - no MSAA
-            );
-        }
-
-        // colortex8-15: RGBA8 format (auxiliary data, saves memory)
-        for (int i = 8; i < 16; ++i)
-        {
-            rtConfigs[i] = RTConfig::ColorTargetWithScale(
-                "colortex" + std::to_string(i), // name
-                1.0f, // widthScale
-                1.0f, // heightScale
-                DXGI_FORMAT_R8G8B8A8_UNORM, // format - RGBA8
-                true, // enableFlipper
-                LoadAction::Clear, // loadAction
-                ClearValue::Color(m_configuration.defaultClearColor), // clearValue
-                false, // enableMipmap
-                true, // allowLinearFilter
-                1 // sampleCount
-            );
-        }
-
-        // Step 2: Read render dimensions and colortex count from config
-        const int baseWidth     = m_configuration.renderWidth;
-        const int baseHeight    = m_configuration.renderHeight;
-        const int colorTexCount = m_configuration.gbufferColorTexCount;
-
-        LogInfo(LogRenderer, "RenderTargetManager configuration: %dx%d, %d colortex (max 16)", baseWidth, baseHeight, colorTexCount);
-
         LogInfo(LogRenderer, "Creating ColorTextureProvider...");
 
-        // Convert std::array to std::vector for use by Provider
-        std::vector<RTConfig> colorConfigs(rtConfigs.begin(), rtConfigs.end());
+        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // Always creates MAX_COLOR_TEXTURES (16) colortex, format from config
+        std::vector<RTConfig> colorConfigs = m_configuration.GetColorTexConfigs();
+
+        const int baseWidth  = m_configuration.renderWidth;
+        const int baseHeight = m_configuration.renderHeight;
+
+        LogInfo(LogRenderer, "ColorTextureProvider configuration: %dx%d, %zu colortex",
+                baseWidth, baseHeight, colorConfigs.size());
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_colorTextureProvider = std::make_unique<ColorTextureProvider>(
             baseWidth, baseHeight, colorConfigs, m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "ColorTextureProvider created successfully (%d colortex)", colorTexCount);
+        LogInfo(LogRenderer, "ColorTextureProvider created successfully (%zu colortex)", colorConfigs.size());
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create RenderTargetManager/ColorTextureProvider: %s", e.what());
-        ERROR_AND_DIE(Stringf("RenderTargetManager/ColorTextureProvider initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ColorTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("ColorTextureProvider initialization failed! Error: %s", e.what()))
     }
 
     // ==================== Create CustomImageManager ====================
@@ -224,99 +187,72 @@ void RendererSubsystem::Startup()
     LogInfo(LogRenderer, "VertexLayoutRegistry initialized with predefined layouts");
 
     // ==================== Create DepthTextureProvider (with UniformManager) ====================
+    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
-        std::array<RTConfig, 3> depthConfigs = {};
-        for (int i = 0; i < 3; ++i)
-        {
-            depthConfigs[i].width  = m_configuration.renderWidth;
-            depthConfigs[i].height = m_configuration.renderHeight;
-            depthConfigs[i].format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-            depthConfigs[i].name   = "depthtex" + std::to_string(i);
-        }
         LogInfo(LogRenderer, "Creating DepthTextureProvider...");
 
-        std::vector<RTConfig> depthTextureVec(depthConfigs.begin(), depthConfigs.end());
+        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // Always creates MAX_DEPTH_TEXTURES (3) depthtex, format from config
+        std::vector<RTConfig> depthConfigs = m_configuration.GetDepthTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_depthTextureProvider = std::make_unique<DepthTextureProvider>(
-            m_configuration.renderWidth, m_configuration.renderHeight, depthTextureVec, m_uniformManager.get()
+            m_configuration.renderWidth, m_configuration.renderHeight, depthConfigs, m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "DepthTextureProvider created successfully (3 depthtex)");
+        LogInfo(LogRenderer, "DepthTextureProvider created successfully (%zu depthtex)", depthConfigs.size());
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create DepthTextureManager/DepthTextureProvider: %s", e.what());
-        ERROR_AND_DIE(Stringf("DepthTextureManager/DepthTextureProvider initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create DepthTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("DepthTextureProvider initialization failed! Error: %s", e.what()))
     }
 
     // ==================== Create ShadowColorProvider (with UniformManager) ====================
+    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
-        std::array<RTConfig, 8> shadowColorConfigs = {};
-        for (int i = 0; i < 8; ++i)
-        {
-            shadowColorConfigs[i] = RTConfig::ColorTarget(
-                "shadowcolor" + std::to_string(i),
-                m_configuration.renderWidth,
-                m_configuration.renderHeight,
-                DXGI_FORMAT_R16G16B16A16_FLOAT,
-                true, LoadAction::Clear,
-                ClearValue::Color(Rgba8::BLACK),
-                false, true, 1
-            );
-        }
         LogInfo(LogRenderer, "Creating ShadowColorProvider...");
 
-        // Convert std::array to std::vector for Provider
-        std::vector<RTConfig> shadowColorVec(shadowColorConfigs.begin(), shadowColorConfigs.end());
+        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // Always creates MAX_SHADOW_COLORS (8) shadowcolor, format from config
+        std::vector<RTConfig> shadowColorConfigs = m_configuration.GetShadowColorConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_shadowColorProvider = std::make_unique<ShadowColorProvider>(
-            m_configuration.renderWidth, m_configuration.renderHeight, shadowColorVec, m_uniformManager.get()
+            m_configuration.renderWidth, m_configuration.renderHeight, shadowColorConfigs, m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "ShadowColorProvider created successfully (8 shadowcolor)");
+        LogInfo(LogRenderer, "ShadowColorProvider created successfully (%zu shadowcolor)", shadowColorConfigs.size());
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create ShadowColorManager/ShadowColorProvider: %s", e.what());
-        ERROR_AND_DIE(Stringf("ShadowColorManager/ShadowColorProvider initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ShadowColorProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("ShadowColorProvider initialization failed! Error: %s", e.what()))
     }
 
     // ==================== Create ShadowTextureProvider (with UniformManager) ====================
+    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
-        LogInfo(LogRenderer, "Creating ShadowTextureManager...");
-
-        std::array<RTConfig, 2> shadowTexConfigs = {};
-        for (int i = 0; i < 2; ++i)
-        {
-            shadowTexConfigs[i] = RTConfig::DepthTarget(
-                "shadowtex" + std::to_string(i),
-                m_configuration.renderWidth,
-                m_configuration.renderHeight,
-                DXGI_FORMAT_D32_FLOAT, true,
-                LoadAction::Clear,
-                ClearValue::Depth(1.0f, 0)
-            );
-        }
-
         LogInfo(LogRenderer, "Creating ShadowTextureProvider...");
-        std::vector<RTConfig> shadowTextureConfigs(shadowTexConfigs.begin(), shadowTexConfigs.end());
+
+        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // Always creates MAX_SHADOW_TEXTURES (2) shadowtex, format from config
+        std::vector<RTConfig> shadowTexConfigs = m_configuration.GetShadowTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(
-            m_configuration.renderWidth, m_configuration.renderHeight, shadowTextureConfigs, m_uniformManager.get()
+            m_configuration.renderWidth, m_configuration.renderHeight, shadowTexConfigs, m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "ShadowTextureProvider created successfully (2 shadowtex)");
+        LogInfo(LogRenderer, "ShadowTextureProvider created successfully (%zu shadowtex)", shadowTexConfigs.size());
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create ShadowTextureManager/ShadowTextureProvider: %s", e.what());
-        ERROR_AND_DIE(Stringf("ShadowTextureManager/ShadowTextureProvider initialization failed! Error: %s", e.what()))
+        LogError(LogRenderer, "Failed to create ShadowTextureProvider: %s", e.what());
+        ERROR_AND_DIE(Stringf("ShadowTextureProvider initialization failed! Error: %s", e.what()))
     }
 
     try
@@ -533,6 +469,12 @@ void RendererSubsystem::BeginFrame()
     }
     LogDebug(LogRenderer, "BeginFrame - RT Provider indices uploaded to GPU");
 
+    // Update viewport uniform and upload the buffer
+    m_viewportUniforms.viewWidth   = (float)m_configuration.renderWidth;
+    m_viewportUniforms.viewHeight  = (float)m_configuration.renderHeight;
+    m_viewportUniforms.aspectRatio = m_viewportUniforms.viewWidth / m_viewportUniforms.viewHeight;
+    m_uniformManager->UploadBuffer(m_viewportUniforms);
+
     if (m_configuration.enableAutoClearColor)
     {
         // Clear SwapChain BackBuffer first
@@ -558,7 +500,7 @@ void RendererSubsystem::BeginFrame()
         // - All RTs start with clean state
         // - Multi-pass rendering can rely on preserved values (via LoadAction::Load)
         // - No RT trailing artifacts
-        ClearAllRenderTargets(m_configuration.defaultClearColor);
+        ClearAllRenderTargets();
 
         LogDebug(LogRenderer, "BeginFrame - All render targets cleared (centralized strategy)");
     }
@@ -1968,37 +1910,69 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
             depthIndex, clearDepth, clearStencil);
 }
 
-void RendererSubsystem::ClearAllRenderTargets(const Rgba8& clearColor)
+// [REFACTOR] ClearAllRenderTargets - Use RTConfig for per-RT clear settings
+void RendererSubsystem::ClearAllRenderTargets()
 {
-    // Clear all active colortex (0 to gbufferColorTexCount-1)
-    for (int i = 0; i < m_configuration.gbufferColorTexCount; ++i)
+    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
     {
-        ClearRenderTarget(RTType::ColorTex, i, clearColor);
+        LogWarn(LogRenderer, "ClearAllRenderTargets: No active command list");
+        return;
     }
 
-    // Clear all 3 depthtex (0 to 2)
-    for (uint32_t i = 0; i < 3; ++i)
+    // Clear colortex based on each RT's config
+    if (m_colorTextureProvider)
     {
-        ClearDepthStencil(i, 1.0f, 0);
-    }
-
-    // [FIX] Clear shadowtex (0 to 1) - shadow depth buffers
-    // Without this, shadow depth test always fails (depth buffer contains garbage/0.0)
-    if (m_shadowTextureProvider)
-    {
-        float clearDepth = 1.0f;
-        for (int i = 0; i < m_shadowTextureProvider->GetCount(); ++i)
+        for (int i = 0; i < m_colorTextureProvider->GetCount(); ++i)
         {
-            m_shadowTextureProvider->Clear(i, &clearDepth);
+            const RTConfig& config = m_colorTextureProvider->GetConfig(i);
+            if (config.loadAction == LoadAction::Clear)
+            {
+                auto rtvHandle = m_colorTextureProvider->GetMainRTV(i);
+                D3D12RenderSystem::ClearRenderTargetByConfig(cmdList, rtvHandle, config);
+            }
         }
     }
 
-    // [FIX] Clear shadowcolor (0 to 1) - shadow color buffers
+    // Clear depthtex based on each RT's config
+    if (m_depthTextureProvider)
+    {
+        for (int i = 0; i < m_depthTextureProvider->GetCount(); ++i)
+        {
+            const RTConfig& config = m_depthTextureProvider->GetConfig(i);
+            if (config.loadAction == LoadAction::Clear)
+            {
+                auto dsvHandle = m_depthTextureProvider->GetMainRTV(i); // DSV handle
+                D3D12RenderSystem::ClearDepthStencilByConfig(cmdList, dsvHandle, config);
+            }
+        }
+    }
+
+    // Clear shadowtex based on each RT's config
+    if (m_shadowTextureProvider)
+    {
+        for (int i = 0; i < m_shadowTextureProvider->GetCount(); ++i)
+        {
+            const RTConfig& config = m_shadowTextureProvider->GetConfig(i);
+            if (config.loadAction == LoadAction::Clear)
+            {
+                auto dsvHandle = m_shadowTextureProvider->GetMainRTV(i); // DSV handle
+                D3D12RenderSystem::ClearDepthStencilByConfig(cmdList, dsvHandle, config);
+            }
+        }
+    }
+
+    // Clear shadowcolor based on each RT's config
     if (m_shadowColorProvider)
     {
         for (int i = 0; i < m_shadowColorProvider->GetCount(); ++i)
         {
-            ClearRenderTarget(RTType::ShadowColor, i, clearColor);
+            const RTConfig& config = m_shadowColorProvider->GetConfig(i);
+            if (config.loadAction == LoadAction::Clear)
+            {
+                auto rtvHandle = m_shadowColorProvider->GetMainRTV(i);
+                D3D12RenderSystem::ClearRenderTargetByConfig(cmdList, rtvHandle, config);
+            }
         }
     }
 }

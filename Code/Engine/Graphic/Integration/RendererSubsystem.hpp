@@ -34,6 +34,7 @@
 #include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
 #include "Engine/Graphic/Sampler/SamplerConfig.hpp" // [NEW] Dynamic Sampler System
 #include "Engine/Graphic/Sampler/SamplerProvider.hpp" // [NEW] Dynamic Sampler System
+#include "Engine/Graphic/Shader/Uniform/ViewportUniforms.hpp"
 
 using namespace enigma::core;
 using namespace enigma::graphic;
@@ -835,7 +836,6 @@ namespace enigma::graphic
 
         /**
          * @brief Clear all active render targets and depth textures
-         * @param clearColor Clear color for all RTs (default: black)
          *
          * @details
          * Convenience method to clear all active colortex (0 to activeColorTexCount-1)
@@ -854,7 +854,7 @@ namespace enigma::graphic
          * - Learn efficient multi-RT clearing
          * - Master frame initialization patterns
          */
-        void ClearAllRenderTargets(const Rgba8& clearColor = Rgba8::BLACK);
+        void ClearAllRenderTargets();
 
         /**
          * @brief [DEPRECATED] Set blend mode (use SetBlendConfig instead)
@@ -1042,14 +1042,6 @@ namespace enigma::graphic
 #pragma endregion
 
 #pragma region RenderTarget Management
-
-        /**
-         * @brief 获取当前配置的GBuffer colortex数量
-         * @return int 当前数量 [1-16]
-         *
-         * Milestone 3.0: 从m_configuration读取配置值（不再使用m_config）
-         */
-        int GetGBufferColorTexCount() const { return m_configuration.gbufferColorTexCount; }
 
         /**
          * @brief 设置CustomImage槽位的纹理
@@ -1302,13 +1294,19 @@ namespace enigma::graphic
         /**
          * @brief 获取配置的shader入口点名称
          * @return const std::string& 入口点名称（如 "main" 或 "VSMain"）
-         * 
+         *
          * 教学要点:
          * - 配置访问: 提供对配置项的便捷访问
          * - Iris兼容: 默认值为 "main"（Iris标准）
          * - 编译流程: 用于shader编译时指定入口点
          */
         const std::string& GetShaderEntryPoint() const noexcept { return m_configuration.shaderEntryPoint; }
+
+        // [NEW] Provider access methods for RT format configuration
+        ColorTextureProvider*  GetColorTextureProvider() { return m_colorTextureProvider.get(); }
+        DepthTextureProvider*  GetDepthTextureProvider() { return m_depthTextureProvider.get(); }
+        ShadowColorProvider*   GetShadowColorProvider() { return m_shadowColorProvider.get(); }
+        ShadowTextureProvider* GetShadowTextureProvider() { return m_shadowTextureProvider.get(); }
 
 
         /**
@@ -1500,5 +1498,8 @@ namespace enigma::graphic
 
         /// 调试状态 (子系统级别的调试，底层调试由D3D12RenderSystem管理)
         bool m_debugRenderingEnabled = false;
+
+        /// Uniforms
+        ViewportUniforms m_viewportUniforms;
     };
 } // namespace enigma::graphic

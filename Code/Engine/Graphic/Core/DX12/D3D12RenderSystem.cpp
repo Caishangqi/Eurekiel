@@ -6,6 +6,7 @@
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/D12DepthTexture.hpp"
+#include "Engine/Graphic/Target/RTTypes.hpp"
 #include "Engine/Graphic/Resource/BindlessIndexAllocator.hpp"
 #include "Engine/Resource/ResourceSubsystem.hpp"
 #include "Engine/Resource/Atlas/ImageResource.hpp"
@@ -2210,5 +2211,64 @@ namespace enigma::graphic
             LogDebug(LogRenderer,
                      "ClearAllTextureCache: Cache was already empty");
         }
+    }
+
+    // ============================================================================
+    // [NEW] Config-based Clear API - RenderTarget Format Refactor
+    // ============================================================================
+
+    void D3D12RenderSystem::ClearRenderTargetByConfig(
+        ID3D12GraphicsCommandList*  commandList,
+        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
+        const RTConfig&             config)
+    {
+        if (!commandList)
+        {
+            LogError(LogRenderer, "ClearRenderTargetByConfig: commandList is null");
+            return;
+        }
+
+        // Only clear if loadAction is Clear
+        if (config.loadAction != LoadAction::Clear)
+        {
+            return;
+        }
+
+        // Get clear color from config
+        float clearColor[4];
+        config.clearValue.GetColorAsFloats(clearColor);
+
+        commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    }
+
+    void D3D12RenderSystem::ClearDepthStencilByConfig(
+        ID3D12GraphicsCommandList*  commandList,
+        D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle,
+        const RTConfig&             config)
+    {
+        if (!commandList)
+        {
+            LogError(LogRenderer, "ClearDepthStencilByConfig: commandList is null");
+            return;
+        }
+
+        // Only clear if loadAction is Clear
+        if (config.loadAction != LoadAction::Clear)
+        {
+            return;
+        }
+
+        // Get clear values from config
+        float   clearDepth   = config.clearValue.depthStencil.depth;
+        uint8_t clearStencil = config.clearValue.depthStencil.stencil;
+
+        commandList->ClearDepthStencilView(
+            dsvHandle,
+            D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+            clearDepth,
+            clearStencil,
+            0,
+            nullptr
+        );
     }
 } // namespace enigma::graphic
