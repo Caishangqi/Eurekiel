@@ -5,6 +5,7 @@
 
 #include <d3d12.h>
 #include <cstdint>
+#include <vector>
 
 namespace enigma::graphic
 {
@@ -163,13 +164,36 @@ namespace enigma::graphic
          * @param config New RT configuration
          * @throws InvalidIndexException if index out of bounds
          * @throws ResourceNotReadyException if resource recreation fails
-         * 
+         *
          * Use cases:
          * - ShadowCamera: orthographic projection with square viewport (e.g. 1024x1024)
          * - PlayerCamera: perspective projection with non-square viewport (e.g. 1920x1080)
          * - Runtime resolution adjustment
          */
         virtual void SetRtConfig(int index, const RTConfig& config) = 0;
+
+        // ========== [NEW] Reset and Config Query ==========
+
+        /**
+         * @brief Reset all RTs to default configuration
+         * @param defaultConfigs Vector of default configs (from RendererSubsystemConfig)
+         *
+         * Use cases:
+         * - ShaderBundle unload: restore to engine default RT formats
+         */
+        virtual void ResetToDefault(const std::vector<RTConfig>& defaultConfigs) = 0;
+
+        /**
+         * @brief Get current configuration at specified index
+         * @param index RT index
+         * @return Current RTConfig reference
+         * @throws InvalidIndexException if index out of bounds
+         *
+         * Use cases:
+         * - ClearAllRenderTargets: get loadAction and clearValue
+         * - Debug: query current RT config state
+         */
+        virtual const RTConfig& GetConfig(int index) const = 0;
 
         // ========== [NEW] Uniform Registration ==========
 
