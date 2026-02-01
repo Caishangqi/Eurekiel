@@ -2220,7 +2220,7 @@ namespace enigma::graphic
     void D3D12RenderSystem::ClearRenderTargetByConfig(
         ID3D12GraphicsCommandList*  commandList,
         D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
-        const RTConfig&             config)
+        const RenderTargetConfig&   config)
     {
         if (!commandList)
         {
@@ -2244,7 +2244,7 @@ namespace enigma::graphic
     void D3D12RenderSystem::ClearDepthStencilByConfig(
         ID3D12GraphicsCommandList*  commandList,
         D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle,
-        const RTConfig&             config)
+        const RenderTargetConfig&   config)
     {
         if (!commandList)
         {

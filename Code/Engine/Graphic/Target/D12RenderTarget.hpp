@@ -216,7 +216,7 @@ namespace enigma::graphic
              * 注意: RTConfig的enableFlipper, loadAction, clearValue字段
              *       不属于Builder职责，由外部管理
              */
-            static Builder FromConfig(const struct RTConfig& config)
+            static Builder FromConfig(const struct RenderTargetConfig& config)
             {
                 return Builder()
                        .SetName(config.name)

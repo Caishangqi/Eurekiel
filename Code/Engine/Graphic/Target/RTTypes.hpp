@@ -8,7 +8,7 @@
 namespace enigma::graphic
 {
     // ============================================================================  
-    // RTType - 渲染目标类型枚举
+    // RenderTargetType - 渲染目标类型枚举
     // ============================================================================
 
     /**
@@ -22,7 +22,7 @@ namespace enigma::graphic
      * 
      * 教学要点: 使用enum class确保类型安全，避免隐式转换
      */
-    enum class RTType
+    enum class RenderTargetType
     {
         ColorTex, ///< 常规颜色渲染目标，使用D12RenderTarget
         ShadowColor, ///< 阴影颜色渲染目标，使用D12RenderTarget，支持Flipper
@@ -144,7 +144,7 @@ namespace enigma::graphic
     };
 
     // ============================================================================  
-    // RTConfig - 渲染目标配置结构体
+    // RenderTargetConfig - 渲染目标配置结构体
     // ============================================================================
 
     /**
@@ -158,7 +158,7 @@ namespace enigma::graphic
      * - enableFlipper仅对需要历史帧数据的RT有效
      * - loadAction和clearValue配合实现高效的清空策略
      */
-    struct RTConfig
+    struct RenderTargetConfig
     {
         std::string name          = ""; ///< 渲染目标名称 (用于调试)
         int         width         = 0; ///< 宽度 (像素), 0表示使用scale计算
@@ -199,7 +199,7 @@ namespace enigma::graphic
          * - 默认使用Rgba8::BLACK清空值
          * - 新增纹理特性参数保持向后兼容（使用默认值）
          */
-        static RTConfig ColorTarget(
+        static RenderTargetConfig ColorTarget(
             const std::string& name,
             int                width, int height,
             DXGI_FORMAT        format,
@@ -227,7 +227,7 @@ namespace enigma::graphic
          * 
          * 教学要点: 新增纹理特性参数保持向后兼容（使用默认值）
          */
-        static RTConfig DepthTarget(
+        static RenderTargetConfig DepthTarget(
             const std::string& name,
             int                width, int height,
             DXGI_FORMAT        format,
@@ -258,7 +258,7 @@ namespace enigma::graphic
          * - width和height暂时设为0，通过widthScale/heightScale字段传递缩放信息
          * - 统一配置接口，RTConfig作为唯一配置源(配置统一化重构已完成)
          */
-        static RTConfig ColorTargetWithScale(
+        static RenderTargetConfig ColorTargetWithScale(
             const std::string& name,
             float              widthScale,
             float              heightScale,
@@ -288,7 +288,7 @@ namespace enigma::graphic
          * - 深度纹理通常不启用Mipmap（enableMipmap固定为false）
          * - width和height暂时设为0，通过widthScale/heightScale字段传递缩放信息
          */
-        static RTConfig DepthTargetWithScale(
+        static RenderTargetConfig DepthTargetWithScale(
             const std::string& name,
             float              widthScale,
             float              heightScale,
@@ -313,7 +313,7 @@ namespace enigma::graphic
          * @param clearValue Clear value (default: black)
          * @return RTConfig instance
          */
-        static RTConfig ShadowColorTarget(
+        static RenderTargetConfig ShadowColorTarget(
             const std::string& name,
             int                resolution,
             DXGI_FORMAT        format        = DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -331,7 +331,7 @@ namespace enigma::graphic
          * @param clearValue Clear value (default: 1.0 depth + 0 stencil)
          * @return RTConfig instance
          */
-        static RTConfig ShadowDepthTarget(
+        static RenderTargetConfig ShadowDepthTarget(
             const std::string& name,
             int                resolution,
             DXGI_FORMAT        format     = DXGI_FORMAT_D32_FLOAT,

@@ -59,10 +59,10 @@ namespace enigma::graphic
          * @note Use RTConfig::DepthTarget() to create depth texture configs
          */
         DepthTextureProvider(
-            int                          baseWidth,
-            int                          baseHeight,
-            const std::vector<RTConfig>& configs,
-            UniformManager*              uniformMgr
+            int                                    baseWidth,
+            int                                    baseHeight,
+            const std::vector<RenderTargetConfig>& configs,
+            UniformManager*                        uniformMgr
         );
 
         ~DepthTextureProvider() override = default;
@@ -116,11 +116,11 @@ namespace enigma::graphic
         bool SupportsDSV() const override { return true; }
 
         // Dynamic Configuration
-        void SetRtConfig(int index, const RTConfig& config) override;
+        void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
         // [NEW] Reset and Config Query
-        void            ResetToDefault(const std::vector<RTConfig>& defaultConfigs) override;
-        const RTConfig& GetConfig(int index) const override;
+        void                      ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) override;
+        const RenderTargetConfig& GetConfig(int index) const override;
 
         // ========================================================================
         // [NEW] Uniform Update API - Shader RT Fetching Feature
@@ -203,7 +203,7 @@ namespace enigma::graphic
         // ========================================================================
 
         std::vector<std::shared_ptr<D12DepthTexture>> m_depthTextures;
-        std::vector<RTConfig>                         m_configs;
+        std::vector<RenderTargetConfig>               m_configs;
 
         int m_baseWidth   = 0;
         int m_baseHeight  = 0;

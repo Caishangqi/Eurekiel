@@ -41,10 +41,10 @@ namespace enigma::graphic
          * @param defaultShadowTexConfig Default config for shadowtex (from YAML)
          */
         PackRenderTargetDirectives(
-            const RTConfig& defaultColorConfig,
-            const RTConfig& defaultDepthConfig,
-            const RTConfig& defaultShadowColorConfig,
-            const RTConfig& defaultShadowTexConfig
+            const RenderTargetConfig& defaultColorConfig,
+            const RenderTargetConfig& defaultDepthConfig,
+            const RenderTargetConfig& defaultShadowColorConfig,
+            const RenderTargetConfig& defaultShadowTexConfig
         );
 
         /**
@@ -71,33 +71,33 @@ namespace enigma::graphic
         // ColorTex Config Access
         // ========================================================================
 
-        RTConfig GetColorTexConfig(int index) const;
-        bool     HasColorTexConfig(int index) const;
-        int      GetMaxColorTexIndex() const;
+        RenderTargetConfig GetColorTexConfig(int index) const;
+        bool               HasColorTexConfig(int index) const;
+        int                GetMaxColorTexIndex() const;
 
         // ========================================================================
         // DepthTex Config Access
         // ========================================================================
 
-        RTConfig GetDepthTexConfig(int index) const;
-        bool     HasDepthTexConfig(int index) const;
-        int      GetMaxDepthTexIndex() const;
+        RenderTargetConfig GetDepthTexConfig(int index) const;
+        bool               HasDepthTexConfig(int index) const;
+        int                GetMaxDepthTexIndex() const;
 
         // ========================================================================
         // ShadowColor Config Access
         // ========================================================================
 
-        RTConfig GetShadowColorConfig(int index) const;
-        bool     HasShadowColorConfig(int index) const;
-        int      GetMaxShadowColorIndex() const;
+        RenderTargetConfig GetShadowColorConfig(int index) const;
+        bool               HasShadowColorConfig(int index) const;
+        int                GetMaxShadowColorIndex() const;
 
         // ========================================================================
         // ShadowTex Config Access
         // ========================================================================
 
-        RTConfig GetShadowTexConfig(int index) const;
-        bool     HasShadowTexConfig(int index) const;
-        int      GetMaxShadowTexIndex() const;
+        RenderTargetConfig GetShadowTexConfig(int index) const;
+        bool               HasShadowTexConfig(int index) const;
+        int                GetMaxShadowTexIndex() const;
 
         // ========================================================================
         // Utility
@@ -115,41 +115,41 @@ namespace enigma::graphic
         int  ExtractIndex(const std::string& name, const std::string& prefix, const std::string& suffix) const;
 
         void ApplyFormat(
-            std::map<int, RTConfig>& configs,
-            int                      index,
-            DXGI_FORMAT              format,
-            const RTConfig&          defaultConfig,
-            int                      maxIndex
+            std::map<int, RenderTargetConfig>& configs,
+            int                                index,
+            DXGI_FORMAT                        format,
+            const RenderTargetConfig&          defaultConfig,
+            int                                maxIndex
         );
 
         void ApplyClear(
-            std::map<int, RTConfig>& configs,
-            int                      index,
-            bool                     enableClear,
-            const RTConfig&          defaultConfig,
-            int                      maxIndex
+            std::map<int, RenderTargetConfig>& configs,
+            int                                index,
+            bool                               enableClear,
+            const RenderTargetConfig&          defaultConfig,
+            int                                maxIndex
         );
 
         void ApplyClearColor(
-            std::map<int, RTConfig>& configs,
-            int                      index,
-            const Vec4&              clearColor,
-            const RTConfig&          defaultConfig,
-            int                      maxIndex
+            std::map<int, RenderTargetConfig>& configs,
+            int                                index,
+            const Vec4&                        clearColor,
+            const RenderTargetConfig&          defaultConfig,
+            int                                maxIndex
         );
 
         // ========================================================================
         // Private Members
         // ========================================================================
 
-        RTConfig m_defaultColorConfig;
-        RTConfig m_defaultDepthConfig;
-        RTConfig m_defaultShadowColorConfig;
-        RTConfig m_defaultShadowTexConfig;
+        RenderTargetConfig m_defaultColorConfig;
+        RenderTargetConfig m_defaultDepthConfig;
+        RenderTargetConfig m_defaultShadowColorConfig;
+        RenderTargetConfig m_defaultShadowTexConfig;
 
-        std::map<int, RTConfig> m_colorTexConfigs;
-        std::map<int, RTConfig> m_depthTexConfigs;
-        std::map<int, RTConfig> m_shadowColorConfigs;
-        std::map<int, RTConfig> m_shadowTexConfigs;
+        std::map<int, RenderTargetConfig> m_colorTexConfigs;
+        std::map<int, RenderTargetConfig> m_depthTexConfigs;
+        std::map<int, RenderTargetConfig> m_shadowColorConfigs;
+        std::map<int, RenderTargetConfig> m_shadowTexConfigs;
     };
 } // namespace enigma::graphic

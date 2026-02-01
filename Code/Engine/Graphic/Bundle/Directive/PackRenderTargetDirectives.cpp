@@ -41,10 +41,10 @@ namespace enigma::graphic
     // ============================================================================
 
     PackRenderTargetDirectives::PackRenderTargetDirectives(
-        const RTConfig& defaultColorConfig,
-        const RTConfig& defaultDepthConfig,
-        const RTConfig& defaultShadowColorConfig,
-        const RTConfig& defaultShadowTexConfig)
+        const RenderTargetConfig& defaultColorConfig,
+        const RenderTargetConfig& defaultDepthConfig,
+        const RenderTargetConfig& defaultShadowColorConfig,
+        const RenderTargetConfig& defaultShadowTexConfig)
         : m_defaultColorConfig(defaultColorConfig)
           , m_defaultDepthConfig(defaultDepthConfig)
           , m_defaultShadowColorConfig(defaultShadowColorConfig)
@@ -234,11 +234,11 @@ namespace enigma::graphic
     // ============================================================================
 
     void PackRenderTargetDirectives::ApplyFormat(
-        std::map<int, RTConfig>& configs,
-        int                      index,
-        DXGI_FORMAT              format,
-        const RTConfig&          defaultConfig,
-        int                      maxIndex)
+        std::map<int, RenderTargetConfig>& configs,
+        int                                index,
+        DXGI_FORMAT                        format,
+        const RenderTargetConfig&          defaultConfig,
+        int                                maxIndex)
     {
         if (index < 0 || index >= maxIndex) return;
 
@@ -256,11 +256,11 @@ namespace enigma::graphic
     }
 
     void PackRenderTargetDirectives::ApplyClear(
-        std::map<int, RTConfig>& configs,
-        int                      index,
-        bool                     enableClear,
-        const RTConfig&          defaultConfig,
-        int                      maxIndex)
+        std::map<int, RenderTargetConfig>& configs,
+        int                                index,
+        bool                               enableClear,
+        const RenderTargetConfig&          defaultConfig,
+        int                                maxIndex)
     {
         if (index < 0 || index >= maxIndex) return;
 
@@ -277,11 +277,11 @@ namespace enigma::graphic
     }
 
     void PackRenderTargetDirectives::ApplyClearColor(
-        std::map<int, RTConfig>& configs,
-        int                      index,
-        const Vec4&              clearColor,
-        const RTConfig&          defaultConfig,
-        int                      maxIndex)
+        std::map<int, RenderTargetConfig>& configs,
+        int                                index,
+        const Vec4&                        clearColor,
+        const RenderTargetConfig&          defaultConfig,
+        int                                maxIndex)
     {
         if (index < 0 || index >= maxIndex) return;
 
@@ -301,7 +301,7 @@ namespace enigma::graphic
     // Config Access - ColorTex
     // ============================================================================
 
-    RTConfig PackRenderTargetDirectives::GetColorTexConfig(int index) const
+    RenderTargetConfig PackRenderTargetDirectives::GetColorTexConfig(int index) const
     {
         auto it = m_colorTexConfigs.find(index);
         return (it != m_colorTexConfigs.end()) ? it->second : m_defaultColorConfig;
@@ -322,7 +322,7 @@ namespace enigma::graphic
     // Config Access - DepthTex
     // ============================================================================
 
-    RTConfig PackRenderTargetDirectives::GetDepthTexConfig(int index) const
+    RenderTargetConfig PackRenderTargetDirectives::GetDepthTexConfig(int index) const
     {
         auto it = m_depthTexConfigs.find(index);
         return (it != m_depthTexConfigs.end()) ? it->second : m_defaultDepthConfig;
@@ -343,7 +343,7 @@ namespace enigma::graphic
     // Config Access - ShadowColor
     // ============================================================================
 
-    RTConfig PackRenderTargetDirectives::GetShadowColorConfig(int index) const
+    RenderTargetConfig PackRenderTargetDirectives::GetShadowColorConfig(int index) const
     {
         auto it = m_shadowColorConfigs.find(index);
         return (it != m_shadowColorConfigs.end()) ? it->second : m_defaultShadowColorConfig;
@@ -364,7 +364,7 @@ namespace enigma::graphic
     // Config Access - ShadowTex
     // ============================================================================
 
-    RTConfig PackRenderTargetDirectives::GetShadowTexConfig(int index) const
+    RenderTargetConfig PackRenderTargetDirectives::GetShadowTexConfig(int index) const
     {
         auto it = m_shadowTexConfigs.find(index);
         return (it != m_shadowTexConfigs.end()) ? it->second : m_defaultShadowTexConfig;

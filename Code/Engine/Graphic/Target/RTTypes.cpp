@@ -53,10 +53,10 @@ namespace enigma::graphic
     }
 
     // ============================================================================  
-    // RTConfig 静态工厂方法实现
+    // RenderTargetConfig 静态工厂方法实现
     // ============================================================================
 
-    RTConfig RTConfig::ColorTarget(
+    RenderTargetConfig RenderTargetConfig::ColorTarget(
         const std::string& name,
         int                width, int height,
         DXGI_FORMAT        format,
@@ -67,7 +67,7 @@ namespace enigma::graphic
         bool               allowLinearFilter,
         int                sampleCount)
     {
-        RTConfig config;
+        RenderTargetConfig config;
         config.name              = name;
         config.width             = width;
         config.height            = height;
@@ -81,7 +81,7 @@ namespace enigma::graphic
         return config;
     }
 
-    RTConfig RTConfig::DepthTarget(
+    RenderTargetConfig RenderTargetConfig::DepthTarget(
         const std::string& name,
         int                width, int height,
         DXGI_FORMAT        format,
@@ -92,7 +92,7 @@ namespace enigma::graphic
         bool               allowLinearFilter,
         int                sampleCount)
     {
-        RTConfig config;
+        RenderTargetConfig config;
         config.name              = name;
         config.width             = width;
         config.height            = height;
@@ -106,7 +106,7 @@ namespace enigma::graphic
         return config;
     }
 
-    RTConfig RTConfig::ColorTargetWithScale(
+    RenderTargetConfig RenderTargetConfig::ColorTargetWithScale(
         const std::string& name,
         float              widthScale,
         float              heightScale,
@@ -120,7 +120,7 @@ namespace enigma::graphic
     {
         // 调用ColorTarget()创建基础配置，width和height暂时设为0
         // 实际尺寸由RenderTargetManager构造时根据widthScale/heightScale计算
-        RTConfig config = ColorTarget(
+        RenderTargetConfig config = ColorTarget(
             name,
             0, 0, // width和height暂时设为0
             format,
@@ -139,7 +139,7 @@ namespace enigma::graphic
         return config;
     }
 
-    RTConfig RTConfig::DepthTargetWithScale(
+    RenderTargetConfig RenderTargetConfig::DepthTargetWithScale(
         const std::string& name,
         float              widthScale,
         float              heightScale,
@@ -151,7 +151,7 @@ namespace enigma::graphic
         // 调用DepthTarget()创建基础配置，width和height暂时设为0
         // 实际尺寸由RenderTargetManager构造时根据widthScale/heightScale计算
         // 深度纹理固定参数：enableFlipper=false, enableMipmap=false, allowLinearFilter=true
-        RTConfig config = DepthTarget(
+        RenderTargetConfig config = DepthTarget(
             name,
             0, 0, // width和height暂时设为0
             format,
@@ -174,7 +174,7 @@ namespace enigma::graphic
     // [NEW] Shadow Render Target Factory Methods Implementation
     // ============================================================================
 
-    RTConfig RTConfig::ShadowColorTarget(
+    RenderTargetConfig RenderTargetConfig::ShadowColorTarget(
         const std::string& name,
         int                resolution,
         DXGI_FORMAT        format,
@@ -196,7 +196,7 @@ namespace enigma::graphic
         );
     }
 
-    RTConfig RTConfig::ShadowDepthTarget(
+    RenderTargetConfig RenderTargetConfig::ShadowDepthTarget(
         const std::string& name,
         int                resolution,
         DXGI_FORMAT        format,

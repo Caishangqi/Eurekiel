@@ -55,29 +55,29 @@ namespace enigma::graphic
     // ============================================================================
 
     void RenderTargetBinder::BindRenderTargets(
-        const std::vector<std::pair<RTType, int>>& targets
+        const std::vector<std::pair<RenderTargetType, int>>& targets
     )
     {
         // ========== Validate depth binding constraints ==========
-        int                                 shadowTexCount = 0;
-        int                                 depthTexCount  = 0;
-        std::pair<RTType, int>              depthTarget    = {RTType::DepthTex, -1}; // -1 = not specified
-        std::vector<std::pair<RTType, int>> colorTargets;
+        int                                           shadowTexCount = 0;
+        int                                           depthTexCount  = 0;
+        std::pair<RenderTargetType, int>              depthTarget    = {RenderTargetType::DepthTex, -1}; // -1 = not specified
+        std::vector<std::pair<RenderTargetType, int>> colorTargets;
 
         for (const auto& target : targets)
         {
             switch (target.first)
             {
-            case RTType::ShadowTex:
+            case RenderTargetType::ShadowTex:
                 shadowTexCount++;
                 depthTarget = target;
                 break;
-            case RTType::DepthTex:
+            case RenderTargetType::DepthTex:
                 depthTexCount++;
                 depthTarget = target;
                 break;
-            case RTType::ColorTex:
-            case RTType::ShadowColor:
+            case RenderTargetType::ColorTex:
+            case RenderTargetType::ShadowColor:
                 colorTargets.push_back(target);
                 break;
             }
@@ -198,21 +198,21 @@ namespace enigma::graphic
                  m_pendingState.rtvHandles.size(), m_hasDepthBinding ? 1 : 0, m_pendingState.stateHash);
     }
 
-    IRenderTargetProvider* RenderTargetBinder::GetProvider(RTType rtType)
+    IRenderTargetProvider* RenderTargetBinder::GetProvider(RenderTargetType rtType)
     {
         switch (rtType)
         {
-        case RTType::ColorTex:
+        case RenderTargetType::ColorTex:
             return m_colorProvider;
-        case RTType::DepthTex:
+        case RenderTargetType::DepthTex:
             return m_depthProvider;
-        case RTType::ShadowColor:
+        case RenderTargetType::ShadowColor:
             return m_shadowColorProvider;
-        case RTType::ShadowTex:
+        case RenderTargetType::ShadowTex:
             return m_shadowTexProvider;
         default:
-            LogError("RenderTargetBinder", "Unknown RTType: %d", static_cast<int>(rtType));
-            throw std::invalid_argument("Unknown RTType");
+            LogError("RenderTargetBinder", "Unknown RenderTargetType: %d", static_cast<int>(rtType));
+            throw std::invalid_argument("Unknown RenderTargetType");
         }
     }
 
@@ -357,9 +357,9 @@ namespace enigma::graphic
     // Internal Implementation
     // ============================================================================
 
-    D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetBinder::GetDSVHandle(RTType rtType, int index) const
+    D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetBinder::GetDSVHandle(RenderTargetType rtType, int index) const
     {
-        if (rtType == RTType::DepthTex && m_depthProvider)
+        if (rtType == RenderTargetType::DepthTex && m_depthProvider)
         {
             // DepthTextureProvider supports DSV
             if (m_depthProvider->SupportsDSV())
@@ -368,7 +368,7 @@ namespace enigma::graphic
                 return depthProvider->GetDSV(index);
             }
         }
-        else if (rtType == RTType::ShadowTex && m_shadowTexProvider)
+        else if (rtType == RenderTargetType::ShadowTex && m_shadowTexProvider)
         {
             // ShadowTextureProvider supports DSV
             if (m_shadowTexProvider->SupportsDSV())
@@ -379,7 +379,7 @@ namespace enigma::graphic
         }
 
         // Other types cannot be used as DSV
-        if (rtType != RTType::DepthTex && rtType != RTType::ShadowTex)
+        if (rtType != RenderTargetType::DepthTex && rtType != RenderTargetType::ShadowTex)
         {
             LogWarn("RenderTargetBinder", "Only DepthTex/ShadowTex can be used as DSV, got type=%d",
                     static_cast<int>(rtType));

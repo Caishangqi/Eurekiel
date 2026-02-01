@@ -21,10 +21,10 @@ namespace enigma::graphic
     // ============================================================================
 
     ShadowTextureProvider::ShadowTextureProvider(
-        int                          baseWidth,
-        int                          baseHeight,
-        const std::vector<RTConfig>& configs,
-        UniformManager*              uniformMgr
+        int                                    baseWidth,
+        int                                    baseHeight,
+        const std::vector<RenderTargetConfig>& configs,
+        UniformManager*                        uniformMgr
     )
         : m_activeCount(static_cast<int>(configs.size()))
     {
@@ -237,11 +237,11 @@ namespace enigma::graphic
     // IRenderTargetProvider - Dynamic Configuration
     // ============================================================================
 
-    void ShadowTextureProvider::SetRtConfig(int index, const RTConfig& config)
+    void ShadowTextureProvider::SetRtConfig(int index, const RenderTargetConfig& config)
     {
         ValidateIndex(index);
 
-        const RTConfig& currentConfig = m_configs[index];
+        const RenderTargetConfig& currentConfig = m_configs[index];
 
         // [REFACTOR] Only rebuild if format or dimensions change
         bool needRebuild = (currentConfig.format != config.format) ||
@@ -278,7 +278,7 @@ namespace enigma::graphic
     // [NEW] Reset and Config Query Implementation
     // ============================================================================
 
-    void ShadowTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    void ShadowTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
     {
         int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
 
@@ -292,7 +292,7 @@ namespace enigma::graphic
                 count);
     }
 
-    const RTConfig& ShadowTextureProvider::GetConfig(int index) const
+    const RenderTargetConfig& ShadowTextureProvider::GetConfig(int index) const
     {
         if (!IsValidIndex(index))
         {

@@ -55,10 +55,10 @@ namespace enigma::graphic
          * @throws std::invalid_argument if dimensions invalid, configs empty, or uniformMgr null
          */
         ColorTextureProvider(
-            int                          baseWidth,
-            int                          baseHeight,
-            const std::vector<RTConfig>& configs,
-            UniformManager*              uniformMgr
+            int                                    baseWidth,
+            int                                    baseHeight,
+            const std::vector<RenderTargetConfig>& configs,
+            UniformManager*                        uniformMgr
         );
 
         ~ColorTextureProvider() override = default;
@@ -102,11 +102,11 @@ namespace enigma::graphic
         bool SupportsDSV() const override { return false; }
 
         // Dynamic Configuration
-        void SetRtConfig(int index, const RTConfig& config) override;
+        void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
         // [NEW] Reset and Config Query
-        void            ResetToDefault(const std::vector<RTConfig>& defaultConfigs) override;
-        const RTConfig& GetConfig(int index) const override;
+        void                      ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) override;
+        const RenderTargetConfig& GetConfig(int index) const override;
 
         // ========================================================================
         // [NEW] Uniform Registration API - Shader RT Fetching Feature
@@ -205,7 +205,7 @@ namespace enigma::graphic
         // ========================================================================
 
         std::vector<std::shared_ptr<D12RenderTarget>> m_renderTargets;
-        std::vector<RTConfig>                         m_configs;
+        std::vector<RenderTargetConfig>               m_configs;
         RenderTargetFlipState                         m_flipState;
 
         int m_baseWidth   = 0;

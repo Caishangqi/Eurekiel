@@ -531,7 +531,7 @@ namespace enigma::graphic
         static void ClearRenderTargetByConfig(
             ID3D12GraphicsCommandList*  commandList,
             D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
-            const struct RTConfig&      config
+            const struct RenderTargetConfig&      config
         );
 
         /**
@@ -546,7 +546,7 @@ namespace enigma::graphic
         static void ClearDepthStencilByConfig(
             ID3D12GraphicsCommandList*  commandList,
             D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle,
-            const struct RTConfig&      config
+            const struct RenderTargetConfig&      config
         );
 
         // ===== 资源创建API =====

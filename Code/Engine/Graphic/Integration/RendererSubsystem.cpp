@@ -131,15 +131,15 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ColorTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
+    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     // Reference: requirements.md - Requirement 1: RendererSubsystemConfig 扩展
     try
     {
         LogInfo(LogRenderer, "Creating ColorTextureProvider...");
 
-        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
         // Always creates MAX_COLOR_TEXTURES (16) colortex, format from config
-        std::vector<RTConfig> colorConfigs = m_configuration.GetColorTexConfigs();
+        std::vector<RenderTargetConfig> colorConfigs = m_configuration.GetColorTexConfigs();
 
         const int baseWidth  = m_configuration.renderWidth;
         const int baseHeight = m_configuration.renderHeight;
@@ -187,14 +187,14 @@ void RendererSubsystem::Startup()
     LogInfo(LogRenderer, "VertexLayoutRegistry initialized with predefined layouts");
 
     // ==================== Create DepthTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
+    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating DepthTextureProvider...");
 
-        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
         // Always creates MAX_DEPTH_TEXTURES (3) depthtex, format from config
-        std::vector<RTConfig> depthConfigs = m_configuration.GetDepthTexConfigs();
+        std::vector<RenderTargetConfig> depthConfigs = m_configuration.GetDepthTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_depthTextureProvider = std::make_unique<DepthTextureProvider>(
@@ -210,14 +210,14 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ShadowColorProvider (with UniformManager) ====================
-    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
+    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating ShadowColorProvider...");
 
-        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
         // Always creates MAX_SHADOW_COLORS (8) shadowcolor, format from config
-        std::vector<RTConfig> shadowColorConfigs = m_configuration.GetShadowColorConfigs();
+        std::vector<RenderTargetConfig> shadowColorConfigs = m_configuration.GetShadowColorConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_shadowColorProvider = std::make_unique<ShadowColorProvider>(
@@ -233,14 +233,14 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ShadowTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RTConfig from RendererSubsystemConfig instead of hardcoding
+    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating ShadowTextureProvider...");
 
-        // [REFACTOR] Get RTConfig from configuration (YAML or defaults)
+        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
         // Always creates MAX_SHADOW_TEXTURES (2) shadowtex, format from config
-        std::vector<RTConfig> shadowTexConfigs = m_configuration.GetShadowTexConfigs();
+        std::vector<RenderTargetConfig> shadowTexConfigs = m_configuration.GetShadowTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(
@@ -916,8 +916,8 @@ std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(const std::string
 //-----------------------------------------------------------------------------------------------
 
 void RendererSubsystem::UseProgram(
-    std::shared_ptr<ShaderProgram>             shaderProgram,
-    const std::vector<std::pair<RTType, int>>& targets
+    std::shared_ptr<ShaderProgram>                       shaderProgram,
+    const std::vector<std::pair<RenderTargetType, int>>& targets
 )
 {
     if (!shaderProgram)
@@ -957,7 +957,7 @@ void RendererSubsystem::UseProgram(
 // [NEW] GetProvider - Access RT provider for dynamic configuration
 //-----------------------------------------------------------------------------------------------
 
-IRenderTargetProvider* RendererSubsystem::GetProvider(RTType rtType)
+IRenderTargetProvider* RendererSubsystem::GetRenderTargetProvider(RenderTargetType rtType)
 {
     if (!m_renderTargetBinder)
     {
@@ -1328,14 +1328,14 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
     LogDebug(LogRenderer, "PresentWithShader: Rendered to BackBuffer");
 }
 
-void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
+void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType)
 {
     // ========================================================================
     // [REFACTORED] Provider-based Architecture
     // ========================================================================
     // 重构说明：
     // - 使用 IRenderTargetProvider 统一接口替代废弃的 m_renderTargetManager
-    // - 支持所有四种 RTType（ColorTex, DepthTex, ShadowColor, ShadowTex）
+    // - 支持所有四种 RenderTargetType（ColorTex, DepthTex, ShadowColor, ShadowTex）
     // - 使用 GetMainResource()/GetAltResource() 获取 ID3D12Resource*
     // - 符合 SOLID 原则（依赖倒置）
     // ========================================================================
@@ -1344,10 +1344,10 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     // Step 1: 获取对应的 Provider
     // ========================================================================
 
-    IRenderTargetProvider* provider = GetProvider(rtType);
+    IRenderTargetProvider* provider = GetRenderTargetProvider(rtType);
     if (!provider)
     {
-        LogError(LogRenderer, "PresentRenderTarget: Provider is null for RTType %d", static_cast<int>(rtType));
+        LogError(LogRenderer, "PresentRenderTarget: Provider is null for RenderTargetType %d", static_cast<int>(rtType));
         return;
     }
 
@@ -1358,7 +1358,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     const int rtCount = provider->GetCount();
     if (rtIndex < 0 || rtIndex >= rtCount)
     {
-        LogError(LogRenderer, "PresentRenderTarget: rtIndex %d out of range [0, %d) for RTType %d",
+        LogError(LogRenderer, "PresentRenderTarget: rtIndex %d out of range [0, %d) for RenderTargetType %d",
                  rtIndex, rtCount, static_cast<int>(rtType));
         return;
     }
@@ -1423,12 +1423,12 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     // ========================================================================
     // Step 6: 确定源资源的初始状态
     // ========================================================================
-    // 不同 RTType 的资源可能处于不同的初始状态：
+    // 不同 RenderTargetType 的资源可能处于不同的初始状态：
     // - ColorTex/ShadowColor: D3D12_RESOURCE_STATE_RENDER_TARGET
     // - DepthTex/ShadowTex: D3D12_RESOURCE_STATE_DEPTH_WRITE
 
     D3D12_RESOURCE_STATES sourceInitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    if (rtType == RTType::DepthTex || rtType == RTType::ShadowTex)
+    if (rtType == RenderTargetType::DepthTex || rtType == RenderTargetType::ShadowTex)
     {
         sourceInitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
@@ -1486,13 +1486,13 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RTType rtType)
     const char* rtTypeName = "Unknown";
     switch (rtType)
     {
-    case RTType::ColorTex: rtTypeName = "colortex";
+    case RenderTargetType::ColorTex: rtTypeName = "colortex";
         break;
-    case RTType::DepthTex: rtTypeName = "depthtex";
+    case RenderTargetType::DepthTex: rtTypeName = "depthtex";
         break;
-    case RTType::ShadowColor: rtTypeName = "shadowcolor";
+    case RenderTargetType::ShadowColor: rtTypeName = "shadowcolor";
         break;
-    case RTType::ShadowTex: rtTypeName = "shadowtex";
+    case RenderTargetType::ShadowTex: rtTypeName = "shadowtex";
         break;
     }
 
@@ -1656,7 +1656,7 @@ const VertexLayout* RendererSubsystem::GetCurrentVertexLayout() const noexcept
     return m_currentVertexLayout;
 }
 
-void RendererSubsystem::BindRenderTargets(const std::vector<std::pair<RTType, int>>& targets)
+void RendererSubsystem::BindRenderTargets(const std::vector<std::pair<RenderTargetType, int>>& targets)
 {
     m_renderTargetBinder->BindRenderTargets(targets);
 }
@@ -1819,7 +1819,7 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
 // Clear Operations - Flexible RT Management
 // ============================================================================
 
-void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba8& clearColor)
+void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, const Rgba8& clearColor)
 {
     // ========================================================================
     // [REFACTORED] Provider-based Architecture
@@ -1831,10 +1831,10 @@ void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba
     // - 符合 SOLID 原则（依赖倒置）
     // ========================================================================
 
-    // Step 1: 验证 RTType 是否支持 RTV Clear
-    if (rtType == RTType::DepthTex || rtType == RTType::ShadowTex)
+    // Step 1: 验证 RenderTargetType 是否支持 RTV Clear
+    if (rtType == RenderTargetType::DepthTex || rtType == RenderTargetType::ShadowTex)
     {
-        LogError(LogRenderer, "ClearRenderTarget: RTType %d is depth-based, use ClearDepthStencil instead",
+        LogError(LogRenderer, "ClearRenderTarget: RenderTargetType %d is depth-based, use ClearDepthStencil instead",
                  static_cast<int>(rtType));
         return;
     }
@@ -1848,10 +1848,10 @@ void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba
     }
 
     // Step 3: 获取对应的 Provider
-    IRenderTargetProvider* provider = GetProvider(rtType);
+    IRenderTargetProvider* provider = GetRenderTargetProvider(rtType);
     if (!provider)
     {
-        LogError(LogRenderer, "ClearRenderTarget: Provider is null for RTType %d", static_cast<int>(rtType));
+        LogError(LogRenderer, "ClearRenderTarget: Provider is null for RenderTargetType %d", static_cast<int>(rtType));
         return;
     }
 
@@ -1859,7 +1859,7 @@ void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba
     const int rtCount = provider->GetCount();
     if (rtIndex < 0 || rtIndex >= rtCount)
     {
-        LogError(LogRenderer, "ClearRenderTarget: rtIndex %d out of range [0, %d) for RTType %d",
+        LogError(LogRenderer, "ClearRenderTarget: rtIndex %d out of range [0, %d) for RenderTargetType %d",
                  rtIndex, rtCount, static_cast<int>(rtType));
         return;
     }
@@ -1879,7 +1879,7 @@ void RendererSubsystem::ClearRenderTarget(RTType rtType, int rtIndex, const Rgba
     cmdList->ClearRenderTargetView(rtvHandle, clearColorFloat, 0, nullptr);
 
     // Step 8: 输出日志
-    const char* rtTypeName = (rtType == RTType::ColorTex) ? "colortex" : "shadowcolor";
+    const char* rtTypeName = (rtType == RenderTargetType::ColorTex) ? "colortex" : "shadowcolor";
     LogDebug(LogRenderer, "ClearRenderTarget: Cleared %s%d to RGBA(%u,%u,%u,%u)",
              rtTypeName, rtIndex, clearColor.r, clearColor.g, clearColor.b, clearColor.a);
 }
@@ -1910,7 +1910,7 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
             depthIndex, clearDepth, clearStencil);
 }
 
-// [REFACTOR] ClearAllRenderTargets - Use RTConfig for per-RT clear settings
+// [REFACTOR] ClearAllRenderTargets - Use RenderTargetConfig for per-RT clear settings
 void RendererSubsystem::ClearAllRenderTargets()
 {
     auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
@@ -1925,7 +1925,7 @@ void RendererSubsystem::ClearAllRenderTargets()
     {
         for (int i = 0; i < m_colorTextureProvider->GetCount(); ++i)
         {
-            const RTConfig& config = m_colorTextureProvider->GetConfig(i);
+            const RenderTargetConfig& config = m_colorTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
                 auto rtvHandle = m_colorTextureProvider->GetMainRTV(i);
@@ -1939,7 +1939,7 @@ void RendererSubsystem::ClearAllRenderTargets()
     {
         for (int i = 0; i < m_depthTextureProvider->GetCount(); ++i)
         {
-            const RTConfig& config = m_depthTextureProvider->GetConfig(i);
+            const RenderTargetConfig& config = m_depthTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
                 auto dsvHandle = m_depthTextureProvider->GetMainRTV(i); // DSV handle
@@ -1953,7 +1953,7 @@ void RendererSubsystem::ClearAllRenderTargets()
     {
         for (int i = 0; i < m_shadowTextureProvider->GetCount(); ++i)
         {
-            const RTConfig& config = m_shadowTextureProvider->GetConfig(i);
+            const RenderTargetConfig& config = m_shadowTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
                 auto dsvHandle = m_shadowTextureProvider->GetMainRTV(i); // DSV handle
@@ -1967,7 +1967,7 @@ void RendererSubsystem::ClearAllRenderTargets()
     {
         for (int i = 0; i < m_shadowColorProvider->GetCount(); ++i)
         {
-            const RTConfig& config = m_shadowColorProvider->GetConfig(i);
+            const RenderTargetConfig& config = m_shadowColorProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
                 auto rtvHandle = m_shadowColorProvider->GetMainRTV(i);

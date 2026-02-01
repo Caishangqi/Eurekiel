@@ -10,7 +10,7 @@
 namespace enigma::graphic
 {
     // Forward declarations
-    struct RTConfig;
+    struct RenderTargetConfig;
     class UniformManager;
 
     /**
@@ -170,7 +170,7 @@ namespace enigma::graphic
          * - PlayerCamera: perspective projection with non-square viewport (e.g. 1920x1080)
          * - Runtime resolution adjustment
          */
-        virtual void SetRtConfig(int index, const RTConfig& config) = 0;
+        virtual void SetRtConfig(int index, const RenderTargetConfig& config) = 0;
 
         // ========== [NEW] Reset and Config Query ==========
 
@@ -181,7 +181,7 @@ namespace enigma::graphic
          * Use cases:
          * - ShaderBundle unload: restore to engine default RT formats
          */
-        virtual void ResetToDefault(const std::vector<RTConfig>& defaultConfigs) = 0;
+        virtual void ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) = 0;
 
         /**
          * @brief Get current configuration at specified index
@@ -193,7 +193,7 @@ namespace enigma::graphic
          * - ClearAllRenderTargets: get loadAction and clearValue
          * - Debug: query current RT config state
          */
-        virtual const RTConfig& GetConfig(int index) const = 0;
+        virtual const RenderTargetConfig& GetConfig(int index) const = 0;
 
         // ========== [NEW] Uniform Registration ==========
 

@@ -31,14 +31,14 @@ namespace enigma::graphic
     namespace
     {
         // Parse single RT config from YAML node
-        RTConfig ParseSingleRTConfig(
-            const YAML::Node&  node,
-            const RTConfig&    defaultConfig,
-            const std::string& rtName,
-            bool               isDepthFormat)
+        RenderTargetConfig ParseSingleRTConfig(
+            const YAML::Node&         node,
+            const RenderTargetConfig& defaultConfig,
+            const std::string&        rtName,
+            bool                      isDepthFormat)
         {
-            RTConfig config = defaultConfig;
-            config.name     = rtName;
+            RenderTargetConfig config = defaultConfig;
+            config.name               = rtName;
 
             // Parse format
             if (node["format"])
@@ -112,13 +112,13 @@ namespace enigma::graphic
             return config;
         }
 
-        // Parse RTTypeConfig from YAML section
+        // Parse RenderTargetTypeConfig from YAML section
         void ParseRTTypeConfigFromYaml(
-            const YAML::Node&                      sectionNode,
-            RendererSubsystemConfig::RTTypeConfig& rtTypeConfig,
-            const std::string&                     rtPrefix,
-            int                                    maxCount,
-            bool                                   isDepthFormat)
+            const YAML::Node&                                sectionNode,
+            RendererSubsystemConfig::RenderTargetTypeConfig& rtTypeConfig,
+            const std::string&                               rtPrefix,
+            int                                              maxCount,
+            bool                                             isDepthFormat)
         {
             if (!sectionNode || !sectionNode.IsMap())
                 return;
@@ -321,7 +321,7 @@ namespace enigma::graphic
 
         // [NEW] Initialize default RT configs
         // ColorTex default: R8G8B8A8_UNORM, clear to black
-        config.colorTexConfig.defaultConfig = RTConfig::ColorTargetWithScale(
+        config.colorTexConfig.defaultConfig = RenderTargetConfig::ColorTargetWithScale(
             "colortex_default", 1.0f, 1.0f,
             DXGI_FORMAT_R8G8B8A8_UNORM,
             true, // enableFlipper
@@ -330,7 +330,7 @@ namespace enigma::graphic
         );
 
         // DepthTex default: D24_UNORM_S8_UINT, clear to 1.0
-        config.depthTexConfig.defaultConfig = RTConfig::DepthTargetWithScale(
+        config.depthTexConfig.defaultConfig = RenderTargetConfig::DepthTargetWithScale(
             "depthtex_default", 1.0f, 1.0f,
             DXGI_FORMAT_D24_UNORM_S8_UINT,
             LoadAction::Clear,
@@ -338,7 +338,7 @@ namespace enigma::graphic
         );
 
         // ShadowColor default: R8G8B8A8_UNORM, clear to black
-        config.shadowColorConfig.defaultConfig = RTConfig::ColorTargetWithScale(
+        config.shadowColorConfig.defaultConfig = RenderTargetConfig::ColorTargetWithScale(
             "shadowcolor_default", 1.0f, 1.0f,
             DXGI_FORMAT_R8G8B8A8_UNORM,
             true, // enableFlipper
@@ -347,7 +347,7 @@ namespace enigma::graphic
         );
 
         // ShadowTex default: D32_FLOAT, clear to 1.0
-        config.shadowTexConfig.defaultConfig = RTConfig::DepthTargetWithScale(
+        config.shadowTexConfig.defaultConfig = RenderTargetConfig::DepthTargetWithScale(
             "shadowtex_default", 1.0f, 1.0f,
             DXGI_FORMAT_D32_FLOAT,
             LoadAction::Clear,
@@ -361,15 +361,15 @@ namespace enigma::graphic
     // [REFACTOR] RT Config Accessor Methods - Calculate actual dimensions from scale
     // ============================================================================
 
-    std::vector<RTConfig> RendererSubsystemConfig::GetColorTexConfigs() const
+    std::vector<RenderTargetConfig> RendererSubsystemConfig::GetColorTexConfigs() const
     {
-        std::vector<RTConfig> result;
+        std::vector<RenderTargetConfig> result;
         result.reserve(MAX_COLOR_TEXTURES);
 
         for (int i = 0; i < MAX_COLOR_TEXTURES; ++i)
         {
-            RTConfig cfg = colorTexConfig.GetConfig(i);
-            cfg.name     = "colortex" + std::to_string(i);
+            RenderTargetConfig cfg = colorTexConfig.GetConfig(i);
+            cfg.name               = "colortex" + std::to_string(i);
 
             // [FIX] Calculate actual dimensions from scale if width/height are 0
             if (cfg.width <= 0 || cfg.height <= 0)
@@ -384,15 +384,15 @@ namespace enigma::graphic
         return result;
     }
 
-    std::vector<RTConfig> RendererSubsystemConfig::GetDepthTexConfigs() const
+    std::vector<RenderTargetConfig> RendererSubsystemConfig::GetDepthTexConfigs() const
     {
-        std::vector<RTConfig> result;
+        std::vector<RenderTargetConfig> result;
         result.reserve(MAX_DEPTH_TEXTURES);
 
         for (int i = 0; i < MAX_DEPTH_TEXTURES; ++i)
         {
-            RTConfig cfg = depthTexConfig.GetConfig(i);
-            cfg.name     = "depthtex" + std::to_string(i);
+            RenderTargetConfig cfg = depthTexConfig.GetConfig(i);
+            cfg.name               = "depthtex" + std::to_string(i);
 
             // [FIX] Calculate actual dimensions from scale if width/height are 0
             if (cfg.width <= 0 || cfg.height <= 0)
@@ -407,15 +407,15 @@ namespace enigma::graphic
         return result;
     }
 
-    std::vector<RTConfig> RendererSubsystemConfig::GetShadowColorConfigs() const
+    std::vector<RenderTargetConfig> RendererSubsystemConfig::GetShadowColorConfigs() const
     {
-        std::vector<RTConfig> result;
+        std::vector<RenderTargetConfig> result;
         result.reserve(MAX_SHADOW_COLORS);
 
         for (int i = 0; i < MAX_SHADOW_COLORS; ++i)
         {
-            RTConfig cfg = shadowColorConfig.GetConfig(i);
-            cfg.name     = "shadowcolor" + std::to_string(i);
+            RenderTargetConfig cfg = shadowColorConfig.GetConfig(i);
+            cfg.name               = "shadowcolor" + std::to_string(i);
 
             // [FIX] Calculate actual dimensions from scale if width/height are 0
             if (cfg.width <= 0 || cfg.height <= 0)
@@ -430,15 +430,15 @@ namespace enigma::graphic
         return result;
     }
 
-    std::vector<RTConfig> RendererSubsystemConfig::GetShadowTexConfigs() const
+    std::vector<RenderTargetConfig> RendererSubsystemConfig::GetShadowTexConfigs() const
     {
-        std::vector<RTConfig> result;
+        std::vector<RenderTargetConfig> result;
         result.reserve(MAX_SHADOW_TEXTURES);
 
         for (int i = 0; i < MAX_SHADOW_TEXTURES; ++i)
         {
-            RTConfig cfg = shadowTexConfig.GetConfig(i);
-            cfg.name     = "shadowtex" + std::to_string(i);
+            RenderTargetConfig cfg = shadowTexConfig.GetConfig(i);
+            cfg.name               = "shadowtex" + std::to_string(i);
 
             // [FIX] Calculate actual dimensions from scale if width/height are 0
             if (cfg.width <= 0 || cfg.height <= 0)

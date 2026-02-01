@@ -105,16 +105,16 @@ namespace enigma::graphic
          *
          * @example
          * // Shadow camera: only shadowtex0 as depth
-         * binder->BindRenderTargets({{RTType::ShadowTex, 0}});
+         * binder->BindRenderTargets({{RenderTargetType::ShadowTex, 0}});
          *
          * // Player camera: 4 colortex + 1 depthtex
          * binder->BindRenderTargets({
-         *     {RTType::ColorTex, 0}, {RTType::ColorTex, 1},
-         *     {RTType::ColorTex, 2}, {RTType::ColorTex, 3},
-         *     {RTType::DepthTex, 0}
+         *     {RenderTargetType::ColorTex, 0}, {RenderTargetType::ColorTex, 1},
+         *     {RenderTargetType::ColorTex, 2}, {RenderTargetType::ColorTex, 3},
+         *     {RenderTargetType::DepthTex, 0}
          * });
          */
-        void BindRenderTargets(const std::vector<std::pair<RTType, int>>& targets);
+        void BindRenderTargets(const std::vector<std::pair<RenderTargetType, int>>& targets);
 
         /**
          * @brief Get provider by RTType
@@ -122,7 +122,7 @@ namespace enigma::graphic
          * @return Provider pointer
          * @throws std::invalid_argument for unknown RTType
          */
-        IRenderTargetProvider* GetProvider(RTType rtType);
+        IRenderTargetProvider* GetProvider(RenderTargetType rtType);
 
         /**
          * @brief Clear all bindings (unbind all RTs)
@@ -182,7 +182,7 @@ namespace enigma::graphic
          * @param index Depth texture index
          * @return DSV handle
          */
-        D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle(RTType rtType, int index) const;
+        D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle(RenderTargetType rtType, int index) const;
 
         /**
          * @brief Perform clear operations (internal)

@@ -205,7 +205,7 @@ namespace enigma::graphic
     // 配置生成函数实现
     // ============================================================================
 
-    std::array<RTConfig, 16> RenderTargetHelper::GenerateRTConfigs(int colorTexCount)
+    std::array<RenderTargetConfig, 16> RenderTargetHelper::GenerateRTConfigs(int colorTexCount)
     {
         // 修正colorTexCount范围到[1, 16]
         int actualColorTexCount = colorTexCount;
@@ -227,7 +227,7 @@ namespace enigma::graphic
         }
 
         // 创建配置数组
-        std::array<RTConfig, 16> configs;
+        std::array<RenderTargetConfig, 16> configs;
 
         // 生成有效的RT配置（前actualColorTexCount个）
         for (int i = 0; i < actualColorTexCount; ++i)
@@ -236,7 +236,7 @@ namespace enigma::graphic
             std::string name = Stringf("colortex%d", i);
 
             // 创建配置
-            configs[i] = RTConfig::ColorTarget(
+            configs[i] = RenderTargetConfig::ColorTarget(
                 name,
                 0, 0, // 尺寸设为0，由RenderTargetManager根据baseWidth/baseHeight计算
                 DXGI_FORMAT_R8G8B8A8_UNORM, // 默认格式
@@ -256,7 +256,7 @@ namespace enigma::graphic
             std::string name = Stringf("unused_colortex%d", i);
 
             // 创建占位配置
-            configs[i] = RTConfig::ColorTarget(
+            configs[i] = RenderTargetConfig::ColorTarget(
                 name,
                 1, 1, // 最小尺寸
                 DXGI_FORMAT_R8G8B8A8_UNORM, // 默认格式

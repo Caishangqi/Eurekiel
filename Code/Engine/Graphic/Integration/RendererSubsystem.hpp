@@ -378,7 +378,7 @@ namespace enigma::graphic
          */
         void UseProgram(
             std::shared_ptr<ShaderProgram>             shaderProgram,
-            const std::vector<std::pair<RTType, int>>& targets = {}
+            const std::vector<std::pair<RenderTargetType, int>>& targets = {}
         );
 
         /**
@@ -388,14 +388,14 @@ namespace enigma::graphic
          *
          * @details
          * Allows App-side to access providers for dynamic resolution changes.
-         * Delegates to m_renderTargetBinder->GetProvider(rtType).
+         * Delegates to m_renderTargetBinder->GetRenderTargetProvider(rtType).
          *
          * @code
-         * auto colorProvider = renderer->GetProvider(RTType::ColorTex);
+         * auto colorProvider = renderer->GetRenderTargetProvider(RTType::ColorTex);
          * colorProvider->SetRtConfig(newConfig);
          * @endcode
          */
-        IRenderTargetProvider* GetProvider(RTType rtType);
+        IRenderTargetProvider* GetRenderTargetProvider(RenderTargetType rtType);
 
         /**
          * @brief [NEW] Begin camera rendering - ICamera interface version
@@ -712,7 +712,7 @@ namespace enigma::graphic
          * - PresentRenderTarget(): ~0.1ms（纯拷贝）
          * - PresentWithShader(): ~0.5-2ms（含Shader执行）
          */
-        void PresentRenderTarget(int rtIndex, RTType rtType = RTType::ColorTex);
+        void PresentRenderTarget(int rtIndex, RenderTargetType rtType = RenderTargetType::ColorTex);
 
         /**
          * @brief 拷贝自定义纹理到BackBuffer（M6.3高级API）
@@ -807,7 +807,7 @@ namespace enigma::graphic
          * - Learn Provider-based RT architecture
          * - Master flexible render target management
          */
-        void ClearRenderTarget(RTType rtType, int rtIndex, const Rgba8& clearColor = Rgba8::BLACK);
+        void ClearRenderTarget(RenderTargetType rtType, int rtIndex, const Rgba8& clearColor = Rgba8::BLACK);
 
         /**
          * @brief Clear a specific depth-stencil texture
@@ -1266,19 +1266,19 @@ namespace enigma::graphic
          * ```cpp
          * // Bind colortex0-3 + depthtex0
          * renderer->BindRenderTargets({
-         *     {RTType::ColorTex, 0}, {RTType::ColorTex, 1},
-         *     {RTType::ColorTex, 2}, {RTType::ColorTex, 3},
-         *     {RTType::DepthTex, 0}
+         *     {RenderTargetType::ColorTex, 0}, {RenderTargetType::ColorTex, 1},
+         *     {RenderTargetType::ColorTex, 2}, {RenderTargetType::ColorTex, 3},
+         *     {RenderTargetType::DepthTex, 0}
          * });
          *
          * // Shadow pass: shadowcolor0 + shadowtex0
          * renderer->BindRenderTargets({
-         *     {RTType::ShadowColor, 0},
-         *     {RTType::ShadowTex, 0}
+         *     {RenderTargetType::ShadowColor, 0},
+         *     {RenderTargetType::ShadowTex, 0}
          * });
          * ```
          */
-        void BindRenderTargets(const std::vector<std::pair<RTType, int>>& targets);
+        void BindRenderTargets(const std::vector<std::pair<RenderTargetType, int>>& targets);
 #pragma endregion
 
 #pragma region State Management

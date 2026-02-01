@@ -311,51 +311,51 @@ namespace enigma::graphic
          * Stores sparse index-specific configs and a default config.
          * Used by RendererSubsystem to initialize Providers.
          */
-        struct RTTypeConfig
+        struct RenderTargetTypeConfig
         {
-            std::map<int, RTConfig> configs; // Index-specific configs (override default)
-            RTConfig                defaultConfig; // Default for unspecified indices
+            std::map<int, RenderTargetConfig> configs; // Index-specific configs (override default)
+            RenderTargetConfig                defaultConfig; // Default for unspecified indices
 
             /**
              * @brief Get config for specified index
              * @param index RT index
              * @return Config at index if exists, otherwise defaultConfig
              */
-            RTConfig GetConfig(int index) const
+            RenderTargetConfig GetConfig(int index) const
             {
                 auto it = configs.find(index);
                 return (it != configs.end()) ? it->second : defaultConfig;
             }
         };
 
-        RTTypeConfig colorTexConfig; // colortex0-15
-        RTTypeConfig depthTexConfig; // depthtex0-2
-        RTTypeConfig shadowColorConfig; // shadowcolor0-7
-        RTTypeConfig shadowTexConfig; // shadowtex0-1
+        RenderTargetTypeConfig colorTexConfig; // colortex0-15
+        RenderTargetTypeConfig depthTexConfig; // depthtex0-2
+        RenderTargetTypeConfig shadowColorConfig; // shadowcolor0-7
+        RenderTargetTypeConfig shadowTexConfig; // shadowtex0-1
 
         /**
          * @brief Get all colortex configs (fixed count = MAX_COLOR_TEXTURES)
          * @return Vector of RTConfig for colortex0-15
          */
-        std::vector<RTConfig> GetColorTexConfigs() const;
+        std::vector<RenderTargetConfig> GetColorTexConfigs() const;
 
         /**
          * @brief Get all depthtex configs (fixed count = MAX_DEPTH_TEXTURES)
          * @return Vector of RTConfig for depthtex0-2
          */
-        std::vector<RTConfig> GetDepthTexConfigs() const;
+        std::vector<RenderTargetConfig> GetDepthTexConfigs() const;
 
         /**
          * @brief Get all shadowcolor configs (fixed count = MAX_SHADOW_COLORS)
          * @return Vector of RTConfig for shadowcolor0-7
          */
-        std::vector<RTConfig> GetShadowColorConfigs() const;
+        std::vector<RenderTargetConfig> GetShadowColorConfigs() const;
 
         /**
          * @brief Get all shadowtex configs (fixed count = MAX_SHADOW_TEXTURES)
          * @return Vector of RTConfig for shadowtex0-1
          */
-        std::vector<RTConfig> GetShadowTexConfigs() const;
+        std::vector<RenderTargetConfig> GetShadowTexConfigs() const;
 
         // ==================== Immediate模式配置 ====================
 

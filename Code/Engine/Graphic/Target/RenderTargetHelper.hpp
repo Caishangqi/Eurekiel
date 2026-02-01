@@ -377,7 +377,7 @@ namespace enigma::graphic
          * - ⚠️ 占位配置不会被RenderTargetManager使用，但会占用数组空间
          * - ⚠️ colorTexCount超出范围会被自动修正（1-16）
          */
-        static std::array<RTConfig, 16> GenerateRTConfigs(int colorTexCount);
+        static std::array<RenderTargetConfig, 16> GenerateRTConfigs(int colorTexCount);
 
     private:
         /**

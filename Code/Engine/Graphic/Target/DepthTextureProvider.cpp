@@ -20,10 +20,10 @@ namespace enigma::graphic
     // ============================================================================
 
     DepthTextureProvider::DepthTextureProvider(
-        int                          baseWidth,
-        int                          baseHeight,
-        const std::vector<RTConfig>& configs,
-        UniformManager*              uniformMgr
+        int                                    baseWidth,
+        int                                    baseHeight,
+        const std::vector<RenderTargetConfig>& configs,
+        UniformManager*                        uniformMgr
     )
         : m_baseWidth(baseWidth)
           , m_baseHeight(baseHeight)
@@ -56,7 +56,7 @@ namespace enigma::graphic
         {
             const auto& config = configs[i];
 
-            // Validate config (RTConfig uses width/height > 0 and non-empty name)
+            // Validate config (RenderTargetConfig uses width/height > 0 and non-empty name)
             if (config.width <= 0 || config.height <= 0 || config.name.empty())
             {
                 throw std::invalid_argument(
@@ -67,8 +67,8 @@ namespace enigma::graphic
             // Save config
             m_configs.push_back(config);
 
-            // Create depth texture using RTConfig fields
-            // RTConfig: name, width, height, format
+            // Create depth texture using RenderTargetConfig fields
+            // RenderTargetConfig: name, width, height, format
             DepthTextureCreateInfo createInfo(
                 config.name,
                 static_cast<uint32_t>(config.width),
@@ -235,7 +235,7 @@ namespace enigma::graphic
     // IRenderTargetProvider - Dynamic Configuration
     // ============================================================================
 
-    void DepthTextureProvider::SetRtConfig(int index, const RTConfig& config)
+    void DepthTextureProvider::SetRtConfig(int index, const RenderTargetConfig& config)
     {
         ValidateIndex(index);
 
@@ -245,7 +245,7 @@ namespace enigma::graphic
             throw std::invalid_argument("DepthTextureProvider: Cannot modify depthtex0 resolution");
         }
 
-        const RTConfig& currentConfig = m_configs[index];
+        const RenderTargetConfig& currentConfig = m_configs[index];
 
         // [REFACTOR] Only rebuild if format changes
         bool needRebuild = (currentConfig.format != config.format) ||
@@ -282,7 +282,7 @@ namespace enigma::graphic
     // [NEW] Reset and Config Query Implementation
     // ============================================================================
 
-    void DepthTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    void DepthTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
     {
         // Skip depthtex0 (cannot be modified)
         int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
@@ -301,7 +301,7 @@ namespace enigma::graphic
                 count - 1);
     }
 
-    const RTConfig& DepthTextureProvider::GetConfig(int index) const
+    const RenderTargetConfig& DepthTextureProvider::GetConfig(int index) const
     {
         if (!IsValidIndex(index))
         {

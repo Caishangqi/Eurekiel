@@ -14,10 +14,10 @@ namespace enigma::graphic
     // ============================================================================
 
     ColorTextureProvider::ColorTextureProvider(
-        int                          baseWidth,
-        int                          baseHeight,
-        const std::vector<RTConfig>& configs,
-        UniformManager*              uniformMgr)
+        int                                    baseWidth,
+        int                                    baseHeight,
+        const std::vector<RenderTargetConfig>& configs,
+        UniformManager*                        uniformMgr)
         : m_baseWidth(baseWidth)
           , m_baseHeight(baseHeight)
           , m_flipState()
@@ -200,11 +200,11 @@ namespace enigma::graphic
     // IRenderTargetProvider - Dynamic Configuration
     // ============================================================================
 
-    void ColorTextureProvider::SetRtConfig(int index, const RTConfig& config)
+    void ColorTextureProvider::SetRtConfig(int index, const RenderTargetConfig& config)
     {
         ValidateIndex(index);
 
-        const RTConfig& currentConfig = m_configs[index];
+        const RenderTargetConfig& currentConfig = m_configs[index];
 
         // [REFACTOR] Only rebuild if format changes
         bool needRebuild = (currentConfig.format != config.format);
@@ -256,7 +256,7 @@ namespace enigma::graphic
     // [NEW] Reset and Config Query Implementation
     // ============================================================================
 
-    void ColorTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    void ColorTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
     {
         int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
 
@@ -270,7 +270,7 @@ namespace enigma::graphic
                 count);
     }
 
-    const RTConfig& ColorTextureProvider::GetConfig(int index) const
+    const RenderTargetConfig& ColorTextureProvider::GetConfig(int index) const
     {
         if (!IsValidIndex(index))
         {
