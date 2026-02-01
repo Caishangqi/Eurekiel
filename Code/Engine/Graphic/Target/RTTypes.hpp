@@ -119,6 +119,13 @@ namespace enigma::graphic
          */
         static ClearValue Color(float r, float g, float b, float a = 1.0f);
 
+        /// The clear value of 3 channel format like RGB
+        /// @param r R channel clear value 
+        /// @param g G channel clear value
+        /// @param b B channel clear value
+        /// @return The Clear value union contains RGB value
+        [[deprecated]] static ClearValue Color(float r, float g, float b);
+
         /**
          * @brief 创建深度模板清空值
          * @param depth 深度值 [0-1]
@@ -153,13 +160,13 @@ namespace enigma::graphic
      */
     struct RTConfig
     {
-        std::string name; ///< 渲染目标名称 (用于调试)
-        int         width; ///< 宽度 (像素)
-        int         height; ///< 高度 (像素)  
-        DXGI_FORMAT format; ///< 像素格式
-        bool        enableFlipper; ///< 是否启用Main/Alt翻转机制
-        LoadAction  loadAction; ///< 装载动作
-        ClearValue  clearValue; ///< 清空值
+        std::string name          = ""; ///< 渲染目标名称 (用于调试)
+        int         width         = 0; ///< 宽度 (像素), 0表示使用scale计算
+        int         height        = 0; ///< 高度 (像素), 0表示使用scale计算
+        DXGI_FORMAT format        = DXGI_FORMAT_R8G8B8A8_UNORM; ///< 像素格式
+        bool        enableFlipper = true; ///< 是否启用Main/Alt翻转机制
+        LoadAction  loadAction    = LoadAction::Clear; ///< 装载动作
+        ClearValue  clearValue; ///< 清空值 (默认黑色)
 
         // ========================================================================
         // 纹理特性字段 (配置统一化重构完成)

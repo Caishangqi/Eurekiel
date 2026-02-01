@@ -1,5 +1,8 @@
 ﻿#include "Engine/Graphic/Target/RTTypes.hpp"
 
+#include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/ErrorWarningAssert.hpp"
+
 namespace enigma::graphic
 {
     // ============================================================================  
@@ -24,6 +27,15 @@ namespace enigma::graphic
         ClearValue cv;
         cv.colorRgba8 = Rgba8(rByte, gByte, bByte, aByte);
         return cv;
+    }
+
+    ClearValue ClearValue::Color(float r, float g, float b)
+    {
+        UNUSED(r)
+        UNUSED(g)
+        UNUSED(b)
+        ClearValue clear_value;
+        ERROR_AND_DIE("3 Channel clear value not implemented")
     }
 
     ClearValue ClearValue::Depth(float depth, uint8_t stencil)
