@@ -27,21 +27,33 @@ namespace enigma::graphic
 
     /**
      * @brief Camera type classification for rendering system
-     * 
+     *
      * [NEW] Defines camera behavior and matrix calculation strategy:
-     * - Perspective:   Standard 3D camera with FOV-based projection
-     * - Orthographic:  2D/UI camera with parallel projection
+     * - Perspective:   Standard 3D camera with FOV-based projection (main game camera)
+     * - Orthographic:  Parallel projection with Y-up (3D ortho views, math/physics 2D)
+     * - UI:            Screen-space 2D with Y-down (UI, HUD, 2D games)
      * - Shadow:        Light-space camera for shadow mapping
-     * - Reflection:    Mirror/water reflection camera
-     * - Cubemap:       6-face environment capture camera
+     * - Reflection:    Mirror/water reflection camera (reserved)
+     * - Cubemap:       6-face environment capture camera (reserved)
+     *
+     * Camera Selection Guide:
+     * +------------------+---------------+----------------------------------+
+     * | Use Case         | CameraType    | Coordinate System                |
+     * +------------------+---------------+----------------------------------+
+     * | 3D Game          | Perspective   | 3D world, FOV projection         |
+     * | 2D Game / UI     | UI            | Top-left origin, Y-down          |
+     * | Isometric / CAD  | Orthographic  | Center origin, Y-up              |
+     * | Shadow Pass      | Shadow        | Light-space orthographic         |
+     * +------------------+---------------+----------------------------------+
      */
     enum class CameraType : uint8_t
     {
-        Perspective = 0, // Standard 3D perspective projection
-        Orthographic = 1, // Parallel projection for 2D/UI
-        Shadow = 2, // Shadow map generation
-        Reflection = 3, // Planar reflection rendering
-        Cubemap = 4 // Environment map capture (6 faces)
+        Perspective = 0, // 3D perspective projection (main game camera)
+        Orthographic = 1, // Parallel projection, Y-up (3D ortho, math-style 2D)
+        UI = 2, // Screen-space 2D, Y-down (UI, HUD, 2D games)
+        Shadow = 3, // Shadow map generation (light-space)
+        Reflection = 4, // Planar reflection rendering (reserved)
+        Cubemap = 5 // Environment map capture (reserved)
     };
 
     // ========================================================================

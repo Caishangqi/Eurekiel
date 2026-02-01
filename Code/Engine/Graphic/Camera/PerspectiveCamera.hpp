@@ -15,17 +15,30 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] PerspectiveCamera - Main render pass camera
+    // [NEW] PerspectiveCamera - Main 3D render pass camera
     // ========================================================================
 
     /**
-     * @brief Perspective camera for GBuffer/deferred rendering
-     * 
+     * @brief Perspective camera for 3D GBuffer/deferred rendering
+     *
      * [NEW] Implements perspective projection with:
      * - Field of view (FOV) in degrees
      * - Aspect ratio (width/height)
      * - Near/far clipping planes (inherited from CameraBase)
-     * 
+     *
+     * Coordinate System:
+     * - Standard 3D world coordinates
+     * - Uses engine's coordinate system conversion via m_rendererCanonicalMatrix
+     *
+     * When to use PerspectiveCamera:
+     * - 3D game main camera
+     * - Any 3D scene requiring depth perception
+     * - First-person / third-person views
+     *
+     * m_rendererCanonicalMatrix: 3D coordinate system conversion
+     * - Converts engine coordinate system to rendering coordinate system
+     * - Inherited from CameraBase default initialization
+     *
      * Usage:
      * ```cpp
      * auto camera = std::make_unique<PerspectiveCamera>(

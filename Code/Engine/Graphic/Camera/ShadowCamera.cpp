@@ -18,6 +18,9 @@ namespace enigma::graphic
         : OrthographicCamera(lightPosition, lightDirection, shadowBoundsMin, shadowBoundsMax, nearPlane, farPlane)
           , m_cascadeIndex(0)
     {
+        Mat44 gbufferRenderer;
+        gbufferRenderer.SetIJK3D(Vec3(0, 0, 1), Vec3(-1, 0, 0), Vec3(0, 1, 0));
+        m_rendererCanonicalMatrix = gbufferRenderer;
     }
 
     // ========================================================================

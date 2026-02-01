@@ -17,27 +17,47 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] OrthographicCamera - UI and 2D rendering camera
+    // [NEW] OrthographicCamera - Parallel projection camera
     // ========================================================================
 
     /**
-     * @brief Orthographic camera for UI rendering and 2D scenes
-     * 
+     * @brief Orthographic camera for 2D/3D scenes with parallel projection
+     *
      * [NEW] Implements orthographic projection with:
      * - Bottom-left and top-right bounds defining view area
      * - Near/far clipping planes (inherited from CameraBase)
-     * - Static factory CreateUI2D() for common UI camera setup
-     * 
-     * Note: Class is virtual (not final) to allow ShadowCamera inheritance.
-     * 
+     *
+     * Note: Class is virtual (not final) to allow UICamera/ShadowCamera inheritance.
+     *
+     * Coordinate System:
+     * - Standard mathematical coordinates (Y increases upward)
+     * - Center can be offset via bounds configuration
+     *
+     * When to use OrthographicCamera:
+     * - 3D scenes requiring parallel projection (isometric views, CAD)
+     * - 2D games with center-origin coordinate system (math/physics style)
+     * - Any scenario where Y-up is preferred
+     *
+     * For UI rendering with top-left origin, use UICamera instead.
+     *
+     * m_rendererCanonicalMatrix: Identity (no 3D coordinate conversion)
+     * - Avoids Z=0 compression issue in 2D rendering
+     *
      * Usage:
      * ```cpp
-     * // UI camera covering screen
-     * auto uiCamera = OrthographicCamera::CreateUI2D(Vec2(1920, 1080));
-     * 
-     * // Custom orthographic camera
+     * // Center-origin orthographic camera (Y-up)
      * auto camera = std::make_unique<OrthographicCamera>(
-     *     Vec3::ZERO, EulerAngles(), Vec2(-10, -10), Vec2(10, 10), 0.1f, 100.0f);
+     *     Vec3::ZERO, EulerAngles(),
+     *     Vec2(-960, -540),  // bottomLeft
+     *     Vec2(960, 540),    // topRight
+     *     0.1f, 100.0f);
+     *
+     * // Position (100, 200) means:
+     * // - 100 units right of center
+     * // - 200 units above center
+     *
+     * // For UI rendering, use UICamera::Create()
+     * auto uiCamera = UICamera::Create(Vec2(1920, 1080));
      * ```
      */
     class OrthographicCamera : public CameraBase
@@ -65,20 +85,6 @@ namespace enigma::graphic
         // Move semantics
         OrthographicCamera(OrthographicCamera&&)            = default;
         OrthographicCamera& operator=(OrthographicCamera&&) = default;
-
-        // ====================================================================
-        // [NEW] Static Factory Methods
-        // ====================================================================
-
-        /**
-         * @brief Create UI camera for 2D rendering
-         * @param screenSize Screen dimensions (width, height)
-         * @return OrthographicCamera configured for UI rendering
-         * 
-         * Creates camera at origin with identity orientation,
-         * view bounds from (0,0) to screenSize.
-         */
-        [[nodiscard]] static OrthographicCamera CreateUI2D(const Vec2& screenSize);
 
         // ====================================================================
         // ICamera Implementation

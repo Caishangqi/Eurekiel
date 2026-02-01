@@ -21,23 +21,6 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // Static Factory Methods
-    // ========================================================================
-
-    OrthographicCamera OrthographicCamera::CreateUI2D(const Vec2& screenSize)
-    {
-        // [NEW] UI camera: origin position, identity orientation, screen bounds
-        return OrthographicCamera(
-            Vec3::ZERO,
-            EulerAngles(),
-            Vec2(0.0f, 0.0f),
-            screenSize,
-            0.0f,
-            1.0f
-        );
-    }
-
-    // ========================================================================
     // ICamera Implementation
     // ========================================================================
 
@@ -54,8 +37,8 @@ namespace enigma::graphic
         Mat44 projection = Mat44::MakeOrthoProjection(
             -size.x * 0.5f,
             size.x * 0.5f,
-            size.y * 0.5f, // [FIX] Swapped: was -size.y * 0.5f
-            -size.y * 0.5f, // [FIX] Swapped: was size.y * 0.5f
+            -size.y * 0.5f,
+            size.y * 0.5f,
             m_nearPlane,
             m_farPlane
         );

@@ -19,18 +19,35 @@ namespace enigma::graphic
     // ========================================================================
 
     /**
-     * @brief Shadow camera for shadow pass rendering
-     * 
+     * @brief Shadow camera for shadow map generation
+     *
      * [NEW] Extends OrthographicCamera with:
      * - Cascade shadow mapping support via cascadeIndex
      * - Fills ONLY shadow matrices (not gbuffer matrices)
      * - Light-space view/projection for shadow depth rendering
-     * 
+     *
+     * Coordinate System:
+     * - Light-space coordinates (looking from light toward scene)
+     * - Orthographic projection for directional lights
+     *
+     * When to use ShadowCamera:
+     * - Shadow map rendering pass
+     * - Directional light shadow generation
+     * - Cascade shadow mapping (CSM)
+     *
+     * m_rendererCanonicalMatrix: Light-space coordinate conversion
+     * - SetIJK3D(Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,1,0))
+     * - Converts to light-space rendering coordinates
+     *
+     * Matrix Output (UpdateMatrixUniforms):
+     * - Fills: shadowView, shadowViewInverse, shadowProjection, shadowProjectionInverse
+     * - Does NOT fill gbuffer matrices
+     *
      * Usage:
      * ```cpp
      * auto shadowCam = std::make_unique<ShadowCamera>(
      *     lightPos, lightDir, Vec2(-50, -50), Vec2(50, 50), 0.1f, 500.0f);
-     * shadowCam->SetCascadeIndex(0);
+     * shadowCam->SetCascadeIndex(0);  // For CSM
      * shadowCam->UpdateMatrixUniforms(uniforms);
      * ```
      */

@@ -485,6 +485,7 @@
     <ClCompile Include="Graphic\Camera\OrthographicCamera.cpp"/>
     <ClCompile Include="Graphic\Camera\PerspectiveCamera.cpp"/>
     <ClCompile Include="Graphic\Camera\ShadowCamera.cpp"/>
+    <ClCompile Include="Graphic\Camera\UICamera.cpp"/>
     <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp" />
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
@@ -1018,6 +1019,7 @@
     <ClInclude Include="Graphic\Camera\OrthographicCamera.hpp"/>
     <ClInclude Include="Graphic\Camera\PerspectiveCamera.hpp"/>
     <ClInclude Include="Graphic\Camera\ShadowCamera.hpp"/>
+    <ClInclude Include="Graphic\Camera\UICamera.hpp"/>
     <ClInclude Include="Graphic\Core\EnigmaGraphicCommon.hpp" />
     <ClInclude Include="Graphic\Core\RenderState.hpp" />
     <ClInclude Include="Graphic\Core\RenderState\BlendState.hpp"/>
