@@ -25,6 +25,8 @@
 #include "Engine/Graphic/Bundle/Helper/ShaderBundleFileHelper.hpp"
 #include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
+#include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 
 using namespace enigma::graphic;
 
@@ -298,6 +300,66 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
         // ShaderBundle initializes in constructor (load fallback rules, discover UserDefinedBundles, precompile)
         auto bundle = std::make_shared<ShaderBundle>(meta, m_engineBundle);
 
+        // [NEW] Apply RT configs from bundle directives to providers
+        auto* rtDirectives = bundle->GetRTDirectives();
+        if (rtDirectives && g_theRendererSubsystem)
+        {
+            auto* colorProvider       = g_theRendererSubsystem->GetColorTextureProvider();
+            auto* depthProvider       = g_theRendererSubsystem->GetDepthTextureProvider();
+            auto* shadowColorProvider = g_theRendererSubsystem->GetShadowColorProvider();
+            auto* shadowTexProvider   = g_theRendererSubsystem->GetShadowTextureProvider();
+
+            // Apply colortex configs
+            if (colorProvider)
+            {
+                for (int i = 0; i <= rtDirectives->GetMaxColorTexIndex(); ++i)
+                {
+                    if (rtDirectives->HasColorTexConfig(i))
+                    {
+                        colorProvider->SetRtConfig(i, rtDirectives->GetColorTexConfig(i));
+                    }
+                }
+            }
+
+            // Apply depthtex configs
+            if (depthProvider)
+            {
+                for (int i = 0; i <= rtDirectives->GetMaxDepthTexIndex(); ++i)
+                {
+                    if (rtDirectives->HasDepthTexConfig(i))
+                    {
+                        depthProvider->SetRtConfig(i, rtDirectives->GetDepthTexConfig(i));
+                    }
+                }
+            }
+
+            // Apply shadowcolor configs
+            if (shadowColorProvider)
+            {
+                for (int i = 0; i <= rtDirectives->GetMaxShadowColorIndex(); ++i)
+                {
+                    if (rtDirectives->HasShadowColorConfig(i))
+                    {
+                        shadowColorProvider->SetRtConfig(i, rtDirectives->GetShadowColorConfig(i));
+                    }
+                }
+            }
+
+            // Apply shadowtex configs
+            if (shadowTexProvider)
+            {
+                for (int i = 0; i <= rtDirectives->GetMaxShadowTexIndex(); ++i)
+                {
+                    if (rtDirectives->HasShadowTexConfig(i))
+                    {
+                        shadowTexProvider->SetRtConfig(i, rtDirectives->GetShadowTexConfig(i));
+                    }
+                }
+            }
+
+            LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied RT configs from bundle directives");
+        }
+
         // Set as current bundle
         m_currentBundle = bundle;
 
@@ -353,6 +415,24 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
 
     // Broadcast MulticastDelegate unload event (before reset)
     ShaderBundleEvents::OnBundleUnloaded.Broadcast();
+
+    // [NEW] Reset RT configs to engine defaults before switching bundles
+    if (g_theRendererSubsystem)
+    {
+        const auto& config = g_theRendererSubsystem->GetConfiguration();
+
+        auto* colorProvider       = g_theRendererSubsystem->GetColorTextureProvider();
+        auto* depthProvider       = g_theRendererSubsystem->GetDepthTextureProvider();
+        auto* shadowColorProvider = g_theRendererSubsystem->GetShadowColorProvider();
+        auto* shadowTexProvider   = g_theRendererSubsystem->GetShadowTextureProvider();
+
+        if (colorProvider) colorProvider->ResetToDefault(config.GetColorTexConfigs());
+        if (depthProvider) depthProvider->ResetToDefault(config.GetDepthTexConfigs());
+        if (shadowColorProvider) shadowColorProvider->ResetToDefault(config.GetShadowColorConfigs());
+        if (shadowTexProvider) shadowTexProvider->ResetToDefault(config.GetShadowTexConfigs());
+
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Reset RT configs to engine defaults");
+    }
 
     // Reset to engine bundle
     m_currentBundle = m_engineBundle;
