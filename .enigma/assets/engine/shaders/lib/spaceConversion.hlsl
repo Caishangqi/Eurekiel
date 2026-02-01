@@ -1,9 +1,9 @@
 /**
- * @file math.hlsl
+ * @file spaceConversion.hlsl
  * @brief Space transformation math library - No cbuffer dependencies
  *
  * Design: Pure functions with explicit matrix parameters
- * Usage: #include "../lib/math.hlsl"
+ * Usage: #include "../lib/spaceConversion.hlsl"
  *
  * Coordinate Spaces:
  * - Screen Space: UV [0,1] x [0,1], Depth [0,1]
@@ -12,8 +12,8 @@
  * - World Space: Global coordinates
  */
 
-#ifndef LIB_MATH_HLSL
-#define LIB_MATH_HLSL
+#ifndef LIB_SPACE_CONVERSION
+#define LIB_SPACE_CONVERSION
 
 // =============================================================================
 // [PROJECTION UTILITIES]
