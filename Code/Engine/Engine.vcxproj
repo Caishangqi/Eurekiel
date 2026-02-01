@@ -389,13 +389,15 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\fog_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\camera_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\lib\fog.hlsl"/>
-    <Content Include="..\..\.enigma\assets\engine\shaders\lib\math.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\lib\spaceConversion.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\color_texture_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\depth_texture_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\matrices_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\perobject_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\shadow_color_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\shadow_texture_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\viewport_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\worldtime_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -463,6 +465,9 @@
     <ClCompile Include="Core\Vertex_PCU.cpp" />
     <ClCompile Include="Core\XmlUtils.cpp" />
     <ClCompile Include="Core\Yaml.cpp" />
+    <ClCompile Include="Graphic\Bundle\Directive\PackDirectives.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Directive\PackRenderTargetDirectives.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Directive\PackShadowDirectives.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\JsonHelper.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\ShaderBundleFileHelper.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\ShaderScanHelper.cpp"/>
@@ -529,9 +534,7 @@
     <ClCompile Include="Graphic\Shader\Program\Option\ShaderPackOptions.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Parsing\CommentDirectiveParser.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Parsing\ConstDirectiveParser.cpp"/>
-    <ClCompile Include="Graphic\Shader\Program\Properties\PackDirectives.cpp"/>
-    <ClCompile Include="Graphic\Shader\Program\Properties\PackRenderTargetDirectives.cpp"/>
-    <ClCompile Include="Graphic\Shader\Program\Properties\PackShadowDirectives.cpp"/>
+    <ClCompile Include="Graphic\Shader\Program\Parsing\DXGIFormatParser.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Properties\ProgramDirectives.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Properties\ShaderProperties.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\ShaderProgram.cpp"/>
@@ -903,6 +906,8 @@
     <Content Include="..\..\.enigma\assets\engine\textures\test\Caizii.png" />
     <Content Include="..\..\.enigma\assets\engine\textures\test\TestUV.png" />
     <Content Include="..\..\.enigma\config\engine\chunkstorage.yml" />
+    <Content Include="..\..\.enigma\config\engine\renderer.yml"/>
+    <Content Include="..\..\.enigma\config\engine\shaderbundle.yml"/>
     <Content Include="..\..\Readme.md" />
     <Content Include="..\ThirdParty\DXC\inc\hlsl\LICENSE.txt" />
     <Content Include="..\ThirdParty\DXC\inc\hlsl\README.txt" />
@@ -993,6 +998,9 @@
     <ClInclude Include="Core\ImGui\IImGuiRenderContext.hpp" />
     <ClInclude Include="Core\ImGui\RendererImGuiContext.hpp" />
     <ClInclude Include="Graphic\Bundle\BundleException.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Directive\PackDirectives.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Directive\PackRenderTargetDirectives.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Directive\PackShadowDirectives.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\JsonHelper.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\ShaderBundleFileHelper.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\ShaderScanHelper.hpp"/>
@@ -1057,6 +1065,7 @@
     <ClInclude Include="Graphic\Shader\Uniform\ShadowTexturesIndexUniforms.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\UniformCommon.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\UniformException.hpp"/>
+    <ClInclude Include="Graphic\Shader\Uniform\ViewportUniforms.hpp"/>
     <!-- [DELETED] UpdateFrequency.hpp - consolidated into UniformCommon.hpp -->
     <ClInclude Include="Graphic\Sprite\Sprite.hpp" />
     <ClInclude Include="Graphic\Sprite\SpriteAtlas.hpp" />
@@ -1165,9 +1174,7 @@
     <ClInclude Include="Graphic\Shader\Program\Parsing\CommentDirective.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Parsing\CommentDirectiveParser.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Parsing\ConstDirectiveParser.hpp"/>
-    <ClInclude Include="Graphic\Shader\Program\Properties\PackDirectives.hpp"/>
-    <ClInclude Include="Graphic\Shader\Program\Properties\PackRenderTargetDirectives.hpp"/>
-    <ClInclude Include="Graphic\Shader\Program\Properties\PackShadowDirectives.hpp"/>
+    <ClInclude Include="Graphic\Shader\Program\Parsing\DXGIFormatParser.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Properties\ProgramDirectives.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Properties\ShaderProperties.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\ShaderProgram.hpp"/>
