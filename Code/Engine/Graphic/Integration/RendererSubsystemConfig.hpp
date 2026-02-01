@@ -34,9 +34,12 @@
 
 #include "Engine/Core/Yaml.hpp"
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Graphic/Target/RTTypes.hpp"
 #include <optional>
 #include <cstdint>
 #include <string>
+#include <map>
+#include <vector>
 
 // 前向声明
 class Window;
@@ -286,20 +289,6 @@ namespace enigma::graphic
          */
         bool enableAutoClearColor = true;
 
-        /**
-         * @brief 是否在BeginFrame自动清除深度缓冲
-         *
-         * @note 合并自Configuration::enableAutoClearDepth
-         */
-        bool enableAutoClearDepth = true;
-
-        /**
-         * @brief 是否启用阴影映射（后续Milestone实现）
-         *
-         * @note 合并自Configuration::enableShadowMapping
-         */
-        bool enableShadowMapping = false;
-
         // ==================== 窗口系统集成 ====================
 
         /**
@@ -314,27 +303,59 @@ namespace enigma::graphic
          */
         Window* targetWindow = nullptr;
 
-        // ==================== GBuffer配置 ====================
+        // ==================== [NEW] RT Type Configuration ====================
 
         /**
-         * @brief GBuffer的colortex数量
+         * @brief RT configuration for a single RT type (colortex, depthtex, etc.)
          *
-         * 范围: [1-16]
-         * - 最小值: 1个colortex (简化场景)
-         * - 推荐值: 8个colortex (平衡内存和功能)
-         * - 最大值: 16个colortex (Iris完全兼容)
-         *
-         * 内存优化示例 (1920x1080, R8G8B8A8格式):
-         * - 4个colortex:  约33.2MB  (节省75%，~99.4MB)
-         * - 8个colortex:  约66.3MB  (节省50%)
-         * - 16个colortex: 约132.6MB (Iris兼容)
-         *
-         * 教学要点:
-         * - 配置驱动: 用户可根据场景复杂度调整内存占用
-         * - 性能权衡: 更多colortex支持更复杂的材质系统
-         * - Iris兼容: 16个colortex与Iris ShaderPack完全兼容
+         * Stores sparse index-specific configs and a default config.
+         * Used by RendererSubsystem to initialize Providers.
          */
-        int gbufferColorTexCount = 8;
+        struct RTTypeConfig
+        {
+            std::map<int, RTConfig> configs; // Index-specific configs (override default)
+            RTConfig                defaultConfig; // Default for unspecified indices
+
+            /**
+             * @brief Get config for specified index
+             * @param index RT index
+             * @return Config at index if exists, otherwise defaultConfig
+             */
+            RTConfig GetConfig(int index) const
+            {
+                auto it = configs.find(index);
+                return (it != configs.end()) ? it->second : defaultConfig;
+            }
+        };
+
+        RTTypeConfig colorTexConfig; // colortex0-15
+        RTTypeConfig depthTexConfig; // depthtex0-2
+        RTTypeConfig shadowColorConfig; // shadowcolor0-7
+        RTTypeConfig shadowTexConfig; // shadowtex0-1
+
+        /**
+         * @brief Get all colortex configs (fixed count = MAX_COLOR_TEXTURES)
+         * @return Vector of RTConfig for colortex0-15
+         */
+        std::vector<RTConfig> GetColorTexConfigs() const;
+
+        /**
+         * @brief Get all depthtex configs (fixed count = MAX_DEPTH_TEXTURES)
+         * @return Vector of RTConfig for depthtex0-2
+         */
+        std::vector<RTConfig> GetDepthTexConfigs() const;
+
+        /**
+         * @brief Get all shadowcolor configs (fixed count = MAX_SHADOW_COLORS)
+         * @return Vector of RTConfig for shadowcolor0-7
+         */
+        std::vector<RTConfig> GetShadowColorConfigs() const;
+
+        /**
+         * @brief Get all shadowtex configs (fixed count = MAX_SHADOW_TEXTURES)
+         * @return Vector of RTConfig for shadowtex0-1
+         */
+        std::vector<RTConfig> GetShadowTexConfigs() const;
 
         // ==================== Immediate模式配置 ====================
 

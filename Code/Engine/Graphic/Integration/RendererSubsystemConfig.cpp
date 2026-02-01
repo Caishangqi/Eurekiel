@@ -18,11 +18,222 @@
 
 #include "RendererSubsystemConfig.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Target/RenderTargetProviderCommon.hpp"
+#include "Engine/Graphic/Shader/Program/Parsing/DXGIFormatParser.hpp"
 
 using namespace enigma::core;
 
 namespace enigma::graphic
 {
+    // ============================================================================
+    // [NEW] Helper functions for YAML RT config parsing
+    // ============================================================================
+    namespace
+    {
+        // Parse single RT config from YAML node
+        RTConfig ParseSingleRTConfig(
+            const YAML::Node&  node,
+            const RTConfig&    defaultConfig,
+            const std::string& rtName,
+            bool               isDepthFormat)
+        {
+            RTConfig config = defaultConfig;
+            config.name     = rtName;
+
+            // Parse format
+            if (node["format"])
+            {
+                std::string formatStr = node["format"].as<std::string>("");
+                auto        formatOpt = DXGIFormatParser::Parse(formatStr);
+                if (formatOpt.has_value())
+                {
+                    config.format = formatOpt.value();
+                }
+                else
+                {
+                    LogWarn("RendererSubsystemConfig",
+                            "Invalid format '%s' for %s, using default",
+                            formatStr.c_str(), rtName.c_str());
+                }
+            }
+
+            // Parse clearValue
+            if (node["clearValue"])
+            {
+                if (isDepthFormat)
+                {
+                    // Depth clear value (single float)
+                    float depthVal    = node["clearValue"].as<float>(1.0f);
+                    config.clearValue = ClearValue::Depth(depthVal, 0);
+                }
+                else if (node["clearValue"].IsSequence() && node["clearValue"].size() >= 3)
+                {
+                    // Color clear value (array of 3-4 floats)
+                    float r           = node["clearValue"][0].as<float>(0.0f);
+                    float g           = node["clearValue"][1].as<float>(0.0f);
+                    float b           = node["clearValue"][2].as<float>(0.0f);
+                    float a           = (node["clearValue"].size() >= 4) ? node["clearValue"][3].as<float>(1.0f) : 1.0f;
+                    config.clearValue = ClearValue::Color(r, g, b, a);
+                }
+            }
+
+            // Parse enableClear -> loadAction
+            if (node["enableClear"])
+            {
+                bool enableClear  = node["enableClear"].as<bool>(true);
+                config.loadAction = enableClear ? LoadAction::Clear : LoadAction::Load;
+            }
+
+            // Parse enableFlipper (color targets only)
+            if (!isDepthFormat && node["enableFlipper"])
+            {
+                config.enableFlipper = node["enableFlipper"].as<bool>(true);
+            }
+
+            // Parse dimensions - absolute size (priority) or scale (fallback)
+            // Priority: width/height > 0 → use absolute; otherwise use scale * renderResolution
+            if (node["width"])
+            {
+                config.width = node["width"].as<int>(0);
+            }
+            if (node["height"])
+            {
+                config.height = node["height"].as<int>(0);
+            }
+            if (node["widthScale"])
+            {
+                config.widthScale = node["widthScale"].as<float>(1.0f);
+            }
+            if (node["heightScale"])
+            {
+                config.heightScale = node["heightScale"].as<float>(1.0f);
+            }
+
+            return config;
+        }
+
+        // Parse RTTypeConfig from YAML section
+        void ParseRTTypeConfigFromYaml(
+            const YAML::Node&                      sectionNode,
+            RendererSubsystemConfig::RTTypeConfig& rtTypeConfig,
+            const std::string&                     rtPrefix,
+            int                                    maxCount,
+            bool                                   isDepthFormat)
+        {
+            if (!sectionNode || !sectionNode.IsMap())
+                return;
+
+            // Parse defaultConfig
+            if (sectionNode["defaultConfig"])
+            {
+                rtTypeConfig.defaultConfig = ParseSingleRTConfig(
+                    sectionNode["defaultConfig"],
+                    rtTypeConfig.defaultConfig,
+                    rtPrefix + "_default",
+                    isDepthFormat
+                );
+            }
+
+            // Parse index-specific configs
+            if (sectionNode["configs"] && sectionNode["configs"].IsMap())
+            {
+                for (auto it = sectionNode["configs"].begin(); it != sectionNode["configs"].end(); ++it)
+                {
+                    int index = -1;
+                    try
+                    {
+                        index = it->first.as<int>();
+                    }
+                    catch (...)
+                    {
+                        continue; // Skip invalid index
+                    }
+
+                    if (index < 0 || index >= maxCount)
+                    {
+                        LogWarn("RendererSubsystemConfig",
+                                "%s index %d out of range [0, %d), skipping",
+                                rtPrefix.c_str(), index, maxCount);
+                        continue;
+                    }
+
+                    std::string rtName          = rtPrefix + std::to_string(index);
+                    rtTypeConfig.configs[index] = ParseSingleRTConfig(
+                        it->second,
+                        rtTypeConfig.defaultConfig,
+                        rtName,
+                        isDepthFormat
+                    );
+                }
+            }
+        }
+
+        // Parse all rendertargets section
+        void ParseRenderTargetsConfig(const YamlConfiguration& yaml, RendererSubsystemConfig& config)
+        {
+            const YAML::Node& root = yaml.GetNode();
+            if (!root["rendertargets"])
+                return;
+
+            const YAML::Node& rtNode = root["rendertargets"];
+
+            // Parse colortexture section
+            if (rtNode["colortexture"])
+            {
+                ParseRTTypeConfigFromYaml(
+                    rtNode["colortexture"],
+                    config.colorTexConfig,
+                    "colortex",
+                    MAX_COLOR_TEXTURES,
+                    false // isDepthFormat
+                );
+            }
+
+            // Parse depthtexture section
+            if (rtNode["depthtexture"])
+            {
+                ParseRTTypeConfigFromYaml(
+                    rtNode["depthtexture"],
+                    config.depthTexConfig,
+                    "depthtex",
+                    MAX_DEPTH_TEXTURES,
+                    true // isDepthFormat
+                );
+            }
+
+            // Parse shadowcolor section
+            if (rtNode["shadowcolor"])
+            {
+                ParseRTTypeConfigFromYaml(
+                    rtNode["shadowcolor"],
+                    config.shadowColorConfig,
+                    "shadowcolor",
+                    MAX_SHADOW_COLORS,
+                    false // isDepthFormat
+                );
+            }
+
+            // Parse shadowtexture section
+            if (rtNode["shadowtexture"])
+            {
+                ParseRTTypeConfigFromYaml(
+                    rtNode["shadowtexture"],
+                    config.shadowTexConfig,
+                    "shadowtex",
+                    MAX_SHADOW_TEXTURES,
+                    true // isDepthFormat
+                );
+            }
+
+            LogInfo("RendererSubsystemConfig",
+                    "Parsed rendertargets config: colortex=%d, depthtex=%d, shadowcolor=%d, shadowtex=%d custom configs",
+                    static_cast<int>(config.colorTexConfig.configs.size()),
+                    static_cast<int>(config.depthTexConfig.configs.size()),
+                    static_cast<int>(config.shadowColorConfig.configs.size()),
+                    static_cast<int>(config.shadowTexConfig.configs.size()));
+        }
+    } // anonymous namespace
+
     //-----------------------------------------------------------------------------------------------
     // ParseFromYaml: 从YAML配置文件解析RendererSubsystem配置
     // Milestone 3.0: 合并Configuration配置项，扩展为14个配置参数
@@ -87,52 +298,10 @@ namespace enigma::graphic
             result.shaderEntryPoint = "main";
         }
 
-        LogInfo("RendererSubsystemConfig",
-                "Shader entry point: %s", result.shaderEntryPoint.c_str());
+        LogInfo("RendererSubsystemConfig", "Shader entry point: %s", result.shaderEntryPoint.c_str());
 
-        // 步骤6: 解析GBuffer配置
-        // YAML路径: gbuffer.colorTexCount
-        result.gbufferColorTexCount = yamlOpt->GetInt("gbuffer.colorTexCount", 8);
-
-        // 参数验证: colorTexCount必须在 [1, 16] 范围内
-        if (result.gbufferColorTexCount < 1 || result.gbufferColorTexCount > 16)
-        {
-            LogWarn("RendererSubsystemConfig",
-                    "gbuffer.colorTexCount %d out of range [1, 16]. Using default 8.",
-                    result.gbufferColorTexCount);
-            result.gbufferColorTexCount = 8; // 回退到默认值
-        }
-
-        // 步骤7: 解析Immediate模式配置
-        // YAML路径: immediate.*
-        result.enableImmediateMode    = yamlOpt->GetBoolean("immediate.enable", true);
-        result.maxCommandsPerPhase    = yamlOpt->GetInt("immediate.maxCommandsPerPhase", 10000);
-        result.enablePhaseDetection   = yamlOpt->GetBoolean("immediate.enablePhaseDetection", true);
-        result.enableCommandProfiling = yamlOpt->GetBoolean("immediate.enableCommandProfiling", false);
-
-        // 参数验证: maxCommandsPerPhase必须大于0
-        if (result.maxCommandsPerPhase <= 0)
-        {
-            LogWarn("RendererSubsystemConfig",
-                    "immediate.maxCommandsPerPhase {} invalid. Using default 10000.",
-                    result.maxCommandsPerPhase);
-            result.maxCommandsPerPhase = 10000;
-        }
-
-        // 步骤8: 注意事项 - 以下配置不从YAML加载（运行时设置）
-        // - targetWindow: 运行时通过代码设置
-        // - defaultClearColor: 使用默认值Rgba8::DEBUG_GREEN
-        // - defaultClearDepth/Stencil: 使用默认值
-        // - enableAutoClearColor/Depth: 使用默认值
-        // - enableShadowMapping: 未来Milestone实现
-
-        // 步骤9: 记录配置加载成功信息
-        LogInfo("RendererSubsystemConfig", "Loaded config from {}: resolution={}x{}, colorTex={}, maxFrames={}, immediateMode={}", yamlPath.c_str(),
-                result.renderWidth,
-                result.renderHeight,
-                result.gbufferColorTexCount,
-                result.maxFramesInFlight,
-                result.enableImmediateMode);
+        // [NEW] Step 8: Parse rendertargets configuration
+        ParseRenderTargetsConfig(*yamlOpt, result);
 
         return result;
     }
@@ -150,9 +319,137 @@ namespace enigma::graphic
         // - renderWidth = 1920 (Full HD)
         // - renderHeight = 1080 (Full HD)
 
-        // 教学要点: 使用成员初始化器 (在.hpp中) 提供默认值
-        // 这样GetDefault()只需返回默认构造的对象即可
+        // [NEW] Initialize default RT configs
+        // ColorTex default: R8G8B8A8_UNORM, clear to black
+        config.colorTexConfig.defaultConfig = RTConfig::ColorTargetWithScale(
+            "colortex_default", 1.0f, 1.0f,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            true, // enableFlipper
+            LoadAction::Clear,
+            ClearValue::Color(0.0f, 0.0f, 0.0f, 1.0f)
+        );
+
+        // DepthTex default: D24_UNORM_S8_UINT, clear to 1.0
+        config.depthTexConfig.defaultConfig = RTConfig::DepthTargetWithScale(
+            "depthtex_default", 1.0f, 1.0f,
+            DXGI_FORMAT_D24_UNORM_S8_UINT,
+            LoadAction::Clear,
+            ClearValue::Depth(1.0f, 0)
+        );
+
+        // ShadowColor default: R8G8B8A8_UNORM, clear to black
+        config.shadowColorConfig.defaultConfig = RTConfig::ColorTargetWithScale(
+            "shadowcolor_default", 1.0f, 1.0f,
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            true, // enableFlipper
+            LoadAction::Clear,
+            ClearValue::Color(0.0f, 0.0f, 0.0f, 1.0f)
+        );
+
+        // ShadowTex default: D32_FLOAT, clear to 1.0
+        config.shadowTexConfig.defaultConfig = RTConfig::DepthTargetWithScale(
+            "shadowtex_default", 1.0f, 1.0f,
+            DXGI_FORMAT_D32_FLOAT,
+            LoadAction::Clear,
+            ClearValue::Depth(1.0f, 0)
+        );
 
         return config;
+    }
+
+    // ============================================================================
+    // [REFACTOR] RT Config Accessor Methods - Calculate actual dimensions from scale
+    // ============================================================================
+
+    std::vector<RTConfig> RendererSubsystemConfig::GetColorTexConfigs() const
+    {
+        std::vector<RTConfig> result;
+        result.reserve(MAX_COLOR_TEXTURES);
+
+        for (int i = 0; i < MAX_COLOR_TEXTURES; ++i)
+        {
+            RTConfig cfg = colorTexConfig.GetConfig(i);
+            cfg.name     = "colortex" + std::to_string(i);
+
+            // [FIX] Calculate actual dimensions from scale if width/height are 0
+            if (cfg.width <= 0 || cfg.height <= 0)
+            {
+                cfg.width  = static_cast<int>(static_cast<float>(renderWidth) * cfg.widthScale);
+                cfg.height = static_cast<int>(static_cast<float>(renderHeight) * cfg.heightScale);
+            }
+
+            result.push_back(cfg);
+        }
+
+        return result;
+    }
+
+    std::vector<RTConfig> RendererSubsystemConfig::GetDepthTexConfigs() const
+    {
+        std::vector<RTConfig> result;
+        result.reserve(MAX_DEPTH_TEXTURES);
+
+        for (int i = 0; i < MAX_DEPTH_TEXTURES; ++i)
+        {
+            RTConfig cfg = depthTexConfig.GetConfig(i);
+            cfg.name     = "depthtex" + std::to_string(i);
+
+            // [FIX] Calculate actual dimensions from scale if width/height are 0
+            if (cfg.width <= 0 || cfg.height <= 0)
+            {
+                cfg.width  = static_cast<int>(static_cast<float>(renderWidth) * cfg.widthScale);
+                cfg.height = static_cast<int>(static_cast<float>(renderHeight) * cfg.heightScale);
+            }
+
+            result.push_back(cfg);
+        }
+
+        return result;
+    }
+
+    std::vector<RTConfig> RendererSubsystemConfig::GetShadowColorConfigs() const
+    {
+        std::vector<RTConfig> result;
+        result.reserve(MAX_SHADOW_COLORS);
+
+        for (int i = 0; i < MAX_SHADOW_COLORS; ++i)
+        {
+            RTConfig cfg = shadowColorConfig.GetConfig(i);
+            cfg.name     = "shadowcolor" + std::to_string(i);
+
+            // [FIX] Calculate actual dimensions from scale if width/height are 0
+            if (cfg.width <= 0 || cfg.height <= 0)
+            {
+                cfg.width  = static_cast<int>(static_cast<float>(renderWidth) * cfg.widthScale);
+                cfg.height = static_cast<int>(static_cast<float>(renderHeight) * cfg.heightScale);
+            }
+
+            result.push_back(cfg);
+        }
+
+        return result;
+    }
+
+    std::vector<RTConfig> RendererSubsystemConfig::GetShadowTexConfigs() const
+    {
+        std::vector<RTConfig> result;
+        result.reserve(MAX_SHADOW_TEXTURES);
+
+        for (int i = 0; i < MAX_SHADOW_TEXTURES; ++i)
+        {
+            RTConfig cfg = shadowTexConfig.GetConfig(i);
+            cfg.name     = "shadowtex" + std::to_string(i);
+
+            // [FIX] Calculate actual dimensions from scale if width/height are 0
+            if (cfg.width <= 0 || cfg.height <= 0)
+            {
+                cfg.width  = static_cast<int>(static_cast<float>(renderWidth) * cfg.widthScale);
+                cfg.height = static_cast<int>(static_cast<float>(renderHeight) * cfg.heightScale);
+            }
+
+            result.push_back(cfg);
+        }
+
+        return result;
     }
 } // namespace enigma::graphic

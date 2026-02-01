@@ -1,0 +1,190 @@
+# ==============================================================================
+# RendererSubsystem Configuration (Milestone 3.0)
+# ==============================================================================
+# Controls the entire rendering subsystem behavior.
+# Follows the "one subsystem, one config file" principle.
+#
+# Architecture Reference: Engine/Core/Schedule/ScheduleSubsystem.hpp (ScheduleConfig pattern)
+
+# ==============================================================================
+# Shader Compilation Settings
+# ==============================================================================
+shader:
+  # Shader entry point name (global, applies to all shader stages)
+  #
+  # Options:
+  #   - "main"   : Iris-compatible (recommended, default)
+  #   - "VSMain" : DirectX style
+  #   - Custom   : For special requirements
+  #
+  # Note: Iris uses "main" as entry point (GLSL standard)
+  entryPoint: "main"
+
+# ==============================================================================
+# GBuffer Settings
+# ==============================================================================
+gbuffer:
+  # Number of color textures, range [1-16]
+  #
+  # Memory usage examples (1920x1080, R8G8B8A8 format):
+  #   - 4 colortex  : ~33.2MB  (saves 75%, ~99.4MB saved)
+  #   - 8 colortex  : ~66.3MB  (saves 50%, balanced)
+  #   - 16 colortex : ~132.6MB (full Iris compatibility)
+  #
+  # Recommendation:
+  #   - Simple scenes  : 4 colortex
+  #   - Standard scenes: 8 colortex (default)
+  #   - Complex scenes : 16 colortex (Iris ShaderPack compatible)
+  colorTexCount: 8
+
+# ==============================================================================
+# Render Resolution Settings
+# ==============================================================================
+rendering:
+  # Render width in pixels
+  # Usually obtained from window system; this is the fallback/initial value
+  width: 1920
+
+  # Render height in pixels
+  height: 1080
+
+  # Maximum frames in flight [2-3]
+  #   - 2: Double buffering (lower latency, GPU may wait)
+  #   - 3: Triple buffering (recommended, balanced)
+  maxFramesInFlight: 3
+
+# ==============================================================================
+# Debug Settings
+# ==============================================================================
+debug:
+  # Enable DirectX 12 debug layer
+  # Performance impact: ~20-50% slower, development only
+  enableDebugLayer: true
+
+  # Enable GPU validation layer
+  # Performance impact: ~50-80% slower, deep debugging only
+  enableGPUValidation: true
+
+  # Enable bindless resources (SM6.6 feature)
+  enableBindlessResources: true
+
+# ==============================================================================
+# Render Target Configuration
+# ==============================================================================
+# All RT types are always created at maximum count.
+# This section configures format, clear values, and dimensions.
+# ShaderBundle can override these via directives (e.g., colortex0Format).
+#
+# DIMENSION MODES:
+# ================
+# 1. Relative Size (Scale) - DEFAULT
+#    Uses widthScale/heightScale multiplied by render resolution.
+#    Automatically adapts to window resize.
+#    Example: widthScale: 0.5 at 1920x1080 = 960x540
+#
+# 2. Absolute Size (Fixed)
+#    Uses explicit width/height in pixels.
+#    Ignores render resolution, fixed size.
+#    Example: width: 2048, height: 2048 (typical for shadow maps)
+#
+# PRIORITY: If width > 0 AND height > 0, absolute size is used.
+#           Otherwise, scale * renderResolution is used.
+#
+rendertargets:
+
+  # --------------------------------------------------------------------------
+  # ColorTexture Configuration (16 textures: colortex0-15)
+  # --------------------------------------------------------------------------
+  colortexture:
+    # Default config applied to all colortex unless overridden
+    defaultConfig:
+      format: R8G8B8A8_UNORM
+      clearValue: [ 0.0, 0.0, 0.0, 1.0 ]  # RGBA clear color
+      enableClear: true
+      enableFlipper: true               # Enable double-buffering flip
+      widthScale: 1.0                   # Relative to render resolution
+      heightScale: 1.0
+
+    # Index-specific overrides (optional)
+    configs:
+      0:
+        format: R8G8B8A8_UNORM
+        clearValue: [ 0.0, 0.0, 0.0, 1.0 ]
+        enableClear: true
+        enableFlipper: true
+      # Example: Half-resolution AO buffer
+      # 1:
+      #   format: R8_UNORM
+      #   widthScale: 0.5
+      #   heightScale: 0.5
+
+  # --------------------------------------------------------------------------
+  # DepthTexture Configuration (3 textures: depthtex0-2)
+  # --------------------------------------------------------------------------
+  depthtexture:
+    defaultConfig:
+      format: D24_UNORM_S8_UINT
+      clearValue: 1.0                   # Depth clear value (0.0-1.0)
+      enableClear: true
+      widthScale: 1.0
+      heightScale: 1.0
+
+    configs:
+      0:
+        format: D24_UNORM_S8_UINT
+        clearValue: 1.0
+        enableClear: true
+
+  # --------------------------------------------------------------------------
+  # ShadowColor Configuration (8 textures: shadowcolor0-7)
+  # --------------------------------------------------------------------------
+  shadowcolor:
+    defaultConfig:
+      format: R8G8B8A8_UNORM
+      clearValue: [ 0.0, 0.0, 0.0, 1.0 ]
+      enableClear: true
+      enableFlipper: true
+      widthScale: 1.0
+      heightScale: 1.0
+
+    configs:
+      0:
+        format: R8G8B8A8_UNORM
+        clearValue: [ 0.0, 0.0, 0.0, 1.0 ]
+        enableClear: true
+
+  # --------------------------------------------------------------------------
+  # ShadowTexture Configuration (2 textures: shadowtex0-1)
+  # --------------------------------------------------------------------------
+  # Shadow maps typically use fixed resolution for consistent quality.
+  shadowtexture:
+    defaultConfig:
+      format: D32_FLOAT
+      clearValue: 1.0
+      enableClear: true
+      # Example: Fixed 2048x2048 shadow map (absolute size)
+      # width: 2048
+      # height: 2048
+      widthScale: 1.0
+      heightScale: 1.0
+
+    configs:
+      0:
+        format: D32_FLOAT
+        clearValue: 1.0
+        enableClear: true
+
+# ==============================================================================
+# Future Extensions (Milestone 3.X+)
+# ==============================================================================
+# Reserved for future implementation:
+#
+# vsync:
+#   enabled: true
+#
+# msaa:
+#   sampleCount: 1    # 1=disabled, 2/4/8=MSAA samples
+#
+# hdr:
+#   enabled: false
+#   format: R16G16B16A16_FLOAT
