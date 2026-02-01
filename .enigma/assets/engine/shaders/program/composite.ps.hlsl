@@ -1,5 +1,5 @@
 #include "../core/core.hlsl"
-#include "../lib/math.hlsl"
+#include "../lib/spaceConversion.hlsl"
 #include "../lib/fog.hlsl"
 /**
  * @brief Calculate final lighting intensity using Minecraft vanilla formula
