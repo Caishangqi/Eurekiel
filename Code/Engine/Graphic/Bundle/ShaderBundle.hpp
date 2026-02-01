@@ -77,6 +77,7 @@
 #include "Engine/Graphic/Bundle/ShaderBundleCommon.hpp"
 #include "Engine/Graphic/Bundle/UserDefinedBundle.hpp"
 #include "Engine/Graphic/Bundle/ProgramFallbackChain.hpp"
+#include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 
 namespace enigma::graphic
 {
@@ -258,6 +259,9 @@ namespace enigma::graphic
         // Returns list of all UserDefinedBundle names
         std::vector<std::string> GetUserBundleNames() const;
 
+        // [NEW] Returns RT directives parsed from shader sources (for RT format configuration)
+        const PackRenderTargetDirectives* GetRTDirectives() const { return m_rtDirectives.get(); }
+
     private:
         //-------------------------------------------------------------------------------------------
         // Private Helper Methods
@@ -290,5 +294,8 @@ namespace enigma::graphic
         // Reference to engine bundle for Level 3 fallback
         // nullptr if this IS the engine bundle
         std::shared_ptr<ShaderBundle> m_engineBundle;
+
+        // [NEW] RT directives parsed from shader sources (exclusive ownership)
+        std::unique_ptr<PackRenderTargetDirectives> m_rtDirectives;
     };
 } // namespace enigma::graphic

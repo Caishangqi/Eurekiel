@@ -8,11 +8,14 @@
 #include "ShaderBundle.hpp"
 
 #include <regex>
+#include <sstream>
 
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/FileSystemHelper.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Bundle/Helper/ShaderScanHelper.hpp"
+#include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
 namespace enigma::graphic
@@ -80,6 +83,53 @@ namespace enigma::graphic
         else
         {
             LogInfo(LogShaderBundle, "ShaderBundle:: No bundle/ directory found (using program/ only)");
+        }
+
+        // [NEW] Step 3: Parse RT directives from program/ folder
+        const auto& config = g_theRendererSubsystem->GetConfiguration();
+        m_rtDirectives     = std::make_unique<PackRenderTargetDirectives>(
+            config.colorTexConfig.defaultConfig,
+            config.depthTexConfig.defaultConfig,
+            config.shadowColorConfig.defaultConfig,
+            config.shadowTexConfig.defaultConfig
+        );
+
+        auto programDir = m_meta.path / "shaders" / "program";
+        if (FileSystemHelper::DirectoryExists(programDir))
+        {
+            ConstDirectiveParser     constParser;
+            std::vector<std::string> allLines;
+
+            // Scan all .hlsl files in program/ folder
+            for (const auto& entry : std::filesystem::directory_iterator(programDir))
+            {
+                if (entry.is_regular_file() && entry.path().extension() == ".hlsl")
+                {
+                    std::string content;
+                    if (FileReadToString(content, entry.path().string()) != 0 || content.empty())
+                        continue;
+
+                    // Split content into lines
+                    std::vector<std::string> lines;
+                    std::istringstream       stream(std::move(content));
+                    std::string              line;
+                    while (std::getline(stream, line))
+                    {
+                        lines.push_back(line);
+                        allLines.push_back(line);
+                    }
+
+                    // Parse format directives from this file (in comments)
+                    m_rtDirectives->ParseFormatDirectives(lines);
+                }
+            }
+
+            // Parse const directives from all collected lines
+            constParser.ParseLines(allLines);
+            m_rtDirectives->AcceptDirectives(constParser);
+
+            LogInfo(LogShaderBundle, "ShaderBundle:: Parsed RT directives from %s",
+                    programDir.string().c_str());
         }
 
         LogInfo(LogShaderBundle, "ShaderBundle:: Created: %s (%zu UserDefinedBundles)",
