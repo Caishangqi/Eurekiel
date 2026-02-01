@@ -8,6 +8,8 @@
 #include "../include/shadow_texture_uniforms.hlsl"
 #include "../include/sampler_uniforms.hlsl"
 #include "../include/perobject_uniforms.hlsl"
+#include "../include/viewport_uniforms.hlsl"
+#include "../include/worldtime_uniforms.hlsl"
 
 #include "../include/camera_uniforms.hlsl"
 #include "../include/celestial_uniforms.hlsl"
