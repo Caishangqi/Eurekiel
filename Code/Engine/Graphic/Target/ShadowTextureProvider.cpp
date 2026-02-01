@@ -159,8 +159,11 @@ namespace enigma::graphic
 
     D3D12_CPU_DESCRIPTOR_HANDLE ShadowTextureProvider::GetMainRTV(int index)
     {
-        UNUSED(index)
-        throw std::logic_error("ShadowTextureProvider: GetMainRTV not supported (depth textures have no RTV)");
+        ValidateIndex(index);
+
+        // [FIX] Shadow depth textures use DSV, return DSV handle as "main" for compatibility
+        // Same pattern as DepthTextureProvider::GetMainRTV
+        return m_depthTextures[index]->GetDSVHandle();
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE ShadowTextureProvider::GetAltRTV(int index)
@@ -238,27 +241,64 @@ namespace enigma::graphic
     {
         ValidateIndex(index);
 
+        const RTConfig& currentConfig = m_configs[index];
+
+        // [REFACTOR] Only rebuild if format or dimensions change
+        bool needRebuild = (currentConfig.format != config.format) ||
+            (currentConfig.width != config.width) ||
+            (currentConfig.height != config.height);
+
         // Update config
-        m_configs[index].width  = config.width;
-        m_configs[index].height = config.height;
+        m_configs[index] = config;
 
-        // Recreate depth texture
-        DepthTextureCreateInfo createInfo(
-            m_configs[index].name,
-            static_cast<uint32_t>(config.width),
-            static_cast<uint32_t>(config.height),
-            m_configs[index].format,
-            1.0f,
-            0
-        );
+        if (needRebuild)
+        {
+            // Recreate depth texture
+            DepthTextureCreateInfo createInfo(
+                config.name,
+                static_cast<uint32_t>(config.width),
+                static_cast<uint32_t>(config.height),
+                config.format,
+                1.0f,
+                0
+            );
 
-        m_depthTextures[index] = std::make_shared<D12DepthTexture>(createInfo);
+            m_depthTextures[index] = std::make_shared<D12DepthTexture>(createInfo);
+            m_depthTextures[index]->Upload();
+            m_depthTextures[index]->RegisterBindless();
 
-        LogInfo(LogRenderTargetProvider, "shadowtex%d reconfigured to %dx%d",
-                index, config.width, config.height);
+            LogInfo(LogRenderTargetProvider, "shadowtex%d rebuilt (%dx%d, format=%d)",
+                    index, config.width, config.height, static_cast<int>(config.format));
 
-        // [NEW] Re-upload indices after resource recreation
-        UpdateIndices();
+            UpdateIndices();
+        }
+    }
+
+    // ============================================================================
+    // [NEW] Reset and Config Query Implementation
+    // ============================================================================
+
+    void ShadowTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    {
+        int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
+
+        for (int i = 0; i < count; ++i)
+        {
+            SetRtConfig(i, defaultConfigs[i]);
+        }
+
+        LogInfo(LogRenderTargetProvider,
+                "ShadowTextureProvider:: ResetToDefault - restored %d shadowtex to default config",
+                count);
+    }
+
+    const RTConfig& ShadowTextureProvider::GetConfig(int index) const
+    {
+        if (!IsValidIndex(index))
+        {
+            throw InvalidIndexException("ShadowTextureProvider::GetConfig", index, m_activeCount);
+        }
+        return m_configs[index];
     }
 
     // ============================================================================

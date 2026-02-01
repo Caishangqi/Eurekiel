@@ -245,27 +245,69 @@ namespace enigma::graphic
             throw std::invalid_argument("DepthTextureProvider: Cannot modify depthtex0 resolution");
         }
 
+        const RTConfig& currentConfig = m_configs[index];
+
+        // [REFACTOR] Only rebuild if format changes
+        bool needRebuild = (currentConfig.format != config.format) ||
+            (currentConfig.width != config.width) ||
+            (currentConfig.height != config.height);
+
         // Update config
-        m_configs[index].width  = config.width;
-        m_configs[index].height = config.height;
+        m_configs[index] = config;
 
-        // Recreate depth texture
-        DepthTextureCreateInfo createInfo(
-            m_configs[index].name,
-            static_cast<uint32_t>(config.width),
-            static_cast<uint32_t>(config.height),
-            m_configs[index].format,
-            1.0f,
-            0
-        );
+        if (needRebuild)
+        {
+            // Recreate depth texture
+            DepthTextureCreateInfo createInfo(
+                config.name,
+                static_cast<uint32_t>(config.width),
+                static_cast<uint32_t>(config.height),
+                config.format,
+                1.0f,
+                0
+            );
 
-        m_depthTextures[index] = std::make_shared<D12DepthTexture>(createInfo);
+            m_depthTextures[index] = std::make_shared<D12DepthTexture>(createInfo);
+            m_depthTextures[index]->Upload();
+            m_depthTextures[index]->RegisterBindless();
 
-        LogInfo(LogRenderTargetProvider, "depthtex%d reconfigured to %dx%d",
-                index, config.width, config.height);
+            LogInfo(LogRenderTargetProvider, "depthtex%d rebuilt (%dx%d, format=%d)",
+                    index, config.width, config.height, static_cast<int>(config.format));
 
-        // [NEW] Re-upload indices after resource recreation
-        UpdateIndices();
+            UpdateIndices();
+        }
+    }
+
+    // ============================================================================
+    // [NEW] Reset and Config Query Implementation
+    // ============================================================================
+
+    void DepthTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    {
+        // Skip depthtex0 (cannot be modified)
+        int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
+
+        for (int i = 1; i < count; ++i)
+        {
+            // Only reset if format differs
+            if (m_configs[i].format != defaultConfigs[i].format)
+            {
+                SetRtConfig(i, defaultConfigs[i]);
+            }
+        }
+
+        LogInfo(LogRenderTargetProvider,
+                "DepthTextureProvider:: ResetToDefault - restored %d depthtex to default config",
+                count - 1);
+    }
+
+    const RTConfig& DepthTextureProvider::GetConfig(int index) const
+    {
+        if (!IsValidIndex(index))
+        {
+            throw InvalidIndexException("DepthTextureProvider::GetConfig", index, m_activeCount);
+        }
+        return m_configs[index];
     }
 
     // ============================================================================

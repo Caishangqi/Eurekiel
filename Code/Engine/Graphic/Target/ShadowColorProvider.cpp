@@ -209,32 +209,66 @@ namespace enigma::graphic
     {
         ValidateIndex(index);
 
+        const RTConfig& currentConfig = m_configs[index];
+
+        // [REFACTOR] Only rebuild if format changes
+        bool needRebuild = (currentConfig.format != config.format);
+
         // Update stored config
         m_configs[index] = config;
 
-        // Recreate render target with new config
-        auto builder = D12RenderTarget::Create()
-                       .SetFormat(config.format)
-                       .SetDimensions(config.width, config.height)
-                       .SetLinearFilter(config.allowLinearFilter)
-                       .SetSampleCount(config.sampleCount)
-                       .EnableMipmap(config.enableMipmap)
-                       .SetClearValue(config.clearValue);
+        if (needRebuild)
+        {
+            // Recreate render target with new config
+            auto builder = D12RenderTarget::Create()
+                           .SetFormat(config.format)
+                           .SetDimensions(config.width, config.height)
+                           .SetLinearFilter(config.allowLinearFilter)
+                           .SetSampleCount(config.sampleCount)
+                           .EnableMipmap(config.enableMipmap)
+                           .SetClearValue(config.clearValue);
 
-        char debugName[32];
-        sprintf_s(debugName, "shadowcolor%d", index);
-        builder.SetName(debugName);
+            char debugName[32];
+            sprintf_s(debugName, "shadowcolor%d", index);
+            builder.SetName(debugName);
 
-        m_renderTargets[index] = builder.Build();
-        m_renderTargets[index]->Upload();
-        m_renderTargets[index]->RegisterBindless();
+            m_renderTargets[index] = builder.Build();
+            m_renderTargets[index]->Upload();
+            m_renderTargets[index]->RegisterBindless();
+
+            LogInfo(LogRenderTargetProvider,
+                    "ShadowColorProvider:: Rebuilt shadowcolor%d (format changed to %d)",
+                    index, static_cast<int>(config.format));
+
+            UpdateIndices();
+        }
+    }
+
+    // ============================================================================
+    // [NEW] Reset and Config Query Implementation
+    // ============================================================================
+
+    void ShadowColorProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    {
+        int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
+
+        for (int i = 0; i < count; ++i)
+        {
+            SetRtConfig(i, defaultConfigs[i]);
+        }
 
         LogInfo(LogRenderTargetProvider,
-                "ShadowColorProvider:: Reconfigured shadowcolor%d (%dx%d)",
-                index, config.width, config.height);
+                "ShadowColorProvider:: ResetToDefault - restored %d shadowcolor to default config",
+                count);
+    }
 
-        // [NEW] Re-upload indices after resource recreation
-        UpdateIndices();
+    const RTConfig& ShadowColorProvider::GetConfig(int index) const
+    {
+        if (!IsValidIndex(index))
+        {
+            throw InvalidIndexException("ShadowColorProvider::GetConfig", index, m_activeCount);
+        }
+        return m_configs[index];
     }
 
     // ============================================================================

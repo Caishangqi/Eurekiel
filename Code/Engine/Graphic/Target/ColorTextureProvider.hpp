@@ -104,6 +104,10 @@ namespace enigma::graphic
         // Dynamic Configuration
         void SetRtConfig(int index, const RTConfig& config) override;
 
+        // [NEW] Reset and Config Query
+        void            ResetToDefault(const std::vector<RTConfig>& defaultConfigs) override;
+        const RTConfig& GetConfig(int index) const override;
+
         // ========================================================================
         // [NEW] Uniform Registration API - Shader RT Fetching Feature
         // ========================================================================

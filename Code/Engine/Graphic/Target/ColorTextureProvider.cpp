@@ -204,38 +204,79 @@ namespace enigma::graphic
     {
         ValidateIndex(index);
 
+        const RTConfig& currentConfig = m_configs[index];
+
+        // [REFACTOR] Only rebuild if format changes
+        bool needRebuild = (currentConfig.format != config.format);
+
         // Update stored config
         m_configs[index] = config;
 
-        // Calculate new dimensions
-        int rtWidth  = static_cast<int>(m_baseWidth * config.widthScale);
-        int rtHeight = static_cast<int>(m_baseHeight * config.heightScale);
-        rtWidth      = (rtWidth > 0) ? rtWidth : 1;
-        rtHeight     = (rtHeight > 0) ? rtHeight : 1;
+        if (needRebuild)
+        {
+            // Calculate new dimensions
+            int rtWidth  = static_cast<int>(m_baseWidth * config.widthScale);
+            int rtHeight = static_cast<int>(m_baseHeight * config.heightScale);
+            rtWidth      = (rtWidth > 0) ? rtWidth : 1;
+            rtHeight     = (rtHeight > 0) ? rtHeight : 1;
 
-        // Recreate render target with new config
-        auto builder = D12RenderTarget::Create()
-                       .SetFormat(config.format)
-                       .SetDimensions(rtWidth, rtHeight)
-                       .SetLinearFilter(config.allowLinearFilter)
-                       .SetSampleCount(config.sampleCount)
-                       .EnableMipmap(config.enableMipmap)
-                       .SetClearValue(config.clearValue);
+            // Recreate render target with new config
+            auto builder = D12RenderTarget::Create()
+                           .SetFormat(config.format)
+                           .SetDimensions(rtWidth, rtHeight)
+                           .SetLinearFilter(config.allowLinearFilter)
+                           .SetSampleCount(config.sampleCount)
+                           .EnableMipmap(config.enableMipmap)
+                           .SetClearValue(config.clearValue);
 
-        char debugName[32];
-        sprintf_s(debugName, "colortex%d", index);
-        builder.SetName(debugName);
+            char debugName[32];
+            sprintf_s(debugName, "colortex%d", index);
+            builder.SetName(debugName);
 
-        m_renderTargets[index] = builder.Build();
-        m_renderTargets[index]->Upload();
-        m_renderTargets[index]->RegisterBindless();
+            m_renderTargets[index] = builder.Build();
+            m_renderTargets[index]->Upload();
+            m_renderTargets[index]->RegisterBindless();
+
+            LogInfo(LogRenderTargetProvider,
+                    "ColorTextureProvider:: Rebuilt colortex%d (format changed to %d)",
+                    index, static_cast<int>(config.format));
+
+            // Re-upload indices after resource recreation
+            UpdateIndices();
+        }
+        else
+        {
+            LogDebug(LogRenderTargetProvider,
+                     "ColorTextureProvider:: Updated colortex%d config (no rebuild needed)",
+                     index);
+        }
+    }
+
+    // ============================================================================
+    // [NEW] Reset and Config Query Implementation
+    // ============================================================================
+
+    void ColorTextureProvider::ResetToDefault(const std::vector<RTConfig>& defaultConfigs)
+    {
+        int count = static_cast<int>(std::min(static_cast<size_t>(m_activeCount), defaultConfigs.size()));
+
+        for (int i = 0; i < count; ++i)
+        {
+            SetRtConfig(i, defaultConfigs[i]);
+        }
 
         LogInfo(LogRenderTargetProvider,
-                "ColorTextureProvider:: Reconfigured colortex%d (%dx%d)",
-                index, rtWidth, rtHeight);
+                "ColorTextureProvider:: ResetToDefault - restored %d colortex to default config",
+                count);
+    }
 
-        // [NEW] Re-upload indices after resource recreation (bindless index changed)
-        UpdateIndices();
+    const RTConfig& ColorTextureProvider::GetConfig(int index) const
+    {
+        if (!IsValidIndex(index))
+        {
+            throw InvalidIndexException("ColorTextureProvider::GetConfig", index, m_activeCount);
+        }
+        return m_configs[index];
     }
 
     // ============================================================================
