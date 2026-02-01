@@ -1,4 +1,4 @@
-﻿#include "Engine/Graphic/Shader/Program/Properties/PackShadowDirectives.hpp"
+﻿#include "PackShadowDirectives.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
 using namespace enigma::graphic;
