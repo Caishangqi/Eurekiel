@@ -465,7 +465,6 @@
     <ClCompile Include="Core\Vertex_PCU.cpp" />
     <ClCompile Include="Core\XmlUtils.cpp" />
     <ClCompile Include="Core\Yaml.cpp" />
-    <ClCompile Include="Graphic\Bundle\Directive\PackDirectives.cpp"/>
     <ClCompile Include="Graphic\Bundle\Directive\PackRenderTargetDirectives.cpp"/>
     <ClCompile Include="Graphic\Bundle\Directive\PackShadowDirectives.cpp"/>
     <ClCompile Include="Graphic\Bundle\Helper\JsonHelper.cpp"/>
@@ -998,7 +997,6 @@
     <ClInclude Include="Core\ImGui\IImGuiRenderContext.hpp" />
     <ClInclude Include="Core\ImGui\RendererImGuiContext.hpp" />
     <ClInclude Include="Graphic\Bundle\BundleException.hpp"/>
-    <ClInclude Include="Graphic\Bundle\Directive\PackDirectives.hpp"/>
     <ClInclude Include="Graphic\Bundle\Directive\PackRenderTargetDirectives.hpp"/>
     <ClInclude Include="Graphic\Bundle\Directive\PackShadowDirectives.hpp"/>
     <ClInclude Include="Graphic\Bundle\Helper\JsonHelper.hpp"/>

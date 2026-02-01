@@ -1302,12 +1302,6 @@ namespace enigma::graphic
          */
         const std::string& GetShaderEntryPoint() const noexcept { return m_configuration.shaderEntryPoint; }
 
-        // [NEW] Provider access methods for RT format configuration
-        ColorTextureProvider*  GetColorTextureProvider() { return m_colorTextureProvider.get(); }
-        DepthTextureProvider*  GetDepthTextureProvider() { return m_depthTextureProvider.get(); }
-        ShadowColorProvider*   GetShadowColorProvider() { return m_shadowColorProvider.get(); }
-        ShadowTextureProvider* GetShadowTextureProvider() { return m_shadowTextureProvider.get(); }
-
 
         /**
          * @brief 获取渲染统计信息

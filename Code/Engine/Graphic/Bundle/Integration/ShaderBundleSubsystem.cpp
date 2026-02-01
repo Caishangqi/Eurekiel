@@ -304,10 +304,10 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
         auto* rtDirectives = bundle->GetRTDirectives();
         if (rtDirectives && g_theRendererSubsystem)
         {
-            auto* colorProvider       = g_theRendererSubsystem->GetColorTextureProvider();
-            auto* depthProvider       = g_theRendererSubsystem->GetDepthTextureProvider();
-            auto* shadowColorProvider = g_theRendererSubsystem->GetShadowColorProvider();
-            auto* shadowTexProvider   = g_theRendererSubsystem->GetShadowTextureProvider();
+            auto* colorProvider       = g_theRendererSubsystem->GetProvider(RTType::ColorTex);
+            auto* depthProvider       = g_theRendererSubsystem->GetProvider(RTType::DepthTex);
+            auto* shadowColorProvider = g_theRendererSubsystem->GetProvider(RTType::ShadowColor);
+            auto* shadowTexProvider   = g_theRendererSubsystem->GetProvider(RTType::ShadowTex);
 
             // Apply colortex configs
             if (colorProvider)
@@ -421,10 +421,10 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
     {
         const auto& config = g_theRendererSubsystem->GetConfiguration();
 
-        auto* colorProvider       = g_theRendererSubsystem->GetColorTextureProvider();
-        auto* depthProvider       = g_theRendererSubsystem->GetDepthTextureProvider();
-        auto* shadowColorProvider = g_theRendererSubsystem->GetShadowColorProvider();
-        auto* shadowTexProvider   = g_theRendererSubsystem->GetShadowTextureProvider();
+        auto* colorProvider       = g_theRendererSubsystem->GetProvider(RTType::ColorTex);
+        auto* depthProvider       = g_theRendererSubsystem->GetProvider(RTType::DepthTex);
+        auto* shadowColorProvider = g_theRendererSubsystem->GetProvider(RTType::ShadowColor);
+        auto* shadowTexProvider   = g_theRendererSubsystem->GetProvider(RTType::ShadowTex);
 
         if (colorProvider) colorProvider->ResetToDefault(config.GetColorTexConfigs());
         if (depthProvider) depthProvider->ResetToDefault(config.GetDepthTexConfigs());
