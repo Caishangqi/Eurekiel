@@ -138,10 +138,13 @@ rendertargets:
   # --------------------------------------------------------------------------
   # ShadowColor Configuration (8 textures: shadowcolor0-7)
   # --------------------------------------------------------------------------
+  # [Iris Ref] PackShadowDirectives.java:399-405 - clearColor = new Vector4f(1.0F)
+  # White = no shadow color modulation (default, correct)
+  # Black would incorrectly absorb all light in shadow calculations
   shadowcolor:
     defaultConfig:
       format: R8G8B8A8_UNORM
-      clearValue: [ 0.0, 0.0, 0.0, 1.0 ]
+      clearValue: [ 1.0, 1.0, 1.0, 1.0 ]  # White (Iris standard)
       enableClear: true
       enableFlipper: true
       widthScale: 1.0
@@ -150,7 +153,7 @@ rendertargets:
     configs:
       0:
         format: R8G8B8A8_UNORM
-        clearValue: [ 0.0, 0.0, 0.0, 1.0 ]
+        clearValue: [ 1.0, 1.0, 1.0, 1.0 ]  # White (Iris standard)
         enableClear: true
 
   # --------------------------------------------------------------------------

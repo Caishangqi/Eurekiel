@@ -310,8 +310,11 @@ namespace enigma::graphic
          * @param format Pixel format (default: R8G8B8A8_UNORM)
          * @param enableFlipper Enable Main/Alt flip mechanism
          * @param loadAction Load action
-         * @param clearValue Clear value (default: black)
+         * @param clearValue Clear value (default: white, Iris standard for shadow color)
          * @return RTConfig instance
+         *
+         * [Iris Ref] PackShadowDirectives.java:399-405 - clearColor = new Vector4f(1.0F)
+         * White = no shadow color modulation, black would incorrectly absorb all light
          */
         static RenderTargetConfig ShadowColorTarget(
             const std::string& name,
@@ -319,7 +322,7 @@ namespace enigma::graphic
             DXGI_FORMAT        format        = DXGI_FORMAT_R8G8B8A8_UNORM,
             bool               enableFlipper = true,
             LoadAction         loadAction    = LoadAction::Clear,
-            ClearValue         clearValue    = ClearValue::Color(Rgba8::BLACK)
+            ClearValue         clearValue    = ClearValue::Color(Rgba8::WHITE)
         );
 
         /**

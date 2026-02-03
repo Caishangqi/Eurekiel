@@ -337,13 +337,15 @@ namespace enigma::graphic
             ClearValue::Depth(1.0f, 0)
         );
 
-        // ShadowColor default: R8G8B8A8_UNORM, clear to black
+        // ShadowColor default: R8G8B8A8_UNORM, clear to white
+        // [Iris Ref] PackShadowDirectives.java:399-405 - clearColor = new Vector4f(1.0F)
+        // White = no shadow color modulation, black would incorrectly absorb all light
         config.shadowColorConfig.defaultConfig = RenderTargetConfig::ColorTargetWithScale(
             "shadowcolor_default", 1.0f, 1.0f,
             DXGI_FORMAT_R8G8B8A8_UNORM,
             true, // enableFlipper
             LoadAction::Clear,
-            ClearValue::Color(0.0f, 0.0f, 0.0f, 1.0f)
+            ClearValue::Color(1.0f, 1.0f, 1.0f, 1.0f)
         );
 
         // ShadowTex default: D32_FLOAT, clear to 1.0

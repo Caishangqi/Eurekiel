@@ -377,7 +377,7 @@ namespace enigma::graphic
          * @endcode
          */
         void UseProgram(
-            std::shared_ptr<ShaderProgram>             shaderProgram,
+            std::shared_ptr<ShaderProgram>                       shaderProgram,
             const std::vector<std::pair<RenderTargetType, int>>& targets = {}
         );
 
@@ -798,8 +798,8 @@ namespace enigma::graphic
          * // Clear colortex0 to red
          * renderer->ClearRenderTarget(RTType::ColorTex, 0, Rgba8::RED);
          *
-         * // Clear shadowcolor0 to black
-         * renderer->ClearRenderTarget(RTType::ShadowColor, 0, Rgba8::BLACK);
+         * // Clear shadowcolor0 to white (Iris default - no shadow color modulation)
+         * renderer->ClearRenderTarget(RTType::ShadowColor, 0, Rgba8::WHITE);
          * @endcode
          *
          * Teaching Points:
