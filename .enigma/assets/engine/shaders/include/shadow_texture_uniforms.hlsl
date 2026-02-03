@@ -1,16 +1,6 @@
-/**
-* @brief ShadowTexturesIndexUniforms - Shadow depth RT indices (16 bytes)
- * @register b6
- * Stores Bindless indices for shadowtex0-1. No flip mechanism.
- * C++ counterpart: ShadowTexturesIndexBuffer.hpp
- *
- * [IMPORTANT] HLSL cbuffer packing rule:
- * - Using uint4 ensures tight packing matching C++ uint32_t[4] layout
- * - Memory layout: [shadowtex0, shadowtex1, pad, pad] = 16 bytes
- */
 cbuffer ShadowTexturesIndexUniforms : register(b6)
 {
-    uint4 shadowTexIndicesPacked; // [shadowtex0, shadowtex1, pad, pad] (16 bytes)
+    uint4 shadowTexIndicesPacked[4];
 };
 
 /**
@@ -24,9 +14,10 @@ cbuffer ShadowTexturesIndexUniforms : register(b6)
  */
 Texture2D GetShadowTexture(uint slot)
 {
-    if (slot == 0) return ResourceDescriptorHeap[shadowTexIndicesPacked.x];
-    if (slot == 1) return ResourceDescriptorHeap[shadowTexIndicesPacked.y];
-    return ResourceDescriptorHeap[0];
+    if (slot >= 16) return ResourceDescriptorHeap[0];
+    uint4 packed = shadowTexIndicesPacked[slot >> 2];
+    uint  index  = packed[slot & 3];
+    return ResourceDescriptorHeap[index];
 }
 
 

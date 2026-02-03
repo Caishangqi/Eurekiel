@@ -30,18 +30,12 @@ namespace enigma::graphic
         // Shadow texture indices array (shadowtex0-1)
         uint32_t indices[CBUFFER_SHADOW_TEXTURES_SIZE];
 
-        // Padding to align to 16 bytes (DirectX 12 cbuffer requirement)
-        uint32_t padding[2];
-
-        // ===== Total: (2 + 2) * 4 = 16 bytes =====
-
         /**
          * @brief Default constructor - initializes all indices to INVALID_BINDLESS_INDEX
          */
         ShadowTexturesIndexUniforms()
-            : indices{INVALID_BINDLESS_INDEX, INVALID_BINDLESS_INDEX}
-              , padding{0, 0}
         {
+            Reset();
         }
 
         // ========== [NEW] Unified API ==========
@@ -86,16 +80,6 @@ namespace enigma::graphic
         }
 
         /**
-         * @brief Check if both shadow textures are valid
-         * @return true if both indices are valid
-         */
-        bool HasBothTextures() const
-        {
-            return indices[0] != INVALID_BINDLESS_INDEX &&
-                indices[1] != INVALID_BINDLESS_INDEX;
-        }
-
-        /**
          * @brief Reset all indices to invalid state
          */
         void Reset()
@@ -104,31 +88,8 @@ namespace enigma::graphic
             {
                 indices[i] = INVALID_BINDLESS_INDEX;
             }
-            padding[0] = 0;
-            padding[1] = 0;
-        }
-
-        // ========== Batch Operations ==========
-
-        /**
-         * @brief Set both shadow texture indices (batch operation)
-         * @param shadowtex0 shadowtex0 bindless index (full shadow depth)
-         * @param shadowtex1 shadowtex1 bindless index (no translucents)
-         */
-        void SetIndices(uint32_t shadowtex0, uint32_t shadowtex1)
-        {
-            indices[0] = shadowtex0;
-            indices[1] = shadowtex1;
         }
     };
-
-    // Compile-time validation: ensure struct size is 16 bytes
-    static_assert(sizeof(ShadowTexturesIndexUniforms) == 16,
-                  "ShadowTexturesIndexUniforms must be exactly 16 bytes to match HLSL cbuffer");
-
-    // Compile-time validation: ensure 16-byte alignment for GPU
-    static_assert(sizeof(ShadowTexturesIndexUniforms) % 16 == 0,
-                  "ShadowTexturesIndexUniforms must be aligned to 16 bytes for GPU upload");
 
     // Compile-time validation: ensure proper element alignment
     static_assert(alignof(ShadowTexturesIndexUniforms) == 4,

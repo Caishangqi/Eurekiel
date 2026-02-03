@@ -89,6 +89,8 @@ namespace enigma::graphic
             );
 
             m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
+            m_depthTextures.back()->Upload();
+            m_depthTextures.back()->RegisterBindless();
         }
 
         // [RAII] Register uniform buffer and perform initial upload
