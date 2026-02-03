@@ -1,3 +1,30 @@
-shaderBundleUserDiscoveryPath: .enigma\\shaderbundles
-shaderBundleEnginePath: .enigma\\assets\\engine
+# ShaderBundle Subsystem Configuration
+# =====================================
+
+# User ShaderBundle discovery path (relative to Run directory)
+shaderBundleUserDiscoveryPath: .enigma\shaderbundles
+
+# Engine default shader path (relative to Run directory)
+# Note: FromBundlePath expects {path}/shaders/bundle.json structure
+shaderBundleEnginePath: .enigma\assets\engine
+
+# Currently loaded ShaderBundle name (empty = use engine default)
 currentLoadedShaderBundle:
+
+# Path Aliases for Shader Include Resolution
+# ==========================================
+# These aliases can be used in #include directives to reference
+# shaders from different locations.
+#
+# Format: @aliasName: targetPath (relative to Run directory)
+#
+# Usage in shader:
+#   #include "../@engine/core/core.hlsl"
+#   #include "../@custom/mylib/utils.hlsl"
+#
+pathAliases:
+  # Engine built-in shaders (core, lib, etc.)
+  "@engine": .enigma\assets\engine\shaders
+
+  # Add custom aliases below:
+  # "@custom": path\to\custom\shaders
