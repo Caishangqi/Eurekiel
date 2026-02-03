@@ -107,12 +107,14 @@ namespace enigma::graphic
         // Parameters:
         //   meta - ShaderBundleMeta containing name, path, and isEngineBundle flag
         //   engineBundle - Reference to engine bundle (nullptr for engine bundle itself)
+        //   pathAliases - [NEW] Optional path aliases for include resolution (e.g., @engine -> path)
         //
         // RAII Workflow:
         //   1. Load fallback rules from shaders/fallback_rule.json via ProgramFallbackChain
         //   2. Scan shaders/bundle/ directory for UserDefinedBundle subdirectories
         //   3. Create and precompile all UserDefinedBundles
         //   4. Set first UserDefinedBundle as current (if any exist)
+        //   5. [NEW] Parse RT directives with alias-aware include expansion
         //
         // Error Handling:
         //   - Missing fallback_rule.json: fallback disabled (not an error)
@@ -121,8 +123,9 @@ namespace enigma::graphic
         //
         // Precondition: g_theRendererSubsystem must be initialized
         //-------------------------------------------------------------------------------------------
-        explicit ShaderBundle(const ShaderBundleMeta&       meta,
-                              std::shared_ptr<ShaderBundle> engineBundle = nullptr);
+        explicit ShaderBundle(const ShaderBundleMeta&                             meta,
+                              std::shared_ptr<ShaderBundle>                       engineBundle = nullptr,
+                              const std::unordered_map<std::string, std::string>& pathAliases  = {});
 
         //-------------------------------------------------------------------------------------------
         // Destructor
@@ -297,5 +300,8 @@ namespace enigma::graphic
 
         // [NEW] RT directives parsed from shader sources (exclusive ownership)
         std::unique_ptr<PackRenderTargetDirectives> m_rtDirectives;
+
+        // [NEW] Path aliases for shader include resolution (e.g., @engine -> engine shader path)
+        std::unordered_map<std::string, std::string> m_pathAliases;
     };
 } // namespace enigma::graphic

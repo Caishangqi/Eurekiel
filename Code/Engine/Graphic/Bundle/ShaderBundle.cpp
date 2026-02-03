@@ -16,6 +16,10 @@
 #include "Engine/Graphic/Bundle/Helper/ShaderScanHelper.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 #include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
+#include "Engine/Graphic/Shader/Program/Include/IncludeGraph.hpp"
+#include "Engine/Graphic/Shader/Program/Include/IncludeProcessor.hpp"
+#include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp"
+#include "Engine/Graphic/Shader/Common/FileSystemReader.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 
 namespace enigma::graphic
@@ -25,11 +29,13 @@ namespace enigma::graphic
     //
     // [REFACTOR] Complete initialization in constructor following RAII pattern
     //-------------------------------------------------------------------------------------------
-    ShaderBundle::ShaderBundle(const ShaderBundleMeta&       meta,
-                               std::shared_ptr<ShaderBundle> engineBundle)
+    ShaderBundle::ShaderBundle(const ShaderBundleMeta&                             meta,
+                               std::shared_ptr<ShaderBundle>                       engineBundle,
+                               const std::unordered_map<std::string, std::string>& pathAliases)
         : m_meta(meta)
           , m_engineBundle(std::move(engineBundle))
           , m_fallbackChain(std::make_unique<ProgramFallbackChain>())
+          , m_pathAliases(pathAliases)
     {
         LogInfo(LogShaderBundle, "ShaderBundle:: Initializing: %s (isEngine: %s)",
                 m_meta.name.c_str(),
@@ -85,7 +91,8 @@ namespace enigma::graphic
             LogInfo(LogShaderBundle, "ShaderBundle:: No bundle/ directory found (using program/ only)");
         }
 
-        // [NEW] Step 3: Parse RT directives from program/ folder
+        // [NEW] Step 3: Parse RT directives using Iris-style approach
+        // [REFACTOR] Scan program files, expand includes, then parse directives from expanded source
         const auto& config = g_theRendererSubsystem->GetConfiguration();
         m_rtDirectives     = std::make_unique<PackRenderTargetDirectives>(
             config.colorTexConfig.defaultConfig,
@@ -94,42 +101,101 @@ namespace enigma::graphic
             config.shadowTexConfig.defaultConfig
         );
 
+        // Step 3.1: Scan program/ folder for shader programs
         auto programDir = m_meta.path / "shaders" / "program";
         if (FileSystemHelper::DirectoryExists(programDir))
         {
-            ConstDirectiveParser     constParser;
-            std::vector<std::string> allLines;
+            auto programNames = ShaderScanHelper::ScanShaderPrograms(programDir);
 
-            // Scan all .hlsl files in program/ folder
-            for (const auto& entry : std::filesystem::directory_iterator(programDir))
+            if (!programNames.empty())
             {
-                if (entry.is_regular_file() && entry.path().extension() == ".hlsl")
+                // Step 3.2: Build starting paths for IncludeGraph
+                // Note: ShaderPath is relative to the root passed to IncludeGraph
+                // Root = m_meta.path (e.g., ".enigma/shaderbundles/EnigmaDefault")
+                // ShaderPath = "/shaders/program/xxx.vs.hlsl" (virtual path from root)
+                std::vector<ShaderPath> startingPaths;
+                for (const auto& programName : programNames)
                 {
-                    std::string content;
-                    if (FileReadToString(content, entry.path().string()) != 0 || content.empty())
-                        continue;
+                    // Add both VS and PS files as starting points
+                    startingPaths.push_back(ShaderPath::FromAbsolutePath("/shaders/program/" + programName + ".vs.hlsl"));
+                    startingPaths.push_back(ShaderPath::FromAbsolutePath("/shaders/program/" + programName + ".ps.hlsl"));
+                }
 
-                    // Split content into lines
-                    std::vector<std::string> lines;
-                    std::istringstream       stream(std::move(content));
-                    std::string              line;
-                    while (std::getline(stream, line))
+                // Step 3.3: Build IncludeGraph (BFS traversal of all includes)
+                // Root is m_meta.path, so ShaderPath "/shaders/program/x.hlsl" resolves to
+                // m_meta.path / "shaders/program/x.hlsl"
+                //
+                // [NEW] Create FileSystemReader with @engine alias support
+                // @engine -> .enigma/assets/engine/shaders (relative to Run directory)
+                try
+                {
+                    // Create FileSystemReader with root at ShaderBundle path
+                    auto fileReader = std::make_shared<FileSystemReader>(m_meta.path);
+
+                    // [NEW] Register path aliases from configuration
+                    // Path aliases enable cross-directory #include resolution (e.g., @engine -> engine shaders)
+                    for (const auto& [alias, targetPath] : m_pathAliases)
                     {
-                        lines.push_back(line);
-                        allLines.push_back(line);
+                        std::filesystem::path resolvedPath = targetPath;
+                        if (FileSystemHelper::DirectoryExists(resolvedPath))
+                        {
+                            fileReader->AddAlias(alias, resolvedPath);
+                            LogInfo(LogShaderBundle, "ShaderBundle:: Registered alias %s -> %s",
+                                    alias.c_str(), resolvedPath.string().c_str());
+                        }
+                        else
+                        {
+                            LogWarn(LogShaderBundle, "ShaderBundle:: Alias target not found: %s -> %s",
+                                    alias.c_str(), resolvedPath.string().c_str());
+                        }
                     }
 
-                    // Parse format directives from this file (in comments)
-                    m_rtDirectives->ParseFormatDirectives(lines);
+                    // Build IncludeGraph with alias-aware FileReader
+                    IncludeGraph graph(fileReader, startingPaths);
+
+                    // Step 3.4: Expand each program and collect all lines for directive parsing
+                    ConstDirectiveParser     constParser;
+                    std::vector<std::string> allLines;
+
+                    for (const auto& startPath : startingPaths)
+                    {
+                        if (!graph.HasNode(startPath))
+                            continue;
+
+                        // Expand includes (Iris-style: directives in include files are preserved)
+                        std::string expandedSource = IncludeProcessor::Expand(graph, startPath);
+
+                        // Split expanded source into lines
+                        std::istringstream stream(expandedSource);
+                        std::string        line;
+                        while (std::getline(stream, line))
+                        {
+                            allLines.push_back(line);
+                        }
+                    }
+
+                    // Step 3.5: Parse format directives (in comments: const int colortexNFormat = ...)
+                    m_rtDirectives->ParseFormatDirectives(allLines);
+
+                    // Step 3.6: Parse const directives (const bool/float4 etc.)
+                    if (!allLines.empty())
+                    {
+                        constParser.ParseLines(allLines);
+                        m_rtDirectives->AcceptDirectives(constParser);
+
+                        LogInfo(LogShaderBundle, "ShaderBundle:: Parsed RT directives from %zu expanded lines (%zu programs)",
+                                allLines.size(), programNames.size());
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    LogWarn(LogShaderBundle, "ShaderBundle:: Failed to build IncludeGraph: %s", e.what());
                 }
             }
-
-            // Parse const directives from all collected lines
-            constParser.ParseLines(allLines);
-            m_rtDirectives->AcceptDirectives(constParser);
-
-            LogInfo(LogShaderBundle, "ShaderBundle:: Parsed RT directives from %s",
-                    programDir.string().c_str());
+        }
+        else
+        {
+            LogInfo(LogShaderBundle, "ShaderBundle:: No program/ directory found, skipping directive parsing");
         }
 
         LogInfo(LogShaderBundle, "ShaderBundle:: Created: %s (%zu UserDefinedBundles)",
