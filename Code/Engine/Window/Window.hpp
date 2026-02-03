@@ -6,7 +6,7 @@
 
 // Forward declare Windows types to avoid including windows.h in header
 #ifndef WIN32_LEAN_AND_MEAN
-typedef unsigned long DWORD;
+typedef unsigned long  DWORD;
 typedef struct tagRECT RECT;
 #endif
 
@@ -27,15 +27,16 @@ enum class WindowMode
 
 struct WindowConfig
 {
-    InputSystem* m_inputSystem  = nullptr;
-    float        m_aspectRatio  = (16.f / 9.f);
-    std::string  m_windowTitle  = "Unnamed Application";
-    WindowMode   m_windowMode   = WindowMode::Windowed;
-    IntVec2      m_resolution   = IntVec2(1600, 900);
-    bool         m_alwaysOnTop  = false; // Window always stays on top of other windows
+    InputSystem* m_inputSystem = nullptr;
+    float        m_aspectRatio = (16.f / 9.f);
+    std::string  m_windowTitle = "Unnamed Application";
+    WindowMode   m_windowMode  = WindowMode::Windowed;
+    IntVec2      m_resolution  = IntVec2(1920, 1080);
+    bool         m_alwaysOnTop = false; // Window always stays on top of other windows
 
     // Backward compatibility method
-    bool IsFullscreen() const {
+    bool IsFullscreen() const
+    {
         return m_windowMode != WindowMode::Windowed;
     }
 };

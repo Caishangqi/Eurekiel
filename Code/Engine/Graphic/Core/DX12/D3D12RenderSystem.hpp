@@ -76,11 +76,11 @@ namespace enigma::graphic
          * @param enableDebugLayer 是否启用调试层
          * @param enableGPUValidation 是否启用GPU验证
          * @param hwnd 窗口句柄，用于SwapChain创建（如果为nullptr则不创建SwapChain）
-         * @param renderWidth 渲染分辨率宽度（默认1280）
-         * @param renderHeight 渲染分辨率高度（默认720）
+         * @param renderWidth 渲染分辨率宽度（默认1920）
+         * @param renderHeight 渲染分辨率高度（默认1080）
          * @return 是否初始化成功
          */
-        static bool Initialize(bool enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1280, uint32_t renderHeight = 720);
+        static bool Initialize(bool enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1920, uint32_t renderHeight = 1080);
         static bool PrepareDefaultTextures();
         /**
          * 关闭渲染系统，释放所有资源
@@ -529,9 +529,9 @@ namespace enigma::graphic
          * Uses config.clearValue for the clear color.
          */
         static void ClearRenderTargetByConfig(
-            ID3D12GraphicsCommandList*  commandList,
-            D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
-            const struct RenderTargetConfig&      config
+            ID3D12GraphicsCommandList*       commandList,
+            D3D12_CPU_DESCRIPTOR_HANDLE      rtvHandle,
+            const struct RenderTargetConfig& config
         );
 
         /**
@@ -544,9 +544,9 @@ namespace enigma::graphic
          * Uses config.clearValue.depthStencil for clear values.
          */
         static void ClearDepthStencilByConfig(
-            ID3D12GraphicsCommandList*  commandList,
-            D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle,
-            const struct RenderTargetConfig&      config
+            ID3D12GraphicsCommandList*       commandList,
+            D3D12_CPU_DESCRIPTOR_HANDLE      dsvHandle,
+            const struct RenderTargetConfig& config
         );
 
         // ===== 资源创建API =====
@@ -915,4 +915,4 @@ namespace enigma::graphic
         // ===== 内部辅助方法 =====
         static size_t AlignConstantBufferSize(size_t size); // 常量缓冲区大小对齐
     };
-} // namespace enigma::graphic
+} // namespace enigma:

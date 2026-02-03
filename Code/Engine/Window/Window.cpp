@@ -458,7 +458,7 @@ void Window::CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD
         clientHeight = static_cast<float>(m_config.m_resolution.y);
 
         // Ensure it fits on screen
-        constexpr float maxClientFractionOfDesktop = 0.90f;
+        constexpr float maxClientFractionOfDesktop = 1.0f;
         float           maxWidth                   = desktopWidth * maxClientFractionOfDesktop;
         float           maxHeight                  = desktopHeight * maxClientFractionOfDesktop;
 
