@@ -79,6 +79,45 @@ namespace enigma::graphic
         return m_yaml.GetString(KEY_CURRENT_LOADED_BUNDLE, DEFAULT_CURRENT_BUNDLE);
     }
 
+    std::vector<PathAliasEntry> ShaderBundleSubsystemConfiguration::GetPathAliases() const
+    {
+        std::vector<PathAliasEntry> result;
+
+        // Check if pathAliases section exists
+        if (!m_yaml.Contains(KEY_PATH_ALIASES))
+        {
+            return result;
+        }
+
+        // Get the pathAliases section as a configuration
+        auto aliasSection = m_yaml.GetConfigurationSection(KEY_PATH_ALIASES);
+        auto keys         = aliasSection.GetKeys();
+
+        for (const auto& alias : keys)
+        {
+            std::string targetPath = aliasSection.GetString(alias, "");
+            if (!targetPath.empty())
+            {
+                result.push_back({alias, targetPath});
+            }
+        }
+
+        return result;
+    }
+
+    std::unordered_map<std::string, std::string> ShaderBundleSubsystemConfiguration::GetPathAliasMap() const
+    {
+        std::unordered_map<std::string, std::string> result;
+
+        auto aliases = GetPathAliases();
+        for (const auto& entry : aliases)
+        {
+            result[entry.alias] = entry.targetPath;
+        }
+
+        return result;
+    }
+
     //-----------------------------------------------------------------------------------------------
     // Mutators
     //-----------------------------------------------------------------------------------------------
@@ -96,6 +135,38 @@ namespace enigma::graphic
     void ShaderBundleSubsystemConfiguration::SetCurrentLoadedBundle(const std::string& bundleName)
     {
         m_yaml.Set(KEY_CURRENT_LOADED_BUNDLE, bundleName);
+    }
+
+    void ShaderBundleSubsystemConfiguration::SetPathAlias(const std::string& alias, const std::string& targetPath)
+    {
+        // Validate alias format (should start with '@')
+        if (alias.empty() || alias[0] != '@')
+        {
+            LogWarn(LogShaderBundle,
+                    "ShaderBundleSubsystemConfiguration:: Invalid alias format (must start with '@'): %s",
+                    alias.c_str());
+            return;
+        }
+
+        // Set the alias in the pathAliases section
+        std::string fullPath = std::string(KEY_PATH_ALIASES) + "." + alias;
+        m_yaml.Set(fullPath, targetPath);
+
+        LogInfo(LogShaderBundle,
+                "ShaderBundleSubsystemConfiguration:: Set path alias: %s -> %s",
+                alias.c_str(), targetPath.c_str());
+    }
+
+    void ShaderBundleSubsystemConfiguration::RemovePathAlias(const std::string& alias)
+    {
+        std::string fullPath = std::string(KEY_PATH_ALIASES) + "." + alias;
+        if (m_yaml.Contains(fullPath))
+        {
+            m_yaml.Remove(fullPath);
+            LogInfo(LogShaderBundle,
+                    "ShaderBundleSubsystemConfiguration:: Removed path alias: %s",
+                    alias.c_str());
+        }
     }
 
     //-----------------------------------------------------------------------------------------------

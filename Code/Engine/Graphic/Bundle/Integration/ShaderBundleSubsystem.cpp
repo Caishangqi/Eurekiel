@@ -62,10 +62,13 @@ void ShaderBundleSubsystem::Startup()
 
     ShaderBundleMeta engineMeta = engineMetaOpt.value();
 
+    // [NEW] Get path aliases from configuration for shader include resolution
+    auto pathAliases = m_config.GetPathAliasMap();
+
     try
     {
         // [RAII] ShaderBundle initializes in constructor
-        m_engineBundle = std::make_shared<ShaderBundle>(engineMeta, nullptr);
+        m_engineBundle = std::make_shared<ShaderBundle>(engineMeta, nullptr, pathAliases);
         LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Engine bundle '%s' loaded from: %s",
                 engineMeta.name.c_str(), m_config.GetEnginePath().c_str());
     }
@@ -296,9 +299,12 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
 
     try
     {
+        // [NEW] Get path aliases from configuration for shader include resolution
+        auto pathAliases = m_config.GetPathAliasMap();
+
         // [RAII] Create bundle with engine bundle reference for fallback
         // ShaderBundle initializes in constructor (load fallback rules, discover UserDefinedBundles, precompile)
-        auto bundle = std::make_shared<ShaderBundle>(meta, m_engineBundle);
+        auto bundle = std::make_shared<ShaderBundle>(meta, m_engineBundle, pathAliases);
 
         // [NEW] Apply RT configs from bundle directives to providers
         auto* rtDirectives = bundle->GetRTDirectives();
