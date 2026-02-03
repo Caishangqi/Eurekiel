@@ -61,12 +61,12 @@
 namespace enigma::graphic
 {
     /**
-     * @brief 常量值类型（使用std::variant存储多种类型）
+     * @brief constant value type (use std::variant to store multiple types)
      *
-     * **设计说明**:
-     * - 使用std::variant而非继承体系，符合现代C++最佳实践
-     * - 避免虚函数开销，提供编译期类型安全
-     * - 支持std::get<T>()和std::holds_alternative<T>()进行类型查询
+     * **Design Description**:
+     * - Use std::variant instead of inheritance system, in line with modern C++ best practices
+     * - Avoid virtual function overhead and provide compile-time type safety
+     * - Support std::get<T>() and std::holds_alternative<T>() for type query
      */
     using ConstantValue = std::variant<
         int,
@@ -80,268 +80,255 @@ namespace enigma::graphic
     >;
 
     /**
-     * @brief ConstDirectiveParser - const常量指令解析器
+     * @brief ConstDirectiveParser - const constant directive parser
      *
-     * **核心职责**:
-     * 1. 解析单行const指令 - Parse()
-     * 2. 批量解析多行代码 - ParseLines()
-     * 3. 查询常量值 - GetInt(), GetFloat(), GetVec3()等
-     * 4. 管理常量存储 - 内部使用std::unordered_map
+     * **Core Responsibilities**:
+     * 1. Parse single-line const instructions - Parse()
+     * 2. Parse multiple lines of code in batches - ParseLines()
+     * 3. Query constant values - GetInt(), GetFloat(), GetVec3(), etc.
+     * 4. Manage constant storage - internally use std::unordered_map
      *
-     * **线程安全性**:
-     * - 非线程安全，需要外部同步
-     * - 解析阶段和查询阶段应分离（先Parse完成，再Query）
+     * **Thread Safety**:
+     * - Not thread safe, requires external synchronization
+     * - The parsing phase and the query phase should be separated (Parse is completed first, then Query)
      *
-     * **性能考虑**:
-     * - 解析时一次性构建哈希表，查询时O(1)复杂度
-     * - 不缓存解析结果，每次Parse()都重新解析（保证简单性）
+     * **Performance Considerations**:
+     * - Construct the hash table once during parsing, O(1) complexity during query
+     * - Do not cache the parsing results, re-parse each time Parse() (ensuring simplicity)
      */
     class ConstDirectiveParser
     {
     public:
-        /**
-         * @brief 默认构造函数
-         */
         ConstDirectiveParser() = default;
 
         // ========================================================================
-        // 解析接口
+        // parse interface
         // ========================================================================
 
         /**
-         * @brief 解析单行const指令
-         * @param line 源代码行（例如："const int shadowMapResolution = 2048;"）
-         * @return true 如果解析成功，false 如果不是const指令或解析失败
+         * @brief parses single-line const instructions
+         * @param line source code line (for example: "const int shadowMapResolution = 2048;")
+         * @return true if parsing is successful, false if it is not a const directive or parsing fails
          *
-         * **解析逻辑**（基于Iris OptionAnnotatedSource.java::parseConst()）:
-         * 1. 检查行是否以"const"开头（Trim后）
-         * 2. 提取类型（int, float, bool, vec2等）
-         * 3. 提取变量名
-         * 4. 提取值并解析
-         * 5. 存储到内部映射表
+         * **Parse logic** (based on Iris OptionAnnotatedSource.java::parseConst()):
+         * 1. Check whether the line starts with "const" (after Trim)
+         * 2. Extraction type (int, float, bool, vec2, etc.)
+         * 3. Extract variable name
+         * 4. Extract the value and parse it
+         * 5. Store in internal mapping table
          *
-         * **Iris兼容性**:
-         * - 完全兼容Iris的int/float/bool常量格式
-         * - 扩展支持向量类型（Iris不支持）
+         * **Iris Compatibility**:
+         * - Fully compatible with Iris' int/float/bool constant format
+         * - Extended support for vector types (not supported by Iris)
          *
-         * **示例**:
+         * **Example**:
          * ```cpp
          * ConstDirectiveParser parser;
          * parser.Parse("const int shadowMapResolution = 2048;"); // true
          * parser.Parse("const vec3 color = vec3(1.0, 0.5, 0.2);"); // true
-         * parser.Parse("#define SHADOWS"); // false (不是const)
+         * parser.Parse("#define SHADOWS"); // false (not const)
          * ```
          */
         bool Parse(const std::string& line);
 
         /**
-         * @brief 批量解析多行代码
-         * @param lines 源代码行列表
-         * @return 成功解析的常量数量
-         *
-         * **使用场景**:
-         * - 解析整个着色器文件的所有const常量
-         * - 与ShaderPackLoader配合使用
-         *
-         * **示例**:
-         * ```cpp
-         * std::vector<std::string> lines = {
-         *     "const int shadowMapResolution = 2048;",
-         *     "const float sunPathRotation = 0.0f;",
-         *     "// 注释行",
-         *     "const bool shadowHardwareFiltering = true;"
-         * };
-         * size_t count = parser.ParseLines(lines); // 返回3
-         * ```
-         */
+          * @brief Batch parsing of multiple lines of code
+          * @param lines source code line list
+          * @return The number of successfully parsed constants
+          *
+          * **Usage Scenario**:
+          * - parse all const constants throughout the shader file
+          * - Used with ShaderPackLoader
+          *
+          * **Example**:
+          * ```cpp
+          * std::vector<std::string> lines = {
+          * "const int shadowMapResolution = 2048;",
+          * "const float sunPathRotation = 0.0f;",
+          * "//Comment line",
+          * "const bool shadowHardwareFiltering = true;"
+          * };
+          * size_t count = parser.ParseLines(lines); // Return 3
+          * ```
+          */
         size_t ParseLines(const std::vector<std::string>& lines);
 
         // ========================================================================
-        // 查询接口 - 获取常量值
+        // Query interface - get constant value
         // ========================================================================
-
         /**
-         * @brief 获取int常量
-         * @param name 常量名
-         * @return 常量值（如果存在且类型匹配）
+         * @brief Get int constant
+         * @param name constant name
+         * @return constant value (if exists and type matches)
          *
-         * **类型安全**:
-         * - 只有当常量存在且类型为int时，才返回值
-         * - 类型不匹配时返回std::nullopt
+         * **Type safety**:
+         * - Return a value only if the constant exists and is of type int
+         * - Returns std::nullopt if type does not match
          */
         std::optional<int> GetInt(const std::string& name) const;
 
         /**
-         * @brief 获取float常量
-         */
+          * @brief Get float constant
+          */
         std::optional<float> GetFloat(const std::string& name) const;
 
         /**
-         * @brief 获取bool常量
-         */
+                 * @brief Get bool constant
+                 */
         std::optional<bool> GetBool(const std::string& name) const;
 
         /**
-         * @brief 获取Vec2常量
-         */
+                 * @brief Get Vec2 constant
+                 */
         std::optional<Vec2> GetVec2(const std::string& name) const;
 
         /**
-         * @brief 获取Vec3常量
+         * @brief Get Vec3 constant
          */
         std::optional<Vec3> GetVec3(const std::string& name) const;
 
         /**
-         * @brief 获取Vec4常量
+         * @brief Get Vec4 constants
          */
         std::optional<Vec4> GetVec4(const std::string& name) const;
 
         /**
-         * @brief 获取IntVec2常量
+         * @brief Get IntVec2 constant
          */
         std::optional<IntVec2> GetIntVec2(const std::string& name) const;
 
         /**
-         * @brief 获取IntVec3常量
+         * @brief Get IntVec3 constant
          */
         std::optional<IntVec3> GetIntVec3(const std::string& name) const;
 
         /**
-         * @brief 检查常量是否存在
-         * @param name 常量名
-         * @return true 如果常量存在（不检查类型）
+         * @brief Check whether the constant exists
+         * @param name constant name
+         * @return true if constant exists (does not check type)
          */
         bool HasConstant(const std::string& name) const;
 
         /**
-         * @brief 获取所有常量名称
-         * @return 常量名称列表
+         * @brief Get all constant names
+         * @return constant name list
          *
-         * **使用场景**:
-         * - 调试和诊断
-         * - 生成常量列表文档
+         * **Usage Scenario**:
+         * - Debugging and Diagnostics
+         * - Generate constant list document
          */
         std::vector<std::string> GetAllConstantNames() const;
 
         /**
-         * @brief 清空所有常量
+         * @brief Clear all constants
          */
         void Clear();
 
         /**
-         * @brief 获取常量总数
-         * @return 存储的常量数量
+         * @brief Get the total number of constants
+         * @return the number of stored constants
          */
         size_t GetConstantCount() const { return m_constants.size(); }
 
     private:
-        // ========================================================================
-        // 内部解析辅助函数
-        // ========================================================================
-
         /**
-         * @brief 解析int常量
-         * @param name 常量名
-         * @param valueStr 值字符串（例如："2048"）
-         * @return true 如果解析成功
-         *
-         * **实现细节**:
-         * - 使用std::stoi()进行解析
-         * - 捕获异常以处理无效格式
-         */
+                 * @brief parse int constant
+                 * @param name constant name
+                 * @param valueStr value string (for example: "2048")
+                 * @return true if parsing is successful
+                 *
+                 * **Implementation details**:
+                 * - Use std::stoi() for parsing
+                 * - Catch exceptions to handle invalid formats
+                 */
         bool ParseInt(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析float常量
-         * @param name 常量名
-         * @param valueStr 值字符串（例如："0.5f" 或 "0.5"）
+         * @brief parse float constants
+         * @param name constant name
+         * @param valueStr value string (for example: "0.5f" or "0.5")
          *
-         * **实现细节**:
-         * - 自动移除'f'或'F'后缀（HLSL风格）
-         * - 使用std::stof()进行解析
+         * **Implementation details**:
+         * - Automatically remove 'f' or 'F' suffix (HLSL style)
+         * - Use std::stof() for parsing
          */
         bool ParseFloat(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析bool常量
-         * @param name 常量名
-         * @param valueStr 值字符串（例如："true" 或 "false"）
+         * @brief parse bool constants
+         * @param name constant name
+         * @param valueStr value string (for example: "true" or "false")
          *
-         * **Iris兼容性**:
-         * - 与Iris完全一致，只接受"true"和"false"字符串
-         * - 不接受"1"和"0"（与C++标准一致）
+         * **Iris Compatibility**:
+         * - exactly the same as Iris, only accepts "true" and "false" strings
+         * - "1" and "0" are not accepted (consistent with the C++ standard)
          */
         bool ParseBool(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析vec2常量
-         * @param name 常量名
-         * @param valueStr 值字符串（例如："vec2(0.5, 0.8)"）
+         * @brief parse vec2 constant
+         * @param name constant name
+         * @param valueStr value string (for example: "vec2(0.5, 0.8)")
          */
         bool ParseVec2(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析vec3常量
-         * @param name 常量名
-         * @param valueStr 值字符串（例如："vec3(0.8, 0.9, 1.0)"）
+         * @brief parse vec3 constants
+         * @param name constant name
+         * @param valueStr value string (for example: "vec3(0.8, 0.9, 1.0)")
          */
         bool ParseVec3(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析vec4常量
+         * @brief parse vec4 constants
          */
         bool ParseVec4(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析ivec2常量
+         * @brief parse ivec2 constants
          */
         bool ParseIntVec2(const std::string& name, const std::string& valueStr);
 
         /**
-         * @brief 解析ivec3常量
+         * @brief parse ivec3 constants
          */
         bool ParseIntVec3(const std::string& name, const std::string& valueStr);
-
         /**
-         * @brief 提取向量构造函数内的值
-         * @param valueStr 值字符串（例如："vec3(0.8, 0.9, 1.0)"）
-         * @return 值列表（例如：["0.8", "0.9", "1.0"]）
-         *
-         * **解析逻辑**:
-         * 1. 查找'('和')'
-         * 2. 提取括号内的内容
-         * 3. 按','分割
-         * 4. Trim每个值
-         */
+                 * @brief Extract the value in the vector constructor
+                 * @param valueStr value string (for example: "vec3(0.8, 0.9, 1.0)")
+                 * @return value list (for example: ["0.8", "0.9", "1.0"])
+                 *
+                 * **Analysis logic**:
+                 * 1. Find '(' and ')'
+                 * 2. Extract the content within the brackets
+                 * 3. Press ',' to split
+                 * 4. Trim each value
+                 */
         std::vector<std::string> ExtractVectorValues(const std::string& valueStr);
 
         /**
-         * @brief 去除字符串首尾空白
-         * @param str 输入字符串
-         * @return 去除空白后的字符串
+         * @brief Remove leading and trailing blanks from the string
+         * @param str input string
+         * @return the string after whitespace removal
          *
-         * **实现细节**:
-         * - 去除空格、制表符、换行符等所有空白字符
-         * - 使用std::isspace()判断
+         * **Implementation details**:
+         * - Remove all whitespace characters such as spaces, tabs, newlines, etc.
+         * - Use std::isspace() to determine
          */
         std::string Trim(const std::string& str) const;
 
     private:
-        // ========================================================================
-        // 内部数据成员
-        // ========================================================================
-
         /**
-         * @brief 常量存储（名称 -> 值）
+         * @brief constant storage (name -> value)
          *
-         * **设计选择**:
-         * - 使用std::unordered_map提供O(1)查询性能
-         * - Key为常量名（std::string）
-         * - Value为ConstantValue（std::variant支持多种类型）
+         * **Design Choice**:
+         * - Use std::unordered_map to provide O(1) query performance
+         * - Key is a constant name (std::string)
+         * - Value is ConstantValue (std::variant supports multiple types)
          *
-         * **内存考虑**:
-         * - 典型着色器包含10-50个常量，内存占用可忽略
-         * - 不需要预留容量优化（KISS原则）
+         * **Memory Considerations**:
+         * - A typical shader contains 10-50 constants and has a negligible memory footprint
+         * - No reserved capacity optimization required (KISS principle)
          */
         std::unordered_map<std::string, ConstantValue> m_constants;
     };

@@ -4,79 +4,74 @@
 
 /**
  * @file ConstDirectiveParser.cpp
- * @brief const常量指令解析器实现
+ * @brief const constant instruction parser implementation
  *
- * **实现参考**:
- * - Iris源码: OptionAnnotatedSource.java::parseConst() (第202-309行)
- * - 核心逻辑: Trim -> 检查"const" -> 提取类型 -> 提取名称 -> 提取值 -> 解析并存储
+ * **Implementation Reference**:
+ * - Iris source code: OptionAnnotatedSource.java::parseConst() (lines 202-309)
+ * - Core logic: Trim -> check "const" -> extract type -> extract name -> extract value -> parse and store
  *
- * **关键设计决策**:
- * 1. 使用简单字符串操作，不使用正则表达式（KISS原则）
- * 2. 异常安全 - 所有std::stoi/stof调用都包裹在try-catch中
- * 3. 类型安全 - 使用std::variant + std::holds_alternative保证类型正确
- * 4. 鲁棒性 - 单个常量解析失败不影响其他常量
+ * **Key Design Decisions**:
+ * 1. Use simple string operations and do not use regular expressions (KISS principle)
+ * 2. Exception safety - all std::stoi/stof calls are wrapped in try-catch
+ * 3. Type safety - use std::variant + std::holds_alternative to ensure correct type
+ * 4. Robustness - failure to parse a single constant does not affect other constants
  *
- * @author Iris源码参考 + DirectX 12项目实现
+ * @author Iris source code reference + DirectX 12 project implementation
  * @date 2025-10-13
  */
 
 namespace enigma::graphic
 {
-    // ========================================================================
-    // 核心解析方法实现
-    // ========================================================================
-
     bool ConstDirectiveParser::Parse(const std::string& line)
     {
-        // **Step 1: Trim首尾空白**
-        // 目的: 忽略缩进和尾部空白，统一格式
+        // **Step 1: Trim first and last blank**
+        //Purpose: Ignore indentation and trailing whitespace, unify format
         std::string trimmed = Trim(line);
 
-        // **Step 2: 检查是否以"const "开头**
-        // 注意: "const "包含空格，避免匹配"constant"等单词
+        // **Step 2: Check if it starts with "const"**
+        // Note: "const" contains spaces to avoid matching words such as "constant"
         if (trimmed.find("const ") != 0)
         {
-            return false; // 不是const指令
+            return false; // Not a const instruction
         }
 
-        // **Step 3: 移除"const "前缀**
-        // "const " = 6个字符（包含空格）
+        // **Step 3: Remove the "const" prefix**
+        // "const " = 6 characters (including spaces)
         trimmed = trimmed.substr(6);
-        trimmed = Trim(trimmed); // 移除"const"后的额外空白
+        trimmed = Trim(trimmed); // Remove extra whitespace after "const"
 
-        // **Step 4: 提取类型（第一个单词）**
-        // 查找第一个空格，空格之前是类型
+        // **Step 4: Extract type (first word)**
+        // Find the first space, before the space is the type
         size_t spacePos = trimmed.find(' ');
         if (spacePos == std::string::npos)
         {
-            return false; // 格式错误：没有空格分隔类型和名称
+            return false; // Format error: no space separating type and name
         }
 
         std::string type = trimmed.substr(0, spacePos);
         trimmed          = trimmed.substr(spacePos + 1);
         trimmed          = Trim(trimmed);
 
-        // **Step 5: 提取名称和值**
-        // 格式: <name> = <value>;
+        // **Step 5: Extract name and value**
+        // Format: <name> = <value>;
         size_t equalPos = trimmed.find('=');
         if (equalPos == std::string::npos)
         {
-            return false; // 格式错误：没有'='
+            return false; // Format error: no '='
         }
 
         std::string name     = Trim(trimmed.substr(0, equalPos));
         std::string valueStr = Trim(trimmed.substr(equalPos + 1));
 
-        // **Step 6: 移除末尾的';'**
-        // GLSL/HLSL常量声明必须以';'结尾
+        // **Step 6: Remove the ';' at the end**
+        // GLSL/HLSL constant declaration must end with ';'
         if (!valueStr.empty() && valueStr.back() == ';')
         {
             valueStr.pop_back();
             valueStr = Trim(valueStr);
         }
 
-        // **Step 7: 根据类型调用对应的解析函数**
-        // 标量类型（Iris兼容）
+        // **Step 7: Call the corresponding parsing function according to the type**
         if (type == "int")
         {
             return ParseInt(name, valueStr);
@@ -89,29 +84,29 @@ namespace enigma::graphic
         {
             return ParseBool(name, valueStr);
         }
-        // 向量类型（DirectX 12扩展）
-        else if (type == "vec2")
+        // Vector type - supports GLSL (vec2/3/4) and HLSL (float2/3/4) syntax
+        else if (type == "vec2" || type == "float2")
         {
             return ParseVec2(name, valueStr);
         }
-        else if (type == "vec3")
+        else if (type == "vec3" || type == "float3")
         {
             return ParseVec3(name, valueStr);
         }
-        else if (type == "vec4")
+        else if (type == "vec4" || type == "float4")
         {
             return ParseVec4(name, valueStr);
         }
-        else if (type == "ivec2")
+        else if (type == "ivec2" || type == "int2")
         {
             return ParseIntVec2(name, valueStr);
         }
-        else if (type == "ivec3")
+        else if (type == "ivec3" || type == "int3")
         {
             return ParseIntVec3(name, valueStr);
         }
 
-        // 未知类型
+        // unknown type
         return false;
     }
 
@@ -119,7 +114,7 @@ namespace enigma::graphic
     {
         size_t successCount = 0;
 
-        // 遍历所有行，尝试解析每一行
+        //Loop through all lines and try to parse each line
         for (const auto& line : lines)
         {
             if (Parse(line))
@@ -132,7 +127,7 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 查询方法实现
+    // Query method implementation
     // ========================================================================
 
     std::optional<int> ConstDirectiveParser::GetInt(const std::string& name) const
@@ -140,16 +135,16 @@ namespace enigma::graphic
         auto it = m_constants.find(name);
         if (it == m_constants.end())
         {
-            return std::nullopt; // 常量不存在
+            return std::nullopt; // constant does not exist
         }
 
-        // 使用std::holds_alternative检查类型
+        // Use std::holds_alternative to check the type
         if (std::holds_alternative<int>(it->second))
         {
             return std::get<int>(it->second);
         }
 
-        return std::nullopt; // 类型不匹配
+        return std::nullopt; // type mismatch
     }
 
     std::optional<float> ConstDirectiveParser::GetFloat(const std::string& name) const
@@ -288,26 +283,26 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 标量类型解析实现（Iris兼容）
+    // Scalar type parsing implementation (Iris compatible)
     // ========================================================================
 
     bool ConstDirectiveParser::ParseInt(const std::string& name, const std::string& valueStr)
     {
         try
         {
-            // std::stoi自动处理前导空白和正负号
+            // std::stoi automatically handles leading whitespace and signs
             int value         = std::stoi(valueStr);
             m_constants[name] = value;
             return true;
         }
         catch (const std::invalid_argument&)
         {
-            // 无效格式（例如："abc"）
+            // Invalid format (for example: "abc")
             return false;
         }
         catch (const std::out_of_range&)
         {
-            // 超出int范围
+            //out of int range
             return false;
         }
     }
@@ -316,8 +311,8 @@ namespace enigma::graphic
     {
         try
         {
-            // **移除'f'或'F'后缀（HLSL风格）**
-            // 例如: "0.5f" -> "0.5"
+            // **Remove 'f' or 'F' suffix (HLSL style) **
+            //Example: "0.5f" -> "0.5"
             std::string cleaned = valueStr;
             if (!cleaned.empty() && (cleaned.back() == 'f' || cleaned.back() == 'F'))
             {
@@ -340,8 +335,8 @@ namespace enigma::graphic
 
     bool ConstDirectiveParser::ParseBool(const std::string& name, const std::string& valueStr)
     {
-        // **Iris兼容逻辑**（见OptionAnnotatedSource.java第275-283行）
-        // 只接受"true"和"false"字符串，不接受"1"和"0"
+        // **Iris compatible logic** (see OptionAnnotatedSource.java lines 275-283)
+        //Only accepts "true" and "false" strings, not "1" and "0"
         if (valueStr == "true")
         {
             m_constants[name] = true;
@@ -353,21 +348,21 @@ namespace enigma::graphic
             return true;
         }
 
-        // 不接受其他格式（与Iris一致）
+        // No other formats are accepted (consistent with Iris)
         return false;
     }
 
     // ========================================================================
-    // 向量类型解析实现（DirectX 12扩展）
+    // Vector type parsing implementation (DirectX 12 extension)
     // ========================================================================
 
     bool ConstDirectiveParser::ParseVec2(const std::string& name, const std::string& valueStr)
     {
-        // 提取vec2(x, y)中的值
+        //Extract the value in vec2(x, y)
         auto values = ExtractVectorValues(valueStr);
         if (values.size() != 2)
         {
-            return false; // 必须恰好2个分量
+            return false; // Must have exactly 2 components
         }
 
         try
@@ -385,12 +380,12 @@ namespace enigma::graphic
 
     bool ConstDirectiveParser::ParseVec3(const std::string& name, const std::string& valueStr)
     {
-        // **核心向量解析逻辑**
-        // 格式: "vec3(0.8, 0.9, 1.0)" -> {0.8, 0.9, 1.0}
+        // **Core vector parsing logic**
+        // Format: "vec3(0.8, 0.9, 1.0)" -> {0.8, 0.9, 1.0}
         auto values = ExtractVectorValues(valueStr);
         if (values.size() != 3)
         {
-            return false; // 必须恰好3个分量
+            return false; // Must have exactly 3 components
         }
 
         try
@@ -473,43 +468,39 @@ namespace enigma::graphic
         }
     }
 
-    // ========================================================================
-    // 辅助函数实现
-    // ========================================================================
-
     std::vector<std::string> ConstDirectiveParser::ExtractVectorValues(const std::string& valueStr)
     {
         /**
-         * **向量构造函数解析逻辑**
+         * **Vector constructor parsing logic**
          *
-         * 输入示例: "vec3(0.8, 0.9, 1.0)"
-         * 输出: ["0.8", "0.9", "1.0"]
+         * Input example: "vec3(0.8, 0.9, 1.0)"
+         * Output: ["0.8", "0.9", "1.0"]
          *
-         * **解析步骤**:
-         * 1. 查找'('和')' - 定位向量参数列表
-         * 2. 提取括号内的内容 - "0.8, 0.9, 1.0"
-         * 3. 按','分割 - ["0.8", " 0.9", " 1.0"]
-         * 4. Trim每个值 - ["0.8", "0.9", "1.0"]
+         * **Analysis steps**:
+         * 1. Find '(' and ')' - locate vector parameter list
+         * 2. Extract the content within the brackets - "0.8, 0.9, 1.0"
+         * 3. Split by ',' - ["0.8", " 0.9", " 1.0"]
+         * 4. Trim each value - ["0.8", "0.9", "1.0"]
          */
 
-        // **Step 1: 查找'('和')'**
+        // **Step 1: Find '(' and ')'**
         size_t openParen  = valueStr.find('(');
         size_t closeParen = valueStr.find(')');
 
         if (openParen == std::string::npos || closeParen == std::string::npos)
         {
-            return {}; // 格式错误：没有括号
+            return {}; // Format error: no brackets
         }
 
         if (openParen >= closeParen)
         {
-            return {}; // 格式错误：括号顺序错误
+            return {}; // Format error: Wrong order of brackets
         }
 
-        // **Step 2: 提取括号内的内容**
+        // **Step 2: Extract the content within the brackets**
         std::string valuesStr = valueStr.substr(openParen + 1, closeParen - openParen - 1);
 
-        // **Step 3 & 4: 按','分割并Trim**
+        // **Step 3 & 4: Press ',' to split and trim**
         std::vector<std::string> result;
         size_t                   start = 0;
         size_t                   comma = valuesStr.find(',');
@@ -523,7 +514,7 @@ namespace enigma::graphic
             comma = valuesStr.find(',', start);
         }
 
-        // 添加最后一个值（逗号之后的部分）
+        //Add the last value (the part after the comma)
         std::string lastValue = valuesStr.substr(start);
         result.push_back(Trim(lastValue));
 
@@ -533,10 +524,10 @@ namespace enigma::graphic
     std::string ConstDirectiveParser::Trim(const std::string& str) const
     {
         /**
-         * **Trim实现 - 去除首尾空白**
+         * **Trim implementation - remove leading and trailing blanks**
          *
-         * 空白字符包括: 空格, 制表符, 换行符, 回车符等
-         * 使用std::isspace()判断
+         * Whitespace characters include: spaces, tabs, line feeds, carriage returns, etc.
+         * Use std::isspace() to determine
          */
 
         if (str.empty())
@@ -544,21 +535,21 @@ namespace enigma::graphic
             return str;
         }
 
-        // **查找第一个非空白字符**
+        // **Find the first non-whitespace character**
         size_t start = 0;
         while (start < str.size() && std::isspace(static_cast<unsigned char>(str[start])))
         {
             start++;
         }
 
-        // **查找最后一个非空白字符**
+        // **Find the last non-whitespace character**
         size_t end = str.size();
         while (end > start && std::isspace(static_cast<unsigned char>(str[end - 1])))
         {
             end--;
         }
 
-        // **提取中间部分**
+        // **Extract the middle part**
         return str.substr(start, end - start);
     }
 } // namespace enigma::graphic
