@@ -420,11 +420,14 @@ namespace enigma::graphic
             return nullptr;
         }
 
+        ShaderCompileOptions shaderCompileOptions;
+        shaderCompileOptions.enableDebugInfo = true;
         // Compile the shader program using RendererSubsystem
         auto program = g_theRendererSubsystem->CreateShaderProgramFromFiles(
             files->first, // VS path
             files->second, // PS path
-            programName // Program name
+            programName, // Program name
+            shaderCompileOptions
         );
 
         if (!program)

@@ -87,9 +87,11 @@ namespace enigma::graphic
             // 2b. Compile shader program
             try
             {
+                ShaderCompileOptions shaderCompileOptions;
+                shaderCompileOptions.enableDebugInfo   = true;
                 std::shared_ptr<ShaderProgram> program =
                     g_theRendererSubsystem->CreateShaderProgramFromFiles(
-                        vsPath, psPath, programName);
+                        vsPath, psPath, programName, shaderCompileOptions);
 
                 if (program)
                 {
