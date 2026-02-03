@@ -1,26 +1,25 @@
 ﻿/**
  * @file FileSystemReader.cpp
- * @brief 文件系统读取器实现
+ * @brief file system reader implementation
  * @date 2025-11-04
  * @author Caizii
  *
- * 实现说明:
- * 本文件包含FileSystemReader类的完整实现，提供安全的本地文件系统访问功能。
- * 所有实现都遵循现代C++最佳实践，确保线程安全和异常安全。
+ * Implementation instructions:
+ * This file contains a complete implementation of the FileSystemReader class, which provides secure local file system access functionality.
+ * All implementations follow modern C++ best practices to ensure thread safety and exception safety.
  *
- * 性能优化:
- * - 使用std::filesystem高效路径操作
- * - 最小化系统调用次数
- * - 智能错误处理避免异常开销
- * - 缓存友好的文件读取策略
+ *Performance optimization:
+ * - Use std::filesystem for efficient path operations
+ * - Minimize the number of system calls
+ * - Intelligent error handling avoids exception overhead
+ * - cache-friendly file reading strategy
  *
- * 安全特性:
- * - 严格的路径边界检查
- * - 符号链接安全处理
- * - 路径遍历攻击防护
- * - 详细的权限验证
+ * Security features:
+ * - Strict path boundary checking
+ * - Safe handling of symbolic links
+ * - Path traversal attack protection
+ * - Detailed permission verification
  */
-
 #include "FileSystemReader.hpp"
 #include <fstream>
 #include <iostream>
@@ -32,10 +31,6 @@
 
 namespace enigma::graphic
 {
-    // ========================================================================
-    // 构造函数实现
-    // ========================================================================
-
     FileSystemReader::FileSystemReader()
         : m_rootPath(std::filesystem::current_path())
     {
@@ -49,10 +44,10 @@ namespace enigma::graphic
     FileSystemReader::FileSystemReader(const std::filesystem::path& explicitRoot)
         : m_rootPath(explicitRoot)
     {
-        // 规范化根目录路径
+        //Normalize root directory path
         m_rootPath = CanonicalizePath(explicitRoot);
 
-        // 验证指定的根目录是否有效
+        // Verify whether the specified root directory is valid
         if (!std::filesystem::exists(m_rootPath) || !std::filesystem::is_directory(m_rootPath))
         {
             ERROR_AND_DIE("Explicit root directory is not a valid directory!");
@@ -60,28 +55,35 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // IFileReader接口实现
+    // IFileReader interface implementation
     // ========================================================================
-
     std::optional<std::string> FileSystemReader::ReadFile(const ShaderPath& path)
     {
         try
         {
-            // 将Shader Pack路径转换为文件系统路径
+            // [NEW] Try to resolve the alias path
+            auto aliasResolved = ResolveAliasPath(path);
+            if (aliasResolved.has_value())
+            {
+                // Alias path parsing is successful, read directly
+                return ReadFileContent(aliasResolved.value());
+            }
+
+            // Convert Shader Pack path to file system path
             auto fullPath = path.Resolved(m_rootPath);
 
-            // 安全检查：确保路径在根目录内
+            // Security check: Make sure the path is within the root directory
             if (!IsPathWithinRoot(fullPath, m_rootPath))
             {
                 ERROR_AND_DIE("Attempted to read file outside working directory!");
             }
 
-            // 安全读取文件内容
+            // Safely read file contents
             return ReadFileContent(fullPath);
         }
         catch (const std::exception& e)
         {
-            // 记录错误但不会终止程序
+            // Log the error but do not terminate the program
             std::cerr << "FileSystemReader::ReadFile failed for path '"
                 << path.GetPathString() << "': " << e.what() << std::endl;
             return std::nullopt;
@@ -92,22 +94,31 @@ namespace enigma::graphic
     {
         try
         {
-            // 将Shader Pack路径转换为文件系统路径
+            // [NEW] Try to resolve the alias path
+            auto aliasResolved = ResolveAliasPath(path);
+            if (aliasResolved.has_value())
+            {
+                // Alias path parsing is successful, check if the file exists
+                return std::filesystem::exists(aliasResolved.value()) &&
+                    std::filesystem::is_regular_file(aliasResolved.value());
+            }
+
+            // Convert Shader Pack path to file system path
             auto fullPath = path.Resolved(m_rootPath);
 
-            // 安全检查：确保路径在根目录内
+            // Security check: Make sure the path is within the root directory
             if (!IsPathWithinRoot(fullPath, m_rootPath))
             {
                 ERROR_AND_DIE("Attempted to access file outside working directory!");
             }
 
-            // 检查文件是否存在
+            // Check if the file exists
             return std::filesystem::exists(fullPath) &&
                 std::filesystem::is_regular_file(fullPath);
         }
         catch (const std::exception& e)
         {
-            // 记录错误但返回false表示文件不存在
+            // Log an error but return false to indicate the file does not exist
             std::cerr << "FileSystemReader::FileExists failed for path '"
                 << path.GetPathString() << "': " << e.what() << std::endl;
             return false;
@@ -120,7 +131,39 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // 私有静态方法实现
+    // [NEW] Alias management method implementation
+    // ========================================================================
+
+    void FileSystemReader::AddAlias(const std::string& alias, const std::filesystem::path& targetPath)
+    {
+        // Validate alias format (should start with @)
+        if (alias.empty() || alias[0] != '@')
+        {
+            std::cerr << "FileSystemReader::AddAlias: Alias must start with '@': " << alias << std::endl;
+            return;
+        }
+
+        //Normalize target path
+        auto canonicalTarget = CanonicalizePath(targetPath);
+
+        // Verify that the target path exists
+        if (!std::filesystem::exists(canonicalTarget) || !std::filesystem::is_directory(canonicalTarget))
+        {
+            std::cerr << "FileSystemReader::AddAlias: Target path is not a valid directory: "
+                << targetPath.string() << std::endl;
+            return;
+        }
+
+        m_aliases[alias] = canonicalTarget;
+    }
+
+    bool FileSystemReader::HasAlias(const std::string& alias) const
+    {
+        return m_aliases.find(alias) != m_aliases.end();
+    }
+
+    // ========================================================================
+    //Private static method implementation
     // ========================================================================
 
 
@@ -129,21 +172,21 @@ namespace enigma::graphic
     {
         try
         {
-            // 使用 weakly_canonical 规范化两个路径
+            // Use weakly_canonical to normalize the two paths
             auto canonicalPath = std::filesystem::weakly_canonical(path);
             auto canonicalRoot = std::filesystem::weakly_canonical(root);
 
-            // 确保根目录以分隔符结尾，便于前缀比较
+            // Make sure the root directory ends with a delimiter to facilitate prefix comparison
             if (canonicalRoot.string().back() != '/' && canonicalRoot.string().back() != '\\')
             {
-                canonicalRoot = canonicalRoot / ""; // 添加分隔符
+                canonicalRoot = canonicalRoot / ""; // Add separator
             }
 
-            // 检查路径是否以根目录开头
+            // Check if the path starts with the root directory
             auto pathStr = canonicalPath.string();
             auto rootStr = canonicalRoot.string();
 
-            // 路径必须在根目录内或就是根目录本身
+            // The path must be within the root directory or the root directory itself
             if (pathStr.length() < rootStr.length())
             {
                 return pathStr == rootStr.substr(0, pathStr.length());
@@ -162,7 +205,7 @@ namespace enigma::graphic
     {
         try
         {
-            // 检查文件是否存在且可读
+            // Check if the file exists and is readable
             if (!std::filesystem::exists(filePath))
             {
                 return std::nullopt;
@@ -173,18 +216,18 @@ namespace enigma::graphic
                 return std::nullopt;
             }
 
-            // 使用ifstream以文本模式读取文件
+            // Use ifstream to read the file in text mode
             std::ifstream fileStream(filePath, std::ios::in);
             if (!fileStream.is_open())
             {
                 return std::nullopt;
             }
 
-            // 使用stringstream读取整个文件内容
+            // Use stringstream to read the entire file content
             std::stringstream buffer;
             buffer << fileStream.rdbuf();
 
-            // 检查读取是否成功
+            // Check if the read is successful
             if (fileStream.fail() && !fileStream.eof())
             {
                 return std::nullopt;
@@ -204,23 +247,82 @@ namespace enigma::graphic
     {
         try
         {
-            // 转换为绝对路径
+            //Convert to absolute path
             auto absolutePath = std::filesystem::absolute(path);
 
-            // 尝试解析符号链接（lexically_normal处理..和.）
+            // Attempt to resolve symlinks (lexically_normal handles .. and .)
             auto canonicalPath = absolutePath.lexically_normal();
 
-            // 注意：std::filesystem::canonical会实际访问文件系统，
-            // 可能对不存在的路径抛出异常，所以这里使用lexically_normal
+            // Note: std::filesystem::canonical will actually access the file system.
+            // An exception may be thrown for non-existent paths, so lexically_normal is used here
 
             return canonicalPath;
         }
         catch (const std::exception& e)
         {
-            // 如果规范化解失败，返回绝对路径
+            // If normalization fails, return the absolute path
             std::cerr << "FileSystemReader::CanonicalizePath failed for '"
                 << path.string() << "': " << e.what() << std::endl;
             return std::filesystem::absolute(path);
         }
+    }
+
+    std::optional<std::filesystem::path> FileSystemReader::ResolveAliasPath(const ShaderPath& path) const
+    {
+        /**
+         * [NEW] Alias path resolution algorithm
+         *
+         *Business logic:
+         * 1. Get the string representation of ShaderPath
+         * 2. Check whether the path contains a registered alias (such as @engine)
+         * 3. If found, replace the alias with the actual path
+         * 4. Return the complete file system path
+         *
+         * Path format example:
+         * - Input: /shaders/@engine/core/core.hlsl
+         * - Alias: @engine -> F:/project/.enigma/assets/engine/shaders
+         * - Output: F:/project/.enigma/assets/engine/shaders/core/core.hlsl
+         */
+
+        std::string pathStr = path.GetPathString();
+
+        // Iterate through all registered aliases
+        for (const auto& [alias, targetPath] : m_aliases)
+        {
+            // Find the location of the alias in the path
+            size_t aliasPos = pathStr.find(alias);
+            if (aliasPos != std::string::npos)
+            {
+                // Find the alias and extract the relative path part after the alias
+                //Example: /shaders/@engine/core/core.hlsl
+                // aliasPos points to @engine
+                //The part after the alias is /core/core.hlsl
+
+                size_t      afterAlias = aliasPos + alias.length();
+                std::string relativePart;
+
+                if (afterAlias < pathStr.length())
+                {
+                    relativePart = pathStr.substr(afterAlias);
+                    // Remove leading slash (if present)
+                    if (!relativePart.empty() && relativePart[0] == '/')
+                    {
+                        relativePart = relativePart.substr(1);
+                    }
+                }
+
+                // Build the full path: targetPath / relativePart
+                std::filesystem::path fullPath = targetPath;
+                if (!relativePart.empty())
+                {
+                    fullPath = fullPath / relativePart;
+                }
+
+                return fullPath;
+            }
+        }
+
+        // No aliases found
+        return std::nullopt;
     }
 } // namespace enigma::graphic
