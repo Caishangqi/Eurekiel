@@ -143,7 +143,18 @@ Vec2 InputSystem::GetCursorClientPosition() const
 
 Vec2 InputSystem::GetCursorNormalizedPosition() const
 {
-    return Vec2(0, 0);
+    IntVec2 clientDims = Window::s_mainWindow->GetClientDimensions();
+
+    // m_cursorClientPosition.x: [0, clientDims.x] -> [0, 1]
+    // m_cursorClientPosition.y: [-clientDims.y, 0] -> [0, 1] (y is negated in BeginFrame)
+    float normalizedX = RangeMapClamped(static_cast<float>(m_cursorState.m_cursorClientPosition.x),
+                                        0.0f, static_cast<float>(clientDims.x),
+                                        0.0f, 1.0f);
+    float normalizedY = RangeMapClamped(static_cast<float>(m_cursorState.m_cursorClientPosition.y),
+                                        static_cast<float>(-clientDims.y), 0.0f,
+                                        0.0f, 1.0f);
+
+    return Vec2(normalizedX, normalizedY);
 }
 
 bool InputSystem::WasKeyJustPressed(unsigned char keyCode)
