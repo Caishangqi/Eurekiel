@@ -498,6 +498,7 @@
     <ClCompile Include="Graphic\Integration\RendererSubsystem.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemImGuiContext.cpp" />
+    <ClCompile Include="Graphic\Integration\RendererEvents.cpp"/>
     <ClCompile Include="Graphic\Resource\BindlessIndexAllocator.cpp" />
     <ClCompile Include="Graphic\Resource\BindlessRootSignature.cpp" />
     <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp" />
@@ -1183,6 +1184,7 @@
     <!-- Support Layer (基于Iris源码验证) -->
     <!-- Integration Layer -->
     <ClInclude Include="Graphic\Integration\RendererSubsystem.hpp" />
+    <ClInclude Include="Graphic\Integration\RendererEvents.hpp"/>
     <!-- Immediate Mode Rendering System -->
     <!-- Resource Management -->
     <ClInclude Include="Graphic\Resource\BindlessIndexAllocator.hpp" />

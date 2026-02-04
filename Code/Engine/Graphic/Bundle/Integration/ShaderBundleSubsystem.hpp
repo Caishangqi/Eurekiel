@@ -41,9 +41,11 @@
 //-----------------------------------------------------------------------------------------------
 
 #include <filesystem>
+#include <optional>
 
 #include "ShaderBundleSubsystemConfiguration.hpp"
 #include "Engine/Core/SubsystemManager.hpp"
+#include "Engine/Core/Event/MulticastDelegate.hpp" // [NEW] For DelegateHandle
 #include "Engine/Graphic/Bundle/ShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleCommon.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
@@ -97,7 +99,8 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // Update
         //
-        // [DEFAULT] Per-frame update (currently no-op for ShaderBundle)
+        // [REFACTOR] Per-frame update - processes pending bundle load/unload requests
+        // This ensures RT resource changes happen at frame boundaries, not mid-frame
         //-------------------------------------------------------------------------------------------
         void Update(float deltaTime) override;
 
@@ -173,6 +176,30 @@ namespace enigma::graphic
         ShaderBundleResult UnloadShaderBundle();
 
         //-------------------------------------------------------------------------------------------
+        // RequestLoadShaderBundle
+        //
+        // [NEW] Request to load a ShaderBundle at the start of next frame
+        // This is the safe way to switch bundles from ImGui or mid-frame code
+        //
+        // Parameters:
+        //   meta - Metadata of the bundle to load
+        //
+        // Note: The actual load happens in Update() at frame start, avoiding
+        //       D3D12 ERROR #924 (render target deleted while in use)
+        //-------------------------------------------------------------------------------------------
+        void RequestLoadShaderBundle(const ShaderBundleMeta& meta);
+
+        //-------------------------------------------------------------------------------------------
+        // RequestUnloadShaderBundle
+        //
+        // [NEW] Request to unload current bundle at the start of next frame
+        // This is the safe way to unload bundles from ImGui or mid-frame code
+        //
+        // Note: The actual unload happens via OnRendererBeginFrame callback
+        //-------------------------------------------------------------------------------------------
+        void RequestUnloadShaderBundle();
+
+        //-------------------------------------------------------------------------------------------
         // GetCurrentShaderBundle
         //
         // [NEW] Get the currently active ShaderBundle
@@ -219,6 +246,18 @@ namespace enigma::graphic
 
         // The discovered list of user bundles in .enigma/shaderpacks
         std::vector<ShaderBundleMeta> m_discoveredListMeta;
+
+        // [NEW] Pending request state for deferred bundle switching
+        // This ensures RT changes happen at frame boundaries, not mid-frame
+        bool                            m_pendingLoad   = false;
+        bool                            m_pendingUnload = false;
+        std::optional<ShaderBundleMeta> m_pendingMeta   = std::nullopt;
+
+        // [NEW] Event subscription handle for cleanup
+        enigma::event::DelegateHandle m_onBeginFrameHandle = 0;
+
+        // [NEW] Event callback - called by RendererEvents::OnBeginFrame
+        void OnRendererBeginFrame();
     };
 }
 

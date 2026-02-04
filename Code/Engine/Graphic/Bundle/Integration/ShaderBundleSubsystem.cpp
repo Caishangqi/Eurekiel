@@ -26,6 +26,7 @@
 #include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp" // [NEW] For OnBeginFrame subscription
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 
 using namespace enigma::graphic;
@@ -141,6 +142,11 @@ void ShaderBundleSubsystem::Startup()
         g_theImGui->RegisterWindow("ShaderBundle", [this]() { ImguiShaderBundle::Show(this); });
     }
 
+    // [NEW] Subscribe to RendererEvents::OnBeginFrame for deferred bundle switching
+    // This ensures RT changes happen at frame boundaries (GPU idle), avoiding D3D12 ERROR #924
+    m_onBeginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &ShaderBundleSubsystem::OnRendererBeginFrame);
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed to OnBeginFrame event");
+
     g_theShaderBundleSubsystem = this;
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Startup complete. %s bundle active.", m_currentBundle == m_engineBundle ? "Engine" : m_currentBundle->GetName().c_str());
 }
@@ -158,6 +164,14 @@ void ShaderBundleSubsystem::Shutdown()
 {
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Shutting down...");
 
+    // [NEW] Unsubscribe from RendererEvents::OnBeginFrame
+    if (m_onBeginFrameHandle != 0)
+    {
+        RendererEvents::OnBeginFrame.Remove(m_onBeginFrameHandle);
+        m_onBeginFrameHandle = 0;
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from OnBeginFrame event");
+    }
+
     // Clear current bundle reference
     m_currentBundle.reset();
 
@@ -172,10 +186,54 @@ void ShaderBundleSubsystem::Shutdown()
 
 //-----------------------------------------------------------------------------------------------
 // Update
+//
+// [REFACTOR] Per-frame update - pending requests now handled via OnBeginFrame event
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::Update(float deltaTime)
 {
     UNUSED(deltaTime)
+    // [NOTE] Pending requests are now processed via RendererEvents::OnBeginFrame callback
+    // This ensures RT changes happen after previous frame completes but before
+    // new frame's CommandList starts recording
+}
+
+//-----------------------------------------------------------------------------------------------
+// OnRendererBeginFrame
+//
+// [NEW] Event callback for RendererEvents::OnBeginFrame
+// Called at the very beginning of each frame when GPU is idle
+// Safe to modify RT resources here without causing D3D12 ERROR #924
+//-----------------------------------------------------------------------------------------------
+void ShaderBundleSubsystem::OnRendererBeginFrame()
+{
+    // Skip if no pending requests
+    if (!m_pendingLoad && !m_pendingUnload)
+    {
+        return;
+    }
+
+    // Process pending unload request first (if both are set, unload takes precedence)
+    if (m_pendingUnload)
+    {
+        m_pendingUnload = false;
+        m_pendingLoad   = false; // Cancel any pending load
+        m_pendingMeta   = std::nullopt;
+
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Processing deferred unload request");
+        UnloadShaderBundle();
+        return;
+    }
+
+    // Process pending load request
+    if (m_pendingLoad && m_pendingMeta.has_value())
+    {
+        m_pendingLoad         = false;
+        ShaderBundleMeta meta = m_pendingMeta.value();
+        m_pendingMeta         = std::nullopt;
+
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Processing deferred load request for: %s", meta.name.c_str());
+        LoadShaderBundle(meta);
+    }
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -462,4 +520,35 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unloaded bundle. Reset to engine default.");
 
     return result;
+}
+
+//-----------------------------------------------------------------------------------------------
+// RequestLoadShaderBundle
+//
+// [NEW] Request to load a ShaderBundle at the start of next frame
+// This is the safe way to switch bundles from ImGui or mid-frame code
+//-----------------------------------------------------------------------------------------------
+void ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta)
+{
+    m_pendingLoad   = true;
+    m_pendingUnload = false; // Cancel any pending unload
+    m_pendingMeta   = meta;
+
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Queued load request for: %s (will execute next frame)",
+            meta.name.c_str());
+}
+
+//-----------------------------------------------------------------------------------------------
+// RequestUnloadShaderBundle
+//
+// [NEW] Request to unload current bundle at the start of next frame
+// This is the safe way to unload bundles from ImGui or mid-frame code
+//-----------------------------------------------------------------------------------------------
+void ShaderBundleSubsystem::RequestUnloadShaderBundle()
+{
+    m_pendingUnload = true;
+    m_pendingLoad   = false; // Cancel any pending load
+    m_pendingMeta   = std::nullopt;
+
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Queued unload request (will execute next frame)");
 }

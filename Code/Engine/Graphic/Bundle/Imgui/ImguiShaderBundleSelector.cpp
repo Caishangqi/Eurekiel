@@ -89,7 +89,9 @@ namespace enigma::graphic
             if (s_selectedIndex >= 0 && s_selectedIndex < static_cast<int>(discoveredBundles.size()))
             {
                 const auto& selectedMeta = discoveredBundles[s_selectedIndex];
-                subsystem->LoadShaderBundle(selectedMeta);
+                // [REFACTOR] Use deferred loading to avoid mid-frame RT resource changes
+                // This prevents D3D12 ERROR #924 (render target deleted while in use)
+                subsystem->RequestLoadShaderBundle(selectedMeta);
             }
         }
 
@@ -103,7 +105,8 @@ namespace enigma::graphic
 
         if (ImGui::Button("Unload"))
         {
-            subsystem->UnloadShaderBundle();
+            // [REFACTOR] Use deferred unloading to avoid mid-frame RT resource changes
+            subsystem->RequestUnloadShaderBundle();
         }
 
         if (!hasUserBundleLoaded)
