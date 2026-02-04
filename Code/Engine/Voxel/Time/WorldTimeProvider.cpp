@@ -1,4 +1,4 @@
-//-----------------------------------------------------------------------------------------------
+﻿//-----------------------------------------------------------------------------------------------
 // WorldTimeProvider.cpp
 //
 // [NEW] Implementation of WorldTimeProvider
@@ -15,7 +15,6 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Math/Vec3.hpp"
 #include "Engine/Math/Mat44.hpp"
-#include "Engine/Voxel/Light/LightEngineCommon.hpp"
 using namespace enigma::core;
 
 namespace enigma::voxel
@@ -27,11 +26,6 @@ namespace enigma::voxel
     }
 
     WorldTimeProvider::WorldTimeProvider()
-        : m_currentTick(TICK_DAY)
-          , m_dayCount(0)
-          , m_timeScale(1.0f)
-          , m_accumulatedTime(0.0f)
-          , m_totalTicks(0.0)
     {
         LogInfo(LogTimeProvider, "WorldTimeProvider:: Initialized at tick %d", m_currentTick);
     }
@@ -190,61 +184,37 @@ namespace enigma::voxel
     }
 
     //=============================================================================
-    // [NEW] Sun/Moon Direction Vector Calculation - VIEW SPACE
-    //=============================================================================
-    // Reference: Iris CelestialUniforms.java:119-133 getCelestialPosition()
-    //
-    // Key Implementation: Returns VIEW SPACE DIRECTION VECTOR (w=0), not position.
-    // Uses TransformVectorQuantity3D to ignore camera translation, ensuring
-    // celestial bodies maintain correct orientation regardless of player movement.
-    //
-    // Algorithm:
-    // 1. Start with initial direction (0, 0, y) where y=100 for sun, y=-100 for moon
-    // 2. Apply Y-axis rotation (celestialAngle * 360 degrees) for day/night cycle
-    // 3. Transform as direction vector (w=0) through gbufferModelView
-    // 4. Result: View space direction pointing toward celestial body
+    // Celestial Position Calculation
+    // Reference: Iris CelestialUniforms.java:119-133
     //=============================================================================
 
     Vec3 WorldTimeProvider::CalculateCelestialPosition(float y, const Mat44& gbufferModelView) const
     {
-        // ==========================================================================
-        // Coordinate System Adaptation: Iris (Y-up) -> Engine (Z-up)
-        // ==========================================================================
-        // Iris/Minecraft: Y-up, Z-forward (OpenGL style)
-        // Our Engine: Z-up, X-forward
+        // Coordinate systems:
+        //   Minecraft/Iris (OpenGL): Y-up, sun rotates around X-axis
+        //   Our Engine: Z-up (+X=East, +Y=North, +Z=Up), sun rotates around Y-axis
         //
-        // Iris sun path: rotates around X-axis (east-west), Y is up
-        // Our sun path: rotates around Y-axis (left-right), Z is up
-        //
-        // Mapping: Iris Y -> Engine Z, Iris X -> Engine Y, Iris Z -> Engine X
-        // ==========================================================================
+        // Sun path: East(+X) → Up(+Z) → West(-X) → Down(-Z)
+        //   celestialAngle=0.0:  noon    → sun at +Z (zenith)
+        //   celestialAngle=0.25: sunset  → sun at -X (west)
+        //   celestialAngle=0.5:  midnight→ sun at -Z (nadir)
+        //   celestialAngle=0.75: sunrise → sun at +X (east)
 
-        // [Step 1] Initial direction - start pointing UP (+Z in our engine)
-        // In Iris this would be (0, y, 0) pointing up along Y
-        // In our engine, up is Z, so we use (0, 0, y)
-        Vec3 direction(0.0f, 0.0f, y);
+        float skyAngle = GetCelestialAngle();
 
-        // [Step 2] Get sky angle for rotation
-        float celestialAngle = GetCelestialAngle();
-        float angleDegrees   = celestialAngle * 360.0f;
+        // Initial direction pointing up (+Z), magnitude = y (100 for sun, -100 for moon)
+        Vec3 worldDirection(0.0f, 0.0f, y);
 
-        // [Step 3] Build transformation matrix
-        // In our Z-up coordinate system:
-        // - Sun rises in East (-Y), peaks at Zenith (+Z), sets in West (+Y)
-        // - This requires rotation around Y-axis (left-right axis)
-        Mat44 celestial = gbufferModelView;
+        // Rotate around Y-axis: angle = (1 - skyAngle) * 360°
+        // This maps celestialAngle to correct sun position
+        float rotationAngle = (1.0f - skyAngle) * 360.0f;
+        Mat44 worldRotation = Mat44::MakeYRotationDegrees(rotationAngle);
+        worldDirection      = worldRotation.TransformVectorQuantity3D(worldDirection);
 
-        // Apply Y rotation for celestial angle (sun path rotation)
-        // This rotates the sun from +Z (up) around the Y-axis
-        Mat44 rotY = Mat44::MakeYRotationDegrees(angleDegrees);
-        celestial.Append(rotY);
+        // Transform to view space (pass identity matrix for world space result)
+        Vec3 viewDirection = gbufferModelView.TransformVectorQuantity3D(worldDirection);
 
-        // [Step 4] Transform as DIRECTION VECTOR (w=0), not position!
-        // This ignores the translation component of gbufferModelView
-        // Result is a VIEW SPACE direction pointing toward the celestial body
-        direction = celestial.TransformVectorQuantity3D(direction);
-
-        return direction;
+        return viewDirection;
     }
 
     Vec3 WorldTimeProvider::CalculateSunPosition(const Mat44& gbufferModelView) const
