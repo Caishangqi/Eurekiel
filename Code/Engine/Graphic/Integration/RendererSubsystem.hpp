@@ -714,70 +714,6 @@ namespace enigma::graphic
          */
         void PresentRenderTarget(int rtIndex, RenderTargetType rtType = RenderTargetType::ColorTex);
 
-        /**
-         * @brief 拷贝自定义纹理到BackBuffer（M6.3高级API）
-         * @param texture 任意D12Texture（必须非空）
-         * 
-         * @details
-         * **使用场景**：
-         * 1. 输出非RT纹理：加载的PNG/JPG图片、视频帧
-         * 2. 截图功能：输出保存的截图纹理到屏幕
-         * 3. 高级自定义输出：动态生成的纹理、计算着色器结果
-         * 4. 纹理预览：在编辑器中预览任意纹理
-         * 
-         * **与其他API的区别**：
-         * - PresentRenderTarget(): 输入来自RenderTargetManager（GBuffer）
-         * - PresentCustomTexture(): 输入来自任意D12Texture（最灵活）
-         * - PresentWithShader(): 使用Shader处理（支持后处理）
-         * 
-         * **实现方式**：
-         * - 使用ID3D12GraphicsCommandList::CopyResource()执行GPU拷贝
-         * - 资源状态假设：texture初始状态为PIXEL_SHADER_RESOURCE
-         * - 拷贝后恢复原始状态，不影响后续使用
-         * 
-         * **执行流程**：
-         * 1. 参数验证（texture非空检查）
-         * 2. 资源状态转换（texture→COPY_SOURCE, BackBuffer→COPY_DEST）
-         * 3. CopyResource()执行GPU拷贝
-         * 4. 恢复资源状态
-         * 
-         * @code
-         * // 基础用法：输出加载的图片
-         * auto splashScreen = LoadTexture("splash.png");
-         * renderer->PresentCustomTexture(splashScreen);
-         * 
-         * // 截图功能：输出保存的截图
-         * auto screenshot = CaptureScreenshot();
-         * renderer->PresentCustomTexture(screenshot); // 显示截图预览
-         * 
-         * // 视频播放：输出视频帧
-         * auto videoFrame = videoPlayer->GetCurrentFrame();
-         * renderer->PresentCustomTexture(videoFrame);
-         * 
-         * // 计算着色器结果：输出UAV纹理
-         * auto computeResult = RunComputeShader();
-         * renderer->PresentCustomTexture(computeResult);
-         * @endcode
-         * 
-         * **教学要点**：
-         * - 理解DirectX 12的资源状态管理
-         * - 学习灵活的纹理输出架构设计
-         * - 掌握CopyResource()的正确使用
-         * 
-         * **注意事项**：
-         * - texture必须与BackBuffer格式兼容（R8G8B8A8_UNORM）
-         * - 分辨率必须一致（1920x1080等）
-         * - texture初始状态假设为PIXEL_SHADER_RESOURCE
-         * - 不执行任何后处理（直接拷贝）
-         * 
-         * **典型应用**：
-         * - 游戏启动画面（Splash Screen）
-         * - 截图预览系统
-         * - 视频播放器
-         * - 纹理编辑器预览
-         */
-        void PresentCustomTexture(std::shared_ptr<D12Texture> texture);
-
         // ========================================================================
         // Clear Operations - Flexible RT Management
         // ========================================================================
@@ -855,16 +791,6 @@ namespace enigma::graphic
          * - Master frame initialization patterns
          */
         void ClearAllRenderTargets();
-
-        /**
-         * @brief [DEPRECATED] Set blend mode (use SetBlendConfig instead)
-         * @param mode Blend mode enum
-         *
-         * Teaching Points:
-         * - Kept for backward compatibility
-         * - Internally delegates to SetBlendConfig
-         */
-        void SetBlendMode(BlendMode mode);
 
         /**
          * @brief [DEPRECATED] Get current blend mode

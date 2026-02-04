@@ -34,6 +34,7 @@
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] VertexLayout state management
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 #include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp" // [NEW] Decoupled frame lifecycle events
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 #pragma region Lifecycle Management
@@ -379,6 +380,20 @@ bool RendererSubsystem::IsReadyForRendering() const noexcept
 
 void RendererSubsystem::BeginFrame()
 {
+    // ========================================================================
+    // [CRITICAL] Broadcast OnBeginFrame event BEFORE frame starts
+    // ========================================================================
+    // This allows dependent systems to perform operations when GPU is idle:
+    // - ShaderBundleSubsystem: Process pending bundle load/unload requests
+    // - RT resource changes happen safely here (no active CommandList)
+    //
+    // Design: Uses MulticastDelegate for decoupling (DIP compliance)
+    // - RendererSubsystem doesn't know about ShaderBundleSubsystem
+    // - ShaderBundleSubsystem subscribes to this event in its Startup()
+    // - Synchronous execution guarantees all listeners complete first
+    // ========================================================================
+    RendererEvents::OnBeginFrame.Broadcast();
+
     // ========================================================================
     // Pipeline 生命周期重构 - BeginFrame 阶段
     // ========================================================================
@@ -1498,44 +1513,6 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
 
     LogInfo(LogRenderer, "PresentRenderTarget: Successfully copied %s%d to BackBuffer",
             rtTypeName, rtIndex);
-}
-
-void RendererSubsystem::PresentCustomTexture(std::shared_ptr<D12Texture> texture)
-{
-    // TODO: 实现需要完善资源访问机制
-    UNUSED(texture);
-    LogWarn(LogRenderer, "PresentCustomTexture: Not implemented yet (需要完善资源访问机制)");
-}
-
-void RendererSubsystem::SetBlendMode(BlendMode mode)
-{
-    // [DEPRECATED] Delegate to SetBlendConfig for backward compatibility
-    // Map BlendMode enum to BlendConfig preset
-    BlendConfig config;
-    switch (mode)
-    {
-    case BlendMode::Opaque:
-        config = BlendConfig::Opaque();
-        break;
-    case BlendMode::Alpha:
-        config = BlendConfig::Alpha();
-        break;
-    case BlendMode::Additive:
-        config = BlendConfig::Additive();
-        break;
-    case BlendMode::Multiply:
-        config = BlendConfig::Multiply();
-        break;
-    case BlendMode::Premultiplied:
-        config = BlendConfig::Premultiplied();
-        break;
-    default:
-        config = BlendConfig::Opaque();
-        break;
-    }
-
-    m_currentBlendMode = mode; // Keep for backward compatibility getter
-    SetBlendConfig(config);
 }
 
 void RendererSubsystem::SetBlendConfig(const BlendConfig& config)
