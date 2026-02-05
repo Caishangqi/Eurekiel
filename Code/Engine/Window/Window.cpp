@@ -90,35 +90,49 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
 
     case WM_LBUTTONDOWN:
         {
-            // 处理鼠标左键按下事件
+            // Handle left mouse button press event
             if (input)
                 input->HandleMouseButtonPressed(KEYCODE_LEFT_MOUSE);
             break;
         }
     case WM_LBUTTONUP:
         {
-            // 处理鼠标左键释放事件
+            //Handle the left mouse button release event
             if (input)
                 input->HandleMouseButtonReleased(KEYCODE_LEFT_MOUSE);
             break;
         }
     case WM_RBUTTONDOWN:
         {
-            // 处理鼠标右键按下事件
+            //Handle the right mouse button press event
             if (input)
                 input->HandleMouseButtonPressed(KEYCODE_RIGHT_MOUSE);
             break;
         }
     case WM_RBUTTONUP:
         {
-            // 处理鼠标右键释放事件
+            //Handle the right mouse button release event
             if (input)
                 input->HandleMouseButtonReleased(KEYCODE_RIGHT_MOUSE);
             break;
         }
+    case WM_MBUTTONDOWN:
+        {
+            //Handle the middle mouse button press event
+            if (input)
+                input->HandleMouseButtonPressed(KEYCODE_MIDDLE_MOUSE);
+            break;
+        }
+    case WM_MBUTTONUP:
+        {
+            //Handle the middle mouse button release event
+            if (input)
+                input->HandleMouseButtonReleased(KEYCODE_MIDDLE_MOUSE);
+            break;
+        }
     case WM_MOUSEMOVE:
         {
-            // 获取鼠标的屏幕坐标
+            // Get the screen coordinates of the mouse
             int mouseX = LOWORD(lParam);
             int mouseY = HIWORD(lParam);
             if (input)
@@ -127,7 +141,7 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
         }
     case WM_MOUSEWHEEL:
         {
-            // 处理鼠标滚轮事件
+            //Handle mouse wheel events
             short wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
             if (input)
                 input->HandleMouseWheel(wheelDelta);
