@@ -33,6 +33,7 @@ constexpr unsigned char KEYCODE_LEFTARROW    = VK_LEFT;
 constexpr unsigned char KEYCODE_RIGHTARROW   = VK_RIGHT;
 constexpr unsigned char KEYCODE_LEFT_MOUSE   = VK_LBUTTON;
 constexpr unsigned char KEYCODE_RIGHT_MOUSE  = VK_RBUTTON;
+constexpr unsigned char KEYCODE_MIDDLE_MOUSE = VK_MBUTTON;
 constexpr unsigned char KEYCODE_LEFT_CTRL    = VK_CONTROL; // TODO: Fix Left ctrl
 constexpr unsigned char KEYCODE_RIGHT_CTRL   = VK_CONTROL; // TODO: Fix Right ctrl
 constexpr unsigned char KEYCODE_LEFTBRACKET  = 0xDB;
