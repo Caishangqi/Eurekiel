@@ -147,8 +147,10 @@ rendertargets:
       clearValue: [ 1.0, 1.0, 1.0, 1.0 ]  # White (Iris standard)
       enableClear: true
       enableFlipper: true
-      widthScale: 1.0
-      heightScale: 1.0
+      width: 2048
+      height: 2048
+      # widthScale: 1.0
+      # heightScale: 1.0
 
     configs:
       0:
@@ -166,10 +168,10 @@ rendertargets:
       clearValue: 1.0
       enableClear: true
       # Example: Fixed 2048x2048 shadow map (absolute size)
-      # width: 2048
-      # height: 2048
-      widthScale: 1.0
-      heightScale: 1.0
+      width: 2048
+      height: 2048
+      # widthScale: 1.0
+      # heightScale: 1.0
 
     configs:
       0:

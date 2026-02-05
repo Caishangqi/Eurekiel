@@ -221,8 +221,10 @@ void RendererSubsystem::Startup()
         std::vector<RenderTargetConfig> shadowColorConfigs = m_configuration.GetShadowColorConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        // [FIX] Pass 0, 0 to use absolute dimensions from config (e.g., 2048x2048)
+        // Shadow textures should NOT use screen resolution override
         m_shadowColorProvider = std::make_unique<ShadowColorProvider>(
-            m_configuration.renderWidth, m_configuration.renderHeight, shadowColorConfigs, m_uniformManager.get()
+            0, 0, shadowColorConfigs, m_uniformManager.get()
         );
 
         LogInfo(LogRenderer, "ShadowColorProvider created successfully (%zu shadowcolor)", shadowColorConfigs.size());
@@ -244,8 +246,10 @@ void RendererSubsystem::Startup()
         std::vector<RenderTargetConfig> shadowTexConfigs = m_configuration.GetShadowTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
+        // [FIX] Pass 0, 0 to use absolute dimensions from config (e.g., 2048x2048)
+        // Shadow textures should NOT use screen resolution override
         m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(
-            m_configuration.renderWidth, m_configuration.renderHeight, shadowTexConfigs, m_uniformManager.get()
+            0, 0, shadowTexConfigs, m_uniformManager.get()
         );
 
         LogInfo(LogRenderer, "ShadowTextureProvider created successfully (%zu shadowtex)", shadowTexConfigs.size());
