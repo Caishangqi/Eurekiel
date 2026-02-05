@@ -98,6 +98,24 @@ void Rgba8::GetAsFloats(float* colorAsFloats) const
     colorAsFloats[3] = static_cast<float>(a) / 255.0f;
 }
 
+void Rgba8::SetFromFloats(const float* colorAsFloats)
+{
+    r = static_cast<unsigned char>(GetClamped(colorAsFloats[0] * 255.0f, 0.0f, 255.0f));
+    g = static_cast<unsigned char>(GetClamped(colorAsFloats[1] * 255.0f, 0.0f, 255.0f));
+    b = static_cast<unsigned char>(GetClamped(colorAsFloats[2] * 255.0f, 0.0f, 255.0f));
+    a = static_cast<unsigned char>(GetClamped(colorAsFloats[3] * 255.0f, 0.0f, 255.0f));
+}
+
+Rgba8 Rgba8::FromFloats(const float* colorAsFloats)
+{
+    return Rgba8(
+        static_cast<unsigned char>(GetClamped(colorAsFloats[0] * 255.0f, 0.0f, 255.0f)),
+        static_cast<unsigned char>(GetClamped(colorAsFloats[1] * 255.0f, 0.0f, 255.0f)),
+        static_cast<unsigned char>(GetClamped(colorAsFloats[2] * 255.0f, 0.0f, 255.0f)),
+        static_cast<unsigned char>(GetClamped(colorAsFloats[3] * 255.0f, 0.0f, 255.0f))
+    );
+}
+
 Rgba8 Interpolate(Rgba8 from, Rgba8 to, float fractionOfEnd)
 {
     float r = Interpolate(NormalizeByte(from.r), NormalizeByte(to.r), fractionOfEnd);

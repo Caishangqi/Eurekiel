@@ -48,6 +48,15 @@ struct Rgba8
     /// in the order rgba
     /// @param colorAsFloats array of 4 floats.
     void GetAsFloats(float* colorAsFloats) const;
+
+    /// Set color from float array (0.0f - 1.0f range)
+    /// @param colorAsFloats array of 4 floats in rgba order
+    void SetFromFloats(const float* colorAsFloats);
+
+    /// Create Rgba8 from float array (0.0f - 1.0f range)
+    /// @param colorAsFloats array of 4 floats in rgba order
+    /// @return Rgba8 color
+    static Rgba8 FromFloats(const float* colorAsFloats);
 };
 
 Rgba8 Interpolate(Rgba8 from, Rgba8 to, float fractionOfEnd);
