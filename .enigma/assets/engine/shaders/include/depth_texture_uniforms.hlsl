@@ -1,5 +1,5 @@
 /**
-* @brief ColorTextureIndexUniforms - Depth RT indices (64 bytes)
+* @brief DepthTextureIndexUniforms - Depth RT indices (64 bytes)
  * @register b4
  * Stores Bindless indices for depthtex0-15. No flip mechanism.
  * C++ counterpart: DepthTexturesIndexBuffer.hpp
@@ -8,7 +8,7 @@
  * - Using uint4[4] ensures tight packing matching C++ uint32_t[16] layout
  * - Memory layout: [0-3][4-7][8-11][12-15] = 4 * 16 = 64 bytes
  */
-cbuffer ColorTextureIndexUniforms : register(b4)
+cbuffer DepthTextureIndexUniforms : register(b4)
 {
     uint4 depthTextureIndicesPacked[4]; // depthtex0-15 indices (64 bytes)
 };
