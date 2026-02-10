@@ -123,4 +123,47 @@ float GetViewDistance(float2 uv, float depth, float4x4 projMatrixInverse, float4
     return length(viewPos);
 }
 
-#endif // LIB_MATH_HLSL
+// =============================================================================
+// [SHADOW SPACE CONVERSIONS]
+// =============================================================================
+
+/**
+ * @brief Transform world position to shadow UV coordinates
+ * @param worldPos World-space position
+ * @param shadowViewMatrix Shadow view matrix (shadowView)
+ * @param rendererMatrix Renderer matrix (gbufferRenderer) - DX12 API correction
+ * @param shadowProjMatrix Shadow projection matrix (shadowProjection)
+ * @return Shadow UV coordinates (xy: [0,1], z: depth for comparison)
+ *
+ * Transform chain (must match shadow.vs.hlsl):
+ *   World -> ShadowView -> gbufferRenderer -> ShadowProjection -> NDC -> UV
+ *
+ * Usage in composite.ps.hlsl:
+ *   float3 shadowUV = WorldToShadowUV(worldPos, shadowView, gbufferRenderer, shadowProjection);
+ *   float shadowDepth = shadowtex1.Sample(sampler, shadowUV.xy).r;
+ *   bool inShadow = shadowUV.z > shadowDepth;
+ */
+float3 WorldToShadowUV(float3 worldPos, float4x4 shadowViewMatrix, float4x4 rendererMatrix, float4x4 shadowProjMatrix)
+{
+    // [STEP 1] World -> Shadow View space
+    float4 shadowViewPos = mul(shadowViewMatrix, float4(worldPos, 1.0));
+
+    // [STEP 2] Shadow View -> Render space (DX12 API correction)
+    // CRITICAL: This must match shadow.vs.hlsl transform chain!
+    float4 shadowRenderPos = mul(rendererMatrix, shadowViewPos);
+
+    // [STEP 3] Render -> Shadow Clip space
+    float4 shadowClipPos = mul(shadowProjMatrix, shadowRenderPos);
+
+    // [STEP 4] Perspective divide -> NDC
+    float3 shadowNDC = shadowClipPos.xyz / shadowClipPos.w;
+
+    // [STEP 5] NDC -> UV (xy: [-1,1] -> [0,1], z: depth unchanged)
+    float2 shadowUV = shadowNDC.xy * 0.5 + 0.5;
+    shadowUV.y      = 1.0 - shadowUV.y; // Flip Y for texture sampling
+
+    return float3(shadowUV, shadowNDC.z);
+}
+
+
+#endif // LIB_SPACE_CONVERSION
