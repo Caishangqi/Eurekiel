@@ -30,8 +30,8 @@
 cbuffer CelestialUniforms: register(b9, space1)
 {
     // ==================== Row 0: Angle Data (16 bytes) ====================
-    float celestialAngle; // @iris sunAngle (0.0-1.0)
-    float compensatedCelestialAngle; // Compensated angle (+0.25)
+    float celestialAngle; // Raw celestial angle (NOT Iris sunAngle! Use compensatedCelestialAngle for sunAngle)
+    float compensatedCelestialAngle; // @iris sunAngle = celestialAngle + 0.25 (0.25=noon, 0.75=midnight)
     float cloudTime; // Cloud time (tick * 0.03)
     float skyBrightness; // Sky brightness (0.0-1.0)
 
