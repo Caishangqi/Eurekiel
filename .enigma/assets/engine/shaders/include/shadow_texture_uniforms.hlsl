@@ -1,6 +1,6 @@
 cbuffer ShadowTexturesIndexUniforms : register(b6)
 {
-    uint4 shadowTexIndicesPacked[4];
+    uint4 shadowTextureIndicesPacked[4];
 };
 
 /**
@@ -15,7 +15,7 @@ cbuffer ShadowTexturesIndexUniforms : register(b6)
 Texture2D GetShadowTexture(uint slot)
 {
     if (slot >= 16) return ResourceDescriptorHeap[0];
-    uint4 packed = shadowTexIndicesPacked[slot >> 2];
+    uint4 packed = shadowTextureIndicesPacked[slot >> 2];
     uint  index  = packed[slot & 3];
     return ResourceDescriptorHeap[index];
 }
