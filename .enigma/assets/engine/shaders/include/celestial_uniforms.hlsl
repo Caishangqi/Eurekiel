@@ -43,7 +43,7 @@ cbuffer CelestialUniforms: register(b9, space1)
     // ==================== Row 2: Moon Position (16 bytes) ====================
     // @iris moonPosition
     float3 moonPosition; // Moon direction (view space), length 100
-    float  CelestialUniforms_padding2;
+    float  CelestialUniforms_padding2; // Padding (sunPathRotation is NOT a uniform in Iris, use const float in shader source)
 
     // ==================== Row 3: Shadow Light Position (16 bytes) ====================
     // @iris shadowLightPosition
