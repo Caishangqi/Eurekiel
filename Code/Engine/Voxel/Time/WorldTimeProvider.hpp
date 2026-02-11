@@ -28,8 +28,6 @@ namespace enigma::voxel
         static constexpr float SECONDS_PER_TICK       = 0.05f; // 20 ticks per second
         static constexpr float CLOUD_TIME_SCALE       = 0.03f; // Cloud animation speed
         static constexpr float CELESTIAL_ANGLE_OFFSET = 0.25f; // Sun/Moon phase offset
-        static constexpr float SUN_PATH_ROTATION      = 0.0f; // Sun path tilt (default: 0)
-
         WorldTimeProvider();
         ~WorldTimeProvider() override = default;
 
@@ -81,6 +79,15 @@ namespace enigma::voxel
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateCloudColor(float rainLevel, float thunderLevel) const override;
 
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Sun path rotation - Reference: Iris PackDirectives.java:25, 265-266
+        // Controls the tilt angle of the sun/moon orbit plane (in degrees)
+        // Default: 0.0 (vertical orbit through zenith)
+        // Configurable per ShaderBundle via "const float sunPathRotation = X.X;" in shader source
+        //-------------------------------------------------------------------------------------------
+        void  SetSunPathRotation(float degrees);
+        float GetSunPathRotation() const;
+
     private:
         //-------------------------------------------------------------------------------------------
         // Internal helper: Calculate celestial direction vector in view space
@@ -95,5 +102,6 @@ namespace enigma::voxel
         float  m_timeScale       = 1.0f; // Time progression multiplier
         float  m_accumulatedTime = 0.0f; // Sub-tick time accumulator
         double m_totalTicks      = 0.0; // Continuous tick counter for cloud animation
+        float  m_sunPathRotation = 0.0f; // Sun path tilt angle in degrees (default: 0)
     };
 } // namespace enigma::voxel

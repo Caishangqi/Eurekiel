@@ -184,6 +184,21 @@ namespace enigma::voxel
     }
 
     //=============================================================================
+    // [NEW] Sun Path Rotation - Reference: Iris PackDirectives.java:25, 265-266
+    //=============================================================================
+
+    void WorldTimeProvider::SetSunPathRotation(float degrees)
+    {
+        m_sunPathRotation = degrees;
+        LogInfo(LogTimeProvider, "WorldTimeProvider:: SunPathRotation set to %.2f degrees", degrees);
+    }
+
+    float WorldTimeProvider::GetSunPathRotation() const
+    {
+        return m_sunPathRotation;
+    }
+
+    //=============================================================================
     // Celestial Position Calculation
     // Reference: Iris CelestialUniforms.java:119-133
     //=============================================================================
@@ -191,8 +206,19 @@ namespace enigma::voxel
     Vec3 WorldTimeProvider::CalculateCelestialPosition(float y, const Mat44& gbufferModelView) const
     {
         // Coordinate systems:
-        //   Minecraft/Iris (OpenGL): Y-up, sun rotates around X-axis
-        //   Our Engine: Z-up (+X=East, +Y=North, +Z=Up), sun rotates around Y-axis
+        //   Minecraft/Iris (OpenGL): Y-up, rotation chain: Ry(-90) * Rz(sunPathRotation) * Rx(skyAngle*360)
+        //   Our Engine: Z-up (+X=East, +Y=North, +Z=Up)
+        //
+        // Iris world-space result (after expanding rotation chain):
+        //   Iris_world = (-y*sin(a), y*cos(a)*cos(spr), -y*cos(a)*sin(spr))
+        //
+        // Coordinate mapping (Iris Y-up -> Engine Z-up):
+        //   Engine(x, y, z) = (Iris_x, -Iris_z, Iris_y)
+        //   Engine_world = (-y*sin(a), y*cos(a)*sin(spr), y*cos(a)*cos(spr))
+        //
+        // Derived engine rotation chain: Rx(-spr) * Ry(-a) applied to (0, 0, y)
+        //   Step 1: Ry(-a) * (0,0,y) = (-y*sin(a), 0, y*cos(a))
+        //   Step 2: Rx(-spr) * result = (-y*sin(a), y*cos(a)*sin(spr), y*cos(a)*cos(spr)) ✓
         //
         // Sun path: East(+X) → Up(+Z) → West(-X) → Down(-Z)
         //   celestialAngle=0.0:  noon    → sun at +Z (zenith)
@@ -205,11 +231,16 @@ namespace enigma::voxel
         // Initial direction pointing up (+Z), magnitude = y (100 for sun, -100 for moon)
         Vec3 worldDirection(0.0f, 0.0f, y);
 
-        // Rotate around Y-axis: angle = (1 - skyAngle) * 360°
-        // This maps celestialAngle to correct sun position
-        float rotationAngle = (1.0f - skyAngle) * 360.0f;
-        Mat44 worldRotation = Mat44::MakeYRotationDegrees(rotationAngle);
-        worldDirection      = worldRotation.TransformVectorQuantity3D(worldDirection);
+        // Build rotation matrix: Rx(-sunPathRotation) * Ry(-(skyAngle*360))
+        // Append is right-multiply, so:
+        //   M = Identity
+        //   M.AppendX(-spr) => M = Rx(-spr)
+        //   M.AppendY(angle) => M = Rx(-spr) * Ry(angle)
+        // TransformVectorQuantity3D computes M * v = Rx(-spr) * Ry(angle) * v
+        Mat44 worldRotation;
+        worldRotation.AppendXRotation(-m_sunPathRotation);
+        worldRotation.AppendYRotation((1.0f - skyAngle) * 360.0f);
+        worldDirection = worldRotation.TransformVectorQuantity3D(worldDirection);
 
         // Transform to view space (pass identity matrix for world space result)
         Vec3 viewDirection = gbufferModelView.TransformVectorQuantity3D(worldDirection);
