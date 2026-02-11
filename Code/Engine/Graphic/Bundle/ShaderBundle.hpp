@@ -78,6 +78,7 @@
 #include "Engine/Graphic/Bundle/UserDefinedBundle.hpp"
 #include "Engine/Graphic/Bundle/ProgramFallbackChain.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
 
 namespace enigma::graphic
 {
@@ -265,6 +266,15 @@ namespace enigma::graphic
         // [NEW] Returns RT directives parsed from shader sources (for RT format configuration)
         const PackRenderTargetDirectives* GetRTDirectives() const { return m_rtDirectives.get(); }
 
+        //-------------------------------------------------------------------------------------------
+        // [NEW] Query const directive values parsed from shader sources
+        // Reference: Iris PackDirectives.java - acceptConstFloatDirective, acceptConstIntDirective
+        // These are "const float/int/bool" declarations found in shader source code
+        //-------------------------------------------------------------------------------------------
+        std::optional<float> GetConstFloat(const std::string& name) const { return m_constDirectives.GetFloat(name); }
+        std::optional<int>   GetConstInt(const std::string& name) const { return m_constDirectives.GetInt(name); }
+        std::optional<bool>  GetConstBool(const std::string& name) const { return m_constDirectives.GetBool(name); }
+
     private:
         //-------------------------------------------------------------------------------------------
         // Private Helper Methods
@@ -300,6 +310,9 @@ namespace enigma::graphic
 
         // [NEW] RT directives parsed from shader sources (exclusive ownership)
         std::unique_ptr<PackRenderTargetDirectives> m_rtDirectives;
+
+        // [NEW] Const directives parsed from shader sources (sunPathRotation, shadowMapResolution, etc.)
+        ConstDirectiveParser m_constDirectives;
 
         // [NEW] Path aliases for shader include resolution (e.g., @engine -> engine shader path)
         std::unordered_map<std::string, std::string> m_pathAliases;

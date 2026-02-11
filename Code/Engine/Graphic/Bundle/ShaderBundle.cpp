@@ -154,7 +154,6 @@ namespace enigma::graphic
                     IncludeGraph graph(fileReader, startingPaths);
 
                     // Step 3.4: Expand each program and collect all lines for directive parsing
-                    ConstDirectiveParser     constParser;
                     std::vector<std::string> allLines;
 
                     for (const auto& startPath : startingPaths)
@@ -180,8 +179,8 @@ namespace enigma::graphic
                     // Step 3.6: Parse const directives (const bool/float4 etc.)
                     if (!allLines.empty())
                     {
-                        constParser.ParseLines(allLines);
-                        m_rtDirectives->AcceptDirectives(constParser);
+                        m_constDirectives.ParseLines(allLines);
+                        m_rtDirectives->AcceptDirectives(m_constDirectives);
 
                         LogInfo(LogShaderBundle, "ShaderBundle:: Parsed RT directives from %zu expanded lines (%zu programs)",
                                 allLines.size(), programNames.size());
