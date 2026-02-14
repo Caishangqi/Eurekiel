@@ -6,13 +6,17 @@
 //
 // Summary of exception types and their mapping to error macros:
 //
-// | Exception Type              | Error Macro          | Description                           |
-// |-----------------------------|----------------------|---------------------------------------|
-// | ShaderBundleException       | ERROR_AND_DIE        | Base class, generic bundle error      |
-// | ShaderNotFoundException     | ERROR_AND_DIE        | Shader missing, cannot continue       |
-// | BundleNotFoundException     | ERROR_AND_DIE        | Bundle directory not found            |
-// | InvalidBundleJsonException  | ERROR_RECOVERABLE    | JSON parse error, may use defaults    |
-// | CompilationFailedException  | ERROR_AND_DIE        | Shader compilation failed             |
+// | Exception Type                  | Error Macro          | Description                           |
+// |---------------------------------|----------------------|---------------------------------------|
+// | ShaderBundleException           | ERROR_AND_DIE        | Base class, generic bundle error      |
+// | ShaderNotFoundException         | ERROR_AND_DIE        | Shader missing, cannot continue       |
+// | BundleNotFoundException         | ERROR_AND_DIE        | Bundle directory not found            |
+// | InvalidBundleJsonException      | ERROR_RECOVERABLE    | JSON parse error, may use defaults    |
+// | CompilationFailedException      | ERROR_AND_DIE        | Shader compilation failed             |
+// | TextureDirectiveParseException  | ERROR_RECOVERABLE    | Texture directive syntax error        |
+// | TextureLoadException            | ERROR_RECOVERABLE    | Texture file load failure             |
+// | EnigmetaParseException          | ERROR_RECOVERABLE    | .enigmeta JSON parse error            |
+// | TextureSlotLimitException       | ERROR_RECOVERABLE    | Custom texture slots exceeded (>16)   |
 //
 // Usage Pattern (Exception + Error Macro two-phase):
 //   1. Throw Phase: Throw specific exception type from business code
@@ -129,6 +133,71 @@ namespace enigma::graphic
     // Mapping: ERROR_AND_DIE (cannot use shader without successful compilation)
     //-------------------------------------------------------------------------------------------
     class CompilationFailedException : public ShaderBundleException
+    {
+    public:
+        using ShaderBundleException::ShaderBundleException;
+    };
+
+    //-------------------------------------------------------------------------------------------
+    // TextureDirectiveParseException
+    // Thrown when a texture directive in shaders.properties has invalid syntax
+    //
+    // Typical scenarios:
+    //   - Missing stage or textureSlot field in texture.<stage>.<slot>=<path>
+    //   - Invalid stage name (not in recognized stage list)
+    //   - Slot index out of range (not 0-15)
+    //
+    // Mapping: ERROR_RECOVERABLE (skip invalid directive, continue parsing)
+    //-------------------------------------------------------------------------------------------
+    class TextureDirectiveParseException : public ShaderBundleException
+    {
+    public:
+        using ShaderBundleException::ShaderBundleException;
+    };
+
+    //-------------------------------------------------------------------------------------------
+    // TextureLoadException
+    // Thrown when a texture file referenced in shaders.properties cannot be loaded
+    //
+    // Typical scenarios:
+    //   - PNG file does not exist at resolved path
+    //   - File read or decode failure
+    //   - GPU texture creation failure
+    //
+    // Mapping: ERROR_RECOVERABLE (skip texture, use default white texture)
+    //-------------------------------------------------------------------------------------------
+    class TextureLoadException : public ShaderBundleException
+    {
+    public:
+        using ShaderBundleException::ShaderBundleException;
+    };
+
+    //-------------------------------------------------------------------------------------------
+    // EnigmetaParseException
+    // Thrown when a .enigmeta metadata file has invalid JSON content
+    //
+    // Typical scenarios:
+    //   - Malformed JSON syntax in .enigmeta file
+    //   - Invalid field types (e.g. blur is not boolean)
+    //
+    // Mapping: ERROR_RECOVERABLE (use default filter settings: nearest + wrap)
+    //-------------------------------------------------------------------------------------------
+    class EnigmetaParseException : public ShaderBundleException
+    {
+    public:
+        using ShaderBundleException::ShaderBundleException;
+    };
+
+    //-------------------------------------------------------------------------------------------
+    // TextureSlotLimitException
+    // Thrown when custom texture declarations exceed available customImage slots
+    //
+    // Typical scenarios:
+    //   - More than 16 combined texture.<stage>.<slot> and customTexture.<name> bindings
+    //
+    // Mapping: ERROR_RECOVERABLE (first 16 bindings work, excess ignored)
+    //-------------------------------------------------------------------------------------------
+    class TextureSlotLimitException : public ShaderBundleException
     {
     public:
         using ShaderBundleException::ShaderBundleException;
