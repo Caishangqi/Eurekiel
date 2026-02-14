@@ -37,6 +37,7 @@
 #pragma once
 
 #include "Engine/Core/Properties.hpp"
+#include "Engine/Graphic/Bundle/Texture/CustomTextureData.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -474,6 +475,12 @@ namespace enigma::graphic
 
         const std::unordered_map<std::string, std::string>& GetConditionallyEnabledPrograms() const;
 
+        // ========================================================================
+        // Custom Texture Data Getter
+        // ========================================================================
+
+        const CustomTextureData& GetCustomTextureData() const { return m_customTextureData; }
+
     private:
         // ========================================================================
         // 内部解析方法
@@ -550,6 +557,13 @@ namespace enigma::graphic
          * @return 字符串列表
          */
         static std::vector<std::string> SplitWhitespace(const std::string& value);
+
+        // Custom texture directive handlers
+        void               HandleTextureStageDirective(const std::string& key, const std::string& value);
+        void               HandleCustomTextureDirective(const std::string& key, const std::string& value);
+        TextureDeclaration ParseTexturePath(const std::string& rawValue);
+        static bool        IsValidStage(const std::string& stage);
+        static int         ParseTextureSlot(const std::string& slotStr);
 
     private:
         // ========================================================================
@@ -666,7 +680,13 @@ namespace enigma::graphic
         std::unordered_map<std::string, std::string> m_conditionallyEnabledPrograms;
 
         // ========================================================================
-        // 内部状态
+        // Custom Texture Data
+        // ========================================================================
+
+        CustomTextureData m_customTextureData;
+
+        // ========================================================================
+        // Internal State
         // ========================================================================
 
         bool m_isValid = false; ///< 是否成功解析

@@ -27,6 +27,7 @@
 #include <cctype>
 
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Graphic/Bundle/BundleException.hpp"
 
 using namespace enigma::graphic;
 
@@ -620,6 +621,28 @@ void ShaderProperties::ParseDirective(const std::string& key, const std::string&
         std::string program                     = key.substr(8, key.length() - 16);
         m_conditionallyEnabledPrograms[program] = value;
     }
+
+    // ========================================================================
+    // 6. Custom Texture Directives
+    // ========================================================================
+
+    try
+    {
+        HandleTextureStageDirective(key, value);
+    }
+    catch (const TextureDirectiveParseException& e)
+    {
+        ERROR_RECOVERABLE(e.what());
+    }
+
+    try
+    {
+        HandleCustomTextureDirective(key, value);
+    }
+    catch (const TextureDirectiveParseException& e)
+    {
+        ERROR_RECOVERABLE(e.what());
+    }
 }
 
 // ============================================================================
@@ -819,6 +842,175 @@ std::vector<std::string> ShaderProperties::SplitWhitespace(const std::string& va
     }
 
     return result;
+}
+
+// ============================================================================
+// Custom Texture Directive Handlers
+// ============================================================================
+
+//-----------------------------------------------------------------------------------------------
+// Handles "texture.<stage>.<textureSlot>=<path>" directives.
+// Skips "texture.noise" which is handled separately as noiseTextureResolution.
+// Validates stage name against known Iris pipeline stages and slot range 0-15.
+// Throws TextureDirectiveParseException on invalid format.
+//-----------------------------------------------------------------------------------------------
+void ShaderProperties::HandleTextureStageDirective(const std::string& key, const std::string& value)
+{
+    const std::string prefix = "texture.";
+    if (key.rfind(prefix, 0) != 0)
+    {
+        return;
+    }
+
+    // "texture.noise" is handled separately as noiseTextureResolution
+    if (key == "texture.noise")
+    {
+        return;
+    }
+
+    // Extract remainder after "texture." (e.g. "composite.5")
+    std::string remainder = key.substr(prefix.length());
+
+    // Find the last dot to split "<stage>.<textureSlot>"
+    size_t lastDot = remainder.rfind('.');
+    if (lastDot == std::string::npos)
+    {
+        throw TextureDirectiveParseException(
+            "Invalid texture directive format (missing textureSlot): " + key);
+    }
+
+    std::string stage   = remainder.substr(0, lastDot);
+    std::string slotStr = remainder.substr(lastDot + 1);
+
+    if (stage.empty())
+    {
+        throw TextureDirectiveParseException(
+            "Empty stage name in texture directive: " + key);
+    }
+
+    if (!IsValidStage(stage))
+    {
+        throw TextureDirectiveParseException(
+            "Invalid stage name in texture directive: " + stage);
+    }
+
+    int textureSlot = ParseTextureSlot(slotStr);
+
+    TextureDeclaration decl = ParseTexturePath(value);
+
+    StageTextureBinding binding;
+    binding.stage       = stage;
+    binding.textureSlot = textureSlot;
+    binding.texture     = std::move(decl);
+
+    m_customTextureData.stageBindings.push_back(std::move(binding));
+}
+
+//-----------------------------------------------------------------------------------------------
+// Handles "customTexture.<name>=<path>" directives.
+// Slot assignment is deferred to ShaderBundle (textureSlot = -1 here).
+// Throws TextureDirectiveParseException on empty name or path.
+//-----------------------------------------------------------------------------------------------
+void ShaderProperties::HandleCustomTextureDirective(const std::string& key, const std::string& value)
+{
+    const std::string prefix = "customTexture.";
+    if (key.rfind(prefix, 0) != 0)
+    {
+        return;
+    }
+
+    std::string name = key.substr(prefix.length());
+    if (name.empty())
+    {
+        throw TextureDirectiveParseException(
+            "Empty name in customTexture directive: " + key);
+    }
+
+    TextureDeclaration decl = ParseTexturePath(value);
+
+    CustomTextureBinding binding;
+    binding.name        = name;
+    binding.textureSlot = -1; // Assigned later by ShaderBundle
+    binding.texture     = std::move(decl);
+
+    m_customTextureData.customBindings.push_back(std::move(binding));
+}
+
+//-----------------------------------------------------------------------------------------------
+// Parses the texture path value from a directive.
+// Strips leading forward/back slashes. Throws on empty result.
+//-----------------------------------------------------------------------------------------------
+TextureDeclaration ShaderProperties::ParseTexturePath(const std::string& rawValue)
+{
+    std::string path = rawValue;
+
+    // Strip leading slashes (forward and backward)
+    while (!path.empty() && (path[0] == '/' || path[0] == '\\'))
+    {
+        path = path.substr(1);
+    }
+
+    if (path.empty())
+    {
+        throw TextureDirectiveParseException(
+            "Empty texture path after stripping leading slashes");
+    }
+
+    TextureDeclaration decl;
+    decl.path = path;
+    return decl;
+}
+
+//-----------------------------------------------------------------------------------------------
+// Validates a stage name against known Iris pipeline stage prefixes.
+// Accepts: composite[N], deferred[N], prepare[N], gbuffers_*, shadow[N], final
+//-----------------------------------------------------------------------------------------------
+bool ShaderProperties::IsValidStage(const std::string& stage)
+{
+    static const std::vector<std::string> validPrefixes = {
+        "composite",
+        "deferred",
+        "prepare",
+        "gbuffers_",
+        "shadow",
+        "final"
+    };
+
+    for (const auto& pfx : validPrefixes)
+    {
+        if (stage.rfind(pfx, 0) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//-----------------------------------------------------------------------------------------------
+// Parses a texture slot string to int and validates range 0-15.
+// Throws TextureDirectiveParseException on non-numeric or out-of-range values.
+//-----------------------------------------------------------------------------------------------
+int ShaderProperties::ParseTextureSlot(const std::string& slotStr)
+{
+    int slot = -1;
+    try
+    {
+        slot = std::stoi(slotStr);
+    }
+    catch (...)
+    {
+        throw TextureDirectiveParseException(
+            "Invalid texture slot (not a number): " + slotStr);
+    }
+
+    if (slot < 0 || slot > 15)
+    {
+        throw TextureDirectiveParseException(
+            "Texture slot out of range 0-15: " + std::to_string(slot));
+    }
+
+    return slot;
 }
 
 // ============================================================================
