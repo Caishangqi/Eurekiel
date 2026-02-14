@@ -8,8 +8,6 @@ struct PSOutput
 PSOutput main(PSInput input)
 {
     PSOutput output;
-
-    output.color0 = float4(1, 1, 1, 1);
-
+    output.color0 = colortex0.Sample(sampler0, input.TexCoord);
     return output;
 }
