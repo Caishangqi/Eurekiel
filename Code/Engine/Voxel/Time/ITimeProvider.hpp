@@ -32,7 +32,6 @@ namespace enigma::voxel
 
         // Celestial calculations
         virtual float GetCelestialAngle() const = 0;
-        virtual float GetCompensatedCelestialAngle() const = 0;
 
         //-------------------------------------------------------------------------------------------
         // [NEW] Sun angle calculation - Reference: Iris CelestialUniforms.java:24-32

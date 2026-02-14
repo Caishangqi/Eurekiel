@@ -51,16 +51,6 @@ namespace enigma::voxel
         return static_cast<float>((d * 2.0 + e) / 3.0);
     }
 
-    float WorldTimeProvider::GetCompensatedCelestialAngle() const
-    {
-        float angle = GetCelestialAngle() + CELESTIAL_ANGLE_OFFSET;
-        if (angle >= 1.0f)
-        {
-            angle -= 1.0f;
-        }
-        return angle;
-    }
-
     //-------------------------------------------------------------------------------------------
     // [NEW] GetSunAngle - Reference: Iris CelestialUniforms.java:24-32
     // Converts skyAngle (celestialAngle) to sunAngle

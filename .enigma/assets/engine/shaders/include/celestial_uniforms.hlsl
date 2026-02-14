@@ -17,7 +17,7 @@
  *   - upPosition
  *
  * [Memory Layout] 96 bytes (6 rows x 16 bytes)
- *   Row 0 [0-15]:   celestialAngle, compensatedCelestialAngle, cloudTime, skyBrightness
+ *   Row 0 [0-15]:   celestialAngle, sunAngle, cloudTime, skyBrightness
  *   Row 1 [16-31]:  sunPosition.xyz, shadowAngle
  *   Row 2 [32-47]:  moonPosition.xyz, _padding2
  *   Row 3 [48-63]:  shadowLightPosition.xyz, _padding3
@@ -30,8 +30,8 @@
 cbuffer CelestialUniforms: register(b9, space1)
 {
     // ==================== Row 0: Angle Data (16 bytes) ====================
-    float celestialAngle; // Raw celestial angle (NOT Iris sunAngle! Use compensatedCelestialAngle for sunAngle)
-    float compensatedCelestialAngle; // @iris sunAngle = celestialAngle + 0.25 (0.25=noon, 0.75=midnight)
+    float celestialAngle; // Raw celestial angle (0.0-1.0 cycle, NOT Iris sunAngle)
+    float sunAngle; // @iris sunAngle = celestialAngle + 0.25 (0.25=noon, 0.75=midnight)
     float cloudTime; // Cloud time (tick * 0.03)
     float skyBrightness; // Sky brightness (0.0-1.0)
 

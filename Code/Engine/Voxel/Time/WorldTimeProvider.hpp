@@ -35,7 +35,6 @@ namespace enigma::voxel
         int   GetCurrentTick() const override;
         int   GetDayCount() const override;
         float GetCelestialAngle() const override;
-        float GetCompensatedCelestialAngle() const override;
         float GetCloudTime() const override;
         float GetSkyLightMultiplier() const override;
         float GetTimeScale() const override;
