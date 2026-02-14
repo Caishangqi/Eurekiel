@@ -15,12 +15,16 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Bundle/Helper/ShaderScanHelper.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Bundle/Properties/ShaderProperties.hpp"
+#include "Engine/Graphic/Bundle/Texture/BundleTextureLoader.hpp"
+#include "Engine/Graphic/Bundle/BundleException.hpp"
 #include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
 #include "Engine/Graphic/Shader/Program/Include/IncludeGraph.hpp"
 #include "Engine/Graphic/Shader/Program/Include/IncludeProcessor.hpp"
 #include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp"
 #include "Engine/Graphic/Shader/Common/FileSystemReader.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp"
 
 namespace enigma::graphic
 {
@@ -197,8 +201,113 @@ namespace enigma::graphic
             LogInfo(LogShaderBundle, "ShaderBundle:: No program/ directory found, skipping directive parsing");
         }
 
+        // Step 4: Load custom textures declared in shaders.properties
+        {
+            ShaderProperties shaderProps;
+            if (shaderProps.Parse(m_meta.path))
+            {
+                m_customTextureData = shaderProps.GetCustomTextureData();
+                if (!m_customTextureData.IsEmpty())
+                {
+                    try
+                    {
+                        m_loadedCustomTextures = BundleTextureLoader::LoadAllTextures(
+                            m_customTextureData, m_meta.path / "shaders");
+
+                        LogInfo(LogShaderBundle, "ShaderBundle:: Loaded %zu custom textures",
+                                m_loadedCustomTextures.size());
+                    }
+                    catch (const TextureSlotLimitException& e)
+                    {
+                        ERROR_RECOVERABLE(e.what());
+                        // Partial textures may have been loaded, continue using them
+                    }
+                }
+            }
+        }
+
+        // Step 5: Bind global customTexture.<name> entries via SetCustomImage + SetSamplerConfig
+        BindGlobalCustomTextures();
+
         LogInfo(LogShaderBundle, "ShaderBundle:: Created: %s (%zu UserDefinedBundles)",
                 m_meta.name.c_str(), m_userDefinedBundles.size());
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // Destructor - clear global customTexture bindings
+    //-------------------------------------------------------------------------------------------
+    ShaderBundle::~ShaderBundle()
+    {
+        for (int slot : m_globalBoundSlots)
+        {
+            g_theRendererSubsystem->ClearCustomImage(slot);
+        }
+        m_globalBoundSlots.clear();
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // BindGlobalCustomTextures
+    //
+    // Binds all customTexture.<name> entries globally via SetCustomImage + SetSamplerConfig.
+    // Auto-assigns slot indices for entries with textureSlot == -1.
+    // These bindings persist across all render stages until the bundle is destroyed.
+    //-------------------------------------------------------------------------------------------
+    void ShaderBundle::BindGlobalCustomTextures()
+    {
+        auto entries = GetAllCustomTextures();
+        if (entries.empty())
+        {
+            return;
+        }
+
+        int nextAutoSlot = 0;
+
+        for (auto& entry : entries)
+        {
+            if (!entry.texture)
+            {
+                continue;
+            }
+
+            int slot = entry.textureSlot;
+            if (slot < 0)
+            {
+                // Auto-assign: find next slot not already claimed in this batch
+                while (nextAutoSlot < CustomImageManager::MAX_CUSTOM_IMAGE_SLOTS)
+                {
+                    bool alreadyUsed = false;
+                    for (int bound : m_globalBoundSlots)
+                    {
+                        if (bound == nextAutoSlot)
+                        {
+                            alreadyUsed = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyUsed)
+                    {
+                        break;
+                    }
+                    ++nextAutoSlot;
+                }
+
+                if (nextAutoSlot >= CustomImageManager::MAX_CUSTOM_IMAGE_SLOTS)
+                {
+                    ERROR_RECOVERABLE("ShaderBundle:: No available customImage slots for auto-assignment");
+                    break;
+                }
+
+                slot = nextAutoSlot;
+                ++nextAutoSlot;
+            }
+
+            g_theRendererSubsystem->SetCustomImage(slot, entry.texture);
+            g_theRendererSubsystem->SetSamplerConfig(entry.metadata.samplerSlot, entry.metadata.samplerConfig);
+            m_globalBoundSlots.push_back(slot);
+
+            LogInfo(LogShaderBundle, "ShaderBundle:: Global customTexture '%s' bound to customImage[%d], sampler[%d]",
+                    entry.name.c_str(), slot, entry.metadata.samplerSlot);
+        }
     }
 
     //-------------------------------------------------------------------------------------------
@@ -521,5 +630,72 @@ namespace enigma::graphic
             }
         }
         return nullptr;
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // Custom Texture Data Provider Methods
+    //-------------------------------------------------------------------------------------------
+
+    std::vector<StageTextureEntry> ShaderBundle::GetCustomTexturesForStage(const std::string& stageName) const
+    {
+        std::vector<StageTextureEntry> result;
+
+        auto bindings = m_customTextureData.GetBindingsForStage(stageName);
+        for (const auto* binding : bindings)
+        {
+            auto it = m_loadedCustomTextures.find(binding->texture.path);
+            if (it == m_loadedCustomTextures.end())
+            {
+                continue; // Texture not loaded (load failure), skip
+            }
+
+            StageTextureEntry entry;
+            entry.textureSlot = binding->textureSlot;
+            entry.texture     = it->second.texture.get();
+            entry.metadata    = it->second.metadata;
+            result.push_back(entry);
+        }
+
+        return result;
+    }
+
+    D12Texture* ShaderBundle::GetCustomTexture(const std::string& name) const
+    {
+        for (const auto& binding : m_customTextureData.customBindings)
+        {
+            if (binding.name == name)
+            {
+                auto it = m_loadedCustomTextures.find(binding.texture.path);
+                if (it != m_loadedCustomTextures.end())
+                {
+                    return it->second.texture.get();
+                }
+                return nullptr;
+            }
+        }
+        return nullptr;
+    }
+
+    std::vector<CustomTextureEntry> ShaderBundle::GetAllCustomTextures() const
+    {
+        std::vector<CustomTextureEntry> result;
+
+        for (const auto& binding : m_customTextureData.customBindings)
+        {
+            auto it = m_loadedCustomTextures.find(binding.texture.path);
+            if (it == m_loadedCustomTextures.end())
+            {
+                continue; // Texture not loaded, skip
+            }
+
+            CustomTextureEntry entry;
+            entry.name        = binding.name;
+            entry.textureSlot = binding.textureSlot;
+            entry.texture     = it->second.texture.get();
+            entry.metadata    = it->second.metadata;
+            result.push_back(entry);
+        }
+
+        return result;
     }
 } // namespace enigma::graphic

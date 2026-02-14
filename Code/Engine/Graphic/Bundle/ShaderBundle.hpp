@@ -78,12 +78,31 @@
 #include "Engine/Graphic/Bundle/UserDefinedBundle.hpp"
 #include "Engine/Graphic/Bundle/ProgramFallbackChain.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Bundle/Texture/BundleTextureLoader.hpp"
 #include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
 
 namespace enigma::graphic
 {
-    // Forward declaration to avoid circular dependencies
+    // Forward declarations
     class ShaderProgram;
+    class D12Texture;
+
+    // Result type for stage-scoped custom texture queries
+    struct StageTextureEntry
+    {
+        int             textureSlot; // customImage slot (0-15)
+        D12Texture*     texture; // Raw pointer, owned by ShaderBundle
+        TextureMetadata metadata; // Contains SamplerConfig and samplerSlot
+    };
+
+    // Result type for named custom texture queries
+    struct CustomTextureEntry
+    {
+        std::string     name; // Custom sampler name
+        int             textureSlot; // customImage slot (0-15)
+        D12Texture*     texture; // Raw pointer, owned by ShaderBundle
+        TextureMetadata metadata; // Contains SamplerConfig and samplerSlot
+    };
 
     //-------------------------------------------------------------------------------------------
     // ShaderBundle
@@ -133,7 +152,7 @@ namespace enigma::graphic
         //
         // [DEFAULT] Releases all owned resources via smart pointer automatic cleanup
         //-------------------------------------------------------------------------------------------
-        ~ShaderBundle() = default;
+        ~ShaderBundle();
 
         // Non-copyable, movable
         ShaderBundle(const ShaderBundle&)                = delete;
@@ -275,6 +294,31 @@ namespace enigma::graphic
         std::optional<int>   GetConstInt(const std::string& name) const { return m_constDirectives.GetInt(name); }
         std::optional<bool>  GetConstBool(const std::string& name) const { return m_constDirectives.GetBool(name); }
 
+        //-------------------------------------------------------------------------------------------
+        // Custom Texture Data Provider APIs
+        //
+        // ShaderBundle holds loaded custom textures (RAII via shared_ptr).
+        // RenderPass pulls texture data through these query methods.
+        // Pattern: same as GetRTDirectives() / GetConstFloat() Data Provider model.
+        //-------------------------------------------------------------------------------------------
+
+        // Get stage-scoped texture bindings for a specific render stage
+        // RenderPass calls this in BeginPass to bind textures via SetCustomImage + SetSamplerConfig
+        std::vector<StageTextureEntry> GetCustomTexturesForStage(const std::string& stageName) const;
+
+        // Get a named custom texture by its declaration name
+        // Returns nullptr if not found or load failed
+        D12Texture* GetCustomTexture(const std::string& name) const;
+
+        // Get all named custom textures with slot assignments and metadata
+        std::vector<CustomTextureEntry> GetAllCustomTextures() const;
+
+        // Get raw parsed texture declaration data (for debugging)
+        const CustomTextureData& GetCustomTextureData() const { return m_customTextureData; }
+
+        // Returns true if any custom textures were successfully loaded
+        bool HasCustomTextures() const { return !m_loadedCustomTextures.empty(); }
+
     private:
         //-------------------------------------------------------------------------------------------
         // Private Helper Methods
@@ -316,5 +360,19 @@ namespace enigma::graphic
 
         // [NEW] Path aliases for shader include resolution (e.g., @engine -> engine shader path)
         std::unordered_map<std::string, std::string> m_pathAliases;
+
+        // Custom texture cache: path -> LoadedTexture (RAII via shared_ptr, released on destruction)
+        std::unordered_map<std::string, LoadedTexture> m_loadedCustomTextures;
+
+        // Parsed texture declarations from shaders.properties (stage bindings + custom bindings)
+        CustomTextureData m_customTextureData;
+
+        // Slots bound globally by BindGlobalCustomTextures(), cleared in destructor
+        std::vector<int> m_globalBoundSlots;
+
+        // Bind all customTexture.<name> entries globally via SetCustomImage + SetSamplerConfig.
+        // Auto-assigns slot indices for entries with textureSlot == -1.
+        // Called once at end of constructor after texture loading completes.
+        void BindGlobalCustomTextures();
     };
 } // namespace enigma::graphic
