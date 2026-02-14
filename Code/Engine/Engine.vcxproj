@@ -537,7 +537,9 @@
     <ClCompile Include="Graphic\Shader\Program\Parsing\ConstDirectiveParser.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Parsing\DXGIFormatParser.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\Properties\ProgramDirectives.cpp"/>
-    <ClCompile Include="Graphic\Shader\Program\Properties\ShaderProperties.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Properties\ShaderProperties.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Texture\EnigmetaParser.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Texture\BundleTextureLoader.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\ShaderProgram.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\ShaderProgramBuilder.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\ShaderSource.cpp"/>
@@ -1180,7 +1182,10 @@
     <ClInclude Include="Graphic\Shader\Program\Parsing\ConstDirectiveParser.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Parsing\DXGIFormatParser.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\Properties\ProgramDirectives.hpp"/>
-    <ClInclude Include="Graphic\Shader\Program\Properties\ShaderProperties.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Properties\ShaderProperties.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Texture\CustomTextureData.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Texture\EnigmetaParser.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Texture\BundleTextureLoader.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\ShaderProgram.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\ShaderProgramBuilder.hpp"/>
     <ClInclude Include="Graphic\Shader\Program\ShaderSource.hpp"/>
