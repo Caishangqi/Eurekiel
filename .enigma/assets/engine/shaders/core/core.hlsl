@@ -15,6 +15,7 @@
 #include "../include/celestial_uniforms.hlsl"
 #include "../include/fog_uniforms.hlsl"
 #include "../include/common_uniforms.hlsl"
+#include "../include/worldinfo_uniforms.hlsl"
 
 /**
  * @brief vertex shader input structure

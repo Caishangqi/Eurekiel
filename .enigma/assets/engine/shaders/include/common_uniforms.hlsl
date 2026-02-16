@@ -9,7 +9,7 @@
  * 2. Register b8, space1 - User-defined area
  * 3. PerFrame update frequency
  * 4. Field order must match CommonConstantBuffer.hpp exactly
- * 5. Total size: 144 bytes (9 rows * 16 bytes)
+ * 5. Total size: 160 bytes (10 rows * 16 bytes)
  *
  * Architecture Benefits:
  * - High performance: Root CBV direct access, no indirection
@@ -80,7 +80,7 @@
 #define EYE_IN_POWDER_SNOW 3   // In powder snow
 
 // =============================================================================
-// CommonUniforms Constant Buffer (144 bytes = 9 rows * 16 bytes)
+// CommonUniforms Constant Buffer (160 bytes = 10 rows * 16 bytes)
 // =============================================================================
 /**
  * @brief CommonUniforms - Iris CommonUniforms.java Compatible
@@ -119,6 +119,7 @@
  * [96-111] Row 6: eyeBrightnessX, eyeBrightnessY, eyeBrightnessSmoothX, eyeBrightnessSmoothY
  * [112-127] Row 7: rainStrength, wetness, _pad5, _pad6
  * [128-143] Row 8: renderStage, _pad7[3]
+ * [144-159] Row 9: frameCounter, frameTime, frameTimeCounter, _pad9
  */
 cbuffer CommonUniforms : register(b8, space1)
 {
@@ -181,6 +182,15 @@ cbuffer CommonUniforms : register(b8, space1)
     // Iris CommonUniforms.java:108 (addDynamicUniforms)
     int renderStage; // WorldRenderingPhase ordinal
     int _pad7[3];
+
+    // ==================== Row 9: Time Counters (16 bytes) ====================
+    // Iris CommonUniforms.java:118 (frameCounter), :119 (frameTime)
+    // Iris SystemTimeUniforms.java:63 (frameTimeCounter)
+    // Used by cloud wind animation and other time-based shader effects
+    int   frameCounter; // Frame count since application start (offset 144)
+    float frameTime; // Delta time of last frame in seconds (offset 148)
+    float frameTimeCounter; // Accumulated frame time, wraps at 3600.0 (offset 152)
+    float _pad9; // Align to 16 bytes (offset 156)
 };
 
 

@@ -1,96 +1,51 @@
 /**
  * @brief CustomImageUniforms - Custom material slot constant buffer (64 bytes)
  *
- *Teaching points:
- * 1. Use cbuffer to store the Bindless index of 16 custom material slots (customImage0-15)
- * 2. PerObject frequency - each Draw Call can independently update different materials
- * 3. Direct access through Root CBV - high performance, no need for StructuredBuffer indirection
- * 4. 64-byte alignment - GPU friendly, no additional padding required
+ * [IMPORTANT] HLSL cbuffer packing rule:
+ * - Using uint4[4] ensures tight packing matching C++ uint32_t[16] layout
+ * - Memory layout: [0-3][4-7][8-11][12-15] = 4 * 16 = 64 bytes
+ * - A plain uint[16] would pad each element to 16 bytes = 256 bytes total!
  *
  * Architectural design:
- * - Structure size: 64 bytes (16 uint indexes)
+ * - Structure size: 64 bytes (4 x uint4)
  * - PerObject frequency, supports independent materials for each object
  * - Root CBV binding, zero overhead
  * - Compatible with Iris style (customImage0-15 macro)
  *
- * Usage scenarios:
- * - Deferred rendering PBR material map
- * - Custom post-processing LUT texture
- * - Special effect maps (noise, mask, etc.)
- *
- * Corresponding to C++: CustomImageUniform.hpp (note: the C++ side is named in the singular)
+ * Corresponding to C++: CustomImageUniforms.hpp
  */
 cbuffer CustomImageUniforms: register(b2)
 {
-    uint customImageIndices[16]; // customImage0-15 Bindless indices
+    uint4 customImageIndicesPacked[4]; // customImage0-15 Bindless indices (64 bytes)
 };
 
 /**
- * @brief Get the Bindless index of the custom material slot Newly added
+ * @brief Get the Bindless index of the custom material slot
  * @param slotIndex slot index (0-15)
  * @return Bindless index, if the slot is not set, return UINT32_MAX (0xFFFFFFFF)
  *
- *Teaching points:
- * - Directly access cbuffer CustomImageUniforms to obtain Bindless index
- * - The return value is a Bindless index, which can directly access ResourceDescriptorHeap
- * - UINT32_MAX indicates that the slot is not set and the validity should be checked before use.
- *
- * Working principle:
- * 1. Read the index directly from cbuffer CustomImageUniforms (Root CBV high-performance access)
- * 2. Query customImageIndices[slotIndex] to obtain the Bindless index
- * 3. Return the index for use by GetCustomImage()
- *
- * Security:
- * - Slot index will be limited to the range 0-15
- * - Out of range returns UINT32_MAX (invalid index)
+ * [IMPORTANT] uint4 unpacking (same pattern as depth_texture_uniforms.hlsl):
+ * - slot >> 2 = which uint4 (0-3)
+ * - slot & 3  = which component (x=0, y=1, z=2, w=3)
  */
 uint GetCustomImageIndex(uint slotIndex)
 {
-    // Prevent out-of-bounds access
     if (slotIndex >= 16)
     {
-        return 0xFFFFFFFF; // UINT32_MAX - invalid index
+        return 0xFFFFFFFF;
     }
-    // 2. Query the Bindless index of the specified slot
-    uint bindlessIndex = customImageIndices[slotIndex];
-
-    // 3. Return the Bindless index
-    return bindlessIndex;
+    uint4 packed = customImageIndicesPacked[slotIndex >> 2];
+    return packed[slotIndex & 3];
 }
 
 /**
- * @brief Get custom material texture (convenient access function) added
+ * @brief Get custom material texture (convenient access function)
  * @param slotIndex slot index (0-15)
  * @return corresponding Bindless texture (Texture2D)
- *
- *Teaching points:
- * - Encapsulates GetCustomImageIndex() + ResourceDescriptorHeap access
- * - Automatically handle invalid index cases (return black texture or default texture)
- * - Follows the Iris texture access pattern
- *
- * Usage example:
- * ```hlsl
- * // Get the albedo map (assuming slot 0 stores albedo)
- * Texture2D albedoTex = GetCustomImage(0);
- * float4 albedo = albedoTex.Sample(linearSampler, uv);
- *
- * // Get the roughness map (assuming slot 1 stores roughness)
- * Texture2D roughnessTex = GetCustomImage(1);
- * float roughness = roughnessTex.Sample(linearSampler, uv).r;
- * ```
- *
- * Note:
- * - If slot is not set (UINT32_MAX), accessing ResourceDescriptorHeap may cause undefined behavior
- * - Before calling, make sure the slot is set correctly, or use the default value.
  */
 Texture2D GetCustomImage(uint slotIndex)
 {
-    // 1. Get the Bindless index
     uint bindlessIndex = GetCustomImageIndex(slotIndex);
-
-    // 2. Access the global descriptor heap through Bindless index
-    // Note: If bindlessIndex is UINT32_MAX, additional validity checks may be required here.
-    // The current design assumes that the C++ side will ensure that all used slots are set correctly
     return ResourceDescriptorHeap[bindlessIndex];
 }
 
