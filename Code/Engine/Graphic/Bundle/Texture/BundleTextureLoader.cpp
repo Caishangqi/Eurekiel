@@ -51,8 +51,7 @@ namespace enigma::graphic
 
         if (!texture)
         {
-            throw TextureLoadException(
-                "Failed to create GPU texture from: " + absolutePath.string());
+            throw TextureLoadException("Failed to create GPU texture from: " + absolutePath.string());
         }
 
         return LoadedTexture{std::move(texture), metadata};
@@ -79,7 +78,7 @@ namespace enigma::graphic
             }
             catch (const TextureLoadException& e)
             {
-                ERROR_RECOVERABLE(e.what());
+                ERROR_RECOVERABLE(e.what())
                 // Skip this texture, continue loading others
             }
         };
