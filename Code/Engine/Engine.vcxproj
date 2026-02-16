@@ -398,6 +398,7 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\shadow_texture_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\viewport_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\worldtime_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\worldinfo_uniforms.hlsl"/>
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
