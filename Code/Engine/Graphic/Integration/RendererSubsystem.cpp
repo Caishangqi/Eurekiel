@@ -362,7 +362,35 @@ void RendererSubsystem::Shutdown()
         LogInfo(LogRenderer, "VertexLayoutRegistry shutdown complete");
     }
 
-    // Step 3: 最后关闭D3D12RenderSystem
+    // ==================== Release GPU descriptor-holding resources ====================
+    // CRITICAL: These must be destroyed BEFORE D3D12RenderSystem::Shutdown(),
+    // because their destructors call GlobalDescriptorHeapManager::Free*() which
+    // requires the heap manager to still be alive.
+    // Without this, the compiler-generated destructor would destroy these members
+    // AFTER D3D12RenderSystem::Shutdown() has already torn down the heap manager,
+    // causing a use-after-free crash in Sampler::Release() / FreeSampler().
+    m_samplerProvider.reset();
+    m_customImageManager.reset();
+    m_psoManager.reset();
+    m_fullQuadsRenderer.reset();
+
+    // Release RT providers (may hold descriptor references)
+    m_renderTargetBinder.reset();
+    m_colorTextureProvider.reset();
+    m_depthTextureProvider.reset();
+    m_shadowColorProvider.reset();
+    m_shadowTextureProvider.reset();
+
+    // Release buffer resources
+    m_immediateVertexRingBuffer.reset();
+    m_immediateIndexRingBuffer.reset();
+
+    // Release UniformManager last (other providers may reference it)
+    m_uniformManager.reset();
+
+    LogInfo(LogRenderer, "All GPU resources released before D3D12 shutdown");
+
+    // Final step: 关闭D3D12RenderSystem (destroys GlobalDescriptorHeapManager)
     D3D12RenderSystem::Shutdown();
 }
 

@@ -470,8 +470,6 @@ bool GlobalDescriptorHeapManager::FreeCbvSrvUav(const DescriptorAllocation& allo
  */
 bool GlobalDescriptorHeapManager::FreeSampler(const DescriptorAllocation& allocation)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
     // 1. 验证分配有效性
     if (!allocation.isValid || allocation.heapType != HeapType::Sampler)
     {
