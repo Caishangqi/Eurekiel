@@ -273,37 +273,24 @@ namespace enigma::voxel
     // [NEW] Up Direction Vector - Reference: Iris CelestialUniforms.java:44-58
     //=============================================================================
     // Returns VIEW SPACE direction pointing toward world "up" (zenith).
-    // This is used for atmospheric scattering calculations and determining
-    // the angle between view direction and zenith.
+    // Used for atmospheric scattering and sun elevation (dot(sunPosition, upPosition)).
     //
-    // Iris implementation:
-    //   Vector4f upVector = new Vector4f(0.0F, 100.0F, 0.0F, 0.0F);
-    //   Matrix4f preCelestial = new Matrix4f(gbufferModelView);
-    //   preCelestial.rotate(Axis.YP.rotationDegrees(-90.0F));
-    //   upVector = preCelestial.transform(upVector);
+    // Iris applies Ry(-90) before transforming (0,100,0), but in Y-up that's a no-op
+    // because rotating around Y doesn't affect the Y component.
+    // In our Z-up engine, Ry(-90) would rotate (0,0,100) into the horizontal plane,
+    // causing a 90-degree phase error in dot(sunPosition, upPosition).
     //
-    // Coordinate adaptation (Iris Y-up -> Engine Z-up):
-    //   Iris: upVector = (0, 100, 0) pointing up along Y
-    //   Engine: upVector = (0, 0, 100) pointing up along Z
+    // Our CalculateCelestialPosition already absorbs the coordinate-system change
+    // (Iris's Ry(-90)*Rz(spr)*Rx(sa*360) → our Rx(-spr)*Ry((1-sa)*360)),
+    // so upPosition simply needs the world up vector in view space — no extra rotation.
     //=============================================================================
     Vec3 WorldTimeProvider::CalculateUpPosition(const Mat44& gbufferModelView) const
     {
-        // [Step 1] Initial up direction - pointing UP (+Z in our Z-up engine)
-        // In Iris (Y-up), this would be (0, 100, 0)
+        // World up direction (+Z in our Z-up engine, magnitude 100 matching Iris convention)
         Vec3 upVector(0.0f, 0.0f, 100.0f);
 
-        // [Step 2] Apply gbufferModelView to transform to view space
-        // Note: Unlike celestial positions, we don't apply celestial rotation here
-        // because "up" is always world up, not dependent on time of day
-        Mat44 preCelestial = gbufferModelView;
-
-        // [Step 3] Apply -90 degree Y rotation (matching Iris's YP.rotationDegrees(-90))
-        // This aligns the coordinate system for proper sky orientation
-        Mat44 rotY = Mat44::MakeYRotationDegrees(-90.0f);
-        preCelestial.Append(rotY);
-
-        // [Step 4] Transform as DIRECTION VECTOR (w=0)
-        upVector = preCelestial.TransformVectorQuantity3D(upVector);
+        // Transform to view space as DIRECTION VECTOR (w=0)
+        upVector = gbufferModelView.TransformVectorQuantity3D(upVector);
 
         return upVector;
     }
