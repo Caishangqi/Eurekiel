@@ -118,7 +118,7 @@
  * [80-95]  Row 5: playerMood, constantMood, _pad3, _pad4
  * [96-111] Row 6: eyeBrightnessX, eyeBrightnessY, eyeBrightnessSmoothX, eyeBrightnessSmoothY
  * [112-127] Row 7: rainStrength, wetness, _pad5, _pad6
- * [128-143] Row 8: renderStage, _pad7[3]
+ * [128-143] Row 8: renderStage, _pad7_0, _pad7_1, _pad7_2
  * [144-159] Row 9: frameCounter, frameTime, frameTimeCounter, _pad9
  */
 cbuffer CommonUniforms : register(b8, space1)
@@ -180,8 +180,11 @@ cbuffer CommonUniforms : register(b8, space1)
 
     // ==================== Row 8: Render Stage (16 bytes) ====================
     // Iris CommonUniforms.java:108 (addDynamicUniforms)
+    // IMPORTANT: Do NOT use array here — HLSL cbuffer arrays pad each element to 16 bytes!
     int renderStage; // WorldRenderingPhase ordinal
-    int _pad7[3];
+    int _pad7_0;
+    int _pad7_1;
+    int _pad7_2;
 
     // ==================== Row 9: Time Counters (16 bytes) ====================
     // Iris CommonUniforms.java:118 (frameCounter), :119 (frameTime)
