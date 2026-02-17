@@ -8,7 +8,7 @@
 #include "ThirdParty/imgui/imgui_internal.h"
 #include "ThirdParty/imgui/backends/imgui_impl_win32.h"
 
-// ImGui后端实现
+// ImGui backend implementation
 #include <filesystem>
 
 using namespace enigma::core;
@@ -16,10 +16,6 @@ ImGuiSubsystem* g_theImGui = nullptr;
 
 namespace enigma::core
 {
-    //=============================================================================
-    // 构造/析构
-    //=============================================================================
-
     ImGuiSubsystem::ImGuiSubsystem(const ImGuiSubsystemConfig& config)
         : m_config(config)
     {
@@ -33,29 +29,28 @@ namespace enigma::core
         }
     }
 
-    //=============================================================================
-    // EngineSubsystem接口实现
-    //=============================================================================
-
+    //==============================================================================
+    // EngineSubsystem interface implementation
+    //==============================================================================
     void ImGuiSubsystem::Initialize()
     {
-        // 1. 验证配置
+        // Verify configuration
         if (!ValidateConfig())
         {
             ERROR_AND_DIE("ImGuiSubsystem: Invalid configuration")
         }
 
-        // 2. 初始化ImGui上下文
+        // Initialize ImGui context
         if (!InitializeImGuiContext())
         {
             ERROR_AND_DIE("ImGuiSubsystem: Failed to initialize ImGui context")
         }
 
-        // 3. Backend创建延迟到Startup()阶段
-        //    此时CommandList尚未创建,延迟到Startup确保资源完整
+        // Backend creation is delayed until the Startup() phase
+        // At this time, the CommandList has not been created yet, and it is delayed until Startup to ensure that the resources are complete.
         DebuggerPrintf("[ImGuiSubsystem] Backend creation deferred to Startup() phase\n");
 
-        // 4. 创建并注册消息预处理器
+        // Create and register message preprocessor
         m_messagePreprocessor = std::make_unique<ImGuiMessagePreprocessor>();
         if (m_config.targetWindow)
         {
@@ -69,13 +64,13 @@ namespace enigma::core
     {
         DebuggerPrintf("[ImGuiSubsystem] Starting up...\n");
 
-        // 检查RenderContext是否就绪
+        // Check if RenderContext is ready
         if (!m_config.renderContext || !m_config.renderContext->IsReady())
         {
             ERROR_AND_DIE("ImGuiSubsystem: RenderContext is not ready in Startup()")
         }
 
-        // 创建渲染后端（此时RendererSubsystem已经Initialize完成）
+        // Create a rendering backend (RendererSubsystem has already been Initialized at this time)
         DebuggerPrintf("[ImGuiSubsystem] Creating rendering backend...\n");
         if (!CreateBackend())
         {
@@ -90,20 +85,20 @@ namespace enigma::core
     {
         DebuggerPrintf("[ImGuiSubsystem] Shutting down...\n");
 
-        // 0. 注销并销毁消息预处理器
+        // Unregister and destroy the message preprocessor
         if (m_messagePreprocessor && m_config.targetWindow)
         {
             m_config.targetWindow->UnregisterMessagePreprocessor(m_messagePreprocessor.get());
         }
         m_messagePreprocessor.reset();
 
-        // 1. 清空窗口注册
+        // Clear window registration
         m_windows.clear();
 
-        // 2. 销毁渲染后端
+        // Destroy the rendering backend
         DestroyBackend();
 
-        // 3. 销毁ImGui上下文
+        // Destroy ImGui context
         ShutdownImGuiContext();
 
         DebuggerPrintf("[ImGuiSubsystem] Shutdown completed\n");
@@ -116,16 +111,16 @@ namespace enigma::core
             return;
         }
 
-        // 1. Win32平台层NewFrame
+        // Win32 platform layer NewFrame
         ImGui_ImplWin32_NewFrame();
 
-        // 2. 后端NewFrame
+        // Backend NewFrame
         if (m_backend)
         {
             m_backend->NewFrame();
         }
 
-        // 3. ImGui NewFrame
+        // ImGui NewFrame
         ImGui::NewFrame();
     }
 
@@ -136,17 +131,13 @@ namespace enigma::core
             return;
         }
 
-        // 注意：Viewports功能需要ImGui docking分支
-        // 标准版本不支持ViewportsEnable、UpdatePlatformWindows和RenderPlatformWindowsDefault
-        // 如果需要这些功能，请使用ImGui docking分支
-
-        // 处理多窗口支持（仅在docking分支中可用）
-        // ImGuiIO& io = ImGui::GetIO();
-        // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        // {
-        //     ImGui::UpdatePlatformWindows();
-        //     ImGui::RenderPlatformWindowsDefault();
-        // }
+        // Handle multi-viewport support (Docking branch function)
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+        {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
     }
 
     void ImGuiSubsystem::Render()
@@ -156,21 +147,20 @@ namespace enigma::core
             return;
         }
 
-        // 1. 渲染所有注册的窗口
+        // Render all registered windows
         for (const auto& [name, callback] : m_windows)
         {
             callback();
         }
 
-        // 2. 渲染ImGui
+        // Render ImGui
         ImGui::Render();
         m_backend->RenderDrawData(ImGui::GetDrawData());
     }
 
-    //=============================================================================
-    // ImGui窗口注册
-    //=============================================================================
-
+    //==============================================================================
+    // ImGui window registration
+    //==============================================================================
     void ImGuiSubsystem::RegisterWindow(const std::string& name, ImGuiWindowCallback callback)
     {
         if (name.empty())
@@ -208,10 +198,9 @@ namespace enigma::core
         }
     }
 
-    //=============================================================================
-    // 后端信息查询
-    //=============================================================================
-
+    //==============================================================================
+    // Backend information query
+    //==============================================================================
     const char* ImGuiSubsystem::GetBackendName() const
     {
         if (m_backend)
@@ -221,38 +210,36 @@ namespace enigma::core
         return "None";
     }
 
-    //=============================================================================
-    // 内部方法 - 配置验证
-    //=============================================================================
-
+    //==============================================================================
+    // Internal method - configuration validation
+    //==============================================================================
     bool ImGuiSubsystem::ValidateConfig() const
     {
-        // 1. 检查RenderContext引用
+        // Check the RenderContext reference
         if (!m_config.renderContext)
         {
             DebuggerPrintf("[ImGuiSubsystem] Error: RenderContext not specified\n");
             return false;
         }
 
-        // 2. 检查目标窗口
+        // Check the target window
         if (!m_config.targetWindow)
         {
             DebuggerPrintf("[ImGuiSubsystem] Error: Target window not specified\n");
             return false;
         }
 
-        // 3. IsReady()检查推迟到Startup()阶段
-        //    Initialize()阶段只验证指针有效性,不检查资源就绪状态
-        //    (RenderContext在Initialize阶段可能尚未完成资源创建)
+        //IsReady() check is postponed to Startup() phase
+        //The Initialize() phase only verifies the validity of the pointer and does not check the resource readiness status.
+        // (RenderContext may not have completed resource creation during the Initialize phase)
         DebuggerPrintf("[ImGuiSubsystem] RenderContext pointer validated (readiness check deferred to Startup)\n");
 
         return true;
     }
 
-    //=============================================================================
-    // 内部方法 - ImGui上下文管理
-    //=============================================================================
-
+    //==============================================================================
+    // Internal method - ImGui context management
+    //==============================================================================
     bool ImGuiSubsystem::InitializeImGuiContext()
     {
         IMGUI_CHECKVERSION();
@@ -260,19 +247,19 @@ namespace enigma::core
 
         ImGuiIO& io = ImGui::GetIO();
 
-        // 配置ini文件路径
+        // Configure ini file path
         if (!m_config.iniFilePath.empty())
         {
-            // 注意：ImGui需要持久的字符串指针，不能使用临时string的c_str()
-            // 我们在m_iniFilePathStorage中保存这个字符串
+            // Note: ImGui requires a persistent string pointer and cannot use c_str() of temporary string.
+            // We save this string in m_iniFilePathStorage
             m_iniFilePathStorage = m_config.iniFilePath;
             io.IniFilename       = m_iniFilePathStorage.c_str();
 
-            // 确保ini文件目录存在
+            // Make sure the ini file directory exists
             std::string dirPath = m_iniFilePathStorage.substr(0, m_iniFilePathStorage.find_last_of("/\\"));
             if (!dirPath.empty())
             {
-                // 使用std::filesystem创建目录（C++17特性）
+                // Use std::filesystem to create a directory (C++17 feature)
                 try
                 {
                     std::filesystem::create_directories(dirPath);
@@ -288,24 +275,20 @@ namespace enigma::core
         }
         else
         {
-            io.IniFilename = nullptr; // 禁用ini文件
+            io.IniFilename = nullptr; // Disable ini file
             DebuggerPrintf("[ImGuiSubsystem] ImGui ini file disabled\n");
         }
 
-        // 注意：Docking和Viewports功能需要ImGui docking分支
-        // 标准版本不支持DockingEnable和ViewportsEnable标志
-        // 如果需要这些功能，请使用ImGui docking分支
+        // Configure Docking and Viewports flags (requires ImGui docking branch)
+        if (m_config.enableDocking)
+        {
+            io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        }
 
-        // 配置ImGui标志
-        // if (m_config.enableDocking)
-        // {
-        //     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        // }
-
-        // if (m_config.enableViewports)
-        // {
-        //     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-        // }
+        if (m_config.enableViewports)
+        {
+            io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        }
 
         if (m_config.enableKeyboardNav)
         {
@@ -317,19 +300,16 @@ namespace enigma::core
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         }
 
-        // 设置样式
+        // Set style
         ImGui::StyleColorsDark();
 
-        // 加载字体
+        // Load font
         if (!m_config.defaultFontPath.empty())
         {
-            io.Fonts->AddFontFromFileTTF(
-                m_config.defaultFontPath.c_str(),
-                m_config.defaultFontSize
-            );
+            io.Fonts->AddFontFromFileTTF(m_config.defaultFontPath.c_str(), m_config.defaultFontSize);
         }
 
-        // 初始化Win32平台层
+        // Initialize the Win32 platform layer
         if (m_config.targetWindow)
         {
             ImGui_ImplWin32_Init(m_config.targetWindow->GetWindowHandle());
@@ -347,25 +327,25 @@ namespace enigma::core
             return;
         }
 
-        // 关闭Win32平台层
+        // Close the Win32 platform layer
         ImGui_ImplWin32_Shutdown();
 
-        // 销毁ImGui上下文
+        // Destroy ImGui context
         ImGui::DestroyContext();
 
         m_imguiContextInitialized = false;
         DebuggerPrintf("[ImGuiSubsystem] ImGui context shutdown\n");
     }
 
-    //=============================================================================
-    // 内部方法 - 后端管理
-    //=============================================================================
+    //==============================================================================
+    // Internal method - backend management
+    //==============================================================================
 
     bool ImGuiSubsystem::CreateBackend()
     {
         DebuggerPrintf("[ImGuiSubsystem] Creating backend via factory method...\n");
 
-        // 使用Context的工厂方法创建Backend（工厂方法模式）
+        // Use Context's factory method to create Backend (factory method pattern)
         m_backend = m_config.renderContext->CreateBackend();
 
         if (!m_backend)
@@ -374,7 +354,7 @@ namespace enigma::core
             return false;
         }
 
-        // 初始化后端
+        // Initialize backend
         if (!m_backend->Initialize())
         {
             DebuggerPrintf("[ImGuiSubsystem] Error: Backend initialization failed\n");

@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include <string>
-#include <cstdint>
 #include "ThirdParty/json/json.hpp"
 
 namespace enigma::graphic
@@ -9,31 +8,29 @@ namespace enigma::graphic
     class RendererSubsystem;
 }
 
-class Window; // 前置声明Window类
-class IImGuiRenderContext; // 前向声明ImGui渲染上下文接口
-
+class Window; // Pre-declare the Window class
+class IImGuiRenderContext; // Forward declaration of ImGui rendering context interface
 namespace enigma::core
 {
-    // ImGuiSubsystem配置结构（使用依赖注入模式）
+    // ImGuiSubsystem configuration structure (using dependency injection mode)
     struct ImGuiSubsystemConfig
     {
-        // ImGui渲染上下文接口（提供ImGui所需的DirectX资源访问）
+        // ImGui rendering context interface (provides DirectX resource access required by ImGui)
         std::shared_ptr<IImGuiRenderContext> renderContext = nullptr;
-
-        // 通用配置
+        //General configuration
         Window* targetWindow      = nullptr;
-        bool    enableDocking     = false; // Docking功能需要ImGui docking分支（标准版本不支持）
-        bool    enableViewports   = false; // 多窗口支持（独立窗口模式，需要docking分支）
+        bool    enableDocking     = true; // Docking function (window docking)
+        bool    enableViewports   = false; //Multiple viewport support (independent window mode, may require additional SwapChain management)
         bool    enableKeyboardNav = true;
         bool    enableGamepadNav  = false;
 
-        // 字体配置
+        // font configuration
         std::string defaultFontPath = ".enigma/assets/engine/font/JetBrainsMono-Regular.ttf";
         float       defaultFontSize = 16.0f;
 
-        // ImGui配置文件路径（相对于工作目录或绝对路径）
-        // 默认为".enigma/config/imgui.ini"
-        // 设置为空字符串将禁用ini文件保存/加载
+        // ImGui configuration file path (relative to the working directory or absolute path)
+        //The default is ".enigma/config/imgui.ini"
+        // Set to an empty string to disable ini file saving/loading
         std::string iniFilePath = ".enigma/config/imgui.ini";
     };
 } // namespace enigma::core
