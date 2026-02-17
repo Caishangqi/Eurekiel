@@ -14,8 +14,7 @@ namespace enigma::graphic
         // [VALIDATION] Check parameters
         if (!cmdList || !uniformMgr)
         {
-            LogWarn(core::LogRenderer, "[DrawBindingHelper] Invalid parameters in BindEngineBuffers");
-            return;
+            ERROR_AND_DIE("Invalid parameters in BindEngineBuffers")
         }
 
         // [ENGINE BUFFERS] Bind slots 0-14 using Root CBV
@@ -41,8 +40,7 @@ namespace enigma::graphic
         // [VALIDATION] Check parameters
         if (!cmdList || !uniformMgr)
         {
-            LogWarn(core::LogRenderer, "[DrawBindingHelper] Invalid parameters in BindCustomBufferTable");
-            return;
+            ERROR_AND_DIE("Invalid parameters in BindCustomBufferTable")
         }
 
         // [REFACTORED] Get ringIndex from UniformManager internally (DRY principle)
@@ -78,8 +76,7 @@ namespace enigma::graphic
         // [VALIDATION] Check parameter
         if (!customImgMgr)
         {
-            LogWarn(core::LogRenderer, "[DrawBindingHelper] Invalid parameter in PrepareCustomImages");
-            return;
+            ERROR_AND_DIE("Invalid parameter in PrepareCustomImages")
         }
 
         // [CUSTOM IMAGES] Upload pending custom image data to GPU

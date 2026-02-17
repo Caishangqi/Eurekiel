@@ -101,9 +101,7 @@ void RendererSubsystem::Initialize()
     // Create PSOManager
     m_psoManager = std::make_unique<PSOManager>();
     LogInfo(LogRenderer, "PSOManager created successfully");
-
-    // Display infrastructure flow confirmation information
-    LogInfo(LogRenderer, "Initialization flow: RendererSubsystem → D3D12RenderSystem → SwapChain creation completed");
+    
     g_theRendererSubsystem = this;
 }
 
@@ -112,7 +110,6 @@ void RendererSubsystem::Startup()
     LogInfo(LogRenderer, "Starting up...");
     try
     {
-        LogInfo(LogRenderer, "Creating UniformManager...");
         m_uniformManager = std::make_unique<UniformManager>();
         m_uniformManager->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<CameraUniforms>(9, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
@@ -483,12 +480,10 @@ void RendererSubsystem::BeginFrame()
     if (m_uniformManager)
     {
         m_uniformManager->ResetDrawCount();
-        LogDebug(LogRenderer, "BeginFrame - Draw count reset to 0");
     }
 
     // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
     D3D12RenderSystem::PrepareNextFrame();
-    LogDebug(LogRenderer, "BeginFrame - D3D12 next frame prepared");
 
     // ========================================================================
     // [CRITICAL FIX] 重置RT绑定状态（修复跨帧Hash缓存污染问题）
@@ -503,7 +498,6 @@ void RendererSubsystem::BeginFrame()
     if (m_renderTargetBinder)
     {
         m_renderTargetBinder->ClearBindings();
-        LogDebug(LogRenderer, "BeginFrame: RT bindings cleared for new frame");
     }
 
     m_colorTextureProvider->UpdateIndices();
@@ -514,7 +508,6 @@ void RendererSubsystem::BeginFrame()
     {
         m_samplerProvider->UpdateIndices();
     }
-    LogDebug(LogRenderer, "BeginFrame - RT Provider indices uploaded to GPU");
 
     // Update viewport uniform and upload the buffer
     m_viewportUniforms.viewWidth   = (float)m_configuration.renderWidth;
@@ -551,39 +544,13 @@ void RendererSubsystem::BeginFrame()
 
         LogDebug(LogRenderer, "BeginFrame - All render targets cleared (centralized strategy)");
     }
-
-    LogInfo(LogRenderer, "BeginFrame - Frame preparation completed (ready for game update)");
 }
 
 //-----------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
 void RendererSubsystem::EndFrame()
 {
-    // ========================================================================
-    // [OK] SIMPLIFIED (2025-10-21): 简单委托给 D3D12RenderSystem
-    // ========================================================================
-    // 职责: 结束帧渲染，提交 GPU 命令并呈现画面
-    // - 不再包含 Phase 管理逻辑（已移除）
-    // - 不再包含 RenderCommandQueue 管理（TODO: M2）
-    // - 只负责简单委托给底层 API 封装层
-    // ========================================================================
-    // 教学要点: 高层Subsystem应该是轻量级的委托层
-    // - BeginFrame() → D3D12RenderSystem::BeginFrame()
-    // - EndFrame() → D3D12RenderSystem::EndFrame()
-    // - 避免重复的业务逻辑（KISS原则）
-    // ========================================================================
-
-    LogInfo(LogRenderer, "RendererSubsystem::EndFrame() called");
-
     D3D12RenderSystem::EndFrame();
-
-    LogInfo(LogRenderer, "RendererSubsystem::EndFrame() completed");
-
-    // TODO (M2): 恢复 RenderCommandQueue 管理（在新的灵活渲染架构中）
-    // - 双缓冲队列交换
-    // - Setup/Begin/End 阶段
-    // - WorldRenderingPhase 执行
-    // - 当前简化版本只负责委托，业务逻辑在 D3D12RenderSystem
 }
 #pragma endregion
 

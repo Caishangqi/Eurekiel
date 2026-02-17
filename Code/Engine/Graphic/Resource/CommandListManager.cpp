@@ -109,14 +109,9 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     auto* device = D3D12RenderSystem::GetDevice();
     if (!device)
     {
-        // TODO: 使用统一的日志系统
-        enigma::core::LogError(LogRenderer, "× Failed to initialize CommandListManager reason: device is null");
-        ERROR_AND_DIE("× Failed to initialize CommandListManager reason: device is null")
+        LogError(LogRenderer, "× Failed to initialize CommandListManager reason: device is null");
+        ERROR_AND_DIE("Failed to initialize CommandListManager reason: device is null")
     }
-
-    enigma::core::LogInfo(LogRenderer,
-                          "CommandListManager::Initialize() - graphicsCount=%u, computeCount=%u, copyCount=%u",
-                          graphicsCount, computeCount, copyCount);
 
     // ========================================================================
     // 第1步: 创建命令队列 (Command Queues)
@@ -273,7 +268,6 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
                           "+ All command list pools created successfully - Graphics:%u, Compute:%u, Copy:%u",
                           graphicsCount, computeCount, copyCount);
 
-    // ✅ 验证命令列表池创建结果
     enigma::core::LogInfo(LogRenderer,
                           "+ Graphics command lists created: %u (available: %u)",
                           static_cast<uint32_t>(m_graphicsCommandLists.size()),

@@ -123,10 +123,7 @@ namespace enigma::graphic
             s_commandListManager.reset();
             return false;
         }
-
-        core::LogInfo(LogRenderer,
-                      "SM6.6 Bindless architecture initialized successfully");
-
+        
         // 5. Create SwapChain (if window handle is provided)
         if (hwnd)
         {
@@ -139,15 +136,12 @@ namespace enigma::graphic
             }
             else
             {
-                core::LogInfo(LogRenderer,
-                              "D3D12RenderSystem initialized successfully with SwapChain (%dx%d)",
-                              renderWidth, renderHeight);
+                core::LogInfo(LogRenderer,"D3D12RenderSystem initialized successfully with SwapChain (%dx%d)",renderWidth, renderHeight);
             }
         }
         else
         {
-            core::LogInfo(LogRenderer,
-                          "D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
+            core::LogInfo(LogRenderer,"D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
         }
 
         s_isInitialized = true;
@@ -1687,32 +1681,7 @@ namespace enigma::graphic
                      "EndFrame: SwapChain not initialized");
             return false;
         }
-
-        // 2. 转换资源状态：RENDER_TARGET → PRESENT
-        //
-        // Bug Fix (2025-10-21 最终修复): 必须显式添加资源 barrier
-        //
-        // 根本原因：
-        // - DirectX 12 **不会**自动转换 SwapChain buffer 的资源状态
-        // - Present() 要求资源处于 PRESENT/COMMON 状态
-        // - 渲染完成后资源处于 RENDER_TARGET 状态
-        // - 必须手动转换回 PRESENT，否则会导致 D3D12 ERROR: INVALID_SUBRESOURCE_STATE
-        //
-        // 错误日志证据：
-        // - "Resource state (0x4: D3D12_RESOURCE_STATE_RENDER_TARGET) is invalid for use as a PRESENT_SOURCE"
-        // - "Expected State Bits: 0x0: D3D12_RESOURCE_STATE_[COMMON|PRESENT]"
-        //
-        // DirectX 12 资源状态管理规则：
-        // 1. 开发者负责显式管理所有资源状态转换
-        // 2. 使用 ResourceBarrier() 转换状态
-        // 3. SwapChain buffer 需要在 Present 前转回 PRESENT/COMMON
-        // 4. CommandList 执行前必须完成所有状态转换
-        //
-        // 参考资料：
-        // - DirectX 12 Programming Guide: Resource Barriers
-        // - Microsoft D3D12HelloTriangle 示例确实有 barrier
-        //
-        // 结论：必须添加显式资源 barrier
+        
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {

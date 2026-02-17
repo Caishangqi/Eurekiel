@@ -230,8 +230,6 @@ namespace enigma::graphic
             m_currentRTFormats[i] = DXGI_FORMAT_UNKNOWN;
         }
         m_currentDepthFormat = DXGI_FORMAT_UNKNOWN;
-
-        LogDebug("RenderTargetBinder", "ClearBindings: All bindings cleared");
     }
 
     // ============================================================================

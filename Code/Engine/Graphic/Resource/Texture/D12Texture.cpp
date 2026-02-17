@@ -950,11 +950,6 @@ namespace enigma::graphic
         {
             // Mark as uploaded (no actual data transfer, just state marking)
             m_isUploaded = true;
-
-            core::LogInfo(LogRenderer,
-                          "Texture '%s' marked as uploaded (RenderTarget/DepthStencil, no CPU data needed)",
-                          GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
-
             return true;
         }
 

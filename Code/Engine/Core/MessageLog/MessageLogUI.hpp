@@ -40,7 +40,7 @@ namespace enigma::core
     // MessageLog UI configuration
     struct MessageLogUIConfig
     {
-        bool   showWindow   = false; // Whether the window is visible
+        bool   showWindow   = true; // Whether the window is visible
         int    toggleKey    = 0x09; // Toggle key (default ~ key, VK_OEM_3)
         size_t maxMessages  = 10000; // Maximum number of messages
         bool   autoScroll   = true; // Auto-scroll to bottom

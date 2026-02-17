@@ -667,8 +667,7 @@ namespace enigma::graphic
     {
         if (!HasCPUData())
         {
-            core::LogError(LogRenderer,
-                           "D12Buffer::UploadToGPU: No CPU data available");
+            core::LogError(LogRenderer,   "D12Buffer::UploadToGPU: No CPU data available");
             return false;
         }
 
@@ -683,16 +682,11 @@ namespace enigma::graphic
 
         if (!uploadSuccess)
         {
-            core::LogError(LogRenderer,
-                           "D12Buffer::UploadToGPU: Failed to upload buffer '%s'",
-                           GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+            core::LogError(LogRenderer,   "D12Buffer::UploadToGPU: Failed to upload buffer '%s'", GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
             return false;
         }
 
-        core::LogDebug(LogRenderer,
-                       "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)",
-                       GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(),
-                       GetCPUDataSize());
+        core::LogDebug(LogRenderer, "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)",  GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(), GetCPUDataSize());
 
         return true;
     }

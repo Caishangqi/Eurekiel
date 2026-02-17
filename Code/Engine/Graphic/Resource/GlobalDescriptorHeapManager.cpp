@@ -183,12 +183,6 @@ bool GlobalDescriptorHeapManager::Initialize(uint32_t cbvSrvUavCapacity, uint32_
         m_nextFreeDsv       = 0;
         m_nextFreeSampler   = 0;
 
-        // 7.1 记录 Custom CBV 预留区域初始化信息
-        core::LogInfo(LogRenderer, "Custom CBV预留区域已标记: 索引 %u-%u, 主堆分配从索引 %u 开始",
-                      CUSTOM_CBV_RESERVED_START,
-                      CUSTOM_CBV_RESERVED_START + CUSTOM_CBV_RESERVED_COUNT - 1,
-                      m_nextFreeCbvSrvUav);
-
         m_totalCbvSrvUavAllocated = 0;
         m_totalRtvAllocated       = 0;
         m_totalDsvAllocated       = 0;

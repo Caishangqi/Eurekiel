@@ -239,9 +239,6 @@ namespace enigma::graphic
         if (!RequiresCPUData())
         {
             m_isUploaded = true;
-            core::LogInfo(LogRenderer,
-                          "Upload: Successfully marked '%s' as uploaded (no CPU data required)",
-                          m_debugName.c_str());
             return true;
         }
 
@@ -249,8 +246,7 @@ namespace enigma::graphic
         auto* cmdListManager = D3D12RenderSystem::GetCommandListManager();
         if (!cmdListManager)
         {
-            LogError(LogRenderer,
-                     "Upload: CommandListManager not available");
+            LogError(LogRenderer,"Upload: CommandListManager not available");
             return false;
         }
 
@@ -289,13 +285,8 @@ namespace enigma::graphic
         // - 数量少(11个)、大小小(几百字节)、上传频率低(初始化时)
         // - 需要GENERIC_READ状态(用于Vertex/Pixel/Compute Shader读取)
         // - 适合使用Graphics Queue而非Copy Queue
-        //
-        // 🔍 DEBUG: 在获取命令列表前检查可用数量
         uint32_t availableBefore = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
         uint32_t executingBefore = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
-        core::LogInfo(LogRenderer,
-                      "Upload[%s]: BEFORE Acquire - Available=%u, Executing=%u", m_debugName.c_str(), availableBefore, executingBefore);
-
         auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Graphics, "ResourceUpload");
         if (!commandList)
         {
@@ -335,30 +326,15 @@ namespace enigma::graphic
         // UpdateCompletedCommandLists() 检查围栏值，将完成的命令列表放回可用队列
         // 这是 DirectX 12 命令列表池化的正确实践
 
-        // 🔍 DEBUG: 在回收前检查状态
         uint32_t availableBeforeRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
         uint32_t executingBeforeRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
-        core::LogInfo(LogRenderer,
-                      "Upload[%s]: BEFORE Recycle - Available=%u, Executing=%u",
-                      m_debugName.c_str(), availableBeforeRecycle, executingBeforeRecycle);
 
         cmdListManager->UpdateCompletedCommandLists();
-
-        // 🔍 DEBUG: 在回收后检查状态
-        uint32_t availableAfterRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
-        uint32_t executingAfterRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
-        core::LogInfo(LogRenderer,
-                      "Upload[%s]: AFTER Recycle - Available=%u, Executing=%u (Recycled=%u)",
-                      m_debugName.c_str(), availableAfterRecycle, executingAfterRecycle,
-                      availableAfterRecycle - availableBeforeRecycle);
-
-        // 10. 更新资源状态和上传标记
+        
         m_currentState = targetState;
         m_isUploaded   = true;
 
-        LogDebug(LogRenderer,
-                 "Upload: Successfully uploaded '%s' (%zu bytes)",
-                 m_debugName.c_str(), GetCPUDataSize());
+        LogDebug(LogRenderer,  "Upload: Successfully uploaded '%s' (%zu bytes)",  m_debugName.c_str(), GetCPUDataSize());
 
         return true;
     }
@@ -383,9 +359,7 @@ namespace enigma::graphic
         // 1. 防止重复注册
         if (IsBindlessRegistered())
         {
-            core::LogWarn(LogRenderer,
-                          "RegisterBindless: Resource '%s' is already registered (index=%u)",
-                          m_debugName.c_str(), m_bindlessIndex);
+            core::LogWarn(LogRenderer,    "RegisterBindless: Resource '%s' is already registered (index=%u)", m_debugName.c_str(), m_bindlessIndex);
             return std::nullopt;
         }
 
