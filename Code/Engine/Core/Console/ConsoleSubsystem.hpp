@@ -1,25 +1,31 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "Engine/Core/SubsystemManager.hpp"
 #include "Engine/Core/Event/EventSubsystem.hpp"
 #include "Engine/Core/Event/StringEventBus.hpp"
+#include "Engine/Core/Event/MulticastDelegate.hpp"
 #include "Engine/Core/Logger/LogLevel.hpp"
 #include "Engine/Core/Rgba8.hpp"
 #include "ConsoleConfig.hpp"
+#include "ConsoleMessage.hpp"
 #include "ExternalConsole.hpp"
-
-// Forward declarations
-class DevConsole;
 
 // Import EventArgs type alias for legacy compatibility
 using enigma::event::EventArgs;
+using enigma::event::MulticastDelegate;
+using enigma::event::DelegateHandle;
 
 namespace enigma::core
 {
-    // Simplified console subsystem that only displays content
-    // User input is forwarded to DevConsole for command execution
+    // Forward declaration
+    class ImguiConsole;
+
+    // Console subsystem managing ExternalConsole and ImguiConsole backends.
+    // Command execution is the sole authority of this class (DevConsole is deprecated).
+    // ImGui rendering is driven from Update() (same pattern as MessageLogSubsystem).
     class ConsoleSubsystem : public EngineSubsystem
     {
     public:
@@ -34,32 +40,27 @@ namespace enigma::core
         void Initialize() override;
         void Startup() override;
         void Shutdown() override;
-        void Update(float deltaTime) override; // Process direct console input
-        bool RequiresGameLoop() const override { return true; } // Need Update() called
+        void Update(float deltaTime) override;
+        bool RequiresGameLoop() const override { return true; }
         bool RequiresInitialize() const override { return true; }
 
-        // Simple output interface (immediate output, no threading)
+        // Output interface (broadcasts to all backends via MulticastDelegate)
         void WriteLine(const std::string& text, LogLevel level = LogLevel::INFO);
         void WriteLineColored(const std::string& text, const Rgba8& color);
         void WriteFormatted(LogLevel level, const char* format, ...);
 
-        // Event handlers (integrate with InputSystem)
-        static bool Event_ConsoleKeyPressed(EventArgs& args);
-        static bool Event_ConsoleCharInput(EventArgs& args);
-        static bool Event_ConsoleWindowClose(EventArgs& args);
+        // Command execution (ConsoleSubsystem is the sole authority)
+        void Execute(const std::string& command, bool echoCommand = true);
 
-        // Direct console input events (when InputSystem can't reach us)
-        static bool Event_ConsoleDirectChar(EventArgs& args);
-        static bool Event_ConsoleDirectEnter(EventArgs& args);
-        static bool Event_ConsoleDirectBackspace(EventArgs& args);
-        static bool Event_ConsoleDirectUpArrow(EventArgs& args);
-        static bool Event_ConsoleDirectDownArrow(EventArgs& args);
-        static bool Event_ConsoleDirectPaste(EventArgs& args);
+        // Command registration for autocomplete
+        void RegisterCommand(const std::string& name, const std::string& description = "");
+        const std::vector<std::string>& GetRegisteredCommands() const;
 
-        // DevConsole output mirroring event
-        static bool Event_DevConsoleOutput(EventArgs& args);
+        // ImGui Console control
+        void ToggleImguiConsole();
+        bool IsImguiConsoleVisible() const;
 
-        // Console control
+        // External Console control
         void SetVisible(bool visible);
         bool IsVisible() const;
 
@@ -67,13 +68,23 @@ namespace enigma::core
         bool IsInitialized() const { return m_initialized; }
         bool IsExternalConsoleActive() const;
 
+        // --- MulticastDelegate events (replacing old static Event_*) ---
+        MulticastDelegate<const ConsoleMessage&> OnConsoleOutput;
+        MulticastDelegate<const std::string&>    OnCommandExecuted;
+
     private:
+        // Delegate binding (replaces old RegisterEventHandlers/UnregisterEventHandlers)
+        void BindDelegates();
+        void UnbindDelegates();
+
+        // Member function event handlers (replacing old static Event_* functions)
+        void OnKeyPressed(unsigned char keyCode);
+        void OnCharInput(unsigned char character);
+
         // Initialization helpers
         void CreateExternalConsole();
-        void RegisterEventHandlers();
-        void UnregisterEventHandlers();
 
-        // Input processing - forward to DevConsole
+        // External console input processing
         void ProcessCharInput(unsigned char character);
         void HandleBackspace();
         void HandleEnter();
@@ -82,25 +93,40 @@ namespace enigma::core
         void HandlePaste();
         void HandleEscape();
         void HandleArrowKeys(unsigned char keyCode);
-
-        // Internal helpers
         void UpdateInputDisplay();
-        void ForwardCommandToDevConsole(const std::string& command);
 
         // Configuration
         ConsoleConfig m_config;
-        bool          m_initialized = false;
-        bool          m_isVisible   = false;
+        bool          m_initialized        = false;
+        bool          m_isVisible          = false;
+        bool          m_isExecutingCommand = false; // True during command execution (for console message routing)
 
-        // Simple external console (no threading)
+        // ImGui Console backend
+        std::unique_ptr<ImguiConsole> m_imguiConsole;
+
+        // External Console backend
         std::unique_ptr<ExternalConsole> m_externalConsole;
 
-        // Input state for forwarding to DevConsole
+        // Delegate handles for cleanup
+        DelegateHandle m_keyPressedHandle = 0;
+        DelegateHandle m_charInputHandle  = 0;
+
+        // Registered commands for autocomplete
+        std::vector<std::string> m_registeredCommands;
+
+        // External console input state
         std::string m_currentInput;
         int         m_cursorPosition = 0;
 
-        // History management (similar to DevConsole)
+        // Command history (shared between backends)
         std::vector<std::string> m_commandHistory;
         int                      m_historyIndex = -1;
+
+        // DockBuilder layout management (Console docked below MessageLogUI)
+        void         SetupDockLayout();
+        void         CycleTerminalMode();
+        bool         m_dockLayoutInitialized = false;
+        unsigned int m_dockTopId    = 0; // MessageLog node
+        unsigned int m_dockBottomId = 0; // Console node
     };
 } // namespace enigma::core

@@ -1,11 +1,18 @@
 #include "ConsoleSubsystem.hpp"
+#include "Engine/Core/Console/Imgui/ImguiConsole.hpp"
 #include "Engine/Core/Engine.hpp"
 #include "Engine/Core/NamedStrings.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Core/MessageLog/MessageLogSubsystem.hpp"
+#include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Input/InputSystem.hpp"
-#include "Engine/Core/Console/DevConsole.hpp"
+#include "ThirdParty/imgui/imgui.h"
+#include "ThirdParty/imgui/imgui_internal.h"
 #include <cstdarg>
 #include <cstdio>
+
+#include "Game/GameCommon.hpp"
 
 // Global console instance (defined in global scope, like other engine globals)
 enigma::core::ConsoleSubsystem* g_theConsole = nullptr;
@@ -43,7 +50,6 @@ namespace enigma::core
         }
 
         // External console already created in constructor for early output
-        // Just mark as initialized
         m_initialized = true;
     }
 
@@ -54,7 +60,14 @@ namespace enigma::core
             Initialize();
         }
 
-        RegisterEventHandlers();
+        // Bind to InputSystem delegates (replaces old SubscribeEventCallbackFunction)
+        BindDelegates();
+
+        // Create ImGui Console if enabled
+        if (m_config.enableImguiConsole)
+        {
+            m_imguiConsole = std::make_unique<ImguiConsole>(m_config);
+        }
 
         if (m_config.enableExternalConsole && m_externalConsole)
         {
@@ -63,9 +76,7 @@ namespace enigma::core
                 SetVisible(true);
             }
 
-            // Show startup message directly
-            WriteLine("Eurekiel Engine External Console", LogLevel::INFO);
-            WriteLine("Input is forwarded to DevConsole for command execution", LogLevel::INFO);
+            WriteLine("Eurekiel Engine Console", LogLevel::INFO);
         }
     }
 
@@ -76,7 +87,8 @@ namespace enigma::core
             return;
         }
 
-        UnregisterEventHandlers();
+        UnbindDelegates();
+        m_imguiConsole.reset();
         m_externalConsole.reset();
 
         m_initialized = false;
@@ -84,22 +96,245 @@ namespace enigma::core
 
     void ConsoleSubsystem::Update(float deltaTime)
     {
-        (void)deltaTime; // Suppress unused parameter warning
+        (void)deltaTime;
 
-        // Process direct console input when external console is active
-        if (m_externalConsole && m_externalConsole->IsVisible())
+        if (!m_imguiConsole)
         {
-            // Only process direct input if external console has focus
-            if (m_externalConsole->HasFocus())
+            // External console only - process input
+            if (m_externalConsole && m_externalConsole->IsVisible() && m_externalConsole->HasFocus())
             {
                 m_externalConsole->ProcessConsoleInput();
             }
+            return;
+        }
+
+        // Detect whether MessageLogUI is open
+        auto* msgLogSub = GEngine ? GEngine->GetSubsystem<MessageLogSubsystem>() : nullptr;
+        bool  msgLogOpen = msgLogSub && msgLogSub->GetUI() && msgLogSub->GetUI()->IsWindowOpen();
+
+        if (msgLogOpen)
+        {
+            // Docked mode: Console docks below MessageLogUI
+            m_imguiConsole->SetMode(ConsoleMode::Docked);
+
+            if (!m_dockLayoutInitialized)
+            {
+                SetupDockLayout();
+            }
+        }
+        else
+        {
+            // Transition from Docked -> Hidden: reset dock layout
+            if (m_imguiConsole->GetMode() == ConsoleMode::Docked)
+            {
+                m_imguiConsole->SetMode(ConsoleMode::Hidden);
+            }
+            m_dockLayoutInitialized = false;
+
+            // "/" key cycles: Hidden -> Terminal -> Full -> Hidden
+            if (g_theInput)
+            {
+                unsigned char toggleKey = static_cast<unsigned char>(m_config.imguiToggleKey);
+                if (g_theInput->WasKeyJustPressed(toggleKey))
+                {
+                    CycleTerminalMode();
+                }
+            }
+        }
+
+        // Render ImGui Console
+        m_imguiConsole->Render();
+
+        // Process external console input
+        if (m_externalConsole && m_externalConsole->IsVisible() && m_externalConsole->HasFocus())
+        {
+            m_externalConsole->ProcessConsoleInput();
         }
     }
 
+    //=========================================================================
+    // Delegate binding (replaces old Subscribe/Unsubscribe pattern)
+    //=========================================================================
+    void ConsoleSubsystem::BindDelegates()
+    {
+        if (g_theInput)
+        {
+            m_keyPressedHandle = g_theInput->OnKeyPressed.Add(this, &ConsoleSubsystem::OnKeyPressed);
+            m_charInputHandle  = g_theInput->OnCharInput.Add(this, &ConsoleSubsystem::OnCharInput);
+        }
+    }
+
+    void ConsoleSubsystem::UnbindDelegates()
+    {
+        if (g_theInput)
+        {
+            g_theInput->OnKeyPressed.Remove(m_keyPressedHandle);
+            g_theInput->OnCharInput.Remove(m_charInputHandle);
+        }
+        m_keyPressedHandle = 0;
+        m_charInputHandle  = 0;
+    }
+
+    //=========================================================================
+    // Member function event handlers (replacing old static Event_* functions)
+    //=========================================================================
+    void ConsoleSubsystem::OnKeyPressed(unsigned char keyCode)
+    {
+        if (!m_initialized)
+        {
+            return;
+        }
+
+        // Backslash toggles external console visibility
+        if (keyCode == 92 && m_config.enableExternalConsole)
+        {
+            if (m_externalConsole)
+            {
+                m_externalConsole->Show();
+                m_isVisible = true;
+            }
+            return;
+        }
+
+        // ESC clears external console input (does not consume)
+        if (keyCode == KEYCODE_ESC)
+        {
+            if (IsVisible())
+            {
+                HandleEscape();
+            }
+            return;
+        }
+
+        // Only handle input if external console is visible and has focus
+        if (!IsVisible())
+        {
+            return;
+        }
+
+        bool hasExternalFocus = m_externalConsole && m_externalConsole->HasFocus();
+        if (!hasExternalFocus)
+        {
+            return;
+        }
+
+        switch (keyCode)
+        {
+        case KEYCODE_ENTER:
+            HandleEnter();
+            break;
+        case KEYCODE_BACKSPACE:
+            HandleBackspace();
+            break;
+        case KEYCODE_UPARROW:
+        case KEYCODE_DOWNARROW:
+        case KEYCODE_LEFTARROW:
+        case KEYCODE_RIGHTARROW:
+            HandleArrowKeys(keyCode);
+            break;
+        default:
+            break;
+        }
+    }
+
+    void ConsoleSubsystem::OnCharInput(unsigned char character)
+    {
+        if (!IsVisible())
+        {
+            return;
+        }
+
+        bool hasExternalFocus = m_externalConsole && m_externalConsole->HasFocus();
+        if (!hasExternalFocus)
+        {
+            return;
+        }
+
+        if (character >= 32 && character <= 126)
+        {
+            ProcessCharInput(character);
+        }
+    }
+
+    //=========================================================================
+    // Command execution (sole authority - DevConsole is deprecated)
+    //=========================================================================
+    void ConsoleSubsystem::Execute(const std::string& command, bool echoCommand)
+    {
+        if (command.empty())
+        {
+            return;
+        }
+
+        // Echo the command to all backends
+        if (echoCommand)
+        {
+            std::string echoText = m_config.commandPrefix + " " + command;
+            ConsoleMessage echoMsg(echoText, LogLevel::INFO, Rgba8::CYAN);
+            OnConsoleOutput.Broadcast(echoMsg);
+
+            if (m_externalConsole)
+            {
+                m_externalConsole->WriteColored(echoText + "\n", Rgba8::CYAN);
+            }
+            if (m_imguiConsole)
+            {
+                m_imguiConsole->AddConsoleMessage(echoMsg);
+            }
+        }
+
+        // Execute command via engine event system
+        m_isExecutingCommand = true;
+        EventArgs args;
+        args.SetValue("Command", command);
+        FireEvent("ExecuteConsoleCommand", args);
+
+        // Broadcast to delegate listeners
+        OnCommandExecuted.Broadcast(command);
+        m_isExecutingCommand = false;
+    }
+
+    void ConsoleSubsystem::RegisterCommand(const std::string& name, const std::string& description)
+    {
+        (void)description; // Reserved for future help system
+        // Avoid duplicates
+        for (const auto& cmd : m_registeredCommands)
+        {
+            if (cmd == name)
+            {
+                return;
+            }
+        }
+        m_registeredCommands.push_back(name);
+    }
+
+    const std::vector<std::string>& ConsoleSubsystem::GetRegisteredCommands() const
+    {
+        return m_registeredCommands;
+    }
+
+    //=========================================================================
+    // ImGui Console control
+    //=========================================================================
+    void ConsoleSubsystem::ToggleImguiConsole()
+    {
+        if (m_imguiConsole)
+        {
+            CycleTerminalMode();
+        }
+    }
+
+    bool ConsoleSubsystem::IsImguiConsoleVisible() const
+    {
+        return m_imguiConsole && m_imguiConsole->IsVisible();
+    }
+
+    //=========================================================================
+    // Output interface (broadcasts to all backends)
+    //=========================================================================
     void ConsoleSubsystem::WriteLine(const std::string& text, LogLevel level)
     {
-        if (!m_initialized || !m_externalConsole)
+        if (!m_initialized)
         {
             return;
         }
@@ -110,7 +345,7 @@ namespace enigma::core
             return;
         }
 
-        // Create message with appropriate color and write directly
+        // Determine color from log level
         Rgba8 color = Rgba8::WHITE;
         switch (level)
         {
@@ -126,26 +361,72 @@ namespace enigma::core
             break;
         }
 
-        // Direct output - no threading
-        if (m_config.enableAnsiColors)
+        // Create message for delegate broadcast and ImGui Console
+        ConsoleMessage msg(text, level, color);
+
+        // Broadcast to delegate listeners
+        OnConsoleOutput.Broadcast(msg);
+
+        // Forward to ImGui Console
+        if (m_imguiConsole)
         {
-            m_externalConsole->WriteColored(text, color);
+            if (m_isExecutingCommand)
+            {
+                // During command execution: route to console-specific buffer (+ general)
+                m_imguiConsole->AddConsoleMessage(msg);
+            }
+            else
+            {
+                // General log output: only to general buffer
+                m_imguiConsole->AddMessage(msg);
+            }
         }
-        else
+
+        // Forward to External Console
+        if (m_externalConsole)
         {
-            m_externalConsole->WriteLine(text);
+            if (m_config.enableAnsiColors)
+            {
+                m_externalConsole->WriteColored(text, color);
+            }
+            else
+            {
+                m_externalConsole->WriteLine(text);
+            }
+        }
+
+        // Forward to Logger system
+        if (m_config.forwardToLogger)
+        {
+            switch (level)
+            {
+            case LogLevel::ERROR_:  enigma::core::LogError(LogConsole, text.c_str()); break;
+            case LogLevel::WARNING: enigma::core::LogWarn(LogConsole, text.c_str());  break;
+            default:                enigma::core::LogInfo(LogConsole, text.c_str());  break;
+            }
         }
     }
 
     void ConsoleSubsystem::WriteLineColored(const std::string& text, const Rgba8& color)
     {
-        if (!m_initialized || !m_externalConsole)
+        if (!m_initialized)
         {
             return;
         }
 
-        // Direct output - no threading, add newline for WriteLine
-        m_externalConsole->WriteColored(text + "\n", color);
+        // Create message for delegate broadcast and ImGui Console
+        ConsoleMessage msg(text, LogLevel::INFO, color);
+        OnConsoleOutput.Broadcast(msg);
+
+        if (m_imguiConsole)
+        {
+            m_imguiConsole->AddMessage(msg);
+        }
+
+        if (m_externalConsole)
+        {
+            m_externalConsole->WriteColored(text + "\n", color);
+        }
     }
 
     void ConsoleSubsystem::WriteFormatted(LogLevel level, const char* format, ...)
@@ -161,243 +442,9 @@ namespace enigma::core
         WriteLine(std::string(buffer), level);
     }
 
-    // Forward command to DevConsole instead of handling internally
-    void ConsoleSubsystem::ForwardCommandToDevConsole(const std::string& command)
-    {
-        // Get global DevConsole and execute command there
-        // Use global declaration from EngineCommon.hpp
-        if (::g_theDevConsole)
-        {
-            // Execute in DevConsole (this handles all the actual command processing)  
-            // Don't echo here - HandleEnter() already echoed the command
-            ::g_theDevConsole->Execute(command, false); // false = don't echo in DevConsole either
-        }
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleKeyPressed(EventArgs& args)
-    {
-        auto* console = ::g_theConsole;
-        if (!console || !console->m_initialized)
-        {
-            return false;
-        }
-
-        unsigned char keyCode = static_cast<unsigned char>(args.GetValue("KeyCode", -1));
-
-        // Handle different toggle keys for different consoles
-        if (keyCode == KEYCODE_TILDE)
-        {
-            // Tilde toggles DevConsole, don't consume for external console
-            return false; // Let DevConsole handle it
-        }
-
-        // Backslash toggles external console (ASCII 92 = '\')
-        if (keyCode == 92 && console->m_config.enableExternalConsole)
-        {
-            // Show and bring to front, don't change input focus
-            if (console->m_externalConsole)
-            {
-                console->m_externalConsole->Show();
-                console->m_isVisible = true;
-            }
-            return true; // Consume the event
-        }
-
-        // ESC should not be consumed by external console - let App handle it
-        if (keyCode == KEYCODE_ESC)
-        {
-            // If external console is visible, clear input but don't consume ESC
-            if (console->IsVisible())
-            {
-                console->HandleEscape();
-            }
-            return false; // Don't consume ESC - let App.cpp handle it
-        }
-
-        // Only handle input if external console is visible AND has focus
-        if (!console->IsVisible())
-        {
-            return false;
-        }
-
-        // Check if external console has focus
-        bool hasExternalFocus = console->m_externalConsole && console->m_externalConsole->HasFocus();
-        if (!hasExternalFocus)
-        {
-            return false; // Let DevConsole or other systems handle
-        }
-
-        // Handle input keys for external console when it has focus
-        switch (keyCode)
-        {
-        case KEYCODE_ENTER:
-            console->HandleEnter();
-            return true;
-
-        case KEYCODE_BACKSPACE:
-            console->HandleBackspace();
-            return true;
-
-        case KEYCODE_UPARROW:
-        case KEYCODE_DOWNARROW:
-        case KEYCODE_LEFTARROW:
-        case KEYCODE_RIGHTARROW:
-            console->HandleArrowKeys(keyCode);
-            return true;
-
-        default:
-            return false; // Let character input event handle
-        }
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleCharInput(EventArgs& args)
-    {
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        // Check if external console has focus
-        bool hasExternalFocus = console->m_externalConsole && console->m_externalConsole->HasFocus();
-        if (!hasExternalFocus)
-        {
-            return false; // Let DevConsole handle
-        }
-
-        // Window sends character as "KeyCode", not "CharCode"
-        unsigned char character = static_cast<unsigned char>(args.GetValue("KeyCode", 0));
-        if (character >= 32 && character <= 126)
-        {
-            // Printable characters
-            console->ProcessCharInput(character);
-            return true;
-        }
-
-        return false;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleWindowClose(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        // Console window close requested, shut down application
-        if (::g_theConsole)
-        {
-            ::g_theConsole->WriteLine("Console window close requested, shutting down application", LogLevel::INFO);
-        }
-        FireEvent("ApplicationQuitEvent");
-        return true;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectChar(EventArgs& args)
-    {
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        // Only process if external console is visible (direct input only works when focused)
-        char character = static_cast<char>(args.GetValue("Character", 0));
-        if (character >= 32 && character <= 126)
-        {
-            console->ProcessCharInput(static_cast<unsigned char>(character));
-            return true;
-        }
-
-        return false;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectEnter(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        console->HandleEnter();
-        return true;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectBackspace(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        console->HandleBackspace();
-        return true;
-    }
-
-    bool ConsoleSubsystem::Event_DevConsoleOutput(EventArgs& args)
-    {
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsExternalConsoleActive())
-        {
-            return false; // Don't consume if external console isn't active
-        }
-
-        // Extract text and color from DevConsole output
-        std::string text = args.GetValue("Text", "");
-        int         r    = args.GetValue("ColorR", 255);
-        int         g    = args.GetValue("ColorG", 255);
-        int         b    = args.GetValue("ColorB", 255);
-        int         a    = args.GetValue("ColorA", 255);
-
-        Rgba8 color(static_cast<unsigned char>(r), static_cast<unsigned char>(g),
-                    static_cast<unsigned char>(b), static_cast<unsigned char>(a));
-
-        // Mirror to External Console
-        console->WriteLineColored(text, color);
-
-        return false; // Don't consume - let other systems handle it too
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectUpArrow(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        console->HandleUpArrow();
-        return true;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectDownArrow(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        console->HandleDownArrow();
-        return true;
-    }
-
-    bool ConsoleSubsystem::Event_ConsoleDirectPaste(EventArgs& args)
-    {
-        (void)args; // Suppress unused parameter warning
-        auto* console = ::g_theConsole;
-        if (!console || !console->IsVisible())
-        {
-            return false;
-        }
-
-        console->HandlePaste();
-        return true;
-    }
-
-
+    //=========================================================================
+    // External Console control
+    //=========================================================================
     void ConsoleSubsystem::SetVisible(bool visible)
     {
         if (!m_externalConsole)
@@ -408,15 +455,11 @@ namespace enigma::core
         if (visible)
         {
             m_externalConsole->Show();
-            // Give console time to appear and gain focus
             Sleep(100);
-            // UpdateFocusState(); // Removed this method
-            // Focus state tracking removed
         }
         else
         {
             m_externalConsole->Hide();
-            // Focus state tracking removed
         }
 
         m_isVisible = visible;
@@ -442,52 +485,75 @@ namespace enigma::core
         }
     }
 
-    void ConsoleSubsystem::RegisterEventHandlers()
+    //=========================================================================
+    // DockBuilder layout: split MessageLog node, dock Console below it
+    //=========================================================================
+    void ConsoleSubsystem::CycleTerminalMode()
     {
-        // Register to InputSystem events
-        SubscribeEventCallbackFunction("KeyPressed", Event_ConsoleKeyPressed);
-        SubscribeEventCallbackFunction("CharInput", Event_ConsoleCharInput);
-
-        // Register Console specific events
-        SubscribeEventCallbackFunction("ConsoleWindowClose", Event_ConsoleWindowClose);
-
-        // Register direct console input events (for when InputSystem can't reach us)
-        SubscribeEventCallbackFunction("ConsoleDirectChar", Event_ConsoleDirectChar);
-        SubscribeEventCallbackFunction("ConsoleDirectEnter", Event_ConsoleDirectEnter);
-        SubscribeEventCallbackFunction("ConsoleDirectBackspace", Event_ConsoleDirectBackspace);
-        SubscribeEventCallbackFunction("ConsoleDirectUpArrow", Event_ConsoleDirectUpArrow);
-        SubscribeEventCallbackFunction("ConsoleDirectDownArrow", Event_ConsoleDirectDownArrow);
-        SubscribeEventCallbackFunction("ConsoleDirectPaste", Event_ConsoleDirectPaste);
-
-        // Register DevConsole output event for mirroring output to External Console
-        SubscribeEventCallbackFunction("DevConsoleOutput", Event_DevConsoleOutput);
+        ConsoleMode current = m_imguiConsole->GetMode();
+        switch (current)
+        {
+        case ConsoleMode::Hidden:
+            m_imguiConsole->SetMode(ConsoleMode::Terminal);
+            break;
+        case ConsoleMode::Terminal:
+            m_imguiConsole->SetMode(ConsoleMode::Full);
+            break;
+        case ConsoleMode::Full:
+        default:
+            m_imguiConsole->SetMode(ConsoleMode::Hidden);
+            break;
+        }
     }
 
-    void ConsoleSubsystem::UnregisterEventHandlers()
+    void ConsoleSubsystem::SetupDockLayout()
     {
-        // Unregister event subscriptions
-        UnsubscribeEventCallbackFunction("KeyPressed", Event_ConsoleKeyPressed);
-        UnsubscribeEventCallbackFunction("CharInput", Event_ConsoleCharInput);
-        UnsubscribeEventCallbackFunction("ConsoleWindowClose", Event_ConsoleWindowClose);
+        ImGuiWindow* msgLogWin = ImGui::FindWindowByName("MessageLog");
+        if (!msgLogWin)
+        {
+            return;
+        }
 
-        // Unregister direct console input events
-        UnsubscribeEventCallbackFunction("ConsoleDirectChar", Event_ConsoleDirectChar);
-        UnsubscribeEventCallbackFunction("ConsoleDirectEnter", Event_ConsoleDirectEnter);
-        UnsubscribeEventCallbackFunction("ConsoleDirectBackspace", Event_ConsoleDirectBackspace);
-        UnsubscribeEventCallbackFunction("ConsoleDirectUpArrow", Event_ConsoleDirectUpArrow);
-        UnsubscribeEventCallbackFunction("ConsoleDirectDownArrow", Event_ConsoleDirectDownArrow);
-        UnsubscribeEventCallbackFunction("ConsoleDirectPaste", Event_ConsoleDirectPaste);
+        // Get MessageLog's current dock ID, or create a new dock node
+        ImGuiID dockId = msgLogWin->DockId;
+        if (dockId == 0)
+        {
+            // MessageLog is not docked yet - create a new dock node
+            dockId = ImGui::DockBuilderAddNode(0, ImGuiDockNodeFlags_None);
+            ImGui::DockBuilderSetNodeSize(dockId, msgLogWin->Size);
+            ImGui::DockBuilderSetNodePos(dockId, msgLogWin->Pos);
+        }
 
-        // Unregister DevConsole output event
-        UnsubscribeEventCallbackFunction("DevConsoleOutput", Event_DevConsoleOutput);
+        // Split: bottom portion for Console (input line height ratio)
+        float consoleRatio = 0.07f;
+        ImGui::DockBuilderSplitNode(dockId, ImGuiDir_Down, consoleRatio,
+                                     &m_dockBottomId, &m_dockTopId);
+
+        // Console node: no undock, no further splitting, auto-hide tab bar, no resize
+        ImGuiDockNode* bottomNode = ImGui::DockBuilderGetNode(m_dockBottomId);
+        if (bottomNode)
+        {
+            bottomNode->LocalFlags |= ImGuiDockNodeFlags_NoUndocking
+                                    | ImGuiDockNodeFlags_NoDockingSplit
+                                    | ImGuiDockNodeFlags_AutoHideTabBar
+                                    | ImGuiDockNodeFlags_NoResize;
+        }
+
+        // Dock windows to their respective nodes
+        ImGui::DockBuilderDockWindow("MessageLog", m_dockTopId);
+        ImGui::DockBuilderDockWindow("Console", m_dockBottomId);
+        ImGui::DockBuilderFinish(dockId);
+
+        m_dockLayoutInitialized = true;
     }
 
-
+    //=========================================================================
+    // External console input processing
+    //=========================================================================
     void ConsoleSubsystem::ProcessCharInput(unsigned char character)
     {
         if (character >= 32 && character <= 126)
         {
-            // Insert character at cursor position
             m_currentInput.insert(m_cursorPosition, 1, static_cast<char>(character));
             m_cursorPosition++;
             UpdateInputDisplay();
@@ -508,25 +574,21 @@ namespace enigma::core
     {
         if (!m_currentInput.empty())
         {
-            // Echo the command in external console
-            WriteLineColored("> " + m_currentInput, Rgba8::CYAN);
-
             // Add to history
             m_commandHistory.push_back(m_currentInput);
             if (m_commandHistory.size() > 1000)
             {
-                // Limit history size
                 m_commandHistory.erase(m_commandHistory.begin());
             }
 
-            // Forward command to DevConsole for execution
-            ForwardCommandToDevConsole(m_currentInput);
+            // Execute command through ConsoleSubsystem (sole authority)
+            Execute(m_currentInput);
         }
 
         // Reset input state
         m_currentInput.clear();
         m_cursorPosition = 0;
-        m_historyIndex   = -1; // Reset history navigation
+        m_historyIndex   = -1;
         UpdateInputDisplay();
     }
 
@@ -558,8 +620,11 @@ namespace enigma::core
             break;
 
         case KEYCODE_UPARROW:
+            HandleUpArrow();
+            break;
+
         case KEYCODE_DOWNARROW:
-            // History is handled by dedicated methods
+            HandleDownArrow();
             break;
         }
     }
@@ -571,88 +636,77 @@ namespace enigma::core
             return;
         }
 
-        if (m_historyIndex >= -1)
+        if (m_historyIndex < 0)
         {
-            m_historyIndex++;
-            // Clamp to maximum index
-            if (m_historyIndex > static_cast<int>(m_commandHistory.size()) - 1)
-            {
-                m_historyIndex = static_cast<int>(m_commandHistory.size()) - 1;
-            }
+            m_historyIndex = static_cast<int>(m_commandHistory.size()) - 1;
+        }
+        else if (m_historyIndex > 0)
+        {
+            m_historyIndex--;
         }
 
-        if (m_historyIndex < static_cast<int>(m_commandHistory.size()))
-        {
-            // Get command from history (reverse order, most recent first)
-            m_currentInput   = m_commandHistory[m_commandHistory.size() - m_historyIndex - 1];
-            m_cursorPosition = static_cast<int>(m_currentInput.length());
-            UpdateInputDisplay();
-        }
+        m_currentInput   = m_commandHistory[m_historyIndex];
+        m_cursorPosition = static_cast<int>(m_currentInput.length());
+        UpdateInputDisplay();
     }
 
     void ConsoleSubsystem::HandleDownArrow()
     {
-        if (m_commandHistory.empty())
+        if (m_historyIndex < 0)
         {
             return;
         }
 
-        m_historyIndex--;
-        if (m_historyIndex < 0)
+        m_historyIndex++;
+        if (m_historyIndex >= static_cast<int>(m_commandHistory.size()))
         {
             m_historyIndex = -1;
             m_currentInput.clear();
             m_cursorPosition = 0;
         }
-        else if (m_historyIndex < static_cast<int>(m_commandHistory.size()))
+        else
         {
-            // Get command from history (reverse order, most recent first)
-            m_currentInput   = m_commandHistory[m_commandHistory.size() - m_historyIndex - 1];
+            m_currentInput   = m_commandHistory[m_historyIndex];
             m_cursorPosition = static_cast<int>(m_currentInput.length());
         }
-
         UpdateInputDisplay();
     }
 
     void ConsoleSubsystem::HandlePaste()
     {
-        // Use Windows clipboard API to get clipboard text
+#ifdef _WIN32
         if (!OpenClipboard(nullptr))
         {
             return;
         }
 
         HANDLE hData = GetClipboardData(CF_TEXT);
-        if (hData == nullptr)
+        if (hData)
         {
-            CloseClipboard();
-            return;
+            const char* pszText = static_cast<const char*>(GlobalLock(hData));
+            if (pszText)
+            {
+                std::string pasteText(pszText);
+                GlobalUnlock(hData);
+
+                // Insert at cursor position
+                m_currentInput.insert(m_cursorPosition, pasteText);
+                m_cursorPosition += static_cast<int>(pasteText.length());
+                UpdateInputDisplay();
+            }
         }
 
-        char* pszText = static_cast<char*>(GlobalLock(hData));
-        if (pszText == nullptr)
-        {
-            CloseClipboard();
-            return;
-        }
-
-        // Insert clipboard text at cursor position
-        std::string clipboardText(pszText);
-        m_currentInput.insert(m_cursorPosition, clipboardText);
-        m_cursorPosition += static_cast<int>(clipboardText.length());
-
-        GlobalUnlock(hData);
         CloseClipboard();
-
-        UpdateInputDisplay();
+#endif
     }
-
 
     void ConsoleSubsystem::UpdateInputDisplay()
     {
-        if (m_externalConsole)
+        if (!m_externalConsole)
         {
-            m_externalConsole->UpdateInputLine(m_currentInput, m_cursorPosition);
+            return;
         }
+
+        m_externalConsole->UpdateInputLine(m_currentInput, m_cursorPosition);
     }
 } // namespace enigma::core
