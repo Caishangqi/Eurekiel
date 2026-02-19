@@ -3,11 +3,14 @@
 #include <windows.h>
 
 #include "Engine/Core/Event/StringEventBus.hpp"
+#include "Engine/Core/Event/MulticastDelegate.hpp"
 #include "Engine/Input/XboxController.hpp"
 #include "Engine/Math/IntVec2.hpp"
 
-// Import EventArgs type alias for legacy compatibility
+// Import types for legacy compatibility
 using enigma::event::EventArgs;
+using enigma::event::MulticastDelegate;
+using enigma::event::DelegateHandle;
 
 /**
  * An InputSystem instance should be owned (created, managed, destroyed) by the App, much like Renderer.
@@ -72,11 +75,19 @@ struct InputSystemConfig
 
 class InputSystem
 {
-    /// Event
+    /// Legacy static event handlers
 public:
     static bool Event_KeyPressed(EventArgs& args);
     static bool Event_KeyReleased(EventArgs& args);
-    /// 
+    static bool Event_CharInput(EventArgs& args);
+
+    /// MulticastDelegate events for key/char input
+    /// Coexists with legacy FireEvent system for gradual migration
+    MulticastDelegate<unsigned char> OnKeyPressed;
+    MulticastDelegate<unsigned char> OnKeyReleased;
+    MulticastDelegate<unsigned char> OnCharInput;
+
+    ///
     InputSystem(const InputSystemConfig& config);
     ~InputSystem();
 
@@ -110,6 +121,7 @@ public:
     bool                  IsKeyDown(unsigned char keyCode);
     void                  HandleKeyPressed(unsigned char keyCode);
     void                  HandleKeyReleased(unsigned char keyCode);
+    void                  HandleCharInput(unsigned char character);
     const XboxController& GetController(unsigned char controllerIndex);
 
     void HandleMouseButtonPressed(unsigned char keyCode);

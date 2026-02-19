@@ -28,6 +28,17 @@ bool InputSystem::Event_KeyReleased(EventArgs& args)
     return true;
 }
 
+bool InputSystem::Event_CharInput(EventArgs& args)
+{
+    if (!g_theInput)
+    {
+        return false;
+    }
+    unsigned char character = static_cast<unsigned char>(args.GetValue("KeyCode", -1));
+    g_theInput->HandleCharInput(character);
+    return true;
+}
+
 InputSystem::InputSystem(const InputSystemConfig& config)
 {
     m_inputConfig = config;
@@ -46,6 +57,7 @@ void InputSystem::Startup()
     printf("InputSystem::Startup    Initialize input system\n");
     g_theEventSubsystem->SubscribeStringEvent("KeyPressed", Event_KeyPressed);
     g_theEventSubsystem->SubscribeStringEvent("KeyReleased", Event_KeyReleased);
+    g_theEventSubsystem->SubscribeStringEvent("CharInput", Event_CharInput);
 }
 
 void InputSystem::Shutdown()
@@ -118,7 +130,7 @@ void InputSystem::EndFrame()
         m_keyStates[keyIndex].m_wasPressedLastFrame = m_keyStates[keyIndex].m_isPressed;
     }
 
-    m_mouseWheelDelta = 0; // 重置鼠标滚轮增量
+    m_mouseWheelDelta = 0; // Reset mouse wheel delta
 }
 
 void InputSystem::SetCursorMode(CursorMode cursorMode)
@@ -179,11 +191,18 @@ bool InputSystem::IsKeyDown(unsigned char keyCode)
 void InputSystem::HandleKeyPressed(unsigned char keyCode)
 {
     m_keyStates[keyCode].m_isPressed = true;
+    OnKeyPressed.Broadcast(keyCode);
 }
 
 void InputSystem::HandleKeyReleased(unsigned char keyCode)
 {
     m_keyStates[keyCode].m_isPressed = false;
+    OnKeyReleased.Broadcast(keyCode);
+}
+
+void InputSystem::HandleCharInput(unsigned char character)
+{
+    OnCharInput.Broadcast(character);
 }
 
 const XboxController& InputSystem::GetController(unsigned char controllerIndex)
@@ -230,28 +249,28 @@ Vec2 InputSystem::GetMousePosition() const
 
 Vec2 InputSystem::GetMousePositionOnWorld(Vec2& cameraBottomLeft, Vec2& cameraTopRight) const
 {
-    // 获取屏幕上的鼠标位置
+    // Get mouse position on screen
     Vec2 mouseScreenPos = GetMousePosition();
 
     auto windowHandle = static_cast<HWND>(Window::s_mainWindow->GetWindowHandle());
 
-    // 获取窗口客户区域的宽度和高度
+    // Get client area width and height
     RECT clientRect;
     GetClientRect(windowHandle, &clientRect);
 
     float clientWidth  = static_cast<float>(clientRect.right - clientRect.left);
     float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top);
 
-    // 获取客户区域左上角相对于屏幕的位置
+    // Get client area top-left position relative to screen
     POINT clientTopLeft = {0, 0};
     ClientToScreen(windowHandle, &clientTopLeft);
     //printf("clientTopLeft: x: %f y: %f\n", static_cast<float>(clientTopLeft.x), static_cast<float>(clientTopLeft.y));
 
-    // 调整鼠标位置以考虑客户区域在屏幕上的位置
+    // Adjust mouse position to account for client area offset on screen
     mouseScreenPos.x -= static_cast<float>(clientTopLeft.x);
     mouseScreenPos.y -= static_cast<float>(clientTopLeft.y);
 
-    // 将鼠标屏幕位置映射到世界坐标系
+    // Map mouse screen position to world coordinates
     float worldX = RangeMapClamped(mouseScreenPos.x + static_cast<float>(clientTopLeft.x), 0.0f, clientWidth,
                                    cameraBottomLeft.x, cameraTopRight.x);
     float worldY = RangeMapClamped(mouseScreenPos.y + static_cast<float>(clientTopLeft.y), 0.0f, clientHeight,
