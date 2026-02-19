@@ -3,6 +3,8 @@
 #include <vector>
 #include <filesystem>
 
+#include "Engine/Core/Buffer/ByteBuffer.hpp"
+
 int FileReadToBuffer(std::vector<uint8_t>& outBuffer, const std::string& filename);
 int FileReadToString(std::string& outString, const std::string& filename);
 
@@ -27,4 +29,11 @@ public:
     static std::filesystem::path CombinePath(
         const std::filesystem::path& base,
         const std::string&           relative);
+
+    // [NEW] ByteBuffer file I/O - Binary read/write with FileIOException on failure
+    static void WriteBufferToFile(const enigma::core::ByteBuffer& buf,
+                                  const std::filesystem::path& filePath);
+    static enigma::core::ByteArray ReadFileToBuffer(const std::filesystem::path& filePath);
+    static void AppendBufferToFile(const enigma::core::ByteBuffer& buf,
+                                   const std::filesystem::path& filePath);
 };

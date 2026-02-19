@@ -1,9 +1,11 @@
 ﻿#include "FileSystemHelper.hpp"
 
+#include <fstream>
 #include <iostream>
 
 #include "ErrorWarningAssert.hpp"
 #include "StringUtils.hpp"
+#include "Engine/Core/Buffer/BufferExceptions.hpp"
 
 int FileReadToBuffer(std::vector<uint8_t>& outBuffer, const std::string& filename)
 {
@@ -101,4 +103,61 @@ std::filesystem::path FileSystemHelper::CombinePath(
     const std::string&           relative)
 {
     return (base / relative).lexically_normal();
+}
+
+// -----------------------------------------------------------------------------
+// [NEW] ByteBuffer file I/O
+// -----------------------------------------------------------------------------
+
+void FileSystemHelper::WriteBufferToFile(const enigma::core::ByteBuffer& buf,
+                                         const std::filesystem::path& filePath)
+{
+    std::ofstream ofs(filePath, std::ios::binary | std::ios::trunc);
+    if (!ofs.is_open())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to open file for writing");
+    }
+
+    ofs.write(reinterpret_cast<const char*>(buf.Data()), static_cast<std::streamsize>(buf.WrittenBytes()));
+    if (!ofs.good())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to write buffer data to file");
+    }
+}
+
+enigma::core::ByteArray FileSystemHelper::ReadFileToBuffer(const std::filesystem::path& filePath)
+{
+    std::ifstream ifs(filePath, std::ios::binary | std::ios::ate);
+    if (!ifs.is_open())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to open file for reading");
+    }
+
+    std::streamsize fileSize = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+
+    enigma::core::ByteArray data(static_cast<size_t>(fileSize));
+    ifs.read(reinterpret_cast<char*>(data.data()), fileSize);
+    if (!ifs.good())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to read file contents");
+    }
+
+    return data;
+}
+
+void FileSystemHelper::AppendBufferToFile(const enigma::core::ByteBuffer& buf,
+                                          const std::filesystem::path& filePath)
+{
+    std::ofstream ofs(filePath, std::ios::binary | std::ios::app);
+    if (!ofs.is_open())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to open file for appending");
+    }
+
+    ofs.write(reinterpret_cast<const char*>(buf.Data()), static_cast<std::streamsize>(buf.WrittenBytes()));
+    if (!ofs.good())
+    {
+        throw enigma::core::FileIOException(filePath.string(), "Failed to append buffer data to file");
+    }
 }
