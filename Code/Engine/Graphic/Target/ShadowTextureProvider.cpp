@@ -485,10 +485,6 @@ namespace enigma::graphic
 
         // Upload to GPU via UniformManager
         m_uniformManager->UploadBuffer(m_indexBuffer);
-
-        LogDebug(LogRenderTargetProvider,
-                 "ShadowTextureProvider::UpdateIndices - Uploaded %d shadowtex indices",
-                 m_activeCount);
     }
 
     // ============================================================================

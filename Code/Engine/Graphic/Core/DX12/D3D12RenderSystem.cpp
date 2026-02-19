@@ -123,7 +123,7 @@ namespace enigma::graphic
             s_commandListManager.reset();
             return false;
         }
-        
+
         // 5. Create SwapChain (if window handle is provided)
         if (hwnd)
         {
@@ -136,12 +136,12 @@ namespace enigma::graphic
             }
             else
             {
-                core::LogInfo(LogRenderer,"D3D12RenderSystem initialized successfully with SwapChain (%dx%d)",renderWidth, renderHeight);
+                core::LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully with SwapChain (%dx%d)", renderWidth, renderHeight);
             }
         }
         else
         {
-            core::LogInfo(LogRenderer,"D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
+            core::LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully (no SwapChain - headless mode)");
         }
 
         s_isInitialized = true;
@@ -233,17 +233,14 @@ namespace enigma::graphic
         if (s_defaultWhiteTexture)
         {
             s_defaultWhiteTexture.reset();
-            core::LogDebug(LogRenderer, "Default white texture released");
         }
         if (s_defaultBlackTexture)
         {
             s_defaultBlackTexture.reset();
-            core::LogDebug(LogRenderer, "Default black texture released");
         }
         if (s_defaultNormalTexture)
         {
             s_defaultNormalTexture.reset();
-            core::LogDebug(LogRenderer, "Default normal texture released");
         }
 
         // 3. Clean up SM6.6 Bindless components (Milestone 2.7)
@@ -726,18 +723,11 @@ namespace enigma::graphic
                 auto cachedTexture = it->second.lock();
                 if (cachedTexture)
                 {
-                    LogDebug(LogRenderer,
-                             "CreateTexture2D(ResourceLocation): Cache hit for '%s'",
-                             resourceLocation.ToString().c_str());
                     return cachedTexture;
                 }
                 else
                 {
-                    // weak_ptr已过期，从缓存中移除
                     s_textureCache.erase(it);
-                    LogDebug(LogRenderer,
-                             "CreateTexture2D(ResourceLocation): Expired cache entry removed for '%s'",
-                             resourceLocation.ToString().c_str());
                 }
             }
         }
@@ -1287,31 +1277,17 @@ namespace enigma::graphic
         const char*                debugName
     )
     {
-        // [REQUIRED] 参数验证
-        if (!cmdList)
-        {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] TransitionResource failed: cmdList is nullptr");
-            return;
-        }
-
         if (!resource)
         {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] TransitionResource failed: resource is nullptr");
-            return;
+            ERROR_AND_DIE("ResourceBarrier:: TransitionResource failed: resource is nullptr")
         }
 
-        // [OPTIMIZATION] 状态相同检查 - 避免不必要的转换
         if (stateBefore == stateAfter)
         {
-            core::LogWarn(LogRenderer,
-                          "[ResourceBarrier] TransitionResource skipped: stateBefore == stateAfter (0x%X), resource: %s",
-                          stateBefore, debugName ? debugName : "Unknown");
+            core::LogWarn(LogRenderer,  "ResourceBarrier:: TransitionResource skipped: stateBefore == stateAfter (0x%X), resource: %s",stateBefore, debugName ? debugName : "Unknown");
             return;
         }
 
-        // [OK] 构造ResourceBarrier
         D3D12_RESOURCE_BARRIER barrier = {};
         barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -1320,31 +1296,7 @@ namespace enigma::graphic
         barrier.Transition.StateAfter  = stateAfter;
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        // [OK] 执行ResourceBarrier
-        try
-        {
-            cmdList->ResourceBarrier(1, &barrier);
-
-            // [DONE] 详细日志记录
-            if (debugName)
-            {
-                core::LogInfo(LogRenderer,
-                              "[ResourceBarrier] Transitioned '%s': 0x%X -> 0x%X",
-                              debugName, stateBefore, stateAfter);
-            }
-            else
-            {
-                core::LogInfo(LogRenderer,
-                              "[ResourceBarrier] Transitioned resource: 0x%X -> 0x%X",
-                              stateBefore, stateAfter);
-            }
-        }
-        catch (...)
-        {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] Exception during TransitionResource for '%s'",
-                           debugName ? debugName : "Unknown");
-        }
+        cmdList->ResourceBarrier(1, &barrier);
     }
 
     void D3D12RenderSystem::TransitionResources(
@@ -1354,58 +1306,9 @@ namespace enigma::graphic
         const char*                debugContext
     )
     {
-        // [REQUIRED] 参数验证
-        if (!cmdList)
-        {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] TransitionResources failed: cmdList is nullptr");
-            return;
-        }
-
-        if (!barriers)
-        {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] TransitionResources failed: barriers is nullptr");
-            return;
-        }
-
-        if (numBarriers == 0)
-        {
-            core::LogWarn(LogRenderer,
-                          "[ResourceBarrier] TransitionResources called with numBarriers = 0, context: %s",
-                          debugContext ? debugContext : "Unknown");
-            return;
-        }
-
-        // [OK] 执行批量ResourceBarrier
-        try
-        {
-            cmdList->ResourceBarrier(numBarriers, barriers);
-
-            // [DONE] 批量转换日志
-            if (debugContext)
-            {
-                core::LogInfo(LogRenderer,
-                              "[ResourceBarrier] Batch transition completed: %u barriers, context: '%s'",
-                              numBarriers, debugContext);
-            }
-            else
-            {
-                core::LogInfo(LogRenderer,
-                              "[ResourceBarrier] Batch transition completed: %u barriers",
-                              numBarriers);
-            }
-        }
-        catch (...)
-        {
-            core::LogError(LogRenderer,
-                           "[ResourceBarrier] Exception during TransitionResources, context: '%s', numBarriers: %u",
-                           debugContext ? debugContext : "Unknown", numBarriers);
-        }
+        UNUSED(debugContext)
+        cmdList->ResourceBarrier(numBarriers, barriers);
     }
-
-    // ===== Buffer管理API实现 - 细粒度操作 (Milestone M2新增) =====
-
     void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)
     {
         if (!s_currentGraphicsCommandList)
@@ -1414,8 +1317,6 @@ namespace enigma::graphic
                            "BindVertexBuffer: No active graphics command list (call BeginFrame first)");
             return;
         }
-
-        // 绑定VertexBuffer到指定槽位
         s_currentGraphicsCommandList->IASetVertexBuffers(slot, 1, &bufferView);
     }
 
@@ -1511,14 +1412,9 @@ namespace enigma::graphic
             return false;
         }
 
-        // 1. 准备下一帧 (更新SwapChain缓冲区索引)
         PrepareNextFrame();
 
-        LogInfo(LogRenderer,
-                "BeginFrame - SwapChain Buffer Index: %u", s_currentBackBufferIndex);
-
-        // 2. 获取当前帧的图形命令列表（M2灵活渲染架构）
-        // 教学要点：保持CommandList打开状态，用于后续的绘制操作
+        // LogInfo(LogRenderer,"BeginFrame - SwapChain Buffer Index: %u", s_currentBackBufferIndex);
         s_currentGraphicsCommandList = s_commandListManager->AcquireCommandList(
             CommandListManager::Type::Graphics,
             "MainFrame Graphics Commands"
@@ -1530,17 +1426,9 @@ namespace enigma::graphic
             return false;
         }
 
-        // 2.5 绑定全局Descriptor Heaps（SM6.6 Bindless必需）
-        // 教学要点：
-        // 1. 使用DIRECTLY_INDEXED标志的Root Signature必须先绑定Heaps
-        // 2. 每次获取新CommandList后都要重新绑定（CommandList状态不保留）
-        // 3. SetDescriptorHeaps会同时绑定CBV/SRV/UAV堆和Sampler堆
-        // 4. 必须在任何SetGraphicsRootSignature()调用之前完成
         if (s_globalDescriptorHeapManager)
         {
             s_globalDescriptorHeapManager->SetDescriptorHeaps(s_currentGraphicsCommandList);
-            LogInfo(LogRenderer,
-                    "BeginFrame: Descriptor Heaps bound to CommandList");
         }
         else
         {
@@ -1548,31 +1436,6 @@ namespace enigma::graphic
                     "BeginFrame: GlobalDescriptorHeapManager is null - Bindless features may not work");
         }
 
-        // 2. 转换资源状态：PRESENT → RENDER_TARGET
-        //
-        // Bug Fix (2025-10-21 最终修复): 必须显式添加资源 barrier
-        //
-        // 根本原因：
-        // - DirectX 12 **不会**自动转换 SwapChain buffer 的资源状态
-        // - ClearRenderTargetView() 要求资源处于 RENDER_TARGET 状态
-        // - Present() 要求资源处于 PRESENT/COMMON 状态
-        // - 必须手动转换状态，否则会导致 D3D12 ERROR: INVALID_SUBRESOURCE_STATE
-        //
-        // 错误日志证据：
-        // - "Resource state (0x0: D3D12_RESOURCE_STATE_[COMMON|PRESENT]) is invalid for use as a render target"
-        // - "Expected State Bits: 0x4: D3D12_RESOURCE_STATE_RENDER_TARGET"
-        //
-        // DirectX 12 资源状态管理规则：
-        // 1. 开发者负责显式管理所有资源状态转换
-        // 2. 使用 ResourceBarrier() 转换状态
-        // 3. SwapChain buffer 需要在渲染前转到 RENDER_TARGET
-        // 4. SwapChain buffer 需要在 Present 前转回 PRESENT/COMMON
-        //
-        // 参考资料：
-        // - DirectX 12 Programming Guide: Resource Barriers
-        // - Microsoft D3D12HelloTriangle 示例确实有 barrier
-        //
-        // 结论：必须添加显式资源 barrier
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {
@@ -1584,7 +1447,6 @@ namespace enigma::graphic
                            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
                            "SwapChain BackBuffer");
 
-        // 3. 清除渲染目标（使用当前CommandList）
         auto currentRTV = GetCurrentSwapChainRTV();
 
         if (!ClearRenderTarget(s_currentGraphicsCommandList, &currentRTV, clearColor))
@@ -1593,36 +1455,6 @@ namespace enigma::graphic
             return false;
         }
 
-        // 3.5 [REMOVED] 不再在 BeginFrame 中绑定 RenderTarget
-        //
-        // 架构变更说明（2025-11-10）：
-        // - 旧设计：BeginFrame 通过 OMSetRenderTargets 绑定 SwapChain BackBuffer
-        // - 新设计：BeginFrame 不绑定任何 RT，所有 RT 绑定由 UseProgram() 统一处理
-        //
-        // 设计原因：
-        // 1. 职责单一原则（SRP）：BeginFrame 只负责帧初始化（清屏、状态转换、Viewport）
-        // 2. 避免冗余绑定：UseProgram 通过 RenderTargetBinder 的 Hash 缓存优化（70%+ 命中率）
-        // 3. 灵活性：支持动态 RT 切换（GBuffer、Shadow Map、Post-processing）
-        // 4. 架构一致性：所有 RT 绑定集中在一个地方，便于维护和调试
-        //
-        // RT 绑定流程（新架构）：
-        // - BeginFrame()：清屏 + 状态转换（PRESENT → RENDER_TARGET）
-        // - UseProgram()：根据 Shader 需求动态绑定 RT（通过 RenderTargetBinder）
-        // - EndFrame()：状态转换（RENDER_TARGET → PRESENT）+ Present
-        //
-        // 教学价值：
-        // - 展示了如何通过重构改进架构设计
-        // - 体现了 SOLID 原则在实际项目中的应用
-        // - 说明了性能优化（Hash 缓存）与架构清晰度的平衡
-        //
-        // 参考：
-        // - RendererSubsystem::UseProgram() - RT 绑定的实际位置
-        // - RenderTargetBinder - Hash 缓存实现（95-98% 命中率）
-
-        // 4. 设置视口（Viewport）
-        // 教学要点：Viewport定义NDC坐标到屏幕像素坐标的映射
-        // 教学要点：未设置Viewport会导致三角形被裁剪到空区域
-        // 教学要点：每次获取新CommandList后必须重新设置（状态不保留）
         D3D12_VIEWPORT viewport = {};
         viewport.TopLeftX       = 0.0f;
         viewport.TopLeftY       = 0.0f;
@@ -1632,10 +1464,6 @@ namespace enigma::graphic
         viewport.MaxDepth       = 1.0f;
         s_currentGraphicsCommandList->RSSetViewports(1, &viewport);
 
-        // 5. 设置裁剪矩形（Scissor Rect）
-        // 教学要点：ScissorRect定义像素级别的裁剪区域
-        // 教学要点：超出此矩形的像素会被丢弃
-        // 教学要点：DirectX 12必须显式设置ScissorRect，否则无法渲染
         D3D12_RECT scissorRect = {};
         scissorRect.left       = 0;
         scissorRect.top        = 0;
@@ -1643,9 +1471,9 @@ namespace enigma::graphic
         scissorRect.bottom     = static_cast<LONG>(s_swapChainHeight);
         s_currentGraphicsCommandList->RSSetScissorRects(1, &scissorRect);
 
-        LogInfo(LogRenderer,
+        /*LogInfo(LogRenderer,
                 "BeginFrame: Viewport and ScissorRect set (%ux%u)",
-                s_swapChainWidth, s_swapChainHeight);
+                s_swapChainWidth, s_swapChainHeight);*/
         return true;
     }
 
@@ -1681,7 +1509,7 @@ namespace enigma::graphic
                      "EndFrame: SwapChain not initialized");
             return false;
         }
-        
+
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {

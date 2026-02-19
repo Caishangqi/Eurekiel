@@ -142,11 +142,6 @@ namespace enigma::graphic
         const RasterizationConfig& rasterizationConfig
     )
     {
-        // [DIAGNOSTIC] Log input stencil configuration
-        LogInfo("PSOManager", "[GetOrCreatePSO] stencil.enable=%d, func=%d, passOp=%d, writeMask=0x%02X",
-                stencilDetail.enable, stencilDetail.stencilFunc, stencilDetail.stencilPassOp, stencilDetail.stencilWriteMask);
-
-        // 1. Build PSOKey
         PSOKey key;
         key.shaderProgram = shaderProgram;
         key.vertexLayout  = layout; // [NEW] Set vertex layout
@@ -164,11 +159,8 @@ namespace enigma::graphic
         auto it = m_psoCache.find(key);
         if (it != m_psoCache.end())
         {
-            LogInfo("PSOManager", "[PSO Cache HIT] Returning cached PSO");
             return it->second.Get();
         }
-
-        LogInfo("PSOManager", "[PSO Cache MISS] Creating new PSO");
 
         // 3. Create a new PSO
         auto pso = CreatePSO(key);

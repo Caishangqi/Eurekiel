@@ -20,16 +20,13 @@ namespace enigma::core
         MessageLogSubsystem();
         ~MessageLogSubsystem() override;
 
-        // EngineSubsystem接口实现
         void Initialize() override;
         void Startup() override;
         void Shutdown() override;
         void Update(float deltaTime) override;
 
-        // 子系统信息
-        DECLARE_SUBSYSTEM(MessageLogSubsystem, "MessageLogSubsystem", 300);
+        DECLARE_SUBSYSTEM(MessageLogSubsystem, "MessageLogSubsystem", 300)
 
-        // 需要每帧更新（检测~键）
         bool RequiresGameLoop() const override { return true; }
         bool RequiresInitialize() const override { return true; }
 

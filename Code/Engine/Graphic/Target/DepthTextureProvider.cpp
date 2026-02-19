@@ -129,11 +129,6 @@ namespace enigma::graphic
 
         // Get command list
         ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-        if (!cmdList)
-        {
-            LogWarn(LogRenderTargetProvider, "Clear: No active command list");
-            return;
-        }
 
         // Clear depth value (first float is depth, second is stencil if provided)
         float depthValue   = clearValue ? clearValue[0] : 1.0f;
@@ -357,10 +352,6 @@ namespace enigma::graphic
 
         // Upload to GPU
         m_uniformManager->UploadBuffer(m_indexBuffer);
-
-        LogDebug(LogRenderTargetProvider,
-                 "DepthTextureProvider::UpdateIndices - Uploaded %d depthtex indices",
-                 m_activeCount);
     }
 
     // ============================================================================

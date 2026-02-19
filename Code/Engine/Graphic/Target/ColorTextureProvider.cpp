@@ -237,18 +237,8 @@ namespace enigma::graphic
             m_renderTargets[index]->Upload();
             m_renderTargets[index]->RegisterBindless();
 
-            LogInfo(LogRenderTargetProvider,
-                    "ColorTextureProvider:: Rebuilt colortex%d (format changed to %d)",
-                    index, static_cast<int>(config.format));
-
             // Re-upload indices after resource recreation
             UpdateIndices();
-        }
-        else
-        {
-            LogDebug(LogRenderTargetProvider,
-                     "ColorTextureProvider:: Updated colortex%d config (no rebuild needed)",
-                     index);
         }
     }
 
@@ -334,8 +324,6 @@ namespace enigma::graphic
 
         // Upload to GPU via UniformManager
         m_uniformManager->UploadBuffer(m_indexBuffer);
-
-        LogDebug(LogRenderTargetProvider, "ColorTextureProvider::UpdateIndices - Uploaded %d colortex indices", m_activeCount);
     }
 
     // ============================================================================

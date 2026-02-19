@@ -75,9 +75,6 @@ namespace enigma::graphic
 
         // Update index buffer (bindless index may have changed)
         UpdateIndices();
-
-        LogDebug(LogSamplerProvider,
-                 "SamplerProvider:: Updated sampler%u config", index);
     }
 
     const SamplerConfig& SamplerProvider::GetSamplerConfig(uint32_t index) const
@@ -118,10 +115,6 @@ namespace enigma::graphic
             BufferSpace::Engine
         );
 
-        LogInfo(LogSamplerProvider,
-                "SamplerProvider::RegisterUniform - Registered at slot b%u",
-                SLOT_SAMPLER_INDICES);
-
         // Initial upload of indices
         UpdateIndices();
     }
@@ -145,10 +138,6 @@ namespace enigma::graphic
 
         // Upload to GPU via UniformManager
         m_uniformManager->UploadBuffer(m_indexBuffer);
-
-        LogDebug(LogSamplerProvider,
-                 "SamplerProvider::UpdateIndices - Uploaded %u sampler indices",
-                 m_activeCount);
     }
 
     // ============================================================================

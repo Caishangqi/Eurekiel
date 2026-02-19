@@ -457,15 +457,7 @@ std::optional<uint32_t> D12RenderTarget::RegisterBindless()
             return std::nullopt;
         }
     }
-
-    // 3. 返回主纹理索引（与基类签名一致）
-    // 注意: RenderTarget本身不需要分配Bindless索引
-    // 只有内部纹理需要索引，RenderTarget作为容器管理这些索引
-    core::LogDebug(RendererSubsystem::GetStaticSubsystemName(),
-                   "RegisterBindless: RenderTarget '%s' registered (main=%u, alt=%u)",
-                   m_debugName.c_str(), m_mainTextureIndex, m_altTextureIndex);
-
-    return m_mainTextureIndex; // 返回主纹理索引
+    return m_mainTextureIndex;
 }
 
 bool D12RenderTarget::IsValid() const

@@ -101,7 +101,7 @@ void RendererSubsystem::Initialize()
     // Create PSOManager
     m_psoManager = std::make_unique<PSOManager>();
     LogInfo(LogRenderer, "PSOManager created successfully");
-    
+
     g_theRendererSubsystem = this;
 }
 
@@ -1509,60 +1509,34 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     case RenderTargetType::ShadowTex: rtTypeName = "shadowtex";
         break;
     }
-
-    LogInfo(LogRenderer, "PresentRenderTarget: Successfully copied %s%d to BackBuffer",
-            rtTypeName, rtIndex);
 }
 
 void RendererSubsystem::SetBlendConfig(const BlendConfig& config)
 {
-    // [NEW] Dynamic Sampler System - BlendConfig API
-    // Skip if config unchanged
     if (m_currentBlendConfig == config)
     {
         return;
     }
-
     m_currentBlendConfig = config;
-    LogDebug(LogRenderer, "SetBlendConfig: enabled=%d, srcBlend=%d, destBlend=%d",
-             config.blendEnabled, static_cast<int>(config.srcBlend), static_cast<int>(config.destBlend));
 }
 
 void RendererSubsystem::SetSamplerConfig(uint32_t index, const SamplerConfig& config)
 {
-    // [NEW] Dynamic Sampler System - Delegate to SamplerProvider
-    if (!m_samplerProvider)
-    {
-        LogWarn(LogRenderer, "SetSamplerConfig: SamplerProvider not initialized");
-        return;
-    }
-
     m_samplerProvider->SetSamplerConfig(index, config);
-    LogDebug(LogRenderer, "SetSamplerConfig: Updated sampler%u", index);
 }
 
 void RendererSubsystem::SetDepthConfig(const DepthConfig& config)
 {
-    // 避免重复设置
     if (m_currentDepthConfig == config)
     {
         return;
     }
-
     m_currentDepthConfig = config;
-    LogDebug(LogRenderer, "SetDepthConfig: test=%d, write=%d, func=%d",
-             config.depthTestEnabled, config.depthWriteEnabled, static_cast<int>(config.depthFunc));
 }
 
 void RendererSubsystem::SetStencilTest(const StencilTestDetail& detail)
 {
     m_currentStencilTest = detail;
-
-    // [IMPORTANT] Stencil configuration is part of PSO (immutable state)
-    // Changing it requires PSO rebuild. Next UseProgram() will create new PSO
-    // with updated stencil settings via PSOManager.
-
-    LogDebug(LogRenderer, "SetStencilTest: Stencil state updated (enable={})", detail.enable);
 }
 
 void RendererSubsystem::SetStencilRefValue(uint8_t refValue)
@@ -1676,7 +1650,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
         return;
     }
 
-    LogInfo(LogRenderer, "DrawVertexArray:: called, count=%zu, offset=%zu",
+    LogDebug(LogRenderer, "DrawVertexArray:: called, count=%zu, offset=%zu",
             count, m_immediateVertexRingBuffer->GetCurrentOffset());
 
     // [NEW] Use RingBuffer wrapper API (Option D Architecture)
@@ -1703,9 +1677,6 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         ERROR_RECOVERABLE("DrawVertexArray:: Immediate RingBuffers not initialized");
         return;
     }
-
-    LogInfo(LogRenderer, "[2-PARAM] DrawVertexArray called, vertexCount=%zu, indexCount=%zu", vertexCount, indexCount);
-
     if (!vertices || vertexCount == 0 || !indices || indexCount == 0)
     {
         ERROR_RECOVERABLE("DrawVertexArray:: Invalid vertex or index data")

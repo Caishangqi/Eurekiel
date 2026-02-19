@@ -193,9 +193,6 @@ namespace enigma::graphic
         }
 
         ++m_totalBindCalls;
-
-        LogDebug("RenderTargetBinder", "BindRenderTargets: %zu RTVs, hasDepth=%d, Hash=0x%08X",
-                 m_pendingState.rtvHandles.size(), m_hasDepthBinding ? 1 : 0, m_pendingState.stateHash);
     }
 
     IRenderTargetProvider* RenderTargetBinder::GetProvider(RenderTargetType rtType)
@@ -251,8 +248,6 @@ namespace enigma::graphic
         if (newHash == m_currentState.stateHash && newHash != 0)
         {
             ++m_cacheHitCount;
-            LogDebug("RenderTargetBinder", "FlushBindings: Cache HIT (Hash=0x%08X), skipping OMSetRenderTargets",
-                     newHash);
             return; // Early exit optimization
         }
 
@@ -283,10 +278,6 @@ namespace enigma::graphic
         // Update current state
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
-
-        LogDebug("RenderTargetBinder", "FlushBindings: OMSetRenderTargets called (%u RTVs, Hash=0x%08X)",
-                 numRTVs, newHash);
-
         // Perform clear operations (if LoadAction is Clear)
         PerformClearOperations(cmdList);
     }
@@ -324,10 +315,6 @@ namespace enigma::graphic
         // Update current state
         m_currentState = m_pendingState;
         ++m_actualBindCalls;
-
-        LogDebug("RenderTargetBinder", "ForceFlushBindings: OMSetRenderTargets called (%u RTVs, forced)",
-                 numRTVs);
-
         // Perform clear operations (if LoadAction is Clear)
         PerformClearOperations(cmdList);
     }
@@ -418,9 +405,6 @@ namespace enigma::graphic
             }
 
             cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
-            LogDebug("RenderTargetBinder", "Cleared RTV[%zu] to color (%f, %f, %f, %f)",
-                     i, clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
         }
 
         // Clear DSV (if exists)
@@ -436,10 +420,6 @@ namespace enigma::graphic
                 0,
                 nullptr
             );
-
-            LogDebug("RenderTargetBinder", "Cleared DSV to depth=%f, stencil=%u",
-                     m_pendingState.depthClearValue.depthStencil.depth,
-                     m_pendingState.depthClearValue.depthStencil.stencil);
         }
     }
 

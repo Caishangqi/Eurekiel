@@ -693,19 +693,7 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(Type type, con
     std::lock_guard<std::mutex> lock(m_mutex);
 
     const char* typeName = GetTypeName(type);
-    enigma::core::LogInfo(LogRenderer,
-                          "AcquireCommandList() - type=%s, debugName='%s'", typeName, debugName.c_str());
 
-    if (!m_initialized)
-    {
-        enigma::core::LogError(LogRenderer,
-                               "- AcquireCommandList failed - CommandListManager not initialized");
-        return nullptr;
-    }
-
-    // 注意：命令列表回收现在在EndFrame阶段统一处理，保持架构清晰
-
-    // 获取对应类型的空闲队列
     auto& availableQueue = GetAvailableQueue(type);
     if (availableQueue.empty())
     {
@@ -716,42 +704,29 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(Type type, con
         return nullptr;
     }
 
-    enigma::core::LogInfo(LogRenderer,
-                          "Found %zu available %s command lists in queue", availableQueue.size(), typeName);
-
-    // 从队列中取出一个可用的命令列表
     CommandListWrapper* wrapper = availableQueue.front();
     availableQueue.pop();
 
     assert(wrapper != nullptr);
     assert(wrapper->state == State::Closed);
-
-    // 重置命令分配器 - 清空之前录制的所有命令
-    // 教学要点: 必须确保GPU已完成使用此分配器的所有命令
+    
     HRESULT hr = wrapper->commandAllocator->Reset();
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令分配器重置失败
-        // 将命令列表放回队列
         availableQueue.push(wrapper);
         return nullptr;
     }
-
-    // 重置命令列表 - 准备录制新的命令
-    // 教学要点: Reset使命令列表进入Recording状态
+    
     hr = wrapper->commandList->Reset(wrapper->commandAllocator.Get(), nullptr);
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令列表重置失败
         availableQueue.push(wrapper);
         return nullptr;
     }
 
-    // 更新状态
     wrapper->state      = State::Recording;
-    wrapper->fenceValue = 0; // 将在ExecuteCommandList中设置
+    wrapper->fenceValue = 0;
 
-    // 设置调试名称 (如果提供)
     if (!debugName.empty())
     {
         wrapper->debugName = debugName;
@@ -1131,52 +1106,19 @@ uint64_t CommandListManager::GetCompletedFenceValue() const
     return minCompletedValue;
 }
 
-// ========================================================================
-// 资源管理和维护接口实现
-// ========================================================================
-
-/**
- * @brief 回收已完成的命令列表
- *
- * 教学要点:
- * 1. 每帧在EndFrame中调用一次，确保资源及时回收
- * 2. 线程安全设计，支持多线程环境
- * 3. 这是DirectX 12资源池化的核心机制
- *
- *  Milestone 2.8: 检查每个wrapper对应的Fence - 三个独立Fence架构
- */
 void CommandListManager::UpdateCompletedCommandLists()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    // 🔍 DEBUG: 记录调用
-    enigma::core::LogInfo(LogRenderer,
-                          "UpdateCompletedCommandLists() called - ExecutingCount=%zu",
-                          m_executingLists.size());
-
     if (m_executingLists.empty())
     {
-        enigma::core::LogInfo(LogRenderer,
-                              "UpdateCompletedCommandLists() - No executing lists, skipping");
         return;
     }
-
     size_t recycledCount = 0;
 
-    //  Milestone 2.8: 显示所有三个Fence的状态
-    enigma::core::LogInfo(LogRenderer,
-                          "GPU Fence Status - Graphics: %llu/%llu, Compute: %llu/%llu, Copy: %llu/%llu",
-                          m_graphicsFence ? m_graphicsFence->GetCompletedValue() : 0, m_graphicsFenceValue,
-                          m_computeFence ? m_computeFence->GetCompletedValue() : 0, m_computeFenceValue,
-                          m_copyFence ? m_copyFence->GetCompletedValue() : 0, m_copyFenceValue);
-
-    // 检查执行中的命令列表，将完成的移回空闲队列
     auto it = m_executingLists.begin();
     while (it != m_executingLists.end())
     {
         CommandListWrapper* wrapper = *it;
 
-        //  Milestone 2.8: 根据wrapper->type获取对应的Fence
         ID3D12Fence* fence = GetFenceByType(wrapper->type);
         if (!fence)
         {
@@ -1189,49 +1131,34 @@ void CommandListManager::UpdateCompletedCommandLists()
 
         uint64_t completedValue = fence->GetCompletedValue();
 
-        // 🔍 DEBUG: 显示每个命令列表的围栏值
-        enigma::core::LogInfo(LogRenderer,
-                              "  Checking wrapper[%s]: fenceValue=%llu (completed=%llu, canRecycle=%s)",
-                              GetTypeName(wrapper->type),
-                              wrapper->fenceValue,
-                              completedValue,
-                              (wrapper->fenceValue <= completedValue) ? "YES" : "NO");
+        enigma::core::LogDebug(LogRenderer,
+                               "  Checking wrapper[%s]: fenceValue=%llu (completed=%llu, canRecycle=%s)",
+                               GetTypeName(wrapper->type),
+                               wrapper->fenceValue,
+                               completedValue,
+                               (wrapper->fenceValue <= completedValue) ? "YES" : "NO");
 
         if (wrapper->fenceValue <= completedValue)
         {
-            // GPU已完成此命令列表，可以回收复用
-            // 教学要点：将状态设置为Closed，表示可以被重新使用
             wrapper->state = State::Closed;
 
-            // 添加到对应的空闲队列
             auto& availableQueue = GetAvailableQueue(wrapper->type);
             availableQueue.push(wrapper);
 
-            enigma::core::LogInfo(LogRenderer,
+            /*enigma::core::LogInfo(LogRenderer,
                                   "  + Recycled %s command list (fenceValue=%llu)",
-                                  GetTypeName(wrapper->type), wrapper->fenceValue);
-
-            // 从执行中列表移除
+                                  GetTypeName(wrapper->type), wrapper->fenceValue);*/
             it = m_executingLists.erase(it);
             recycledCount++;
         }
         else
         {
-            enigma::core::LogWarn(LogRenderer,
-                                  "  ! Cannot recycle %s command list - fenceValue(%llu) > completedValue(%llu)",
-                                  GetTypeName(wrapper->type), wrapper->fenceValue, completedValue);
+            enigma::core::LogWarn(LogRenderer, "  ! Cannot recycle %s command list - fenceValue(%llu) > completedValue(%llu)", GetTypeName(wrapper->type), wrapper->fenceValue, completedValue);
             ++it;
         }
     }
-
-    enigma::core::LogInfo(LogRenderer,
-                          "UpdateCompletedCommandLists() finished - Recycled=%zu, Remaining=%zu",
-                          recycledCount, m_executingLists.size());
 }
 
-/**
- * @brief 强制回收所有命令列表 (等待GPU完成)
- */
 void CommandListManager::FlushAllCommandLists()
 {
     if (!m_initialized)
@@ -1239,10 +1166,10 @@ void CommandListManager::FlushAllCommandLists()
         return;
     }
 
-    // 等待所有命令完成
+    // Wait for all commands to complete
     WaitForGPU();
 
-    // 回收所有命令列表
+    //Recycle all command lists
     UpdateCompletedCommandLists();
 }
 

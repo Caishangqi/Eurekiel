@@ -32,29 +32,14 @@ namespace enigma::graphic
         // [REQUIRED] 验证槽位索引有效性
         if (!IsValidSlotIndex(slotIndex))
         {
-            LogError(core::LogRenderer,
-                     "[CustomImageManager] Invalid slot index: %d (valid range: 0-%d)",
-                     slotIndex, MAX_CUSTOM_IMAGE_SLOTS - 1);
-            return;
+            ERROR_AND_DIE(Stringf("Invalid slot index: %d (valid range: 0-%d)",slotIndex, MAX_CUSTOM_IMAGE_SLOTS - 1))
         }
-
-        // [REQUIRED] 保存纹理指针到m_textures数组
         m_textures[slotIndex] = texture;
 
-        // [REQUIRED] 获取Bindless索引并设置到m_currentCustomImage
         if (texture != nullptr)
         {
-            // [IMPORTANT] 通过D12Texture::GetBindlessIndex()获取Bindless索引
             uint32_t bindlessIndex = texture->GetBindlessIndex();
-
-            // [REQUIRED] 设置到m_currentCustomImage的对应槽位
             m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
-
-            LogDebug(core::LogRenderer,
-                     "[CustomImageManager] Set customImage%d: texture=%s, bindlessIndex=%u",
-                     slotIndex,
-                     texture->GetDebugName().c_str(),
-                     bindlessIndex);
         }
         else
         {
@@ -64,22 +49,13 @@ namespace enigma::graphic
             {
                 uint32_t bindlessIndex = defaultTexture->GetBindlessIndex();
                 m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
-                LogWarn(core::LogRenderer,
-                        "[CustomImageManager] SetCustomImage(%d, nullptr): Using default white texture (index=%u)",
-                        slotIndex, bindlessIndex);
             }
             else
             {
-                // Fallback到index=0（极端情况：默认纹理创建失败）
                 m_currentCustomImage.SetCustomImageIndex(slotIndex, 0);
-                LogError(core::LogRenderer,
-                         "[CustomImageManager] SetCustomImage(%d, nullptr): Default white texture unavailable, using index=0",
-                         slotIndex);
+                ERROR_AND_DIE("Fail to Create and Bind Texture")
             }
         }
-
-        // [IMPORTANT] 此方法只修改CPU端数据，不触发GPU上传
-        // GPU上传延迟到PrepareCustomImagesForDraw()时执行
     }
 
     D12Texture* CustomImageManager::GetCustomImage(int slotIndex) const
@@ -87,9 +63,7 @@ namespace enigma::graphic
         // [REQUIRED] 验证槽位索引有效性
         if (!IsValidSlotIndex(slotIndex))
         {
-            LogError(core::LogRenderer,
-                     "[CustomImageManager] Invalid slot index: %d (valid range: 0-%d)",
-                     slotIndex, MAX_CUSTOM_IMAGE_SLOTS - 1);
+            LogError(core::LogRenderer, "[CustomImageManager] Invalid slot index: %d (valid range: 0-%d)", slotIndex, MAX_CUSTOM_IMAGE_SLOTS - 1);
             return nullptr;
         }
 
@@ -99,12 +73,7 @@ namespace enigma::graphic
 
     void CustomImageManager::ClearCustomImage(int slotIndex)
     {
-        // [REQUIRED] 调用SetCustomImage(slotIndex, nullptr)清除槽位
         SetCustomImage(slotIndex, nullptr);
-
-        LogDebug(core::LogRenderer,
-                 "[CustomImageManager] ClearCustomImage: slot=%d",
-                 slotIndex);
     }
 
     // ========================================================================
@@ -128,13 +97,6 @@ namespace enigma::graphic
         // [REQUIRED] 保存当前状态到m_lastDrawCustomImage
         // [IMPORTANT] 实现"复制上一次Draw的数据"机制
         m_lastDrawCustomImage = m_currentCustomImage;
-
-        // [IMPORTANT] m_currentCustomImage保持不变（无需显式复制）
-        // 下次Draw时会继续使用当前数据，除非调用SetCustomImage()修改
-
-        LogDebug(core::LogRenderer,
-                 "[CustomImageManager] PrepareCustomImagesForDraw: Uploaded CustomImage data to GPU (used slots: %d)",
-                 m_currentCustomImage.GetUsedSlotCount());
     }
 
     // ========================================================================
@@ -143,23 +105,6 @@ namespace enigma::graphic
 
     void CustomImageManager::OnBeginFrame()
     {
-        // [OPTIONAL] 当前实现为空，保留接口供未来扩展
-        // [DESIGN] CustomImage槽位在帧间保持（不像RenderTarget需要Flip）
-        // [DESIGN] 如果需要帧间清理，可以在此实现
-
-        // 可选实现示例：
-        // 1. 清除所有槽位：
-        //    for (int i = 0; i < MAX_CUSTOM_IMAGE_SLOTS; ++i) {
-        //        ClearCustomImage(i);
-        //    }
-        //
-        // 2. 重置状态追踪：
-        //    m_lastDrawCustomImage.Reset();
-        //
-        // 3. 日志输出：
-        //    LogDebug(core::LogRenderer, "[CustomImageManager] OnBeginFrame: Frame started");
-
-        // [CURRENT] 保持上一帧的CustomImage数据（符合Iris行为）
     }
 
     // ========================================================================
@@ -168,7 +113,6 @@ namespace enigma::graphic
 
     int CustomImageManager::GetUsedSlotCount() const
     {
-        // [REQUIRED] 遍历m_textures数组统计非nullptr指针
         int count = 0;
         for (int i = 0; i < MAX_CUSTOM_IMAGE_SLOTS; ++i)
         {
