@@ -411,6 +411,7 @@
     <ClCompile Include="..\ThirdParty\imgui\backends\imgui_impl_dx12.cpp" />
     <ClCompile Include="..\ThirdParty\imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="Audio\AudioSubsystem.cpp" />
+    <ClCompile Include="Core\Buffer\ByteBuffer.cpp" />
     <ClCompile Include="Core\Clock.cpp" />
     <ClCompile Include="Core\Console\DevConsole.cpp" />
     <ClCompile Include="Core\Console\Imgui\ImguiConsoleFullRenderer.cpp" />
@@ -950,6 +951,10 @@
     <ClInclude Include="..\ThirdParty\imgui\backends\imgui_impl_dx12.h" />
     <ClInclude Include="..\ThirdParty\imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="Audio\AudioSubsystem.hpp" />
+    <ClInclude Include="Core\Buffer\BufferExceptions.hpp" />
+    <ClInclude Include="Core\Buffer\BufferSerializable.hpp" />
+    <ClInclude Include="Core\Buffer\ByteBuffer.hpp" />
+    <ClInclude Include="Core\Buffer\Endian.hpp" />
     <ClInclude Include="Core\Clock.hpp" />
     <ClInclude Include="Core\Console\DevConsole.hpp" />
     <ClInclude Include="Core\Console\Imgui\ImguiConsoleFullRenderer.hpp" />
