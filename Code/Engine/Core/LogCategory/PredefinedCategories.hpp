@@ -32,6 +32,9 @@ namespace enigma::core
     DECLARE_LOG_CATEGORY_EXTERN(LogGame)
     DECLARE_LOG_CATEGORY_EXTERN(LogPlayer)
 
+    // Console
+    DECLARE_LOG_CATEGORY_EXTERN(LogConsole); ///< Console subsystem messages
+
     // Temporary/debugging
     DECLARE_LOG_CATEGORY_EXTERN(LogTemp); ///< Temporary debug messages
 }

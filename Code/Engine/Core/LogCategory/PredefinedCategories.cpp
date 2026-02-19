@@ -25,6 +25,9 @@ namespace enigma::core
     DEFINE_LOG_CATEGORY(LogGame)
     DEFINE_LOG_CATEGORY(LogPlayer)
 
+    // Console
+    DEFINE_LOG_CATEGORY(LogConsole, LogLevel::INFO);
+
     // Temporary debugging - use TRACE level (allow all log levels)
     DEFINE_LOG_CATEGORY(LogTemp); // Defaults to TRACE
 }
