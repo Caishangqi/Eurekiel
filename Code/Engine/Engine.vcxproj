@@ -413,6 +413,7 @@
     <ClCompile Include="Audio\AudioSubsystem.cpp" />
     <ClCompile Include="Core\Clock.cpp" />
     <ClCompile Include="Core\Console\DevConsole.cpp" />
+    <ClCompile Include="Core\Console\Imgui\ImguiConsoleFullRenderer.cpp" />
     <ClCompile Include="Core\CubicHermiteSpline.cpp" />
     <ClCompile Include="Core\Engine.cpp" />
     <ClCompile Include="Core\EngineCommon.cpp" />
@@ -458,6 +459,11 @@
     <ClCompile Include="Core\Command\CommandSubsystem.cpp" />
     <ClCompile Include="Core\Command\CommandParser.cpp" />
     <ClCompile Include="Core\Console\ConsoleConfig.cpp" />
+    <ClCompile Include="Core\Console\ImguiConsoleConfig.cpp" />
+    <ClCompile Include="Core\Console\Imgui\ImguiConsole.cpp" />
+    <ClCompile Include="Core\Console\Imgui\ImguiConsoleRenderer.cpp" />
+    <ClCompile Include="Core\Console\Imgui\ImguiConsoleInput.cpp" />
+    <ClCompile Include="Core\Console\Imgui\ImguiConsoleOverlay.cpp" />
     <ClCompile Include="Core\Console\ConsoleSubsystem.cpp" />
     <ClCompile Include="Core\Console\ExternalConsole.cpp" />
     <ClCompile Include="Core\Console\AnsiColorManager.cpp" />
@@ -946,6 +952,7 @@
     <ClInclude Include="Audio\AudioSubsystem.hpp" />
     <ClInclude Include="Core\Clock.hpp" />
     <ClInclude Include="Core\Console\DevConsole.hpp" />
+    <ClInclude Include="Core\Console\Imgui\ImguiConsoleFullRenderer.hpp" />
     <ClInclude Include="Core\CubicHermiteSpline.hpp" />
     <ClInclude Include="Core\Engine.hpp" />
     <ClInclude Include="Core\EngineCommon.hpp" />
@@ -1151,6 +1158,11 @@
     <ClInclude Include="Core\Command\CommandHistory.hpp" />
     <ClInclude Include="Core\Console\ConsoleMessage.hpp" />
     <ClInclude Include="Core\Console\ConsoleConfig.hpp" />
+    <ClInclude Include="Core\Console\ImguiConsoleConfig.hpp" />
+    <ClInclude Include="Core\Console\Imgui\ImguiConsole.hpp" />
+    <ClInclude Include="Core\Console\Imgui\ImguiConsoleRenderer.hpp" />
+    <ClInclude Include="Core\Console\Imgui\ImguiConsoleInput.hpp" />
+    <ClInclude Include="Core\Console\Imgui\ImguiConsoleOverlay.hpp" />
     <ClInclude Include="Core\Console\ConsoleSubsystem.hpp" />
     <ClInclude Include="Core\Console\ExternalConsole.hpp" />
     <ClInclude Include="Core\Console\AnsiColorManager.hpp" />
