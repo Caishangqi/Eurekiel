@@ -28,13 +28,17 @@ namespace enigma::core
         }
 
         // Calculate popup position above the console input line
-        ImGuiWindow* consoleWindow = ImGui::FindWindowByName("Console");
-        if (!consoleWindow)
+        // Use stored input bar screen position (set by renderers each frame)
+        float inputBarX = console.m_inputBarScreenX;
+        float inputBarY = console.m_inputBarScreenY;
+        float inputBarW = console.m_inputBarWidth;
+
+        if (inputBarW <= 0.0f)
         {
-            return;
+            return; // Input bar not rendered yet
         }
 
-        float popupWidth   = consoleWindow->Size.x * 0.9f;
+        float popupWidth   = inputBarW * 0.9f;
         float itemHeight   = ImGui::GetTextLineHeightWithSpacing();
         int   maxVisible   = OVERLAY_MAX_VISIBLE_ITEMS;
 
@@ -54,18 +58,18 @@ namespace enigma::core
             // Add padding for window margins
             float padding = ImGui::GetStyle().WindowPadding.x * 2.0f + ImGui::GetStyle().FramePadding.x * 2.0f;
             float contentWidth = maxTextWidth + padding;
-            // Clamp: at least 200px, at most console width
+            // Clamp: at least 200px, at most input bar width
             float minWidth = 200.0f;
-            float maxWidth = consoleWindow->Size.x;
+            float maxWidth = inputBarW;
             popupWidth = (std::clamp)(contentWidth, minWidth, maxWidth);
         }
 
         float popupHeight  = itemHeight * static_cast<float>(maxVisible)
                            + ImGui::GetStyle().WindowPadding.y * 2.0f;
 
-        // Position: above the input line, left-aligned
-        float popupX = consoleWindow->Pos.x;
-        float popupY = consoleWindow->Pos.y - popupHeight - ImGui::GetStyle().ItemSpacing.y;
+        // Position: above the input line, left-aligned with input bar
+        float popupX = inputBarX;
+        float popupY = inputBarY - popupHeight - ImGui::GetStyle().ItemSpacing.y;
 
         ImGui::SetNextWindowPos(ImVec2(popupX, popupY), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Always);

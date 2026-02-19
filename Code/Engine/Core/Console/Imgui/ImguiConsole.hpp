@@ -114,6 +114,11 @@ namespace enigma::core
         bool m_autoScroll    = true;
         bool m_scrollToBottom = false;
 
+        // Input bar screen position (set by renderers, used by overlay for positioning)
+        float m_inputBarScreenX = 0.0f;
+        float m_inputBarScreenY = 0.0f;
+        float m_inputBarWidth   = 0.0f;
+
         ConsoleConfig m_config;
     };
 } // namespace enigma::core

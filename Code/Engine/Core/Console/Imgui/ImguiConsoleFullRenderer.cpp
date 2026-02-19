@@ -91,6 +91,12 @@ namespace enigma::core
             ImGui::EndChild();
 
             // --- Input bar ---
+            // Record input bar screen position for overlay positioning
+            ImVec2 inputScreenPos = ImGui::GetCursorScreenPos();
+            console.m_inputBarScreenX = inputScreenPos.x;
+            console.m_inputBarScreenY = inputScreenPos.y;
+            console.m_inputBarWidth   = ImGui::GetContentRegionAvail().x;
+
             ImGui::TextUnformatted(">");
             ImGui::SameLine();
 

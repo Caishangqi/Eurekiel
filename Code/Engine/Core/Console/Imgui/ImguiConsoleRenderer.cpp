@@ -44,6 +44,12 @@ namespace enigma::core
     //=========================================================================
     void ImguiConsoleRenderer::RenderTerminalMode(ImguiConsole& console)
     {
+        // Record input bar screen position for overlay positioning
+        ImVec2 inputScreenPos = ImGui::GetCursorScreenPos();
+        console.m_inputBarScreenX = inputScreenPos.x;
+        console.m_inputBarScreenY = inputScreenPos.y;
+        console.m_inputBarWidth   = ImGui::GetContentRegionAvail().x;
+
         ImGui::TextUnformatted(">");
         ImGui::SameLine();
 
@@ -83,6 +89,12 @@ namespace enigma::core
     //=========================================================================
     void ImguiConsoleRenderer::RenderDockedMode(ImguiConsole& console)
     {
+        // Record input bar screen position for overlay positioning
+        ImVec2 inputScreenPos = ImGui::GetCursorScreenPos();
+        console.m_inputBarScreenX = inputScreenPos.x;
+        console.m_inputBarScreenY = inputScreenPos.y;
+        console.m_inputBarWidth   = ImGui::GetContentRegionAvail().x;
+
         ImGui::TextUnformatted(DOCKED_INPUT_LABEL);
         ImGui::SameLine();
 
