@@ -20,6 +20,10 @@ namespace enigma::core
         virtual void Startup() = 0; // Main startup after all Initialize phases
         virtual void Shutdown() = 0;
 
+        virtual void Render()
+        {
+        };
+
         virtual const char* GetSubsystemName() const = 0;
         virtual int         GetPriority() const = 0;
         virtual bool        RequiresGameLoop() const { return true; }
