@@ -72,6 +72,14 @@ namespace enigma::core
         consoleConfig.windows.closeAppOnConsoleClose          = config.GetBoolean("console.external_console.windows.close_app_on_console_close", consoleConfig.windows.closeAppOnConsoleClose);
         consoleConfig.windows.redirectStdio                   = config.GetBoolean("console.external_console.windows.redirect_stdio", consoleConfig.windows.redirectStdio);
 
+        // Load ImGui Console settings
+        consoleConfig.enableImguiConsole = config.GetBoolean("console.imgui.enabled", consoleConfig.enableImguiConsole);
+        consoleConfig.imguiToggleKey     = config.GetInt("console.imgui.toggle_key", consoleConfig.imguiToggleKey);
+        consoleConfig.overlayOpacity     = config.GetFloat("console.imgui.overlay_opacity", consoleConfig.overlayOpacity);
+        consoleConfig.overlayWidthRatio  = config.GetFloat("console.imgui.overlay_width_ratio", consoleConfig.overlayWidthRatio);
+        consoleConfig.overlayHeightRatio = config.GetFloat("console.imgui.overlay_height_ratio", consoleConfig.overlayHeightRatio);
+        consoleConfig.maxImguiMessages   = config.GetInt("console.imgui.max_messages", consoleConfig.maxImguiMessages);
+
         return consoleConfig;
     }
 
@@ -103,5 +111,37 @@ namespace enigma::core
         config.Set("console.external_console.windows.enable_vt_processing", windows.enableVirtualTerminalProcessing);
         config.Set("console.external_console.windows.close_app_on_console_close", windows.closeAppOnConsoleClose);
         config.Set("console.external_console.windows.redirect_stdio", windows.redirectStdio);
+
+        // ImGui Console settings
+        config.Set("console.imgui.enabled", enableImguiConsole);
+        config.Set("console.imgui.toggle_key", imguiToggleKey);
+        config.Set("console.imgui.overlay_opacity", overlayOpacity);
+        config.Set("console.imgui.overlay_width_ratio", overlayWidthRatio);
+        config.Set("console.imgui.overlay_height_ratio", overlayHeightRatio);
+        config.Set("console.imgui.max_messages", maxImguiMessages);
+    }
+
+    ConsoleConfig ConsoleConfig::DefaultImgui()
+    {
+        ConsoleConfig config;
+        config.enableExternalConsole = false;
+        config.enableImguiConsole    = true;
+        return config;
+    }
+
+    ConsoleConfig ConsoleConfig::ExternalOnly()
+    {
+        ConsoleConfig config;
+        config.enableExternalConsole = true;
+        config.enableImguiConsole    = false;
+        return config;
+    }
+
+    ConsoleConfig ConsoleConfig::Both()
+    {
+        ConsoleConfig config;
+        config.enableExternalConsole = true;
+        config.enableImguiConsole    = true;
+        return config;
     }
 } // namespace enigma::core

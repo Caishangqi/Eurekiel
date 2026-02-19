@@ -53,7 +53,21 @@ namespace enigma::core
             bool redirectStdio                   = true; // Redirect stdout/stderr/stdin to console
         } windows;
 
-        // Static factory methods
+        // ImGui Console settings
+        bool        enableImguiConsole = true;
+        int         imguiToggleKey     = 0xBF;    // VK_OEM_2 = '/' key (Windows virtual key code)
+        float       overlayOpacity     = 0.85f;   // Overlay background opacity
+        float       overlayWidthRatio  = 0.6f;    // Overlay width as ratio of screen width
+        float       overlayHeightRatio = 0.4f;    // Overlay height as ratio of screen height
+        int         maxImguiMessages   = 10000;   // Max messages in ImGui Console buffer
+        std::string commandPrefix      = ">>>";   // Full mode user input display prefix
+
+        // Static factory methods for common presets
+        static ConsoleConfig DefaultImgui();  // ImGui Console only
+        static ConsoleConfig ExternalOnly();  // External Console only
+        static ConsoleConfig Both();          // Both backends enabled
+
+        // YAML serialization
         static ConsoleConfig LoadFromYaml();
         static ConsoleConfig LoadFromYaml(const YamlConfiguration& config);
         void                 SaveToYaml() const;
