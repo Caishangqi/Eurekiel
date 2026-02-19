@@ -325,10 +325,7 @@ namespace enigma::graphic
         // 教学要点: WaitForFence() 只等待GPU完成，不会自动回收命令列表
         // UpdateCompletedCommandLists() 检查围栏值，将完成的命令列表放回可用队列
         // 这是 DirectX 12 命令列表池化的正确实践
-
-        uint32_t availableBeforeRecycle = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
-        uint32_t executingBeforeRecycle = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
-
+        
         cmdListManager->UpdateCompletedCommandLists();
         
         m_currentState = targetState;
