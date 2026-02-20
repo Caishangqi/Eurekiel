@@ -166,8 +166,10 @@ namespace enigma::core
     }
 
     //=========================================================================
-    // Autocomplete trigger (Tab key)
-    // Toggles autocomplete overlay when input is non-empty
+    // Autocomplete accept (Tab key by default, configurable)
+    // When overlay is visible with a selected suggestion -> accept it (fill input)
+    // When overlay is not visible and input is non-empty -> open autocomplete
+    // When input is empty -> no-op
     //=========================================================================
     void ImguiConsoleInput::HandleAutoComplete(ImGuiInputTextCallbackData* data, ImguiConsole& console)
     {
@@ -180,19 +182,33 @@ namespace enigma::core
         console.GetInputBuffer().assign(data->Buf, data->BufTextLen);
 
         bool& overlayVisible = console.GetOverlayVisible();
-        if (overlayVisible && console.GetOverlayMode() == OverlayMode::Autocomplete)
+        int&  selectedIndex  = console.GetOverlaySelectedIndex();
+
+        if (overlayVisible && console.GetOverlayMode() == OverlayMode::Autocomplete && selectedIndex >= 0)
         {
-            // Already showing autocomplete -> close
-            overlayVisible = false;
+            // Accept the selected autocomplete suggestion
+            auto suggestions = ImguiConsoleOverlay::GetAutocompleteSuggestions(console.GetInputBuffer());
+            if (selectedIndex < static_cast<int>(suggestions.size()))
+            {
+                const std::string& accepted = suggestions[selectedIndex];
+
+                // Replace input buffer content with accepted suggestion
+                data->DeleteChars(0, data->BufTextLen);
+                data->InsertChars(0, accepted.c_str());
+                console.GetInputBuffer() = accepted;
+            }
+
+            // Close overlay
+            overlayVisible  = false;
             console.GetOverlayMode() = OverlayMode::None;
-            console.GetOverlaySelectedIndex() = -1;
+            selectedIndex   = -1;
         }
         else
         {
-            // Open autocomplete
+            // Open autocomplete overlay
             overlayVisible = true;
             console.GetOverlayMode() = OverlayMode::Autocomplete;
-            console.GetOverlaySelectedIndex() = 0;
+            selectedIndex  = 0;
         }
     }
 

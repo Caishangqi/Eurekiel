@@ -75,6 +75,7 @@ namespace enigma::core
         // Load ImGui Console settings
         consoleConfig.enableImguiConsole = config.GetBoolean("console.imgui.enabled", consoleConfig.enableImguiConsole);
         consoleConfig.imguiToggleKey     = config.GetInt("console.imgui.toggle_key", consoleConfig.imguiToggleKey);
+        consoleConfig.autocompleteAcceptKey = config.GetInt("console.imgui.autocomplete_accept_key", consoleConfig.autocompleteAcceptKey);
         consoleConfig.overlayOpacity     = config.GetFloat("console.imgui.overlay_opacity", consoleConfig.overlayOpacity);
         consoleConfig.overlayWidthRatio  = config.GetFloat("console.imgui.overlay_width_ratio", consoleConfig.overlayWidthRatio);
         consoleConfig.overlayHeightRatio = config.GetFloat("console.imgui.overlay_height_ratio", consoleConfig.overlayHeightRatio);
@@ -115,6 +116,7 @@ namespace enigma::core
         // ImGui Console settings
         config.Set("console.imgui.enabled", enableImguiConsole);
         config.Set("console.imgui.toggle_key", imguiToggleKey);
+        config.Set("console.imgui.autocomplete_accept_key", autocompleteAcceptKey);
         config.Set("console.imgui.overlay_opacity", overlayOpacity);
         config.Set("console.imgui.overlay_width_ratio", overlayWidthRatio);
         config.Set("console.imgui.overlay_height_ratio", overlayHeightRatio);

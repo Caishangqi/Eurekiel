@@ -3,6 +3,8 @@
 #include "Engine/Core/Console/ImguiConsoleConfig.hpp"
 #include "Engine/Core/Console/ConsoleSubsystem.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Input/InputSystem.hpp"
+#include "Game/GameCommon.hpp"
 #include "ThirdParty/imgui/imgui.h"
 #include "ThirdParty/imgui/imgui_internal.h"
 
@@ -41,6 +43,36 @@ namespace enigma::core
         float popupWidth   = inputBarW * 0.9f;
         float itemHeight   = ImGui::GetTextLineHeightWithSpacing();
         int   maxVisible   = OVERLAY_MAX_VISIBLE_ITEMS;
+
+        // Autocomplete mode: size popup to fit the longest command + description
+        if (mode == OverlayMode::Autocomplete)
+        {
+            const std::string& input = console.GetInputBuffer();
+            auto suggestions = GetAutocompleteSuggestions(input);
+            float maxTextWidth = 0.0f;
+            for (const auto& cmd : suggestions)
+            {
+                float w = ImGui::CalcTextSize(cmd.c_str()).x;
+                // Account for description text width
+                if (g_theConsole)
+                {
+                    const std::string& desc = g_theConsole->GetCommandDescription(cmd);
+                    if (!desc.empty())
+                    {
+                        w += ImGui::CalcTextSize(("  " + desc).c_str()).x;
+                    }
+                }
+                if (w > maxTextWidth)
+                {
+                    maxTextWidth = w;
+                }
+            }
+            float padding = ImGui::GetStyle().WindowPadding.x * 2.0f + ImGui::GetStyle().FramePadding.x * 2.0f;
+            float contentWidth = maxTextWidth + padding;
+            float minWidth = 200.0f;
+            float maxWidth = inputBarW;
+            popupWidth = (std::clamp)(contentWidth, minWidth, maxWidth);
+        }
 
         // History mode: size popup to fit the longest history entry
         if (mode == OverlayMode::History)
@@ -189,6 +221,19 @@ namespace enigma::core
             ImGui::SameLine(0.0f, 0.0f);
             ImGui::SetCursorPosX(ImGui::GetStyle().WindowPadding.x);
             RenderFuzzyMatchHighlight(suggestions[i], input);
+
+            // Render command description in dimmed color after the command name
+            if (g_theConsole)
+            {
+                const std::string& desc = g_theConsole->GetCommandDescription(suggestions[i]);
+                if (!desc.empty())
+                {
+                    ImGui::SameLine(0.0f, 0.0f);
+                    ImGui::PushStyleColor(ImGuiCol_Text, OVERLAY_DESCRIPTION_COLOR);
+                    ImGui::TextUnformatted(("  " + desc).c_str());
+                    ImGui::PopStyleColor();
+                }
+            }
 
             ImGui::PopID();
         }
@@ -355,7 +400,7 @@ namespace enigma::core
     }
 
     //=========================================================================
-    // Overlay navigation: PageUp/Down, Enter, Escape
+    // Overlay navigation: PageUp/Down, Enter, Escape, custom accept key
     // Up/Down is handled by InputText callback (HandleHistoryNavigation)
     //=========================================================================
     void ImguiConsoleOverlay::HandleOverlayNavigation(ImguiConsole& console, int itemCount)
@@ -381,7 +426,8 @@ namespace enigma::core
             console.GetOverlayMode()    = OverlayMode::None;
             console.GetOverlaySelectedIndex() = -1;
         }
-        else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))
+        else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)
+                 || ShouldAcceptByCustomKey(console))
         {
             if (selectedIndex >= 0 && selectedIndex < itemCount)
             {
@@ -407,6 +453,33 @@ namespace enigma::core
             console.GetOverlayMode()    = OverlayMode::None;
             console.GetOverlaySelectedIndex() = -1;
         }
+    }
+
+    //=========================================================================
+    // Check if the custom autocomplete accept key (non-Tab) was pressed.
+    // Only active when autocompleteAcceptKey differs from VK_TAB (0x09),
+    // since Tab is already handled by ImGui's CallbackCompletion pathway.
+    // Only triggers in Autocomplete mode (not History mode).
+    //=========================================================================
+    bool ImguiConsoleOverlay::ShouldAcceptByCustomKey(const ImguiConsole& console)
+    {
+        if (console.GetOverlayMode() != OverlayMode::Autocomplete)
+        {
+            return false;
+        }
+
+        int acceptKey = console.GetConfig().autocompleteAcceptKey;
+        if (acceptKey == 0x09) // VK_TAB - already handled via CallbackCompletion
+        {
+            return false;
+        }
+
+        if (g_theInput)
+        {
+            return g_theInput->WasKeyJustPressed(static_cast<unsigned char>(acceptKey));
+        }
+
+        return false;
     }
 
     //=========================================================================

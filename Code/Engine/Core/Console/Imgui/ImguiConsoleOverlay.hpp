@@ -25,6 +25,9 @@ namespace enigma::core
         // Quick check: are there any autocomplete matches for the given input?
         static bool HasAutocompleteSuggestions(const std::string& input);
 
+        // Get filtered autocomplete suggestions via fuzzy matching
+        static std::vector<std::string> GetAutocompleteSuggestions(const std::string& input);
+
         // Trigger conditions
         static bool ShouldShowAutocomplete(const ImguiConsole& console);
         static bool ShouldShowHistory(const ImguiConsole& console);
@@ -32,7 +35,6 @@ namespace enigma::core
     private:
         // Autocomplete rendering
         static void RenderAutocompleteList(ImguiConsole& console);
-        static std::vector<std::string> GetAutocompleteSuggestions(const std::string& input);
         static void RenderFuzzyMatchHighlight(const std::string& text, const std::string& pattern);
 
         // History rendering
@@ -41,6 +43,9 @@ namespace enigma::core
         // Interaction handling
         static void HandleOverlayNavigation(ImguiConsole& console, int itemCount);
         static void HandleOverlayMouseInteraction(ImguiConsole& console, int itemIndex, const std::string& itemText);
+
+        // Check if the custom autocomplete accept key (non-Tab) was pressed
+        static bool ShouldAcceptByCustomKey(const ImguiConsole& console);
 
         // Fuzzy matching utility
         static bool FuzzyMatch(const std::string& text, const std::string& pattern, std::vector<int>* outMatchedIndices = nullptr);

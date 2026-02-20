@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Engine/Core/SubsystemManager.hpp"
@@ -55,6 +56,7 @@ namespace enigma::core
         // Command registration for autocomplete
         void RegisterCommand(const std::string& name, const std::string& description = "");
         const std::vector<std::string>& GetRegisteredCommands() const;
+        const std::string& GetCommandDescription(const std::string& name) const;
 
         // ImGui Console control
         void ToggleImguiConsole();
@@ -113,6 +115,7 @@ namespace enigma::core
 
         // Registered commands for autocomplete
         std::vector<std::string> m_registeredCommands;
+        std::unordered_map<std::string, std::string> m_commandDescriptions;
 
         // External console input state
         std::string m_currentInput;

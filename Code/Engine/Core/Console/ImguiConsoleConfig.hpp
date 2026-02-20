@@ -40,6 +40,7 @@ extern ImVec4 OVERLAY_BG_COLOR;           // Popup background color
 extern ImVec4 OVERLAY_SELECTED_COLOR;     // Selected item background (dark green)
 extern ImVec4 OVERLAY_HOVER_COLOR;        // Hovered item background
 extern ImVec4 OVERLAY_MATCH_HIGHLIGHT;    // Fuzzy match highlight color (green tint)
+extern ImVec4 OVERLAY_DESCRIPTION_COLOR;  // Dimmed color for command descriptions
 
 //=============================================================================
 // Docked Mode

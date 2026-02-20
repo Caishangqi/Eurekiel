@@ -56,6 +56,7 @@ namespace enigma::core
         // ImGui Console settings
         bool        enableImguiConsole = true;
         int         imguiToggleKey     = 0xBF;    // VK_OEM_2 = '/' key (Windows virtual key code)
+        int         autocompleteAcceptKey = 0x09;  // VK_TAB - key to accept selected autocomplete suggestion
         float       overlayOpacity     = 0.85f;   // Overlay background opacity
         float       overlayWidthRatio  = 0.6f;    // Overlay width as ratio of screen width
         float       overlayHeightRatio = 0.4f;    // Overlay height as ratio of screen height

@@ -296,7 +296,6 @@ namespace enigma::core
 
     void ConsoleSubsystem::RegisterCommand(const std::string& name, const std::string& description)
     {
-        (void)description; // Reserved for future help system
         // Avoid duplicates
         for (const auto& cmd : m_registeredCommands)
         {
@@ -306,11 +305,26 @@ namespace enigma::core
             }
         }
         m_registeredCommands.push_back(name);
+        if (!description.empty())
+        {
+            m_commandDescriptions[name] = description;
+        }
     }
 
     const std::vector<std::string>& ConsoleSubsystem::GetRegisteredCommands() const
     {
         return m_registeredCommands;
+    }
+
+    const std::string& ConsoleSubsystem::GetCommandDescription(const std::string& name) const
+    {
+        static const std::string s_empty;
+        auto it = m_commandDescriptions.find(name);
+        if (it != m_commandDescriptions.end())
+        {
+            return it->second;
+        }
+        return s_empty;
     }
 
     //=========================================================================
