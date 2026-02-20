@@ -80,7 +80,8 @@ namespace enigma::graphic
          * @param renderHeight 渲染分辨率高度（默认1080）
          * @return 是否初始化成功
          */
-        static bool Initialize(bool enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1920, uint32_t renderHeight = 1080);
+        static bool Initialize(bool        enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1920, uint32_t renderHeight = 1080,
+                               DXGI_FORMAT backbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM);
         static bool PrepareDefaultTextures();
         /**
          * 关闭渲染系统，释放所有资源
@@ -363,6 +364,13 @@ namespace enigma::graphic
          * @note M6.3新增 - 用于Present API执行CopyResource
          */
         static ID3D12Resource* GetBackBufferResource();
+
+        /**
+         * @brief Get the DXGI format of the backbuffer
+         * @return DXGI_FORMAT_R8G8B8A8_UNORM (matches SwapChain creation)
+         * @note Used by PresentRenderTarget for format compatibility check
+         */
+        static DXGI_FORMAT GetBackBufferFormat();
 
         /**
          * 获取DXGI工厂接口
@@ -885,6 +893,7 @@ namespace enigma::graphic
         static uint32_t                                s_swapChainBufferCount; // SwapChain缓冲区数量
         static uint32_t                                s_swapChainWidth; // SwapChain宽度（用于Viewport和ScissorRect）
         static uint32_t                                s_swapChainHeight; // SwapChain高度（用于Viewport和ScissorRect）
+        static DXGI_FORMAT                             s_backbufferFormat; // Backbuffer format (configurable via renderer.yml)
 
         // 命令系统管理（对应IrisRenderSystem的命令管理职责）
         static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器

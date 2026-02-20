@@ -36,6 +36,7 @@ namespace enigma::graphic
     uint32_t                                D3D12RenderSystem::s_swapChainBufferCount   = 3;
     uint32_t                                D3D12RenderSystem::s_swapChainWidth         = 0;
     uint32_t                                D3D12RenderSystem::s_swapChainHeight        = 0;
+    DXGI_FORMAT                             D3D12RenderSystem::s_backbufferFormat       = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     // Command system management
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager         = nullptr;
@@ -64,13 +65,17 @@ namespace enigma::graphic
      * The IrisRenderSystem.initialize() method corresponding to Iris
      * Note: Now includes automatic SwapChain creation for complete engine-layer initialization
      */
-    bool D3D12RenderSystem::Initialize(bool enableDebugLayer, bool enableGPUValidation,
-                                       HWND hwnd, uint32_t         renderWidth, uint32_t renderHeight)
+    bool D3D12RenderSystem::Initialize(bool        enableDebugLayer, bool enableGPUValidation,
+                                       HWND        hwnd, uint32_t         renderWidth, uint32_t renderHeight,
+                                       DXGI_FORMAT backbufferFormat)
     {
         if (s_isInitialized)
         {
             return true; // has been initialized
         }
+
+        // Store configured backbuffer format
+        s_backbufferFormat = backbufferFormat;
 
         // 1. Enable debug layer (if requested)
         if (enableDebugLayer)
@@ -1029,6 +1034,11 @@ namespace enigma::graphic
         return s_swapChainBuffers[s_currentBackBufferIndex].Get();
     }
 
+    DXGI_FORMAT D3D12RenderSystem::GetBackBufferFormat()
+    {
+        return s_backbufferFormat;
+    }
+
     // ============================================================================
     // 系统默认纹理访问方法
     // ============================================================================
@@ -1284,7 +1294,7 @@ namespace enigma::graphic
 
         if (stateBefore == stateAfter)
         {
-            core::LogWarn(LogRenderer,  "ResourceBarrier:: TransitionResource skipped: stateBefore == stateAfter (0x%X), resource: %s",stateBefore, debugName ? debugName : "Unknown");
+            core::LogWarn(LogRenderer, "ResourceBarrier:: TransitionResource skipped: stateBefore == stateAfter (0x%X), resource: %s", stateBefore, debugName ? debugName : "Unknown");
             return;
         }
 
@@ -1309,6 +1319,7 @@ namespace enigma::graphic
         UNUSED(debugContext)
         cmdList->ResourceBarrier(numBarriers, barriers);
     }
+
     void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)
     {
         if (!s_currentGraphicsCommandList)
@@ -1738,7 +1749,7 @@ namespace enigma::graphic
         swapChainDesc.BufferCount           = s_swapChainBufferCount;
         swapChainDesc.Width                 = width;
         swapChainDesc.Height                = height;
-        swapChainDesc.Format                = DXGI_FORMAT_R8G8B8A8_UNORM;
+        swapChainDesc.Format                = s_backbufferFormat;
         swapChainDesc.BufferUsage           = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         swapChainDesc.SwapEffect            = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         swapChainDesc.SampleDesc.Count      = 1;
