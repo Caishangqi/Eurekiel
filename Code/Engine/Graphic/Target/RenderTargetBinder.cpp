@@ -327,15 +327,35 @@ namespace enigma::graphic
 
     void RenderTargetBinder::GetCurrentRTFormats(DXGI_FORMAT outFormats[8]) const
     {
-        for (int i = 0; i < 8; ++i)
+        if (m_backbufferOverrideActive)
         {
-            outFormats[i] = m_currentRTFormats[i];
+            outFormats[0] = m_backbufferOverrideFormat;
+            for (int i = 1; i < 8; ++i)
+                outFormats[i] = DXGI_FORMAT_UNKNOWN;
+            return;
         }
+
+        for (int i = 0; i < 8; ++i)
+            outFormats[i] = m_currentRTFormats[i];
     }
 
     DXGI_FORMAT RenderTargetBinder::GetCurrentDepthFormat() const
     {
+        if (m_backbufferOverrideActive)
+            return DXGI_FORMAT_UNKNOWN;
         return m_currentDepthFormat;
+    }
+
+    void RenderTargetBinder::SetBackbufferOverride(DXGI_FORMAT format)
+    {
+        m_backbufferOverrideActive = true;
+        m_backbufferOverrideFormat = format;
+    }
+
+    void RenderTargetBinder::ClearBackbufferOverride()
+    {
+        m_backbufferOverrideActive = false;
+        m_backbufferOverrideFormat = DXGI_FORMAT_UNKNOWN;
     }
 
     // ============================================================================

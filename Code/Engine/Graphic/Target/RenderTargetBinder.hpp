@@ -171,6 +171,25 @@ namespace enigma::graphic
          */
         DXGI_FORMAT GetCurrentDepthFormat() const;
 
+        // ========================================================================
+        // Backbuffer Format Override (for PresentRenderTarget draw fallback)
+        // ========================================================================
+
+        /**
+         * @brief Set temporary backbuffer format override for PSO creation
+         * @param format Backbuffer format (e.g., DXGI_FORMAT_R8G8B8A8_UNORM)
+         *
+         * When active, GetCurrentRTFormats() returns override format in slot 0
+         * and DXGI_FORMAT_UNKNOWN in slots 1-7. GetCurrentDepthFormat() returns UNKNOWN.
+         * Used by PresentRenderTargetWithDraw() to create correct PSO for backbuffer output.
+         */
+        void SetBackbufferOverride(DXGI_FORMAT format);
+
+        /**
+         * @brief Clear backbuffer format override, restore normal behavior
+         */
+        void ClearBackbufferOverride();
+
     private:
         // ========================================================================
         // Internal Implementation
@@ -280,5 +299,12 @@ namespace enigma::graphic
 
         DXGI_FORMAT m_currentRTFormats[8]; ///< Current bound RT formats
         DXGI_FORMAT m_currentDepthFormat; ///< Current bound depth format
+
+        // ========================================================================
+        // Backbuffer Override State
+        // ========================================================================
+
+        bool        m_backbufferOverrideActive = false; ///< Whether override is active
+        DXGI_FORMAT m_backbufferOverrideFormat = DXGI_FORMAT_UNKNOWN; ///< Override format
     };
 } // namespace enigma::graphic
