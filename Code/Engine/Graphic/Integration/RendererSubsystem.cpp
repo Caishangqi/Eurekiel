@@ -83,7 +83,8 @@ void RendererSubsystem::Initialize()
         m_configuration.enableGPUValidation, // GPU validation
         hwnd, // Window handle for SwapChain
         m_configuration.renderWidth, // Render width
-        m_configuration.renderHeight // Render height
+        m_configuration.renderHeight, // Render height
+        m_configuration.backbufferFormat // Backbuffer format (configurable via renderer.yml)
     );
     if (!success)
     {
@@ -370,6 +371,7 @@ void RendererSubsystem::Shutdown()
     m_customImageManager.reset();
     m_psoManager.reset();
     m_fullQuadsRenderer.reset();
+    m_blitProgram.reset();
 
     // Release RT providers (may hold descriptor references)
     m_renderTargetBinder.reset();
@@ -1345,19 +1347,10 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
 void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType)
 {
     // ========================================================================
-    // [REFACTORED] Provider-based Architecture
-    // ========================================================================
-    // 重构说明：
-    // - 使用 IRenderTargetProvider 统一接口替代废弃的 m_renderTargetManager
-    // - 支持所有四种 RenderTargetType（ColorTex, DepthTex, ShadowColor, ShadowTex）
-    // - 使用 GetMainResource()/GetAltResource() 获取 ID3D12Resource*
-    // - 符合 SOLID 原则（依赖倒置）
+    // [REFACTORED] Provider-based Architecture + Format Mismatch Fallback
     // ========================================================================
 
-    // ========================================================================
-    // Step 1: 获取对应的 Provider
-    // ========================================================================
-
+    // Step 1: Get provider
     IRenderTargetProvider* provider = GetRenderTargetProvider(rtType);
     if (!provider)
     {
@@ -1365,10 +1358,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // ========================================================================
-    // Step 2: 验证 rtIndex 范围
-    // ========================================================================
-
+    // Step 2: Validate rtIndex range
     const int rtCount = provider->GetCount();
     if (rtIndex < 0 || rtIndex >= rtCount)
     {
@@ -1377,31 +1367,19 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // ========================================================================
-    // Step 3: 根据 FlipState 选择 Main 或 Alt 资源
-    // ========================================================================
-
+    // Step 3: Select Main or Alt resource based on FlipState
     ID3D12Resource* sourceRT       = nullptr;
     bool            useAltResource = false;
 
-    // 检查 Provider 是否支持 FlipState
     if (provider->SupportsFlipState())
     {
-        // 对于支持 FlipState 的 Provider（ColorTex, ShadowColor）：
-        // - 默认状态（未翻转）：使用 Main 资源
-        // - 翻转后状态：使用 Alt 资源
-        // 注意：这里我们总是使用 Main 资源作为呈现源
-        // 因为 Main 是当前帧渲染的目标
         sourceRT = provider->GetMainResource(rtIndex);
     }
     else
     {
-        // 对于不支持 FlipState 的 Provider（DepthTex, ShadowTex）：
-        // - 只有 Main 资源
         sourceRT = provider->GetMainResource(rtIndex);
     }
 
-    // 验证源资源
     if (!sourceRT)
     {
         LogError(LogRenderer, "PresentRenderTarget: Source resource is null (rtIndex=%d, rtType=%d, useAlt=%d)",
@@ -1409,10 +1387,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // ========================================================================
-    // Step 4: 获取 BackBuffer 资源
-    // ========================================================================
-
+    // Step 4: Get BackBuffer resource
     ID3D12Resource* backBuffer = D3D12RenderSystem::GetBackBufferResource();
     if (!backBuffer)
     {
@@ -1420,11 +1395,31 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // [NOTE] ImGui 渲染在 Present 之前执行
+    // Step 4.1: Determine source initial state (needed by both paths)
+    D3D12_RESOURCE_STATES sourceInitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    if (rtType == RenderTargetType::DepthTex || rtType == RenderTargetType::ShadowTex)
+    {
+        sourceInitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    }
+
+    // Step 4.5: Format compatibility check — fast path (CopyResource) or fallback (Draw)
+    DXGI_FORMAT sourceFormat     = provider->GetFormat(rtIndex);
+    DXGI_FORMAT backbufferFormat = D3D12RenderSystem::GetBackBufferFormat();
+
+    if (sourceFormat != backbufferFormat)
+    {
+        // Fallback path: draw call with blit shader
+        LogInfo(LogRenderer, "PresentRenderTarget: Format mismatch (source=%d vs backbuffer=%d), using draw fallback",
+                static_cast<int>(sourceFormat), static_cast<int>(backbufferFormat));
+        PresentRenderTargetWithDraw(rtIndex, rtType, sourceInitialState);
+        g_theImGui->Render();
+        return;
+    }
+
     g_theImGui->Render();
 
     // ========================================================================
-    // Step 5: 获取 CommandList
+    // Fast path: CopyResource (formats match)
     // ========================================================================
 
     ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
@@ -1434,26 +1429,9 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // ========================================================================
-    // Step 6: 确定源资源的初始状态
-    // ========================================================================
-    // 不同 RenderTargetType 的资源可能处于不同的初始状态：
-    // - ColorTex/ShadowColor: D3D12_RESOURCE_STATE_RENDER_TARGET
-    // - DepthTex/ShadowTex: D3D12_RESOURCE_STATE_DEPTH_WRITE
-
-    D3D12_RESOURCE_STATES sourceInitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    if (rtType == RenderTargetType::DepthTex || rtType == RenderTargetType::ShadowTex)
-    {
-        sourceInitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    }
-
-    // ========================================================================
-    // Step 7: 创建资源屏障数组
-    // ========================================================================
-
+    // Resource barriers for copy
     D3D12_RESOURCE_BARRIER barriers[2];
 
-    // barriers[0]: sourceRT (初始状态 → COPY_SOURCE)
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[0].Transition.pResource   = sourceRT;
@@ -1461,7 +1439,6 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-    // barriers[1]: backBuffer (RENDER_TARGET → COPY_DEST)
     barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
     barriers[1].Transition.pResource   = backBuffer;
@@ -1469,46 +1446,99 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-    // ========================================================================
-    // Step 8: 执行 GPU 拷贝
-    // ========================================================================
-
-    // 8.1 转换资源状态
     D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PreCopy");
 
-    // 8.2 执行拷贝
     cmdList->CopyResource(backBuffer, sourceRT);
 
-    // ========================================================================
-    // Step 9: 恢复资源状态
-    // ========================================================================
-
-    // barriers[0]: COPY_SOURCE → 初始状态
+    // Restore resource states
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[0].Transition.StateAfter  = sourceInitialState;
-
-    // barriers[1]: COPY_DEST → RENDER_TARGET
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
     D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PostCopy");
+}
 
-    // ========================================================================
-    // Step 10: 输出日志
-    // ========================================================================
+// ============================================================================
+// InitializeBlitProgram - Lazy init blit shader for format mismatch fallback
+// ============================================================================
 
-    const char* rtTypeName = "Unknown";
-    switch (rtType)
+void RendererSubsystem::InitializeBlitProgram()
+{
+    if (m_blitProgram)
+        return;
+
+    std::filesystem::path vsPath = ".enigma/assets/engine/shaders/program/final.vs.hlsl";
+    std::filesystem::path psPath = ".enigma/assets/engine/shaders/program/final.ps.hlsl";
+
+    LogInfo(LogRenderer, "InitializeBlitProgram: Compiling engine blit shader (final.vs + final.ps)");
+    m_blitProgram = CreateShaderProgramFromFiles(vsPath, psPath, "engine_blit");
+
+    if (!m_blitProgram)
     {
-    case RenderTargetType::ColorTex: rtTypeName = "colortex";
-        break;
-    case RenderTargetType::DepthTex: rtTypeName = "depthtex";
-        break;
-    case RenderTargetType::ShadowColor: rtTypeName = "shadowcolor";
-        break;
-    case RenderTargetType::ShadowTex: rtTypeName = "shadowtex";
-        break;
+        LogError(LogRenderer, "InitializeBlitProgram: Failed to compile blit shader");
     }
+}
+
+// ============================================================================
+// PresentRenderTargetWithDraw - Draw call fallback for format mismatch
+// ============================================================================
+
+void RendererSubsystem::PresentRenderTargetWithDraw(
+    int                   rtIndex,
+    RenderTargetType      rtType,
+    D3D12_RESOURCE_STATES sourceInitialState)
+{
+    // Step 1: Lazy-init blit program
+    InitializeBlitProgram();
+    if (!m_blitProgram)
+    {
+        LogError(LogRenderer, "PresentRenderTargetWithDraw: Blit program unavailable, cannot present");
+        return;
+    }
+
+    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    if (!cmdList)
+    {
+        LogError(LogRenderer, "PresentRenderTargetWithDraw: CommandList is null");
+        return;
+    }
+
+    // Step 2: Transition source RT -> PIXEL_SHADER_RESOURCE
+    IRenderTargetProvider* provider = GetRenderTargetProvider(rtType);
+    ID3D12Resource*        sourceRT = provider->GetMainResource(rtIndex);
+
+    D3D12RenderSystem::TransitionResource(
+        cmdList, sourceRT,
+        sourceInitialState,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        "PresentRenderTargetWithDraw::SourceToSRV"
+    );
+
+    // Step 3: Bind backbuffer as RTV
+    auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
+    cmdList->OMSetRenderTargets(1, &backBufferRTV, FALSE, nullptr);
+
+    // Step 4: Set backbuffer format override for correct PSO creation
+    DXGI_FORMAT backbufferFormat = D3D12RenderSystem::GetBackBufferFormat();
+    m_renderTargetBinder->SetBackbufferOverride(backbufferFormat);
+
+    // Step 5: Cache blit shader (PSO created at Draw time via PreparePSOAndBindings)
+    m_currentShaderProgram = m_blitProgram.get();
+
+    // Step 6: Draw full-screen quad
+    FullQuadsRenderer::DrawFullQuads();
+
+    // Step 7: Clear backbuffer override
+    m_renderTargetBinder->ClearBackbufferOverride();
+
+    // Step 8: Restore source RT state
+    D3D12RenderSystem::TransitionResource(
+        cmdList, sourceRT,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        sourceInitialState,
+        "PresentRenderTargetWithDraw::RestoreSource"
+    );
 }
 
 void RendererSubsystem::SetBlendConfig(const BlendConfig& config)
@@ -1651,7 +1681,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     }
 
     LogDebug(LogRenderer, "DrawVertexArray:: called, count=%zu, offset=%zu",
-            count, m_immediateVertexRingBuffer->GetCurrentOffset());
+             count, m_immediateVertexRingBuffer->GetCurrentOffset());
 
     // [NEW] Use RingBuffer wrapper API (Option D Architecture)
     // Append returns VBV with correct BufferLocation for mixed-stride support

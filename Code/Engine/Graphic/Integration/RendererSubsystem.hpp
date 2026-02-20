@@ -1342,6 +1342,12 @@ namespace enigma::graphic
          */
         bool PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList);
 
+        /// Initialize blit shader program (lazy, first call only)
+        void InitializeBlitProgram();
+
+        /// Present RT to backbuffer via draw call (format mismatch fallback)
+        void PresentRenderTargetWithDraw(int rtIndex, RenderTargetType rtType, D3D12_RESOURCE_STATES sourceInitialState);
+
         /// Swap chain - double buffered display (requires window handle, managed by subsystem)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
 
@@ -1368,6 +1374,9 @@ namespace enigma::graphic
 
         /// Full Screen Draw
         std::unique_ptr<class FullQuadsRenderer> m_fullQuadsRenderer;
+
+        /// Blit shader for PresentRenderTarget format mismatch fallback (lazy-initialized)
+        std::shared_ptr<ShaderProgram> m_blitProgram;
 
         // ==================== Uniform管理组件 (Phase 3) ====================
 
