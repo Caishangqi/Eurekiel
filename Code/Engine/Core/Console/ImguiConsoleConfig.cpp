@@ -37,7 +37,7 @@ ImVec4 OVERLAY_BG_COLOR          = ImVec4(0.12f, 0.12f, 0.15f, 0.95f); // Dark p
 ImVec4 OVERLAY_SELECTED_COLOR    = ImVec4(0.1f, 0.4f, 0.1f, 0.8f);    // Dark green
 ImVec4 OVERLAY_HOVER_COLOR       = ImVec4(0.2f, 0.2f, 0.3f, 0.6f);    // Subtle hover
 ImVec4 OVERLAY_MATCH_HIGHLIGHT   = ImVec4(0.2f, 0.6f, 0.2f, 0.4f);    // Green tint
-ImVec4 OVERLAY_DESCRIPTION_COLOR = ImVec4(0.5f, 0.5f, 0.5f, 0.7f);    // Dimmed gray for descriptions
+ImVec4 OVERLAY_DESCRIPTION_COLOR = ImVec4(0.8f, 0.8f, 0.8f, 0.7f);    // Dimmed gray for descriptions
 
 //=============================================================================
 // Docked Mode
