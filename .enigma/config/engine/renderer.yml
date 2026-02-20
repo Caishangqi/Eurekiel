@@ -53,6 +53,19 @@ rendering:
   #   - 3: Triple buffering (recommended, balanced)
   maxFramesInFlight: 3
 
+  # Backbuffer (SwapChain) format
+  #
+  # Controls the DXGI format used for SwapChain buffer creation.
+  # PresentRenderTarget auto-detects format mismatch between colortex0
+  # and backbuffer, falling back to draw-call blit when needed.
+  #
+  # Options:
+  #   - R8G8B8A8_UNORM     : Standard LDR (default)
+  #   - R10G10B10A2_UNORM  : 10-bit HDR output
+  #   - R16G16B16A16_FLOAT : Full HDR (requires HDR display)
+  #
+  backbufferFormat: R8G8B8A8_UNORM
+
 # ==============================================================================
 # Debug Settings
 # ==============================================================================
