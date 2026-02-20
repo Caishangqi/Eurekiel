@@ -444,6 +444,24 @@ namespace enigma::graphic
         // TODO: MSAA配置
         // int msaaSampleCount = 1; // 1=无MSAA, 2/4/8=MSAA采样数
 
+        // ==================== Backbuffer Format Configuration ====================
+
+        /**
+         * @brief Backbuffer (SwapChain) format
+         *
+         * Controls the DXGI format used for SwapChain buffer creation.
+         * PresentRenderTarget uses this to detect format mismatch and
+         * automatically fall back to draw-call-based blit when needed.
+         *
+         * Common values:
+         * - R8G8B8A8_UNORM  : Standard LDR (default)
+         * - R10G10B10A2_UNORM: 10-bit HDR output
+         * - R16G16B16A16_FLOAT: Full HDR (requires HDR display)
+         *
+         * YAML config: rendering.backbufferFormat
+         */
+        DXGI_FORMAT backbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
         // TODO: HDR配置
         // bool enableHDR = false;
         // DXGI_FORMAT hdrFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;

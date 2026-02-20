@@ -300,6 +300,23 @@ namespace enigma::graphic
 
         LogInfo("RendererSubsystemConfig", "Shader entry point: %s", result.shaderEntryPoint.c_str());
 
+        std::string bbFormatStr = yamlOpt->GetString("rendering.backbufferFormat", "");
+        if (!bbFormatStr.empty())
+        {
+            auto bbFormatOpt = DXGIFormatParser::Parse(bbFormatStr);
+            if (bbFormatOpt.has_value())
+            {
+                result.backbufferFormat = bbFormatOpt.value();
+                LogInfo("RendererSubsystemConfig", "Backbuffer format: %s", bbFormatStr.c_str());
+            }
+            else
+            {
+                LogWarn("RendererSubsystemConfig",
+                        "Invalid backbufferFormat '%s', using default R8G8B8A8_UNORM",
+                        bbFormatStr.c_str());
+            }
+        }
+
         // [NEW] Step 8: Parse rendertargets configuration
         ParseRenderTargetsConfig(*yamlOpt, result);
 
