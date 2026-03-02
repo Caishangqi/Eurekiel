@@ -22,12 +22,13 @@
 #include <wrl/client.h>
 #include <unordered_map>
 #include <vector>
+#include <array>
 #include <cstddef>
 
 namespace enigma::graphic
 {
     class ShaderProgram;
-    class VertexLayout; // [NEW] Forward declaration for VertexLayout
+    class VertexLayout; // Forward declaration for VertexLayout
 #pragma warning(push)
 #pragma warning(disable: 4324)
     /**
@@ -49,14 +50,16 @@ namespace enigma::graphic
      */
     struct alignas(16) PSOKey
     {
-        const ShaderProgram* shaderProgram       = nullptr; ///< shader program pointer
-        const VertexLayout*  vertexLayout        = nullptr; ///< [NEW] Vertex layout pointer
-        DXGI_FORMAT          rtFormats[8]        = {}; ///< 8 RT formats (corresponding to colortex0-7)
-        DXGI_FORMAT          depthFormat         = DXGI_FORMAT_UNKNOWN; ///< depth format
-        BlendConfig          blendConfig         = BlendConfig::Opaque(); ///< [REFACTORED] blend configuration (replaces BlendMode)
-        DepthConfig          depthConfig         = DepthConfig::Enabled(); ///< [REFACTORED] depth configuration (replaces DepthMode)
-        StencilTestDetail    stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
-        RasterizationConfig  rasterizationConfig = RasterizationConfig::CullBack(); ///< Rasterization configuration
+        const ShaderProgram*       shaderProgram       = nullptr; ///< shader program pointer
+        const VertexLayout*        vertexLayout        = nullptr; ///< Vertex layout pointer
+        DXGI_FORMAT                rtFormats[8]        = {}; ///< 8 RT formats (corresponding to colortex0-7)
+        DXGI_FORMAT                depthFormat         = DXGI_FORMAT_UNKNOWN; ///< depth format
+        BlendConfig                blendConfig         = BlendConfig::Opaque(); ///< [REFACTORED] blend configuration (replaces BlendMode)
+        bool                       hasIndependentBlend = false; ///< Per-RT independent blend enable
+        std::array<BlendConfig, 8> perRTBlendConfigs   = {}; ///< Per-RT blend overrides (used when hasIndependentBlend)
+        DepthConfig                depthConfig         = DepthConfig::Enabled(); ///< [REFACTORED] depth configuration (replaces DepthMode)
+        StencilTestDetail          stencilDetail       = StencilTestDetail::Disabled(); ///< Stencil test configuration
+        RasterizationConfig        rasterizationConfig = RasterizationConfig::CullBack(); ///< Rasterization configuration
         /**
          * @brief equality comparison operator
          * @param other another PSOKey
@@ -147,16 +150,7 @@ namespace enigma::graphic
          * 3. Call CreatePSO to create a cache miss.
          * 4. New PSO added to cache
          */
-        ID3D12PipelineState* GetOrCreatePSO(
-            const ShaderProgram*       shaderProgram,
-            const VertexLayout*        layout, // [NEW] Vertex layout
-            const DXGI_FORMAT          rtFormats[8],
-            DXGI_FORMAT                depthFormat,
-            const BlendConfig&         blendConfig, // [REFACTORED] BlendConfig replaces BlendMode
-            const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
-            const StencilTestDetail&   stencilDetail,
-            const RasterizationConfig& rasterizationConfig
-        );
+        ID3D12PipelineState* GetOrCreatePSO(const PSOKey& key);
 
         /**
          * @brief Clear PSO cache
@@ -189,7 +183,7 @@ namespace enigma::graphic
          * @param blendDesc blend descriptor
          * @param blendConfig blend configuration
          */
-        static void ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const BlendConfig& blendConfig);
+        static void ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const PSOKey& key);
 
         /**
          * @brief configure depth stencil state

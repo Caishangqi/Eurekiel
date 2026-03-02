@@ -8,8 +8,8 @@
 #include "Engine/Graphic/Shader/Program/ShaderProgram.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Helper/StencilHelper.hpp"
-#include "Engine/Graphic/Resource/VertexLayout/VertexLayout.hpp" // [NEW] VertexLayout for InputLayout
-#include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] Default layout fallback
+#include "Engine/Graphic/Resource/VertexLayout/VertexLayout.hpp" // VertexLayout for InputLayout
+#include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // Default layout fallback
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include <functional>
 
@@ -24,18 +24,20 @@ namespace enigma::graphic
     {
         if (shaderProgram != other.shaderProgram)
             return false;
-        // [NEW] VertexLayout pointer comparison
+        // VertexLayout pointer comparison
         if (vertexLayout != other.vertexLayout)
             return false;
         if (depthFormat != other.depthFormat)
             return false;
         if (blendConfig != other.blendConfig)
             return false;
+        if (hasIndependentBlend != other.hasIndependentBlend)
+            return false;
         if (depthConfig != other.depthConfig)
             return false;
         if (!(stencilDetail == other.stencilDetail))
             return false;
-        // [NEW] RasterizationConfig comparison
+        // RasterizationConfig comparison
         if (!(rasterizationConfig == other.rasterizationConfig))
             return false;
 
@@ -43,6 +45,16 @@ namespace enigma::graphic
         {
             if (rtFormats[i] != other.rtFormats[i])
                 return false;
+        }
+
+        // Per-RT blend comparison (only when independent blend is active)
+        if (hasIndependentBlend)
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                if (perRTBlendConfigs[i] != other.perRTBlendConfigs[i])
+                    return false;
+            }
         }
 
         return true;
@@ -55,7 +67,7 @@ namespace enigma::graphic
         // Hash ShaderProgram pointer
         hash ^= std::hash<const void*>{}(shaderProgram);
 
-        // [NEW] Hash VertexLayout pointer
+        // Hash VertexLayout pointer
         hash ^= std::hash<const void*>{}(vertexLayout) << 1;
 
         // Hash RT format
@@ -78,6 +90,21 @@ namespace enigma::graphic
             (static_cast<uint32_t>(blendConfig.renderTargetWriteMask) << 27);
         hash ^= std::hash<uint32_t>{}(blendKey) << 16;
 
+        // Hash per-RT blend when independent blend is active
+        if (hasIndependentBlend)
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                const auto& rtBlend    = perRTBlendConfigs[i];
+                uint32_t    rtBlendKey = (rtBlend.blendEnabled ? 1u : 0u) |
+                    (static_cast<uint32_t>(rtBlend.srcBlend) << 1) |
+                    (static_cast<uint32_t>(rtBlend.destBlend) << 6) |
+                    (static_cast<uint32_t>(rtBlend.srcBlendAlpha) << 14) |
+                    (static_cast<uint32_t>(rtBlend.destBlendAlpha) << 19);
+                hash ^= std::hash<uint32_t>{}(rtBlendKey) << (i + 3);
+            }
+        }
+
         // Hash depth config (3 fields)
         hash ^= std::hash<bool>{}(depthConfig.depthTestEnabled) << 24;
         hash ^= std::hash<bool>{}(depthConfig.depthWriteEnabled) << 25;
@@ -99,7 +126,7 @@ namespace enigma::graphic
         hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilFailOp)) << 5;
         hash ^= std::hash<uint32_t>{}(static_cast<uint32_t>(stencilDetail.backFaceStencilDepthFailOp)) << 6;
 
-        // [NEW] RasterizationConfig Hash (optimized strategy)
+        // RasterizationConfig Hash (optimized strategy)
         // Strategy 1: High-frequency fields always hashed
         uint32_t rastKey = (static_cast<uint32_t>(rasterizationConfig.fillMode) << 16) |
             (static_cast<uint32_t>(rasterizationConfig.cullMode) << 8) |
@@ -131,30 +158,8 @@ namespace enigma::graphic
     // ========================================================================
     // PSOManager implementation
     // ========================================================================
-    ID3D12PipelineState* PSOManager::GetOrCreatePSO(
-        const ShaderProgram*       shaderProgram,
-        const VertexLayout*        layout, // [NEW] Vertex layout parameters
-        const DXGI_FORMAT          rtFormats[8],
-        DXGI_FORMAT                depthFormat,
-        const BlendConfig&         blendConfig, // [REFACTORED] BlendConfig replaces BlendMode
-        const DepthConfig&         depthConfig, // [REFACTORED] DepthConfig replaces DepthMode
-        const StencilTestDetail&   stencilDetail,
-        const RasterizationConfig& rasterizationConfig
-    )
+    ID3D12PipelineState* PSOManager::GetOrCreatePSO(const PSOKey& key)
     {
-        PSOKey key;
-        key.shaderProgram = shaderProgram;
-        key.vertexLayout  = layout; // [NEW] Set vertex layout
-        for (int i = 0; i < 8; ++i)
-        {
-            key.rtFormats[i] = rtFormats[i];
-        }
-        key.depthFormat         = depthFormat;
-        key.blendConfig         = blendConfig; // [REFACTORED] Use BlendConfig
-        key.depthConfig         = depthConfig; // [REFACTORED] Use DepthConfig
-        key.stencilDetail       = stencilDetail;
-        key.rasterizationConfig = rasterizationConfig; // [NEW] Set rasterization config
-
         // 2. Find cache
         auto it = m_psoCache.find(key);
         if (it != m_psoCache.end())
@@ -208,7 +213,7 @@ namespace enigma::graphic
         // }
 
         // 2.2 Blend state (using key.blendConfig)
-        ConfigureBlendState(psoDesc.BlendState, key.blendConfig);
+        ConfigureBlendState(psoDesc.BlendState, key);
 
         // 2.3 Rasterization status (using key.rasterizationConfig)
         ConfigureRasterizerState(psoDesc.RasterizerState, key.rasterizationConfig);
@@ -299,13 +304,14 @@ namespace enigma::graphic
     // ========================================================================
     // State configuration helper method
     // ========================================================================
-    void PSOManager::ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const BlendConfig& blendConfig)
+    void PSOManager::ConfigureBlendState(D3D12_BLEND_DESC& blendDesc, const PSOKey& key)
     {
         blendDesc.AlphaToCoverageEnable  = FALSE;
-        blendDesc.IndependentBlendEnable = FALSE;
+        blendDesc.IndependentBlendEnable = key.hasIndependentBlend ? TRUE : FALSE;
 
-        // [REFACTORED] Direct configuration from BlendConfig struct
-        // No more switch-case on BlendMode enum - cleaner and more flexible
+        const auto& blendConfig = key.blendConfig;
+
+        // Set global blend for all RTs first
         for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
         {
             blendDesc.RenderTarget[i].BlendEnable           = blendConfig.blendEnabled ? TRUE : FALSE;
@@ -317,6 +323,26 @@ namespace enigma::graphic
             blendDesc.RenderTarget[i].DestBlendAlpha        = blendConfig.destBlendAlpha;
             blendDesc.RenderTarget[i].BlendOpAlpha          = blendConfig.blendOpAlpha;
             blendDesc.RenderTarget[i].RenderTargetWriteMask = blendConfig.renderTargetWriteMask;
+        }
+
+        // Apply per-RT overrides when independent blend is active
+        if (key.hasIndependentBlend)
+        {
+            for (UINT i = 0; i < 8; ++i)
+            {
+                const auto& rtBlend = key.perRTBlendConfigs[i];
+                if (!rtBlend.IsUndefined())
+                {
+                    blendDesc.RenderTarget[i].BlendEnable           = rtBlend.blendEnabled ? TRUE : FALSE;
+                    blendDesc.RenderTarget[i].SrcBlend              = rtBlend.srcBlend;
+                    blendDesc.RenderTarget[i].DestBlend             = rtBlend.destBlend;
+                    blendDesc.RenderTarget[i].BlendOp               = rtBlend.blendOp;
+                    blendDesc.RenderTarget[i].SrcBlendAlpha         = rtBlend.srcBlendAlpha;
+                    blendDesc.RenderTarget[i].DestBlendAlpha        = rtBlend.destBlendAlpha;
+                    blendDesc.RenderTarget[i].BlendOpAlpha          = rtBlend.blendOpAlpha;
+                    blendDesc.RenderTarget[i].RenderTargetWriteMask = rtBlend.renderTargetWriteMask;
+                }
+            }
         }
     }
 
@@ -337,23 +363,23 @@ namespace enigma::graphic
 
     void PSOManager::ConfigureRasterizerState(D3D12_RASTERIZER_DESC& rasterDesc, const RasterizationConfig& config)
     {
-        // [NEW] Core configuration from RasterizationConfig
+        // Core configuration from RasterizationConfig
         rasterDesc.FillMode              = config.fillMode;
         rasterDesc.CullMode              = config.cullMode;
         rasterDesc.FrontCounterClockwise = (config.windingOrder == RasterizeWindingOrder::CounterClockwise);
 
-        // [NEW] Depth bias configuration (for shadow mapping)
+        // Depth bias configuration (for shadow mapping)
         rasterDesc.DepthBias            = config.depthBias;
         rasterDesc.DepthBiasClamp       = config.depthBiasClamp;
         rasterDesc.SlopeScaledDepthBias = config.slopeScaledDepthBias;
 
-        // [NEW] Feature switches
+        // Feature switches
         rasterDesc.DepthClipEnable       = config.depthClipEnabled;
         rasterDesc.MultisampleEnable     = config.multisampleEnabled;
         rasterDesc.AntialiasedLineEnable = config.antialiasedLineEnabled;
         rasterDesc.ForcedSampleCount     = config.forcedSampleCount;
 
-        // [NEW] Conservative rasterization
+        // Conservative rasterization
         rasterDesc.ConservativeRaster = config.conservativeRasterEnabled
                                             ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
                                             : D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
