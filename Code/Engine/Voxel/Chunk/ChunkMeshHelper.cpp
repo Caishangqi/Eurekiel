@@ -755,6 +755,16 @@ void ChunkMeshHelper::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockStat
                 }
             }
 
+            // Broadcast vertex build event for external systems (e.g., MaterialIdMapper)
+            // Subscribers can modify vertex attributes such as m_entityId
+            if (graphic::TerrainVertexLayout::OnBuildVertexLayout.HasListeners())
+            {
+                std::string namespacedBlockName = blockState->GetBlock()->GetNamespace()
+                    + ":" + blockState->GetBlock()->GetRegistryName();
+                graphic::TerrainVertexLayout::OnBuildVertexLayout.Broadcast(
+                    terrainQuad.data(), namespacedBlockName);
+            }
+
             // [FLIPPED QUADS] Determine triangulation based on AO values
             // [SODIUM REF] ModelQuadOrientation.orientByBrightness()
             // File: net/caffeinemc/mods/sodium/client/model/quad/properties/ModelQuadOrientation.java
