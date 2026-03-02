@@ -72,9 +72,11 @@
 #pragma once
 
 #include "Engine/Graphic/Shader/Program/Parsing/CommentDirective.hpp"
+#include "Engine/Graphic/Core/RenderState/BlendState.hpp"
 #include <optional>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <string>
 #include <cstdint>
 
@@ -312,18 +314,42 @@ namespace enigma::graphic::shader
          */
         const std::unordered_map<std::string, std::string>& GetRTFormats() const { return m_rtFormats; }
 
-    private:
-        // ========== 数据成员 (存储解析后的配置) ==========
+        // ========== Per-Program Blend State (from shaders.properties) ==========
 
+        /**
+         * @brief Get global blend config for this program
+         * @return BlendConfig (Undefined if no blend directive specified)
+         */
+        const graphic::BlendConfig& GetBlendConfig() const { return m_blendConfig; }
+
+        /**
+         * @brief Set global blend config (called during ShaderBundle injection)
+         */
+        void SetBlendConfig(const graphic::BlendConfig& config) { m_blendConfig = config; }
+
+        /**
+         * @brief Get per-buffer blend overrides (rtIndex -> BlendConfig)
+         * @return Map of RT index to BlendConfig overrides
+         */
+        const std::map<int, graphic::BlendConfig>& GetBufferBlendOverrides() const { return m_bufferBlendOverrides; }
+
+        /**
+         * @brief Set per-buffer blend override for a specific RT index
+         */
+        void SetBufferBlendOverride(int rtIndex, const graphic::BlendConfig& config) { m_bufferBlendOverrides[rtIndex] = config; }
+
+    private:
         std::vector<uint32_t>                        m_drawBuffers; ///< DrawBuffers 列表 (默认: {0})
         std::optional<std::string>                   m_blendMode; ///< 混合模式 (默认: std::nullopt)
         std::optional<std::string>                   m_depthTest; ///< 深度测试 (默认: std::nullopt)
         std::optional<std::string>                   m_cullFace; ///< 面剔除 (默认: std::nullopt)
         std::optional<bool>                          m_depthWrite; ///< 深度写入 (默认: std::nullopt)
         std::optional<float>                         m_alphaTest; ///< Alpha 测试 (默认: std::nullopt)
-        std::unordered_map<std::string, std::string> m_rtFormats; ///< RT 格式覆盖
+        std::unordered_map<std::string, std::string> m_rtFormats; ///< RT format overrides
 
-        // ========== 内部解析方法 ==========
+        // Per-program blend state (injected from shaders.properties)
+        graphic::BlendConfig                m_blendConfig = graphic::BlendConfig::Undefined(); ///< Global blend (Undefined = not set)
+        std::map<int, graphic::BlendConfig> m_bufferBlendOverrides; ///< Per-RT blend overrides (rtIndex -> config)
 
         /**
          * @brief 解析注释指令
