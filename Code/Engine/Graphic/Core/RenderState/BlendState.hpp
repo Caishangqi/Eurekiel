@@ -111,6 +111,9 @@ namespace enigma::graphic
         // [KEY] Render target write mask
         ColorWriteMask renderTargetWriteMask = ColorWriteEnable::All;
 
+        // Marks "no blend directive specified" - used by per-buffer blend system
+        bool isUndefined = false;
+
         // ========================================
         // Static Preset Methods
         // ========================================
@@ -125,6 +128,22 @@ namespace enigma::graphic
             config.blendEnabled = false;
             return config;
         }
+
+        /**
+         * @brief Undefined blend state - no directive specified
+         * @return BlendConfig with isUndefined=true, used as "not set" sentinel
+         */
+        static inline BlendConfig Undefined()
+        {
+            BlendConfig config;
+            config.isUndefined = true;
+            return config;
+        }
+
+        /**
+         * @brief Check if this blend config is undefined (no directive specified)
+         */
+        constexpr bool IsUndefined() const { return isUndefined; }
 
         /**
          * @brief Standard Alpha blending
@@ -207,7 +226,8 @@ namespace enigma::graphic
          */
         bool operator==(const BlendConfig& other) const
         {
-            return blendEnabled == other.blendEnabled &&
+            return isUndefined == other.isUndefined &&
+                blendEnabled == other.blendEnabled &&
                 srcBlend == other.srcBlend &&
                 destBlend == other.destBlend &&
                 blendOp == other.blendOp &&
