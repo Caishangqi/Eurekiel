@@ -20,21 +20,21 @@
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
 #include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
 #include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
-#include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
+#include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // M6.2: ShaderProgram
 #include "Engine/Graphic/Shader/Program/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
 #include "Engine/Graphic/Shader/Program/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
 #include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
-#include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // [NEW] Option D: RingBuffer wrapper
-#include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // [NEW] Option D: RingBuffer wrapper
-#include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // [NEW] Draw binding helper
+#include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // Option D: RingBuffer wrapper
+#include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // Option D: RingBuffer wrapper
+#include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // Draw binding helper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
-#include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // [NEW] VertexLayout state management
+#include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // VertexLayout state management
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 #include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
-#include "Engine/Graphic/Integration/RendererEvents.hpp" // [NEW] Decoupled frame lifecycle events
+#include "Engine/Graphic/Integration/RendererEvents.hpp" // Decoupled frame lifecycle events
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
 
 #pragma region Lifecycle Management
@@ -277,7 +277,7 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create SamplerProvider (Dynamic Sampler System) ====================
-    // [NEW] Initialize SamplerProvider with 4 default samplers
+    // Initialize SamplerProvider with 4 default samplers
     // Teaching points:
     // - sampler0: Linear (default texture sampling)
     // - sampler1: Point (pixel-perfect sampling)
@@ -319,7 +319,7 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create Immediate Mode RingBuffers ====================
-    // [NEW] RAII Ring Buffer wrappers encapsulate D12Buffer + offset state together
+    // RAII Ring Buffer wrappers encapsulate D12Buffer + offset state together
     // This fixes the mixed-stride issue by using BufferLocation byte offset instead of startVertex
     try
     {
@@ -452,7 +452,7 @@ void RendererSubsystem::BeginFrame()
     // - 帧内优化 vs 跨帧优化（跨帧缓存是错误的设计）
     // ========================================================================
 
-    // [NEW] Reset Ring Buffers at frame start (Option D Architecture)
+    // Reset Ring Buffers at frame start (Option D Architecture)
     // Teaching points:
     // - Per-Frame Append strategy: reset offset to 0, reuse buffer memory
     // - RAII wrapper encapsulates reset logic
@@ -466,7 +466,7 @@ void RendererSubsystem::BeginFrame()
         m_immediateIndexRingBuffer->Reset();
     }
 
-    // [NEW] Reset VertexLayout to default at frame start
+    // Reset VertexLayout to default at frame start
     // Teaching points:
     // - Ensures consistent state for each frame
     // - Default layout is Vertex_PCUTBN (set by VertexLayoutRegistry)
@@ -531,7 +531,7 @@ void RendererSubsystem::BeginFrame()
             LogWarn(LogRenderer, "BeginFrame - D3D12 frame clear failed");
         }
 
-        // [NEW] Clear all GBuffer RTs and DepthTex (centralized clear strategy)
+        // Clear all GBuffer RTs and DepthTex (centralized clear strategy)
         // This ensures clean state for the frame
         // Clear order:
         // 1. SwapChain BackBuffer: cleared by D3D12RenderSystem::BeginFrame (above)
@@ -970,7 +970,7 @@ void RendererSubsystem::UseProgram(
 }
 
 //-----------------------------------------------------------------------------------------------
-// [NEW] GetProvider - Access RT provider for dynamic configuration
+// GetProvider - Access RT provider for dynamic configuration
 //-----------------------------------------------------------------------------------------------
 
 IRenderTargetProvider* RendererSubsystem::GetRenderTargetProvider(RenderTargetType rtType)
@@ -984,7 +984,7 @@ IRenderTargetProvider* RendererSubsystem::GetRenderTargetProvider(RenderTargetTy
     return m_renderTargetBinder->GetProvider(rtType);
 }
 
-// [NEW] BeginCamera - ICamera interface version
+// BeginCamera - ICamera interface version
 void RendererSubsystem::BeginCamera(const ICamera& camera)
 {
     MatricesUniforms matricesUniforms;
@@ -1168,17 +1168,24 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
         return false;
     }
 
-    // Step 6: Get or create PSO (with layout parameter)
-    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(
-        state.program,
-        layout,
-        state.rtFormats.data(),
-        state.depthFormat,
-        state.blendConfig,
-        state.depthConfig, // [REFACTORED] Use DepthConfig
-        state.stencilDetail,
-        state.rasterizationConfig
-    );
+    // Step 6: Build PSOKey and get or create PSO
+    PSOKey psoKey;
+    psoKey.shaderProgram       = state.program;
+    psoKey.vertexLayout        = layout;
+    psoKey.depthFormat         = state.depthFormat;
+    psoKey.blendConfig         = state.blendConfig;
+    psoKey.depthConfig         = state.depthConfig;
+    psoKey.stencilDetail       = state.stencilDetail;
+    psoKey.rasterizationConfig = state.rasterizationConfig;
+    for (int i = 0; i < 8; ++i)
+        psoKey.rtFormats[i] = state.rtFormats[i];
+
+    // Per-RT blend from shaders.properties (injected via ProgramDirectives)
+    psoKey.hasIndependentBlend = m_hasIndependentBlend;
+    if (m_hasIndependentBlend)
+        psoKey.perRTBlendConfigs = m_perRTBlendConfigs;
+
+    ID3D12PipelineState* pso = m_psoManager->GetOrCreatePSO(psoKey);
 
     // Step 7: Bind PSO (avoid redundant binding)
     if (pso != m_lastBoundPSO)
@@ -1543,11 +1550,22 @@ void RendererSubsystem::PresentRenderTargetWithDraw(
 
 void RendererSubsystem::SetBlendConfig(const BlendConfig& config)
 {
-    if (m_currentBlendConfig == config)
+    if (m_currentBlendConfig == config && !m_hasIndependentBlend)
     {
         return;
     }
-    m_currentBlendConfig = config;
+    m_currentBlendConfig  = config;
+    m_hasIndependentBlend = false;
+    m_perRTBlendConfigs   = {};
+}
+
+void RendererSubsystem::SetBlendConfig(const BlendConfig& config, int rtIndex)
+{
+    if (rtIndex < 0 || rtIndex >= 8)
+        return;
+
+    m_hasIndependentBlend        = true;
+    m_perRTBlendConfigs[rtIndex] = config;
 }
 
 void RendererSubsystem::SetSamplerConfig(uint32_t index, const SamplerConfig& config)
@@ -1643,7 +1661,7 @@ void RendererSubsystem::BindRenderTargets(const std::vector<std::pair<RenderTarg
 
 size_t RendererSubsystem::GetCurrentVertexOffset() const noexcept
 {
-    // [NEW] Delegate to VertexRingBuffer wrapper
+    // Delegate to VertexRingBuffer wrapper
     // Returns 0 if RingBuffer not yet initialized
     if (m_immediateVertexRingBuffer)
     {
@@ -1654,7 +1672,7 @@ size_t RendererSubsystem::GetCurrentVertexOffset() const noexcept
 
 size_t RendererSubsystem::GetCurrentIndexOffset() const noexcept
 {
-    // [NEW] Delegate to IndexRingBuffer wrapper
+    // Delegate to IndexRingBuffer wrapper
     // Returns 0 if RingBuffer not yet initialized
     if (m_immediateIndexRingBuffer)
     {
@@ -1683,7 +1701,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t count)
     LogDebug(LogRenderer, "DrawVertexArray:: called, count=%zu, offset=%zu",
              count, m_immediateVertexRingBuffer->GetCurrentOffset());
 
-    // [NEW] Use RingBuffer wrapper API (Option D Architecture)
+    // Use RingBuffer wrapper API (Option D Architecture)
     // Append returns VBV with correct BufferLocation for mixed-stride support
     auto result = m_immediateVertexRingBuffer->Append(vertices, count, sizeof(Vertex));
 
@@ -1713,7 +1731,7 @@ void RendererSubsystem::DrawVertexArray(const Vertex* vertices, size_t vertexCou
         return;
     }
 
-    // [NEW] Use RingBuffer wrapper API (Option D Architecture)
+    // Use RingBuffer wrapper API (Option D Architecture)
     // Append returns VBV with correct BufferLocation for mixed-stride support
     auto vbResult = m_immediateVertexRingBuffer->Append(vertices, vertexCount, sizeof(Vertex));
 

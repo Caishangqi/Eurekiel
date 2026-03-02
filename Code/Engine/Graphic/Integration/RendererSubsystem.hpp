@@ -26,14 +26,14 @@
 #include "../Core/RenderState.hpp"
 #include "RendererSubsystemConfig.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
-#include "Engine/Graphic/Camera/ICamera.hpp" // [NEW] ICamera interface for new camera system
+#include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
 #include "Engine/Graphic/Target/ColorTextureProvider.hpp"
 #include "Engine/Graphic/Target/DepthTextureProvider.hpp"
 #include "Engine/Graphic/Target/ShadowColorProvider.hpp"
 #include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
-#include "Engine/Graphic/Sampler/SamplerConfig.hpp" // [NEW] Dynamic Sampler System
-#include "Engine/Graphic/Sampler/SamplerProvider.hpp" // [NEW] Dynamic Sampler System
+#include "Engine/Graphic/Sampler/SamplerConfig.hpp" // Dynamic Sampler System
+#include "Engine/Graphic/Sampler/SamplerProvider.hpp" // Dynamic Sampler System
 #include "Engine/Graphic/Shader/Uniform/ViewportUniforms.hpp"
 
 using namespace enigma::core;
@@ -50,9 +50,9 @@ namespace enigma::graphic
     class DepthTextureManager;
     class PSOManager;
     class CustomImageManager;
-    class VertexLayout; // [NEW] Forward declaration for VertexLayout state API
-    class VertexRingBuffer; // [NEW] Forward declaration for RingBuffer wrapper (Option D architecture)
-    class IndexRingBuffer; // [NEW] Forward declaration for RingBuffer wrapper
+    class VertexLayout; // Forward declaration for VertexLayout state API
+    class VertexRingBuffer; // Forward declaration for RingBuffer wrapper (Option D architecture)
+    class IndexRingBuffer; // Forward declaration for RingBuffer wrapper
 
     /**
      * @brief DirectX 12渲染子系统管理器
@@ -382,7 +382,7 @@ namespace enigma::graphic
         );
 
         /**
-         * @brief [NEW] Get RenderTarget provider by RTType
+         * @brief Get RenderTarget provider by RTType
          * @param rtType RT type (ColorTex, DepthTex, ShadowColor, ShadowTex)
          * @return Provider pointer for dynamic RT configuration
          *
@@ -398,7 +398,7 @@ namespace enigma::graphic
         IRenderTargetProvider* GetRenderTargetProvider(RenderTargetType rtType);
 
         /**
-         * @brief [NEW] Begin camera rendering - ICamera interface version
+         * @brief Begin camera rendering - ICamera interface version
          * @param camera ICamera interface reference (supports all camera types)
          *
          * Teaching Points:
@@ -588,7 +588,7 @@ namespace enigma::graphic
         void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo);
 
         /**
-         * @brief [NEW] Directly bind VBO/IBO drawing (skip Ring Buffer, used for static geometry)
+         * @brief Directly bind VBO/IBO drawing (skip Ring Buffer, used for static geometry)
          * @param vbo vertex buffer smart pointer
          * @param ibo index buffer smart pointer
          *
@@ -803,7 +803,7 @@ namespace enigma::graphic
         [[nodiscard]] BlendMode GetBlendMode() const noexcept { return m_currentBlendMode; }
 
         /**
-         * @brief [NEW] Set blend configuration (replaces SetBlendMode)
+         * @brief Set blend configuration (replaces SetBlendMode)
          * @param config Blend configuration (blend enable, factors, operations)
          *
          * Teaching Points:
@@ -826,7 +826,17 @@ namespace enigma::graphic
         void SetBlendConfig(const BlendConfig& config);
 
         /**
-         * @brief [NEW] Get current blend configuration
+         * @brief Set blend configuration for a specific render target
+         * @param config Blend configuration
+         * @param rtIndex Render target index (0-7)
+         *
+         * Enables IndependentBlendEnable in PSO when called.
+         * Use SetBlendConfig(config) without rtIndex to reset to uniform blend.
+         */
+        void SetBlendConfig(const BlendConfig& config, int rtIndex);
+
+        /**
+         * @brief Get current blend configuration
          * @return Current BlendConfig
          *
          * Teaching Points:
@@ -836,7 +846,7 @@ namespace enigma::graphic
         [[nodiscard]] BlendConfig GetBlendConfig() const noexcept { return m_currentBlendConfig; }
 
         /**
-         * @brief [NEW] Set sampler configuration at index
+         * @brief Set sampler configuration at index
          * @param index Sampler slot (0-15)
          * @param config Sampler configuration
          *
@@ -1163,7 +1173,7 @@ namespace enigma::graphic
          * @brief Get current frame vertex buffer write offset
          * @return Current offset in bytes
          * 
-         * [NEW] Option D: Delegates to VertexRingBuffer::GetCurrentOffset()
+         * Option D: Delegates to VertexRingBuffer::GetCurrentOffset()
          * Returns 0 if RingBuffer not yet initialized
          */
         size_t GetCurrentVertexOffset() const noexcept;
@@ -1172,7 +1182,7 @@ namespace enigma::graphic
          * @brief Get current frame index buffer write offset
          * @return Current offset in bytes
          * 
-         * [NEW] Option D: Delegates to IndexRingBuffer::GetCurrentOffset()
+         * Option D: Delegates to IndexRingBuffer::GetCurrentOffset()
          * Returns 0 if RingBuffer not yet initialized
          */
         size_t GetCurrentIndexOffset() const noexcept;
@@ -1391,19 +1401,21 @@ namespace enigma::graphic
         /// PSO管理器 - 动态创建和缓存PSO
         std::unique_ptr<PSOManager> m_psoManager;
 
-        // [NEW] PSO state caching for deferred binding
-        ShaderProgram*       m_currentShaderProgram       = nullptr;
-        BlendMode            m_currentBlendMode           = BlendMode::Opaque; // [DEPRECATED] Kept for backward compatibility
-        BlendConfig          m_currentBlendConfig         = BlendConfig::Opaque(); // [NEW] Dynamic Sampler System
-        DepthConfig          m_currentDepthConfig         = DepthConfig::Enabled();
-        StencilTestDetail    m_currentStencilTest         = StencilTestDetail::Disabled();
-        RasterizationConfig  m_currentRasterizationConfig = RasterizationConfig::CullBack();
-        const VertexLayout*  m_currentVertexLayout        = nullptr; // [NEW] Current vertex layout state
-        ID3D12PipelineState* m_lastBoundPSO               = nullptr;
+        // PSO state caching for deferred binding
+        ShaderProgram*             m_currentShaderProgram       = nullptr;
+        BlendMode                  m_currentBlendMode           = BlendMode::Opaque; // [DEPRECATED] Kept for backward compatibility
+        BlendConfig                m_currentBlendConfig         = BlendConfig::Opaque(); // Dynamic Sampler System
+        bool                       m_hasIndependentBlend        = false; // Per-RT blend active flag
+        std::array<BlendConfig, 8> m_perRTBlendConfigs          = {}; // Per-RT blend overrides
+        DepthConfig                m_currentDepthConfig         = DepthConfig::Enabled();
+        StencilTestDetail          m_currentStencilTest         = StencilTestDetail::Disabled();
+        RasterizationConfig        m_currentRasterizationConfig = RasterizationConfig::CullBack();
+        const VertexLayout*        m_currentVertexLayout        = nullptr; // Current vertex layout state
+        ID3D12PipelineState*       m_lastBoundPSO               = nullptr;
 
         // ==================== Dynamic Sampler System ====================
 
-        /// [NEW] SamplerProvider - Manages bindless samplers (Linear, Point, Shadow, PointWrap)
+        /// SamplerProvider - Manages bindless samplers (Linear, Point, Shadow, PointWrap)
         std::unique_ptr<SamplerProvider> m_samplerProvider;
 
         /// Current stencil reference value (CommandList dynamic state)
