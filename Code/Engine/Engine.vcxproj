@@ -481,6 +481,7 @@
     <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundle.cpp"/>
     <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.cpp"/>
     <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.cpp"/>
+    <ClCompile Include="Graphic\Bundle\MaterialIdMapper.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.cpp"/>
     <ClCompile Include="Graphic\Bundle\ProgramFallbackChain.cpp"/>
@@ -1025,6 +1026,7 @@
     <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundle.hpp"/>
     <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.hpp"/>
     <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.hpp"/>
+    <ClInclude Include="Graphic\Bundle\MaterialIdMapper.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.hpp"/>
     <ClInclude Include="Graphic\Bundle\ProgramFallbackChain.hpp"/>
