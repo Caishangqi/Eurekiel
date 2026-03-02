@@ -7,7 +7,7 @@ typedef unsigned int  Index;
 namespace enigma::graphic
 {
     // ========================================================================
-    // [NEW] Graphic Module Common Constants
+    // Graphic Module Common Constants
     // ========================================================================
     // These constants define system-wide limits for the Graphic module.
     // All modules should reference these constants instead of hardcoding values.

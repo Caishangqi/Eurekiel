@@ -62,7 +62,7 @@ int FileReadToString(std::string& outString, const std::string& filename)
 }
 
 // -----------------------------------------------------------------------------
-// [NEW] FileSystemHelper static methods for ShaderBundle directory operations
+// FileSystemHelper static methods for ShaderBundle directory operations
 // -----------------------------------------------------------------------------
 
 std::vector<std::filesystem::path> FileSystemHelper::ListSubdirectories(
@@ -106,11 +106,11 @@ std::filesystem::path FileSystemHelper::CombinePath(
 }
 
 // -----------------------------------------------------------------------------
-// [NEW] ByteBuffer file I/O
+// ByteBuffer file I/O
 // -----------------------------------------------------------------------------
 
 void FileSystemHelper::WriteBufferToFile(const enigma::core::ByteBuffer& buf,
-                                         const std::filesystem::path& filePath)
+                                         const std::filesystem::path&    filePath)
 {
     std::ofstream ofs(filePath, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open())
@@ -147,7 +147,7 @@ enigma::core::ByteArray FileSystemHelper::ReadFileToBuffer(const std::filesystem
 }
 
 void FileSystemHelper::AppendBufferToFile(const enigma::core::ByteBuffer& buf,
-                                          const std::filesystem::path& filePath)
+                                          const std::filesystem::path&    filePath)
 {
     std::ofstream ofs(filePath, std::ios::binary | std::ios::app);
     if (!ofs.is_open())
