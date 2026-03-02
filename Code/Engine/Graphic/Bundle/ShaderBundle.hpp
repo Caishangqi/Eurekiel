@@ -79,6 +79,7 @@
 #include "Engine/Graphic/Bundle/ProgramFallbackChain.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 #include "Engine/Graphic/Bundle/Texture/BundleTextureLoader.hpp"
+#include "Engine/Graphic/Bundle/MaterialIdMapper.hpp"
 #include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
 
 namespace enigma::graphic
@@ -319,6 +320,10 @@ namespace enigma::graphic
         // Returns true if any custom textures were successfully loaded
         bool HasCustomTextures() const { return !m_loadedCustomTextures.empty(); }
 
+        // Returns MaterialIdMapper for block-to-material-ID mapping
+        MaterialIdMapper*       GetMaterialIdMapper() { return &m_materialIdMapper; }
+        const MaterialIdMapper* GetMaterialIdMapper() const { return &m_materialIdMapper; }
+
     private:
         //-------------------------------------------------------------------------------------------
         // Private Helper Methods
@@ -366,6 +371,9 @@ namespace enigma::graphic
 
         // Parsed texture declarations from shaders.properties (stage bindings + custom bindings)
         CustomTextureData m_customTextureData;
+
+        // Block-to-material-ID mapping loaded from block.properties
+        MaterialIdMapper m_materialIdMapper;
 
         // Slots bound globally by BindGlobalCustomTextures(), cleared in destructor
         std::vector<int> m_globalBoundSlots;

@@ -28,6 +28,7 @@
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp" // [NEW] For OnBeginFrame subscription
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Voxel/World/TerrainVertexLayout.hpp" // [NEW] For OnBuildVertexLayout event
 
 using namespace enigma::graphic;
 
@@ -170,6 +171,13 @@ void ShaderBundleSubsystem::Shutdown()
         RendererEvents::OnBeginFrame.Remove(m_onBeginFrameHandle);
         m_onBeginFrameHandle = 0;
         LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from OnBeginFrame event");
+    }
+
+    // [NEW] Remove MaterialIdMapper subscription
+    if (m_onBuildVertexHandle != 0)
+    {
+        TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
+        m_onBuildVertexHandle = 0;
     }
 
     // Clear current bundle reference
@@ -424,6 +432,27 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
             LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied RT configs from bundle directives");
         }
 
+        // [NEW] Remove previous MaterialIdMapper subscription before switching bundles
+        if (m_onBuildVertexHandle != 0)
+        {
+            TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
+            m_onBuildVertexHandle = 0;
+        }
+
+        // [NEW] Load MaterialIdMapper from block.properties and subscribe to vertex event
+        {
+            auto  blockPropertiesPath = meta.path / "shaders" / "block.properties";
+            auto* mapper              = bundle->GetMaterialIdMapper();
+            if (!mapper->Load(blockPropertiesPath))
+            {
+                LogWarn(LogShaderBundle, "ShaderBundleSubsystem:: MaterialIdMapper load failed or empty for '%s' (non-blocking)",
+                        meta.name.c_str());
+            }
+            // Subscribe even if Load returned false (mapper will just return 0 for all queries)
+            m_onBuildVertexHandle = TerrainVertexLayout::OnBuildVertexLayout.Add(
+                mapper, &MaterialIdMapper::OnBuildVertex);
+        }
+
         // Set as current bundle
         m_currentBundle = bundle;
 
@@ -479,6 +508,13 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
 
     // Broadcast MulticastDelegate unload event (before reset)
     ShaderBundleEvents::OnBundleUnloaded.Broadcast();
+
+    // [NEW] Remove MaterialIdMapper subscription before unloading bundle
+    if (m_onBuildVertexHandle != 0)
+    {
+        TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
+        m_onBuildVertexHandle = 0;
+    }
 
     // [NEW] Reset RT configs to engine defaults before switching bundles
     if (g_theRendererSubsystem)

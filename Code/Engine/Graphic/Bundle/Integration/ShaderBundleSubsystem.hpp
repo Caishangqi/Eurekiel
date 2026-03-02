@@ -256,6 +256,9 @@ namespace enigma::graphic
         // [NEW] Event subscription handle for cleanup
         enigma::event::DelegateHandle m_onBeginFrameHandle = 0;
 
+        // [NEW] Event subscription handle for MaterialIdMapper vertex event
+        enigma::event::DelegateHandle m_onBuildVertexHandle = 0;
+
         // [NEW] Event callback - called by RendererEvents::OnBeginFrame
         void OnRendererBeginFrame();
     };
