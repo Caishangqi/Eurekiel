@@ -17,6 +17,7 @@
 // | TextureLoadException            | ERROR_RECOVERABLE    | Texture file load failure             |
 // | EnigmetaParseException          | ERROR_RECOVERABLE    | .enigmeta JSON parse error            |
 // | TextureSlotLimitException       | ERROR_RECOVERABLE    | Custom texture slots exceeded (>16)   |
+// | BlendDirectiveParseException    | ERROR_RECOVERABLE    | Blend directive syntax/mapping error  |
 //
 // Usage Pattern (Exception + Error Macro two-phase):
 //   1. Throw Phase: Throw specific exception type from business code
@@ -198,6 +199,24 @@ namespace enigma::graphic
     // Mapping: ERROR_RECOVERABLE (first 16 bindings work, excess ignored)
     //-------------------------------------------------------------------------------------------
     class TextureSlotLimitException : public ShaderBundleException
+    {
+    public:
+        using ShaderBundleException::ShaderBundleException;
+    };
+
+    //-------------------------------------------------------------------------------------------
+    // BlendDirectiveParseException
+    // Thrown when a blend directive in shaders.properties has invalid syntax
+    //
+    // Typical scenarios:
+    //   - blend.<pass> value has wrong number of tokens
+    //   - Unknown blend function name (not in 16 supported functions)
+    //   - blend.<pass>.<buffer> references unknown buffer name
+    //   - Buffer index not found in RENDERTARGETS drawBuffers mapping
+    //
+    // Mapping: ERROR_RECOVERABLE (skip invalid directive, use default blend)
+    //-------------------------------------------------------------------------------------------
+    class BlendDirectiveParseException : public ShaderBundleException
     {
     public:
         using ShaderBundleException::ShaderBundleException;
