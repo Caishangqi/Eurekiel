@@ -31,7 +31,7 @@ public:
     /// For each tile, check if the value equals specialValue.  If so, push a quad of color specialColor.  Otherwise,
     /// use RangeMapClamped() to map the tile’s value from valueRange into [0,1] (clamped so no values are outside [0,1]),
     /// then use that to get an interpolated color between lowColor (at 0.0f) and highColor (at 1.0f).  Use the following
-    /// standalone (non-member) utility/helper function to do this – write it if you haven’t written it already!
+    /// standalone (non-member) utility/helper function to do this - write it if you haven’t written it already!
     /// 
     /// @param verts The new vertexes, six verts (two triangles) per tile, into the provided
     /// vertex array. So a TileHeatMap whose m_dimensions are (50,20) should add to the end of the vertex array 1000
