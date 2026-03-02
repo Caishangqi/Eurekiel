@@ -38,6 +38,7 @@
 
 #include "Engine/Core/Properties.hpp"
 #include "Engine/Graphic/Bundle/Texture/CustomTextureData.hpp"
+#include "Engine/Graphic/Core/RenderState/BlendState.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -209,6 +210,12 @@ namespace enigma::graphic
         }
 
         static BlendModeOverride Off();
+
+        // Convert this BlendModeOverride to engine BlendConfig
+        BlendConfig ToBlendConfig() const;
+
+        // Map Function enum to D3D12_BLEND constant
+        static D3D12_BLEND ToD3D12Blend(Function func);
     };
 
     /**

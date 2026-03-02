@@ -1208,3 +1208,50 @@ BlendModeOverride BlendModeOverride::Off()
         Function::OFF
     };
 }
+
+D3D12_BLEND BlendModeOverride::ToD3D12Blend(Function func)
+{
+    switch (func)
+    {
+    case Function::ZERO: return D3D12_BLEND_ZERO;
+    case Function::ONE: return D3D12_BLEND_ONE;
+    case Function::SRC_COLOR: return D3D12_BLEND_SRC_COLOR;
+    case Function::ONE_MINUS_SRC_COLOR: return D3D12_BLEND_INV_SRC_COLOR;
+    case Function::DST_COLOR: return D3D12_BLEND_DEST_COLOR;
+    case Function::ONE_MINUS_DST_COLOR: return D3D12_BLEND_INV_DEST_COLOR;
+    case Function::SRC_ALPHA: return D3D12_BLEND_SRC_ALPHA;
+    case Function::ONE_MINUS_SRC_ALPHA: return D3D12_BLEND_INV_SRC_ALPHA;
+    case Function::DST_ALPHA: return D3D12_BLEND_DEST_ALPHA;
+    case Function::ONE_MINUS_DST_ALPHA: return D3D12_BLEND_INV_DEST_ALPHA;
+    case Function::SRC_ALPHA_SATURATE: return D3D12_BLEND_SRC_ALPHA_SAT;
+    case Function::CONSTANT_COLOR: return D3D12_BLEND_BLEND_FACTOR;
+    case Function::ONE_MINUS_CONSTANT_COLOR: return D3D12_BLEND_INV_BLEND_FACTOR;
+    case Function::CONSTANT_ALPHA: return D3D12_BLEND_BLEND_FACTOR;
+    case Function::ONE_MINUS_CONSTANT_ALPHA: return D3D12_BLEND_INV_BLEND_FACTOR;
+    case Function::OFF: return D3D12_BLEND_ZERO;
+    default: return D3D12_BLEND_ONE;
+    }
+}
+
+BlendConfig BlendModeOverride::ToBlendConfig() const
+{
+    // OFF on all channels means blend disabled
+    if (srcRGB == Function::OFF && dstRGB == Function::OFF &&
+        srcAlpha == Function::OFF && dstAlpha == Function::OFF)
+    {
+        BlendConfig config;
+        config.blendEnabled = false;
+        return config;
+    }
+
+    BlendConfig config;
+    config.blendEnabled          = true;
+    config.srcBlend              = ToD3D12Blend(srcRGB);
+    config.destBlend             = ToD3D12Blend(dstRGB);
+    config.blendOp               = D3D12_BLEND_OP_ADD;
+    config.srcBlendAlpha         = ToD3D12Blend(srcAlpha);
+    config.destBlendAlpha        = ToD3D12Blend(dstAlpha);
+    config.blendOpAlpha          = D3D12_BLEND_OP_ADD;
+    config.renderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    return config;
+}
