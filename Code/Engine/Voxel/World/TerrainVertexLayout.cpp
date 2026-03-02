@@ -3,6 +3,10 @@
 
 namespace enigma::graphic
 {
+    // Static event definition - vertex build event for material ID injection
+    enigma::event::MulticastDelegate<TerrainVertex*, const std::string&>
+    TerrainVertexLayout::OnBuildVertexLayout;
+
     // ============================================================================
     // Static Element Array Definition
     // 

@@ -26,6 +26,7 @@
 #include "Engine/Math/Vec2.hpp"
 #include "Engine/Math/Vec3.hpp"
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Core/Event/MulticastDelegate.hpp"
 
 namespace enigma::graphic
 {
@@ -97,6 +98,11 @@ namespace enigma::graphic
          * @return Typed pointer to this layout, or nullptr if not registered
          */
         [[nodiscard]] static const TerrainVertexLayout* Get();
+
+        // Vertex build event - broadcast after each quad's 4 vertices are constructed.
+        // Subscribers can modify vertex attributes (e.g., m_entityId for material ID injection).
+        // Parameters: vertices (pointer to 4 TerrainVertex), blockRegistryName ("namespace:name")
+        static enigma::event::MulticastDelegate<TerrainVertex*, const std::string&> OnBuildVertexLayout;
 
     private:
         static const D3D12_INPUT_ELEMENT_DESC s_elements[7]; // [UPDATED] 5 -> 7 elements
