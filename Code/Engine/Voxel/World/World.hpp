@@ -162,6 +162,11 @@ namespace enigma::voxel
         // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
         void ScheduleChunkMeshRebuild(Chunk* chunk);
 
+        // [R5.0] Mark all loaded chunks as dirty and schedule mesh rebuild
+        // Called when ShaderBundle switches (material ID mappings change)
+        // Reference: Iris levelRenderer.allChanged() on shader pack switch
+        void InvalidateAllChunkMeshes();
+
         //-------------------------------------------------------------------------------------------
         // [REFACTORED] Lighting System - Now delegates to VoxelLightEngine
         //-------------------------------------------------------------------------------------------

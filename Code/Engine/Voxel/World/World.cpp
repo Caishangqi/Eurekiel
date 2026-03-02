@@ -1661,6 +1661,24 @@ void World::ScheduleChunkMeshRebuild(Chunk* chunk)
     }
 }
 
+void World::InvalidateAllChunkMeshes()
+{
+    for (auto& [key, chunk] : m_loadedChunks)
+    {
+        if (chunk)
+        {
+            chunk->MarkDirty();
+            ScheduleChunkMeshRebuild(chunk.get());
+        }
+    }
+
+    // Sort by player distance - nearest chunks rebuild first
+    SortMeshQueueByDistance();
+
+    LogInfo("world", "InvalidateAllChunkMeshes: queued %zu chunks for mesh rebuild",
+            m_loadedChunks.size());
+}
+
 void World::SortMeshQueueByDistance()
 {
     if (m_pendingMeshRebuildQueue.empty()) return;
