@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // LightEngine.hpp
 //
-// [NEW] Abstract base class for light engines (BlockLightEngine, SkyLightEngine)
+// Abstract base class for light engines (BlockLightEngine, SkyLightEngine)
 // Provides BFS dirty queue management for light propagation
 //
 // Reference: Minecraft LightEngine.java
@@ -66,6 +66,6 @@ namespace enigma::voxel
         virtual uint8_t GetCurrentLightValue(Chunk* chunk, int32_t x, int32_t y, int32_t z) const = 0;
 
         std::deque<BlockIterator> m_dirtyQueue;
-        World*                    m_world = nullptr; // [NEW] World reference for BlockPos lookup
+        World*                    m_world = nullptr; // World reference for BlockPos lookup
     };
 } // namespace enigma::voxel

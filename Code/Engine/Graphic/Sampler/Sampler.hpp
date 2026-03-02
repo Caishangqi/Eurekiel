@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// Sampler.hpp - [NEW] RAII Sampler class for Dynamic Sampler System
+// Sampler.hpp - RAII Sampler class for Dynamic Sampler System
 // Part of Dynamic Sampler System
 // ============================================================================
 

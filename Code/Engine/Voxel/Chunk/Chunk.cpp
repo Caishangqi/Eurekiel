@@ -117,7 +117,7 @@ void Chunk::SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state)
     {
         BlockIterator iter(this, (int)index);
 
-        // ===== [NEW] SKY Flag Propagation (Assignment 05 requirements) =====
+        // ===== SKY Flag Propagation (Assignment 05 requirements) =====
 
         // Case 1: Digging a block (old=opaque, new=non-opaque)
         if (wasOpaque && !isOpaque)
@@ -558,7 +558,7 @@ Chunk* Chunk::GetWestNeighbor() const
 void Chunk::InitializeLighting(World* world)
 {
     // Step 1: Default all blocks to lighting=0, not dirty
-    // [NEW] Use Chunk's independent storage instead of shared BlockState
+    // Use Chunk's independent storage instead of shared BlockState
     for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
     {
         int32_t x, y, z;

@@ -38,7 +38,7 @@ namespace enigma::graphic
             Reset();
         }
 
-        // ========== [NEW] Unified API ==========
+        // ========== Unified API ==========
 
         /**
          * @brief Set single shadow texture index (unified API)

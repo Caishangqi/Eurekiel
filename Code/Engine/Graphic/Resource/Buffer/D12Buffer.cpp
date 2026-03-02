@@ -67,7 +67,7 @@ namespace enigma::graphic
      */
     D12Buffer::~D12Buffer()
     {
-        // [NEW] 如果有持久映射，先取消持久映射
+        // 如果有持久映射，先取消持久映射
         UnmapPersistent();
 
         // 如果当前有映射，先取消映射
@@ -90,13 +90,13 @@ namespace enigma::graphic
           , m_mappedData(other.m_mappedData)
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
           , m_byteStride(other.m_byteStride)
-          , m_persistentMappedData(other.m_persistentMappedData) // [NEW] 转移持久映射指针
-          , m_isPersistentlyMapped(other.m_isPersistentlyMapped) // [NEW] 转移持久映射状态
+          , m_persistentMappedData(other.m_persistentMappedData) // 转移持久映射指针
+          , m_isPersistentlyMapped(other.m_isPersistentlyMapped) // 转移持久映射状态
     {
         // 清空源对象
         other.m_mappedData           = nullptr;
-        other.m_persistentMappedData = nullptr; // [NEW] 清空源对象的持久映射指针
-        other.m_isPersistentlyMapped = false; // [NEW] 清空源对象的持久映射状态
+        other.m_persistentMappedData = nullptr; // 清空源对象的持久映射指针
+        other.m_isPersistentlyMapped = false; // 清空源对象的持久映射状态
     }
 
     /**
@@ -106,7 +106,7 @@ namespace enigma::graphic
     {
         if (this != &other)
         {
-            // [NEW] 释放当前的持久映射
+            // 释放当前的持久映射
             UnmapPersistent();
 
             // 释放当前资源
@@ -124,13 +124,13 @@ namespace enigma::graphic
             m_mappedData           = other.m_mappedData;
             m_formattedDebugName   = std::move(other.m_formattedDebugName);
             m_byteStride           = other.m_byteStride;
-            m_persistentMappedData = other.m_persistentMappedData; // [NEW] 转移持久映射指针
-            m_isPersistentlyMapped = other.m_isPersistentlyMapped; // [NEW] 转移持久映射状态
+            m_persistentMappedData = other.m_persistentMappedData; // 转移持久映射指针
+            m_isPersistentlyMapped = other.m_isPersistentlyMapped; // 转移持久映射状态
 
             // 清空源对象
             other.m_mappedData           = nullptr;
-            other.m_persistentMappedData = nullptr; // [NEW] 清空源对象的持久映射指针
-            other.m_isPersistentlyMapped = false; // [NEW] 清空源对象的持久映射状态
+            other.m_persistentMappedData = nullptr; // 清空源对象的持久映射指针
+            other.m_isPersistentlyMapped = false; // 清空源对象的持久映射状态
         }
         return *this;
     }
@@ -188,7 +188,7 @@ namespace enigma::graphic
     }
 
     /**
-     * [NEW] 持久映射CPU内存（DirectX 12推荐模式）
+     * 持久映射CPU内存（DirectX 12推荐模式）
      * 教学要点:
      * 1. 只有UPLOAD堆的缓冲区才能持久映射
      * 2. 使用CD3DX12_RANGE(0,0)表示CPU不读取，只写入
@@ -241,7 +241,7 @@ namespace enigma::graphic
     }
 
     /**
-     * [NEW] 取消持久映射
+     * 取消持久映射
      * 教学要点:
      * 1. 在析构函数中调用，确保资源正确释放
      * 2. 检查状态标志，避免重复Unmap
@@ -339,9 +339,9 @@ namespace enigma::graphic
     std::string D12Buffer::GetDebugInfo() const
     {
         std::string info = "D12Buffer Debug Info:\n";
-        info += "  Name: " + GetDebugName() + "\n";
-        info += "  Size: " + std::to_string(GetSize()) + " bytes\n";
-        info += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
+        info             += "  Name: " + GetDebugName() + "\n";
+        info             += "  Size: " + std::to_string(GetSize()) + " bytes\n";
+        info             += "  GPU Address: 0x" + std::to_string(GetGPUVirtualAddress()) + "\n";
 
         // 内存访问模式
         info += "  Memory Access: ";
@@ -419,12 +419,12 @@ namespace enigma::graphic
         // 使用D3D12RenderSystem统一接口创建资源
         // 符合分层架构原则：资源层通过API封装层访问DirectX
         ID3D12Resource* resource = nullptr;
-        // [NEW] Buffer resources don't need ClearValue (DirectX 12 specification)
+        // Buffer resources don't need ClearValue (DirectX 12 specification)
         HRESULT hr = D3D12RenderSystem::CreateCommittedResource(
             heapProps, // 堆属性
             resourceDesc, // 资源描述
             initialState, // 初始状态
-            nullptr, // [NEW] Buffer resources always pass nullptr for pOptimizedClearValue
+            nullptr, // Buffer resources always pass nullptr for pOptimizedClearValue
             &resource // 输出接口
         );
 
@@ -667,7 +667,7 @@ namespace enigma::graphic
     {
         if (!HasCPUData())
         {
-            core::LogError(LogRenderer,   "D12Buffer::UploadToGPU: No CPU data available");
+            core::LogError(LogRenderer, "D12Buffer::UploadToGPU: No CPU data available");
             return false;
         }
 
@@ -682,11 +682,11 @@ namespace enigma::graphic
 
         if (!uploadSuccess)
         {
-            core::LogError(LogRenderer,   "D12Buffer::UploadToGPU: Failed to upload buffer '%s'", GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
+            core::LogError(LogRenderer, "D12Buffer::UploadToGPU: Failed to upload buffer '%s'", GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
             return false;
         }
 
-        core::LogDebug(LogRenderer, "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)",  GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(), GetCPUDataSize());
+        core::LogDebug(LogRenderer, "D12Buffer::UploadToGPU: Successfully uploaded buffer '%s' (%zu bytes)", GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str(), GetCPUDataSize());
 
         return true;
     }

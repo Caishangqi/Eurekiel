@@ -1,6 +1,6 @@
 #pragma once
 
-// [NEW] Exception classes for RenderTarget Provider module
+// Exception classes for RenderTarget Provider module
 // Part of RenderTarget Manager Architecture Refactoring
 
 #include <stdexcept>

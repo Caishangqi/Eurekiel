@@ -43,7 +43,7 @@ namespace enigma::graphic
             Reset();
         }
 
-        // ========== [NEW] Unified API ==========
+        // ========== Unified API ==========
 
         /**
          * @brief Set single read index (unified API)

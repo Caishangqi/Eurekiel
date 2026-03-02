@@ -154,6 +154,12 @@ namespace enigma::graphic
         const shader::ProgramDirectives& GetDirectives() const { return m_directives; }
 
         /**
+         * @brief Get mutable directives for post-compilation injection (e.g., blend from shaders.properties)
+         * @return Mutable reference to ProgramDirectives
+         */
+        shader::ProgramDirectives& GetMutableDirectives() { return m_directives; }
+
+        /**
          * @brief 获取程序名称
          * @return 程序名称字符串
          */

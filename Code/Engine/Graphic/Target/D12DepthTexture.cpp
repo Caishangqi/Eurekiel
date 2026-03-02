@@ -429,7 +429,7 @@ namespace enigma::graphic
                 m_formattedDebugName += ", D24S8";
                 break;
             case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-                m_formattedDebugName += ", D32FS8X24"; // [NEW] 64-bit depth-stencil format
+                m_formattedDebugName += ", D32FS8X24"; // 64-bit depth-stencil format
                 break;
             case DXGI_FORMAT_D16_UNORM:
                 m_formattedDebugName += ", D16";
@@ -557,7 +557,7 @@ namespace enigma::graphic
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             return DXGI_FORMAT_R24_UNORM_X8_TYPELESS; // 深度部分作为24位归一化值
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-            return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; // [NEW] 32-bit float depth, stencil in separate plane
+            return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS; // 32-bit float depth, stencil in separate plane
         case DXGI_FORMAT_D16_UNORM:
             return DXGI_FORMAT_R16_UNORM; // 16位深度
         default:
@@ -566,7 +566,7 @@ namespace enigma::graphic
     }
 
     /**
-         * [NEW] Get the corresponding TYPELESS format (for resource creation)
+         * Get the corresponding TYPELESS format (for resource creation)
          *
          * D3D12 rules: To be used as both DSV and SRV, resources must be created in TYPELESS format
          * Format mapping:
@@ -586,7 +586,7 @@ namespace enigma::graphic
         case DXGI_FORMAT_D24_UNORM_S8_UINT:
             return DXGI_FORMAT_R24G8_TYPELESS;
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-            return DXGI_FORMAT_R32G8X24_TYPELESS; // [NEW] 64-bit typeless for D32_FLOAT_S8X24_UINT
+            return DXGI_FORMAT_R32G8X24_TYPELESS; // 64-bit typeless for D32_FLOAT_S8X24_UINT
         case DXGI_FORMAT_D16_UNORM:
             return DXGI_FORMAT_R16_TYPELESS;
         default:
@@ -640,7 +640,7 @@ namespace enigma::graphic
         // 3. 确定初始资源状态
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_DEPTH_WRITE; // 深度写入状态
 
-        // 4. [NEW] OptimizedClearValue for depth texture (DirectX 12 best practice)
+        // 4. OptimizedClearValue for depth texture (DirectX 12 best practice)
         // Depth textures always need ClearValue to enable Fast Clear
         // Default: depth=1.0f (far plane), stencil=0
         D3D12_CLEAR_VALUE depthOptimizedClearValue    = {};
@@ -655,7 +655,7 @@ namespace enigma::graphic
             heapProps, // 堆属性
             resourceDesc, // 资源描述
             initialState, // 初始状态
-            &depthOptimizedClearValue, // [NEW] Always pass ClearValue for depth textures
+            &depthOptimizedClearValue, // Always pass ClearValue for depth textures
             &resource // 输出接口
         );
 
@@ -676,7 +676,7 @@ namespace enigma::graphic
             depthTextureSize *= 4; // 24+8位 = 4字节
             break;
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-            depthTextureSize *= 8; // [NEW] 64位 = 8字节 (32-bit depth + 8-bit stencil + 24-bit padding)
+            depthTextureSize *= 8; // 64位 = 8字节 (32-bit depth + 8-bit stencil + 24-bit padding)
             break;
         case DXGI_FORMAT_D16_UNORM:
             depthTextureSize *= 2; // 16位 = 2字节
@@ -751,7 +751,7 @@ namespace enigma::graphic
             formatStr = "D24_UNORM_S8_UINT";
             break;
         case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-            formatStr = "D32_FLOAT_S8X24_UINT"; // [NEW] 64-bit depth-stencil
+            formatStr = "D32_FLOAT_S8X24_UINT"; // 64-bit depth-stencil
             break;
         case DXGI_FORMAT_D16_UNORM:
             formatStr = "D16_UNORM";

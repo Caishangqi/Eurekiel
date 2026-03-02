@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // VoxelLightEngine.hpp
 //
-// [NEW] Composite light engine manager
+// Composite light engine manager
 // Composes BlockLightEngine and SkyLightEngine, provides unified interface
 //
 // Reference: Minecraft LevelLightEngine.java
@@ -62,7 +62,7 @@ namespace enigma::voxel
         void UndirtyAllBlocksInChunk(Chunk* chunk);
 
     private:
-        World*                            m_world = nullptr; // [NEW] World reference for BlockIterator creation
+        World*                            m_world = nullptr; // World reference for BlockIterator creation
         std::unique_ptr<BlockLightEngine> m_blockEngine;
         std::unique_ptr<SkyLightEngine>   m_skyEngine;
     };

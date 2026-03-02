@@ -937,7 +937,7 @@ bool ChunkMeshHelper::ShouldRenderFace(const BlockIterator& iterator, Direction 
 }
 
 // ============================================================
-// [NEW] GetBlockRenderType - Determine render pass for a block
+// GetBlockRenderType - Determine render pass for a block
 // [MINECRAFT REF] ItemBlockRenderTypes classification
 // ============================================================
 RenderType ChunkMeshHelper::GetBlockRenderType(BlockState* blockState)

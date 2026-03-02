@@ -112,7 +112,7 @@ namespace enigma::registry::block
         FluidType m_fluidType;
 
         // ============================================================
-        // [NEW] FluidState cache
+        // FluidState cache
         // [MINECRAFT REF] LiquidBlock.java stateCache
         // File: net/minecraft/world/level/block/LiquidBlock.java:35
         //

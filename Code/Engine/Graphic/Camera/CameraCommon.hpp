@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// CameraCommon.hpp - [NEW] Foundation types for Camera system
+// CameraCommon.hpp - Foundation types for Camera system
 // 
 // Contains: LogCamera category, CameraType enum, Exception hierarchy
 // Pattern: Follows UniformCommon.hpp exception design
@@ -16,19 +16,19 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // [NEW] Log Category Declaration
+    // Log Category Declaration
     // ========================================================================
 
     DECLARE_LOG_CATEGORY_EXTERN(LogCamera);
 
     // ========================================================================
-    // [NEW] CameraType Enum - Camera classification
+    // CameraType Enum - Camera classification
     // ========================================================================
 
     /**
      * @brief Camera type classification for rendering system
      *
-     * [NEW] Defines camera behavior and matrix calculation strategy:
+     * Defines camera behavior and matrix calculation strategy:
      * - Perspective:   Standard 3D camera with FOV-based projection (main game camera)
      * - Orthographic:  Parallel projection with Y-up (3D ortho views, math/physics 2D)
      * - UI:            Screen-space 2D with Y-down (UI, HUD, 2D games)
@@ -57,13 +57,13 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // [NEW] Exception Hierarchy - Type-safe error handling
+    // Exception Hierarchy - Type-safe error handling
     // ========================================================================
 
     /**
      * @brief Base exception class for Camera system
      * 
-     * [NEW] Root of Camera exception hierarchy
+     * Root of Camera exception hierarchy
      * Inherits from std::runtime_error for standard library compatibility
      */
     class CameraException : public std::runtime_error
@@ -75,7 +75,7 @@ namespace enigma::graphic
     /**
      * @brief Exception for invalid camera parameters
      * 
-     * [NEW] Thrown when camera configuration is invalid:
+     * Thrown when camera configuration is invalid:
      * - Invalid FOV (<=0 or >=180)
      * - Invalid aspect ratio (<=0)
      * - Invalid near/far planes (near >= far or negative)
@@ -89,7 +89,7 @@ namespace enigma::graphic
     /**
      * @brief Exception for camera matrix calculation errors
      * 
-     * [NEW] Thrown when matrix operations fail:
+     * Thrown when matrix operations fail:
      * - Singular matrix (non-invertible)
      * - NaN/Inf values in matrix
      * - Invalid view direction (zero length)

@@ -26,7 +26,7 @@ namespace enigma::graphic
 
     Mat44 OrthographicCamera::GetProjectionMatrix() const
     {
-        // [NEW] Orthographic projection with center offset
+        // Orthographic projection with center offset
         // Extracted from EnigmaCamera.cpp orthographic branch
         Vec2 size   = m_topRight - m_bottomLeft;
         Vec2 center = (m_topRight + m_bottomLeft) * 0.5f;
@@ -60,7 +60,7 @@ namespace enigma::graphic
 
     void OrthographicCamera::UpdateMatrixUniforms(MatricesUniforms& uniforms) const
     {
-        // [NEW] Fill GBuffer matrices for orthographic rendering
+        // Fill GBuffer matrices for orthographic rendering
         Mat44 view          = GetViewMatrix();
         Mat44 proj          = GetProjectionMatrix();
         Mat44 cameraToWorld = GetCameraToWorldTransform();

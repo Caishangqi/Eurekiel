@@ -10,7 +10,7 @@ namespace enigma::voxel
     SlabBlock::SlabBlock(const std::string& registryName, const std::string& ns)
         : Block(registryName, ns)
     {
-        // [NEW] Create EnumProperty for slab type with 3 values (bottom, top, double)
+        // Create EnumProperty for slab type with 3 values (bottom, top, double)
         m_typeProperty = std::make_shared<EnumProperty<SlabType>>(
             "type",
             std::vector<SlabType>{SlabType::BOTTOM, SlabType::TOP, SlabType::DOUBLE},
@@ -19,15 +19,15 @@ namespace enigma::voxel
             StringToSlabType // String to enum converter
         );
 
-        // [NEW] Register the property
+        // Register the property
         AddProperty(m_typeProperty);
 
-        // [NEW] Set block-level properties
+        // Set block-level properties
         // Only DOUBLE slabs are opaque, so block-level opaque = false
         SetCanOcclude(false);
         SetFullBlock(false); // Slabs are not full blocks (except DOUBLE, but YAML can override)
 
-        // [NEW] Generate all possible block states (3 states: BOTTOM, TOP, DOUBLE)
+        // Generate all possible block states (3 states: BOTTOM, TOP, DOUBLE)
         GenerateBlockStates();
     }
 
@@ -77,13 +77,13 @@ namespace enigma::voxel
 
         core::LogInfo("SlabBlock", "  [NORMAL] Placing %s slab", SlabTypeToString(type));
 
-        // [NEW] Create property map with selected type
+        // Create property map with selected type
         PropertyMap props;
         props.Set(std::static_pointer_cast<Property<SlabType>>(m_typeProperty), type);
 
         core::LogInfo("SlabBlock", "  PropertyMap before GetState(): '%s'", props.ToString().c_str());
 
-        // [NEW] Return the BlockState matching these properties
+        // Return the BlockState matching these properties
         BlockState* result = GetState(props);
 
         core::LogInfo("SlabBlock", "  GetState() returned: %s", result ? "valid" : "NULL");
@@ -119,7 +119,7 @@ namespace enigma::voxel
             return false; // Already a full block
         }
 
-        // [NEW] Check if can merge to DOUBLE slab
+        // Check if can merge to DOUBLE slab
         // Merge conditions:
         // 1. BOTTOM slab + click top half (isTopHit=true) → DOUBLE
         // 2. TOP slab + click bottom half (isTopHit=false) → DOUBLE
@@ -132,7 +132,7 @@ namespace enigma::voxel
 
     bool SlabBlock::IsOpaque(enigma::voxel::BlockState* state) const
     {
-        // [NEW] Per-state opacity check
+        // Per-state opacity check
         // Only DOUBLE slabs are opaque and block light
         SlabType type = state->Get(std::static_pointer_cast<Property<SlabType>>(m_typeProperty));
         return IsSlabOpaque(type); // Use helper function from SlabType.hpp
@@ -140,7 +140,7 @@ namespace enigma::voxel
 
     VoxelShape SlabBlock::GetCollisionShape(enigma::voxel::BlockState* state) const
     {
-        // [NEW] Get collision shape based on slab type
+        // Get collision shape based on slab type
         SlabType type = state->Get(std::static_pointer_cast<Property<SlabType>>(m_typeProperty));
 
         switch (type)
@@ -161,10 +161,10 @@ namespace enigma::voxel
 
     std::string SlabBlock::GetModelPath(enigma::voxel::BlockState* state) const
     {
-        // [NEW] Get slab type from state
+        // Get slab type from state
         SlabType type = state->Get(std::static_pointer_cast<Property<SlabType>>(m_typeProperty));
 
-        // [NEW] Build model path based on type
+        // Build model path based on type
         // Format: "{namespace}:block/{registryName}_{type}"
         // Example: "simpleminer:block/oak_slab_bottom"
         std::string typeSuffix = SlabTypeToString(type);

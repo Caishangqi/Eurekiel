@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// SamplerProvider.hpp - [NEW] Sampler provider for Dynamic Sampler System
+// SamplerProvider.hpp - Sampler provider for Dynamic Sampler System
 // Manages multiple Sampler objects and registers SamplerIndicesUniforms
 // ============================================================================
 

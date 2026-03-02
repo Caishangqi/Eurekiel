@@ -29,7 +29,7 @@ D12IndexBuffer::D12IndexBuffer(size_t size, const void* initialData, const char*
     //Teaching points: Create D3D12_INDEX_BUFFER_VIEW
     UpdateView();
 
-    // [NEW] Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
+    // Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
     // Teaching points: The IndexBuffer of the UPLOAD heap needs to be persistently mapped so that:
     // 1. DrawVertexBuffer can read data through GetPersistentMappedData()
     // 2. Data can be copied to the renderer’s Ring Buffer

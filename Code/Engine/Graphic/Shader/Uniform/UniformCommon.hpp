@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// UniformCommon.hpp - [NEW] Consolidated type definitions for Uniform system
+// UniformCommon.hpp - Consolidated type definitions for Uniform system
 // 
 // This module serves as the foundation for the entire Uniform system, providing
 // common types, enums, structs, and exception hierarchy.
@@ -30,24 +30,24 @@ namespace enigma::graphic
     DECLARE_LOG_CATEGORY_EXTERN(LogUniform);
 
     // ========================================================================
-    // [NEW] BufferSpace Enum - Space parameter routing
+    // BufferSpace Enum - Space parameter routing
     // ========================================================================
 
     /**
      * @brief Buffer space routing for Engine vs Custom buffers
      * 
-     * [NEW] Introduced for space parameter routing architecture:
+     * Introduced for space parameter routing architecture:
      * - Engine buffers use space=0 with Root CBV (slots 0-14)
      * - Custom buffers use space=1 with Descriptor Table (unlimited slots)
      */
     enum class BufferSpace : uint32_t
     {
-        Engine = 0, // [NEW] space=0, uses Root CBV, slots 0-14
-        Custom = 1 // [NEW] space=1, uses Descriptor Table, unlimited slots
+        Engine = 0, // space=0, uses Root CBV, slots 0-14
+        Custom = 1 // space=1, uses Descriptor Table, unlimited slots
     };
 
     // ========================================================================
-    // [NEW] SlotSpaceInfo - Slot and Space binding information
+    // SlotSpaceInfo - Slot and Space binding information
     // ========================================================================
 
     /**
@@ -64,7 +64,7 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // [NEW] SlotSpaceKey - Hash key for (slot, space) combination
+    // SlotSpaceKey - Hash key for (slot, space) combination
     // ========================================================================
 
     /**
@@ -236,13 +236,13 @@ namespace enigma::graphic
     };
 
     // ========================================================================
-    // [NEW] Exception Hierarchy - for type-safe error handling
+    // Exception Hierarchy - for type-safe error handling
     // ========================================================================
 
     /**
      * @brief Base exception class for Uniform system
      *
-     * [NEW] Root of Uniform exception hierarchy
+     * Root of Uniform exception hierarchy
      * Inherits from std::runtime_error for standard library compatibility
      */
     class UniformException : public std::runtime_error
@@ -257,7 +257,7 @@ namespace enigma::graphic
     /**
      * @brief Exception for buffer-related errors
      *
-     * [NEW] Provides slot and space context for debugging
+     * Provides slot and space context for debugging
      */
     class UniformBufferException : public UniformException
     {
@@ -280,7 +280,7 @@ namespace enigma::graphic
     /**
      * @brief Exception for descriptor heap-related errors
      *
-     * [NEW] For descriptor allocation and management failures
+     * For descriptor allocation and management failures
      */
     class DescriptorHeapException : public UniformException
     {

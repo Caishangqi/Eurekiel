@@ -140,7 +140,7 @@ namespace enigma::graphic
         // 
         // Migration from Static Sampler:
         // - [OLD] SamplerState linearSampler : register(s0);
-        // - [NEW] SamplerDescriptorHeap[samplerIndices.linearSampler]
+        // - SamplerDescriptorHeap[samplerIndices.linearSampler]
         // ============================================================================
 
         // 3. Create Root Signature Desc - SM6.6 Key Configuration
@@ -153,7 +153,7 @@ namespace enigma::graphic
             nullptr, // [REFACTORED] pStaticSamplers = nullptr
             D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
             D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED |
-            D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED); // [NEW] Enable dynamic sampler access
+            D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED); // Enable dynamic sampler access
 
         // 4. Serialize Root Signature
         Microsoft::WRL::ComPtr<ID3DBlob> signature;

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShadowCamera.hpp - [NEW] Shadow camera for shadow pass rendering
+// ShadowCamera.hpp - Shadow camera for shadow pass rendering
 // 
 // Extends OrthographicCamera for shadow mapping. Fills shadow matrices
 // in MatricesUniforms instead of gbuffer matrices.
@@ -15,13 +15,13 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] ShadowCamera - Shadow pass rendering camera
+    // ShadowCamera - Shadow pass rendering camera
     // ========================================================================
 
     /**
      * @brief Shadow camera for shadow map generation
      *
-     * [NEW] Extends OrthographicCamera with:
+     * Extends OrthographicCamera with:
      * - Cascade shadow mapping support via cascadeIndex
      * - Fills ONLY shadow matrices (not gbuffer matrices)
      * - Light-space view/projection for shadow depth rendering
@@ -103,7 +103,7 @@ namespace enigma::graphic
         MatricesUniforms GetMatrixUniforms() override;
 
         // ====================================================================
-        // [NEW] Cascade Shadow Mapping Support
+        // Cascade Shadow Mapping Support
         // ====================================================================
 
         void              SetCascadeIndex(int cascadeIndex) { m_cascadeIndex = cascadeIndex; }
@@ -111,7 +111,7 @@ namespace enigma::graphic
 
     private:
         // ====================================================================
-        // [NEW] Private Members
+        // Private Members
         // ====================================================================
 
         int m_cascadeIndex = 0;

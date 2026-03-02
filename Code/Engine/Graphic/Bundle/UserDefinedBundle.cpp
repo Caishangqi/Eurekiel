@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // UserDefinedBundle.cpp
 //
-// [NEW] Implementation of UserDefinedBundle class
+// Implementation of UserDefinedBundle class
 //
 // This file implements:
 //   - Constructor: Initialize bundle name and path

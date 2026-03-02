@@ -151,7 +151,7 @@ namespace enigma::registry::block
         return path;
     }
 
-    // [NEW] Default implementations for advanced placement and behavior methods
+    // Default implementations for advanced placement and behavior methods
 
     enigma::voxel::BlockState* Block::GetStateForPlacement(const PlacementContext& ctx) const
     {
@@ -202,7 +202,7 @@ namespace enigma::registry::block
                 m_namespace.c_str(), GetRegistryName().c_str(), m_impl->allStates.size());
         LogInfo("Block", "  blockstatePath: '%s'", m_blockstatePath.c_str());
 
-        // [NEW] Delegate to BlockStateDefinition::CompileModels() which applies rotation
+        // Delegate to BlockStateDefinition::CompileModels() which applies rotation
         // This follows Minecraft's FaceBakery pattern where rotation is applied during baking
         std::string fullName      = m_namespace + ":" + m_registryName;
         auto        blockStateDef = BlockRegistry::GetBlockStateDefinition(fullName);

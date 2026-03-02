@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // JsonHelper.cpp
 //
-// [NEW] Implementation of JSON parsing utilities for ShaderBundle module
+// Implementation of JSON parsing utilities for ShaderBundle module
 //
 // Implementation Notes:
 //   - Uses JsonObject wrapper from Core/Json.hpp for safe JSON access

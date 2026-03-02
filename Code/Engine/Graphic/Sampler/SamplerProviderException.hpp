@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// SamplerProviderException.hpp - [NEW] Exception classes for Sampler Provider module
+// SamplerProviderException.hpp - Exception classes for Sampler Provider module
 // Part of Dynamic Sampler System
 // ============================================================================
 

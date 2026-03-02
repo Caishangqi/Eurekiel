@@ -1,7 +1,7 @@
 ﻿//-----------------------------------------------------------------------------------------------
 // WorldTimeProvider.cpp
 //
-// [NEW] Implementation of WorldTimeProvider
+// Implementation of WorldTimeProvider
 // Minecraft-compatible time calculations matching TimeOfDayManager algorithms
 //
 // Reference: Iris CelestialUniforms.java, Minecraft ClientLevel.java
@@ -52,7 +52,7 @@ namespace enigma::voxel
     }
 
     //-------------------------------------------------------------------------------------------
-    // [NEW] GetSunAngle - Reference: Iris CelestialUniforms.java:24-32
+    // GetSunAngle - Reference: Iris CelestialUniforms.java:24-32
     // Converts skyAngle (celestialAngle) to sunAngle
     // sunAngle: 0.0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight
     //-------------------------------------------------------------------------------------------
@@ -72,7 +72,7 @@ namespace enigma::voxel
     }
 
     //-------------------------------------------------------------------------------------------
-    // [NEW] IsDay - Reference: Iris CelestialUniforms.java:60-65
+    // IsDay - Reference: Iris CelestialUniforms.java:60-65
     // Determines whether it is day or night based on the sun angle.
     // Day when sunAngle <= 0.5 (sun above horizon)
     //-------------------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ namespace enigma::voxel
     }
 
     //-------------------------------------------------------------------------------------------
-    // [NEW] GetShadowAngle - Reference: Iris CelestialUniforms.java:34-42
+    // GetShadowAngle - Reference: Iris CelestialUniforms.java:34-42
     // Returns shadow angle in range [0, 0.5]
     // The shadow angle represents the progress of the shadow-casting celestial body
     // Day: shadowAngle = sunAngle (sun casts shadows)
@@ -174,7 +174,7 @@ namespace enigma::voxel
     }
 
     //=============================================================================
-    // [NEW] Sun Path Rotation - Reference: Iris PackDirectives.java:25, 265-266
+    // Sun Path Rotation - Reference: Iris PackDirectives.java:25, 265-266
     //=============================================================================
 
     void WorldTimeProvider::SetSunPathRotation(float degrees)
@@ -253,7 +253,7 @@ namespace enigma::voxel
     }
 
     //=============================================================================
-    // [NEW] Shadow Light Position - Reference: Iris CelestialUniforms.java:93-95
+    // Shadow Light Position - Reference: Iris CelestialUniforms.java:93-95
     //=============================================================================
     // Returns the position of the current shadow-casting light source.
     // During day: sun casts shadows -> return sunPosition
@@ -270,7 +270,7 @@ namespace enigma::voxel
     }
 
     //=============================================================================
-    // [NEW] Up Direction Vector - Reference: Iris CelestialUniforms.java:44-58
+    // Up Direction Vector - Reference: Iris CelestialUniforms.java:44-58
     //=============================================================================
     // Returns VIEW SPACE direction pointing toward world "up" (zenith).
     // Used for atmospheric scattering and sun elevation (dot(sunPosition, upPosition)).
@@ -296,7 +296,7 @@ namespace enigma::voxel
     }
 
     //=============================================================================
-    // [NEW] Cloud Color Calculation
+    // Cloud Color Calculation
     //=============================================================================
     // Reference: Minecraft ClientLevel.java:673-703 getCloudColor()
     //

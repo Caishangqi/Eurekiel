@@ -525,7 +525,7 @@ namespace enigma::graphic
                                       float                              clearDepth  = 1.0f, uint8_t clearStencil = 0,
                                       D3D12_CLEAR_FLAGS                  clearFlags  = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL);
 
-        // ===== [NEW] Config-based Clear API - RenderTarget Format Refactor =====
+        // ===== Config-based Clear API - RenderTarget Format Refactor =====
 
         /**
          * @brief Clear render target using RTConfig settings

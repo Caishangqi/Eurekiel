@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShadowColorProvider.hpp - [NEW] Shadow color render target provider
+// ShadowColorProvider.hpp - Shadow color render target provider
 // Implements IRenderTargetProvider for shadowcolor0-7 management
 // Part of RenderTarget Manager Unified Architecture Refactoring
 // ============================================================================
@@ -28,7 +28,7 @@ namespace enigma::graphic
      * @class ShadowColorProvider
      * @brief Manages shadowcolor0-7 with D12RenderTarget and BufferFlipState
      * 
-     * [NEW] Implements IRenderTargetProvider for shadow color render targets.
+     * Implements IRenderTargetProvider for shadow color render targets.
      * 
      * Features:
      * - Manages 1-8 shadow color render targets (shadowcolor0-7)
@@ -108,12 +108,12 @@ namespace enigma::graphic
         // Dynamic Configuration
         void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
-        // [NEW] Reset and Config Query
+        // Reset and Config Query
         void                      ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) override;
         const RenderTargetConfig& GetConfig(int index) const override;
 
         // ========================================================================
-        // [NEW] Uniform Update API - Shader RT Fetching Feature
+        // Uniform Update API - Shader RT Fetching Feature
         // ========================================================================
 
         /**
@@ -217,7 +217,7 @@ namespace enigma::graphic
         int m_baseHeight  = 0; // Base height (can be non-square)
         int m_activeCount = 0;
 
-        // [NEW] Uniform registration for Shader RT Fetching
+        // Uniform registration for Shader RT Fetching
         UniformManager*          m_uniformManager = nullptr;
         ShadowColorIndexUniforms m_indexBuffer;
     };

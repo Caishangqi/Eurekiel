@@ -179,7 +179,7 @@ namespace enigma::graphic
         ValidateIndex(index);
         m_flipState.Flip(index);
 
-        // [NEW] Re-upload indices after flip state change
+        // Re-upload indices after flip state change
         UpdateIndices();
     }
 
@@ -187,7 +187,7 @@ namespace enigma::graphic
     {
         m_flipState.FlipAll();
 
-        // [NEW] Re-upload indices after flip state change
+        // Re-upload indices after flip state change
         UpdateIndices();
     }
 
@@ -243,7 +243,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Reset and Config Query Implementation
+    // Reset and Config Query Implementation
     // ============================================================================
 
     void ColorTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
@@ -270,7 +270,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // Uniform Registration API - Shader RT Fetching Feature
     // ============================================================================
 
     void ColorTextureProvider::RegisterUniform(UniformManager* uniformMgr)

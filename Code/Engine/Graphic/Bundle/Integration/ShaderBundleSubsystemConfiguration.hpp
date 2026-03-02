@@ -19,7 +19,7 @@
 //   std::string userPath = config.GetUserDiscoveryPath();
 //   std::string currentBundle = config.GetCurrentLoadedBundle();
 //
-//   // [NEW] Get path aliases for include resolution
+//   // Get path aliases for include resolution
 //   auto aliases = config.GetPathAliases();
 //   for (const auto& [alias, path] : aliases) { ... }
 //
@@ -37,7 +37,7 @@
 namespace enigma::graphic
 {
     /**
-     * @brief [NEW] Path alias entry for shader include resolution
+     * @brief Path alias entry for shader include resolution
      *
      * Used to map virtual path aliases (like @engine) to actual filesystem paths.
      * This enables cross-directory #include references in shaders.
@@ -56,7 +56,7 @@ namespace enigma::graphic
         static constexpr const char* KEY_USER_DISCOVERY_PATH   = "shaderBundleUserDiscoveryPath";
         static constexpr const char* KEY_ENGINE_PATH           = "shaderBundleEnginePath";
         static constexpr const char* KEY_CURRENT_LOADED_BUNDLE = "currentLoadedShaderBundle";
-        static constexpr const char* KEY_PATH_ALIASES          = "pathAliases"; ///< [NEW] Path aliases section
+        static constexpr const char* KEY_PATH_ALIASES          = "pathAliases"; ///< Path aliases section
 
         //-------------------------------------------------------------------------------------------
         // Default Value Constants
@@ -102,7 +102,7 @@ namespace enigma::graphic
         std::string GetCurrentLoadedBundle() const;
 
         /**
-         * @brief [NEW] Get all registered path aliases
+         * @brief Get all registered path aliases
          * @return Vector of PathAliasEntry containing alias->path mappings
          *
          * Path aliases are used for shader #include resolution.
@@ -111,7 +111,7 @@ namespace enigma::graphic
         std::vector<PathAliasEntry> GetPathAliases() const;
 
         /**
-         * @brief [NEW] Get path aliases as a map for convenient lookup
+         * @brief Get path aliases as a map for convenient lookup
          * @return Map of alias name to target path
          */
         std::unordered_map<std::string, std::string> GetPathAliasMap() const;
@@ -130,14 +130,14 @@ namespace enigma::graphic
         void SetCurrentLoadedBundle(const std::string& bundleName);
 
         /**
-         * @brief [NEW] Add or update a path alias
+         * @brief Add or update a path alias
          * @param alias Alias name (should start with '@', e.g., "@engine")
          * @param targetPath Target path relative to Run directory
          */
         void SetPathAlias(const std::string& alias, const std::string& targetPath);
 
         /**
-         * @brief [NEW] Remove a path alias
+         * @brief Remove a path alias
          * @param alias Alias name to remove
          */
         void RemovePathAlias(const std::string& alias);

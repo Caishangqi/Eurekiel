@@ -3,7 +3,7 @@
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 
 // ============================================================================
-// Sampler.cpp - [NEW] RAII Sampler implementation
+// Sampler.cpp - RAII Sampler implementation
 // Part of Dynamic Sampler System
 // ============================================================================
 

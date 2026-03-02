@@ -82,20 +82,20 @@ PSOutput main(PSInput input)
     {
         if (isEyeInWater == EYE_IN_WATER)
         {
-            // [NEW] Underwater sky: completely obscured by fog color
+            // Underwater sky: completely obscured by fog color
             // This handles unloaded chunks and sky visible through water
             output.color0 = float4(fogColor, 1.0);
             return output;
         }
         else if (isEyeInWater == EYE_IN_LAVA)
         {
-            // [NEW] In lava: sky obscured by lava fog color
+            // In lava: sky obscured by lava fog color
             output.color0 = float4(LAVA_FOG_COLOR, 1.0);
             return output;
         }
         else if (isEyeInWater == EYE_IN_POWDER_SNOW)
         {
-            // [NEW] In powder snow: sky obscured by snow fog color
+            // In powder snow: sky obscured by snow fog color
             output.color0 = float4(POWDER_SNOW_FOG_COLOR, 1.0);
             return output;
         }

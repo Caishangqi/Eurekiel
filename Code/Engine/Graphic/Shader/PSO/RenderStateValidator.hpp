@@ -25,7 +25,7 @@ namespace enigma::graphic
     public:
         /**
          * @brief Draw state structure for validation
-         * [NEW] Local definition - replaces dependency on PSOStateCollector::CollectedState
+         * Local definition - replaces dependency on PSOStateCollector::CollectedState
          */
         struct DrawState
         {

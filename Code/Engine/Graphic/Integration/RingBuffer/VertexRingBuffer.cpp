@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // VertexRingBuffer.cpp
 //
-// [NEW] Implementation of VertexRingBuffer wrapper class
+// Implementation of VertexRingBuffer wrapper class
 //
 // Key Implementation Details:
 //   - RAII: Buffer created in constructor, released in destructor
@@ -32,7 +32,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // Log Category Definition
     //
-    // [NEW] Define the LogRingBuffer log category
+    // Define the LogRingBuffer log category
     // This creates the actual storage for the category declared in the header
     //-------------------------------------------------------------------------------------------
     DEFINE_LOG_CATEGORY(LogRingBuffer);

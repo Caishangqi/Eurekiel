@@ -18,7 +18,7 @@ using enigma::graphic::RendererSubsystemConfig;
 using namespace enigma::core;
 
 // ================================================================================================
-// [NEW] ConstantBuffer辅助方法实现
+// ConstantBuffer辅助方法实现
 // ================================================================================================
 
 size_t BufferHelper::CalculateAlignedSize(size_t rawSize)

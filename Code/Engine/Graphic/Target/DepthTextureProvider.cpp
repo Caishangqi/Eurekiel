@@ -274,7 +274,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Reset and Config Query Implementation
+    // Reset and Config Query Implementation
     // ============================================================================
 
     void DepthTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
@@ -306,7 +306,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // Uniform Registration API - Shader RT Fetching Feature
     // ============================================================================
 
     void DepthTextureProvider::RegisterUniform(UniformManager* uniformMgr)

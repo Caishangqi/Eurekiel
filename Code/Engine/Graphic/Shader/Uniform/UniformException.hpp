@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // UniformException.hpp
 //
-// [NEW] Exception hierarchy for Uniform module
+// Exception hierarchy for Uniform module
 //
 // This header provides:
 //   - UniformException base class inheriting from std::exception
@@ -33,7 +33,7 @@ namespace enigma::graphic
     // UniformException
     // Base exception class for all Uniform module errors
     //
-    // [NEW] Inherits from std::exception for standard C++ exception handling
+    // Inherits from std::exception for standard C++ exception handling
     // Default mapping: ERROR_AND_DIE (fatal error)
     //-------------------------------------------------------------------------------------------
     class UniformException : public std::exception

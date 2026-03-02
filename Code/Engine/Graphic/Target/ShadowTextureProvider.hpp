@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShadowTextureProvider.hpp - [NEW] Shadow depth texture provider
+// ShadowTextureProvider.hpp - Shadow depth texture provider
 // Implements IRenderTargetProvider for shadowtex0-1 management
 // Part of RenderTarget Manager Unified Architecture Refactoring
 // ============================================================================
@@ -26,7 +26,7 @@ namespace enigma::graphic
      * @class ShadowTextureProvider
      * @brief Manages shadowtex0-1 with D12DepthTexture, no FlipState support
      * 
-     * [NEW] Implements IRenderTargetProvider for shadow depth textures.
+     * Implements IRenderTargetProvider for shadow depth textures.
      * 
      * Features:
      * - Manages 1-2 shadow depth textures (shadowtex0-1)
@@ -109,12 +109,12 @@ namespace enigma::graphic
         // Dynamic Configuration
         void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
-        // [NEW] Reset and Config Query
+        // Reset and Config Query
         void                      ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) override;
         const RenderTargetConfig& GetConfig(int index) const override;
 
         // ========================================================================
-        // [NEW] Uniform Update API - Shader RT Fetching Feature
+        // Uniform Update API - Shader RT Fetching Feature
         // ========================================================================
 
         /**
@@ -219,7 +219,7 @@ namespace enigma::graphic
         int m_baseHeight  = 0; // Base height (can be non-square)
         int m_activeCount = 0;
 
-        // [NEW] Uniform registration for Shader RT Fetching
+        // Uniform registration for Shader RT Fetching
         UniformManager*             m_uniformManager = nullptr;
         ShadowTexturesIndexUniforms m_indexBuffer;
     };

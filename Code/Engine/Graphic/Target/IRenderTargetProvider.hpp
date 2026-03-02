@@ -1,6 +1,6 @@
 #pragma once
 
-// [NEW] Unified interface for all RenderTarget providers
+// Unified interface for all RenderTarget providers
 // Part of RenderTarget Manager Architecture Refactoring
 
 #include <d3d12.h>
@@ -172,7 +172,7 @@ namespace enigma::graphic
          */
         virtual void SetRtConfig(int index, const RenderTargetConfig& config) = 0;
 
-        // ========== [NEW] Reset and Config Query ==========
+        // ========== Reset and Config Query ==========
 
         /**
          * @brief Reset all RTs to default configuration
@@ -195,7 +195,7 @@ namespace enigma::graphic
          */
         virtual const RenderTargetConfig& GetConfig(int index) const = 0;
 
-        // ========== [NEW] Uniform Registration ==========
+        // ========== Uniform Registration ==========
 
         /**
          * @brief Register IndexBuffer to UniformManager for GPU upload

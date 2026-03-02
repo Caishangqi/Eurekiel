@@ -26,7 +26,7 @@ namespace enigma::voxel
     class BlockState;
     class FluidState;
     struct BlockPos;
-    struct PlacementContext; // [NEW] Forward declaration for placement logic
+    struct PlacementContext; // Forward declaration for placement logic
 }
 
 namespace enigma::voxel
@@ -199,7 +199,7 @@ namespace enigma::registry::block
          */
         virtual std::string GetModelPath(enigma::voxel::BlockState* state) const;
 
-        // [NEW] Virtual methods for advanced block placement and behavior (Non-Breaking)
+        // Virtual methods for advanced block placement and behavior (Non-Breaking)
 
         /**
          * @brief Determine the BlockState to use when placing this block

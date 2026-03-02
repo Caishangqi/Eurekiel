@@ -1,5 +1,5 @@
 // ============================================================================
-// [NEW] DXGIFormatParser.cpp - DXGI format string to enum parser implementation
+// DXGIFormatParser.cpp - DXGI format string to enum parser implementation
 // Part of RenderTarget Format Refactor Feature
 // ============================================================================
 

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// UICamera.hpp - [NEW] UI/2D rendering camera with Y-axis flip
+// UICamera.hpp - UI/2D rendering camera with Y-axis flip
 //
 // Extends OrthographicCamera for 2D UI rendering with DirectX coordinate
 // system (top-left origin, Y increases downward).
@@ -15,13 +15,13 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] UICamera - 2D UI and 2D Game rendering camera
+    // UICamera - 2D UI and 2D Game rendering camera
     // ========================================================================
 
     /**
      * @brief UI camera for 2D rendering with DirectX coordinate system
      *
-     * [NEW] Extends OrthographicCamera with:
+     * Extends OrthographicCamera with:
      * - Y-axis flip for DirectX texture coordinate system (top-left origin)
      * - Identity renderer matrix (no 3D coordinate conversion)
      * - Optimized for screen-space UI and 2D game rendering
@@ -71,7 +71,7 @@ namespace enigma::graphic
         UICamera& operator=(UICamera&&) = default;
 
         // ====================================================================
-        // [NEW] Static Factory Methods
+        // Static Factory Methods
         // ====================================================================
 
         /**
@@ -102,7 +102,7 @@ namespace enigma::graphic
         [[nodiscard]] CameraType GetCameraType() const override;
 
         // ====================================================================
-        // [NEW] UI-specific Methods
+        // UI-specific Methods
         // ====================================================================
 
         void                      SetScreenSize(const Vec2& screenSize);

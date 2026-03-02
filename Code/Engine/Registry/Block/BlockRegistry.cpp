@@ -576,7 +576,7 @@ namespace enigma::registry::block
         {
             return std::make_unique<BlockAir>(registryName, namespaceName);
         }
-        // [NEW] Transparent block hierarchy
+        // Transparent block hierarchy
         else if (blockClass == "HalfTransparentBlock")
         {
             return std::make_unique<HalfTransparentBlock>(registryName, namespaceName);
@@ -585,14 +585,14 @@ namespace enigma::registry::block
         {
             return std::make_unique<TransparentBlock>(registryName, namespaceName);
         }
-        // [NEW] Leaves block (cutout rendering)
+        // Leaves block (cutout rendering)
         else if (blockClass == "LeavesBlock")
         {
             // LeavesBlock constructor adds default properties (distance, persistent, waterlogged)
             // Set addDefaultProperties=false if YAML defines custom properties
             return std::make_unique<LeavesBlock>(registryName, namespaceName, false);
         }
-        // [NEW] Liquid block (water, lava)
+        // Liquid block (water, lava)
         else if (blockClass == "LiquidBlock")
         {
             return std::make_unique<LiquidBlock>(registryName, namespaceName, fluidType);
@@ -611,7 +611,7 @@ namespace enigma::registry::block
             // Parse base_class field (optional, defaults to "Block")
             std::string blockClass = yaml.GetString("base_class", "Block");
 
-            // [NEW] Parse fluid_type for LiquidBlock
+            // Parse fluid_type for LiquidBlock
             FluidType fluidType = FluidType::EMPTY;
             if (yaml.Contains("fluid_type"))
             {

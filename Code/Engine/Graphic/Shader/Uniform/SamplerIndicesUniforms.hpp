@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// SamplerIndicesUniforms.hpp - [NEW] Sampler bindless indices uniform buffer
+// SamplerIndicesUniforms.hpp - Sampler bindless indices uniform buffer
 // Part of Dynamic Sampler System
 // ============================================================================
 

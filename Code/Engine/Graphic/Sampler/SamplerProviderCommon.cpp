@@ -1,7 +1,7 @@
 #include "SamplerProviderCommon.hpp"
 
 // ============================================================================
-// SamplerProviderCommon.cpp - [NEW] Log category definition
+// SamplerProviderCommon.cpp - Log category definition
 // Part of Dynamic Sampler System
 // ============================================================================
 

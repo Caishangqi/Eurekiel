@@ -25,7 +25,7 @@ public:
     Vec2               GetStandardDimensions() const;
     const std::string& GetImageFilePath() const { return m_name; }
 
-    // [NEW] MipMap 查询方法
+    // MipMap 查询方法
     int         GetMipLevels() const { return m_mipLevels; }
     bool        HasMipmaps() const { return m_mipLevels > 1; }
     static UINT IncrementInternalID() { return ++s_internalID; }
@@ -35,7 +35,7 @@ public:
 protected:
     std::string m_name;
     IntVec2     m_dimensions;
-    int         m_mipLevels = 1; // [NEW] MipMap 级别数，默认 1（无 MipMap）
+    int         m_mipLevels = 1; // MipMap 级别数，默认 1（无 MipMap）
 
     static UINT s_internalID;
 

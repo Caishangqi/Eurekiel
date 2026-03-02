@@ -26,13 +26,13 @@
 #include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
-#include "Engine/Graphic/Integration/RendererEvents.hpp" // [NEW] For OnBeginFrame subscription
+#include "Engine/Graphic/Integration/RendererEvents.hpp" // For OnBeginFrame subscription
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
-#include "Engine/Voxel/World/TerrainVertexLayout.hpp" // [NEW] For OnBuildVertexLayout event
+#include "Engine/Voxel/World/TerrainVertexLayout.hpp" // For OnBuildVertexLayout event
 
 using namespace enigma::graphic;
 
-// [NEW] Global accessor definition
+// Global accessor definition
 enigma::graphic::ShaderBundleSubsystem* g_theShaderBundleSubsystem = nullptr;
 
 //-----------------------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ void ShaderBundleSubsystem::Startup()
 
     ShaderBundleMeta engineMeta = engineMetaOpt.value();
 
-    // [NEW] Get path aliases from configuration for shader include resolution
+    // Get path aliases from configuration for shader include resolution
     auto pathAliases = m_config.GetPathAliasMap();
 
     try
@@ -143,7 +143,7 @@ void ShaderBundleSubsystem::Startup()
         g_theImGui->RegisterWindow("ShaderBundle", [this]() { ImguiShaderBundle::Show(this); });
     }
 
-    // [NEW] Subscribe to RendererEvents::OnBeginFrame for deferred bundle switching
+    // Subscribe to RendererEvents::OnBeginFrame for deferred bundle switching
     // This ensures RT changes happen at frame boundaries (GPU idle), avoiding D3D12 ERROR #924
     m_onBeginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &ShaderBundleSubsystem::OnRendererBeginFrame);
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed to OnBeginFrame event");
@@ -165,7 +165,7 @@ void ShaderBundleSubsystem::Shutdown()
 {
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Shutting down...");
 
-    // [NEW] Unsubscribe from RendererEvents::OnBeginFrame
+    // Unsubscribe from RendererEvents::OnBeginFrame
     if (m_onBeginFrameHandle != 0)
     {
         RendererEvents::OnBeginFrame.Remove(m_onBeginFrameHandle);
@@ -173,7 +173,7 @@ void ShaderBundleSubsystem::Shutdown()
         LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from OnBeginFrame event");
     }
 
-    // [NEW] Remove MaterialIdMapper subscription
+    // Remove MaterialIdMapper subscription
     if (m_onBuildVertexHandle != 0)
     {
         TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
@@ -208,7 +208,7 @@ void ShaderBundleSubsystem::Update(float deltaTime)
 //-----------------------------------------------------------------------------------------------
 // OnRendererBeginFrame
 //
-// [NEW] Event callback for RendererEvents::OnBeginFrame
+// Event callback for RendererEvents::OnBeginFrame
 // Called at the very beginning of each frame when GPU is idle
 // Safe to modify RT resources here without causing D3D12 ERROR #924
 //-----------------------------------------------------------------------------------------------
@@ -308,7 +308,7 @@ void ShaderBundleSubsystem::DiscoverUserBundles()
 //-----------------------------------------------------------------------------------------------
 // ListDiscoveredShaderBundles
 //
-// [NEW] Get list of all discovered user ShaderBundles
+// Get list of all discovered user ShaderBundles
 //-----------------------------------------------------------------------------------------------
 std::vector<ShaderBundleMeta> ShaderBundleSubsystem::ListDiscoveredShaderBundles()
 {
@@ -318,7 +318,7 @@ std::vector<ShaderBundleMeta> ShaderBundleSubsystem::ListDiscoveredShaderBundles
 //-----------------------------------------------------------------------------------------------
 // RefreshDiscoveredShaderBundles
 //
-// [NEW] Re-scan .enigma/shaderpacks directory and update discovered list
+// Re-scan .enigma/shaderpacks directory and update discovered list
 //-----------------------------------------------------------------------------------------------
 bool ShaderBundleSubsystem::RefreshDiscoveredShaderBundles()
 {
@@ -354,7 +354,7 @@ bool ShaderBundleSubsystem::RefreshDiscoveredShaderBundles()
 //-----------------------------------------------------------------------------------------------
 // LoadShaderBundle
 //
-// [NEW] Load a user ShaderBundle and set as current
+// Load a user ShaderBundle and set as current
 //-----------------------------------------------------------------------------------------------
 ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMeta& meta)
 {
@@ -365,14 +365,14 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
 
     try
     {
-        // [NEW] Get path aliases from configuration for shader include resolution
+        // Get path aliases from configuration for shader include resolution
         auto pathAliases = m_config.GetPathAliasMap();
 
         // [RAII] Create bundle with engine bundle reference for fallback
         // ShaderBundle initializes in constructor (load fallback rules, discover UserDefinedBundles, precompile)
         auto bundle = std::make_shared<ShaderBundle>(meta, m_engineBundle, pathAliases);
 
-        // [NEW] Apply RT configs from bundle directives to providers
+        // Apply RT configs from bundle directives to providers
         auto* rtDirectives = bundle->GetRTDirectives();
         if (rtDirectives && g_theRendererSubsystem)
         {
@@ -432,14 +432,14 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
             LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied RT configs from bundle directives");
         }
 
-        // [NEW] Remove previous MaterialIdMapper subscription before switching bundles
+        // Remove previous MaterialIdMapper subscription before switching bundles
         if (m_onBuildVertexHandle != 0)
         {
             TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
             m_onBuildVertexHandle = 0;
         }
 
-        // [NEW] Load MaterialIdMapper from block.properties and subscribe to vertex event
+        // Load MaterialIdMapper from block.properties and subscribe to vertex event
         {
             auto  blockPropertiesPath = meta.path / "shaders" / "block.properties";
             auto* mapper              = bundle->GetMaterialIdMapper();
@@ -491,7 +491,7 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
 //-----------------------------------------------------------------------------------------------
 // UnloadShaderBundle
 //
-// [NEW] Unload current user bundle and reset to engine bundle
+// Unload current user bundle and reset to engine bundle
 //-----------------------------------------------------------------------------------------------
 ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
 {
@@ -509,14 +509,14 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
     // Broadcast MulticastDelegate unload event (before reset)
     ShaderBundleEvents::OnBundleUnloaded.Broadcast();
 
-    // [NEW] Remove MaterialIdMapper subscription before unloading bundle
+    // Remove MaterialIdMapper subscription before unloading bundle
     if (m_onBuildVertexHandle != 0)
     {
         TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
         m_onBuildVertexHandle = 0;
     }
 
-    // [NEW] Reset RT configs to engine defaults before switching bundles
+    // Reset RT configs to engine defaults before switching bundles
     if (g_theRendererSubsystem)
     {
         const auto& config = g_theRendererSubsystem->GetConfiguration();
@@ -561,7 +561,7 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
 //-----------------------------------------------------------------------------------------------
 // RequestLoadShaderBundle
 //
-// [NEW] Request to load a ShaderBundle at the start of next frame
+// Request to load a ShaderBundle at the start of next frame
 // This is the safe way to switch bundles from ImGui or mid-frame code
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta)
@@ -577,7 +577,7 @@ void ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta
 //-----------------------------------------------------------------------------------------------
 // RequestUnloadShaderBundle
 //
-// [NEW] Request to unload current bundle at the start of next frame
+// Request to unload current bundle at the start of next frame
 // This is the safe way to unload bundles from ImGui or mid-frame code
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::RequestUnloadShaderBundle()

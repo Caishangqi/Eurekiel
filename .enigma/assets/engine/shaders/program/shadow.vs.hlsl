@@ -3,7 +3,7 @@
  * @brief Shadow Pass Vertex Shader - Light Space Transformation
  * @date 2026-01-07
  *
- * [NEW] Shadow mapping vertex shader for depth-only rendering.
+ * Shadow mapping vertex shader for depth-only rendering.
  * Transforms vertices from world space to light space using
  * shadowView and shadowProjection matrices.
  *

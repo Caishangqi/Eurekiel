@@ -17,7 +17,7 @@ struct RaycastResult2D
     Vec2  m_impactPos;
     Vec2  m_impactNormal;
 
-    // [NEW] Plane index for convex hull raycast debugging
+    // Plane index for convex hull raycast debugging
     int m_impactPlaneIndex = -1;
 
     // Original raycast information (optional)

@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // ProgramFallbackChain.hpp
 //
-// [NEW] Manages shader program fallback rules for graceful degradation
+// Manages shader program fallback rules for graceful degradation
 //
 // This class provides:
 //   - Loading fallback rules from fallback_rule.json
@@ -40,7 +40,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ProgramFallbackChain
     //
-    // [NEW] Manages shader program fallback rules
+    // Manages shader program fallback rules
     //
     // Fallback rules define how the system should try alternative shaders when
     // a requested shader program is not found. The chain format is:
@@ -64,7 +64,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // LoadRules
         //
-        // [NEW] Load fallback rules from JSON file
+        // Load fallback rules from JSON file
         //
         // Parameters:
         //   fallbackRuleJsonPath - Full path to fallback_rule.json
@@ -82,7 +82,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetFallbackChain
         //
-        // [NEW] Generate fallback chain for a program name
+        // Generate fallback chain for a program name
         //
         // Parameters:
         //   programName - The shader program name to get fallback chain for

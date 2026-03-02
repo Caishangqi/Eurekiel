@@ -481,7 +481,7 @@ void BlockStateDefinition::CompileModels(enigma::model::ModelSubsystem* modelSub
 
                 if (compiledMesh)
                 {
-                    // [NEW] Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
+                    // Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
                     if (variant.x != 0 || variant.y != 0)
                     {
                         if (isDebug)
@@ -520,7 +520,7 @@ void BlockStateDefinition::CompileModels(enigma::model::ModelSubsystem* modelSub
 
                 if (compiledMesh)
                 {
-                    // [NEW] Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
+                    // Apply variant rotation if specified (following Minecraft's FaceBakery pattern)
                     if (variant.x != 0 || variant.y != 0)
                     {
                         if (isDebug)

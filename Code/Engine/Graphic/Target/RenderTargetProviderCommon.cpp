@@ -1,7 +1,7 @@
 #include "RenderTargetProviderCommon.hpp"
 
 // ============================================================================
-// RenderTargetProviderCommon.cpp - [NEW] Log category definition
+// RenderTargetProviderCommon.cpp - Log category definition
 // Part of RenderTarget Manager Unified Architecture Refactoring
 // ============================================================================
 

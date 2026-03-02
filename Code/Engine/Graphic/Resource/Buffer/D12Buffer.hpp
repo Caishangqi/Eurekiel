@@ -65,7 +65,7 @@ namespace enigma::graphic
         MemoryAccess memoryAccess; // Memory access mode
         const void*  initialData; // Initial data pointer (can be nullptr)
         const char*  debugName; // Debug name (corresponding to Iris' GLDebug.nameObject)
-        size_t       byteStride; // [NEW] StructuredBuffer element size (bytes)
+        size_t       byteStride; // StructuredBuffer element size (bytes)
 
         // 默认构造
         BufferCreateInfo() : size(0), usage(BufferUsage::Default), memoryAccess(MemoryAccess::GPUOnly), initialData(nullptr), debugName(nullptr), byteStride(0)
@@ -140,27 +140,27 @@ namespace enigma::graphic
         void Unmap(const D3D12_RANGE* writtenRange = nullptr);
 
         /**
-         * [NEW] 持久映射CPU内存（DirectX 12推荐模式）
+         * 持久映射CPU内存（DirectX 12推荐模式）
          * 在缓冲区生命周期内保持映射状态，避免每次draw都Map/Unmap的开销
          * 只适用于HEAP_TYPE_UPLOAD的缓冲区（CPUToGPU或CPUWritable）
          * @return 持久映射的CPU内存指针，失败返回nullptr
          */
         void* MapPersistent();
-        
+
         /**
-         * [NEW] 取消持久映射
+         * 取消持久映射
          * 释放持久映射的CPU内存，通常在析构时调用
          */
         void UnmapPersistent();
 
         /**
-         * [NEW] 获取持久映射的CPU内存指针
+         * 获取持久映射的CPU内存指针
          * @return 如果已持久映射返回有效指针，否则返回nullptr
          */
         void* GetPersistentMappedData() const { return m_persistentMappedData; }
 
         /**
-         * [NEW] 检查缓冲区是否处于持久映射状态
+         * 检查缓冲区是否处于持久映射状态
          * @return 已持久映射返回true，否则返回false
          */
         bool IsPersistentlyMapped() const { return m_isPersistentlyMapped; }
@@ -259,7 +259,7 @@ namespace enigma::graphic
         mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
         size_t              m_byteStride; // StructuredBuffer元素大小（字节）
 
-        // [NEW] Persistent Mapping支持
+        // Persistent Mapping支持
         void* m_persistentMappedData = nullptr; // 持久映射的CPU内存指针
         bool  m_isPersistentlyMapped = false; // 是否处于持久映射状态
 

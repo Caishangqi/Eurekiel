@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // VertexRingBuffer.hpp
 //
-// [NEW] Dedicated wrapper class for immediate mode vertex Ring Buffer operations
+// Dedicated wrapper class for immediate mode vertex Ring Buffer operations
 //
 // Design Goals:
 //   - Encapsulate D12VertexBuffer + offset state together (Option D architecture)
@@ -44,7 +44,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // Log Category Declaration
     //
-    // [NEW] RingBuffer module log category for consistent logging
+    // RingBuffer module log category for consistent logging
     // Use with LogInfo, LogWarn, LogError macros:
     //   LogInfo(LogRingBuffer, "Message with format: %s", arg);
     //
@@ -107,7 +107,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // VertexAppendResult
     //
-    // [NEW] Result of Append operation
+    // Result of Append operation
     // Contains VBV ready for binding with BufferLocation pointing to appended data
     //-------------------------------------------------------------------------------------------
     struct VertexAppendResult
@@ -120,7 +120,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // VertexRingBuffer
     //
-    // [NEW] Dedicated wrapper class for immediate mode vertex Ring Buffer operations
+    // Dedicated wrapper class for immediate mode vertex Ring Buffer operations
     //
     // Encapsulates:
     //   - D12VertexBuffer (GPU resource)
@@ -188,7 +188,7 @@ namespace enigma::graphic
         // @param sourceVBO Source VertexBuffer to copy data from
         // @return VertexAppendResult with VBV ready for binding
         //
-        // [NEW] Convenience overload for copying from external VBO:
+        // Convenience overload for copying from external VBO:
         //   - Automatically extracts mapped data, vertex count, and stride
         //   - Reduces boilerplate code at call sites
         //   - Validates source VBO before copying

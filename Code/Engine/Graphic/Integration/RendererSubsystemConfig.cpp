@@ -26,7 +26,7 @@ using namespace enigma::core;
 namespace enigma::graphic
 {
     // ============================================================================
-    // [NEW] Helper functions for YAML RT config parsing
+    // Helper functions for YAML RT config parsing
     // ============================================================================
     namespace
     {
@@ -317,7 +317,7 @@ namespace enigma::graphic
             }
         }
 
-        // [NEW] Step 8: Parse rendertargets configuration
+        // Step 8: Parse rendertargets configuration
         ParseRenderTargetsConfig(*yamlOpt, result);
 
         return result;
@@ -336,7 +336,7 @@ namespace enigma::graphic
         // - renderWidth = 1920 (Full HD)
         // - renderHeight = 1080 (Full HD)
 
-        // [NEW] Initialize default RT configs
+        // Initialize default RT configs
         // ColorTex default: R8G8B8A8_UNORM, clear to black
         config.colorTexConfig.defaultConfig = RenderTargetConfig::ColorTargetWithScale(
             "colortex_default", 1.0f, 1.0f,

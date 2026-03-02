@@ -1,14 +1,14 @@
 #pragma once
 
 // ============================================================================
-// ImguiShaderBundleInfo.hpp - [NEW] Static ImGui module for Bundle info display
+// ImguiShaderBundleInfo.hpp - Static ImGui module for Bundle info display
 // ============================================================================
 
 namespace enigma::graphic
 {
     class ShaderBundleSubsystem;
 
-    // [NEW] Static ImGui class for displaying current Bundle metadata
+    // Static ImGui class for displaying current Bundle metadata
     class ImguiShaderBundleInfo
     {
     public:

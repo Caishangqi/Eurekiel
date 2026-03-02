@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderBundle.hpp
 //
-// [NEW] Complete shader bundle management with three-tier fallback mechanism
+// Complete shader bundle management with three-tier fallback mechanism
 //
 // This class provides:
 //   - Management of multiple UserDefinedBundles (from bundle/ subdirectories)
@@ -78,6 +78,7 @@
 #include "Engine/Graphic/Bundle/UserDefinedBundle.hpp"
 #include "Engine/Graphic/Bundle/ProgramFallbackChain.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Bundle/Properties/ShaderProperties.hpp"
 #include "Engine/Graphic/Bundle/Texture/BundleTextureLoader.hpp"
 #include "Engine/Graphic/Bundle/MaterialIdMapper.hpp"
 #include "Engine/Graphic/Shader/Program/Parsing/ConstDirectiveParser.hpp"
@@ -108,7 +109,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundle
     //
-    // [NEW] Complete shader bundle with three-tier fallback mechanism
+    // Complete shader bundle with three-tier fallback mechanism
     //
     // Lifecycle:
     //   1. Construct with metadata and optional engine bundle reference
@@ -128,14 +129,14 @@ namespace enigma::graphic
         // Parameters:
         //   meta - ShaderBundleMeta containing name, path, and isEngineBundle flag
         //   engineBundle - Reference to engine bundle (nullptr for engine bundle itself)
-        //   pathAliases - [NEW] Optional path aliases for include resolution (e.g., @engine -> path)
+        //   pathAliases - Optional path aliases for include resolution (e.g., @engine -> path)
         //
         // RAII Workflow:
         //   1. Load fallback rules from shaders/fallback_rule.json via ProgramFallbackChain
         //   2. Scan shaders/bundle/ directory for UserDefinedBundle subdirectories
         //   3. Create and precompile all UserDefinedBundles
         //   4. Set first UserDefinedBundle as current (if any exist)
-        //   5. [NEW] Parse RT directives with alias-aware include expansion
+        //   5. Parse RT directives with alias-aware include expansion
         //
         // Error Handling:
         //   - Missing fallback_rule.json: fallback disabled (not an error)
@@ -164,7 +165,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetProgram (single program, default bundle)
         //
-        // [NEW] Get a shader program by name with three-tier fallback
+        // Get a shader program by name with three-tier fallback
         //
         // Parameters:
         //   programName - Program name (e.g., "gbuffers_basic")
@@ -186,7 +187,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetProgram (single program, specific bundle)
         //
-        // [NEW] Get a shader program from a specific UserDefinedBundle
+        // Get a shader program from a specific UserDefinedBundle
         //
         // Parameters:
         //   bundleName - Name of the UserDefinedBundle to query
@@ -211,7 +212,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetPrograms (batch query)
         //
-        // [NEW] Get multiple shader programs matching a regex pattern
+        // Get multiple shader programs matching a regex pattern
         //
         // Parameters:
         //   searchRule - Regex pattern (e.g., "gbuffers_.*")
@@ -230,7 +231,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // SwitchBundle
         //
-        // [NEW] Switch the current UserDefinedBundle
+        // Switch the current UserDefinedBundle
         //
         // Parameters:
         //   targetBundleName - Name of the target UserDefinedBundle
@@ -283,11 +284,11 @@ namespace enigma::graphic
         // Returns list of all UserDefinedBundle names
         std::vector<std::string> GetUserBundleNames() const;
 
-        // [NEW] Returns RT directives parsed from shader sources (for RT format configuration)
+        // Returns RT directives parsed from shader sources (for RT format configuration)
         const PackRenderTargetDirectives* GetRTDirectives() const { return m_rtDirectives.get(); }
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Query const directive values parsed from shader sources
+        // Query const directive values parsed from shader sources
         // Reference: Iris PackDirectives.java - acceptConstFloatDirective, acceptConstIntDirective
         // These are "const float/int/bool" declarations found in shader source code
         //-------------------------------------------------------------------------------------------
@@ -357,13 +358,13 @@ namespace enigma::graphic
         // nullptr if this IS the engine bundle
         std::shared_ptr<ShaderBundle> m_engineBundle;
 
-        // [NEW] RT directives parsed from shader sources (exclusive ownership)
+        // RT directives parsed from shader sources (exclusive ownership)
         std::unique_ptr<PackRenderTargetDirectives> m_rtDirectives;
 
-        // [NEW] Const directives parsed from shader sources (sunPathRotation, shadowMapResolution, etc.)
+        // Const directives parsed from shader sources (sunPathRotation, shadowMapResolution, etc.)
         ConstDirectiveParser m_constDirectives;
 
-        // [NEW] Path aliases for shader include resolution (e.g., @engine -> engine shader path)
+        // Path aliases for shader include resolution (e.g., @engine -> engine shader path)
         std::unordered_map<std::string, std::string> m_pathAliases;
 
         // Custom texture cache: path -> LoadedTexture (RAII via shared_ptr, released on destruction)
@@ -382,5 +383,15 @@ namespace enigma::graphic
         // Auto-assigns slot indices for entries with textureSlot == -1.
         // Called once at end of constructor after texture loading completes.
         void BindGlobalCustomTextures();
+
+        // Per-program blend overrides from shaders.properties (passName -> BlendModeOverride)
+        std::unordered_map<std::string, BlendModeOverride> m_blendModeOverrides;
+
+        // Per-buffer blend overrides from shaders.properties (passName -> vector<BufferBlendInformation>)
+        std::unordered_map<std::string, std::vector<BufferBlendInformation>> m_bufferBlendOverrides;
+
+        // Inject blend data from shaders.properties into compiled program directives.
+        // Called after ShaderProperties parsing and program compilation.
+        void InjectBlendDirectives(ShaderProgram& program, const std::string& programName);
     };
 } // namespace enigma::graphic

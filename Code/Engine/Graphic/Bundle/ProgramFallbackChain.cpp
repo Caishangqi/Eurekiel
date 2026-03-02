@@ -1,7 +1,7 @@
 ﻿//-----------------------------------------------------------------------------------------------
 // ProgramFallbackChain.cpp
 //
-// [NEW] Implementation of shader program fallback rule management
+// Implementation of shader program fallback rule management
 //
 //-----------------------------------------------------------------------------------------------
 

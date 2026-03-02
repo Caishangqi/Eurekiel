@@ -45,7 +45,7 @@
 
 #include "ShaderBundleSubsystemConfiguration.hpp"
 #include "Engine/Core/SubsystemManager.hpp"
-#include "Engine/Core/Event/MulticastDelegate.hpp" // [NEW] For DelegateHandle
+#include "Engine/Core/Event/MulticastDelegate.hpp" // For DelegateHandle
 #include "Engine/Graphic/Bundle/ShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleCommon.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
@@ -62,7 +62,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // Constructor
         //
-        // [NEW] Initialize with configuration containing paths
+        // Initialize with configuration containing paths
         //
         // Parameters:
         //   config - Configuration with shaderBundleEnginePath and shaderBundleUserDiscoveryPath
@@ -118,7 +118,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // ListDiscoveredShaderBundles
         //
-        // [NEW] Get list of all discovered user ShaderBundles
+        // Get list of all discovered user ShaderBundles
         //
         // Returns:
         //   Vector of ShaderBundleMeta for all discovered bundles in .enigma/shaderpacks
@@ -128,7 +128,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // RefreshDiscoveredShaderBundles
         //
-        // [NEW] Re-scan .enigma/shaderpacks directory and update discovered list
+        // Re-scan .enigma/shaderpacks directory and update discovered list
         //
         // Returns:
         //   true if the list changed (bundles added or removed)
@@ -139,7 +139,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // LoadShaderBundle
         //
-        // [NEW] Load a user ShaderBundle and set as current
+        // Load a user ShaderBundle and set as current
         //
         // Parameters:
         //   meta - Metadata of the bundle to load
@@ -162,7 +162,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // UnloadShaderBundle
         //
-        // [NEW] Unload current user bundle and reset to engine bundle
+        // Unload current user bundle and reset to engine bundle
         //
         // Returns:
         //   ShaderBundleResult with success status (always succeeds)
@@ -178,7 +178,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // RequestLoadShaderBundle
         //
-        // [NEW] Request to load a ShaderBundle at the start of next frame
+        // Request to load a ShaderBundle at the start of next frame
         // This is the safe way to switch bundles from ImGui or mid-frame code
         //
         // Parameters:
@@ -192,7 +192,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // RequestUnloadShaderBundle
         //
-        // [NEW] Request to unload current bundle at the start of next frame
+        // Request to unload current bundle at the start of next frame
         // This is the safe way to unload bundles from ImGui or mid-frame code
         //
         // Note: The actual unload happens via OnRendererBeginFrame callback
@@ -202,7 +202,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetCurrentShaderBundle
         //
-        // [NEW] Get the currently active ShaderBundle
+        // Get the currently active ShaderBundle
         //
         // Returns:
         //   shared_ptr to current bundle (engine bundle if no user bundle loaded)
@@ -212,7 +212,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetEngineShaderBundle
         //
-        // [NEW] Get the engine default ShaderBundle
+        // Get the engine default ShaderBundle
         //
         // Returns:
         //   shared_ptr to engine bundle (always available after Startup)
@@ -225,7 +225,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // DiscoverUserBundles
         //
-        // [NEW] Internal helper to scan .enigma/shaderpacks for valid bundles
+        // Internal helper to scan .enigma/shaderpacks for valid bundles
         //
         // Workflow:
         //   1. Clear m_discoveredListMeta
@@ -247,22 +247,22 @@ namespace enigma::graphic
         // The discovered list of user bundles in .enigma/shaderpacks
         std::vector<ShaderBundleMeta> m_discoveredListMeta;
 
-        // [NEW] Pending request state for deferred bundle switching
+        // Pending request state for deferred bundle switching
         // This ensures RT changes happen at frame boundaries, not mid-frame
         bool                            m_pendingLoad   = false;
         bool                            m_pendingUnload = false;
         std::optional<ShaderBundleMeta> m_pendingMeta   = std::nullopt;
 
-        // [NEW] Event subscription handle for cleanup
+        // Event subscription handle for cleanup
         enigma::event::DelegateHandle m_onBeginFrameHandle = 0;
 
-        // [NEW] Event subscription handle for MaterialIdMapper vertex event
+        // Event subscription handle for MaterialIdMapper vertex event
         enigma::event::DelegateHandle m_onBuildVertexHandle = 0;
 
-        // [NEW] Event callback - called by RendererEvents::OnBeginFrame
+        // Event callback - called by RendererEvents::OnBeginFrame
         void OnRendererBeginFrame();
     };
 }
 
-// [NEW] Global accessor for ShaderBundleSubsystem
+// Global accessor for ShaderBundleSubsystem
 extern enigma::graphic::ShaderBundleSubsystem* g_theShaderBundleSubsystem;

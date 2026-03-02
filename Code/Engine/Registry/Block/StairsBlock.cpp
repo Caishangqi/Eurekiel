@@ -12,10 +12,10 @@ namespace enigma::voxel
     StairsBlock::StairsBlock(const std::string& registryName, const std::string& ns)
         : Block(registryName, ns)
     {
-        // [NEW] Create DirectionProperty for horizontal facing (4 directions)
+        // Create DirectionProperty for horizontal facing (4 directions)
         m_facingProperty = DirectionProperty::CreateHorizontal("facing");
 
-        // [NEW] Create EnumProperty for half type (top/bottom)
+        // Create EnumProperty for half type (top/bottom)
         m_halfProperty = std::make_shared<EnumProperty<HalfType>>(
             "half",
             std::vector<HalfType>{HalfType::BOTTOM, HalfType::TOP},
@@ -24,7 +24,7 @@ namespace enigma::voxel
             StringToHalfType
         );
 
-        // [NEW] Create EnumProperty for stairs shape (5 variants)
+        // Create EnumProperty for stairs shape (5 variants)
         m_shapeProperty = std::make_shared<EnumProperty<StairsShape>>(
             "shape",
             std::vector<StairsShape>{
@@ -39,24 +39,24 @@ namespace enigma::voxel
             StringToStairsShape
         );
 
-        // [NEW] Register all properties
+        // Register all properties
         AddProperty(m_facingProperty);
         AddProperty(m_halfProperty);
         AddProperty(m_shapeProperty);
 
-        // [NEW] Set block-level properties
+        // Set block-level properties
         // Stairs are not fully opaque (have empty spaces in corners)
         SetCanOcclude(false);
         SetFullBlock(false);
 
-        // [NEW] Generate all possible block states
+        // Generate all possible block states
         // 4 (facing) × 2 (half) × 5 (shape) = 40 states
         GenerateBlockStates();
     }
 
     enigma::voxel::BlockState* StairsBlock::GetStateForPlacement(const PlacementContext& ctx) const
     {
-        // [NEW] Determine facing from player look direction
+        // Determine facing from player look direction
         Direction facing = ctx.GetHorizontalFacing();
 
         // [FIX] Determine half based on clicked face and hit point
@@ -82,16 +82,16 @@ namespace enigma::voxel
         LogInfo("Stairs", "[DEBUG] GetStateForPlacement: clickedFace=%s IsTopHalf=%d => half=%s",
                 DirectionToString(ctx.clickedFace).c_str(), ctx.IsTopHalf(), HalfTypeToString(half));
 
-        // [NEW] Calculate shape based on adjacent stairs
+        // Calculate shape based on adjacent stairs
         StairsShape shape = GetStairsShape(facing, half, ctx.world, ctx.targetPos);
 
-        // [NEW] Create property map with all properties
+        // Create property map with all properties
         PropertyMap props;
         props.Set(std::static_pointer_cast<Property<Direction>>(m_facingProperty), facing);
         props.Set(std::static_pointer_cast<Property<HalfType>>(m_halfProperty), half);
         props.Set(std::static_pointer_cast<Property<StairsShape>>(m_shapeProperty), shape);
 
-        // [NEW] Return the BlockState matching these properties
+        // Return the BlockState matching these properties
         return GetState(props);
     }
 

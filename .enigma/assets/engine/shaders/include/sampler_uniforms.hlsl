@@ -1,6 +1,6 @@
 /**
  * @file sampler_uniforms.hlsl
- * @brief [NEW] Dynamic Sampler System - Bindless Sampler Access via Uniform Buffer
+ * @brief Dynamic Sampler System - Bindless Sampler Access via Uniform Buffer
  * @date 2026-01-17
  * @version v1.0
  *

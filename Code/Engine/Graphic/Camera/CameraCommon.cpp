@@ -1,5 +1,5 @@
 // ============================================================================
-// CameraCommon.cpp - [NEW] Camera system common definitions
+// CameraCommon.cpp - Camera system common definitions
 // ============================================================================
 
 #include "CameraCommon.hpp"
@@ -7,7 +7,7 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // [NEW] Log Category Definition
+    // Log Category Definition
     // ========================================================================
 
     DEFINE_LOG_CATEGORY(LogCamera);

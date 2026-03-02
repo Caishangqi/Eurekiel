@@ -193,7 +193,7 @@ void DX11Renderer::Startup()
     if (!SUCCEEDED(hr))
         ERROR_AND_DIE("CreateSamplerState for SamplerMode::BILINEAR_WRAP failed.")
 
-    // [NEW] Create TRILINEAR_WRAP Sampler (支持 MipMap 三线性过滤)
+    // Create TRILINEAR_WRAP Sampler (支持 MipMap 三线性过滤)
     samplerDesc.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR; // [CRITICAL] 三线性过滤
     samplerDesc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP; // [CRITICAL] 循环寻址
     samplerDesc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -666,7 +666,7 @@ Texture* DX11Renderer::CreateTextureFromImage(Image& image)
 {
     auto newTexture          = new Texture();
     newTexture->m_dimensions = image.GetDimensions();
-    newTexture->m_mipLevels  = 1; // [NEW] 默认无 MipMap
+    newTexture->m_mipLevels  = 1; // 默认无 MipMap
 
     D3D11_TEXTURE2D_DESC textureDesc = {};
     textureDesc.Width                = image.GetDimensions().x;
@@ -1520,7 +1520,7 @@ Texture* DX11Renderer::GenerateMipmaps(const Texture* sourceTexture, int maxLeve
     auto* newTexture                 = new Texture();
     newTexture->m_name               = sourceTexture->GetImageFilePath() + "_mips";
     newTexture->m_dimensions         = dimensions;
-    newTexture->m_mipLevels          = mipLevels; // [NEW] 设置 MipMap 级数
+    newTexture->m_mipLevels          = mipLevels; // 设置 MipMap 级数
     newTexture->m_texture            = destTexture;
     newTexture->m_shaderResourceView = srv;
 

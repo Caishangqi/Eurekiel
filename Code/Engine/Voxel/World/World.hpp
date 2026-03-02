@@ -68,12 +68,12 @@ namespace enigma::voxel
         void DigBlock(const BlockIterator& blockIter);
         void PlaceBlock(const BlockIterator& blockIter, BlockState* newState);
 
-        // [NEW] PlaceBlock with placement context (for slab/stairs)
+        // PlaceBlock with placement context (for slab/stairs)
         void PlaceBlock(const BlockIterator&        blockIter, enigma::registry::block::Block* blockType,
                         const VoxelRaycastResult3D& raycast, const Vec3&                       playerLookDir);
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] VoxelLightEngine Integration
+        // VoxelLightEngine Integration
         //-------------------------------------------------------------------------------------------
         VoxelLightEngine&       GetVoxelLightEngine() { return *m_voxelLightEngine; }
         const VoxelLightEngine& GetVoxelLightEngine() const { return *m_voxelLightEngine; }

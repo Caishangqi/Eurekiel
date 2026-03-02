@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // BundleException.hpp
 //
-// [NEW] Centralized exception hierarchy for ShaderBundle module
+// Centralized exception hierarchy for ShaderBundle module
 //
 // Summary of exception types and their mapping to error macros:
 //
@@ -49,7 +49,7 @@ namespace enigma::graphic
     // ShaderBundleException
     // Base exception class for all ShaderBundle module errors
     //
-    // [NEW] Inherits from std::exception for standard C++ exception handling
+    // Inherits from std::exception for standard C++ exception handling
     // Default mapping: ERROR_AND_DIE (fatal error)
     //-------------------------------------------------------------------------------------------
     class ShaderBundleException : public std::exception

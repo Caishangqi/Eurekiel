@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderBundleFileHelper.hpp
 //
-// [NEW] Pure static utility class for validating ShaderBundle directory structures
+// Pure static utility class for validating ShaderBundle directory structures
 //
 // This helper provides:
 //   - IsValidShaderBundleDirectory: Quick validation check for bundle directory
@@ -51,7 +51,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundleFileHelper
     //
-    // [NEW] Static utility class for ShaderBundle directory validation
+    // Static utility class for ShaderBundle directory validation
     // All methods are static, class cannot be instantiated
     //-------------------------------------------------------------------------------------------
     class ShaderBundleFileHelper
@@ -66,7 +66,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // IsValidShaderBundleDirectory
         //
-        // [NEW] Quick validation check for ShaderBundle directory
+        // Quick validation check for ShaderBundle directory
         //
         // This method performs a minimal check to determine if a directory could be
         // a valid ShaderBundle by checking for the presence of shaders/bundle.json
@@ -85,7 +85,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // HasRequiredStructure
         //
-        // [NEW] Full structure validation for ShaderBundle directory
+        // Full structure validation for ShaderBundle directory
         //
         // This method performs comprehensive validation:
         //   1. Checks shaders/ subdirectory exists

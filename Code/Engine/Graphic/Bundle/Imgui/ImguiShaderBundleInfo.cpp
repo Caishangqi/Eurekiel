@@ -1,5 +1,5 @@
 // ============================================================================
-// ImguiShaderBundleInfo.cpp - [NEW] Static ImGui module for Bundle info display
+// ImguiShaderBundleInfo.cpp - Static ImGui module for Bundle info display
 // ============================================================================
 
 #include "ImguiShaderBundleInfo.hpp"

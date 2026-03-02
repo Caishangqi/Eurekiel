@@ -30,7 +30,7 @@ PSOutput_PCU main(VSOutput_PCU input)
     // The CustomImage slot is set on the CPU side through SetCustomImage(0, texture)
     float4 texColor = customImage0.Sample(sampler1, input.TexCoord);
 
-    // [NEW] Multi-draw data independence test
+    // Multi-draw data independence test
     // Final color = Custom Buffer color (should be Red/Green/Blue for each cube)
     // If Ring Buffer isolation fails, all cubes will show Blue (last uploaded color)
     output.color0 = texColor * input.Color * modelColor;

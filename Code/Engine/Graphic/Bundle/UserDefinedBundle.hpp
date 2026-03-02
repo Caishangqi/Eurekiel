@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // UserDefinedBundle.hpp
 //
-// [NEW] User-defined shader bundle for managing shaders in bundle/{name}/ directory
+// User-defined shader bundle for managing shaders in bundle/{name}/ directory
 //
 // This class provides:
 //   - Precompilation of all shader programs during bundle load
@@ -66,7 +66,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // UserDefinedBundle
     //
-    // [NEW] Manages shader programs from a user-defined bundle directory
+    // Manages shader programs from a user-defined bundle directory
     //
     // Lifecycle:
     //   1. Construct with bundle name and path
@@ -80,7 +80,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // Constructor
         //
-        // [NEW] Initialize bundle with name and path
+        // Initialize bundle with name and path
         //
         // Parameters:
         //   bundleName - Display name of the bundle (e.g., "custom_pack")
@@ -107,7 +107,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // PrecompileAll
         //
-        // [NEW] Compile all shader programs in the bundle directory
+        // Compile all shader programs in the bundle directory
         //
         // Workflow:
         //   1. Scan directory for valid VS/PS shader pairs using ShaderScanHelper
@@ -129,7 +129,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetProgram
         //
-        // [NEW] Get a single shader program by exact name
+        // Get a single shader program by exact name
         //
         // Parameters:
         //   programName - Exact program name (e.g., "gbuffers_basic")
@@ -145,7 +145,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetPrograms
         //
-        // [NEW] Get multiple shader programs matching a regex pattern
+        // Get multiple shader programs matching a regex pattern
         //
         // Parameters:
         //   searchRule - Regex pattern (e.g., "gbuffers_.*" matches gbuffers_basic, gbuffers_textured)
@@ -160,7 +160,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // HasProgram
         //
-        // [NEW] Check if a program exists in the cache
+        // Check if a program exists in the cache
         //
         // Parameters:
         //   programName - Exact program name to check
@@ -173,7 +173,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetName
         //
-        // [NEW] Get the bundle name
+        // Get the bundle name
         //
         // Returns:
         //   Const reference to bundle name string
@@ -183,7 +183,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetPath
         //
-        // [NEW] Get the bundle directory path
+        // Get the bundle directory path
         //
         // Returns:
         //   Const reference to bundle path
@@ -193,7 +193,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // GetProgramCount
         //
-        // [NEW] Get the number of successfully compiled programs
+        // Get the number of successfully compiled programs
         //
         // Returns:
         //   Number of programs in cache

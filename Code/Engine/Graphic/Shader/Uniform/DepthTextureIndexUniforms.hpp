@@ -41,7 +41,7 @@ namespace enigma::graphic
             Reset();
         }
 
-        // ========== [NEW] Unified API ==========
+        // ========== Unified API ==========
 
         /**
          * @brief Set single depth texture index (unified API)

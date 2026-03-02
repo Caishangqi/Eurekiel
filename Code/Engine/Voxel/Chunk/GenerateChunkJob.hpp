@@ -26,7 +26,7 @@ namespace enigma::voxel
         void Execute() override;
 
     private:
-        World*            m_world; // [NEW] World instance to get Chunk via coordinates
+        World*            m_world; // World instance to get Chunk via coordinates
         TerrainGenerator* m_generator; // TerrainGenerator instance (thread-safe, stateless)
         uint32_t          m_worldSeed; // World generation seed
     };

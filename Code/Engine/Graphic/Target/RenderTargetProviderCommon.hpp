@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// RenderTargetProviderCommon.hpp - [NEW] Common definitions for RenderTarget Provider module
+// RenderTargetProviderCommon.hpp - Common definitions for RenderTarget Provider module
 // Part of RenderTarget Manager Unified Architecture Refactoring
 // ============================================================================
 
@@ -16,7 +16,7 @@ namespace enigma::graphic
     DECLARE_LOG_CATEGORY_EXTERN(LogRenderTargetProvider);
 
     // ========================================================================
-    // [NEW] RT Provider Constants - Shader RT Fetching Feature
+    // RT Provider Constants - Shader RT Fetching Feature
     // ========================================================================
 
     // RT slot count constants (Provider capacity)
@@ -28,6 +28,9 @@ namespace enigma::graphic
     constexpr int MIN_SHADOW_COLORS   = 1;
     constexpr int MAX_SHADOW_TEXTURES = 2; // shadowtex0-1
     constexpr int MIN_SHADOW_TEXTURES = 1;
+
+    // D3D12 simultaneous render target limit (for per-RT blend state)
+    constexpr int MAX_SIMULTANEOUS_RENDER_TARGETS = 8;
 
     // cbuffer array size constants (HLSL buffer capacity)
     constexpr uint32_t CBUFFER_COLOR_TARGETS_SIZE   = 16; // colortex cbuffer array size

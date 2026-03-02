@@ -3,7 +3,7 @@
 //-----------------------------------------------------------------------------------------------
 // WorldTimeProvider.hpp
 //
-// [NEW] Default time provider implementing ITimeProvider interface
+// Default time provider implementing ITimeProvider interface
 // Minecraft-compatible time system with tick progression and celestial calculations
 //
 // Reference: Minecraft DimensionType.java, TimeCommand.java, ClientLevel.java
@@ -43,43 +43,43 @@ namespace enigma::voxel
         void  Update(float deltaTime) override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Sun angle - Reference: Iris CelestialUniforms.java:24-32
+        // Sun angle - Reference: Iris CelestialUniforms.java:24-32
         //-------------------------------------------------------------------------------------------
         float GetSunAngle() const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Day/Night check - Reference: Iris CelestialUniforms.java:60-65
+        // Day/Night check - Reference: Iris CelestialUniforms.java:60-65
         //-------------------------------------------------------------------------------------------
         bool IsDay() const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Shadow angle - Reference: Iris CelestialUniforms.java:34-42
+        // Shadow angle - Reference: Iris CelestialUniforms.java:34-42
         //-------------------------------------------------------------------------------------------
         float GetShadowAngle() const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Celestial body direction vectors - Reference: Iris CelestialUniforms.java:119-133
+        // Celestial body direction vectors - Reference: Iris CelestialUniforms.java:119-133
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateSunPosition(const Mat44& gbufferModelView) const override;
         Vec3 CalculateMoonPosition(const Mat44& gbufferModelView) const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Shadow light position - Reference: Iris CelestialUniforms.java:93-95
+        // Shadow light position - Reference: Iris CelestialUniforms.java:93-95
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateShadowLightPosition(const Mat44& gbufferModelView) const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Up direction vector - Reference: Iris CelestialUniforms.java:44-58
+        // Up direction vector - Reference: Iris CelestialUniforms.java:44-58
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateUpPosition(const Mat44& gbufferModelView) const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Cloud color - Reference: Minecraft ClientLevel.java:673-703
+        // Cloud color - Reference: Minecraft ClientLevel.java:673-703
         //-------------------------------------------------------------------------------------------
         Vec3 CalculateCloudColor(float rainLevel, float thunderLevel) const override;
 
         //-------------------------------------------------------------------------------------------
-        // [NEW] Sun path rotation - Reference: Iris PackDirectives.java:25, 265-266
+        // Sun path rotation - Reference: Iris PackDirectives.java:25, 265-266
         // Controls the tilt angle of the sun/moon orbit plane (in degrees)
         // Default: 0.0 (vertical orbit through zenith)
         // Configurable per ShaderBundle via "const float sunPathRotation = X.X;" in shader source

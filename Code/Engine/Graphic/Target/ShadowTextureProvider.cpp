@@ -1,5 +1,5 @@
 // ============================================================================
-// ShadowTextureProvider.cpp - [NEW] Shadow depth texture provider
+// ShadowTextureProvider.cpp - Shadow depth texture provider
 // Implements IRenderTargetProvider for shadowtex0-1 management
 // ============================================================================
 
@@ -277,7 +277,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Reset and Config Query Implementation
+    // Reset and Config Query Implementation
     // ============================================================================
 
     void ShadowTextureProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
@@ -438,7 +438,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // Uniform Registration API - Shader RT Fetching Feature
     // ============================================================================
 
     void ShadowTextureProvider::RegisterUniform(UniformManager* uniformMgr)

@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderBundleFileHelper.cpp
 //
-// [NEW] Implementation of ShaderBundle directory validation helpers
+// Implementation of ShaderBundle directory validation helpers
 //
 //-----------------------------------------------------------------------------------------------
 #include "ShaderBundleFileHelper.hpp"

@@ -80,7 +80,7 @@ float4 UnpackRgba8(uint packedColor)
  * 4. KISS principle - minimalist implementation, no additional calculations
  *
  * Workflow:
- * 1. [NEW] Directly access cbuffer Matrices to obtain the transformation matrix (no function call required)
+ * 1. Directly access cbuffer Matrices to obtain the transformation matrix (no function call required)
  * 2. Vertex position transformation: Position → ViewSpace → ClipSpace
  * 3. Normal transformation: normalMatrix transforms the normal vector
  * 4. Color unpacking: uint → float4

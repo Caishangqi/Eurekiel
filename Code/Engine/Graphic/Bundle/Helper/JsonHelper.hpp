@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // JsonHelper.hpp
 //
-// [NEW] Pure static utility class for parsing ShaderBundle JSON configuration files
+// Pure static utility class for parsing ShaderBundle JSON configuration files
 //
 // This helper provides:
 //   - ParseBundleJson: Parse bundle.json to ShaderBundleMeta
@@ -43,7 +43,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // JsonHelper
     //
-    // [NEW] Static utility class for ShaderBundle JSON parsing
+    // Static utility class for ShaderBundle JSON parsing
     // All methods are static, class cannot be instantiated
     //-------------------------------------------------------------------------------------------
     class JsonHelper
@@ -58,7 +58,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // ParseBundleJson
         //
-        // [NEW] Parse bundle.json file to ShaderBundleMeta structure
+        // Parse bundle.json file to ShaderBundleMeta structure
         //
         // Expected JSON format:
         // {
@@ -85,7 +85,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // ParseFallbackRuleJson
         //
-        // [NEW] Parse fallback_rule.json file to FallbackRule structure
+        // Parse fallback_rule.json file to FallbackRule structure
         //
         // Expected JSON format:
         // {

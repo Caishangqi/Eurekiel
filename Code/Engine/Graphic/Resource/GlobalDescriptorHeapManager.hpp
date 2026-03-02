@@ -275,7 +275,7 @@ namespace enigma::graphic
         std::vector<DescriptorAllocation> BatchAllocateCbvSrvUav(uint32_t count);
 
         /**
-         * @brief [NEW] 批量分配Custom CBV描述符（确保连续性）
+         * @brief 批量分配Custom CBV描述符（确保连续性）
          * @param count 要分配的数量
          * @return 连续分配的描述符数组，失败返回空数组
          *

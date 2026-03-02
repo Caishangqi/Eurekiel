@@ -32,7 +32,7 @@ D12VertexBuffer::D12VertexBuffer(size_t size, size_t stride, const void* initial
     // This is the key structure for DirectX 12 bound vertex buffers
     UpdateView();
 
-    // [NEW] Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
+    // Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
     // Teaching points: The VertexBuffer of the UPLOAD heap needs to be persistently mapped so that:
     // 1. DrawVertexBuffer can read data through GetPersistentMappedData()
     // 2. Data can be copied to the renderer’s Ring Buffer

@@ -60,7 +60,7 @@ World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<e
 {
     using namespace enigma::voxel;
 
-    // [NEW] Initialize VoxelLightEngine
+    // Initialize VoxelLightEngine
     m_voxelLightEngine = std::make_unique<VoxelLightEngine>(this);
 
     // Create and initialize ChunkManager (follow NeoForge mode)
@@ -622,7 +622,7 @@ void World::UpdateNearbyChunks()
         LogDebug("world", "Activated %d chunks this frame", activatedThisFrame);
     }
 
-    // [NEW] Phase 6: Dynamic unload rate based on loaded chunk count
+    // Phase 6: Dynamic unload rate based on loaded chunk count
     // Assignment 02 requirement: deactivate chunks per frame if outside range
     size_t loadedCount = m_loadedChunks.size();
     size_t targetCount = CalculateNeededChunks().size();
@@ -1849,7 +1849,7 @@ void World::UndirtyAllBlocksInChunk(Chunk* chunk)
 }
 
 //-----------------------------------------------------------------------------------------------
-// [NEW] UpdateSkyBrightness - Calculate sky darken from time
+// UpdateSkyBrightness - Calculate sky darken from time
 // Reference: Minecraft Level.java:559-563
 //-----------------------------------------------------------------------------------------------
 
@@ -1868,7 +1868,7 @@ void World::UpdateSkyBrightness(const ITimeProvider& timeProvider)
 }
 
 //-----------------------------------------------------------------------------------------------
-// [NEW] MarkLightingDirty - Convenience wrapper for Chunk usage
+// MarkLightingDirty - Convenience wrapper for Chunk usage
 // Delegates to both BlockLightEngine and SkyLightEngine
 //-----------------------------------------------------------------------------------------------
 
@@ -1989,7 +1989,7 @@ void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
     // 6. Schedule chunk mesh rebuild
     ScheduleChunkMeshRebuild(chunk);
 
-    // 7. [NEW] Notify 6 neighbors about block change (for stairs shape update, etc.)
+    // 7. Notify 6 neighbors about block change (for stairs shape update, etc.)
     //    This is critical for stairs/slab auto-connection feature
     BlockPos                        pos             = blockIter.GetBlockPos();
     enigma::registry::block::Block* placedBlockType = newState->GetBlock();
@@ -2016,7 +2016,7 @@ void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
 }
 
 //-------------------------------------------------------------------------------------------
-// [NEW] PlaceBlock with PlacementContext (for slab/stairs)
+// PlaceBlock with PlacementContext (for slab/stairs)
 //-------------------------------------------------------------------------------------------
 void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::block::Block* blockType,
                        const VoxelRaycastResult3D& raycast, const Vec3&                       playerLookDir)
@@ -2065,7 +2065,7 @@ void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::
                                     static_cast<float>(clickedPos.z));
     Vec3 localHitPoint = worldHitPos - clickedWorldPos; // Relative to clicked block, not target
 
-    // [NEW] Construct PlacementContext
+    // Construct PlacementContext
     PlacementContext ctx;
     ctx.world         = this;
     ctx.targetPos     = targetPos;
@@ -2128,7 +2128,7 @@ void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::
             static_cast<int>(ctx.clickedFace), ctx.hitPoint.x, ctx.hitPoint.y, ctx.hitPoint.z,
             ctx.playerLookDir.x, ctx.playerLookDir.y, ctx.playerLookDir.z);
 
-    // [NEW] Get final state from placement logic
+    // Get final state from placement logic
     BlockState* finalState = blockType->GetStateForPlacement(ctx);
 
     if (isDebugBlock)

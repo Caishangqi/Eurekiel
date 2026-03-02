@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ShaderBundleEvents.hpp - [NEW] Static MulticastDelegate events for Bundle lifecycle
+// ShaderBundleEvents.hpp - Static MulticastDelegate events for Bundle lifecycle
 // ============================================================================
 
 #include "Engine/Core/Event/MulticastDelegate.hpp"
@@ -10,7 +10,7 @@ namespace enigma::graphic
 {
     class ShaderBundle;
 
-    // [NEW] Centralized ShaderBundle event definitions
+    // Centralized ShaderBundle event definitions
     struct ShaderBundleEvents
     {
         // Fired after a Bundle is loaded - parameter is the newly loaded Bundle

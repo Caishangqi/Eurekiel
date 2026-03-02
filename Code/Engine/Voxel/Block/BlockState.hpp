@@ -58,7 +58,7 @@ namespace enigma::voxel
         size_t m_stateIndex = 0;
 
         // ============================================================
-        // [NEW] FluidState cache
+        // FluidState cache
         // [MINECRAFT REF] BlockBehaviour.BlockStateBase.fluidState
         // File: net/minecraft/world/level/block/state/BlockBehaviour.java:1195
         // Cached at initCache() time for O(1) access

@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // IndexRingBuffer.cpp
 //
-// [NEW] Implementation of IndexRingBuffer wrapper class
+// Implementation of IndexRingBuffer wrapper class
 //
 // Key Implementation Details:
 //   - RAII: Buffer created in constructor, released in destructor

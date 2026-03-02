@@ -245,7 +245,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Reset and Config Query Implementation
+    // Reset and Config Query Implementation
     // ============================================================================
 
     void ShadowColorProvider::ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs)
@@ -393,7 +393,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Uniform Registration API - Shader RT Fetching Feature
+    // Uniform Registration API - Shader RT Fetching Feature
     // ============================================================================
 
     void ShadowColorProvider::RegisterUniform(UniformManager* uniformMgr)

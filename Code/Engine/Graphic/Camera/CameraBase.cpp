@@ -34,7 +34,7 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // [NEW] Public Setters
+    // Public Setters
     // ========================================================================
 
     CameraUniforms CameraBase::GetCameraUniforms() const

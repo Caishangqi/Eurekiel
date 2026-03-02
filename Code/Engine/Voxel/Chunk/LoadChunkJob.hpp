@@ -43,7 +43,7 @@ namespace enigma::voxel
         bool WasSuccessful() const { return m_loadSuccess; }
 
     private:
-        World*            m_world; // [NEW] World instance to get Chunk via coordinates
+        World*            m_world; // World instance to get Chunk via coordinates
         ESFChunkStorage*  m_esfStorage; // ESF storage (or nullptr if using ESFS)
         ESFSChunkStorage* m_esfsStorage; // ESFS storage (or nullptr if using ESF)
         bool              m_loadSuccess; // Did the load operation succeed?

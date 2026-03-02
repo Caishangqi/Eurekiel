@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// SamplerProviderCommon.hpp - [NEW] Common definitions for Sampler Provider module
+// SamplerProviderCommon.hpp - Common definitions for Sampler Provider module
 // Part of Dynamic Sampler System
 // ============================================================================
 

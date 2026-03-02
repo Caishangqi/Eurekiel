@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderBundleCommon.hpp
 //
-// [NEW] Common types and declarations for ShaderBundle module
+// Common types and declarations for ShaderBundle module
 //
 // This header provides:
 //   - Log category declaration for ShaderBundle module (LogShaderBundle)
@@ -39,7 +39,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // Log Category Declaration
     //
-    // [NEW] ShaderBundle module log category for consistent logging
+    // ShaderBundle module log category for consistent logging
     // Use with LogInfo, LogWarn, LogError macros:
     //   LogInfo(LogShaderBundle, "Message with format: %s", arg);
     //
@@ -51,7 +51,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundleMeta
     //
-    // [NEW] Metadata for a discovered ShaderBundle
+    // Metadata for a discovered ShaderBundle
     // Populated from bundle.json parsing or directory discovery
     //
     // Factory Method:
@@ -72,7 +72,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // FromBundlePath
         //
-        // [NEW] Static factory method to create ShaderBundleMeta from bundle directory path
+        // Static factory method to create ShaderBundleMeta from bundle directory path
         //
         // Parameters:
         //   bundlePath     - Path to bundle root directory (e.g., ".enigma/assets/engine")
@@ -93,7 +93,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundleResult
     //
-    // [NEW] Result type for ShaderBundle operations
+    // Result type for ShaderBundle operations
     // Used as return type for LoadShaderBundle, UnloadShaderBundle, etc.
     //-------------------------------------------------------------------------------------------
     struct ShaderBundleResult
@@ -106,7 +106,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // FallbackRule
     //
-    // [NEW] Fallback configuration loaded from fallback_rule.json
+    // Fallback configuration loaded from fallback_rule.json
     // Defines shader program fallback chains for graceful degradation
     //
     // Example fallback_rule.json:
@@ -127,7 +127,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // Event Name Constants
     //
-    // [NEW] Standard event names for ShaderBundle lifecycle events
+    // Standard event names for ShaderBundle lifecycle events
     // Subscribe to these events via EventSystem for notifications
     //
     // Usage:
@@ -145,7 +145,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundleEventData
     //
-    // [NEW] Event data structure for ShaderBundle lifecycle events
+    // Event data structure for ShaderBundle lifecycle events
     // Passed to event subscribers when bundle events are triggered
     //-------------------------------------------------------------------------------------------
     struct ShaderBundleEventData

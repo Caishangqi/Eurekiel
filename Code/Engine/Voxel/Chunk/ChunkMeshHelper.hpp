@@ -91,7 +91,7 @@ namespace enigma::voxel
         /**
          * @brief Determine render type for a block
          *
-         * [NEW] Priority:
+         * Priority:
          * 1. RenderShape::INVISIBLE -> skip entirely
          * 2. Block's explicit RenderType from GetRenderType()
          *

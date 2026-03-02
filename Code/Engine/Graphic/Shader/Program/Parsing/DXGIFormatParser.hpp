@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// [NEW] DXGIFormatParser.hpp - DXGI format string to enum parser
+// DXGIFormatParser.hpp - DXGI format string to enum parser
 // Part of RenderTarget Format Refactor Feature
 // ============================================================================
 

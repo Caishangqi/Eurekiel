@@ -61,7 +61,7 @@ namespace enigma::graphic
     {
         try
         {
-            // [NEW] Try to resolve the alias path
+            // Try to resolve the alias path
             auto aliasResolved = ResolveAliasPath(path);
             if (aliasResolved.has_value())
             {
@@ -94,7 +94,7 @@ namespace enigma::graphic
     {
         try
         {
-            // [NEW] Try to resolve the alias path
+            // Try to resolve the alias path
             auto aliasResolved = ResolveAliasPath(path);
             if (aliasResolved.has_value())
             {
@@ -131,7 +131,7 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // [NEW] Alias management method implementation
+    // Alias management method implementation
     // ========================================================================
 
     void FileSystemReader::AddAlias(const std::string& alias, const std::filesystem::path& targetPath)
@@ -270,7 +270,7 @@ namespace enigma::graphic
     std::optional<std::filesystem::path> FileSystemReader::ResolveAliasPath(const ShaderPath& path) const
     {
         /**
-         * [NEW] Alias path resolution algorithm
+         * Alias path resolution algorithm
          *
          *Business logic:
          * 1. Get the string representation of ShaderPath

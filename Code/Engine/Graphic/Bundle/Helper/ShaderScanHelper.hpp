@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderScanHelper.hpp
 //
-// [NEW] Pure static utility class for discovering and matching shader program files
+// Pure static utility class for discovering and matching shader program files
 //
 // This helper provides:
 //   - ScanShaderPrograms: Scan directory for valid VS/PS shader pairs
@@ -52,7 +52,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderScanHelper
     //
-    // [NEW] Static utility class for shader file discovery and matching
+    // Static utility class for shader file discovery and matching
     // All methods are static, class cannot be instantiated
     //-------------------------------------------------------------------------------------------
     class ShaderScanHelper
@@ -67,7 +67,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // ScanShaderPrograms
         //
-        // [NEW] Scan directory for valid shader program pairs
+        // Scan directory for valid shader program pairs
         //
         // This method scans a directory for .vs.hlsl files and checks if corresponding
         // .ps.hlsl files exist. Only programs with both VS and PS files are included.
@@ -89,7 +89,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // FindShaderFiles
         //
-        // [NEW] Find VS and PS shader files for a specific program
+        // Find VS and PS shader files for a specific program
         //
         // This method looks for {programName}.vs.hlsl and {programName}.ps.hlsl
         // in the specified directory.
@@ -116,7 +116,7 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // MatchProgramsByPattern
         //
-        // [NEW] Filter program names using regex pattern
+        // Filter program names using regex pattern
         //
         // This method applies a regex pattern to filter program names.
         // Useful for finding related programs (e.g., all "gbuffers_*" programs).

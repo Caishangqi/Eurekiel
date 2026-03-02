@@ -3,7 +3,7 @@
  * @brief Shadow Pass Pixel Shader - Depth Output with Alpha Testing
  * @date 2026-01-07
  *
- * [NEW] Shadow mapping pixel shader for depth-only rendering.
+ * Shadow mapping pixel shader for depth-only rendering.
  * Supports alpha testing for cutout geometry (leaves, fences, etc.)
  *
  * Output:

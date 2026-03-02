@@ -14,7 +14,7 @@ namespace enigma::graphic
      * Key Features:
      * 1. Root CBV Architecture - 15 Root Descriptors (b0-b14), optimal performance
      * 2. SM6.6 Bindless: CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED for textures/buffers
-     * 3. [NEW] Dynamic Sampler: SAMPLER_HEAP_DIRECTLY_INDEXED for runtime sampler config
+     * 3. Dynamic Sampler: SAMPLER_HEAP_DIRECTLY_INDEXED for runtime sampler config
      * 4. Global shared Root Signature: All PSOs use the same Root Signature
      *
      * Root Signature Layout (31 DWORDs = 48.4% budget):
@@ -28,7 +28,7 @@ namespace enigma::graphic
      *
      * Dynamic Sampler Access (HLSL):
      * ```hlsl
-     * // [NEW] Dynamic sampler via SamplerDescriptorHeap
+     * // Dynamic sampler via SamplerDescriptorHeap
      * SamplerState GetSampler(uint index) {
      *     return SamplerDescriptorHeap[index];
      * }
@@ -104,7 +104,7 @@ namespace enigma::graphic
         static constexpr uint32_t ROOT_SIGNATURE_MAX_DWORDS  = 64; // DX12限制
         static constexpr float    ROOT_SIGNATURE_BUDGET_USED = 48.4f; // 31/64 = 48.4% [NEW]
 
-        // [NEW] 编译期预算验证
+        // 编译期预算验证
         static_assert(ROOT_SIGNATURE_DWORD_COUNT <= ROOT_SIGNATURE_MAX_DWORDS,
                       "Root Signature exceeds 64 DWORDs limit");
 

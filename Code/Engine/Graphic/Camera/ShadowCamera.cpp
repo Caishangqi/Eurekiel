@@ -1,5 +1,5 @@
 // ============================================================================
-// ShadowCamera.cpp - [NEW] Shadow camera implementation
+// ShadowCamera.cpp - Shadow camera implementation
 // ============================================================================
 
 #include "ShadowCamera.hpp"
@@ -9,7 +9,7 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // [NEW] Constructor
+    // Constructor
     // ========================================================================
 
     ShadowCamera::ShadowCamera(const Vec3& lightPosition, const EulerAngles& lightDirection,
@@ -24,7 +24,7 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // [NEW] ICamera Implementation
+    // ICamera Implementation
     // ========================================================================
 
     CameraType ShadowCamera::GetCameraType() const
@@ -34,12 +34,12 @@ namespace enigma::graphic
 
     void ShadowCamera::UpdateMatrixUniforms(MatricesUniforms& uniforms) const
     {
-        // [NEW] Calculate shadow matrices
+        // Calculate shadow matrices
         Mat44 view          = GetViewMatrix();
         Mat44 proj          = GetProjectionMatrix();
         Mat44 cameraToWorld = GetCameraToWorldTransform();
 
-        // [NEW] Fill ONLY shadow matrices (not gbuffer matrices)
+        // Fill ONLY shadow matrices (not gbuffer matrices)
         uniforms.shadowView              = view;
         uniforms.shadowViewInverse       = cameraToWorld;
         uniforms.shadowProjection        = proj;

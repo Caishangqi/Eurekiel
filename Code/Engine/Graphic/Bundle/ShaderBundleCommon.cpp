@@ -1,7 +1,7 @@
 ﻿//-----------------------------------------------------------------------------------------------
 // ShaderBundleCommon.cpp
 //
-// [NEW] Implementation file for ShaderBundle common types and declarations
+// Implementation file for ShaderBundle common types and declarations
 //
 // This file contains:
 //   - Log category definition for LogShaderBundle
@@ -23,7 +23,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // Log Category Definition
     //
-    // [NEW] Define the LogShaderBundle log category
+    // Define the LogShaderBundle log category
     // This creates the actual storage for the category declared in the header
     // Default log level is TRACE (most verbose)
     //-------------------------------------------------------------------------------------------
@@ -32,7 +32,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // ShaderBundleMeta::FromBundlePath
     //
-    // [NEW] Static factory method implementation
+    // Static factory method implementation
     //
     // Workflow:
     //   1. Construct bundle.json path: {bundlePath}/shaders/bundle.json

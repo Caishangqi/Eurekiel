@@ -3,7 +3,7 @@
 //-----------------------------------------------------------------------------------------------
 // LightEngineCommon.hpp
 //
-// [NEW] Common declarations for VoxelLight module
+// Common declarations for VoxelLight module
 // Contains log category declarations for consistent logging across light engine components
 //
 // Usage:
@@ -17,7 +17,7 @@ namespace enigma::voxel
     //-------------------------------------------------------------------------------------------
     // Log Category Declarations
     //
-    // [NEW] VoxelLight module log categories for consistent logging
+    // VoxelLight module log categories for consistent logging
     // Definition in LightEngineCommon.cpp
     //-------------------------------------------------------------------------------------------
     DECLARE_LOG_CATEGORY_EXTERN(LogVoxelLight);

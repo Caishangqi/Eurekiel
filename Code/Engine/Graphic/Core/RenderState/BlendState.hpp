@@ -17,7 +17,7 @@
 namespace enigma::graphic
 {
     // ========================================
-    // [NEW] Blend Configuration Type Aliases
+    // Blend Configuration Type Aliases
     // ========================================
 
     /**
@@ -39,7 +39,7 @@ namespace enigma::graphic
     using ColorWriteMask = uint8_t;
 
     // ========================================
-    // [NEW] Blend Factor Constants
+    // Blend Factor Constants
     // ========================================
 
     namespace BlendFactorMode
@@ -58,7 +58,7 @@ namespace enigma::graphic
     }
 
     // ========================================
-    // [NEW] Blend Operation Constants
+    // Blend Operation Constants
     // ========================================
 
     namespace BlendOperation
@@ -71,7 +71,7 @@ namespace enigma::graphic
     }
 
     // ========================================
-    // [NEW] Color Write Mask Constants
+    // Color Write Mask Constants
     // ========================================
 
     namespace ColorWriteEnable
@@ -84,7 +84,7 @@ namespace enigma::graphic
     }
 
     // ========================================
-    // [NEW] BlendConfig Structure
+    // BlendConfig Structure
     // ========================================
 
     /**

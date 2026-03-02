@@ -299,7 +299,7 @@ namespace enigma::graphic
         );
 
         // ========================================================================
-        // [NEW] Shadow Render Target Factory Methods
+        // Shadow Render Target Factory Methods
         // Shadow textures use square resolution (width = height = resolution)
         // ========================================================================
 

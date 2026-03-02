@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // LightException.hpp
 //
-// [NEW] Centralized exception hierarchy for VoxelLight module
+// Centralized exception hierarchy for VoxelLight module
 //
 // Summary of exception types and their mapping to error macros:
 //

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// CameraBase.hpp - [NEW] Abstract base class for camera implementations
+// CameraBase.hpp - Abstract base class for camera implementations
 // 
 // [REFACTOR] Extracted common functionality from EnigmaCamera.cpp
 // Provides: position, orientation, near/far planes, view matrix calculation
@@ -15,7 +15,7 @@
 namespace enigma::graphic
 {
     // ========================================================================
-    // [NEW] CameraBase - Template Method base class
+    // CameraBase - Template Method base class
     // ========================================================================
 
     /**
@@ -65,7 +65,7 @@ namespace enigma::graphic
         CameraUniforms           GetCameraUniforms() const override;
 
         // ====================================================================
-        // [NEW] Public Setters
+        // Public Setters
         // ====================================================================
 
         void SetPosition(const Vec3& position);
@@ -74,7 +74,7 @@ namespace enigma::graphic
         void SetNearFar(float nearPlane, float farPlane);
 
         // ====================================================================
-        // [NEW] Public Getters
+        // Public Getters
         // ====================================================================
 
         [[nodiscard]] const Vec3&        GetPosition() const { return m_position; }
@@ -104,7 +104,7 @@ namespace enigma::graphic
 
     protected:
         // ====================================================================
-        // [NEW] Protected Members
+        // Protected Members
         // ====================================================================
 
         Vec3        m_position                = Vec3::ZERO;

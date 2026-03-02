@@ -72,7 +72,7 @@ enum class SamplerMode
 {
     POINT_CLAMP,
     BILINEAR_WRAP,
-    TRILINEAR_WRAP, // [NEW] 支持 MipMap 的三线性过滤
+    TRILINEAR_WRAP, // 支持 MipMap 的三线性过滤
     COUNT = 3
 };
 

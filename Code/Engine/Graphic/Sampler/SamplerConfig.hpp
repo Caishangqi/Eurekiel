@@ -1,6 +1,6 @@
 /**
  * @file SamplerConfig.hpp
- * @brief [NEW] Sampler configuration struct for Dynamic Sampler System
+ * @brief Sampler configuration struct for Dynamic Sampler System
  * 
  * Design Pattern: Following RasterizationConfig pattern
  * - Type aliases mapping to D3D12 types

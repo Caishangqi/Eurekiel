@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------------------------
 // ShaderScanHelper.cpp
 //
-// [NEW] Implementation of shader file discovery and matching utilities
+// Implementation of shader file discovery and matching utilities
 //
 //-----------------------------------------------------------------------------------------------
 

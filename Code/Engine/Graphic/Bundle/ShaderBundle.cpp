@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------------------------
 // ShaderBundle.cpp
 //
-// [NEW] Implementation of ShaderBundle with three-tier fallback mechanism
+// Implementation of ShaderBundle with three-tier fallback mechanism
 //
 //-----------------------------------------------------------------------------------------------
 
@@ -25,6 +25,7 @@
 #include "Engine/Graphic/Shader/Common/FileSystemReader.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp"
+#include "Engine/Graphic/Shader/Program/ShaderProgram.hpp"
 
 namespace enigma::graphic
 {
@@ -95,7 +96,7 @@ namespace enigma::graphic
             LogInfo(LogShaderBundle, "ShaderBundle:: No bundle/ directory found (using program/ only)");
         }
 
-        // [NEW] Step 3: Parse RT directives using Iris-style approach
+        // Step 3: Parse RT directives using Iris-style approach
         // [REFACTOR] Scan program files, expand includes, then parse directives from expanded source
         const auto& config = g_theRendererSubsystem->GetConfiguration();
         m_rtDirectives     = std::make_unique<PackRenderTargetDirectives>(
@@ -129,14 +130,14 @@ namespace enigma::graphic
                 // Root is m_meta.path, so ShaderPath "/shaders/program/x.hlsl" resolves to
                 // m_meta.path / "shaders/program/x.hlsl"
                 //
-                // [NEW] Create FileSystemReader with @engine alias support
+                // Create FileSystemReader with @engine alias support
                 // @engine -> .enigma/assets/engine/shaders (relative to Run directory)
                 try
                 {
                     // Create FileSystemReader with root at ShaderBundle path
                     auto fileReader = std::make_shared<FileSystemReader>(m_meta.path);
 
-                    // [NEW] Register path aliases from configuration
+                    // Register path aliases from configuration
                     // Path aliases enable cross-directory #include resolution (e.g., @engine -> engine shaders)
                     for (const auto& [alias, targetPath] : m_pathAliases)
                     {
@@ -201,11 +202,12 @@ namespace enigma::graphic
             LogInfo(LogShaderBundle, "ShaderBundle:: No program/ directory found, skipping directive parsing");
         }
 
-        // Step 4: Load custom textures declared in shaders.properties
+        // Step 4: Load custom textures and blend directives from shaders.properties
         {
             ShaderProperties shaderProps;
             if (shaderProps.Parse(m_meta.path))
             {
+                // 4a: Extract custom texture data
                 m_customTextureData = shaderProps.GetCustomTextureData();
                 if (!m_customTextureData.IsEmpty())
                 {
@@ -223,11 +225,41 @@ namespace enigma::graphic
                         // Partial textures may have been loaded, continue using them
                     }
                 }
+
+                // 4b: Extract blend directives for per-program injection
+                m_blendModeOverrides   = shaderProps.GetBlendModeOverrides();
+                m_bufferBlendOverrides = shaderProps.GetBufferBlendOverrides();
+
+                if (!m_blendModeOverrides.empty() || !m_bufferBlendOverrides.empty())
+                {
+                    LogInfo(LogShaderBundle, "ShaderBundle:: Loaded %zu blend overrides, %zu buffer blend overrides",
+                            m_blendModeOverrides.size(), m_bufferBlendOverrides.size());
+                }
             }
         }
 
         // Step 5: Bind global customTexture.<name> entries via SetCustomImage + SetSamplerConfig
         BindGlobalCustomTextures();
+
+        // Step 6: Inject blend directives from shaders.properties into compiled programs
+        if (!m_blendModeOverrides.empty() || !m_bufferBlendOverrides.empty())
+        {
+            // Inject into program/ cache
+            for (auto& [name, program] : m_programCache)
+            {
+                if (program) InjectBlendDirectives(*program, name);
+            }
+
+            // Inject into UserDefinedBundle programs
+            for (auto& userBundle : m_userDefinedBundles)
+            {
+                auto allPrograms = userBundle->GetPrograms(".*");
+                for (auto& program : allPrograms)
+                {
+                    if (program) InjectBlendDirectives(*program, program->GetName());
+                }
+            }
+        }
 
         LogInfo(LogShaderBundle, "ShaderBundle:: Created: %s (%zu UserDefinedBundles)",
                 m_meta.name.c_str(), m_userDefinedBundles.size());
@@ -697,5 +729,64 @@ namespace enigma::graphic
         }
 
         return result;
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // InjectBlendDirectives
+    //
+    // Inject blend data from shaders.properties into a compiled program's directives.
+    // Maps colortex index to RT index via drawBuffers for per-buffer blend.
+    //-------------------------------------------------------------------------------------------
+    void ShaderBundle::InjectBlendDirectives(ShaderProgram& program, const std::string& programName)
+    {
+        auto& directives = program.GetMutableDirectives();
+
+        // 1. Global blend: blend.<pass> = <srcRGB> <dstRGB> <srcAlpha> <dstAlpha>
+        auto globalIt = m_blendModeOverrides.find(programName);
+        if (globalIt != m_blendModeOverrides.end())
+        {
+            directives.SetBlendConfig(globalIt->second.ToBlendConfig());
+        }
+
+        // 2. Per-buffer blend: blend.<pass>.<buffer> = <srcRGB> <dstRGB> <srcAlpha> <dstAlpha>
+        auto bufferIt = m_bufferBlendOverrides.find(programName);
+        if (bufferIt != m_bufferBlendOverrides.end())
+        {
+            const auto& drawBuffers = directives.GetDrawBuffers();
+
+            for (const auto& bufferBlend : bufferIt->second)
+            {
+                int colortexIndex = bufferBlend.bufferIndex;
+
+                // Map colortex index to RT index via drawBuffers
+                int rtIndex = -1;
+                for (size_t i = 0; i < drawBuffers.size(); ++i)
+                {
+                    if (static_cast<int>(drawBuffers[i]) == colortexIndex)
+                    {
+                        rtIndex = static_cast<int>(i);
+                        break;
+                    }
+                }
+
+                if (rtIndex < 0)
+                {
+                    LogWarn(LogShaderBundle,
+                            "ShaderBundle:: Blend override for '%s' buffer %d: colortex not in drawBuffers, skipping",
+                            programName.c_str(), colortexIndex);
+                    continue;
+                }
+
+                if (bufferBlend.blendMode.has_value())
+                {
+                    directives.SetBufferBlendOverride(rtIndex, bufferBlend.blendMode->ToBlendConfig());
+                }
+                else
+                {
+                    // nullopt = blend off for this buffer
+                    directives.SetBufferBlendOverride(rtIndex, graphic::BlendConfig::Opaque());
+                }
+            }
+        }
     }
 } // namespace enigma::graphic

@@ -171,7 +171,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Shadow Render Target Factory Methods Implementation
+    // Shadow Render Target Factory Methods Implementation
     // ============================================================================
 
     RenderTargetConfig RenderTargetConfig::ShadowColorTarget(

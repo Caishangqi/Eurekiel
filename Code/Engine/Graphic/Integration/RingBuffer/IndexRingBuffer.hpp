@@ -2,7 +2,7 @@
 //-----------------------------------------------------------------------------------------------
 // IndexRingBuffer.hpp
 //
-// [NEW] Dedicated wrapper class for immediate mode index Ring Buffer operations
+// Dedicated wrapper class for immediate mode index Ring Buffer operations
 //
 // Design Goals:
 //   - Encapsulate D12IndexBuffer + offset state together (Option D architecture)
@@ -43,7 +43,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // IndexAppendResult
     //
-    // [NEW] Result of Append operation
+    // Result of Append operation
     // Contains start index for DrawIndexed call
     //-------------------------------------------------------------------------------------------
     struct IndexAppendResult
@@ -56,7 +56,7 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     // IndexRingBuffer
     //
-    // [NEW] Dedicated wrapper class for immediate mode index Ring Buffer operations
+    // Dedicated wrapper class for immediate mode index Ring Buffer operations
     //
     // Encapsulates:
     //   - D12IndexBuffer (GPU resource)

@@ -2022,7 +2022,7 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // [NEW] Config-based Clear API - RenderTarget Format Refactor
+    // Config-based Clear API - RenderTarget Format Refactor
     // ============================================================================
 
     void D3D12RenderSystem::ClearRenderTargetByConfig(

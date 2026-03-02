@@ -303,7 +303,7 @@ namespace enigma::graphic
          */
         Window* targetWindow = nullptr;
 
-        // ==================== [NEW] RT Type Configuration ====================
+        // ==================== RT Type Configuration ====================
 
         /**
          * @brief RT configuration for a single RT type (colortex, depthtex, etc.)

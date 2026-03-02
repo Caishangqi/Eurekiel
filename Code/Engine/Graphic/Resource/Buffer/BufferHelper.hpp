@@ -25,11 +25,11 @@ using namespace enigma::graphic;
 class BufferHelper
 {
 public:
-    // [NEW] ConstantBuffer对齐和slot管理常量
+    // ConstantBuffer对齐和slot管理常量
     static constexpr size_t   CONSTANT_BUFFER_ALIGNMENT = 256; // D3D12 ConstantBuffer必须256字节对齐
     static constexpr uint32_t MAX_ENGINE_RESERVED_SLOT  = 14; // 引擎保留slot范围：0-14
 
-    // [NEW] ConstantBuffer辅助方法
+    // ConstantBuffer辅助方法
     /**
      * @brief 计算256字节对齐后的大小
      * @param rawSize 原始大小

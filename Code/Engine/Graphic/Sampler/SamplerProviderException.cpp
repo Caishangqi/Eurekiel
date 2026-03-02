@@ -1,7 +1,7 @@
 #include "SamplerProviderException.hpp"
 
 // ============================================================================
-// SamplerProviderException.cpp - [NEW] Exception implementations
+// SamplerProviderException.cpp - Exception implementations
 // Part of Dynamic Sampler System
 // ============================================================================
 

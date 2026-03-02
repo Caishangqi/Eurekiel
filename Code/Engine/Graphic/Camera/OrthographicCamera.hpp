@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// OrthographicCamera.hpp - [NEW] Orthographic camera for UI and 2D rendering
+// OrthographicCamera.hpp - Orthographic camera for UI and 2D rendering
 // 
 // Implements orthographic projection for UI rendering and 2D scenes.
 // Base class for ShadowCamera (virtual, not final).
@@ -17,13 +17,13 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] OrthographicCamera - Parallel projection camera
+    // OrthographicCamera - Parallel projection camera
     // ========================================================================
 
     /**
      * @brief Orthographic camera for 2D/3D scenes with parallel projection
      *
-     * [NEW] Implements orthographic projection with:
+     * Implements orthographic projection with:
      * - Bottom-left and top-right bounds defining view area
      * - Near/far clipping planes (inherited from CameraBase)
      *
@@ -110,13 +110,13 @@ namespace enigma::graphic
         MatricesUniforms GetMatrixUniforms() override;
 
         // ====================================================================
-        // [NEW] Orthographic-specific Setters
+        // Orthographic-specific Setters
         // ====================================================================
 
         void SetBounds(const Vec2& bottomLeft, const Vec2& topRight);
 
         // ====================================================================
-        // [NEW] Orthographic-specific Getters
+        // Orthographic-specific Getters
         // ====================================================================
 
         [[nodiscard]] const Vec2& GetBottomLeft() const { return m_bottomLeft; }
@@ -124,7 +124,7 @@ namespace enigma::graphic
 
     protected:
         // ====================================================================
-        // [NEW] Protected Members (accessible by ShadowCamera)
+        // Protected Members (accessible by ShadowCamera)
         // ====================================================================
 
         Vec2 m_bottomLeft = Vec2(-1.0f, -1.0f);

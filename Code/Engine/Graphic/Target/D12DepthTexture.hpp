@@ -387,7 +387,7 @@ namespace enigma::graphic
         static DXGI_FORMAT GetTypedFormat(DXGI_FORMAT depthFormat);
 
         /**
-         * @brief [NEW] 获取对应的 TYPELESS 格式 (用于资源创建)
+         * @brief 获取对应的 TYPELESS 格式 (用于资源创建)
          * @param depthFormat 深度格式
          * @return TYPELESS 格式
          *

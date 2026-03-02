@@ -104,12 +104,12 @@ namespace enigma::graphic
         // Dynamic Configuration
         void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
-        // [NEW] Reset and Config Query
+        // Reset and Config Query
         void                      ResetToDefault(const std::vector<RenderTargetConfig>& defaultConfigs) override;
         const RenderTargetConfig& GetConfig(int index) const override;
 
         // ========================================================================
-        // [NEW] Uniform Registration API - Shader RT Fetching Feature
+        // Uniform Registration API - Shader RT Fetching Feature
         // ========================================================================
 
         /**
@@ -212,7 +212,7 @@ namespace enigma::graphic
         int m_baseHeight  = 0;
         int m_activeCount = 0;
 
-        // [NEW] Uniform registration for Shader RT Fetching
+        // Uniform registration for Shader RT Fetching
         UniformManager*           m_uniformManager = nullptr;
         ColorTextureIndexUniforms m_indexBuffer;
     };

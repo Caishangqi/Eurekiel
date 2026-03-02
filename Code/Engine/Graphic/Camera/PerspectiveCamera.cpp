@@ -27,7 +27,7 @@ namespace enigma::graphic
 
     Mat44 PerspectiveCamera::GetProjectionMatrix() const
     {
-        // [NEW] Perspective projection using FOV and aspect ratio
+        // Perspective projection using FOV and aspect ratio
         return Mat44::MakePerspectiveProjection(m_fov, m_aspectRatio, m_nearPlane, m_farPlane);
     }
 
@@ -38,7 +38,7 @@ namespace enigma::graphic
 
     void PerspectiveCamera::UpdateMatrixUniforms(MatricesUniforms& uniforms) const
     {
-        // [NEW] Fill GBuffer matrices for deferred rendering
+        // Fill GBuffer matrices for deferred rendering
         Mat44 view          = GetViewMatrix();
         Mat44 proj          = GetProjectionMatrix();
         Mat44 cameraToWorld = GetCameraToWorldTransform();

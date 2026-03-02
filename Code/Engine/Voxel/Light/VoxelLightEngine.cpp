@@ -1,7 +1,7 @@
 ﻿//-----------------------------------------------------------------------------------------------
 // VoxelLightEngine.cpp
 //
-// [NEW] Composite light engine manager implementation
+// Composite light engine manager implementation
 // Composes BlockLightEngine and SkyLightEngine, provides unified interface
 //
 // Reference: Minecraft LevelLightEngine.java

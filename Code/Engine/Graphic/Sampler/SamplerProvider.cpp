@@ -3,7 +3,7 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
 // ============================================================================
-// SamplerProvider.cpp - [NEW] Sampler provider implementation
+// SamplerProvider.cpp - Sampler provider implementation
 // Part of Dynamic Sampler System
 // ============================================================================
 

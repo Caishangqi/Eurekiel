@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// ICamera.hpp - [NEW] Camera interface (Strategy Pattern)
+// ICamera.hpp - Camera interface (Strategy Pattern)
 // 
 // Pure virtual interface defining contract for all camera types.
 // Implementations: PerspectiveCamera, OrthographicCamera, ShadowCamera, etc.
@@ -18,13 +18,13 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] ICamera Interface - Strategy Pattern base
+    // ICamera Interface - Strategy Pattern base
     // ========================================================================
 
     /**
      * @brief Pure virtual interface for camera implementations
      * 
-     * [NEW] Strategy Pattern interface for camera system:
+     * Strategy Pattern interface for camera system:
      * - GetViewMatrix():         Returns world-to-view transformation
      * - GetProjectionMatrix():   Returns view-to-clip transformation
      * - GetCameraType():         Returns camera classification
@@ -55,7 +55,7 @@ namespace enigma::graphic
         ICamera& operator=(ICamera&&)      = default;
 
         // ====================================================================
-        // [NEW] Core Interface Methods
+        // Core Interface Methods
         // ====================================================================
 
         /**

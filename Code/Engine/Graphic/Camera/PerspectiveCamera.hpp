@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// PerspectiveCamera.hpp - [NEW] Perspective camera for GBuffer rendering
+// PerspectiveCamera.hpp - Perspective camera for GBuffer rendering
 // 
 // Implements perspective projection for main render pass (deferred rendering).
 // Fills gbuffer matrices in MatricesUniforms.
@@ -15,13 +15,13 @@ namespace enigma::graphic
     struct MatricesUniforms;
 
     // ========================================================================
-    // [NEW] PerspectiveCamera - Main 3D render pass camera
+    // PerspectiveCamera - Main 3D render pass camera
     // ========================================================================
 
     /**
      * @brief Perspective camera for 3D GBuffer/deferred rendering
      *
-     * [NEW] Implements perspective projection with:
+     * Implements perspective projection with:
      * - Field of view (FOV) in degrees
      * - Aspect ratio (width/height)
      * - Near/far clipping planes (inherited from CameraBase)
@@ -100,7 +100,7 @@ namespace enigma::graphic
         MatricesUniforms GetMatrixUniforms() override;
 
         // ====================================================================
-        // [NEW] Perspective-specific Setters
+        // Perspective-specific Setters
         // ====================================================================
 
         /**
@@ -118,7 +118,7 @@ namespace enigma::graphic
         void SetAspectRatio(float aspectRatio);
 
         // ====================================================================
-        // [NEW] Perspective-specific Getters
+        // Perspective-specific Getters
         // ====================================================================
 
         [[nodiscard]] float GetFOV() const { return m_fov; }
@@ -133,7 +133,7 @@ namespace enigma::graphic
         static void ValidateAspectRatio(float aspectRatio);
 
         // ====================================================================
-        // [NEW] Private Members
+        // Private Members
         // ====================================================================
 
         float m_fov         = 90.0f;

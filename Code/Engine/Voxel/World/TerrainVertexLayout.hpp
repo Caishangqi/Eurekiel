@@ -53,7 +53,7 @@ namespace enigma::graphic
         Vec3  m_normal; // 12 bytes, offset 24
         Vec2  m_lightmapCoord; // 8 bytes, offset 36
 
-        // [NEW] Phase 1: Iris-compatible extension (12 bytes with padding)
+        // Phase 1: Iris-compatible extension (12 bytes with padding)
         uint16_t m_entityId; // 2 bytes, offset 44 - Block ID (mc_Entity)
         uint16_t m_padding; // 2 bytes, offset 46 - Alignment padding
         Vec2     m_midTexCoord; // 8 bytes, offset 48 - Texture center (mc_midTexCoord)

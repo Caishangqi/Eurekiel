@@ -1,5 +1,5 @@
 // ============================================================================
-// UICamera.cpp - [NEW] UI/2D rendering camera implementation
+// UICamera.cpp - UI/2D rendering camera implementation
 // ============================================================================
 
 #include "UICamera.hpp"
@@ -13,7 +13,7 @@ namespace enigma::graphic
     UICamera::UICamera(const Vec2& screenSize, float nearPlane, float farPlane)
         : OrthographicCamera(Vec3::ZERO, EulerAngles(), Vec2(0.0f, 0.0f), screenSize, nearPlane, farPlane)
     {
-        // [NEW] UI camera uses identity renderer matrix (no 3D coordinate conversion)
+        // UI camera uses identity renderer matrix (no 3D coordinate conversion)
         // Y-axis flip is handled in GetProjectionMatrix() instead
         m_rendererCanonicalMatrix = Mat44();
     }
@@ -33,7 +33,7 @@ namespace enigma::graphic
 
     Mat44 UICamera::GetProjectionMatrix() const
     {
-        // [NEW] Orthographic projection with Y-axis flip for DirectX
+        // Orthographic projection with Y-axis flip for DirectX
         Vec2 size   = m_topRight - m_bottomLeft;
         Vec2 center = (m_topRight + m_bottomLeft) * 0.5f;
 

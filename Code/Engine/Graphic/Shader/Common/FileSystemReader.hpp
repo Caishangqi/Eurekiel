@@ -81,7 +81,7 @@ namespace enigma::graphic
          * - Strict path security checks
          * - Support manually specifying the root directory
          * - Efficient file IO operations
-         * - [NEW] Support path aliases (e.g. @engine -> .enigma/assets/engine/shaders)
+         * - Support path aliases (e.g. @engine -> .enigma/assets/engine/shaders)
          *
          * Security mechanism:
          * - All file access is restricted to the root directory
@@ -192,7 +192,7 @@ namespace enigma::graphic
         std::filesystem::path GetRootPath() const override;
 
         /**
-         * @brief [NEW] Add path alias
+         * @brief Add path alias
          * @param alias alias name (such as "@engine")
          * @param targetPath The actual path pointed by the alias (absolute path)
          *
@@ -209,7 +209,7 @@ namespace enigma::graphic
         void AddAlias(const std::string& alias, const std::filesystem::path& targetPath);
 
         /**
-         * @brief [NEW] Check whether there is an alias specified
+         * @brief Check whether there is an alias specified
          * @param alias alias name
          * @return bool returns true if it exists
          */
@@ -227,7 +227,7 @@ namespace enigma::graphic
         std::filesystem::path m_rootPath;
 
         /**
-         * @brief [NEW] Path alias mapping table
+         * @brief Path alias mapping table
          *
          * Purpose:
          * - Map virtual aliases (such as @engine) to real file system paths
@@ -305,7 +305,7 @@ namespace enigma::graphic
         static std::filesystem::path CanonicalizePath(const std::filesystem::path& path);
 
         /**
-         * @brief [NEW] Parse paths with aliases
+         * @brief Parse paths with aliases
          * @param path ShaderPath (may contain aliases such as @engine)
          * @return std::optional<std::filesystem::path> Returns the actual path if the parsing is successful, otherwise returns nullopt
          *
