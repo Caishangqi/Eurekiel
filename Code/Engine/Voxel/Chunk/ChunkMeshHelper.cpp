@@ -927,8 +927,17 @@ bool ChunkMeshHelper::ShouldRenderFace(const BlockIterator& iterator, Direction 
         {
             return false;
         }
-        // Cutout and Translucent blocks: always render face against opaque neighbors
-        // This ensures leaves render properly against logs/dirt
+
+        // [FIX] Fluids (water/lava) should be culled against solid blocks
+        // [MINECRAFT REF] FluidRenderer does not render fluid faces against full solid blocks
+        // This prevents seeing water bottom faces from underground (vanilla MC behavior)
+        if (currentRenderType == RenderType::TRANSLUCENT
+            && !currentBlock->GetFluidState().IsEmpty())
+        {
+            return false;
+        }
+
+        // Non-fluid Translucent (glass/ice) and Cutout (leaves): render against opaque neighbors
         return true;
     }
 
