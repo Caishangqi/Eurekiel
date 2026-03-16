@@ -120,7 +120,7 @@ namespace enigma::graphic
          * @brief Update and upload bindless indices to GPU
          * @note Call after Flip operations or resource recreation
          */
-        void UpdateIndices();
+        void UpdateIndices() override;
 
         // ========================================================================
         // Extended API (ShadowColor-specific)

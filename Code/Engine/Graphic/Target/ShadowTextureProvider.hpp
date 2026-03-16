@@ -121,7 +121,7 @@ namespace enigma::graphic
          * @brief Update and upload bindless indices to GPU
          * @note Call after resource recreation (no flip for shadow textures)
          */
-        void UpdateIndices();
+        void UpdateIndices() override;
 
         // ========================================================================
         // Extended API (ShadowTexture-specific)

@@ -211,8 +211,10 @@ namespace enigma::graphic
 
         const RenderTargetConfig& currentConfig = m_configs[index];
 
-        // [REFACTOR] Only rebuild if format changes
-        bool needRebuild = (currentConfig.format != config.format);
+        // Rebuild if format or dimensions change
+        bool needRebuild = (currentConfig.format != config.format) ||
+            (currentConfig.width != config.width) ||
+            (currentConfig.height != config.height);
 
         // Update stored config
         m_configs[index] = config;
@@ -309,29 +311,22 @@ namespace enigma::graphic
             throw std::invalid_argument("ShadowColorProvider:: Resolution must be > 0");
         }
 
+        // Skip if resolution is already the same
+        if (newWidth == m_baseWidth && newHeight == m_baseHeight)
+        {
+            return;
+        }
+
         m_baseWidth  = newWidth;
         m_baseHeight = newHeight;
 
-        // Recreate all render targets with new resolution
+        // Delegate to SetRtConfig (handles rebuild + Upload + RegisterBindless + UpdateIndices)
         for (int i = 0; i < m_activeCount; ++i)
         {
-            const auto& config = m_configs[i];
-
-            auto builder = D12RenderTarget::Create()
-                           .SetFormat(config.format)
-                           .SetDimensions(newWidth, newHeight)
-                           .SetLinearFilter(config.allowLinearFilter)
-                           .SetSampleCount(config.sampleCount)
-                           .EnableMipmap(config.enableMipmap)
-                           .SetClearValue(config.clearValue);
-
-            char debugName[32];
-            sprintf_s(debugName, "shadowcolor%d", i);
-            builder.SetName(debugName);
-
-            m_renderTargets[i] = builder.Build();
-            m_renderTargets[i]->Upload();
-            m_renderTargets[i]->RegisterBindless();
+            RenderTargetConfig cfg = m_configs[i];
+            cfg.width              = newWidth;
+            cfg.height             = newHeight;
+            SetRtConfig(i, cfg);
         }
 
         LogInfo(LogRenderTargetProvider,

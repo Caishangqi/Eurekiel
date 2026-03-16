@@ -369,25 +369,22 @@ namespace enigma::graphic
             throw std::invalid_argument("ShadowTextureProvider: Invalid resolution");
         }
 
+        // Skip if resolution is already the same
+        if (newWidth == m_baseWidth && newHeight == m_baseHeight)
+        {
+            return;
+        }
+
         m_baseWidth  = newWidth;
         m_baseHeight = newHeight;
 
-        // Recreate all shadow depth textures with new resolution
-        for (size_t i = 0; i < m_depthTextures.size(); ++i)
+        // Delegate to SetRtConfig (handles rebuild + Upload + RegisterBindless + UpdateIndices)
+        for (int i = 0; i < m_activeCount; ++i)
         {
-            m_configs[i].width  = newWidth;
-            m_configs[i].height = newHeight;
-
-            DepthTextureCreateInfo createInfo(
-                m_configs[i].name,
-                static_cast<uint32_t>(newWidth),
-                static_cast<uint32_t>(newHeight),
-                m_configs[i].format,
-                1.0f,
-                0
-            );
-
-            m_depthTextures[i] = std::make_shared<D12DepthTexture>(createInfo);
+            RenderTargetConfig cfg = m_configs[i];
+            cfg.width              = newWidth;
+            cfg.height             = newHeight;
+            SetRtConfig(i, cfg);
         }
 
         LogInfo(LogRenderTargetProvider, "ShadowTextureProvider resolution changed to %dx%d",
