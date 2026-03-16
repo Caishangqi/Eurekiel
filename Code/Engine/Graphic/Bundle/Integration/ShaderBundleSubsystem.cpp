@@ -28,6 +28,8 @@
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp" // For OnBeginFrame subscription
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
+#include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
+#include "Engine/Graphic/Target/ShadowColorProvider.hpp"
 #include "Engine/Voxel/World/TerrainVertexLayout.hpp" // For OnBuildVertexLayout event
 
 using namespace enigma::graphic;
@@ -430,6 +432,22 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
             }
 
             LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied RT configs from bundle directives");
+
+            // Apply shadow map resolution from bundle const directives
+            // Iris pattern: const int shadowMapResolution = 2048; in any shader source
+            auto shadowRes = bundle->GetConstInt("shadowMapResolution");
+            if (shadowRes.has_value())
+            {
+                int res = shadowRes.value();
+                if (res > 0 && res <= 16384)
+                {
+                    auto* stProvider = dynamic_cast<ShadowTextureProvider*>(shadowTexProvider);
+                    auto* scProvider = dynamic_cast<ShadowColorProvider*>(shadowColorProvider);
+
+                    if (stProvider) stProvider->SetResolution(res, res);
+                    if (scProvider) scProvider->SetResolution(res, res);
+                }
+            }
         }
 
         // Remove previous MaterialIdMapper subscription before switching bundles
