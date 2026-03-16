@@ -291,6 +291,26 @@ namespace enigma::graphic
         core::LogInfo(LogRenderer, "D3D12RenderSystem shutdown completed");
     }
 
+    void D3D12RenderSystem::SetViewport(int width, int height)
+    {
+        auto           commandList = GetCurrentCommandList();
+        D3D12_VIEWPORT viewport    = {};
+        viewport.TopLeftX          = 0.0f;
+        viewport.TopLeftY          = 0.0f;
+        viewport.Width             = static_cast<float>(width);
+        viewport.Height            = static_cast<float>(height);
+        viewport.MinDepth          = 0.0f;
+        viewport.MaxDepth          = 1.0f;
+        commandList->RSSetViewports(1, &viewport);
+
+        D3D12_RECT scissorRect = {};
+        scissorRect.left       = 0;
+        scissorRect.top        = 0;
+        scissorRect.right      = static_cast<LONG>(width);
+        scissorRect.bottom     = static_cast<LONG>(height);
+        commandList->RSSetScissorRects(1, &scissorRect);
+    }
+
     // ===== Buffer creation API implementation =====
 
     /**

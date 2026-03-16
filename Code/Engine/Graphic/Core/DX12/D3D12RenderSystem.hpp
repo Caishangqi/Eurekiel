@@ -95,6 +95,8 @@ namespace enigma::graphic
          */
         static bool IsInitialized() { return s_device != nullptr; }
 
+        static void SetViewport(int width, int height);
+
         // ===== 缓冲区管理API（对应Iris的createBuffers等方法）=====
 
         /**
