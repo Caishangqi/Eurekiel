@@ -945,6 +945,17 @@ namespace enigma::graphic
         void SetRasterizationConfig(const RasterizationConfig& config);
 
         /**
+         * @brief Override viewport and scissor rect dimensions
+         * @param width  Viewport width in pixels
+         * @param height Viewport height in pixels
+         *
+         * Sets both the D3D12 viewport and scissor rect to the specified dimensions.
+         * Use this when rendering to a render target with different dimensions than the swapchain
+         * (e.g., shadow maps). Call again with swapchain dimensions to restore.
+         */
+        void SetViewport(int width, int height);
+
+        /**
          * @brief Set vertex layout for next draw call
          * @param layout Pointer to vertex layout (nullptr uses default)
          *

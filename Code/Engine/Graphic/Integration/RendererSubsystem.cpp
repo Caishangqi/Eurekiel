@@ -1626,6 +1626,11 @@ void RendererSubsystem::SetRasterizationConfig(const RasterizationConfig& config
              static_cast<int>(config.cullMode), static_cast<int>(config.fillMode));
 }
 
+void RendererSubsystem::SetViewport(int width, int height)
+{
+    D3D12RenderSystem::SetViewport(width, height);
+}
+
 void RendererSubsystem::SetVertexLayout(const VertexLayout* layout)
 {
     m_currentVertexLayout = layout;
