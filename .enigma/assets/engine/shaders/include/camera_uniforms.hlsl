@@ -88,14 +88,14 @@ cbuffer CameraUniforms : register(b9)
 // =============================================================================
 
 /**
- * @brief Convert NDC depth to linear view-space depth
+ * @brief Convert depth buffer value to view-space distance (world units)
  * @param ndcDepth Depth value from depth buffer [0, 1]
- * @return Linear depth in view space (world units)
+ * @return View-space distance in world units [near, far]
  *
  * [IMPORTANT] Uses near/far from CameraUniforms
- * Formula: linearDepth = (near * far) / (far - ndcDepth * (far - near))
+ * Formula: distance = (near * far) / (far - ndcDepth * (far - near))
  */
-float LinearizeDepth(float ndcDepth)
+float DepthToViewDistance(float ndcDepth)
 {
     // Handle sky (depth = 1.0)
     if (ndcDepth >= 1.0)
@@ -106,13 +106,31 @@ float LinearizeDepth(float ndcDepth)
 }
 
 /**
- * @brief Convert linear depth back to NDC depth
- * @param linearDepth Linear depth in view space
+ * @brief Convert depth buffer value to normalized linear depth [~0, 1]
+ * @param ndcDepth Depth value from depth buffer [0, 1]
+ * @return Normalized linear depth [near/far, 1.0]
+ *
+ * Equivalent to DepthToViewDistance(d) / far.
+ * Useful for screen-space effects (SSAO, DoF) where normalized range is expected.
+ * Matches the behavioral range of CR's GetLinearDepth.
+ */
+float DepthToLinearNormalized(float ndcDepth)
+{
+    if (ndcDepth >= 1.0)
+    {
+        return 1.0;
+    }
+    return near / (far - ndcDepth * (far - near));
+}
+
+/**
+ * @brief Convert view-space distance back to depth buffer value
+ * @param viewDist View-space distance in world units
  * @return NDC depth [0, 1]
  */
-float LinearToNDCDepth(float linearDepth)
+float ViewDistanceToDepth(float viewDist)
 {
-    return (far * (linearDepth - near)) / (linearDepth * (far - near));
+    return (far * (viewDist - near)) / (viewDist * (far - near));
 }
 
 /**
@@ -125,11 +143,14 @@ float LinearToNDCDepth(float linearDepth)
  *     // Sample depth
  *     float depth = depthtex0.Sample(sampler0, input.uv).r;
  *
- *     // Convert to linear depth using near/far from CameraUniforms
- *     float linearDepth = LinearizeDepth(depth);
+ *     // Convert to view distance (world units) for fog, lighting, etc.
+ *     float viewDist = DepthToViewDistance(depth);
+ *
+ *     // Or normalized [0,1] for screen-space effects (SSAO, DoF)
+ *     float linearNorm = DepthToLinearNormalized(depth);
  *
  *     // Use for fog, DOF, etc.
- *     float fogFactor = saturate(linearDepth / far);
+ *     float fogFactor = saturate(viewDist / far);
  *
  *     return float4(color * (1.0 - fogFactor), 1.0);
  * }
