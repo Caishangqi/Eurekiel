@@ -562,35 +562,20 @@ namespace enigma::graphic
             throw CopyOperationFailedException("DepthTextureProvider", srcIndex, dstIndex);
         }
 
-        // Transition: DEPTH_WRITE -> COPY_SOURCE/DEST
-        D3D12_RESOURCE_BARRIER barriers[2];
+        // [FIX] Use tracked state instead of hardcoded DEPTH_WRITE
+        // CopyDepth may be called when resources are in any state (e.g. PIXEL_SHADER_RESOURCE)
+        D3D12_RESOURCE_STATES srcPrevState = srcTex->GetCurrentState();
+        D3D12_RESOURCE_STATES dstPrevState = dstTex->GetCurrentState();
 
-        barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[0].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barriers[0].Transition.pResource   = srcResource;
-        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-        barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-        barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barriers[1].Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        barriers[1].Transition.pResource   = dstResource;
-        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-        barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-        barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-        D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "DepthTextureProvider::Copy::Pre");
+        // Transition to COPY states using tracked state as before-state
+        srcTex->TransitionResourceTo(D3D12_RESOURCE_STATE_COPY_SOURCE);
+        dstTex->TransitionResourceTo(D3D12_RESOURCE_STATE_COPY_DEST);
 
         // Copy
         cmdList->CopyResource(dstResource, srcResource);
 
-        // Transition back: COPY_SOURCE/DEST -> DEPTH_WRITE
-        barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-
-        barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-
-        D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "DepthTextureProvider::Copy::Post");
+        // Transition back to original states (tracked state updated automatically)
+        srcTex->TransitionResourceTo(srcPrevState);
+        dstTex->TransitionResourceTo(dstPrevState);
     }
 } // namespace enigma::graphic
