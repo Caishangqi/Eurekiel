@@ -1437,6 +1437,8 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     }
 
     // Resource barriers for copy
+    // NOTE: Raw barriers used here because backBuffer is a swap chain resource (not D12Resource).
+    // This is the only legitimate use of raw ResourceBarrier in the codebase.
     D3D12_RESOURCE_BARRIER barriers[2];
 
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1453,7 +1455,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PreCopy");
+    cmdList->ResourceBarrier(2, barriers);
 
     cmdList->CopyResource(backBuffer, sourceRT);
 
@@ -1463,7 +1465,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
-    D3D12RenderSystem::TransitionResources(cmdList, barriers, 2, "PresentRenderTarget::PostCopy");
+    cmdList->ResourceBarrier(2, barriers);
 }
 
 // ============================================================================

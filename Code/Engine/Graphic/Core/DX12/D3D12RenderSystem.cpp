@@ -1329,17 +1329,6 @@ namespace enigma::graphic
         cmdList->ResourceBarrier(1, &barrier);
     }
 
-    void D3D12RenderSystem::TransitionResources(
-        ID3D12GraphicsCommandList* cmdList,
-        D3D12_RESOURCE_BARRIER*    barriers,
-        UINT                       numBarriers,
-        const char*                debugContext
-    )
-    {
-        UNUSED(debugContext)
-        cmdList->ResourceBarrier(numBarriers, barriers);
-    }
-
     void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)
     {
         if (!s_currentGraphicsCommandList)
