@@ -47,6 +47,12 @@ namespace enigma::voxel
         void    SetLightValue(Chunk* chunk, int32_t x, int32_t y, int32_t z, uint8_t value) override;
         uint8_t GetCurrentLightValue(Chunk* chunk, int32_t x, int32_t y, int32_t z) const override;
 
+        //-----------------------------------------------------------------------------------
+        // Override from LightEngine - Dirty flag access (uses IsBlockLightDirty, bit 1)
+        //-----------------------------------------------------------------------------------
+        bool GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const override;
+        void SetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z, bool value) override;
+
     private:
         //-----------------------------------------------------------------------------------
         // Block emission helper

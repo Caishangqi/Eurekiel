@@ -173,4 +173,17 @@ namespace enigma::voxel
         }
         return static_cast<uint8_t>(state->GetLightEmission());
     }
+
+    //-------------------------------------------------------------------------------------------
+    // Dirty Flag Access - Uses IsBlockLightDirty (bit 1, 0x02)
+    //-------------------------------------------------------------------------------------------
+    bool BlockLightEngine::GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const
+    {
+        return chunk->GetIsBlockLightDirty(x, y, z);
+    }
+
+    void BlockLightEngine::SetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z, bool value)
+    {
+        chunk->SetIsBlockLightDirty(x, y, z, value);
+    }
 } // namespace enigma::voxel
