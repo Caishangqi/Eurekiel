@@ -65,6 +65,13 @@ namespace enigma::voxel
         virtual void    SetLightValue(Chunk* chunk, int32_t x, int32_t y, int32_t z, uint8_t value) = 0;
         virtual uint8_t GetCurrentLightValue(Chunk* chunk, int32_t x, int32_t y, int32_t z) const = 0;
 
+        //-----------------------------------------------------------------------------------
+        // Dirty Flag Access - Subclass implements for separate dirty tracking
+        // BlockLightEngine uses IsBlockLightDirty (bit 1), SkyLightEngine uses IsSkyLightDirty (bit 2)
+        //-----------------------------------------------------------------------------------
+        virtual bool GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const = 0;
+        virtual void SetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z, bool value) = 0;
+
         std::deque<BlockIterator> m_dirtyQueue;
         World*                    m_world = nullptr; // World reference for BlockPos lookup
     };

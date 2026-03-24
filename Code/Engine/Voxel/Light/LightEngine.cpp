@@ -37,15 +37,15 @@ namespace enigma::voxel
         int32_t x, y, z;
         iter.GetLocalCoords(x, y, z);
 
-        // Skip if already dirty (avoid duplicates)
-        if (chunk->GetIsLightDirty(x, y, z))
+        // Skip if already dirty in THIS engine's flag (avoid duplicates)
+        if (GetDirtyFlag(chunk, x, y, z))
         {
             return;
         }
 
         // Add to queue and mark dirty
         m_dirtyQueue.push_back(iter);
-        chunk->SetIsLightDirty(x, y, z, true);
+        SetDirtyFlag(chunk, x, y, z, true);
     }
 
     //-------------------------------------------------------------------------------------------
@@ -131,8 +131,8 @@ namespace enigma::voxel
             int32_t x, y, z;
             iter.GetLocalCoords(x, y, z);
 
-            // Clear dirty flag
-            chunk->SetIsLightDirty(x, y, z, false);
+            // Clear dirty flag (per-engine)
+            SetDirtyFlag(chunk, x, y, z, false);
 
             // Calculate correct light value
             uint8_t correctLight = ComputeCorrectLight(iter);
@@ -207,10 +207,10 @@ namespace enigma::voxel
         {
             if (it->GetChunk() == chunk)
             {
-                // Clear dirty flag
+                // Clear dirty flag (per-engine)
                 int32_t x, y, z;
                 it->GetLocalCoords(x, y, z);
-                chunk->SetIsLightDirty(x, y, z, false);
+                SetDirtyFlag(chunk, x, y, z, false);
 
                 // Remove from queue
                 it = m_dirtyQueue.erase(it);
