@@ -557,21 +557,23 @@ Chunk* Chunk::GetWestNeighbor() const
  */
 void Chunk::InitializeLighting(World* world)
 {
-    // Step 1: Default all blocks to lighting=0, not dirty
-    // Use Chunk's independent storage instead of shared BlockState
+    // Step 1: Default all blocks to lighting=0, clear both per-engine dirty flags
     for (int i = 0; i < BLOCKS_PER_CHUNK; ++i)
     {
         int32_t x, y, z;
         IndexToCoords(i, x, y, z);
         SetSkyLight(x, y, z, 0);
         SetBlockLight(x, y, z, 0);
-        SetIsLightDirty(x, y, z, false);
+        SetIsBlockLightDirty(x, y, z, false);
+        SetIsSkyLightDirty(x, y, z, false);
     }
 
     // Step 2: Mark boundary blocks as dirty
     MarkBoundaryBlocksDirty(world);
 
-    // Step 3: Set SKY flags and outdoor light (CORRECTED - no neighbor marking)
+    // Step 3: Set SKY flags and mark sky blocks dirty for BFS propagation
+    // DON'T pre-set skylight=15 here. Leave at 0 so BFS detects a value change
+    // (compute=15 vs current=0) and propagates light into caves and overhangs.
     for (int x = 0; x < CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < CHUNK_SIZE_Y; ++y)
@@ -585,7 +587,9 @@ void Chunk::InitializeLighting(World* world)
                     break; // Stop at first opaque block
                 }
                 SetIsSky(x, y, z, true);
-                SetSkyLight(x, y, z, 15);
+                // Mark dirty so BFS will compute skylight=15 and propagate to neighbors
+                BlockIterator iter(this, (int)CoordsToIndex(x, y, z));
+                world->MarkLightingDirty(iter);
             }
         }
     }
@@ -986,6 +990,41 @@ void Chunk::SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value)
         m_flags[index] |= 0x02;
     else
         m_flags[index] &= ~0x02;
+}
+
+//-------------------------------------------------------------------------------------------
+// Per-engine dirty flags (separate bits to avoid cross-engine interference)
+// BlockLightEngine uses bit 1 (0x02), SkyLightEngine uses bit 2 (0x04)
+//-------------------------------------------------------------------------------------------
+
+bool Chunk::GetIsBlockLightDirty(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return (m_flags[index] & 0x02) != 0; // Bit 1
+}
+
+void Chunk::SetIsBlockLightDirty(int32_t x, int32_t y, int32_t z, bool value)
+{
+    size_t index = CoordsToIndex(x, y, z);
+    if (value)
+        m_flags[index] |= 0x02;
+    else
+        m_flags[index] &= ~0x02;
+}
+
+bool Chunk::GetIsSkyLightDirty(int32_t x, int32_t y, int32_t z) const
+{
+    size_t index = CoordsToIndex(x, y, z);
+    return (m_flags[index] & 0x04) != 0; // Bit 2
+}
+
+void Chunk::SetIsSkyLightDirty(int32_t x, int32_t y, int32_t z, bool value)
+{
+    size_t index = CoordsToIndex(x, y, z);
+    if (value)
+        m_flags[index] |= 0x04;
+    else
+        m_flags[index] &= ~0x04;
 }
 
 Mat44 Chunk::GetModelToWorldTransform() const
