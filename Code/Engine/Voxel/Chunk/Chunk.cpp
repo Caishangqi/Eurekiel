@@ -571,9 +571,8 @@ void Chunk::InitializeLighting(World* world)
     // Step 2: Mark boundary blocks as dirty
     MarkBoundaryBlocksDirty(world);
 
-    // Step 3: Set SKY flags and mark sky blocks dirty for BFS propagation
-    // DON'T pre-set skylight=15 here. Leave at 0 so BFS detects a value change
-    // (compute=15 vs current=0) and propagates light into caves and overhangs.
+    // Step 3: Set SKY flags and skylight=15 directly (no BFS for sky blocks)
+    // Sky blocks always have light level 15 - set directly without BFS queue
     for (int x = 0; x < CHUNK_SIZE_X; ++x)
     {
         for (int y = 0; y < CHUNK_SIZE_Y; ++y)
@@ -581,15 +580,51 @@ void Chunk::InitializeLighting(World* world)
             for (int z = CHUNK_MAX_Z; z >= 0; --z)
             {
                 BlockState* state = GetBlock(x, y, z);
-                // [UPDATED] Use per-state opacity check for non-full blocks (slabs/stairs)
                 if (state->GetBlock()->IsOpaque(state))
                 {
-                    break; // Stop at first opaque block
+                    break;
                 }
                 SetIsSky(x, y, z, true);
-                // Mark dirty so BFS will compute skylight=15 and propagate to neighbors
-                BlockIterator iter(this, (int)CoordsToIndex(x, y, z));
-                world->MarkLightingDirty(iter);
+                SetSkyLight(x, y, z, 15);
+            }
+        }
+    }
+
+    // Step 3b: Seed BFS with sky-light frontier blocks only
+    // Frontier = non-sky, non-opaque blocks directly adjacent to a sky block
+    // These are cave/overhang entry points where skylight propagates inward
+    // (~100-500 blocks per chunk vs ~49K if all sky blocks were queued)
+    for (int x = 0; x < CHUNK_SIZE_X; ++x)
+    {
+        for (int y = 0; y < CHUNK_SIZE_Y; ++y)
+        {
+            for (int z = CHUNK_MAX_Z; z >= 0; --z)
+            {
+                if (GetIsSky(x, y, z))
+                {
+                    continue;
+                }
+
+                BlockState* state = GetBlock(x, y, z);
+                if (state->GetBlock()->IsOpaque(state))
+                {
+                    continue;
+                }
+
+                // Check if adjacent to any sky block within this chunk
+                bool adjacentToSky = false;
+                if (z < CHUNK_MAX_Z && GetIsSky(x, y, z + 1)) adjacentToSky = true;
+                if (!adjacentToSky && z > 0 && GetIsSky(x, y, z - 1)) adjacentToSky = true;
+                if (!adjacentToSky && x > 0 && GetIsSky(x - 1, y, z)) adjacentToSky = true;
+                if (!adjacentToSky && x < CHUNK_MAX_X && GetIsSky(x + 1, y, z)) adjacentToSky = true;
+                if (!adjacentToSky && y > 0 && GetIsSky(x, y - 1, z)) adjacentToSky = true;
+                if (!adjacentToSky && y < CHUNK_MAX_Y && GetIsSky(x, y + 1, z)) adjacentToSky = true;
+
+                if (adjacentToSky)
+                {
+                    BlockIterator iter(this, (int)CoordsToIndex(x, y, z));
+                    world->MarkLightingDirty(iter);
+                }
             }
         }
     }
@@ -953,43 +988,6 @@ void Chunk::SetIsSky(int32_t x, int32_t y, int32_t z, bool value)
         m_flags[index] |= 0x01;
     else
         m_flags[index] &= ~0x01;
-}
-
-/**
- * @brief Get IsLightDirty flag from independent storage
- *
- * IsLightDirty flag is stored in bit 1 of m_flags[index].
- * This flag indicates whether the block's lighting needs to be recalculated.
- *
- * @param x Local X coordinate (0-15)
- * @param y Local Y coordinate (0-15)
- * @param z Local Z coordinate (0-255)
- * @return true if block lighting is dirty, false otherwise
- */
-bool Chunk::GetIsLightDirty(int32_t x, int32_t y, int32_t z) const
-{
-    size_t index = CoordsToIndex(x, y, z);
-    return (m_flags[index] & 0x02) != 0; // Bit 1
-}
-
-/**
- * @brief Set IsLightDirty flag in independent storage
- *
- * IsLightDirty flag is stored in bit 1 of m_flags[index].
- * This method uses bit manipulation to set or clear bit 1 while preserving other bits.
- *
- * @param x Local X coordinate (0-15)
- * @param y Local Y coordinate (0-15)
- * @param z Local Z coordinate (0-255)
- * @param value true to mark lighting as dirty, false to clear dirty flag
- */
-void Chunk::SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value)
-{
-    size_t index = CoordsToIndex(x, y, z);
-    if (value)
-        m_flags[index] |= 0x02;
-    else
-        m_flags[index] &= ~0x02;
 }
 
 //-------------------------------------------------------------------------------------------

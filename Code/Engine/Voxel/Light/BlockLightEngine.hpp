@@ -52,11 +52,5 @@ namespace enigma::voxel
         //-----------------------------------------------------------------------------------
         bool GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const override;
         void SetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z, bool value) override;
-
-    private:
-        //-----------------------------------------------------------------------------------
-        // Block emission helper
-        //-----------------------------------------------------------------------------------
-        uint8_t GetEmission(const BlockState* state) const;
     };
 } // namespace enigma::voxel

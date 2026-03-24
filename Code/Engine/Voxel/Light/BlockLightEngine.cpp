@@ -160,21 +160,6 @@ namespace enigma::voxel
     }
 
     //-------------------------------------------------------------------------------------------
-    // GetEmission
-    //
-    // [DEPRECATED] Use BlockState::GetLightEmission() instead
-    // Kept for backward compatibility
-    //-------------------------------------------------------------------------------------------
-    uint8_t BlockLightEngine::GetEmission(const BlockState* state) const
-    {
-        if (!state)
-        {
-            return 0;
-        }
-        return static_cast<uint8_t>(state->GetLightEmission());
-    }
-
-    //-------------------------------------------------------------------------------------------
     // Dirty Flag Access - Uses IsBlockLightDirty (bit 1, 0x02)
     //-------------------------------------------------------------------------------------------
     bool BlockLightEngine::GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const

@@ -231,10 +231,6 @@ namespace enigma::voxel
         bool GetIsSky(int32_t x, int32_t y, int32_t z) const;
         void SetIsSky(int32_t x, int32_t y, int32_t z, bool value);
 
-        // [DEPRECATED] Unified dirty flag - use per-engine flags below instead
-        bool GetIsLightDirty(int32_t x, int32_t y, int32_t z) const;
-        void SetIsLightDirty(int32_t x, int32_t y, int32_t z, bool value);
-
         // Per-engine dirty flags (separate bits to avoid cross-engine interference)
         // BlockLightEngine uses bit 1 (0x02), SkyLightEngine uses bit 2 (0x04)
         bool GetIsBlockLightDirty(int32_t x, int32_t y, int32_t z) const;
