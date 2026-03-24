@@ -201,4 +201,17 @@ namespace enigma::voxel
         iter.GetLocalCoords(localX, localY, localZ);
         return chunk->GetIsSky(localX, localY, localZ);
     }
+
+    //-------------------------------------------------------------------------------------------
+    // Dirty Flag Access - Uses IsSkyLightDirty (bit 2, 0x04)
+    //-------------------------------------------------------------------------------------------
+    bool SkyLightEngine::GetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z) const
+    {
+        return chunk->GetIsSkyLightDirty(x, y, z);
+    }
+
+    void SkyLightEngine::SetDirtyFlag(Chunk* chunk, int32_t x, int32_t y, int32_t z, bool value)
+    {
+        chunk->SetIsSkyLightDirty(x, y, z, value);
+    }
 } // namespace enigma::voxel
