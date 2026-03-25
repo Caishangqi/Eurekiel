@@ -66,7 +66,7 @@ namespace enigma::graphic
             ROOT_CBV_UNDEFINE_8 = 8, // SamplerIndicesUniforms
             ROOT_CBV_UNDEFINE_9 = 9,
             ROOT_CBV_UNDEFINE_10 = 10,
-            ROOT_CBV_UNDEFINE_11 = 11,
+            ROOT_CBV_MIPGEN = 11, // MipGenUniforms (compute mipmap generation)
             ROOT_CBV_UNDEFINE_12 = 12,
             ROOT_CBV_UNDEFINE_13 = 13,
 
