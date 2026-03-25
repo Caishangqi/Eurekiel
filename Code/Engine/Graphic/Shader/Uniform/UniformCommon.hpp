@@ -17,6 +17,7 @@
 
 #include "Engine/Core/LogCategory/LogCategory.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
+#include "Engine/Graphic/Shader/Uniform/BufferUpdateStrategy.hpp"
 
 namespace enigma::graphic
 {
@@ -102,23 +103,25 @@ namespace enigma::graphic
      * @brief Buffer update frequency enumeration
      *
      * [MOVE] Consolidated from UpdateFrequency.hpp
-     * 
+     *
      * Usage:
-     * - PerObject: Updated once per Draw call (high frequency, 10,000/frame)
-     * - PerPass:   Updated once per render pass (medium frequency, 24/frame)
-     * - PerFrame:  Updated once per frame (low frequency, 60/sec)
-     * - Static:    Set once and never updated (very low frequency)
+     * - PerObject:   Updated once per Draw call (high frequency, 10,000/frame)
+     * - PerPass:     Updated once per render pass (medium frequency, 24/frame)
+     * - PerFrame:    Updated once per frame (low frequency, 60/sec)
+     * - Static:      Set once and never updated (very low frequency)
+     * - PerDispatch: Updated per compute dispatch (auto-advances, self-contained)
      *
      * Purpose:
-     * - Determines Ring Buffer size (PerObject needs many copies)
-     * - Optimizes memory and performance (Static=1 copy, PerObject=10,000 copies)
+     * - Used as factory key for BufferUpdateStrategy::Create()
+     * - Each frequency maps to a concrete strategy class
      */
     enum class UpdateFrequency : uint8_t
     {
-        PerObject = 0, // Updated once per Draw call (high frequency)
-        PerPass = 1, // Updated once per render pass (medium frequency)
-        PerFrame = 2, // Updated once per frame (low frequency)
-        Static = 3 // Set once and never updated (very low frequency)
+        PerObject   = 0, // Updated once per Draw call (high frequency)
+        PerPass     = 1, // Updated once per render pass (medium frequency)
+        PerFrame    = 2, // Updated once per frame (low frequency)
+        Static      = 3, // Set once and never updated (very low frequency)
+        PerDispatch = 4  // Per compute dispatch (auto-advances on each UploadBuffer)
     };
 
     // ========================================================================
@@ -150,11 +153,13 @@ namespace enigma::graphic
         // ==================== Core Buffer Resource ====================
         std::unique_ptr<D12Buffer> buffer; // GPU Buffer (provides resource, mapping, bindless)
 
+        // ==================== Strategy (replaces frequency + ringIndex) ====================
+        std::unique_ptr<BufferUpdateStrategy> strategy; // Encapsulates ring buffer indexing behavior
+
         // ==================== Ring Buffer Parameters ====================
         size_t          elementSize = 0; // 256-byte aligned element size
         size_t          maxCount    = 0; // Maximum element count in Ring Buffer
-        size_t          ringIndex   = 0; // Current write index (unified naming)
-        UpdateFrequency frequency   = UpdateFrequency::PerObject;
+        UpdateFrequency frequency   = UpdateFrequency::PerObject; // Retained as tag for filtering
 
         // ==================== Routing Information ====================
         uint32_t    slot  = UINT32_MAX; // HLSL register slot (b0-b14 or b15+)
@@ -163,6 +168,26 @@ namespace enigma::graphic
         // ==================== Optimization: Delayed Fill ====================
         std::vector<uint8_t> lastUpdatedValue; // Cached last value (skip duplicate uploads)
         size_t               lastUpdatedIndex = SIZE_MAX; // Last updated ring index
+
+        // ==================== Strategy Delegates ====================
+
+        /**
+         * @brief Get current write index via strategy
+         * @return Index for writing data in UploadBuffer
+         */
+        size_t GetCurrentWriteIndex() const
+        {
+            return strategy ? strategy->GetCurrentWriteIndex() : 0;
+        }
+
+        /**
+         * @brief Get current read index via strategy
+         * @return Index for GPU address binding
+         */
+        size_t GetCurrentReadIndex() const
+        {
+            return strategy ? strategy->GetCurrentReadIndex() : 0;
+        }
 
         // ==================== Convenience Accessors ====================
 
@@ -190,12 +215,6 @@ namespace enigma::graphic
          * @return void* pointer to data at index
          */
         void* GetDataAt(size_t index) const;
-
-        /**
-         * @brief Get current ring index to use (with modulo for PerObject)
-         * @return For PerObject: ringIndex % maxCount, others: 0
-         */
-        size_t GetCurrentRingIndex() const;
 
         /**
          * @brief Check if buffer is valid and ready for use

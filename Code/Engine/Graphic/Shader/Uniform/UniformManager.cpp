@@ -78,20 +78,26 @@ namespace enigma::graphic
     void UniformManager::IncrementDrawCount()
     {
         m_currentDrawCount++;
-        // [REFACTORED] Unified: use m_bufferStates with ringIndex
+        // Strategy pattern: delegate to each buffer's strategy
         for (auto& [typeId, state] : m_bufferStates)
         {
-            state.ringIndex++;
+            if (state.strategy)
+            {
+                state.strategy->OnDrawCountIncrement();
+            }
         }
     }
 
     void UniformManager::ResetDrawCount()
     {
         m_currentDrawCount = 0;
-        // [REFACTORED] Unified: reset all buffers' ringIndex
+        // Strategy pattern: delegate frame reset to each buffer's strategy
         for (auto& [typeId, state] : m_bufferStates)
         {
-            state.ringIndex = 0;
+            if (state.strategy)
+            {
+                state.strategy->OnFrameReset();
+            }
         }
     }
 
@@ -138,18 +144,17 @@ namespace enigma::graphic
 
     void UniformManager::UpdateRingBufferOffsets(UpdateFrequency frequency)
     {
-        // [REFACTORED] Direct iteration over m_bufferStates instead of m_frequencyToSlotsMap
-        // This avoids the need to try multiple space values since state contains all info
+        // Strategy pattern: iterate buffers, filter by frequency tag, delegate to strategy
         for (auto& [typeId, state] : m_bufferStates)
         {
-            // Filter by frequency, skip if not matching or buffer invalid
+            // Filter by frequency tag, skip if not matching or buffer invalid
             if (state.frequency != frequency || !state.buffer)
             {
                 continue;
             }
 
-            // Calculate current Ring Buffer index
-            size_t currentIndex = state.GetCurrentRingIndex();
+            // Strategy provides the current write index
+            size_t currentIndex = state.GetCurrentWriteIndex();
 
             // Delayed Fill: copy last value if index not updated
             if (state.lastUpdatedIndex != currentIndex)
@@ -205,18 +210,9 @@ namespace enigma::graphic
         // Calculate 256-byte aligned size
         size_t alignedSize = BufferHelper::CalculateAlignedSize(bufferSize);
 
-        // Calculate Ring Buffer count based on frequency
-        size_t ringBufferCount = 1;
-        switch (freq)
-        {
-        case UpdateFrequency::PerObject: ringBufferCount = maxDraws;
-            break;
-        case UpdateFrequency::PerPass: ringBufferCount = 20;
-            break;
-        case UpdateFrequency::PerFrame:
-        case UpdateFrequency::Static: ringBufferCount = 1;
-            break;
-        }
+        // Strategy pattern: create strategy and query ring buffer count
+        auto strategy = BufferUpdateStrategy::Create(freq, maxDraws);
+        size_t ringBufferCount = strategy->GetRingBufferCount(maxDraws);
 
         size_t totalSize = alignedSize * ringBufferCount;
 
@@ -286,12 +282,12 @@ namespace enigma::graphic
                     BindlessRootSignature::MAX_RING_FRAMES, slotId, baseGpuAddress);
         }
 
-        // [REFACTORED] Create unified UniformBufferState
+        // Create unified UniformBufferState with strategy
         UniformBufferState state;
         state.buffer      = std::move(gpuBuffer);
+        state.strategy    = std::move(strategy);
         state.elementSize = alignedSize;
         state.maxCount    = ringBufferCount;
-        state.ringIndex   = 0;
         state.frequency   = freq;
         state.slot        = slotId;
         state.space       = space;
@@ -330,8 +326,8 @@ namespace enigma::graphic
             LogWarn(LogUniform, "Data size (%zu) exceeds element size (%zu)", size, state.elementSize);
         }
 
-        // Calculate current ring index
-        size_t currentIndex = state.GetCurrentRingIndex();
+        // Strategy pattern: get current write index
+        size_t currentIndex = state.GetCurrentWriteIndex();
         void*  destPtr      = state.GetDataAt(currentIndex);
 
         if (!destPtr)
@@ -345,6 +341,12 @@ namespace enigma::graphic
         // Update Delayed Fill cache
         std::memcpy(state.lastUpdatedValue.data(), data, size);
         state.lastUpdatedIndex = currentIndex;
+
+        // Strategy pattern: post-upload hook (PerDispatch auto-advances here)
+        if (state.strategy)
+        {
+            state.strategy->OnPostUpload();
+        }
 
         return true;
     }
@@ -502,7 +504,8 @@ namespace enigma::graphic
             return 0;
         }
 
-        size_t currentIndex = state->GetCurrentRingIndex();
+        // Strategy pattern: use read index for GPU address binding
+        size_t currentIndex = state->GetCurrentReadIndex();
 
         D3D12_GPU_VIRTUAL_ADDRESS baseAddress    = state->GetGPUVirtualAddress();
         D3D12_GPU_VIRTUAL_ADDRESS currentAddress = baseAddress + currentIndex * state->elementSize;
