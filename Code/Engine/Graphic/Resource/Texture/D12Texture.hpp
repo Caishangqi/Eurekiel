@@ -23,6 +23,7 @@
 #pragma once
 
 #include "../D12Resources.hpp"
+#include "Engine/Graphic/Mipmap/MipmapConfig.hpp"
 #include <memory>
 #include <string>
 #include <dxgi1_6.h>
@@ -300,13 +301,27 @@ namespace enigma::graphic
         );
 
         /**
-         * @brief 生成Mip贴图
-         * @return 是否成功生成
-         *
-         * 教学要点: Mip贴图提升纹理采样性能和质量
-         * 通过Compute Shader实现Mip生成
+         * @brief Generate mip chain via MipmapGenerator compute shader
+         * @param config Mipmap generation configuration
+         * @return true on success, false if texture has no mips or is invalid
          */
-        bool GenerateMips();
+        bool GenerateMips(const MipmapConfig& config = MipmapConfig::Default());
+
+        /**
+         * @brief Get persistent UAV bindless index for a specific mip level
+         * @param mipLevel The mip level (0 to mipLevels-1)
+         * @return Bindless UAV index for the requested mip level
+         *
+         * Mip UAV descriptors are lazily created on first GenerateMips() call.
+         * Fatal error if mipLevel is out of range or UAVs not yet created.
+         */
+        uint32_t GetMipUavIndex(uint32_t mipLevel) const;
+
+        /**
+         * @brief Check if texture has multiple mip levels
+         * @return true if mipLevels > 1
+         */
+        bool IsMipmapEnabled() const { return m_mipLevels > 1; }
 
         // ==================== 调试支持 ====================
 
@@ -451,6 +466,9 @@ namespace enigma::graphic
         bool                        m_hasSRV; ///< 是否有SRV
         bool                        m_hasUAV; ///< 是否有UAV
 
+        // ==================== Per-Mip UAV (Mipmap Generation) ====================
+        std::vector<uint32_t> m_mipUavIndices; ///< Persistent per-mip UAV bindless indices
+
         mutable std::string m_formattedDebugName; ///< 格式化的调试名称（用于GetDebugName重写）
 
         // ==================== 内部辅助方法 ====================
@@ -463,6 +481,19 @@ namespace enigma::graphic
          * 教学要点: 使用D3D12RenderSystem统一API，遵循分层架构
          */
         bool CreateD3D12Resource(const TextureCreateInfo& createInfo);
+
+        /**
+         * @brief Lazily allocate persistent per-mip UAV descriptors for mipmap generation
+         * @details Called once by GenerateMips(). Idempotent - skips if already created.
+         *          Uses D3D12RenderSystem::CreateUAV() for each mip level.
+         */
+        void createMipUavDescriptors();
+
+        /**
+         * @brief Free all per-mip UAV bindless indices
+         * @details Called in destructor to prevent index leaks.
+         */
+        void freeMipUavDescriptors();
 
         /**
          * @brief 创建着色器资源视图

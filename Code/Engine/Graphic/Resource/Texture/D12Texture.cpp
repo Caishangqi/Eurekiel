@@ -11,6 +11,7 @@
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
+#include "Engine/Graphic/Mipmap/MipmapGenerator.hpp"
 
 namespace enigma::graphic
 {
@@ -82,8 +83,8 @@ namespace enigma::graphic
      */
     D12Texture::~D12Texture()
     {
-        // ComPtr会自动释放DirectX 12资源
-        // 描述符会在描述符堆销毁时自动释放
+        freeMipUavDescriptors();
+        // ComPtr handles DirectX 12 resource release
     }
 
     /**
@@ -201,17 +202,87 @@ namespace enigma::graphic
     }
 
     /**
-     * 生成Mip贴图
+     * Generate mip chain via MipmapGenerator compute shader
      */
-    bool D12Texture::GenerateMips()
+    bool D12Texture::GenerateMips(const MipmapConfig& config)
     {
-        auto graphicCommandQueue = D3D12RenderSystem::GetCommandListManager()->GetCommandQueue(CommandListManager::Type::Graphics);
-        if (!graphicCommandQueue || !IsValid() || m_mipLevels <= 1)
+        if (m_mipLevels <= 1)
         {
             return false;
         }
-        // 通过Compute Shader实现
+
+        if (!IsValid() || !GetResource())
+        {
+            ERROR_RECOVERABLE("D12Texture::GenerateMips: texture not uploaded to GPU");
+            return false;
+        }
+
+        // Lazy init: create persistent per-mip UAV descriptors on first call
+        createMipUavDescriptors();
+
+        MipmapGenerator::GenerateMips(this, config);
         return true;
+    }
+
+    uint32_t D12Texture::GetMipUavIndex(uint32_t mipLevel) const
+    {
+        if (mipLevel >= static_cast<uint32_t>(m_mipUavIndices.size()))
+        {
+            ERROR_AND_DIE(Stringf("D12Texture::GetMipUavIndex: mipLevel %u out of range (size=%u)",
+                          mipLevel, static_cast<uint32_t>(m_mipUavIndices.size())));
+        }
+        return m_mipUavIndices[mipLevel];
+    }
+
+    void D12Texture::createMipUavDescriptors()
+    {
+        // Idempotent: skip if already created
+        if (!m_mipUavIndices.empty())
+            return;
+
+        if (!GetResource())
+        {
+            ERROR_RECOVERABLE("D12Texture::createMipUavDescriptors: resource is null");
+            return;
+        }
+
+        m_mipUavIndices.resize(m_mipLevels, BindlessIndexAllocator::INVALID_INDEX);
+
+        for (uint32_t mip = 0; mip < m_mipLevels; ++mip)
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+            uavDesc.Format                  = m_format;
+            uavDesc.ViewDimension           = D3D12_UAV_DIMENSION_TEXTURE2D;
+            uavDesc.Texture2D.MipSlice      = mip;
+            uavDesc.Texture2D.PlaneSlice    = 0;
+
+            uint32_t index = D3D12RenderSystem::CreateUAV(GetResource(), uavDesc);
+            if (index == BindlessIndexAllocator::INVALID_INDEX)
+            {
+                ERROR_RECOVERABLE(Stringf("D12Texture::createMipUavDescriptors: failed at mip %u", mip));
+                continue;
+            }
+            m_mipUavIndices[mip] = index;
+        }
+    }
+
+    void D12Texture::freeMipUavDescriptors()
+    {
+        if (m_mipUavIndices.empty())
+            return;
+
+        auto* allocator = D3D12RenderSystem::GetBindlessIndexAllocator();
+        if (!allocator)
+            return;
+
+        for (uint32_t index : m_mipUavIndices)
+        {
+            if (index != BindlessIndexAllocator::INVALID_INDEX)
+            {
+                allocator->FreeTextureIndex(index);
+            }
+        }
+        m_mipUavIndices.clear();
     }
 
     // ==================== 调试支持 ====================
@@ -710,23 +781,6 @@ namespace enigma::graphic
     // ==================== 静态辅助函数 ====================
 
     /**
-     * 检查是否为深度格式
-     */
-    static bool IsDepthFormat(DXGI_FORMAT format)
-    {
-        switch (format)
-        {
-        case DXGI_FORMAT_D16_UNORM:
-        case DXGI_FORMAT_D24_UNORM_S8_UINT:
-        case DXGI_FORMAT_D32_FLOAT:
-        case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-            return true;
-        default:
-            return false;
-        }
-    }
-
-    /**
      * @brief 分配Bindless纹理索引 (Template Method模式 - 子类实现)
      *
      * 教学要点:
@@ -803,14 +857,14 @@ namespace enigma::graphic
         {
         case TextureType::Texture1D:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
-            srvDesc.Texture1D.MipLevels           = m_mipLevels;
+            srvDesc.Texture1D.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.Texture1D.MostDetailedMip     = 0;
             srvDesc.Texture1D.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture2D:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MipLevels           = m_mipLevels;
+            srvDesc.Texture2D.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.Texture2D.MostDetailedMip     = 0;
             srvDesc.Texture2D.PlaneSlice          = 0;
             srvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
@@ -818,21 +872,21 @@ namespace enigma::graphic
 
         case TextureType::Texture3D:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-            srvDesc.Texture3D.MipLevels           = m_mipLevels;
+            srvDesc.Texture3D.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.Texture3D.MostDetailedMip     = 0;
             srvDesc.Texture3D.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::TextureCube:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-            srvDesc.TextureCube.MipLevels           = m_mipLevels;
+            srvDesc.TextureCube.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.TextureCube.MostDetailedMip     = 0;
             srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
             break;
 
         case TextureType::Texture1DArray:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-            srvDesc.Texture1DArray.MipLevels           = m_mipLevels;
+            srvDesc.Texture1DArray.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.Texture1DArray.MostDetailedMip     = 0;
             srvDesc.Texture1DArray.FirstArraySlice     = 0;
             srvDesc.Texture1DArray.ArraySize           = m_arraySize;
@@ -841,7 +895,7 @@ namespace enigma::graphic
 
         case TextureType::Texture2DArray:
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-            srvDesc.Texture2DArray.MipLevels           = m_mipLevels;
+            srvDesc.Texture2DArray.MipLevels           = (m_mipLevels > 1) ? (UINT)-1 : m_mipLevels;
             srvDesc.Texture2DArray.MostDetailedMip     = 0;
             srvDesc.Texture2DArray.FirstArraySlice     = 0;
             srvDesc.Texture2DArray.ArraySize           = m_arraySize;
