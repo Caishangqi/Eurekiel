@@ -182,6 +182,53 @@ namespace enigma::graphic
     void PSOManager::ClearCache()
     {
         m_psoCache.clear();
+        m_computePSOCache.clear();
+    }
+
+    // ========================================================================
+    // Compute PSO support
+    // ========================================================================
+
+    ID3D12PipelineState* PSOManager::GetOrCreateComputePSO(const ShaderProgram* computeProgram)
+    {
+        ComputePSOKey key;
+        key.shaderProgram = computeProgram;
+
+        auto it = m_computePSOCache.find(key);
+        if (it != m_computePSOCache.end())
+        {
+            return it->second.Get();
+        }
+
+        auto pso = CreateComputePSO(computeProgram);
+        m_computePSOCache[key] = pso;
+        return pso.Get();
+    }
+
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOManager::CreateComputePSO(const ShaderProgram* computeProgram)
+    {
+        if (!computeProgram || !computeProgram->HasComputeShader())
+        {
+            ERROR_AND_DIE("PSOManager::CreateComputePSO: invalid compute program (null or missing compute shader)");
+        }
+
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
+        desc.pRootSignature = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
+        desc.CS = {
+            computeProgram->GetComputeShader().GetBytecodePtr(),
+            computeProgram->GetComputeShader().GetBytecodeSize()
+        };
+
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+        HRESULT hr = D3D12RenderSystem::GetDevice()->CreateComputePipelineState(
+            &desc, IID_PPV_ARGS(&pso));
+
+        if (FAILED(hr))
+        {
+            ERROR_AND_DIE("PSOManager::CreateComputePSO: CreateComputePipelineState failed");
+        }
+
+        return pso;
     }
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> PSOManager::CreatePSO(const PSOKey& key)

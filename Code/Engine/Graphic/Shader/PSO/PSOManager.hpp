@@ -94,6 +94,40 @@ namespace enigma::graphic
         }
     };
 
+    // ========================================================================
+    // ComputePSOKey - Cache key for Compute Pipeline State Objects
+    // ========================================================================
+
+    /**
+     * @struct ComputePSOKey
+     * @brief Compute PSO cache key - uses ShaderProgram pointer as unique identifier
+     *
+     * Compute PSOs only depend on the compute shader bytecode (via ShaderProgram),
+     * unlike Graphics PSOs which also depend on RT formats, blend, depth, etc.
+     */
+    struct ComputePSOKey
+    {
+        const ShaderProgram* shaderProgram = nullptr;
+
+        bool operator==(const ComputePSOKey& other) const
+        {
+            return shaderProgram == other.shaderProgram;
+        }
+
+        std::size_t GetHash() const
+        {
+            return std::hash<const void*>{}(shaderProgram);
+        }
+    };
+
+    struct ComputePSOKeyHash
+    {
+        std::size_t operator()(const ComputePSOKey& key) const
+        {
+            return key.GetHash();
+        }
+    };
+
     /**
      * @class PSOManager
      * @brief PSO Dynamic Manager - unified management of PSO creation and caching
@@ -153,6 +187,13 @@ namespace enigma::graphic
         ID3D12PipelineState* GetOrCreatePSO(const PSOKey& key);
 
         /**
+         * @brief Get or create a Compute PSO for the given compute ShaderProgram
+         * @param computeProgram ShaderProgram with compute shader
+         * @return PSO pointer (ERROR_AND_DIE on failure)
+         */
+        ID3D12PipelineState* GetOrCreateComputePSO(const ShaderProgram* computeProgram);
+
+        /**
          * @brief Clear PSO cache
          *
          * Teaching points:
@@ -177,6 +218,13 @@ namespace enigma::graphic
          * Note: ShaderProgram is required to provide shader bytecode access methods
          */
         Microsoft::WRL::ComPtr<ID3D12PipelineState> CreatePSO(const PSOKey& key);
+
+        /**
+         * @brief Create a new Compute PSO
+         * @param computeProgram ShaderProgram with compute shader
+         * @return PSO ComPtr (ERROR_AND_DIE on failure)
+         */
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateComputePSO(const ShaderProgram* computeProgram);
 
         /**
          * @brief Configure blend state
@@ -207,5 +255,8 @@ namespace enigma::graphic
     private:
         /// PSO cache (Key to PSO)
         std::unordered_map<PSOKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>, PSOKeyHash> m_psoCache;
+
+        /// Compute PSO cache (separate from Graphics cache)
+        std::unordered_map<ComputePSOKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>, ComputePSOKeyHash> m_computePSOCache;
     };
 } // namespace enigma::graphic

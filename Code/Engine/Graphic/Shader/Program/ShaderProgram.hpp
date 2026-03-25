@@ -90,9 +90,25 @@ namespace enigma::graphic
             CompiledShader&&                 vertexShader,
             CompiledShader&&                 pixelShader,
             std::optional<CompiledShader>&&  geometryShader,
+            std::optional<CompiledShader>&&  computeShader,
             ShaderType                       type,
             const shader::ProgramDirectives& directives
         );
+
+        /**
+         * @brief Create a compute-only ShaderProgram (no VS/PS/GS)
+         * @param computeShader Compiled compute shader
+         * @param type Shader type (e.g., ShaderType::Composite)
+         * @param directives Program directives
+         * @return Unique pointer to compute-only ShaderProgram
+         *
+         * Used by MipmapGenerator for built-in compute shader,
+         * and by ShaderBundle for setup/compute passes.
+         */
+        static std::unique_ptr<ShaderProgram> CreateCompute(
+            CompiledShader&&                 computeShader,
+            ShaderType                       type,
+            const shader::ProgramDirectives& directives = {});
 
         /**
          * @brief 激活此着色器程序 (对应 Iris Program.use())
@@ -177,6 +193,18 @@ namespace enigma::graphic
          */
         bool HasGeometryShader() const { return m_geometryShader.has_value(); }
 
+        /**
+         * @brief Check if program has a compute shader
+         * @return true if compute shader is present
+         */
+        bool HasComputeShader() const { return m_computeShader.has_value(); }
+
+        /**
+         * @brief Get the compiled compute shader
+         * @return Reference to CompiledShader (must check HasComputeShader() first)
+         */
+        const CompiledShader& GetComputeShader() const { return m_computeShader.value(); }
+
     private:
         std::string m_name; ///< 程序名称 (如 "gbuffers_terrain")
         ShaderType  m_type; ///< 着色器类型
@@ -187,7 +215,8 @@ namespace enigma::graphic
 
         CompiledShader                m_vertexShader; ///< 顶点着色器 (必需)
         CompiledShader                m_pixelShader; ///< 像素着色器 (必需)
-        std::optional<CompiledShader> m_geometryShader; ///< 几何着色器 (可选)
+        std::optional<CompiledShader> m_geometryShader; ///< Geometry shader (optional)
+        std::optional<CompiledShader> m_computeShader; ///< Compute shader (optional)
 
         // ========================================================================
         // DirectX 12 对象
