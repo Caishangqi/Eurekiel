@@ -801,6 +801,35 @@ namespace enigma::graphic
             const char*                debugName = nullptr
         );
 
+        /**
+         * @brief Insert a UAV barrier to synchronize unordered access writes
+         * @param cmdList Active command list
+         * @param resource The resource to synchronize (nullptr = all UAV resources)
+         *
+         * Unlike TransitionResource, this does NOT change the resource state.
+         * It ensures all prior UAV writes are visible before subsequent reads/writes.
+         * Typical use: between compute shader dispatches that read from the
+         * previous dispatch's output (e.g. mipmap chain generation).
+         */
+        static void UAVBarrier(
+            ID3D12GraphicsCommandList* cmdList,
+            ID3D12Resource*            resource
+        );
+
+        /**
+         * @brief Allocate a bindless texture index and create a UAV descriptor
+         * @param resource The D3D12 resource to create the UAV for
+         * @param desc UAV description (caller builds format, dimension, mip slice, etc.)
+         * @return Bindless index for the UAV, or INVALID_INDEX on failure
+         *
+         * Generic factory: caller is responsible for building the desc and
+         * freeing the returned index via BindlessIndexAllocator::FreeTextureIndex().
+         */
+        static uint32_t CreateUAV(
+            ID3D12Resource*                              resource,
+            const D3D12_UNORDERED_ACCESS_VIEW_DESC&      desc
+        );
+
         // ===== Immediate模式渲染API (Milestone 2.6新增) =====
 
         // ===== CommandList访问API (Milestone 2.6新增) =====

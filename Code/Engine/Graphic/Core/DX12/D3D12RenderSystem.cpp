@@ -1329,6 +1329,37 @@ namespace enigma::graphic
         cmdList->ResourceBarrier(1, &barrier);
     }
 
+    void D3D12RenderSystem::UAVBarrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* resource)
+    {
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type          = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource = resource;
+        cmdList->ResourceBarrier(1, &barrier);
+    }
+
+    uint32_t D3D12RenderSystem::CreateUAV(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc)
+    {
+        if (!resource)
+        {
+            ERROR_RECOVERABLE("D3D12RenderSystem::CreateUAV: resource is nullptr");
+            return BindlessIndexAllocator::INVALID_INDEX;
+        }
+
+        auto* allocator = GetBindlessIndexAllocator();
+        auto* heapMgr   = GetGlobalDescriptorHeapManager();
+        auto* device     = GetDevice();
+
+        uint32_t index = allocator->AllocateTextureIndex();
+        if (index == BindlessIndexAllocator::INVALID_INDEX)
+        {
+            ERROR_RECOVERABLE("D3D12RenderSystem::CreateUAV: failed to allocate bindless index");
+            return BindlessIndexAllocator::INVALID_INDEX;
+        }
+
+        heapMgr->CreateUnorderedAccessView(device, resource, nullptr, &desc, index);
+        return index;
+    }
+
     void D3D12RenderSystem::BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot)
     {
         if (!s_currentGraphicsCommandList)
