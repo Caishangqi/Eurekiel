@@ -297,10 +297,11 @@ void RendererSubsystem::Startup()
 
         // Default sampler configurations (matches Static Sampler slots)
         std::vector<SamplerConfig> defaultSamplerConfigs = {
-            SamplerConfig::Linear(), // sampler0: Linear filtering, clamp
+            SamplerConfig::Linear(), // sampler0: Linear filtering, wrap (tiling textures)
             SamplerConfig::Point(), // sampler1: Point filtering, clamp
             SamplerConfig::Shadow(), // sampler2: Shadow comparison
-            SamplerConfig::PointWrap() // sampler3: Point filtering, wrap
+            SamplerConfig::PointWrap(), // sampler3: Point filtering, wrap
+            SamplerConfig::LinearClamp() // sampler4: Linear filtering, clamp (screen-space effects)
         };
 
         // [RAII] Create SamplerProvider with UniformManager dependency injection
@@ -310,7 +311,7 @@ void RendererSubsystem::Startup()
             m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "SamplerProvider created successfully (4 default samplers)");
+        LogInfo(LogRenderer, "SamplerProvider created successfully (5 default samplers)");
     }
     catch (const std::exception& e)
     {

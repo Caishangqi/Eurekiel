@@ -155,6 +155,20 @@ namespace enigma::graphic
         }
 
         /**
+         * @brief Linear filtering with clamp addressing
+         * Used for screen-space effects (bloom, SSR, etc.) where UV must not wrap
+         */
+        static inline SamplerConfig LinearClamp()
+        {
+            SamplerConfig config;
+            config.filter   = SamplerFilterMode::Linear;
+            config.addressU = SamplerAddressMode::Clamp;
+            config.addressV = SamplerAddressMode::Clamp;
+            config.addressW = SamplerAddressMode::Clamp;
+            return config;
+        }
+
+        /**
          * @brief Point filtering with wrap addressing
          */
         static inline SamplerConfig PointWrap()

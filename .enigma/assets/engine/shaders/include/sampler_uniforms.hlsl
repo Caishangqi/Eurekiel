@@ -16,10 +16,11 @@
  * - Unified: Follows same pattern as ColorTargetsIndexBuffer
  *
  * Default Sampler Slots:
- * - sampler0: Linear filter (texture sampling)
- * - sampler1: Point filter (pixel-perfect sampling)
+ * - sampler0: Linear filter + wrap (texture tiling)
+ * - sampler1: Point filter + clamp (pixel-perfect sampling)
  * - sampler2: Shadow comparison sampler
- * - sampler3: Point filter with wrap addressing
+ * - sampler3: Point filter + wrap addressing
+ * - sampler4: Linear filter + clamp (screen-space effects: bloom, SSR, etc.)
  *
  * C++ Counterpart: Engine/Code/Engine/Graphic/Shader/Uniform/SamplerIndicesBuffer.hpp
  *
@@ -87,20 +88,22 @@ SamplerState GetSampler(uint index)
 // =============================================================================
 // [USER-FRIENDLY MACROS] Default Sampler Accessors
 // =============================================================================
-// These macros provide convenient access to the 4 default samplers.
+// These macros provide convenient access to the 5 default samplers.
 // They replace the old static sampler declarations (linearSampler, etc.)
 //
 // Slot Mapping:
-//   sampler0 = Linear filter   (replaces linearSampler)
-//   sampler1 = Point filter    (replaces pointSampler)
+//   sampler0 = Linear + Wrap   (replaces linearSampler, for tiling textures)
+//   sampler1 = Point + Clamp   (replaces pointSampler)
 //   sampler2 = Shadow sampler  (replaces shadowSampler)
 //   sampler3 = Point + Wrap    (replaces wrapSampler)
+//   sampler4 = Linear + Clamp  (screen-space effects: bloom, SSR, composites)
 // =============================================================================
 
 #define sampler0 GetSampler(0)
 #define sampler1 GetSampler(1)
 #define sampler2 GetSampler(2)
 #define sampler3 GetSampler(3)
+#define sampler4 GetSampler(4)
 
 // =============================================================================
 // [LEGACY COMPATIBILITY] Sampler Aliases
@@ -109,10 +112,11 @@ SamplerState GetSampler(uint index)
 // New code should use sampler0-3 macros directly.
 // =============================================================================
 
-#define linearSampler sampler0
-#define pointSampler  sampler1
-#define shadowSampler sampler2
-#define wrapSampler   sampler3
+#define linearSampler      sampler0
+#define pointSampler       sampler1
+#define shadowSampler      sampler2
+#define wrapSampler        sampler3
+#define linearClampSampler sampler4
 
 #endif // SAMPLER_UNIFORMS_HLSL
 
