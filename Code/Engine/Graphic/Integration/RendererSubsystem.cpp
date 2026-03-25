@@ -648,8 +648,9 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
         std::move(*buildResult.vertexShader),
         std::move(*buildResult.pixelShader),
         buildResult.geometryShader ? std::make_optional(std::move(*buildResult.geometryShader)) : std::nullopt,
+        buildResult.computeShader ? std::make_optional(std::move(*buildResult.computeShader)) : std::nullopt,
         ShaderType::GBuffers_Terrain,
-        buildResult.directives // 使用解析后的 Directives
+        buildResult.directives // Use parsed Directives
     );
 
     LogInfo(LogRenderer, "Successfully compiled shader program from source: %s", programName.c_str());

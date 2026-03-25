@@ -1340,6 +1340,18 @@ namespace enigma::graphic
          */
         class UniformManager* GetUniformManager() const noexcept { return m_uniformManager.get(); }
 
+        /**
+         * @brief Get PSOManager for PSO creation and caching
+         * @return PSOManager raw pointer (owned by RendererSubsystem)
+         */
+        class PSOManager* GetPSOManager() const noexcept { return m_psoManager.get(); }
+
+        /**
+         * @brief Get SamplerProvider for bindless sampler index resolution
+         * @return SamplerProvider raw pointer (owned by RendererSubsystem)
+         */
+        class SamplerProvider* GetSamplerProvider() const noexcept { return m_samplerProvider.get(); }
+
     private:
         /**
          * @brief Prepare PSO and resource binding (common logic of Draw series functions)

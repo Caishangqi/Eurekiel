@@ -76,6 +76,14 @@ namespace enigma::graphic
             {
                 ApplyClearColor(m_colorTexConfigs, i, clearColorOpt.value(), m_defaultColorConfig, MAX_COLOR_TEXTURES);
             }
+
+            // colortexNMipmapEnabled
+            std::string mipmapName = "colortex" + std::to_string(i) + "MipmapEnabled";
+            auto        mipmapOpt  = parser.GetBool(mipmapName);
+            if (mipmapOpt.has_value())
+            {
+                ApplyMipmapEnabled(m_colorTexConfigs, i, mipmapOpt.value(), m_defaultColorConfig, MAX_COLOR_TEXTURES);
+            }
         }
 
         // Parse depthtexNClear
@@ -294,6 +302,27 @@ namespace enigma::graphic
         else
         {
             it->second.clearValue = ClearValue::Color(clearColor.x, clearColor.y, clearColor.z, clearColor.w);
+        }
+    }
+
+    void PackRenderTargetDirectives::ApplyMipmapEnabled(
+        std::map<int, RenderTargetConfig>& configs,
+        int                                index,
+        bool                               enableMipmap,
+        const RenderTargetConfig&          defaultConfig,
+        int                                maxIndex)
+    {
+        if (index < 0 || index >= maxIndex) return;
+
+        auto it = configs.find(index);
+        if (it == configs.end())
+        {
+            configs[index]               = defaultConfig;
+            configs[index].enableMipmap = enableMipmap;
+        }
+        else
+        {
+            it->second.enableMipmap = enableMipmap;
         }
     }
 

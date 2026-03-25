@@ -399,6 +399,8 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\viewport_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\worldtime_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\include\worldinfo_uniforms.hlsl"/>
+    <Content Include="..\..\.enigma\assets\engine\shaders\core\mipmapGeneration.cs.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\include\mipgen_uniforms.hlsl" />
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -508,6 +510,7 @@
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemImGuiContext.cpp" />
     <ClCompile Include="Graphic\Integration\RendererEvents.cpp"/>
+    <ClCompile Include="Graphic\Mipmap\MipmapGenerator.cpp"/>
     <ClCompile Include="Graphic\Resource\BindlessIndexAllocator.cpp" />
     <ClCompile Include="Graphic\Resource\BindlessRootSignature.cpp" />
     <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp" />
@@ -554,6 +557,7 @@
     <ClCompile Include="Graphic\Shader\Program\ShaderSource.cpp"/>
     <ClCompile Include="Graphic\Shader\Program\VirtualPathReader.cpp"/>
     <ClCompile Include="Graphic\Shader\Uniform\CustomImageManager.cpp" />
+    <ClCompile Include="Graphic\Shader\Uniform\BufferUpdateStrategy.cpp"/>
     <ClCompile Include="Graphic\Shader\Uniform\UniformCommon.cpp"/>
     <ClCompile Include="Graphic\Shader\Uniform\UniformManager.cpp" />
     <ClCompile Include="Graphic\Sprite\Sprite.cpp" />

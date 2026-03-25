@@ -138,6 +138,14 @@ namespace enigma::graphic
             int                                maxIndex
         );
 
+        void ApplyMipmapEnabled(
+            std::map<int, RenderTargetConfig>& configs,
+            int                                index,
+            bool                               enableMipmap,
+            const RenderTargetConfig&          defaultConfig,
+            int                                maxIndex
+        );
+
         // ========================================================================
         // Private Members
         // ========================================================================
