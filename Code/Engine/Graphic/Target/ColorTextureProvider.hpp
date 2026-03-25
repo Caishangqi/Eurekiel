@@ -101,6 +101,9 @@ namespace enigma::graphic
         bool SupportsFlipState() const override { return true; }
         bool SupportsDSV() const override { return false; }
 
+        // Resource State Transitions
+        void PrepareForRendering(int index) override;
+
         // Dynamic Configuration
         void SetRtConfig(int index, const RenderTargetConfig& config) override;
 
@@ -117,6 +120,13 @@ namespace enigma::graphic
          * @note Call after Flip operations or resource recreation
          */
         void UpdateIndices();
+
+        /**
+         * @brief Get underlying D12RenderTarget at index
+         * @param index RT index (0-15)
+         * @return Shared pointer to D12RenderTarget
+         */
+        std::shared_ptr<D12RenderTarget> GetRenderTarget(int index) const;
 
     private:
         // ========================================================================
@@ -140,13 +150,6 @@ namespace enigma::graphic
          * @return DXGI_FORMAT
          */
         DXGI_FORMAT GetFormat(int index) const;
-
-        /**
-         * @brief Get underlying D12RenderTarget
-         * @param index RT index
-         * @return Shared pointer to D12RenderTarget
-         */
-        std::shared_ptr<D12RenderTarget> GetRenderTarget(int index) const;
 
         /**
          * @brief Check if index is flipped

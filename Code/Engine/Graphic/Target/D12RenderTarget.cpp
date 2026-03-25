@@ -1,5 +1,6 @@
 ﻿#include "D12RenderTarget.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
+#include "../Mipmap/MipmapConfig.hpp"
 #include "../Resource/GlobalDescriptorHeapManager.hpp"
 #include "../Resource/Texture/D12Texture.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
@@ -67,13 +68,19 @@ void D12RenderTarget::InitializeTextures(int width, int height)
     mainTexInfo.width     = static_cast<uint32_t>(width);
     mainTexInfo.height    = static_cast<uint32_t>(height);
     mainTexInfo.depth     = 1;
-    mainTexInfo.mipLevels = m_enableMipmap ? 0 : 1; // 0 = 自动生成所有Mip级别
+    mainTexInfo.mipLevels = m_enableMipmap ? CalculateMipCount(width, height) : 1;
     mainTexInfo.arraySize = 1;
     mainTexInfo.format    = m_format;
-    // Milestone 3.0 Bug Fix: RenderTarget必须同时支持RTV和SRV
-    // - RTV用于渲染输出 (OMSetRenderTargets)
-    // - SRV用于着色器采样 (历史帧读取/Ping-Pong渲染)
+    // Milestone 3.0 Bug Fix: RenderTarget must support both RTV and SRV
+    // - RTV for render output (OMSetRenderTargets)
+    // - SRV for shader sampling (history frame read / Ping-Pong rendering)
     mainTexInfo.usage      = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
+
+    // Mipmap support: add UAV flag for compute shader mipmap generation
+    if (m_enableMipmap)
+    {
+        mainTexInfo.usage = mainTexInfo.usage | TextureUsage::UnorderedAccess;
+    }
     mainTexInfo.clearValue = m_clearValue; // Pass clear value for Fast Clear optimization
 
     // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
@@ -543,6 +550,28 @@ ID3D12Resource* D12RenderTarget::GetAltTextureResource() const
         return m_altTexture->GetResource();
     }
     return nullptr;
+}
+
+// ============================================================================
+// Mipmap Generation Convenience API
+// ============================================================================
+
+bool D12RenderTarget::GenerateMainMips(const MipmapConfig& config)
+{
+    if (!m_enableMipmap || !m_mainTexture)
+    {
+        return false;
+    }
+    return m_mainTexture->GenerateMips(config);
+}
+
+bool D12RenderTarget::GenerateAltMips(const MipmapConfig& config)
+{
+    if (!m_enableMipmap || !m_altTexture)
+    {
+        return false;
+    }
+    return m_altTexture->GenerateMips(config);
 }
 
 // ============================================================================

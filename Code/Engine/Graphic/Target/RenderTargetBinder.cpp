@@ -112,6 +112,9 @@ namespace enigma::graphic
             auto* provider = GetProvider(colorTarget.first);
             if (provider)
             {
+                // Transition RT to write state before binding
+                provider->PrepareForRendering(colorTarget.second);
+
                 D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = provider->GetMainRTV(colorTarget.second);
                 if (rtvHandle.ptr != 0)
                 {

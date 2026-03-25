@@ -48,6 +48,20 @@ namespace enigma::graphic
          */
         virtual void Clear(int index, const float* clearValue) = 0;
 
+        // ========== Resource State Transitions ==========
+
+        /**
+         * @brief Transition RT at specified index to its write state before binding
+         * @param index RT index
+         *
+         * Called by RenderTargetBinder before OMSetRenderTargets to ensure
+         * the resource is in the correct state (RENDER_TARGET for color RTs,
+         * DEPTH_WRITE for depth RTs). Updates tracked m_currentState.
+         *
+         * Default: no-op. Override in providers that need explicit transitions.
+         */
+        virtual void PrepareForRendering(int index) { (void)index; }
+
         // ========== RTV/DSV Access ==========
 
         /**

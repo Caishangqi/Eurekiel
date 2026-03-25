@@ -375,6 +375,20 @@ namespace enigma::graphic
         bool IsMipmapEnabled() const { return m_enableMipmap; }
 
         /**
+         * @brief Generate mip chain for the main texture
+         * @param config Mipmap generation configuration
+         * @return true on success, false if mipmap disabled or texture invalid
+         */
+        bool GenerateMainMips(const MipmapConfig& config = MipmapConfig::Default());
+
+        /**
+         * @brief Generate mip chain for the alt texture
+         * @param config Mipmap generation configuration
+         * @return true on success, false if mipmap disabled or texture invalid
+         */
+        bool GenerateAltMips(const MipmapConfig& config = MipmapConfig::Default());
+
+        /**
          * @brief 获取主纹理Bindless索引 (Milestone 3.0: Bindless-MRT架构)
          * @return 主纹理在全局ResourceDescriptorHeap中的索引
          *

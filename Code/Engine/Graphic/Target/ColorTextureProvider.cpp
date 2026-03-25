@@ -383,6 +383,18 @@ namespace enigma::graphic
                 "ColorTextureProvider:: Resized to %dx%d base", newWidth, newHeight);
     }
 
+    void ColorTextureProvider::PrepareForRendering(int index)
+    {
+        if (index < 0 || index >= MAX_COLOR_TEXTURES)
+            return;
+
+        auto rt = GetRenderTarget(index);
+        if (rt)
+        {
+            rt->TransitionToRenderTarget();
+        }
+    }
+
     void ColorTextureProvider::GenerateMipmaps(ID3D12GraphicsCommandList* cmdList)
     {
         if (!cmdList)
