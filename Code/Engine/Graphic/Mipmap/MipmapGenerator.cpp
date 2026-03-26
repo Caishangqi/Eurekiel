@@ -5,6 +5,7 @@
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp"
 #include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Core/EngineCommon.hpp"
@@ -18,24 +19,32 @@
 namespace enigma::graphic
 {
     // Static member definitions
-    std::unique_ptr<ShaderProgram> MipmapGenerator::s_builtInComputeProgram = nullptr;
+    std::map<MipFilterMode, std::unique_ptr<ShaderProgram>> MipmapGenerator::s_shaderCache;
     bool MipmapGenerator::s_initialized = false;
 
     // ========================================================================
-    // Lazy Initialization
+    // Event-Driven Initialization
     // ========================================================================
 
-    void MipmapGenerator::ensureInitialized()
+    void MipmapGenerator::Initialize()
+    {
+        RendererEvents::OnPipelineReady.Add([]() { onPipelineReady(); });
+    }
+
+    void MipmapGenerator::onPipelineReady()
     {
         if (s_initialized)
             return;
 
-        compileBuiltInShader();
         registerUniformBuffer();
+        compileAllVariants();
         s_initialized = true;
+
+        LogInfo("MipmapGenerator", "Initialized: %zu filter variants compiled",
+                s_shaderCache.size());
     }
 
-    void MipmapGenerator::compileBuiltInShader()
+    void MipmapGenerator::compileAllVariants()
     {
         DXCCompiler compiler;
         if (!compiler.Initialize())
@@ -49,39 +58,47 @@ namespace enigma::graphic
         options.enableOptimization = true;
         options.enableDebugInfo = false;
         options.enable16BitTypes = true;
-
-        // Add include paths for shader resolution
         options.includePaths.push_back(L".enigma/assets/engine/shaders/");
         options.includePaths.push_back(L".enigma/assets/engine/shaders/core/");
 
-        // Compile from the shader file (relative to working directory = Run/)
-        DXCCompiler::CompileResult result = compiler.CompileShaderFromFile(
-            L".enigma/assets/engine/shaders/core/mipmapGeneration.cs.hlsl",
-            options);
-
-        if (!result.success)
+        // Iterate all filter modes using MIP_FILTER_SHADER_PATHS from MipmapCommon.hpp
+        for (int i = 0; i < static_cast<int>(MipFilterMode::COUNT); ++i)
         {
-            LogError("MipmapGenerator", "Compute shader compile error: %s", result.errorMessage.c_str());
-            ERROR_AND_DIE("MipmapGenerator: built-in compute shader compilation failed");
+            MipFilterMode mode = static_cast<MipFilterMode>(i);
+            const wchar_t* path = MIP_FILTER_SHADER_PATHS[i];
+
+            DXCCompiler::CompileResult result = compiler.CompileShaderFromFile(path, options);
+            if (!result.success)
+            {
+                LogError("MipmapGenerator", "Compute shader compile error: %s",
+                         result.errorMessage.c_str());
+                ERROR_AND_DIE("MipmapGenerator: shader compilation failed");
+            }
+
+            CompiledShader compiled;
+            compiled.stage      = ShaderStage::Compute;
+            compiled.name       = "MipGen_" + std::to_string(i);
+            compiled.entryPoint = "main";
+            compiled.profile    = "cs_6_6";
+            compiled.success    = true;
+            compiled.bytecode   = std::move(result.bytecode);
+
+            auto program = ShaderProgram::CreateCompute(std::move(compiled), ShaderType::Composite);
+            if (!program || !program->IsValid())
+            {
+                ERROR_AND_DIE("MipmapGenerator: Failed to create compute ShaderProgram");
+            }
+
+            s_shaderCache[mode] = std::move(program);
         }
+    }
 
-        // Create CompiledShader and wrap in ShaderProgram
-        CompiledShader compiled;
-        compiled.stage = ShaderStage::Compute;
-        compiled.name = "MipmapGeneration";
-        compiled.entryPoint = "main";
-        compiled.profile = "cs_6_6";
-        compiled.success = true;
-        compiled.bytecode = std::move(result.bytecode);
-
-        s_builtInComputeProgram = ShaderProgram::CreateCompute(
-            std::move(compiled),
-            ShaderType::Composite);
-
-        if (!s_builtInComputeProgram || !s_builtInComputeProgram->IsValid())
-        {
-            ERROR_AND_DIE("MipmapGenerator: Failed to create compute ShaderProgram");
-        }
+    ShaderProgram* MipmapGenerator::GetFilterShader(MipFilterMode mode)
+    {
+        auto it = s_shaderCache.find(mode);
+        if (it != s_shaderCache.end())
+            return it->second.get();
+        return nullptr;
     }
 
     void MipmapGenerator::registerUniformBuffer()
@@ -106,9 +123,6 @@ namespace enigma::graphic
 
     void MipmapGenerator::GenerateMips(D12Texture* texture, const MipmapConfig& config)
     {
-        // Lazy init
-        ensureInitialized();
-
         // Validate texture
         if (!texture || !texture->GetResource())
         {
@@ -122,10 +136,16 @@ namespace enigma::graphic
             return; // Nothing to generate
         }
 
-        // Resolve compute program (custom or built-in)
+        // Resolve compute program: custom shader takes priority, otherwise select by FilterMode
         ShaderProgram* computeProgram = config.computeShader
             ? config.computeShader
-            : s_builtInComputeProgram.get();
+            : GetFilterShader(config.filterMode);
+
+        if (!computeProgram)
+        {
+            ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: No shader available. Was Initialize() called?");
+            return;
+        }
 
         // Get Compute PSO
         auto* psoManager = g_theRendererSubsystem->GetPSOManager();
@@ -137,9 +157,40 @@ namespace enigma::graphic
 
         // Get required systems
         auto* uniformMgr = g_theRendererSubsystem->GetUniformManager();
-        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
         ID3D12Resource* resource = texture->GetResource();
         ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
+
+        // Determine command list: use frame command list if available,
+        // otherwise self-acquire one (initialization-time mip generation)
+        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+        bool selfAcquired = false;
+        auto* cmdListManager = D3D12RenderSystem::GetCommandListManager();
+
+        if (!cmdList)
+        {
+            // No frame command list (called during initialization, not during rendering)
+            // Acquire our own Graphics command list, same pattern as D12Resource::Upload()
+            if (!cmdListManager)
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: CommandListManager not available");
+                return;
+            }
+            cmdList = cmdListManager->AcquireCommandList(
+                CommandListManager::Type::Graphics, "MipGen_Init");
+            if (!cmdList)
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire command list");
+                return;
+            }
+            selfAcquired = true;
+
+            // Bind descriptor heaps for bindless access (normally done in BeginFrame)
+            auto* heapMgr = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+            if (heapMgr)
+            {
+                heapMgr->SetDescriptorHeaps(cmdList);
+            }
+        }
 
         // Calculate mip range
         uint32_t startMip = config.startMipLevel;
@@ -152,7 +203,15 @@ namespace enigma::graphic
         // Transition entire resource to UNORDERED_ACCESS for compute shader.
         // Both source and destination mips are accessed via RWTexture2D (UAV),
         // avoiding the SRV state conflict that occurs with per-subresource barriers.
-        texture->TransitionResourceTo(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        // When self-acquired, use manual transition (TransitionResourceTo needs GetCurrentCommandList)
+        D3D12_RESOURCE_STATES prevState = texture->GetCurrentState();
+        if (prevState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+        {
+            D3D12RenderSystem::TransitionResource(
+                cmdList, resource, prevState,
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                texture->GetDebugName().c_str());
+        }
 
         // Set compute root signature and PSO (once before the loop)
         cmdList->SetComputeRootSignature(rootSig);
@@ -194,6 +253,19 @@ namespace enigma::graphic
         }
 
         // Transition back to shader resource for sampling
-        texture->TransitionResourceTo(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        D3D12RenderSystem::TransitionResource(
+            cmdList, resource,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            texture->GetDebugName().c_str());
+        texture->SetCurrentState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+        // If we self-acquired the command list, execute and wait for GPU completion
+        if (selfAcquired)
+        {
+            uint64_t fenceValue = cmdListManager->ExecuteCommandList(cmdList);
+            cmdListManager->WaitForFence(fenceValue);
+            cmdListManager->UpdateCompletedCommandLists();
+        }
     }
 } // namespace enigma::graphic

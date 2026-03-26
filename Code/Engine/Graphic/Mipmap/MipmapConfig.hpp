@@ -1,4 +1,5 @@
 #pragma once
+#include "MipmapCommon.hpp"
 #include <cstdint>
 #include <climits>
 
@@ -33,12 +34,12 @@ namespace enigma::graphic
     struct MipmapConfig
     {
         // Which compute shader to use for downsampling
-        // nullptr = use engine built-in box filter shader
+        // nullptr = use engine built-in shader selected by filterMode
         ShaderProgram* computeShader = nullptr;
 
-        // Filter mode hint (for built-in shader selection)
-        enum class FilterMode { Box, Linear, Kaiser };
-        FilterMode filterMode = FilterMode::Box;
+        // Filter mode for built-in shader selection (defined in MipmapCommon.hpp)
+        // Custom ShaderProgram (via computeShader) bypasses this entirely
+        MipFilterMode filterMode = MipFilterMode::Box;
 
         // Mip range control
         uint32_t startMipLevel = 0;          // Start from this mip (usually 0)
@@ -79,6 +80,30 @@ namespace enigma::graphic
         {
             MipmapConfig config;
             config.samplerSlot = slot;
+            return config;
+        }
+
+        // Alpha-weighted downsampling (prevents cutout texture fringe)
+        static inline MipmapConfig AlphaWeighted()
+        {
+            MipmapConfig config;
+            config.filterMode = MipFilterMode::AlphaWeighted;
+            return config;
+        }
+
+        // sRGB-correct downsampling (prevents color darkening at distance)
+        static inline MipmapConfig Srgb()
+        {
+            MipmapConfig config;
+            config.filterMode = MipFilterMode::SRGB;
+            return config;
+        }
+
+        // Alpha-weighted + sRGB (highest quality, best for cutout textures)
+        static inline MipmapConfig AlphaWeightedSrgb()
+        {
+            MipmapConfig config;
+            config.filterMode = MipFilterMode::AlphaWeightedSRGB;
             return config;
         }
 

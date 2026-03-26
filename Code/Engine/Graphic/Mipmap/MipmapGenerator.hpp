@@ -5,11 +5,16 @@
 //
 // Layer 0: Core service that dispatches per-mip downsampling via Compute Shader.
 // Uses SM6.6 Bindless architecture with PerDispatch uniform strategy.
+//
+// Initialization: Subscribes to RendererEvents::OnPipelineReady.
+// When pipeline is ready, compiles all filter shader variants upfront.
 // ============================================================================
 
+#include "MipmapCommon.hpp"
 #include "MipmapConfig.hpp"
 #include <cstdint>
 #include <memory>
+#include <map>
 
 namespace enigma::graphic
 {
@@ -33,37 +38,42 @@ namespace enigma::graphic
      * @class MipmapGenerator
      * @brief Pure static engine service for GPU mipmap generation
      *
-     * Lazy-initialized on first GenerateMips() call:
-     * - Compiles built-in box filter compute shader (MipmapGeneration.cs.hlsl)
-     * - Registers MipGenUniforms with UniformManager (PerDispatch, slot b11, maxCount=16)
+     * Event-driven initialization via RendererEvents::OnPipelineReady:
+     * - Registers MipGenUniforms with UniformManager (PerDispatch, slot b11)
+     * - Compiles all filter shader variants from MipmapCommon::MIP_FILTER_SHADER_PATHS
      *
      * Per-mip dispatch loop:
-     * - Allocates temp UAV bindless index per mip level
      * - Uploads MipGenUniforms via PerDispatch strategy (auto-advances)
      * - Dispatches compute shader with ceil(w/8) x ceil(h/8) thread groups
      * - Inserts UAV barrier between mip levels
-     * - Frees temp bindless index after each mip
      */
     class MipmapGenerator
     {
     public:
         MipmapGenerator() = delete;
 
-        /**
-         * @brief Generate mip chain for a texture using compute shader
-         * @param texture Target texture (must have mipLevels > 1 and UAV flag)
-         * @param config Mipmap generation configuration
-         */
+        /// Call once during engine startup (before OnPipelineReady fires).
+        /// Subscribes to RendererEvents::OnPipelineReady for shader compilation.
+        static void Initialize();
+
+        /// Generate mip chain for a texture using compute shader.
+        /// @param texture Target texture (must have mipLevels > 1 and UAV flag)
+        /// @param config  Mipmap generation configuration (FilterMode or custom shader)
         static void GenerateMips(D12Texture* texture,
                                  const MipmapConfig& config = MipmapConfig::Default());
 
+        /// Get cached shader for a MipFilterMode (nullptr if not yet compiled)
+        static ShaderProgram* GetFilterShader(MipFilterMode mode);
+
     private:
-        // Lazy-initialized on first GenerateMips() call
-        static std::unique_ptr<ShaderProgram> s_builtInComputeProgram;
+        // MipFilterMode -> compiled ShaderProgram (populated on OnPipelineReady)
+        static std::map<MipFilterMode, std::unique_ptr<ShaderProgram>> s_shaderCache;
+
         static bool s_initialized;
 
-        static void ensureInitialized();
-        static void compileBuiltInShader();
+        // Event callback: compiles all shader variants + registers uniform buffer
+        static void onPipelineReady();
         static void registerUniformBuffer();
+        static void compileAllVariants();
     };
 } // namespace enigma::graphic
