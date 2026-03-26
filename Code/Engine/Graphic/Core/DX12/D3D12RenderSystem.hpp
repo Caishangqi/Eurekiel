@@ -5,6 +5,7 @@
 #include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
 #include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
 #include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 Root Signature
+#include "../../Mipmap/MipmapConfig.hpp"                            // MipmapConfig for CreateTexture2DWithMips
 #include "Engine/Core/Rgba8.hpp"
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -295,6 +296,16 @@ namespace enigma::graphic
         static std::shared_ptr<D12Texture> CreateTexture2D(const class ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName = "");
         static std::shared_ptr<D12Texture> CreateTexture2D(const class ImageResource& imageResource, TextureUsage usage, const std::string& debugName = "");
         static std::shared_ptr<D12Texture> CreateTexture2D(const std::string& imagePath, TextureUsage usage, const std::string& debugName = "");
+
+        /// Create texture with full mip chain and auto-generate mipmaps via compute shader.
+        /// Adds UnorderedAccess flag automatically for mip generation.
+        /// Safe to call during initialization (self-acquires command list if needed).
+        /// @param maxMipLevels 0 = full chain, >0 = limit to this many levels
+        /// @param mipConfig    Mipmap generation config (FilterMode, custom shader, etc.)
+        static std::shared_ptr<D12Texture> CreateTexture2DWithMips(
+            Image& image, TextureUsage usage, const std::string& debugName = "",
+            uint32_t maxMipLevels = 0,
+            const MipmapConfig& mipConfig = MipmapConfig::Default());
 
         static void   ClearUnusedTextures();
         static size_t GetTextureCacheSize();

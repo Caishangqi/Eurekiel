@@ -15,6 +15,7 @@
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
+#include "Engine/Graphic/Mipmap/MipmapConfig.hpp"
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
@@ -720,6 +721,91 @@ namespace enigma::graphic
         }
 
         // 转换unique_ptr到shared_ptr
+        return std::shared_ptr<D12Texture>(texture.release());
+    }
+
+    /**
+     * Create texture with full mip chain and auto-generate mipmaps.
+     *
+     * Flow:
+     * 1. Calculate full mip count from image dimensions
+     * 2. Add UnorderedAccess flag (required for compute shader mip generation)
+     * 3. Create texture with full mip chain (only mip 0 uploaded)
+     * 4. Generate remaining mips via compute shader (MipmapGenerator)
+     *
+     * Safe to call during initialization: MipmapGenerator self-acquires
+     * a command list when no frame command list is active.
+     */
+    std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2DWithMips(
+        Image& image, TextureUsage usage, const std::string& debugName,
+        uint32_t maxMipLevels, const MipmapConfig& mipConfig)
+    {
+        if (!image.GetRawData())
+        {
+            LogError(LogRenderer, "CreateTexture2DWithMips: Image data is null");
+            return nullptr;
+        }
+
+        IntVec2 dimensions = image.GetDimensions();
+        if (dimensions.x <= 0 || dimensions.y <= 0)
+        {
+            LogError(LogRenderer, "CreateTexture2DWithMips: Invalid dimensions (%d x %d)",
+                     dimensions.x, dimensions.y);
+            return nullptr;
+        }
+
+        uint32_t width  = static_cast<uint32_t>(dimensions.x);
+        uint32_t height = static_cast<uint32_t>(dimensions.y);
+        uint32_t mipCount = CalculateMipCount(width, height);
+
+        // Limit mip levels if requested (e.g., atlas textures need fewer mips
+        // to prevent cross-tile bleeding at high mip levels)
+        if (maxMipLevels > 0 && mipCount > maxMipLevels)
+        {
+            mipCount = maxMipLevels;
+        }
+
+        // Build TextureCreateInfo with full mip chain + UAV for compute mip gen
+        TextureCreateInfo createInfo;
+        createInfo.type        = TextureType::Texture2D;
+        createInfo.width       = width;
+        createInfo.height      = height;
+        createInfo.depth       = 1;
+        createInfo.mipLevels   = mipCount;
+        createInfo.arraySize   = 1;
+        createInfo.format      = DXGI_FORMAT_R8G8B8A8_UNORM;
+        createInfo.usage       = usage | TextureUsage::UnorderedAccess;
+        createInfo.initialData = image.GetRawData();
+        createInfo.debugName   = debugName.empty() ? "Texture2D_Mipped" : debugName.c_str();
+
+        // Calculate row pitch (256-byte aligned) and data size
+        uint32_t bytesPerPixel = 4; // RGBA8
+        createInfo.rowPitch    = (width * bytesPerPixel + 255) & ~255u;
+        createInfo.slicePitch  = createInfo.rowPitch * height;
+        createInfo.dataSize    = static_cast<size_t>(width) * height * bytesPerPixel;
+
+        auto texture = CreateTexture(createInfo);
+        if (!texture)
+        {
+            LogError(LogRenderer, "CreateTexture2DWithMips: Failed to create texture '%s'",
+                     debugName.c_str());
+            return nullptr;
+        }
+
+        // Generate mip chain via compute shader
+        // MipmapGenerator handles command list acquisition during init
+        if (!texture->GenerateMips(mipConfig))
+        {
+            LogError(LogRenderer, "CreateTexture2DWithMips: Mip generation failed for '%s'",
+                     debugName.c_str());
+            // Texture is still usable with mip 0 only, don't fail
+        }
+
+        core::LogInfo(LogRenderer,
+                      "CreateTexture2DWithMips: '%s' created (%ux%u, %u mips, bindless=%u)",
+                      debugName.c_str(), width, height, mipCount,
+                      texture->GetBindlessIndex());
+
         return std::shared_ptr<D12Texture>(texture.release());
     }
 
