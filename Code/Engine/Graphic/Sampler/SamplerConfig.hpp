@@ -31,6 +31,7 @@ namespace enigma::graphic
     namespace SamplerFilterMode
     {
         constexpr SamplerFilter Point            = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        constexpr SamplerFilter PointMipLinear   = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR;
         constexpr SamplerFilter Linear           = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
         constexpr SamplerFilter Anisotropic      = D3D12_FILTER_ANISOTROPIC;
         constexpr SamplerFilter ComparisonLinear = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
@@ -178,6 +179,21 @@ namespace enigma::graphic
             config.addressU = SamplerAddressMode::Wrap;
             config.addressV = SamplerAddressMode::Wrap;
             config.addressW = SamplerAddressMode::Wrap;
+            return config;
+        }
+
+        /**
+         * @brief Point texel filtering + linear mip interpolation with clamp
+         * Pixel-perfect texels (Minecraft style) with smooth LOD transitions.
+         * Eliminates visible mip level "pop lines" on cutout textures.
+         */
+        static inline SamplerConfig PointMipLinearClamp()
+        {
+            SamplerConfig config;
+            config.filter   = SamplerFilterMode::PointMipLinear;
+            config.addressU = SamplerAddressMode::Clamp;
+            config.addressV = SamplerAddressMode::Clamp;
+            config.addressW = SamplerAddressMode::Clamp;
             return config;
         }
 

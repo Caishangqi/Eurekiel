@@ -6,6 +6,8 @@
 #include "Engine/Core/StringUtils.hpp"
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp"
+#include "Engine/Graphic/Mipmap/MipmapGenerator.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
@@ -301,7 +303,8 @@ void RendererSubsystem::Startup()
             SamplerConfig::Point(), // sampler1: Point filtering, clamp
             SamplerConfig::Shadow(), // sampler2: Shadow comparison
             SamplerConfig::PointWrap(), // sampler3: Point filtering, wrap
-            SamplerConfig::LinearClamp() // sampler4: Linear filtering, clamp (screen-space effects)
+            SamplerConfig::LinearClamp(), // sampler4: Linear filtering, clamp (screen-space effects)
+            SamplerConfig::PointMipLinearClamp() // sampler5: Point texel + linear mip (cutout LOD)
         };
 
         // [RAII] Create SamplerProvider with UniformManager dependency injection
@@ -347,6 +350,12 @@ void RendererSubsystem::Startup()
 
     /// Full Screen Quads Renderer
     m_fullQuadsRenderer = std::make_unique<FullQuadsRenderer>();
+
+    // Subscribe static services to pipeline events (before broadcast)
+    MipmapGenerator::Initialize();
+
+    // Broadcast: all core render systems are ready
+    RendererEvents::OnPipelineReady.Broadcast();
 }
 
 void RendererSubsystem::Shutdown()

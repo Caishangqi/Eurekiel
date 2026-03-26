@@ -21,6 +21,7 @@
  * - sampler2: Shadow comparison sampler
  * - sampler3: Point filter + wrap addressing
  * - sampler4: Linear filter + clamp (screen-space effects: bloom, SSR, etc.)
+ * - sampler5: Point texel + linear mip + clamp (cutout LOD: smooth mip transitions)
  *
  * C++ Counterpart: Engine/Code/Engine/Graphic/Shader/Uniform/SamplerIndicesBuffer.hpp
  *
@@ -97,6 +98,7 @@ SamplerState GetSampler(uint index)
 //   sampler2 = Shadow sampler  (replaces shadowSampler)
 //   sampler3 = Point + Wrap    (replaces wrapSampler)
 //   sampler4 = Linear + Clamp  (screen-space effects: bloom, SSR, composites)
+//   sampler5 = Point + MipLinear + Clamp (cutout textures: smooth mip LOD)
 // =============================================================================
 
 #define sampler0 GetSampler(0)
@@ -104,6 +106,7 @@ SamplerState GetSampler(uint index)
 #define sampler2 GetSampler(2)
 #define sampler3 GetSampler(3)
 #define sampler4 GetSampler(4)
+#define sampler5 GetSampler(5)
 
 // =============================================================================
 // [LEGACY COMPATIBILITY] Sampler Aliases
