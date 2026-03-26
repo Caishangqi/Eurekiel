@@ -7,6 +7,7 @@
 namespace enigma::graphic
 {
     // Static member definitions
+    enigma::event::MulticastDelegate<> RendererEvents::OnPipelineReady;
     enigma::event::MulticastDelegate<> RendererEvents::OnBeginFrame;
     enigma::event::MulticastDelegate<> RendererEvents::OnEndFrame;
 } // namespace enigma::graphic

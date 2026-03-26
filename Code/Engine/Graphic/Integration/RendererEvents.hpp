@@ -24,6 +24,16 @@ namespace enigma::graphic
     struct RendererEvents
     {
         // ====================================================================
+        // Pipeline Lifecycle Events
+        // ====================================================================
+
+        // Fired once at the end of RendererSubsystem::Startup().
+        // All core systems are ready: UniformManager, ColorTextureProvider,
+        // DepthTextureProvider, SamplerProvider, RingBuffers, etc.
+        // Subscribers can safely compile shaders, create PSOs, register buffers.
+        static enigma::event::MulticastDelegate<> OnPipelineReady;
+
+        // ====================================================================
         // Frame Lifecycle Events
         // ====================================================================
 
