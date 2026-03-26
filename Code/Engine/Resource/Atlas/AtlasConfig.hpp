@@ -9,6 +9,16 @@
 namespace enigma::resource
 {
     /**
+     * BorderExtrusionMode - How padding pixels are filled around atlas sprites
+     * CLAMP_TO_EDGE replicates edge pixels to prevent mipmap color bleeding
+     */
+    enum class BorderExtrusionMode
+    {
+        NONE,           // Padding stays transparent (debug only)
+        CLAMP_TO_EDGE   // Replicate edge pixels into padding (prevents mipmap bleeding)
+    };
+
+    /**
      * AtlasSourceType - Defines how textures are collected for atlas building
      * Following Minecraft's atlas configuration patterns
      */
@@ -113,6 +123,7 @@ namespace enigma::resource
         // Atlas generation settings
         IntVec2 maxAtlasSize  = IntVec2(4096, 4096); // Maximum atlas size (GPU limit consideration)
         int     padding       = 0; // Padding between sprites (prevent bleeding)
+        BorderExtrusionMode borderMode = BorderExtrusionMode::CLAMP_TO_EDGE; // How padding pixels are filled
         bool    allowRotation = false; // Allow sprite rotation for better packing (disabled for simplicity)
 
         // Export settings

@@ -544,6 +544,7 @@ namespace enigma::resource
     {
         AtlasConfig config("blocks");
         config.requiredResolution = resolution;
+        config.padding = 4; // Prevent mipmap bleeding across tile boundaries (safe for 3 mip levels)
         // Keep hardcoded for backward compatibility - use overload for auto-discovery
         config.AddDirectorySource("textures/block/", {"minecraft", "testmod", "simpleminer"});
         config.exportPNG = true;
@@ -554,6 +555,7 @@ namespace enigma::resource
     {
         AtlasConfig config("blocks");
         config.requiredResolution = resolution;
+        config.padding = 4; // Prevent mipmap bleeding across tile boundaries (safe for 3 mip levels)
         config.AddDirectorySource("textures/block/", namespaces);
         config.exportPNG = true;
         return config;

@@ -1,4 +1,5 @@
 #include "TextureAtlas.hpp"
+#include "AtlasBorderHelper.hpp"
 #include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Core/StringUtils.hpp"
 #include "../../Core/FileSystemHelper.hpp"
@@ -33,7 +34,7 @@ namespace enigma::resource
           , m_atlasImage(nullptr)
           , m_atlasDimensions(IntVec2::ZERO)
           , m_isBuilt(false)
-          , m_gridResolution(config.requiredResolution)
+          , m_gridResolution(config.requiredResolution + 2 * config.padding)
           , m_atlasTexture(nullptr)
     {
         m_metadata.type = ResourceType::TEXTURE;
@@ -343,8 +344,8 @@ namespace enigma::resource
         // Create atlas image
         m_atlasImage = std::make_unique<Image>(m_atlasDimensions, Rgba8(0, 0, 0, 0)); // Transparent background
 
-        // Initialize packing grid
-        InitializePackingGrid(m_atlasDimensions, m_config.requiredResolution);
+        // Initialize packing grid (cell size includes padding)
+        InitializePackingGrid(m_atlasDimensions, m_gridResolution);
 
         // Pack each sprite
         for (const auto& imageRes : images)
@@ -359,18 +360,22 @@ namespace enigma::resource
                     continue;
             }
 
-            // Find position for this sprite
-            IntVec2 spriteSize(m_config.requiredResolution, m_config.requiredResolution);
-            IntVec2 position;
+            // Find position for this sprite (cell size includes padding)
+            IntVec2 cellSize(m_gridResolution, m_gridResolution);
+            IntVec2 cellPosition;
 
-            if (!TryPackSprite(spriteSize, position))
+            if (!TryPackSprite(cellSize, cellPosition))
             {
                 // Atlas is full, could implement multiple atlas support here
                 break;
             }
 
-            // Create atlas sprite entry
-            AtlasSprite sprite(imageRes->GetResourceLocation(), position, spriteSize, resolution);
+            // Sprite content is offset by padding within the cell
+            IntVec2 spritePosition = cellPosition + IntVec2(m_config.padding, m_config.padding);
+            IntVec2 spriteSize(m_config.requiredResolution, m_config.requiredResolution);
+
+            // Create atlas sprite entry (position = content area, not cell)
+            AtlasSprite sprite(imageRes->GetResourceLocation(), spritePosition, spriteSize, resolution);
             m_sprites.push_back(sprite);
             m_spriteLocationMap[imageRes->GetResourceLocation()] = m_sprites.size() - 1;
 
@@ -378,14 +383,22 @@ namespace enigma::resource
             if (resolution == m_config.requiredResolution)
             {
                 // Direct copy
-                CopyImageToAtlas(imageRes->GetImage(), position);
+                CopyImageToAtlas(imageRes->GetImage(), spritePosition);
             }
             else if (m_config.autoScale)
             {
                 // Scale and copy
                 Image scaledImage(spriteSize, Rgba8::WHITE);
                 ScaleImageIfNeeded(imageRes->GetImage(), scaledImage, m_config.requiredResolution);
-                CopyImageToAtlas(scaledImage, position);
+                CopyImageToAtlas(scaledImage, spritePosition);
+            }
+
+            // Extrude edge pixels into padding area for mipmap bleeding prevention
+            if (m_config.padding > 0)
+            {
+                AtlasBorderHelper::ExtrudeBorders(
+                    *m_atlasImage, spritePosition, spriteSize,
+                    m_config.padding, m_config.borderMode);
             }
         }
 
@@ -448,8 +461,9 @@ namespace enigma::resource
 
     IntVec2 TextureAtlas::FindBestAtlasSize(int totalSprites, int spriteResolution) const
     {
-        // Calculate minimum area needed
-        int totalArea = totalSprites * spriteResolution * spriteResolution;
+        // Calculate minimum area needed (account for padding around each sprite)
+        int effectiveCellSize = spriteResolution + 2 * m_config.padding;
+        int totalArea = totalSprites * effectiveCellSize * effectiveCellSize;
         int minSize   = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(totalArea))));
 
         // Round up to next power of 2 for GPU efficiency
