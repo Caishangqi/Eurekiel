@@ -401,6 +401,9 @@
     <Content Include="..\..\.enigma\assets\engine\shaders\include\worldinfo_uniforms.hlsl"/>
     <Content Include="..\..\.enigma\assets\engine\shaders\core\mipmapGeneration.cs.hlsl" />
     <Content Include="..\..\.enigma\assets\engine\shaders\include\mipgen_uniforms.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\core\mipmapGeneration_alphaWeighted.cs.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\core\mipmapGeneration_alphaWeightedSrgb.cs.hlsl" />
+    <Content Include="..\..\.enigma\assets\engine\shaders\core\mipmapGeneration_srgb.cs.hlsl" />
     <ClCompile Include="..\ThirdParty\TineyXML2\tinyxml2.cpp" />
     <!-- ImGui Core -->
     <ClCompile Include="..\ThirdParty\imgui\imgui.cpp" />
@@ -674,6 +677,7 @@
     <ClCompile Include="Resource\Atlas\ImageResource.cpp" />
     <ClCompile Include="Resource\Atlas\ImageLoader.cpp" />
     <ClCompile Include="Resource\Atlas\TextureAtlas.cpp" />
+    <ClCompile Include="Resource\Atlas\AtlasBorderHelper.cpp" />
     <ClCompile Include="Resource\Atlas\AtlasManager.cpp" />
     <ClCompile Include="Resource\Sound\SoundLoader.cpp" />
     <ClCompile Include="Resource\Sound\SoundResource.cpp" />
@@ -1057,6 +1061,9 @@
     <ClInclude Include="Graphic\Integration\FullQuadsRenderer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\IndexRingBuffer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\VertexRingBuffer.hpp"/>
+    <ClInclude Include="Graphic\Mipmap\MipmapCommon.hpp" />
+    <ClInclude Include="Graphic\Mipmap\MipmapConfig.hpp" />
+    <ClInclude Include="Graphic\Mipmap\MipmapGenerator.hpp" />
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
@@ -1334,6 +1341,7 @@
     <ClInclude Include="Resource\Atlas\ImageResource.hpp" />
     <ClInclude Include="Resource\Atlas\ImageLoader.hpp" />
     <ClInclude Include="Resource\Atlas\TextureAtlas.hpp" />
+    <ClInclude Include="Resource\Atlas\AtlasBorderHelper.hpp" />
     <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
     <ClInclude Include="Resource\Sound\SoundLoader.hpp" />
     <ClInclude Include="Resource\Sound\SoundResource.hpp" />
