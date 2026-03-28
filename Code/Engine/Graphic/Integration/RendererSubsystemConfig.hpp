@@ -438,8 +438,15 @@ namespace enigma::graphic
 
         // ==================== 未来扩展配置 (Milestone 3.X+) ====================
 
-        // TODO: VSync配置
-        // bool enableVSync = true;
+        /**
+         * @brief Enable vertical sync
+         *
+         * - true:  syncInterval=1, caps FPS to monitor refresh rate, no tearing
+         * - false: syncInterval=0, uncapped FPS, may tear
+         *
+         * YAML config: rendering.vsync
+         */
+        bool enableVSync = true;
 
         // TODO: MSAA配置
         // int msaaSampleCount = 1; // 1=无MSAA, 2/4/8=MSAA采样数

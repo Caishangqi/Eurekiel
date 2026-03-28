@@ -301,6 +301,11 @@ namespace enigma::graphic
         LogInfo("RendererSubsystemConfig", "Shader entry point: %s", result.shaderEntryPoint.c_str());
 
         std::string bbFormatStr = yamlOpt->GetString("rendering.backbufferFormat", "");
+
+        // Parse VSync setting
+        // YAML path: rendering.vsync
+        result.enableVSync = yamlOpt->GetBoolean("rendering.vsync", true);
+        LogInfo("RendererSubsystemConfig", "VSync: %s", result.enableVSync ? "enabled" : "disabled");
         if (!bbFormatStr.empty())
         {
             auto bbFormatOpt = DXGIFormatParser::Parse(bbFormatStr);

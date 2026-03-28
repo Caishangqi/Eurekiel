@@ -48,6 +48,11 @@ rendering:
   # Render height in pixels
   height: 1080
 
+  # Vertical sync
+  #   - true:  Cap FPS to monitor refresh rate, no tearing (default)
+  #   - false: Uncapped FPS, may tear
+  vsync: false
+
   # Maximum frames in flight [2-3]
   #   - 2: Double buffering (lower latency, GPU may wait)
   #   - 3: Triple buffering (recommended, balanced)
@@ -191,9 +196,6 @@ rendertargets:
 # Future Extensions (Milestone 3.X+)
 # ==============================================================================
 # Reserved for future implementation:
-#
-# vsync:
-#   enabled: true
 #
 # msaa:
 #   sampleCount: 1    # 1=disabled, 2/4/8=MSAA samples

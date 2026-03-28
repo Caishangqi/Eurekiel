@@ -737,7 +737,7 @@ namespace enigma::graphic
      * a command list when no frame command list is active.
      */
     std::shared_ptr<D12Texture> D3D12RenderSystem::CreateTexture2DWithMips(
-        Image& image, TextureUsage usage, const std::string& debugName,
+        Image&   image, TextureUsage               usage, const std::string& debugName,
         uint32_t maxMipLevels, const MipmapConfig& mipConfig)
     {
         if (!image.GetRawData())
@@ -754,8 +754,8 @@ namespace enigma::graphic
             return nullptr;
         }
 
-        uint32_t width  = static_cast<uint32_t>(dimensions.x);
-        uint32_t height = static_cast<uint32_t>(dimensions.y);
+        uint32_t width    = static_cast<uint32_t>(dimensions.x);
+        uint32_t height   = static_cast<uint32_t>(dimensions.y);
         uint32_t mipCount = CalculateMipCount(width, height);
 
         // Limit mip levels if requested (e.g., atlas textures need fewer mips
@@ -1418,8 +1418,8 @@ namespace enigma::graphic
     void D3D12RenderSystem::UAVBarrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* resource)
     {
         D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type          = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        barrier.UAV.pResource = resource;
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrier.UAV.pResource          = resource;
         cmdList->ResourceBarrier(1, &barrier);
     }
 
@@ -1433,7 +1433,7 @@ namespace enigma::graphic
 
         auto* allocator = GetBindlessIndexAllocator();
         auto* heapMgr   = GetGlobalDescriptorHeapManager();
-        auto* device     = GetDevice();
+        auto* device    = GetDevice();
 
         uint32_t index = allocator->AllocateTextureIndex();
         if (index == BindlessIndexAllocator::INVALID_INDEX)
@@ -1670,7 +1670,7 @@ namespace enigma::graphic
         // 3. Present SwapChain（显示到屏幕）
         // 教学要点：Present将后台缓冲区显示到屏幕，并轮换缓冲区
         // DirectX 12会在Present()内部自动处理资源状态转换
-        if (!Present(true)) // vsync = true
+        if (!Present(g_theRendererSubsystem->GetConfiguration().enableVSync))
         {
             LogError(LogRenderer,
                      "EndFrame: Failed to present frame");
