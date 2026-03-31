@@ -20,6 +20,7 @@
 
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/StringUtils.hpp"
 
@@ -162,6 +163,12 @@ namespace enigma::graphic
         const size_t dataSize     = vertexCount * stride;
         const size_t requiredSize = m_currentOffset + dataSize;
 
+        // Frame partition boundary check (multi-frame in-flight safety)
+        if (m_partitionEnd > 0 && requiredSize > m_partitionEnd)
+        {
+            ERROR_AND_DIE("VertexRingBuffer: frame partition overflow");
+        }
+
         // [STEP 3] Ensure buffer has sufficient capacity
         EnsureCapacity(requiredSize);
 
@@ -234,6 +241,23 @@ namespace enigma::graphic
         // Reset offset to beginning at frame start
         // Previous frame data is still valid on GPU (fence synchronized)
         m_currentOffset = 0;
+        m_partitionEnd  = 0;
+    }
+
+    //-------------------------------------------------------------------------------------------
+    // ResetForFrame - frame-partitioned reset for multi-frame in-flight
+    //-------------------------------------------------------------------------------------------
+    void VertexRingBuffer::ResetForFrame()
+    {
+        uint32_t frameIndex = D3D12RenderSystem::GetFrameIndex();
+        constexpr uint32_t maxFIF = MAX_FRAMES_IN_FLIGHT;
+
+        size_t capacity      = GetCapacity();
+        size_t partitionSize = capacity / maxFIF;
+        size_t partitionStart = frameIndex * partitionSize;
+
+        m_currentOffset = partitionStart;
+        m_partitionEnd  = partitionStart + partitionSize;
     }
 
     //-------------------------------------------------------------------------------------------

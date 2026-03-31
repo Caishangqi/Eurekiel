@@ -738,6 +738,69 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(Type type, con
 }
 
 /**
+ * Acquire a command list using an external command allocator (e.g. from FrameContext).
+ * The wrapper's internal allocator is left untouched - only the command list is
+ * Reset with the provided allocator. If no wrappers are available, tries to
+ * recycle completed ones before failing.
+ */
+ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(
+    Type type, ID3D12CommandAllocator* externalAllocator, const std::string& debugName)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    if (!externalAllocator)
+    {
+        enigma::core::LogError(LogRenderer,
+                               "AcquireCommandList: externalAllocator is null");
+        return nullptr;
+    }
+
+    auto& availableQueue = GetAvailableQueue(type);
+
+    // If no wrappers available, try recycling completed ones first
+    if (availableQueue.empty())
+    {
+        UpdateCompletedCommandLists();
+    }
+
+    if (availableQueue.empty())
+    {
+        enigma::core::LogError(LogRenderer,
+                               "AcquireCommandList: no available %s command lists after recycle attempt",
+                               GetTypeName(type));
+        return nullptr;
+    }
+
+    CommandListWrapper* wrapper = availableQueue.front();
+    availableQueue.pop();
+
+    assert(wrapper != nullptr);
+    assert(wrapper->state == State::Closed);
+
+    // Reset command list with external allocator (skip internal allocator reset)
+    HRESULT hr = wrapper->commandList->Reset(externalAllocator, nullptr);
+    if (FAILED(hr))
+    {
+        enigma::core::LogError(LogRenderer,
+                               "AcquireCommandList: Reset with external allocator failed, HRESULT=0x%08X", hr);
+        availableQueue.push(wrapper);
+        return nullptr;
+    }
+
+    wrapper->state      = State::Recording;
+    wrapper->fenceValue = 0;
+
+    if (!debugName.empty())
+    {
+        wrapper->debugName = debugName;
+        std::wstring wDebugName(debugName.begin(), debugName.end());
+        wrapper->commandList->SetName(wDebugName.c_str());
+    }
+
+    return wrapper->commandList.Get();
+}
+
+/**
  * @brief 提交命令列表执行
  *
  * 教学要点: DirectX 12的命令提交和同步机制

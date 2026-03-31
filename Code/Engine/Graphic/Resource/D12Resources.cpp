@@ -105,20 +105,31 @@ namespace enigma::graphic
     }
 
     /**
-     * 释放资源实现
-     * 教学要点：安全释放DX12资源，避免重复释放
+     * Release resource implementation.
+     * With multi-frame in-flight (N>1), the GPU may still be referencing this
+     * resource from a previous frame. Flush all in-flight work before releasing.
      */
     void D12Resource::ReleaseResource()
     {
         if (m_resource)
         {
-            // DirectX 12资源使用COM接口
-            // Release()会减少引用计数，当计数为0时自动销毁
+            // When multiple frames can be in-flight, the GPU may still be
+            // reading this resource from a previous frame's command list.
+            // Flush to ensure GPU is idle before releasing.
+            if (MAX_FRAMES_IN_FLIGHT > 1)
+            {
+                auto* cmdListMgr = D3D12RenderSystem::GetCommandListManager();
+                if (cmdListMgr && cmdListMgr->IsInitialized())
+                {
+                    cmdListMgr->FlushAllCommandLists();
+                }
+            }
+
             m_resource->Release();
             m_resource = nullptr;
         }
 
-        // 重置状态
+        // Reset state
         m_currentState = D3D12_RESOURCE_STATE_COMMON;
         m_size         = 0;
         m_isValid      = false;

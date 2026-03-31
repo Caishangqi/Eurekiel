@@ -11,6 +11,7 @@
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
 #include "Engine/Graphic/Resource/GlobalDescriptorHeapManager.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp"
 
 namespace enigma::graphic
 {
@@ -31,8 +32,10 @@ namespace enigma::graphic
             m_cbvSrvUavDescriptorIncrementSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
 
-        // Step 3: Pre-allocate Ring Descriptor Pool (MAX_RING_FRAMES * MAX_CUSTOM_BUFFERS)
-        const uint32_t totalDescriptors = BindlessRootSignature::MAX_RING_FRAMES * BindlessRootSignature::MAX_CUSTOM_BUFFERS;
+        // Step 3: Pre-allocate Frame-Isolated Ring Descriptor Pool
+        // Each in-flight frame gets its own descriptor region to prevent CPU/GPU race conditions.
+        // Layout: [Frame0: Draw0..Draw1023] [Frame1: Draw0..Draw1023], each draw has MAX_CUSTOM_BUFFERS slots
+        const uint32_t totalDescriptors = MAX_FRAMES_IN_FLIGHT * BindlessRootSignature::MAX_RING_FRAMES * BindlessRootSignature::MAX_CUSTOM_BUFFERS;
         auto           allocations      = heapMgr->BatchAllocateCustomCbv(totalDescriptors);
         if (allocations.size() != totalDescriptors)
         {
@@ -67,12 +70,34 @@ namespace enigma::graphic
 
         m_initialized = true;
 
-        LogInfo(LogUniform, "UniformManager: %u Ring Descriptors allocated (MAX_RING_FRAMES=%u * MAX_CUSTOM_BUFFERS=%u)",
-                totalDescriptors, BindlessRootSignature::MAX_RING_FRAMES, BindlessRootSignature::MAX_CUSTOM_BUFFERS);
+        // Subscribe to OnBeginFrame to auto-update frame index on all strategies
+        m_beginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &UniformManager::SetFrameIndex);
+
+        LogInfo(LogUniform, "UniformManager: %u Ring Descriptors allocated (Frames=%u * Draws=%u * Slots=%u)",
+                totalDescriptors, MAX_FRAMES_IN_FLIGHT, BindlessRootSignature::MAX_RING_FRAMES, BindlessRootSignature::MAX_CUSTOM_BUFFERS);
     }
 
     UniformManager::~UniformManager()
     {
+        // Unsubscribe from OnBeginFrame delegate
+        if (m_beginFrameHandle != 0)
+        {
+            RendererEvents::OnBeginFrame.Remove(m_beginFrameHandle);
+            m_beginFrameHandle = 0;
+        }
+    }
+
+    void UniformManager::SetFrameIndex()
+    {
+        for (auto& [typeId, state] : m_bufferStates)
+        {
+            if (state.strategy)
+            {
+                state.strategy->SetFrameIndex();
+            }
+        }
+        // Custom buffer CBVs are pre-created at registration time with frame-isolated
+        // descriptor regions, so no per-frame CBV update is needed.
     }
 
     void UniformManager::IncrementDrawCount()
@@ -248,38 +273,66 @@ namespace enigma::graphic
                 throw DescriptorHeapException("Failed to allocate descriptor for Custom Buffer");
             }
 
-            // Create CBV for ALL Ring Frames
+            // Create CBV for ALL frames x ALL draws (frame-isolated Ring Descriptor Table)
+            // Each in-flight frame gets its own descriptor region, preventing CPU/GPU race.
+            // CBVs are deterministic and never need per-frame updates.
             auto* device = D3D12RenderSystem::GetDevice();
             if (!device)
             {
                 throw DescriptorHeapException("D3D12 device not available for CBV creation");
             }
 
-            D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress     = gpuBuffer->GetGPUVirtualAddress();
-            size_t                    effectiveRingCount = std::min(ringBufferCount, static_cast<size_t>(BindlessRootSignature::MAX_RING_FRAMES));
+            D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress = gpuBuffer->GetGPUVirtualAddress();
 
-            for (uint32_t ringFrame = 0; ringFrame < BindlessRootSignature::MAX_RING_FRAMES; ++ringFrame)
+            bool   isPerObject   = (freq == UpdateFrequency::PerObject);
+            bool   isPerFrame    = (freq == UpdateFrequency::PerFrame);
+            size_t perFrameDraws = isPerObject ? (ringBufferCount / MAX_FRAMES_IN_FLIGHT) : 0;
+
+            for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame)
             {
-                uint32_t descriptorIndex = ringFrame * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
-                if (descriptorIndex >= m_customBufferDescriptorPool.size())
+                for (uint32_t draw = 0; draw < BindlessRootSignature::MAX_RING_FRAMES; ++draw)
                 {
-                    LogError(LogUniform, "Descriptor index %u out of range (pool size=%zu)", descriptorIndex, m_customBufferDescriptorPool.size());
-                    continue;
+                    uint32_t globalRingPage  = frame * BindlessRootSignature::MAX_RING_FRAMES + draw;
+                    uint32_t descriptorIndex = globalRingPage * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
+
+                    if (descriptorIndex >= m_customBufferDescriptorPool.size())
+                    {
+                        LogError(LogUniform, "Descriptor index %u out of range (pool size=%zu)",
+                                 descriptorIndex, m_customBufferDescriptorPool.size());
+                        continue;
+                    }
+
+                    size_t sliceIndex;
+                    if (isPerObject)
+                    {
+                        // Frame F, Draw D -> buffer slot (F * perFrameDraws + D) % totalSlots
+                        sliceIndex = (frame * perFrameDraws + draw) % ringBufferCount;
+                    }
+                    else if (isPerFrame)
+                    {
+                        // Frame F -> buffer slot F (same data for all draws within a frame)
+                        sliceIndex = frame;
+                    }
+                    else
+                    {
+                        // Static/PerPass/PerDispatch: always slot 0
+                        sliceIndex = 0;
+                    }
+
+                    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle    = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
+                    D3D12_GPU_VIRTUAL_ADDRESS   sliceAddress = baseGpuAddress + sliceIndex * alignedSize;
+
+                    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+                    cbvDesc.BufferLocation                  = sliceAddress;
+                    cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
+
+                    device->CreateConstantBufferView(&cbvDesc, cpuHandle);
                 }
-
-                D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle    = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
-                size_t                      sliceIndex   = ringFrame % effectiveRingCount;
-                D3D12_GPU_VIRTUAL_ADDRESS   sliceAddress = baseGpuAddress + sliceIndex * alignedSize;
-
-                D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-                cbvDesc.BufferLocation                  = sliceAddress;
-                cbvDesc.SizeInBytes                     = static_cast<UINT>(alignedSize);
-
-                device->CreateConstantBufferView(&cbvDesc, cpuHandle);
             }
 
-            LogInfo(LogUniform, "Created %u CBVs for Custom Buffer Slot=%u, Base GPU=0x%llX",
-                    BindlessRootSignature::MAX_RING_FRAMES, slotId, baseGpuAddress);
+            LogInfo(LogUniform, "Created %u CBVs for Custom Buffer Slot=%u (Frames=%u * Draws=%u), Base GPU=0x%llX",
+                    MAX_FRAMES_IN_FLIGHT * BindlessRootSignature::MAX_RING_FRAMES, slotId,
+                    MAX_FRAMES_IN_FLIGHT, BindlessRootSignature::MAX_RING_FRAMES, baseGpuAddress);
         }
 
         // Create unified UniformBufferState with strategy
@@ -296,6 +349,12 @@ namespace enigma::graphic
 
         m_bufferStates[typeId] = std::move(state);
         m_frequencyToSlotsMap[freq].push_back(slotId);
+
+        // [PERF] Populate engine buffer cache for O(1) lookup in GetEngineBufferGPUAddress
+        if (space == BufferSpace::Engine && slotId < ENGINE_SLOT_COUNT)
+        {
+            m_engineBufferCache[slotId] = &m_bufferStates[typeId];
+        }
 
         const char* spaceStr = (space == BufferSpace::Engine) ? "Engine" : "Custom";
         LogInfo(LogUniform, "%s Buffer registered: Slot=%u, Space=%u, Size=%zu, Freq=%d, Count=%zu",
@@ -458,9 +517,13 @@ namespace enigma::graphic
     // ========================================================================
     D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex) const
     {
-        D3D12_GPU_DESCRIPTOR_HANDLE handle             = m_customBufferDescriptorTableBaseGPUHandle;
-        uint32_t                    effectiveRingIndex = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
-        handle.ptr                                     += effectiveRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS * m_cbvSrvUavDescriptorIncrementSize;
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = m_customBufferDescriptorTableBaseGPUHandle;
+        // Frame-isolated: each in-flight frame has its own descriptor region
+        // globalRingIndex = frameIndex * MAX_DRAWS_PER_FRAME + drawIndex
+        uint32_t frameIndex      = D3D12RenderSystem::GetFrameIndex();
+        uint32_t drawRingIndex   = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
+        uint32_t globalRingIndex = frameIndex * BindlessRootSignature::MAX_RING_FRAMES + drawRingIndex;
+        handle.ptr += globalRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS * m_cbvSrvUavDescriptorIncrementSize;
         return handle;
     }
 
@@ -485,21 +548,14 @@ namespace enigma::graphic
     // ========================================================================
     D3D12_GPU_VIRTUAL_ADDRESS UniformManager::GetEngineBufferGPUAddress(uint32_t slotId) const
     {
-        if (!BufferHelper::IsEngineReservedSlot(slotId))
+        // [PERF] Direct array lookup instead of two hash map lookups
+        if (slotId >= ENGINE_SLOT_COUNT)
         {
-            LogError(LogUniform, "Slot %u is not an engine reserved slot", slotId);
             return 0;
         }
 
-        // [REFACTORED] Use unified m_bufferStates via GetBufferStateBySlot
-        auto* state = GetBufferStateBySlot(slotId, 0); // space=0 for Engine
+        auto* state = m_engineBufferCache[slotId];
         if (!state || !state->buffer)
-        {
-            return 0;
-        }
-
-        // Skip if this is a Custom Buffer (space=1)
-        if (state->space == BufferSpace::Custom)
         {
             return 0;
         }

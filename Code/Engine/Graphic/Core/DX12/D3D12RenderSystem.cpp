@@ -59,6 +59,11 @@ namespace enigma::graphic
 
     bool D3D12RenderSystem::s_isInitialized = false;
 
+    // Multi-Frame In-Flight static members (Phase 1)
+    FrameContext D3D12RenderSystem::s_frameContexts[4]  = {};
+    uint32_t     D3D12RenderSystem::s_frameIndex        = 0;
+    uint64_t     D3D12RenderSystem::s_globalFrameCount  = 0;
+
     // ===== Public API implementation =====
 
     /**
@@ -98,13 +103,34 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. Initialize SM6.6 Bindless components (Milestone 2.7)
+        // 4. Create per-frame command allocators for multi-frame in-flight
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            HRESULT hr = s_device->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                IID_PPV_ARGS(&s_frameContexts[i].commandAllocator)
+            );
+            if (FAILED(hr))
+            {
+                core::LogError(LogRenderer,
+                               "Failed to create command allocator for FrameContext[%u], HRESULT=0x%08X", i, hr);
+                return false;
+            }
+            s_frameContexts[i].fenceValue = 0;
+        }
+        s_frameIndex       = 0;
+        s_globalFrameCount = 0;
 
-        // 4.1 Create Bindless Index Allocator (纯索引分配器)
+        core::LogInfo(LogRenderer,
+                      "Created %u FrameContext command allocators", MAX_FRAMES_IN_FLIGHT);
+
+        // 5. Initialize SM6.6 Bindless components (Milestone 2.7)
+
+        // 5.1 Create Bindless Index Allocator (纯索引分配器)
         s_bindlessIndexAllocator = std::make_unique<BindlessIndexAllocator>();
         // 构造函数自动初始化，无需调用Initialize()
 
-        // 4.2 Create Global Descriptor Heap Manager (全局描述符堆)
+        // 5.2 Create Global Descriptor Heap Manager (全局描述符堆)
         s_globalDescriptorHeapManager = std::make_unique<GlobalDescriptorHeapManager>();
         if (!s_globalDescriptorHeapManager->Initialize())
         {
@@ -116,7 +142,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4.3 Create SM6.6 Bindless Root Signature (极简Root Signature)
+        // 5.3 Create SM6.6 Bindless Root Signature (极简Root Signature)
         s_bindlessRootSignature = std::make_unique<BindlessRootSignature>();
         if (!s_bindlessRootSignature->Initialize())
         {
@@ -130,7 +156,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // 5. Create SwapChain (if window handle is provided)
+        // 6. Create SwapChain (if window handle is provided)
         if (hwnd)
         {
             if (!CreateSwapChain(hwnd, renderWidth, renderHeight))
@@ -234,7 +260,16 @@ namespace enigma::graphic
             s_commandListManager.reset();
         }
 
-        // 2. 释放系统默认纹理（必须在Bindless组件关闭之前）
+        // 2. Release FrameContext command allocators (GPU is idle after step 1)
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            s_frameContexts[i].commandAllocator.Reset();
+            s_frameContexts[i].fenceValue = 0;
+        }
+        s_frameIndex       = 0;
+        s_globalFrameCount = 0;
+
+        // 3. Release default textures (must be before Bindless components)
         // 教学要点：这些纹理持有Bindless索引，必须先释放
         if (s_defaultWhiteTexture)
         {
@@ -249,7 +284,7 @@ namespace enigma::graphic
             s_defaultNormalTexture.reset();
         }
 
-        // 3. Clean up SM6.6 Bindless components (Milestone 2.7)
+        // 4. Clean up SM6.6 Bindless components (Milestone 2.7)
         if (s_bindlessRootSignature)
         {
             s_bindlessRootSignature->Shutdown();
@@ -268,7 +303,7 @@ namespace enigma::graphic
             s_bindlessIndexAllocator.reset();
         }
 
-        // 4. Clean up SwapChain resources
+        // 5. Clean up SwapChain resources
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
             if (s_swapChainBuffers[i])
@@ -282,7 +317,21 @@ namespace enigma::graphic
         s_currentBackBufferIndex = 0;
         s_swapChainBufferCount   = 3;
 
-        // 5. Release DirectX 12 object (ComPtr will be automatically released)
+        // 6. Report live objects before releasing device (debug diagnostics)
+#if defined(_DEBUG)
+        {
+            Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
+            if (SUCCEEDED(s_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
+            {
+                DebuggerPrintf("\n========== D3D12 ReportLiveObjects (before device release) ==========\n");
+                debugDevice->ReportLiveDeviceObjects(
+                    D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+                DebuggerPrintf("========== End ReportLiveObjects ==========\n\n");
+            }
+        }
+#endif
+
+        // 7. Release DirectX 12 object (ComPtr will be automatically released)
         s_adapter.Reset();
         s_dxgiFactory.Reset();
         s_device.Reset();
@@ -1256,6 +1305,34 @@ namespace enigma::graphic
             ERROR_AND_DIE("Failed to create D3D12 device")
         }
 
+        // Suppress known harmless D3D12 debug warnings via Info Queue filter.
+        // - CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE (820): SkyBasicRenderPass clears
+        //   colortex0 with dynamic fog color that cannot match the static optimizedClearValue.
+        // - CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE (821): Same category, dynamic clears.
+        // - CREATEGRAPHICSPIPELINESTATE_RENDERTARGETVIEW_NOT_SET (679): ShaderCodeGenerator
+        //   may generate PSOutput with more targets than the render pass binds. D3D12 confirms
+        //   "writes of an unbound Render Target View are discarded" - no correctness impact.
+        // These are performance hints only; rendering works correctly.
+#ifdef _DEBUG
+        Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+        if (SUCCEEDED(s_device->QueryInterface(IID_PPV_ARGS(&infoQueue))))
+        {
+            D3D12_MESSAGE_ID suppressedIds[] =
+            {
+                D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+                D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
+                D3D12_MESSAGE_ID_CREATEGRAPHICSPIPELINESTATE_RENDERTARGETVIEW_NOT_SET,
+            };
+
+            D3D12_INFO_QUEUE_FILTER filter = {};
+            filter.DenyList.NumIDs  = _countof(suppressedIds);
+            filter.DenyList.pIDList = suppressedIds;
+            infoQueue->AddStorageFilterEntries(&filter);
+
+            LogInfo(LogRenderer, "D3D12 Info Queue: Suppressed %u known harmless warnings", _countof(suppressedIds));
+        }
+#endif
+
         return true;
     }
 
@@ -1551,9 +1628,22 @@ namespace enigma::graphic
 
         PrepareNextFrame();
 
-        // LogInfo(LogRenderer,"BeginFrame - SwapChain Buffer Index: %u", s_currentBackBufferIndex);
+        // Wait for the current frame slot's previous submission to complete on GPU.
+        // When MAX_FRAMES_IN_FLIGHT=1, this always waits for the previous frame
+        // (identical to the old WaitForFence-in-EndFrame behavior).
+        FrameContext& ctx = s_frameContexts[s_frameIndex];
+        if (ctx.fenceValue > 0)
+        {
+            s_commandListManager->WaitForFence(ctx.fenceValue);
+        }
+
+        // Reset this frame's command allocator (GPU is done with it after fence wait)
+        ctx.commandAllocator->Reset();
+
+        // Acquire command list with current frame's allocator (already Reset above)
         s_currentGraphicsCommandList = s_commandListManager->AcquireCommandList(
             CommandListManager::Type::Graphics,
+            ctx.commandAllocator.Get(),
             "MainFrame Graphics Commands"
         );
 
@@ -1615,20 +1705,18 @@ namespace enigma::graphic
     }
 
     /**
-     * 结束帧渲染 - 执行CommandList并Present
+     * End frame rendering - execute CommandList, Present, record fence
      *
-     * 教学要点：
-     * 1. 资源状态转换：RENDER_TARGET → PRESENT（准备显示）
-     * 2. 执行CommandList：提交所有渲染指令到GPU
-     * 3. Present：将后台缓冲区显示到屏幕
-     * 4. GPU同步：等待当前帧完成（临时方案）
-     * 5. 清理引用：为下一帧做准备
+     * Flow:
+     * 1. Transition BackBuffer: RENDER_TARGET -> PRESENT
+     * 2. Execute CommandList (submit to GPU queue)
+     * 3. Present SwapChain
+     * 4. Record fence value in FrameContext, advance frame index
+     * 5. Recycle completed command list wrappers
+     * 6. Clear current command list reference
      *
-     * DirectX 12 API调用链：
-     * - ID3D12GraphicsCommandList::ResourceBarrier() - 状态转换
-     * - CommandListManager::ExecuteCommandList() - 执行指令
-     * - IDXGISwapChain::Present() - 显示到屏幕
-     * - CommandListManager::WaitForFence() - GPU同步
+     * Note: No WaitForFence here - the wait moves to BeginFrame,
+     * enabling CPU/GPU pipelining when MAX_FRAMES_IN_FLIGHT > 1.
      */
     bool D3D12RenderSystem::EndFrame()
     {
@@ -1657,8 +1745,7 @@ namespace enigma::graphic
                            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT,
                            "SwapChain BackBuffer");
 
-        // 3. 执行CommandList（通过CommandListManager）
-        // 教学要点：ExecuteCommandList会关闭CommandList并提交到GPU队列
+        // 2. Execute CommandList (submit to GPU queue)
         uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);
         if (fenceValue == 0)
         {
@@ -1667,9 +1754,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // 3. Present SwapChain（显示到屏幕）
-        // 教学要点：Present将后台缓冲区显示到屏幕，并轮换缓冲区
-        // DirectX 12会在Present()内部自动处理资源状态转换
+        // 3. Present SwapChain
         if (!Present(g_theRendererSubsystem->GetConfiguration().enableVSync))
         {
             LogError(LogRenderer,
@@ -1677,23 +1762,16 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. 等待GPU fence（临时同步方案）
-        // 教学要点：这是简化版同步，实际项目应使用多帧并行
-        // TODO (性能优化): 改为异步fence管理，支持2-3帧并行
-        s_commandListManager->WaitForFence(fenceValue);
+        // 4. Record fence value in current FrameContext and advance frame index
+        // The fence wait moves to BeginFrame - GPU executes asynchronously
+        s_frameContexts[s_frameIndex].fenceValue = fenceValue;
+        s_frameIndex = (s_frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+        s_globalFrameCount++;
 
-        // [IMPORTANT] 5. 显式回收已完成的CommandList
-        // 教学要点：WaitForFence只负责等待GPU完成，不负责回收CommandList
-        // 需要显式调用UpdateCompletedCommandLists将完成的CommandList移回available队列
-        //
-        // 原理：
-        // - ExecuteCommandList已将wrapper添加到m_executingLists (State::Executing)
-        // - WaitForFence确保GPU已完成（fence值已达到）
-        // - UpdateCompletedCommandLists检查fence，将完成的wrapper移回available队列
+        // 5. Recycle completed command list wrappers
         s_commandListManager->UpdateCompletedCommandLists();
 
-        // 6. 重置s_currentGraphicsCommandList为nullptr
-        // 教学要点：防止在下次BeginFrame之前误用已执行的CommandList
+        // 6. Clear current command list reference for next frame
         s_currentGraphicsCommandList = nullptr;
 
         return true;

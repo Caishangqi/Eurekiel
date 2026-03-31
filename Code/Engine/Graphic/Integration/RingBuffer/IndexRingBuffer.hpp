@@ -134,6 +134,11 @@ namespace enigma::graphic
         //-----------------------------------------------------------------------------------
         void Reset();
 
+        // Reset to frame-specific partition for multi-frame in-flight.
+        // Queries D3D12RenderSystem::GetFrameIndex() and MAX_FRAMES_IN_FLIGHT internally.
+        // When MAX_FRAMES_IN_FLIGHT=1, behaves identically to Reset().
+        void ResetForFrame();
+
         //-----------------------------------------------------------------------------------
         // Accessors
         //-----------------------------------------------------------------------------------
@@ -170,6 +175,7 @@ namespace enigma::graphic
 
         std::shared_ptr<D12IndexBuffer> m_buffer; // GPU index buffer resource
         size_t                          m_currentOffset; // Current append offset in bytes
+        size_t                          m_partitionEnd = 0; // Frame partition boundary (0 = no limit)
         std::string                     m_debugName; // Debug name for logging
 
         //-----------------------------------------------------------------------------------

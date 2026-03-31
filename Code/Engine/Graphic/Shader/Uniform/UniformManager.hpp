@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <functional>
@@ -15,6 +16,7 @@
 #include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // For MAX_DRAWS_PER_FRAME
+#include "Engine/Core/Event/MulticastDelegate.hpp"    // For DelegateHandle
 
 namespace enigma::graphic
 {
@@ -92,6 +94,9 @@ namespace enigma::graphic
         /// @brief Reset draw count (call in BeginFrame)
         void ResetDrawCount();
 
+        /// @brief Update frame index on all buffer strategies (subscribed to OnBeginFrame delegate)
+        void SetFrameIndex();
+
         // ========================================================================
         // Slot Management API
         // ========================================================================
@@ -137,6 +142,12 @@ namespace enigma::graphic
         // [REFACTORED] Replaced separate m_perObjectBuffers and m_customBufferStates
         std::unordered_map<std::type_index, UniformBufferState> m_bufferStates;
 
+        // [PERF] Direct array cache for Engine buffer slots 0-14
+        // Eliminates two hash lookups per slot per draw call in GetEngineBufferGPUAddress.
+        // Populated during RegisterBufferInternal, pointers remain stable (unordered_map guarantee).
+        static constexpr uint32_t ENGINE_SLOT_COUNT = BufferHelper::MAX_ENGINE_RESERVED_SLOT + 1; // 15
+        std::array<UniformBufferState*, ENGINE_SLOT_COUNT> m_engineBufferCache{};
+
         // (Slot,Space) -> TypeId mapping for GetBufferStateBySlot()
         std::unordered_map<SlotSpaceKey, std::type_index, SlotSpaceKeyHash> m_slotToTypeMap;
 
@@ -167,6 +178,9 @@ namespace enigma::graphic
 
         // Initialization flag
         bool m_initialized = false;
+
+        // Delegate handle for OnBeginFrame subscription (multi-frame in-flight)
+        enigma::event::DelegateHandle m_beginFrameHandle = 0;
 
         // ========================================================================
         // [REFACTORED] Unified Internal Buffer Operations

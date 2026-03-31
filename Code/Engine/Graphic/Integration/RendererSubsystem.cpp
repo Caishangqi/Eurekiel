@@ -469,11 +469,11 @@ void RendererSubsystem::BeginFrame()
     // - No need to recreate buffers each frame
     if (m_immediateVertexRingBuffer)
     {
-        m_immediateVertexRingBuffer->Reset();
+        m_immediateVertexRingBuffer->ResetForFrame();
     }
     if (m_immediateIndexRingBuffer)
     {
-        m_immediateIndexRingBuffer->Reset();
+        m_immediateIndexRingBuffer->ResetForFrame();
     }
 
     // Reset VertexLayout to default at frame start

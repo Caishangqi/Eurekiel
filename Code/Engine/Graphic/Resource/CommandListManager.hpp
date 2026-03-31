@@ -7,6 +7,7 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 
 namespace enigma::graphic
 {
@@ -124,7 +125,7 @@ namespace enigma::graphic
         bool               m_initialized = false; // 初始化标记
 
         // 配置参数
-        static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = 4; // 默认图形命令列表数量
+        static constexpr uint32_t DEFAULT_GRAPHICS_LIST_COUNT = (MAX_FRAMES_IN_FLIGHT + 1) > 4 ? (MAX_FRAMES_IN_FLIGHT + 1) : 4;
         static constexpr uint32_t DEFAULT_COMPUTE_LIST_COUNT  = 2; // 默认计算命令列表数量
         static constexpr uint32_t DEFAULT_COPY_LIST_COUNT     = 4; // 默认复制命令列表数量
 
@@ -191,6 +192,19 @@ namespace enigma::graphic
          * 注意：返回裸指针用于DirectX API调用，但内部使用智能指针管理
          */
         ID3D12GraphicsCommandList* AcquireCommandList(Type type, const std::string& debugName = "");
+
+        /**
+         * @brief Acquire a command list using an external command allocator
+         * @param type Command list type
+         * @param externalAllocator Caller-owned allocator (e.g. from FrameContext)
+         * @param debugName Debug name (optional)
+         * @return Command list pointer, nullptr on failure
+         *
+         * The command list is Reset with the external allocator instead of the
+         * wrapper's internal one. The internal allocator is left untouched.
+         * If no command lists are available, attempts to recycle completed ones first.
+         */
+        ID3D12GraphicsCommandList* AcquireCommandList(Type type, ID3D12CommandAllocator* externalAllocator, const std::string& debugName = "");
 
         /**
          * @brief 提交命令列表执行

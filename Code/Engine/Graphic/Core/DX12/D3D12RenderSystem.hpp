@@ -1,7 +1,9 @@
 ﻿#pragma once
 
+#include "FrameContext.hpp"
 #include "../../Resource/Buffer/D12Buffer.hpp"
 #include "../../Resource/CommandListManager.hpp"
+#include "../EnigmaGraphicCommon.hpp"
 #include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
 #include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
 #include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 Root Signature
@@ -868,6 +870,14 @@ namespace enigma::graphic
          */
         static ID3D12GraphicsCommandList* GetCurrentCommandList() { return s_currentGraphicsCommandList; }
 
+        // ===== Frame Resource API (Multi-Frame In-Flight) =====
+
+        // Current frame slot index [0, MAX_FRAMES_IN_FLIGHT)
+        static uint32_t GetFrameIndex() { return s_frameIndex; }
+
+        // Global monotonically increasing frame counter
+        static uint64_t GetFrameCount() { return s_globalFrameCount; }
+
     private:
         // 禁用实例化（纯静态类）
         D3D12RenderSystem()                                    = delete;
@@ -911,6 +921,11 @@ namespace enigma::graphic
 
         // 系统状态（移除重复的配置结构）
         static bool s_isInitialized; // 初始化状态
+
+        // Multi-Frame In-Flight resources (Phase 1)
+        static FrameContext s_frameContexts[4];   // per-frame GPU resources, upper bound 4
+        static uint32_t     s_frameIndex;         // current frame slot [0, MAX_FRAMES_IN_FLIGHT)
+        static uint64_t     s_globalFrameCount;   // global monotonic frame counter
 
         // ===== 内部初始化方法 =====
         static bool CreateDevice(bool enableGPUValidation); // 简化的设备创建方法

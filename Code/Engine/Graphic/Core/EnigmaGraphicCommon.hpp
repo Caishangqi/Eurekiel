@@ -19,6 +19,27 @@ namespace enigma::graphic
     // ========================================================================
 
     /**
+     * @brief Maximum number of frames that can be in-flight simultaneously
+     *
+     * Controls CPU/GPU pipelining depth:
+     * - 1 = Single-frame sync (CPU waits for GPU each frame)
+     * - 2 = Double-buffered (CPU records frame N+1 while GPU executes frame N)
+     *
+     * Note: Must be <= SwapChainBufferCount - 1. With 3 SwapChain buffers,
+     * DWM holds 1 for display, leaving 2 available for CPU/GPU pipelining.
+     * N=3 with 3 buffers causes flickering due to DWM buffer contention.
+     *
+     * Affects resource duplication:
+     * - Command Allocators: 1 per in-flight frame
+     * - PerFrame Uniform Buffers: N copies (Camera, Matrices, etc.)
+     * - Vertex/Index Ring Buffers: N partitions
+     *
+     * @note Must be >= 1 and <= SwapChain buffer count (typically 3)
+     * @note Higher values increase memory usage but improve GPU utilization
+     */
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2; // SwapChainBufferCount(3) - 1
+
+    /**
      * @brief Maximum number of Custom Buffers (space=1 Descriptor Table slots)
      *
      * This limits the number of custom constant buffers that can be registered
@@ -44,10 +65,11 @@ namespace enigma::graphic
     /**
      * @brief Total Custom CBV Descriptor Pool size
      *
-     * Calculated from MAX_DRAWS_PER_FRAME * MAX_CUSTOM_BUFFERS
-     * Example: 64 * 100 = 6400 Descriptors
+     * Frame-isolated Ring Descriptor Table: each in-flight frame gets its own
+     * descriptor region to prevent CPU/GPU race conditions.
+     * Calculated from MAX_FRAMES_IN_FLIGHT * MAX_DRAWS_PER_FRAME * MAX_CUSTOM_BUFFERS
      */
-    static constexpr uint32_t CUSTOM_CBV_DESCRIPTOR_POOL_SIZE = MAX_DRAWS_PER_FRAME * MAX_CUSTOM_BUFFERS;
+    static constexpr uint32_t CUSTOM_CBV_DESCRIPTOR_POOL_SIZE = MAX_FRAMES_IN_FLIGHT * MAX_DRAWS_PER_FRAME * MAX_CUSTOM_BUFFERS;
 
     /**
      * @brief Maximum Ring Buffer capacity for Engine Buffers (space=0)
@@ -64,6 +86,8 @@ namespace enigma::graphic
     static constexpr uint32_t ENGINE_BUFFER_RING_CAPACITY = 10000;
 
     // Compile-time validation
+    static_assert(MAX_FRAMES_IN_FLIGHT >= 1 && MAX_FRAMES_IN_FLIGHT <= 4,
+                  "MAX_FRAMES_IN_FLIGHT must be 1-4");
     static_assert(MAX_CUSTOM_BUFFERS > 0, "MAX_CUSTOM_BUFFERS must be positive");
     static_assert(MAX_DRAWS_PER_FRAME > 0, "MAX_DRAWS_PER_FRAME must be positive");
     static_assert(CUSTOM_CBV_DESCRIPTOR_POOL_SIZE <= 1000000, "Descriptor Pool exceeds 1M limit");
