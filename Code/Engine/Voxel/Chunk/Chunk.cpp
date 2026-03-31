@@ -54,10 +54,7 @@ Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
     m_flags.resize(BLOCKS_PER_CHUNK, 0); // Initialize all flags to 0 (no flags set)
 }
 
-Chunk::~Chunk()
-{
-    m_mesh.release();
-}
+Chunk::~Chunk() = default;
 
 BlockState* Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
 {

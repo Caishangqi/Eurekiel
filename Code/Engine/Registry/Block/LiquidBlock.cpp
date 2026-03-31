@@ -76,16 +76,10 @@ namespace enigma::registry::block
             return false;
         }
 
-        // Check if neighbor is also a LiquidBlock with the same fluid type
-        const Block*       neighborBlock  = neighbor->GetBlock();
-        const LiquidBlock* neighborLiquid = dynamic_cast<const LiquidBlock*>(neighborBlock);
-
-        if (neighborLiquid && neighborLiquid->GetFluidType() == m_fluidType)
-        {
-            return true;
-        }
-
-        return false;
+        // [PERF] Use virtual GetFluidState() instead of dynamic_cast
+        // This matches Minecraft's original logic exactly:
+        //   return neighbor.getFluidState().getType().isSame(this.fluid);
+        return neighbor->GetFluidState().IsSame(m_fluidType);
     }
 
     RenderShape LiquidBlock::GetRenderShape(voxel::BlockState* state) const
