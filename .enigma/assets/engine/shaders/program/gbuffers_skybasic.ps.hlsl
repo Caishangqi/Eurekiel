@@ -54,7 +54,7 @@ PSOutput main(PSInput input)
     PSOutput output;
     float3   finalColor;
 
-    /*RENDERTARGETS: 0,3,7*/
+    /*RENDERTARGETS: 0*/
     /*BLEND:ADD*/
     /*DEPTHTEST:GREATER*/
 

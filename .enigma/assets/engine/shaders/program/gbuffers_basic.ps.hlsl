@@ -1,76 +1,29 @@
 /**
  * @file gbuffers_basic.ps.hlsl
- * @brief Iris 兼容 Fallback 着色器 - gbuffers_basic (像素着色器)
+ * @brief Iris compatible Fallback shader - gbuffers_basic (Pixel Shader)
  * @date 2025-10-04
  *
- * 教学要点:
- * 1. 最基础的像素着色器 - 仅输出顶点颜色
- * 2. 无纹理采样、无光照计算、无特殊效果
- * 3. GBuffers 阶段 - 写入 colortex0 (主颜色缓冲)
- * 4. 延迟渲染架构 - 光照在后续 Deferred/Composite 阶段处理
- *
- * 输出目标:
- * - SV_Target0 (colortex0) - RGBA 颜色缓冲
- * - (可选) SV_Target1-7 - 其他 GBuffer 输出 (法线、深度等)
- *
- * Iris 注释支持:
- * - RENDERTARGETS: 0  - 只写入 colortex0
- * - 可通过 ShaderDirectiveParser 解析
+ * Basic pixel shader - outputs vertex color with texture sampling.
+ * No lighting, no special effects.
+ * GBuffers stage - writes to colortex0 (main color buffer).
+ * Lighting handled in Deferred/Composite passes.
  */
 
 #include "../core/core.hlsl"
 
-/**
- * @brief 像素着色器输出结构体 - 多RT输出
- *
- * [TEMPORARY TEST] 临时测试配置 - 输出到colortex4-7
- * 正常情况下应该输出到colortex0-3 (GBuffer标准配置)
- */
-struct PSOutput
-{
-    float4 color0 : SV_Target0; // colortex4 - 主颜色 (Albedo)
-    float4 color1 : SV_Target1; // colortex5 - 预留
-    float4 color2 : SV_Target2; // colortex6 - 预留
-    float4 color3 : SV_Target3; // colortex7 - 预留
-};
+// [RENDERTARGETS] 0
+// Output to colortex0 (main color)
 
 /**
- * @brief 像素着色器主函数
- * @param input 像素输入 (PSInput from Common.hlsli)
- * @return PSOutput - 多RT输出
- *
- * 教学要点:
- * 1. 多RT输出需要定义结构体，每个成员对应一个SV_Target
- * 2. SV_Target索引对应OMSetRenderTargets绑定的RTV数组索引
- * 3. 当前配置：输出到colortex4-7 (测试用途)
- * 4. 正常配置：应该输出到colortex0-3 (GBuffer标准)
+ * @brief Pixel Shader Main
+ * @param input Pixel input from vertex shader
+ * @return float4 - Single render target output (colortex0)
  */
-PSOutput main(PSInput input)
+float4 main(PSInput input) : SV_Target0
 {
-    PSOutput output;
-
-    // 采样CustomImage0纹理（使用线性采样器和UV坐标）
-    // CustomImage槽位在CPU侧通过SetCustomImage(0, texture)设置
+    // Sample CustomImage0 texture (linear sampler + UV)
     float4 texColor = customImage0.Sample(sampler1, input.TexCoord);
 
-    // 混合纹理颜色与顶点颜色和模型颜色
-    // 最终颜色 = 纹理颜色 × 顶点颜色 × 模型颜色
-    output.color0 = texColor * input.Color * modelColor;
-
-    // [TEST] 其他RT输出测试数据
-    output.color1 = input.Color * modelColor;
-    output.color2 = input.Color * modelColor;
-    output.color3 = input.Color * modelColor;
-
-    return output;
+    // Final color = texture * vertex color * model color
+    return texColor * input.Color * modelColor;
 }
-
-/**
- * Iris 注释示例:
- * RENDERTARGETS: 0
- *
- * 说明:
- * - 只写入 RT0 (colortex0)
- * - 不写入法线、深度等其他 GBuffer
- * - ShaderDirectiveParser 会解析此注释并配置 PSO
- */

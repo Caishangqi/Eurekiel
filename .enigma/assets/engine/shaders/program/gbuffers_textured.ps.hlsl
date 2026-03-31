@@ -50,24 +50,3 @@ float4 main(PSInput input) : SV_Target0
 
     return finalColor;
 }
-
-struct PSOutput
-{
-    float4 color : SV_Target0;
-    float4 normal : SV_Target1;
-    float4 specular : SV_Target2;
-};
-
-
-/**
- * Iris 注释示例:
- * RENDERTARGETS: 0
- *
- * 高级用法:
- * - 如果需要访问多个纹理,可添加额外的采样:
- *   Texture2D normalMap = ResourceDescriptorHeap[1];
- *   Texture2D specularMap = ResourceDescriptorHeap[2];
- *
- * - 如果需要写入多个 RT:
- *   RENDERTARGETS: 0,1,2
- */

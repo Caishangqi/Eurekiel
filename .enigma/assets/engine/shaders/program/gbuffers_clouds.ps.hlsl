@@ -26,8 +26,8 @@
 
 #include "../core/core.hlsl"
 
-// [RENDERTARGETS] 0
-// Output to colortex0 (main color)
+// [RENDERTARGETS] 0 3
+// Output to colortex0 (main color) and colortex3 (cloud color copy)
 
 /**
  * @brief Pixel Shader Output Structure
