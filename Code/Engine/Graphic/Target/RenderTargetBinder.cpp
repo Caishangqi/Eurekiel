@@ -119,7 +119,8 @@ namespace enigma::graphic
                 if (rtvHandle.ptr != 0)
                 {
                     m_pendingState.rtvHandles.push_back(rtvHandle);
-                    m_pendingState.clearValues.push_back(ClearValue::Color(Rgba8::BLACK));
+                    // Use config's clear value to match optimizedClearValue at creation (Fast Clear)
+                    m_pendingState.clearValues.push_back(provider->GetConfig(colorTarget.second).clearValue);
                 }
                 else
                 {
@@ -134,6 +135,13 @@ namespace enigma::graphic
         if (m_hasDepthBinding)
         {
             m_pendingState.dsvHandle = GetDSVHandle(depthTarget.first, depthTarget.second);
+
+            // Use config's clear value to match optimizedClearValue at creation (Fast Clear)
+            auto* depthProvider = GetProvider(depthTarget.first);
+            if (depthProvider)
+            {
+                m_pendingState.depthClearValue = depthProvider->GetConfig(depthTarget.second).clearValue;
+            }
         }
         else
         {

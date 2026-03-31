@@ -84,6 +84,54 @@ void ShaderBundleSubsystem::Startup()
     // Step 2: Set Engine bundle as current initially
     m_currentBundle = m_engineBundle;
 
+    // Step 2.5: Apply engine bundle's RT directives to providers
+    // Same pattern as LoadShaderBundle() - ensures textures are recreated with
+    // correct optimizedClearValue, enabling DX12 Fast Clear and eliminating
+    // CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE / CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE warnings
+    auto* rtDirectives = m_engineBundle->GetRTDirectives();
+    if (rtDirectives && g_theRendererSubsystem)
+    {
+        auto* colorProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ColorTex);
+        auto* depthProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::DepthTex);
+        auto* shadowColorProvider = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowColor);
+        auto* shadowTexProvider   = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowTex);
+
+        if (colorProvider)
+        {
+            for (int i = 0; i <= rtDirectives->GetMaxColorTexIndex(); ++i)
+            {
+                if (rtDirectives->HasColorTexConfig(i))
+                    colorProvider->SetRtConfig(i, rtDirectives->GetColorTexConfig(i));
+            }
+        }
+        if (depthProvider)
+        {
+            for (int i = 0; i <= rtDirectives->GetMaxDepthTexIndex(); ++i)
+            {
+                if (rtDirectives->HasDepthTexConfig(i))
+                    depthProvider->SetRtConfig(i, rtDirectives->GetDepthTexConfig(i));
+            }
+        }
+        if (shadowColorProvider)
+        {
+            for (int i = 0; i <= rtDirectives->GetMaxShadowColorIndex(); ++i)
+            {
+                if (rtDirectives->HasShadowColorConfig(i))
+                    shadowColorProvider->SetRtConfig(i, rtDirectives->GetShadowColorConfig(i));
+            }
+        }
+        if (shadowTexProvider)
+        {
+            for (int i = 0; i <= rtDirectives->GetMaxShadowTexIndex(); ++i)
+            {
+                if (rtDirectives->HasShadowTexConfig(i))
+                    shadowTexProvider->SetRtConfig(i, rtDirectives->GetShadowTexConfig(i));
+            }
+        }
+
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied engine bundle RT directives to providers");
+    }
+
     // Step 3: Discover user bundles
     DiscoverUserBundles();
 
