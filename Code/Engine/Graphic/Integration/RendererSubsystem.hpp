@@ -28,6 +28,7 @@
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 #include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface for new camera system
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
+#include "Engine/Graphic/Integration/GraphicsRootBinder.hpp"
 #include "Engine/Graphic/Target/ColorTextureProvider.hpp"
 #include "Engine/Graphic/Target/DepthTextureProvider.hpp"
 #include "Engine/Graphic/Target/ShadowColorProvider.hpp"
@@ -166,6 +167,12 @@ namespace enigma::graphic
         void BeginFrame() override;
 
         void EndFrame() override;
+
+        void BeginPassScope(const char* debugName = nullptr);
+
+        void AdvancePassScope(const char* debugName = nullptr);
+
+        void EndPassScope();
 #pragma endregion
 
 #pragma region Shader Compilation
@@ -1307,6 +1314,16 @@ namespace enigma::graphic
         ID3D12DescriptorHeap* GetSRVHeap() const noexcept;
 
         /**
+         * @brief Notify the renderer that graphics descriptor heaps were rebound or replaced
+         */
+        void NotifyGraphicsDescriptorHeapContextChanged() noexcept;
+
+        /**
+         * @brief Invalidate cached graphics root bindings on recovery or debug paths
+         */
+        void InvalidateGraphicsRootBindings() noexcept;
+
+        /**
          * @brief 获取RenderTarget格式
          * @return RTV格式
          * @details 返回SwapChain的后台缓冲区格式（固定为DXGI_FORMAT_R8G8B8A8_UNORM）
@@ -1352,6 +1369,21 @@ namespace enigma::graphic
          */
         class SamplerProvider* GetSamplerProvider() const noexcept { return m_samplerProvider.get(); }
 
+        /**
+         * @brief Get GraphicsRootBinder for graphics root-state binding
+         * @return GraphicsRootBinder raw pointer (owned by RendererSubsystem)
+         */
+        GraphicsRootBinder* GetGraphicsRootBinder() const noexcept { return m_graphicsRootBinder.get(); }
+
+        /**
+         * @brief Get current graphics root binding diagnostics
+         * @return Diagnostics pointer, or nullptr when binder is unavailable
+         */
+        const GraphicsRootBindingDiagnostics* GetGraphicsRootBindingDiagnostics() const noexcept
+        {
+            return m_graphicsRootBinder ? &m_graphicsRootBinder->GetDiagnostics() : nullptr;
+        }
+
     private:
         /**
          * @brief Prepare PSO and resource binding (common logic of Draw series functions)
@@ -1366,10 +1398,10 @@ namespace enigma::graphic
          * 5. ValidateDrawState
          * 6. GetOrCreatePSO
          * 7. Bind PSO (if changed)
-         * 8. Bind Root Signature
+         * 8. Ensure the graphics root signature is bound through GraphicsRootBinder
          * 9. Set Primitive Topology
-         * 10. BindEngineBuffers
-         * 11. BindCustomBufferTable
+         * 10. Bind engine root CBVs through GraphicsRootBinder
+         * 11. Bind the custom descriptor table through GraphicsRootBinder
          *
          * @note IncrementDrawCount is not called in this function and is the responsibility of the caller
          */
@@ -1380,6 +1412,9 @@ namespace enigma::graphic
 
         /// Present RT to backbuffer via draw call (format mismatch fallback)
         void PresentRenderTargetWithDraw(int rtIndex, RenderTargetType rtType, D3D12_RESOURCE_STATES sourceInitialState);
+
+        void SyncGraphicsRootBinderWithCommandList(ID3D12GraphicsCommandList* commandList, bool resetDiagnostics) const noexcept;
+        void SyncGraphicsRootBinderWithSrvHeap(ID3D12DescriptorHeap* srvHeap) const noexcept;
 
         /// Swap chain - double buffered display (requires window handle, managed by subsystem)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
@@ -1405,6 +1440,9 @@ namespace enigma::graphic
         /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;
 
+        /// Graphics root-state binder for dirty root signature, CBV, and descriptor table binding
+        std::unique_ptr<GraphicsRootBinder> m_graphicsRootBinder;
+
         /// Full Screen Draw
         std::unique_ptr<class FullQuadsRenderer> m_fullQuadsRenderer;
 
@@ -1418,6 +1456,13 @@ namespace enigma::graphic
 
         /// CustomImage管理器 - 管理16个CustomImage槽位的纹理绑定
         std::unique_ptr<CustomImageManager> m_customImageManager;
+
+        struct GraphicsPassScopeState
+        {
+            bool hasActiveScope = false;
+        };
+
+        GraphicsPassScopeState m_graphicsPassScopeState;
 
         // ==================== PSO管理组件 ====================
 
@@ -1454,6 +1499,8 @@ namespace enigma::graphic
 
         /// 渲染统计信息
         mutable RenderStatistics m_renderStatistics;
+        mutable ID3D12GraphicsCommandList* m_lastObservedGraphicsCommandList = nullptr;
+        mutable ID3D12DescriptorHeap*      m_lastObservedSrvHeap             = nullptr;
 
         /// 初始化状态标志
         bool m_isInitialized = false;

@@ -126,6 +126,55 @@ namespace enigma::graphic
         }
     }
 
+    void UniformManager::ResetPassScopesForFrame()
+    {
+        const uint32_t currentFrameIndex = D3D12RenderSystem::GetFrameIndex();
+
+        m_passScopeState.frameIndex     = currentFrameIndex;
+        m_passScopeState.passScopeIndex = 0;
+        m_passScopeState.hasActiveScope = false;
+        m_passScopeState.hasFrameReset  = true;
+
+        for (auto& [typeId, state] : m_bufferStates)
+        {
+            if (state.frequency != UpdateFrequency::PerPass || !state.strategy)
+            {
+                continue;
+            }
+
+            state.strategy->OnFrameReset();
+        }
+    }
+
+    void UniformManager::AdvancePassScope()
+    {
+        const uint32_t currentFrameIndex = D3D12RenderSystem::GetFrameIndex();
+        if (!m_passScopeState.hasFrameReset || m_passScopeState.frameIndex != currentFrameIndex)
+        {
+            ERROR_RECOVERABLE(Stringf("UniformManager::AdvancePassScope called before ResetPassScopesForFrame for frame %u; resetting pass scope state",
+                currentFrameIndex));
+            ResetPassScopesForFrame();
+        }
+
+        if (!m_passScopeState.hasActiveScope)
+        {
+            m_passScopeState.hasActiveScope = true;
+            return;
+        }
+
+        for (auto& [typeId, state] : m_bufferStates)
+        {
+            if (state.frequency != UpdateFrequency::PerPass || !state.strategy)
+            {
+                continue;
+            }
+
+            state.strategy->OnPassScopeAdvance();
+        }
+
+        ++m_passScopeState.passScopeIndex;
+    }
+
     bool UniformManager::IsSlotRegistered(uint32_t slot, uint32_t space) const
     {
         return m_slotToTypeMap.find(SlotSpaceKey{slot, space}) != m_slotToTypeMap.end();
@@ -284,9 +333,11 @@ namespace enigma::graphic
 
             D3D12_GPU_VIRTUAL_ADDRESS baseGpuAddress = gpuBuffer->GetGPUVirtualAddress();
 
-            bool   isPerObject   = (freq == UpdateFrequency::PerObject);
-            bool   isPerFrame    = (freq == UpdateFrequency::PerFrame);
-            size_t perFrameDraws = isPerObject ? (ringBufferCount / MAX_FRAMES_IN_FLIGHT) : 0;
+            bool   isPerObject      = (freq == UpdateFrequency::PerObject);
+            bool   isPerFrame       = (freq == UpdateFrequency::PerFrame);
+            bool   isPerPass        = (freq == UpdateFrequency::PerPass);
+            size_t perFrameDraws    = isPerObject ? (ringBufferCount / MAX_FRAMES_IN_FLIGHT) : 0;
+            size_t perFramePasses   = isPerPass ? (ringBufferCount / MAX_FRAMES_IN_FLIGHT) : 0;
 
             for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame)
             {
@@ -313,9 +364,15 @@ namespace enigma::graphic
                         // Frame F -> buffer slot F (same data for all draws within a frame)
                         sliceIndex = frame;
                     }
+                    else if (isPerPass)
+                    {
+                        // PerPass pages are keyed by pass-scope index within the current frame partition.
+                        const size_t passScopeIndex = (perFramePasses > 0 && draw < perFramePasses) ? draw : 0;
+                        sliceIndex = frame * perFramePasses + passScopeIndex;
+                    }
                     else
                     {
-                        // Static/PerPass/PerDispatch: always slot 0
+                        // Static/PerDispatch: always slot 0
                         sliceIndex = 0;
                     }
 
@@ -422,19 +479,12 @@ namespace enigma::graphic
     // ========================================================================
     // UpdateDescriptorTableOffset
     // ========================================================================
-    void UniformManager::UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex)
+    void UniformManager::UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex, uint32_t ringIndex)
     {
         // [REFACTORED] Use unified m_bufferStates
         auto* state = GetBufferStateBySlot(slotId, 1); // space=1 for Custom
         if (!state || !state->buffer)
         {
-            return;
-        }
-
-        auto it = m_customBufferDescriptors.find(slotId);
-        if (it == m_customBufferDescriptors.end() || !it->second.isValid)
-        {
-            LogError(LogUniform, "Custom Buffer descriptor not found for slot %u", slotId);
             return;
         }
 
@@ -445,7 +495,19 @@ namespace enigma::graphic
         cbvDesc.BufferLocation                  = bufferAddress;
         cbvDesc.SizeInBytes                     = static_cast<UINT>(state->elementSize);
 
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = it->second.allocation.cpuHandle;
+        const uint32_t frameIndex      = D3D12RenderSystem::GetFrameIndex();
+        const uint32_t drawRingIndex   = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
+        const uint32_t globalRingIndex = frameIndex * BindlessRootSignature::MAX_RING_FRAMES + drawRingIndex;
+        const uint32_t descriptorIndex = globalRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
+
+        if (descriptorIndex >= m_customBufferDescriptorPool.size())
+        {
+            LogError(LogUniform, "Custom Buffer descriptor index %u out of range (pool size=%zu)",
+                     descriptorIndex, m_customBufferDescriptorPool.size());
+            return;
+        }
+
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = m_customBufferDescriptorPool[descriptorIndex].cpuHandle;
 
         auto* device = D3D12RenderSystem::GetDevice();
         if (!device)
@@ -455,6 +517,21 @@ namespace enigma::graphic
         }
 
         device->CreateConstantBufferView(&cbvDesc, cpuHandle);
+    }
+
+    void UniformManager::CommitCustomBufferDescriptorPage(uint32_t ringIndex)
+    {
+        for (auto& entry : m_bufferStates)
+        {
+            UniformBufferState& state = entry.second;
+
+            if (state.space != BufferSpace::Custom || !state.buffer)
+            {
+                continue;
+            }
+
+            UpdateDescriptorTableOffset(state.slot, state.GetCurrentReadIndex(), ringIndex);
+        }
     }
 
     // ========================================================================

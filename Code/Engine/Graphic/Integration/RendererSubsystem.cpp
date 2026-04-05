@@ -29,9 +29,9 @@
 #include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
 #include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
 #include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
+#include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
 #include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // Option D: RingBuffer wrapper
 #include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // Option D: RingBuffer wrapper
-#include "Engine/Graphic/Integration/DrawBindingHelper.hpp" // Draw binding helper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // VertexLayout state management
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
@@ -114,11 +114,11 @@ void RendererSubsystem::Startup()
     try
     {
         m_uniformManager = std::make_unique<UniformManager>();
-        m_uniformManager->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<MatricesUniforms>(7, UpdateFrequency::PerPass, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<CameraUniforms>(9, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<ViewportUniforms>(10, UpdateFrequency::PerFrame, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
         m_uniformManager->RegisterBuffer<PerObjectUniforms>(1, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
-        m_uniformManager->RegisterBuffer<CustomImageUniforms>(2, UpdateFrequency::PerObject, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
+        m_uniformManager->RegisterBuffer<CustomImageUniforms>(2, UpdateFrequency::PerPass, BufferSpace::Engine, ENGINE_BUFFER_RING_CAPACITY);
     }
     catch (const UniformException& e)
     {
@@ -168,7 +168,19 @@ void RendererSubsystem::Startup()
         LogInfo(LogRenderer, "Creating CustomImageManager...");
 
         // Create CustomImageManager with UniformManager dependency injection
-        m_customImageManager = std::make_unique<CustomImageManager>(m_uniformManager.get());
+        m_customImageManager = std::make_unique<CustomImageManager>(
+            m_uniformManager.get(),
+            [this]() -> bool
+            {
+                if (!m_graphicsPassScopeState.hasActiveScope)
+                {
+                    return false;
+                }
+
+                AdvancePassScope("CustomImageManager snapshot conflict");
+                return true;
+            }
+        );
 
         LogInfo(LogRenderer, "CustomImageManager created successfully");
     }
@@ -278,6 +290,8 @@ void RendererSubsystem::Startup()
         LogError(LogRenderer, "Failed to create RenderTargetBinder: %s", e.what());
     }
 
+    m_graphicsRootBinder = std::make_unique<GraphicsRootBinder>();
+
     // ==================== Create SamplerProvider (Dynamic Sampler System) ====================
     // Initialize SamplerProvider with 4 default samplers
     // Teaching points:
@@ -380,8 +394,11 @@ void RendererSubsystem::Shutdown()
     m_samplerProvider.reset();
     m_customImageManager.reset();
     m_psoManager.reset();
+    m_graphicsRootBinder.reset();
     m_fullQuadsRenderer.reset();
     m_blitProgram.reset();
+    m_lastObservedGraphicsCommandList = nullptr;
+    m_lastObservedSrvHeap             = nullptr;
 
     // Release RT providers (may hold descriptor references)
     m_renderTargetBinder.reset();
@@ -492,6 +509,14 @@ void RendererSubsystem::BeginFrame()
     if (m_uniformManager)
     {
         m_uniformManager->ResetDrawCount();
+        m_uniformManager->ResetPassScopesForFrame();
+    }
+
+    m_graphicsPassScopeState.hasActiveScope = false;
+
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnBeginFrame();
     }
 
     // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
@@ -556,6 +581,81 @@ void RendererSubsystem::BeginFrame()
 
         LogDebug(LogRenderer, "BeginFrame - All render targets cleared (centralized strategy)");
     }
+
+    SyncGraphicsRootBinderWithCommandList(D3D12RenderSystem::GetCurrentCommandList(), true);
+
+    auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+    m_lastObservedSrvHeap = heapManager ? heapManager->GetCbvSrvUavHeap() : nullptr;
+}
+
+void RendererSubsystem::BeginPassScope(const char* debugName)
+{
+    if (!m_uniformManager)
+    {
+        ERROR_RECOVERABLE("RendererSubsystem::BeginPassScope called without UniformManager");
+        return;
+    }
+
+    if (m_graphicsPassScopeState.hasActiveScope)
+    {
+        if (debugName)
+        {
+            ERROR_RECOVERABLE(Stringf("RendererSubsystem::BeginPassScope called while a scope is already active (%s)", debugName));
+        }
+        else
+        {
+            ERROR_RECOVERABLE("RendererSubsystem::BeginPassScope called while a scope is already active");
+        }
+        return;
+    }
+
+    m_uniformManager->AdvancePassScope();
+    m_graphicsPassScopeState.hasActiveScope = true;
+
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnPassScopeChanged();
+    }
+}
+
+void RendererSubsystem::AdvancePassScope(const char* debugName)
+{
+    if (!m_uniformManager)
+    {
+        ERROR_RECOVERABLE("RendererSubsystem::AdvancePassScope called without UniformManager");
+        return;
+    }
+
+    if (!m_graphicsPassScopeState.hasActiveScope)
+    {
+        if (debugName)
+        {
+            ERROR_RECOVERABLE(Stringf("RendererSubsystem::AdvancePassScope called without an active scope (%s)", debugName));
+        }
+        else
+        {
+            ERROR_RECOVERABLE("RendererSubsystem::AdvancePassScope called without an active scope");
+        }
+        return;
+    }
+
+    m_uniformManager->AdvancePassScope();
+
+    if (m_customImageManager)
+    {
+        m_customImageManager->OnPassScopeChanged();
+    }
+}
+
+void RendererSubsystem::EndPassScope()
+{
+    if (!m_graphicsPassScopeState.hasActiveScope)
+    {
+        ERROR_RECOVERABLE("RendererSubsystem::EndPassScope called without an active scope");
+        return;
+    }
+
+    m_graphicsPassScopeState.hasActiveScope = false;
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -831,13 +931,36 @@ ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
 
 ID3D12GraphicsCommandList* RendererSubsystem::GetCurrentCommandList() const noexcept
 {
-    return D3D12RenderSystem::GetCurrentCommandList();
+    ID3D12GraphicsCommandList* commandList = D3D12RenderSystem::GetCurrentCommandList();
+    SyncGraphicsRootBinderWithCommandList(commandList, true);
+    return commandList;
 }
 
 ID3D12DescriptorHeap* RendererSubsystem::GetSRVHeap() const noexcept
 {
     auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
-    return heapManager ? heapManager->GetCbvSrvUavHeap() : nullptr;
+    ID3D12DescriptorHeap* srvHeap = heapManager ? heapManager->GetCbvSrvUavHeap() : nullptr;
+    SyncGraphicsRootBinderWithSrvHeap(srvHeap);
+    return srvHeap;
+}
+
+void RendererSubsystem::NotifyGraphicsDescriptorHeapContextChanged() noexcept
+{
+    auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+    m_lastObservedSrvHeap = heapManager ? heapManager->GetCbvSrvUavHeap() : nullptr;
+
+    if (m_graphicsRootBinder)
+    {
+        m_graphicsRootBinder->InvalidateDescriptorTables();
+    }
+}
+
+void RendererSubsystem::InvalidateGraphicsRootBindings() noexcept
+{
+    if (m_graphicsRootBinder)
+    {
+        m_graphicsRootBinder->InvalidateAll();
+    }
 }
 
 DXGI_FORMAT RendererSubsystem::GetRTVFormat() const noexcept
@@ -956,7 +1079,7 @@ void RendererSubsystem::UseProgram(
     // Cache current ShaderProgram for subsequent Draw() calls
     m_currentShaderProgram = shaderProgram.get();
 
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "UseProgram: CommandList is nullptr");
@@ -1137,12 +1260,51 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
              size, offset, buffer->GetSize());
 }
 
+void RendererSubsystem::SyncGraphicsRootBinderWithCommandList(
+    ID3D12GraphicsCommandList* commandList,
+    bool                       resetDiagnostics) const noexcept
+{
+    if (commandList == m_lastObservedGraphicsCommandList)
+    {
+        return;
+    }
+
+    m_lastObservedGraphicsCommandList = commandList;
+
+    if (!m_graphicsRootBinder)
+    {
+        return;
+    }
+
+    if (resetDiagnostics)
+    {
+        m_graphicsRootBinder->ResetDiagnostics();
+    }
+
+    m_graphicsRootBinder->InvalidateAll();
+}
+
+void RendererSubsystem::SyncGraphicsRootBinderWithSrvHeap(ID3D12DescriptorHeap* srvHeap) const noexcept
+{
+    if (srvHeap == m_lastObservedSrvHeap)
+    {
+        return;
+    }
+
+    m_lastObservedSrvHeap = srvHeap;
+
+    if (m_graphicsRootBinder)
+    {
+        m_graphicsRootBinder->InvalidateDescriptorTables();
+    }
+}
+
 bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList)
 {
     // Step 1: Prepare custom images (before draw)
     if (m_customImageManager)
     {
-        DrawBindingHelper::PrepareCustomImages(m_customImageManager.get());
+        m_customImageManager->PrepareCustomImagesForDraw();
     }
 
     // Step 2: Update Ring Buffer offsets (Delayed Fill pattern)
@@ -1205,20 +1367,48 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
         m_lastBoundPSO = pso;
     }
 
-    // Step 8: Bind Root Signature
-    if (m_currentShaderProgram)
+    if (!m_graphicsRootBinder)
     {
-        m_currentShaderProgram->Use(cmdList);
+        ERROR_RECOVERABLE("PreparePSOAndBindings: GraphicsRootBinder is not available");
+        return false;
     }
+
+    if (!m_uniformManager)
+    {
+        ERROR_RECOVERABLE("PreparePSOAndBindings: UniformManager is not available");
+        return false;
+    }
+
+    if (!m_currentShaderProgram)
+    {
+        ERROR_RECOVERABLE("PreparePSOAndBindings: ShaderProgram is not set");
+        return false;
+    }
+
+    // Step 8: Bind Root Signature
+    m_currentShaderProgram->Use(cmdList, *m_graphicsRootBinder);
 
     // Step 9: Set Primitive Topology
     cmdList->IASetPrimitiveTopology(state.topology);
 
-    // Step 10: Bind Engine Buffers (slots 0-14)
-    DrawBindingHelper::BindEngineBuffers(cmdList, m_uniformManager.get());
+    // Step 10: Bind engine root CBVs through the dirty binder
+    for (uint32_t slot = 0; slot < GraphicsRootBindingCache::ENGINE_ROOT_CBV_SLOT_COUNT; ++slot)
+    {
+        const D3D12_GPU_VIRTUAL_ADDRESS cbvAddress = m_uniformManager->GetEngineBufferGPUAddress(slot);
+        m_graphicsRootBinder->BindEngineCbvIfDirty(cmdList, slot, cbvAddress);
+    }
 
-    // Step 11: Bind Custom Buffer Table (slot 15)
-    DrawBindingHelper::BindCustomBufferTable(cmdList, m_uniformManager.get());
+    // Step 11: Bind the custom-buffer descriptor table through the dirty binder
+    const uint32_t ringIndex = static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount());
+    m_uniformManager->CommitCustomBufferDescriptorPage(ringIndex);
+
+    const D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
+        m_uniformManager->GetCustomBufferDescriptorTableGPUHandle(ringIndex);
+    m_graphicsRootBinder->BindDescriptorTableIfDirty(
+        cmdList,
+        BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,
+        customBufferTableHandle
+    );
 
     return true;
 }
@@ -1231,7 +1421,7 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         return;
     }
 
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "Draw: CommandList is nullptr");
@@ -1264,7 +1454,7 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "DrawIndexed: CommandList is nullptr");
@@ -1298,7 +1488,7 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         return;
     }
 
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "DrawInstanced: CommandList is nullptr");
@@ -1338,7 +1528,7 @@ void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalPr
     }
 
     auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
-    auto cmdList       = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList       = GetCurrentCommandList();
 
     if (!cmdList)
     {
@@ -1440,7 +1630,7 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     // Fast path: CopyResource (formats match)
     // ========================================================================
 
-    ID3D12GraphicsCommandList* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    ID3D12GraphicsCommandList* cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "PresentRenderTarget: CommandList is null");
@@ -1517,7 +1707,7 @@ void RendererSubsystem::PresentRenderTargetWithDraw(
         return;
     }
 
-    auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "PresentRenderTargetWithDraw: CommandList is null");
@@ -1614,7 +1804,7 @@ void RendererSubsystem::SetStencilRefValue(uint8_t refValue)
     // without PSO rebuild. Applied via OMSetStencilRef on active CommandList.
 
     // Get active CommandList from D3D12RenderSystem
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto* cmdList = GetCurrentCommandList();
     if (cmdList && m_currentStencilTest.enable)
     {
         cmdList->OMSetStencilRef(refValue);
@@ -1853,7 +2043,7 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
     }
 
     // Step 2: 获取 CommandList
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto* cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "ClearRenderTarget: No active CommandList");
@@ -1900,7 +2090,7 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
 void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth, uint8_t clearStencil)
 {
     // Get active CommandList
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto* cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogError(LogRenderer, "ClearDepthStencil: No active CommandList");
@@ -1926,7 +2116,7 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
 // [REFACTOR] ClearAllRenderTargets - Use RenderTargetConfig for per-RT clear settings
 void RendererSubsystem::ClearAllRenderTargets()
 {
-    auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
+    auto* cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
         LogWarn(LogRenderer, "ClearAllRenderTargets: No active command list");

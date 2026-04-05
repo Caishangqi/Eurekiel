@@ -4,6 +4,7 @@
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
+#include <utility>
 
 namespace enigma::graphic
 {
@@ -11,8 +12,12 @@ namespace enigma::graphic
     // 构造与析构
     // ========================================================================
 
-    CustomImageManager::CustomImageManager(UniformManager* uniformManager)
+    CustomImageManager::CustomImageManager(
+        UniformManager*       uniformManager,
+        std::function<bool()> advancePassScopeCallback
+    )
         : m_uniformManager(uniformManager)
+        , m_advancePassScopeCallback(std::move(advancePassScopeCallback))
     {
         // [INIT] Initialize all texture pointers to nullptr
         m_textures.fill(nullptr);
@@ -34,28 +39,17 @@ namespace enigma::graphic
         {
             ERROR_AND_DIE(Stringf("Invalid slot index: %d (valid range: 0-%d)",slotIndex, MAX_CUSTOM_IMAGE_SLOTS - 1))
         }
+
+        const uint32_t bindlessIndex = ResolveBindlessIndex(texture);
         m_textures[slotIndex] = texture;
 
-        if (texture != nullptr)
+        if (m_currentCustomImage.GetCustomImageIndex(slotIndex) == bindlessIndex)
         {
-            uint32_t bindlessIndex = texture->GetBindlessIndex();
-            m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
+            return;
         }
-        else
-        {
-            // [FIX] 使用默认白色纹理而非index=0
-            auto defaultTexture = D3D12RenderSystem::GetDefaultWhiteTexture();
-            if (defaultTexture)
-            {
-                uint32_t bindlessIndex = defaultTexture->GetBindlessIndex();
-                m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
-            }
-            else
-            {
-                m_currentCustomImage.SetCustomImageIndex(slotIndex, 0);
-                ERROR_AND_DIE("Fail to Create and Bind Texture")
-            }
-        }
+
+        m_currentCustomImage.SetCustomImageIndex(slotIndex, bindlessIndex);
+        m_dirtySlots.set(static_cast<size_t>(slotIndex));
     }
 
     D12Texture* CustomImageManager::GetCustomImage(int slotIndex) const
@@ -90,13 +84,34 @@ namespace enigma::graphic
             return;
         }
 
-        // [REQUIRED] 通过UniformManager上传m_currentCustomImage到GPU
-        // [IMPORTANT] 使用模板方法UploadBuffer<CustomImageUniforms>()
-        m_uniformManager->UploadBuffer<CustomImageUniforms>(m_currentCustomImage);
+        if (!m_hasCommittedSnapshotForCurrentScope)
+        {
+            CommitCurrentSnapshot();
+            return;
+        }
 
-        // [REQUIRED] 保存当前状态到m_lastDrawCustomImage
-        // [IMPORTANT] 实现"复制上一次Draw的数据"机制
-        m_lastDrawCustomImage = m_currentCustomImage;
+        if (m_dirtySlots.none())
+        {
+            return;
+        }
+
+        if (AreSnapshotsEqual(m_currentCustomImage, m_lastCommittedCustomImage))
+        {
+            m_dirtySlots.reset();
+            return;
+        }
+
+        if (!m_advancePassScopeCallback)
+        {
+            ERROR_AND_DIE("CustomImageManager: conflicting snapshot requires pass-scope advance callback");
+        }
+
+        if (!m_advancePassScopeCallback())
+        {
+            ERROR_AND_DIE("CustomImageManager: failed to advance pass scope for conflicting snapshot");
+        }
+
+        CommitCurrentSnapshot();
     }
 
     // ========================================================================
@@ -105,6 +120,49 @@ namespace enigma::graphic
 
     void CustomImageManager::OnBeginFrame()
     {
+        m_hasCommittedSnapshotForCurrentScope = false;
+    }
+
+    void CustomImageManager::OnPassScopeChanged()
+    {
+        m_hasCommittedSnapshotForCurrentScope = false;
+    }
+
+    uint32_t CustomImageManager::ResolveBindlessIndex(D12Texture* texture) const
+    {
+        if (texture != nullptr)
+        {
+            return texture->GetBindlessIndex();
+        }
+
+        auto defaultTexture = D3D12RenderSystem::GetDefaultWhiteTexture();
+        if (!defaultTexture)
+        {
+            ERROR_AND_DIE("CustomImageManager: default white texture is unavailable")
+        }
+
+        return defaultTexture->GetBindlessIndex();
+    }
+
+    bool CustomImageManager::AreSnapshotsEqual(const CustomImageUniforms& lhs, const CustomImageUniforms& rhs) const
+    {
+        for (int slotIndex = 0; slotIndex < MAX_CUSTOM_IMAGE_SLOTS; ++slotIndex)
+        {
+            if (lhs.customImageIndices[slotIndex] != rhs.customImageIndices[slotIndex])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void CustomImageManager::CommitCurrentSnapshot()
+    {
+        m_uniformManager->UploadBuffer<CustomImageUniforms>(m_currentCustomImage);
+        m_lastCommittedCustomImage         = m_currentCustomImage;
+        m_hasCommittedSnapshotForCurrentScope = true;
+        m_dirtySlots.reset();
     }
 
     // ========================================================================

@@ -97,6 +97,18 @@ namespace enigma::graphic
         /// @brief Update frame index on all buffer strategies (subscribed to OnBeginFrame delegate)
         void SetFrameIndex();
 
+        /// @brief Reset pass-scope tracking for the current frame and reseed PerPass strategies.
+        void ResetPassScopesForFrame();
+
+        /// @brief Enter the first pass scope of the frame or advance to the next pass scope.
+        void AdvancePassScope();
+
+        /// @brief Returns true after the current frame has entered at least one pass scope.
+        bool HasActivePassScope() const { return m_passScopeState.hasActiveScope; }
+
+        /// @brief Returns the current PerPass scope index within the active frame partition.
+        uint32_t GetCurrentPassScopeIndex() const { return m_passScopeState.passScopeIndex; }
+
         // ========================================================================
         // Slot Management API
         // ========================================================================
@@ -130,6 +142,9 @@ namespace enigma::graphic
         /// @brief Get Custom Buffer Descriptor Table GPU handle
         D3D12_GPU_DESCRIPTOR_HANDLE GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex = 0) const;
 
+        /// @brief Refresh the descriptor table page for the requested draw ring index.
+        void CommitCustomBufferDescriptorPage(uint32_t ringIndex);
+
         /// @brief Get Engine Buffer GPU virtual address for Root CBV binding
         D3D12_GPU_VIRTUAL_ADDRESS GetEngineBufferGPUAddress(uint32_t slotId) const;
 
@@ -159,6 +174,16 @@ namespace enigma::graphic
 
         // Current frame draw count for Ring Buffer indexing
         size_t m_currentDrawCount = 0;
+
+        struct PassScopeState
+        {
+            uint32_t frameIndex      = 0;
+            uint32_t passScopeIndex  = 0;
+            bool     hasActiveScope  = false;
+            bool     hasFrameReset   = false;
+        };
+
+        PassScopeState m_passScopeState;
 
         // ========================================================================
         // Custom Buffer Descriptor Management (for space=1 only)
@@ -210,7 +235,7 @@ namespace enigma::graphic
         void UpdateRootCBVOffset(uint32_t slotId, size_t currentIndex);
 
         /// @brief Update Descriptor Table CBV offset
-        void UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex);
+        void UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex, uint32_t ringIndex);
 
         // ========================================================================
         // Descriptor Management Helpers

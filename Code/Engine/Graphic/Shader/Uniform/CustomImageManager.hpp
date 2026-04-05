@@ -1,7 +1,9 @@
 ﻿#pragma once
 
 #include <array>
+#include <bitset>
 #include <cstdint>
+#include <functional>
 #include "Engine/Graphic/Shader/Uniform/CustomImageUniforms.hpp"
 
 namespace enigma::graphic
@@ -98,7 +100,10 @@ namespace enigma::graphic
          *
          * @note uniformManager不能为nullptr，否则无法上传数据
          */
-        explicit CustomImageManager(UniformManager* uniformManager);
+        explicit CustomImageManager(
+            UniformManager*       uniformManager,
+            std::function<bool()> advancePassScopeCallback = {}
+        );
 
         /**
          * @brief 默认析构函数
@@ -244,6 +249,8 @@ namespace enigma::graphic
          */
         void OnBeginFrame();
 
+        void OnPassScopeChanged();
+
         // ========================================================================
         // 调试支持 - 查询槽位状态
         // ========================================================================
@@ -311,7 +318,11 @@ namespace enigma::graphic
          * - 实现"复制上一次Draw的数据"机制
          * - 用于调试和状态追踪
          */
-        CustomImageUniforms m_lastDrawCustomImage;
+        CustomImageUniforms m_lastCommittedCustomImage;
+
+        std::bitset<MAX_CUSTOM_IMAGE_SLOTS> m_dirtySlots;
+
+        bool m_hasCommittedSnapshotForCurrentScope = false;
 
         /**
          * @brief 纹理指针数组 - 16个CustomImage槽位
@@ -323,6 +334,8 @@ namespace enigma::graphic
          * - nullptr表示槽位未使用
          */
         std::array<D12Texture*, MAX_CUSTOM_IMAGE_SLOTS> m_textures;
+
+        std::function<bool()> m_advancePassScopeCallback;
 
         // ========================================================================
         // 私有辅助方法
@@ -341,6 +354,12 @@ namespace enigma::graphic
         {
             return slotIndex >= 0 && slotIndex < MAX_CUSTOM_IMAGE_SLOTS;
         }
+
+        uint32_t ResolveBindlessIndex(D12Texture* texture) const;
+
+        bool AreSnapshotsEqual(const CustomImageUniforms& lhs, const CustomImageUniforms& rhs) const;
+
+        void CommitCurrentSnapshot();
 
         // ========================================================================
         // 禁用拷贝和移动 (遵循RAII原则)
