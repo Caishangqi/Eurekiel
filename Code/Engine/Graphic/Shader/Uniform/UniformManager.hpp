@@ -8,11 +8,13 @@
 #include <vector>
 #include <memory>
 #include <typeindex>
+#include <bitset>
 
 #include "Engine/Core/LogCategory/PredefinedCategories.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Resource/Buffer/BufferHelper.hpp"
+#include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // For MAX_DRAWS_PER_FRAME
@@ -136,14 +138,17 @@ namespace enigma::graphic
         void UpdateRingBufferOffsets(UpdateFrequency frequency);
 
         // ========================================================================
-        // Public Accessor Methods
+        // Public Descriptor Table Methods
         // ========================================================================
 
-        /// @brief Get Custom Buffer Descriptor Table GPU handle
-        D3D12_GPU_DESCRIPTOR_HANDLE GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex = 0) const;
+        /// @brief Prepare a descriptor table page for the current custom-buffer read state.
+        D3D12_GPU_DESCRIPTOR_HANDLE PrepareCustomBufferDescriptorTableForCurrentState();
 
-        /// @brief Refresh the descriptor table page for the requested draw ring index.
-        void CommitCustomBufferDescriptorPage(uint32_t ringIndex);
+        /// @brief Returns true when the current custom-buffer read state matches the last committed page.
+        bool IsCurrentCustomBufferStateCommitted() const;
+
+        /// @brief Returns the currently active custom descriptor page index for diagnostics.
+        uint32_t GetCurrentCustomDescriptorPageIndex() const { return m_customDescriptorPageState.activePageIndex; }
 
         /// @brief Get Engine Buffer GPU virtual address for Root CBV binding
         D3D12_GPU_VIRTUAL_ADDRESS GetEngineBufferGPUAddress(uint32_t slotId) const;
@@ -184,6 +189,18 @@ namespace enigma::graphic
         };
 
         PassScopeState m_passScopeState;
+
+        struct CustomDescriptorPageState
+        {
+            uint32_t frameIndex     = 0;
+            uint32_t activePageIndex = 0;
+            bool     hasCommittedPage = false;
+            std::array<size_t, BindlessRootSignature::MAX_CUSTOM_BUFFERS> committedReadIndices = {};
+            std::bitset<BindlessRootSignature::MAX_CUSTOM_BUFFERS> committedReadIndicesValid = {};
+        };
+
+        static constexpr uint32_t CUSTOM_DESCRIPTOR_PAGES_PER_FRAME = BindlessRootSignature::MAX_RING_FRAMES;
+        CustomDescriptorPageState m_customDescriptorPageState;
 
         // ========================================================================
         // Custom Buffer Descriptor Management (for space=1 only)
@@ -234,8 +251,8 @@ namespace enigma::graphic
         /// @brief Update Root CBV offset (placeholder, actual binding in RendererSubsystem)
         void UpdateRootCBVOffset(uint32_t slotId, size_t currentIndex);
 
-        /// @brief Update Descriptor Table CBV offset
-        void UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex, uint32_t ringIndex);
+        /// @brief Update Descriptor Table CBV offset using a resolved buffer state and state-driven page index.
+        void UpdateDescriptorTableOffset(const UniformBufferState& state, size_t currentIndex, uint32_t pageIndex);
 
         // ========================================================================
         // Descriptor Management Helpers
@@ -249,6 +266,21 @@ namespace enigma::graphic
 
         /// @brief Get CPU descriptor handle for Custom Buffer
         D3D12_CPU_DESCRIPTOR_HANDLE GetCustomBufferCPUHandle(uint32_t slotId) const;
+
+        /// @brief Reset frame-local custom descriptor page state for a new in-flight frame.
+        void ResetCustomDescriptorPageState(uint32_t frameIndex);
+
+        /// @brief Snapshot the current custom-buffer read indices into the committed page state.
+        void CaptureCommittedCustomBufferReadState();
+
+        /// @brief Resolve the descriptor-pool index for a custom slot on a specific page.
+        uint32_t GetCustomBufferDescriptorPoolIndex(uint32_t slotId, uint32_t pageIndex) const;
+
+        /// @brief Get the descriptor table GPU handle for a specific state-driven page index.
+        D3D12_GPU_DESCRIPTOR_HANDLE GetCustomBufferDescriptorTableGPUHandleForPage(uint32_t pageIndex) const;
+
+        /// @brief Commit all current Custom-space CBVs into a specific state-driven page.
+        void CommitCustomBufferDescriptorPageForPage(uint32_t pageIndex);
 
         // Disable copy (RAII principle)
         UniformManager(const UniformManager&)            = delete;

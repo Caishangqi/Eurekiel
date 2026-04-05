@@ -1399,11 +1399,8 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
     }
 
     // Step 11: Bind the custom-buffer descriptor table through the dirty binder
-    const uint32_t ringIndex = static_cast<uint32_t>(m_uniformManager->GetCurrentDrawCount());
-    m_uniformManager->CommitCustomBufferDescriptorPage(ringIndex);
-
     const D3D12_GPU_DESCRIPTOR_HANDLE customBufferTableHandle =
-        m_uniformManager->GetCustomBufferDescriptorTableGPUHandle(ringIndex);
+        m_uniformManager->PrepareCustomBufferDescriptorTableForCurrentState();
     m_graphicsRootBinder->BindDescriptorTableIfDirty(
         cmdList,
         BindlessRootSignature::ROOT_DESCRIPTOR_TABLE_CUSTOM,

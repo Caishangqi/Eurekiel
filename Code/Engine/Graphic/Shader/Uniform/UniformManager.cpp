@@ -89,6 +89,8 @@ namespace enigma::graphic
 
     void UniformManager::SetFrameIndex()
     {
+        const uint32_t currentFrameIndex = D3D12RenderSystem::GetFrameIndex();
+
         for (auto& [typeId, state] : m_bufferStates)
         {
             if (state.strategy)
@@ -96,8 +98,8 @@ namespace enigma::graphic
                 state.strategy->SetFrameIndex();
             }
         }
-        // Custom buffer CBVs are pre-created at registration time with frame-isolated
-        // descriptor regions, so no per-frame CBV update is needed.
+
+        ResetCustomDescriptorPageState(currentFrameIndex);
     }
 
     void UniformManager::IncrementDrawCount()
@@ -476,29 +478,146 @@ namespace enigma::graphic
         UNUSED(currentIndex)
     }
 
+    void UniformManager::ResetCustomDescriptorPageState(uint32_t frameIndex)
+    {
+        m_customDescriptorPageState.frameIndex       = frameIndex;
+        m_customDescriptorPageState.activePageIndex  = 0;
+        m_customDescriptorPageState.hasCommittedPage = false;
+        m_customDescriptorPageState.committedReadIndices.fill(0);
+        m_customDescriptorPageState.committedReadIndicesValid.reset();
+    }
+
+    void UniformManager::CaptureCommittedCustomBufferReadState()
+    {
+        m_customDescriptorPageState.committedReadIndices.fill(0);
+        m_customDescriptorPageState.committedReadIndicesValid.reset();
+
+        // CAUTION: The current descriptor-page model snapshots every registered
+        // Custom-space buffer. Requirement 7 is still incomplete because page
+        // reuse is not yet keyed by the active program's real custom-slot usage.
+        for (const auto& entry : m_bufferStates)
+        {
+            const UniformBufferState& state = entry.second;
+            if (state.space != BufferSpace::Custom || !state.buffer)
+            {
+                continue;
+            }
+
+            if (state.slot >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
+            {
+                ERROR_RECOVERABLE(Stringf("UniformManager::CaptureCommittedCustomBufferReadState encountered invalid custom slot %u",
+                    state.slot));
+                continue;
+            }
+
+            m_customDescriptorPageState.committedReadIndices[state.slot] = state.GetCurrentReadIndex();
+            m_customDescriptorPageState.committedReadIndicesValid.set(state.slot);
+        }
+    }
+
+    bool UniformManager::IsCurrentCustomBufferStateCommitted() const
+    {
+        if (!m_customDescriptorPageState.hasCommittedPage)
+        {
+            return false;
+        }
+
+        // TODO(perf): Compare only the custom slots consumed by the active draw.
+        // The current global comparison allows unrelated sky-only PerObject
+        // buffers to force descriptor-page churn in shadow/terrain passes.
+        for (const auto& entry : m_bufferStates)
+        {
+            const UniformBufferState& state = entry.second;
+            if (state.space != BufferSpace::Custom || !state.buffer)
+            {
+                continue;
+            }
+
+            if (state.slot >= BindlessRootSignature::MAX_CUSTOM_BUFFERS)
+            {
+                return false;
+            }
+
+            if (!m_customDescriptorPageState.committedReadIndicesValid.test(state.slot))
+            {
+                return false;
+            }
+
+            if (m_customDescriptorPageState.committedReadIndices[state.slot] != state.GetCurrentReadIndex())
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    uint32_t UniformManager::GetCustomBufferDescriptorPoolIndex(uint32_t slotId, uint32_t pageIndex) const
+    {
+        const uint32_t frameIndex      = D3D12RenderSystem::GetFrameIndex();
+        const uint32_t globalPageIndex = frameIndex * CUSTOM_DESCRIPTOR_PAGES_PER_FRAME + pageIndex;
+        return globalPageIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::GetCustomBufferDescriptorTableGPUHandleForPage(uint32_t pageIndex) const
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = m_customBufferDescriptorTableBaseGPUHandle;
+        handle.ptr += static_cast<uint64_t>(GetCustomBufferDescriptorPoolIndex(0, pageIndex)) * m_cbvSrvUavDescriptorIncrementSize;
+        return handle;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::PrepareCustomBufferDescriptorTableForCurrentState()
+    {
+        const uint32_t currentFrameIndex = D3D12RenderSystem::GetFrameIndex();
+        if (m_customDescriptorPageState.frameIndex != currentFrameIndex)
+        {
+            ResetCustomDescriptorPageState(currentFrameIndex);
+        }
+
+        if (IsCurrentCustomBufferStateCommitted())
+        {
+            return GetCustomBufferDescriptorTableGPUHandleForPage(m_customDescriptorPageState.activePageIndex);
+        }
+
+        if (m_customDescriptorPageState.hasCommittedPage)
+        {
+            const uint32_t nextPageIndex = m_customDescriptorPageState.activePageIndex + 1;
+            if (nextPageIndex >= CUSTOM_DESCRIPTOR_PAGES_PER_FRAME)
+            {
+                ERROR_AND_DIE(Stringf("Custom descriptor page overflow: frame=%u transitions=%u capacity=%u",
+                    currentFrameIndex,
+                    nextPageIndex,
+                    CUSTOM_DESCRIPTOR_PAGES_PER_FRAME));
+            }
+
+            m_customDescriptorPageState.activePageIndex = nextPageIndex;
+        }
+
+        CommitCustomBufferDescriptorPageForPage(m_customDescriptorPageState.activePageIndex);
+        CaptureCommittedCustomBufferReadState();
+        m_customDescriptorPageState.hasCommittedPage = true;
+
+        return GetCustomBufferDescriptorTableGPUHandleForPage(m_customDescriptorPageState.activePageIndex);
+    }
+
     // ========================================================================
     // UpdateDescriptorTableOffset
     // ========================================================================
-    void UniformManager::UpdateDescriptorTableOffset(uint32_t slotId, size_t currentIndex, uint32_t ringIndex)
+    void UniformManager::UpdateDescriptorTableOffset(const UniformBufferState& state, size_t currentIndex, uint32_t pageIndex)
     {
-        // [REFACTORED] Use unified m_bufferStates
-        auto* state = GetBufferStateBySlot(slotId, 1); // space=1 for Custom
-        if (!state || !state->buffer)
+        if (!state.buffer)
         {
             return;
         }
 
-        D3D12_GPU_VIRTUAL_ADDRESS bufferAddress = state->GetGPUVirtualAddress();
-        bufferAddress                           += currentIndex * state->elementSize;
+        D3D12_GPU_VIRTUAL_ADDRESS bufferAddress = state.GetGPUVirtualAddress();
+        bufferAddress                           += currentIndex * state.elementSize;
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
         cbvDesc.BufferLocation                  = bufferAddress;
-        cbvDesc.SizeInBytes                     = static_cast<UINT>(state->elementSize);
+        cbvDesc.SizeInBytes                     = static_cast<UINT>(state.elementSize);
 
-        const uint32_t frameIndex      = D3D12RenderSystem::GetFrameIndex();
-        const uint32_t drawRingIndex   = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
-        const uint32_t globalRingIndex = frameIndex * BindlessRootSignature::MAX_RING_FRAMES + drawRingIndex;
-        const uint32_t descriptorIndex = globalRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS + slotId;
+        const uint32_t descriptorIndex = GetCustomBufferDescriptorPoolIndex(state.slot, pageIndex);
 
         if (descriptorIndex >= m_customBufferDescriptorPool.size())
         {
@@ -519,18 +638,21 @@ namespace enigma::graphic
         device->CreateConstantBufferView(&cbvDesc, cpuHandle);
     }
 
-    void UniformManager::CommitCustomBufferDescriptorPage(uint32_t ringIndex)
+    void UniformManager::CommitCustomBufferDescriptorPageForPage(uint32_t pageIndex)
     {
+        // TODO(perf): Commit only the active program's custom-slot subset once
+        // that usage mask exists. Rebuilding every Custom-space slot keeps page
+        // selection broader than the draw's true dependency set.
         for (auto& entry : m_bufferStates)
         {
-            UniformBufferState& state = entry.second;
+            const UniformBufferState& state = entry.second;
 
             if (state.space != BufferSpace::Custom || !state.buffer)
             {
                 continue;
             }
 
-            UpdateDescriptorTableOffset(state.slot, state.GetCurrentReadIndex(), ringIndex);
+            UpdateDescriptorTableOffset(state, state.GetCurrentReadIndex(), pageIndex);
         }
     }
 
@@ -587,21 +709,6 @@ namespace enigma::graphic
             m_customBufferDescriptors.erase(it);
             LogInfo(LogUniform, "Freed descriptor for slot %u", slotId);
         }
-    }
-
-    // ========================================================================
-    // GetCustomBufferDescriptorTableGPUHandle
-    // ========================================================================
-    D3D12_GPU_DESCRIPTOR_HANDLE UniformManager::GetCustomBufferDescriptorTableGPUHandle(uint32_t ringIndex) const
-    {
-        D3D12_GPU_DESCRIPTOR_HANDLE handle = m_customBufferDescriptorTableBaseGPUHandle;
-        // Frame-isolated: each in-flight frame has its own descriptor region
-        // globalRingIndex = frameIndex * MAX_DRAWS_PER_FRAME + drawIndex
-        uint32_t frameIndex      = D3D12RenderSystem::GetFrameIndex();
-        uint32_t drawRingIndex   = ringIndex % BindlessRootSignature::MAX_RING_FRAMES;
-        uint32_t globalRingIndex = frameIndex * BindlessRootSignature::MAX_RING_FRAMES + drawRingIndex;
-        handle.ptr += globalRingIndex * BindlessRootSignature::MAX_CUSTOM_BUFFERS * m_cbvSrvUavDescriptorIncrementSize;
-        return handle;
     }
 
     // ========================================================================
