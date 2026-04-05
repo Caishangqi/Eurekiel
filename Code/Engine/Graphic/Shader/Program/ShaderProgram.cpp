@@ -6,6 +6,7 @@
 
 #include "ShaderProgram.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Integration/GraphicsRootBinder.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 
 namespace enigma::graphic
@@ -87,7 +88,7 @@ namespace enigma::graphic
     // 使用方法
     // ========================================================================
 
-    void ShaderProgram::Use(ID3D12GraphicsCommandList* commandList)
+    void ShaderProgram::Use(ID3D12GraphicsCommandList* commandList, GraphicsRootBinder& rootBinder) const
     {
         if (!IsValid())
         {
@@ -95,8 +96,7 @@ namespace enigma::graphic
             return;
         }
 
-        // 设置 Root Signature (PSO由PSOManager管理)
-        commandList->SetGraphicsRootSignature(m_rootSignature);
+        rootBinder.BindRootSignatureIfDirty(commandList, m_rootSignature);
     }
 
     void ShaderProgram::Unbind(ID3D12GraphicsCommandList* commandList)

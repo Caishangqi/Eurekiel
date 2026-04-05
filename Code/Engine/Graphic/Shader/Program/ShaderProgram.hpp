@@ -6,7 +6,7 @@
  * 职责:
  * 1. 持有 Root Signature (引用全局 Bindless Root Signature)
  * 2. 持有编译后的 CompiledShader
- * 3. 提供 Use() 方法设置 Root Signature
+ * 3. 提供 Use() 方法，通过 GraphicsRootBinder 按需绑定 Root Signature
  * 4. PSO 由 PSOManager 统一管理
  *
  * 对应 Iris:
@@ -31,6 +31,8 @@
 
 namespace enigma::graphic
 {
+    class GraphicsRootBinder;
+
     /**
      * @class ShaderProgram
      * @brief 着色器程序 - 持有编译后的着色器和Root Signature
@@ -46,7 +48,7 @@ namespace enigma::graphic
      * Iris                    DirectX 12
      * ----------------------------------------
      * int glProgramId    →    PSOManager管理的PSO
-     * glUseProgram(id)   →    SetGraphicsRootSignature
+     * glUseProgram(id)   →    GraphicsRootBinder::BindRootSignatureIfDirty
      * ProgramUniforms    →    Root Constants / UniformBuffer
      * ProgramSamplers    →    Bindless 采样器索引
      * ```
@@ -113,10 +115,11 @@ namespace enigma::graphic
         /**
          * @brief 激活此着色器程序 (对应 Iris Program.use())
          * @param commandList 命令列表
+         * @param rootBinder Graphics root-state binder
          *
          * 教学要点:
          * - 对应 OpenGL glUseProgram(id)
-         * - 仅设置 Root Signature
+         * - Delegates graphics root signature binding to GraphicsRootBinder
          * - PSO 由 PSOManager 在渲染时设置
          *
          * Iris 对应:
@@ -129,7 +132,7 @@ namespace enigma::graphic
          * }
          * ```
          */
-        void Use(ID3D12GraphicsCommandList* commandList);
+        void Use(ID3D12GraphicsCommandList* commandList, GraphicsRootBinder& rootBinder) const;
 
         /**
          * @brief 解绑当前着色器程序 (对应 Iris Program.unbind())

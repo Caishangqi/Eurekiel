@@ -124,6 +124,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <SolutionDir>$(MSBuildThisFileDirectory)..\..\..\Thesis\</SolutionDir>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</IntDir>
@@ -504,7 +507,7 @@
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
-    <ClCompile Include="Graphic\Integration\DrawBindingHelper.cpp"/>
+    <ClCompile Include="Graphic\Integration\GraphicsRootBinder.cpp"/>
     <ClCompile Include="Graphic\Integration\FullQuadsRenderer.cpp"/>
     <ClCompile Include="Graphic\Integration\RingBuffer\IndexRingBuffer.cpp"/>
     <ClCompile Include="Graphic\Integration\RingBuffer\VertexRingBuffer.cpp"/>
@@ -1057,7 +1060,8 @@
     <ClInclude Include="Graphic\Core\RenderState\StencilState.hpp"/>
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
-    <ClInclude Include="Graphic\Integration\DrawBindingHelper.hpp"/>
+    <ClInclude Include="Graphic\Integration\GraphicsRootBinder.hpp"/>
+    <ClInclude Include="Graphic\Integration\GraphicsRootBindingCache.hpp"/>
     <ClInclude Include="Graphic\Integration\FullQuadsRenderer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\IndexRingBuffer.hpp"/>
     <ClInclude Include="Graphic\Integration\RingBuffer\VertexRingBuffer.hpp"/>
