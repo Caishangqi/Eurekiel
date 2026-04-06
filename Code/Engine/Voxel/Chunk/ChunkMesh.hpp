@@ -84,7 +84,8 @@ namespace enigma::voxel
         bool IsEmpty() const;
 
         // GPU Buffer Management
-        void CompileToGPU();
+        void CompileToGPU(bool compileOpaque = true, bool compileCutout = true, bool compileTranslucent = true);
+        void ReleaseGpuBuffers(bool releaseOpaque = true, bool releaseCutout = true, bool releaseTranslucent = true);
         void InvalidateGPUData();
 
         // DX12 Buffer Access - Opaque (used by TerrainRenderPass)
@@ -103,6 +104,12 @@ namespace enigma::voxel
         std::vector<graphic::TerrainVertex>& GetOpaqueTerrainVertices() { return m_opaqueTerrainVertices; }
         std::vector<graphic::TerrainVertex>& GetCutoutTerrainVertices() { return m_cutoutTerrainVertices; }
         std::vector<graphic::TerrainVertex>& GetTranslucentTerrainVertices() { return m_translucentTerrainVertices; }
+        const std::vector<graphic::TerrainVertex>& GetOpaqueTerrainVertices() const { return m_opaqueTerrainVertices; }
+        const std::vector<graphic::TerrainVertex>& GetCutoutTerrainVertices() const { return m_cutoutTerrainVertices; }
+        const std::vector<graphic::TerrainVertex>& GetTranslucentTerrainVertices() const { return m_translucentTerrainVertices; }
+        const std::vector<uint32_t>&               GetOpaqueIndices() const { return m_opaqueIndices; }
+        const std::vector<uint32_t>&               GetCutoutIndices() const { return m_cutoutIndices; }
+        const std::vector<uint32_t>&               GetTranslucentIndices() const { return m_translucentIndices; }
 
     private:
         // TerrainVertex geometry data - Three render types
@@ -120,6 +127,8 @@ namespace enigma::voxel
         std::shared_ptr<graphic::D12IndexBuffer>  m_d12OpaqueIndexBuffer;
         std::shared_ptr<graphic::D12IndexBuffer>  m_d12CutoutIndexBuffer;
         std::shared_ptr<graphic::D12IndexBuffer>  m_d12TranslucentIndexBuffer;
-        bool                                      m_gpuDataValid = false;
+        bool                                      m_opaqueGpuDataValid = false;
+        bool                                      m_cutoutGpuDataValid = false;
+        bool                                      m_translucentGpuDataValid = false;
     };
 }

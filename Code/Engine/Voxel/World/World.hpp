@@ -7,6 +7,7 @@
 #include "../Time/ITimeProvider.hpp"
 
 #include "../Chunk/ChunkSerializationInterfaces.hpp"
+#include "../Chunk/ChunkRenderRegionStorage.hpp"
 #include "../Chunk/ChunkJob.hpp"
 #include "../Chunk/GenerateChunkJob.hpp"
 #include "../Chunk/LoadChunkJob.hpp"
@@ -49,7 +50,7 @@ namespace enigma::voxel
     public:
         World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator);
 
-        World() = default;
+        World();
         ~World();
 
         // Block Operations:
@@ -114,6 +115,11 @@ namespace enigma::voxel
         bool                                                 IsChunkLoadedDirect(int32_t chunkX, int32_t chunkY) const;
         size_t                                               GetLoadedChunkCount() const;
         std::unordered_map<int64_t, std::unique_ptr<Chunk>>& GetLoadedChunks();
+        ChunkBatchStats&                                     MutableChunkBatchStats() { return m_chunkBatchStats; }
+        const ChunkBatchStats&                               GetChunkBatchStats() const { return m_chunkBatchStats; }
+        ChunkRenderRegionStorage&                            GetChunkRenderRegionStorage() { return m_chunkRenderRegionStorage; }
+        const ChunkRenderRegionStorage&                      GetChunkRenderRegionStorage() const { return m_chunkRenderRegionStorage; }
+        uint32_t                                             GetMaxChunkBatchRegionRebuildsPerFrame() const { return m_maxChunkBatchRegionRebuildsPerFrame; }
 
         // 调试功能
         bool SetEnableChunkDebugDirect(bool enable = true);
@@ -206,6 +212,8 @@ namespace enigma::voxel
 
         // Update chunk meshes on main thread (called from Update())
         void UpdateChunkMeshes();
+        uint32_t RebuildQueuedChunkMeshes(uint32_t maxRebuildCount);
+        bool     RebuildChunkMeshNow(Chunk* chunk);
 
         // Sort mesh rebuild queue by distance to player (nearest first)
         void SortMeshQueueByDistance();
@@ -245,6 +253,8 @@ namespace enigma::voxel
         std::unordered_map<int64_t, std::unique_ptr<Chunk>> m_loadedChunks;
         bool                                                m_enableChunkDebug         = false;
         Texture*                                            m_cachedBlocksAtlasTexture = nullptr;
+        ChunkBatchStats                                     m_chunkBatchStats;
+        ChunkRenderRegionStorage                            m_chunkRenderRegionStorage;
 
         std::string m_worldName; // World identifier
         std::string m_worldPath; // World storage path
@@ -300,6 +310,7 @@ namespace enigma::voxel
         //-------------------------------------------------------------------------------------------
         std::deque<Chunk*> m_pendingMeshRebuildQueue; // Chunks waiting for mesh rebuild on main thread
         int                m_maxMeshRebuildsPerFrame = 2; // Maximum mesh rebuilds per frame (Assignment 03 spec)
+        uint32_t           m_maxChunkBatchRegionRebuildsPerFrame = 2;
 
         //-------------------------------------------------------------------------------------------
         // Phase 5: Graceful Shutdown State

@@ -20,8 +20,6 @@
 #include "Engine/Registry/Block/Block.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
 #include "Engine/Voxel/Block/VoxelShape.hpp"
-#include "Game/GameCommon.hpp"
-
 using namespace enigma::voxel;
 
 //-----------------------------------------------------------------------------------------------
@@ -56,7 +54,16 @@ World::~World()
 {
 }
 
-World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator) : m_worldName(worldName), m_worldSeed(worldSeed)
+World::World()
+    : m_chunkRenderRegionStorage(this)
+{
+    m_voxelLightEngine = std::make_unique<VoxelLightEngine>(this);
+}
+
+World::World(const std::string& worldName, uint64_t worldSeed, std::unique_ptr<enigma::voxel::TerrainGenerator> generator)
+    : m_chunkRenderRegionStorage(this)
+    , m_worldName(worldName)
+    , m_worldSeed(worldSeed)
 {
     using namespace enigma::voxel;
 
@@ -525,6 +532,7 @@ void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
 
     // Clean dirty light queue before deactivating chunk
     UndirtyAllBlocksInChunk(chunk);
+    m_chunkRenderRegionStorage.NotifyChunkUnloaded(IntVec2(chunkCoordinateX, chunkCoordinateY));
 
     // Validate pointer again before accessing chunk state (double insurance)
     ChunkState currentState = chunk->GetState();
@@ -698,6 +706,8 @@ std::vector<std::pair<int32_t, int32_t>> World::CalculateNeededChunks() const
 void World::Update(float deltaTime)
 {
     UNUSED(deltaTime)
+    m_chunkBatchStats.ResetFrameCounters();
+
     // Phase 3: Update nearby chunks (activate/deactivate based on player position)
     UpdateNearbyChunks();
 
@@ -715,8 +725,29 @@ void World::Update(float deltaTime)
 
     // Phase 1: Update chunk meshes on main thread (Assignment 03 requirement)
     UpdateChunkMeshes();
-}
 
+    const uint32_t rebuiltRegionCount = m_chunkRenderRegionStorage.RebuildDirtyRegions(m_maxChunkBatchRegionRebuildsPerFrame);
+    m_chunkBatchStats.dirtyRegionRebuilds = rebuiltRegionCount;
+
+    uint32_t activeChunkCount = 0;
+    std::unordered_set<ChunkBatchRegionId> visibleRegionIds;
+    visibleRegionIds.reserve(m_loadedChunks.size());
+
+    for (const auto& [chunkKey, chunkPtr] : m_loadedChunks)
+    {
+        UNUSED(chunkKey);
+        if (chunkPtr == nullptr || !chunkPtr->IsActive())
+        {
+            continue;
+        }
+
+        activeChunkCount++;
+        visibleRegionIds.insert(GetChunkBatchRegionIdForChunk(chunkPtr->GetChunkCoords()));
+    }
+
+    m_chunkBatchStats.visibleChunks  = activeChunkCount;
+    m_chunkBatchStats.visibleRegions = static_cast<uint32_t>(visibleRegionIds.size());
+}
 
 bool World::SetEnableChunkDebug(bool enable)
 {
@@ -1614,28 +1645,55 @@ void World::ProcessCompletedChunkTasks()
 
 void World::UpdateChunkMeshes()
 {
-    int rebuiltCount = 0;
-    while (rebuiltCount < m_maxMeshRebuildsPerFrame && !m_pendingMeshRebuildQueue.empty())
+    const uint32_t rebuiltCount = RebuildQueuedChunkMeshes(static_cast<uint32_t>(m_maxMeshRebuildsPerFrame));
+
+    if (rebuiltCount > 0)
+    {
+        LogDebug("world", "UpdateChunkMeshes: rebuilt %u meshes this frame, %zu remaining in queue",
+                 rebuiltCount, m_pendingMeshRebuildQueue.size());
+    }
+}
+
+uint32_t World::RebuildQueuedChunkMeshes(uint32_t maxRebuildCount)
+{
+    uint32_t rebuiltCount = 0;
+    while (rebuiltCount < maxRebuildCount && !m_pendingMeshRebuildQueue.empty())
     {
         Chunk* chunk = m_pendingMeshRebuildQueue.front();
         m_pendingMeshRebuildQueue.pop_front();
 
-        if (chunk && chunk->IsActive() && chunk->NeedsMeshRebuild())
+        if (RebuildChunkMeshNow(chunk))
         {
-            // Build mesh on main thread using ChunkMeshHelper
-            chunk->RebuildMesh();
             rebuiltCount++;
 
-            LogDebug("world", "Rebuilt mesh for chunk (%d, %d) on main thread (%d/%d this frame)",
-                     chunk->GetChunkX(), chunk->GetChunkY(), rebuiltCount, m_maxMeshRebuildsPerFrame);
+            LogDebug("world", "Rebuilt mesh for chunk (%d, %d) on main thread (%u/%u this pass)",
+                     chunk->GetChunkX(), chunk->GetChunkY(), rebuiltCount, maxRebuildCount);
         }
     }
 
-    if (rebuiltCount > 0)
+    return rebuiltCount;
+}
+
+bool World::RebuildChunkMeshNow(Chunk* chunk)
+{
+    if (chunk == nullptr || !chunk->IsActive() || !chunk->NeedsMeshRebuild())
     {
-        LogDebug("world", "UpdateChunkMeshes: rebuilt %d meshes this frame, %zu remaining in queue",
-                 rebuiltCount, m_pendingMeshRebuildQueue.size());
+        return false;
     }
+
+    const bool meshRebuilt = chunk->RebuildMesh();
+    if (!meshRebuilt)
+    {
+        return false;
+    }
+
+    ChunkMesh* chunkMesh = chunk->GetChunkMesh();
+    if (chunkMesh)
+    {
+        m_chunkRenderRegionStorage.NotifyChunkMeshReady(chunk);
+    }
+
+    return true;
 }
 
 void World::ScheduleChunkMeshRebuild(Chunk* chunk)
@@ -1647,6 +1705,7 @@ void World::ScheduleChunkMeshRebuild(Chunk* chunk)
 
     // Mark chunk as needing mesh rebuild
     chunk->MarkDirty();
+    m_chunkRenderRegionStorage.MarkChunkDirty(chunk->GetChunkCoords());
 
     // Check if chunk is already in queue
     auto it = std::find(m_pendingMeshRebuildQueue.begin(), m_pendingMeshRebuildQueue.end(), chunk);

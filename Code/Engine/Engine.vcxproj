@@ -697,6 +697,10 @@
     <ClCompile Include="Voxel\Builtin\BlockAir.cpp" />
     <ClCompile Include="Voxel\Builtin\DefaultBlock.cpp" />
     <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkBatchRegionBuilder.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkRenderRegionStorage.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkBatchCollector.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkBatchRenderer.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkStorageConfig.cpp" />
     <ClCompile Include="Voxel\Chunk\ESFFormat.cpp" />
@@ -1355,6 +1359,11 @@
     <ClInclude Include="Voxel\Builtin\BlockAir.hpp" />
     <ClInclude Include="Voxel\Builtin\DefaultBlock.hpp" />
     <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkBatchRegionBuilder.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkRenderRegionStorage.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkBatchCollector.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkBatchRenderer.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkBatchTypes.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkMesh.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkSerializationInterfaces.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkStorageConfig.hpp" />

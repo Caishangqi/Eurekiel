@@ -182,20 +182,18 @@ void Chunk::MarkDirty()
     m_isDirty = true;
 }
 
-void Chunk::RebuildMesh()
+bool Chunk::RebuildMesh()
 {
     auto newMesh = ChunkMeshHelper::BuildMesh(this);
 
     if (newMesh)
     {
-        // Compile the new mesh to GPU
-        newMesh->CompileToGPU();
-
         // Replace the old mesh with new one
         m_mesh    = std::move(newMesh);
         m_isDirty = false;
 
         core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshHelper");
+        return true;
     }
     else
     {
@@ -219,7 +217,7 @@ void Chunk::RebuildMesh()
 
         // 保持m_isDirty = true，下次UpdateChunkMeshes()会重试
         // 不创建空mesh，允许Active的Chunk暂时无mesh（符合Assignment 05要求）
-        return;
+        return false;
     }
 }
 

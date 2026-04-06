@@ -162,7 +162,7 @@ namespace enigma::voxel
 
         // Mesh Management - PUBLIC for rendering system
         void       MarkDirty(); // Mark chunk as needing mesh rebuild
-        void       RebuildMesh(); // Regenerate ChunkMesh from block data using ChunkMeshHelper
+        bool       RebuildMesh(); // Regenerate ChunkMesh from block data using ChunkMeshHelper
         void       SetMesh(std::unique_ptr<ChunkMesh> mesh); // Set new mesh (used by ChunkMeshHelper)
         ChunkMesh* GetMesh() const; // Get mesh for rendering
         bool       NeedsMeshRebuild() const; // Check if mesh needs rebuilding

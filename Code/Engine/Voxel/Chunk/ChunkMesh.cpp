@@ -1,7 +1,6 @@
 ﻿#include "ChunkMesh.hpp"
 #include "Engine/Voxel/World/TerrainVertexLayout.hpp"
-#include "Game/GameCommon.hpp"
-
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 using namespace enigma::voxel;
 
 void ChunkMesh::Clear()
@@ -12,7 +11,7 @@ void ChunkMesh::Clear()
     m_opaqueIndices.clear();
     m_cutoutIndices.clear();
     m_translucentIndices.clear();
-    InvalidateGPUData();
+    ReleaseGpuBuffers();
 }
 
 void ChunkMesh::Reserve(size_t opaqueQuads, size_t cutoutQuads, size_t translucentQuads)
@@ -279,39 +278,88 @@ void ChunkMesh::AddTranslucentTerrainQuadBackface(const std::array<graphic::Terr
 
 void ChunkMesh::InvalidateGPUData()
 {
-    m_gpuDataValid = false;
+    m_opaqueGpuDataValid = false;
+    m_cutoutGpuDataValid = false;
+    m_translucentGpuDataValid = false;
 }
 
-void ChunkMesh::CompileToGPU()
+void ChunkMesh::ReleaseGpuBuffers(bool releaseOpaque, bool releaseCutout, bool releaseTranslucent)
 {
-    if (m_gpuDataValid) return;
-
-    // Create opaque geometry buffers
-    if (HasOpaqueGeometry())
+    if (releaseOpaque)
     {
-        size_t opaqueVertexDataSize = sizeof(TerrainVertex) * m_opaqueTerrainVertices.size();
+        m_d12OpaqueVertexBuffer.reset();
+        m_d12OpaqueIndexBuffer.reset();
+        m_opaqueGpuDataValid = false;
+    }
+
+    if (releaseCutout)
+    {
+        m_d12CutoutVertexBuffer.reset();
+        m_d12CutoutIndexBuffer.reset();
+        m_cutoutGpuDataValid = false;
+    }
+
+    if (releaseTranslucent)
+    {
+        m_d12TranslucentVertexBuffer.reset();
+        m_d12TranslucentIndexBuffer.reset();
+        m_translucentGpuDataValid = false;
+    }
+}
+
+void ChunkMesh::CompileToGPU(bool compileOpaque, bool compileCutout, bool compileTranslucent)
+{
+    const bool needsOpaqueUpload = compileOpaque &&
+        HasOpaqueGeometry() &&
+        (!m_opaqueGpuDataValid || !m_d12OpaqueVertexBuffer || !m_d12OpaqueIndexBuffer);
+    if (needsOpaqueUpload)
+    {
+        size_t opaqueVertexDataSize = sizeof(graphic::TerrainVertex) * m_opaqueTerrainVertices.size();
         size_t opaqueIndexDataSize  = sizeof(uint32_t) * m_opaqueIndices.size();
-        m_d12OpaqueVertexBuffer     = D3D12RenderSystem::CreateVertexBuffer(opaqueVertexDataSize, sizeof(TerrainVertex), m_opaqueTerrainVertices.data());
-        m_d12OpaqueIndexBuffer      = D3D12RenderSystem::CreateIndexBuffer(opaqueIndexDataSize, m_opaqueIndices.data());
+        m_d12OpaqueVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(opaqueVertexDataSize, sizeof(graphic::TerrainVertex), m_opaqueTerrainVertices.data());
+        m_d12OpaqueIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(opaqueIndexDataSize, m_opaqueIndices.data());
+        m_opaqueGpuDataValid        = m_d12OpaqueVertexBuffer != nullptr && m_d12OpaqueIndexBuffer != nullptr;
+    }
+    else if (compileOpaque && !HasOpaqueGeometry())
+    {
+        m_d12OpaqueVertexBuffer.reset();
+        m_d12OpaqueIndexBuffer.reset();
+        m_opaqueGpuDataValid = false;
     }
 
-    // Create cutout geometry buffers (alpha test, no sorting needed)
-    if (HasCutoutGeometry())
+    const bool needsCutoutUpload = compileCutout &&
+        HasCutoutGeometry() &&
+        (!m_cutoutGpuDataValid || !m_d12CutoutVertexBuffer || !m_d12CutoutIndexBuffer);
+    if (needsCutoutUpload)
     {
-        size_t cutoutVertexDataSize = sizeof(TerrainVertex) * m_cutoutTerrainVertices.size();
+        size_t cutoutVertexDataSize = sizeof(graphic::TerrainVertex) * m_cutoutTerrainVertices.size();
         size_t cutoutIndexDataSize  = sizeof(uint32_t) * m_cutoutIndices.size();
-        m_d12CutoutVertexBuffer     = D3D12RenderSystem::CreateVertexBuffer(cutoutVertexDataSize, sizeof(TerrainVertex), m_cutoutTerrainVertices.data());
-        m_d12CutoutIndexBuffer      = D3D12RenderSystem::CreateIndexBuffer(cutoutIndexDataSize, m_cutoutIndices.data());
+        m_d12CutoutVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(cutoutVertexDataSize, sizeof(graphic::TerrainVertex), m_cutoutTerrainVertices.data());
+        m_d12CutoutIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(cutoutIndexDataSize, m_cutoutIndices.data());
+        m_cutoutGpuDataValid        = m_d12CutoutVertexBuffer != nullptr && m_d12CutoutIndexBuffer != nullptr;
     }
-
-    // Create translucent geometry buffers (alpha blend, requires depth sorting)
-    if (HasTranslucentGeometry())
+    else if (compileCutout && !HasCutoutGeometry())
     {
-        size_t translucentVertexDataSize = sizeof(TerrainVertex) * m_translucentTerrainVertices.size();
-        size_t translucentIndexDataSize  = sizeof(uint32_t) * m_translucentIndices.size();
-        m_d12TranslucentVertexBuffer     = D3D12RenderSystem::CreateVertexBuffer(translucentVertexDataSize, sizeof(TerrainVertex), m_translucentTerrainVertices.data());
-        m_d12TranslucentIndexBuffer      = D3D12RenderSystem::CreateIndexBuffer(translucentIndexDataSize, m_translucentIndices.data());
+        m_d12CutoutVertexBuffer.reset();
+        m_d12CutoutIndexBuffer.reset();
+        m_cutoutGpuDataValid = false;
     }
 
-    m_gpuDataValid = true;
+    const bool needsTranslucentUpload = compileTranslucent &&
+        HasTranslucentGeometry() &&
+        (!m_translucentGpuDataValid || !m_d12TranslucentVertexBuffer || !m_d12TranslucentIndexBuffer);
+    if (needsTranslucentUpload)
+    {
+        size_t translucentVertexDataSize = sizeof(graphic::TerrainVertex) * m_translucentTerrainVertices.size();
+        size_t translucentIndexDataSize  = sizeof(uint32_t) * m_translucentIndices.size();
+        m_d12TranslucentVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(translucentVertexDataSize, sizeof(graphic::TerrainVertex), m_translucentTerrainVertices.data());
+        m_d12TranslucentIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(translucentIndexDataSize, m_translucentIndices.data());
+        m_translucentGpuDataValid        = m_d12TranslucentVertexBuffer != nullptr && m_d12TranslucentIndexBuffer != nullptr;
+    }
+    else if (compileTranslucent && !HasTranslucentGeometry())
+    {
+        m_d12TranslucentVertexBuffer.reset();
+        m_d12TranslucentIndexBuffer.reset();
+        m_translucentGpuDataValid = false;
+    }
 }
