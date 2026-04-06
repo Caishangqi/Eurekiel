@@ -8,7 +8,7 @@
 #pragma comment (lib, "dxgi.lib")
 #pragma comment (lib, "d3dcompiler.lib")
 
-#include "Game/EngineBuildPreferences.hpp"
+#include "Engine/Core/BuildPreferences.hpp"
 
 #if defined(ENGINE_DEBUG_RENDER)
 #include <dxgidebug.h>

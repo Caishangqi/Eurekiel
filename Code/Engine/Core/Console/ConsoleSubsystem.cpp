@@ -12,8 +12,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-#include "Game/GameCommon.hpp"
-
 // Global console instance (defined in global scope, like other engine globals)
 enigma::core::ConsoleSubsystem* g_theConsole = nullptr;
 

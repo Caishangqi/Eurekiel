@@ -3,9 +3,6 @@
 #include "Engine/Core/NamedStrings.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Window/Window.hpp"
-#include "Game/GameCommon.hpp"
-
-
 bool InputSystem::Event_KeyPressed(EventArgs& args)
 {
     if (!g_theInput)

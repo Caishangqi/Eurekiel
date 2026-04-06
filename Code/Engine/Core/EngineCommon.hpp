@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "BuildPreferences.hpp"
 #include "Engine.hpp"
 #include "Console/DevConsole.hpp"
 #include "Event/EventSubsystem.hpp"
@@ -12,6 +13,9 @@ using enigma::event::EventArgs;
 using enigma::event::EventCallbackFunction;
 
 class Window;
+class IRenderer;
+class InputSystem;
+class AudioSubsystem;
 
 namespace enigma::core
 {
@@ -43,6 +47,9 @@ namespace enigma::event
 extern NamedStrings                         g_gameConfigBlackboard;
 extern DevConsole*                          g_theDevConsole;
 extern Window*                              g_theWindow;
+extern IRenderer*                           g_theRenderer;
+extern InputSystem*                         g_theInput;
+extern AudioSubsystem*                      g_theAudio;
 extern enigma::core::Engine*                g_theEngine;
 extern enigma::core::ConsoleSubsystem*      g_theConsole;
 extern enigma::resource::ResourceSubsystem* g_theResource;

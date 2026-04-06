@@ -4,9 +4,9 @@
 #include "../Logger/LogLevel.hpp"
 #include "../Logger/LoggerSubsystem.hpp"
 #include "../Engine.hpp"
+#include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Input/InputSystem.hpp"
-#include "Game/GameCommon.hpp"
 
 namespace enigma::core
 {

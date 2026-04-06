@@ -1,5 +1,6 @@
 #include "TextureAtlas.hpp"
 #include "AtlasBorderHelper.hpp"
+#include "../../Core/EngineCommon.hpp"
 #include "../../Core/ErrorWarningAssert.hpp"
 #include "../../Core/StringUtils.hpp"
 #include "../../Core/FileSystemHelper.hpp"
@@ -177,7 +178,6 @@ namespace enigma::resource
         if (!m_atlasTexture && m_atlasImage && IsLoaded())
         {
             // Get renderer from global context
-            extern IRenderer* g_theRenderer;
             if (g_theRenderer && m_atlasImage)
             {
                 // Create GPU texture from atlas image with MipMap support

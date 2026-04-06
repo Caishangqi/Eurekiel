@@ -1,6 +1,7 @@
 #pragma once
 
 //-----------------------------------------------------------------------------------------------
+#include "Engine/Core/BuildPreferences.hpp"
 #include "ThirdParty/fmod/fmod.h"
 #include "../Core/SubsystemManager.hpp"
 

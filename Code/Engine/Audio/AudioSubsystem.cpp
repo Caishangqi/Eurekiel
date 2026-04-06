@@ -5,17 +5,10 @@
 #include "Engine/Core/Engine.hpp"
 
 //-----------------------------------------------------------------------------------------------
-// To disable audio entirely (and remove requirement for fmod.dll / fmod64.dll) for any game,
-//	#define ENGINE_DISABLE_AUDIO in your game's Code/Game/EngineBuildPreferences.hpp file.
-//
-// Note that this #include is an exception to the rule "engine code doesn't know about game code".
-//	Purpose: Each game can now direct the engine via #defines to build differently for that game.
-//	Downside: ALL games must now have this Code/Game/EngineBuildPreferences.hpp file.
-//
-// SD1 NOTE: THIS MEANS *EVERY* GAME MUST HAVE AN EngineBuildPreferences.hpp FILE IN ITS CODE/GAME FOLDER!!
+// To disable audio entirely (and remove requirement for fmod.dll / fmod64.dll),
+// define ENGINE_DISABLE_AUDIO in the engine build configuration.
 #include "Engine/Math/Vec3.hpp"
 #include "ThirdParty/fmod/fmod.hpp"
-#include "Game/EngineBuildPreferences.hpp"
 
 // Resource system integration
 #include "Engine/Resource/ResourceSubsystem.hpp"
