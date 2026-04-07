@@ -20,7 +20,7 @@
 #include "ShaderSource.hpp"
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp"
-#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 3: ShaderCompileOptions
+#include "Engine/Graphic/Shader/Common/ShaderCompileOptions.hpp"
 #include <memory>
 #include <optional>
 

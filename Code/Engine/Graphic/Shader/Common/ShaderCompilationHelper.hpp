@@ -93,6 +93,7 @@
 #include "Engine/Graphic/Shader/Program/Properties/ProgramDirectives.hpp"
 #include "Engine/Graphic/Shader/Compiler/DXCCompiler.hpp"
 #include "Engine/Graphic/Resource/CompiledShader.hpp"
+#include "ShaderCompileOptions.hpp"
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -100,100 +101,6 @@
 
 namespace enigma::graphic
 {
-    /**
-     * @brief 着色器编译选项配置（高层抽象）
-     * 
-     * 设计变更（Task 3）：
-     * - 移除 autoIncludeCommon 布尔值
-     * - 使用 includePaths 列表，用户完全控制 Include 路径
-     * - 添加静态工厂方法提供常用配置
-     * 
-     * 使用示例：
-     * @code
-     * // ========== 静态工厂方法（推荐） ==========
-     * 
-     * // 1. 默认配置（不包含 Common.hlsl）
-     * auto opts1 = ShaderCompileOptions::Default();
-     * 
-     * // 2. 包含 Common.hlsl（最常用）
-     * auto opts2 = ShaderCompileOptions::WithCommonInclude();
-     * 
-     * // 3. 调试配置（启用调试信息，禁用优化）
-     * auto opts3 = ShaderCompileOptions::Debug();
-     * 
-     * // ========== 自定义配置 ==========
-     * 
-     * // 4. 完全自定义
-     * ShaderCompileOptions opts4;
-     * opts4.includePaths = {"shaders/lib", "shaders/include"};
-     * opts4.defines = {"USE_BINDLESS=1", "DEBUG_MODE=1"};
-     * opts4.enableDebugInfo = true;
-     * opts4.enableOptimization = false;
-     * 
-     * // 5. 基于默认配置修改
-     * auto opts5 = ShaderCompileOptions::WithCommonInclude();
-     * opts5.defines.push_back("CUSTOM_DEFINE=1");
-     * opts5.enableDebugInfo = true;
-     * 
-     * // ========== 实际使用 ==========
-     * 
-     * // 使用自定义选项编译
-     * auto program = g_theRendererSubsystem->CreateShaderProgramFromSource(
-     *     vsSource, psSource, "CustomShader", opts4
-     * );
-     * @endcode
-     * 
-     * 教学要点：
-     * - 理解静态工厂方法的优势（语义清晰，易于使用）
-     * - 学习如何基于默认配置进行定制
-     * - 掌握编译选项对着色器性能的影响
-     */
-    struct ShaderCompileOptions
-    {
-        bool                               enableDebugInfo    = false; ///< 是否生成调试信息
-        bool                               enableOptimization = true; ///< 是否启用优化 (-O3)
-        bool                               enable16BitTypes   = true; ///< 是否启用 16-bit 类型
-        bool                               enableBindless     = true; ///< 是否启用 Bindless 支持 (SM 6.6)
-        std::string                        entryPoint; ///< 着色器入口点名称（空字符串=使用默认值，"main"=Iris兼容）
-        std::vector<std::string>           defines; ///< 编译宏定义 (例: "USE_BINDLESS=1")
-        std::vector<std::filesystem::path> includePaths; ///< Include 搜索路径（用户完全控制）
-
-        /**
-         * @brief 创建默认配置
-         * @return 默认编译选项（不包含 Common.hlsl）
-         * 
-         * 默认配置：
-         * - enableDebugInfo = false
-         * - enableOptimization = true
-         * - enable16BitTypes = true
-         * - enableBindless = true
-         * - defines = {}
-         * - includePaths = {}（空，不自动包含 Common.hlsl）
-         */
-        static ShaderCompileOptions Default();
-
-        /**
-         * @brief 创建调试配置
-         * @return 调试编译选项（启用调试信息，禁用优化）
-         * 
-         * 调试配置：
-         * - enableDebugInfo = true
-         * - enableOptimization = false
-         * - 其他选项与 Default() 相同
-         */
-        static ShaderCompileOptions Debug();
-
-        /**
-         * @brief 创建包含 Common.hlsl 的配置
-         * @return 包含引擎核心路径的编译选项
-         * 
-         * 配置：
-         * - 所有选项与 Default() 相同
-         * - includePaths = {"Run/.enigma/assets/engine/shaders/core/"}
-         */
-        static ShaderCompileOptions WithCommonInclude();
-    };
-
     /**
      * @class ShaderCompilationHelper
      * @brief 着色器编译辅助工具类 - 纯静态工具类

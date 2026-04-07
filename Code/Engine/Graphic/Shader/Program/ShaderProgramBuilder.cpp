@@ -5,6 +5,7 @@
  */
 
 #include "ShaderProgramBuilder.hpp"
+#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include <iostream>
 

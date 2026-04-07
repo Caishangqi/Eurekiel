@@ -27,7 +27,7 @@
 #include "RendererSubsystemConfig.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 #include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface for new camera system
-#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp"
+#include "Engine/Graphic/Shader/Common/ShaderCompileOptions.hpp"
 #include "Engine/Graphic/Integration/GraphicsRootBinder.hpp"
 #include "Engine/Graphic/Target/ColorTextureProvider.hpp"
 #include "Engine/Graphic/Target/DepthTextureProvider.hpp"

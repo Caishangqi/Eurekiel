@@ -139,31 +139,6 @@ namespace enigma::graphic
         return dxcOpts;
     }
 
-    // ========== ShaderCompileOptions 静态工厂方法 ==========
-
-    ShaderCompileOptions ShaderCompileOptions::Default()
-    {
-        ShaderCompileOptions opts;
-        // 使用默认值（结构体初始化器已设置）
-        return opts;
-    }
-
-    ShaderCompileOptions ShaderCompileOptions::Debug()
-    {
-        ShaderCompileOptions opts;
-        opts.enableDebugInfo    = true;
-        opts.enableOptimization = false;
-        return opts;
-    }
-
-    ShaderCompileOptions ShaderCompileOptions::WithCommonInclude()
-    {
-        ShaderCompileOptions opts;
-        opts.includePaths.push_back(ShaderCompilationHelper::GetEngineShaderCorePath());
-        opts.entryPoint = "main"; //  Iris兼容：使用 "main" 作为入口点
-        return opts;
-    }
-
     // ========== 私有辅助方法 ==========
 
     std::string ShaderCompilationHelper::GetShaderProfile(ShaderStage stage)
