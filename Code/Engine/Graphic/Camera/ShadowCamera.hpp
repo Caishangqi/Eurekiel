@@ -86,6 +86,7 @@ namespace enigma::graphic
          * @return CameraType::Shadow
          */
         [[nodiscard]] CameraType GetCameraType() const override;
+        bool                     GetFrustum(Frustum& outFrustum) const override;
 
         /**
          * @brief Fill shadow matrices in MatricesUniforms

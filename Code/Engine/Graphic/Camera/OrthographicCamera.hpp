@@ -95,6 +95,7 @@ namespace enigma::graphic
          * @return Orthographic projection matrix (view-to-clip)
          */
         [[nodiscard]] Mat44 GetProjectionMatrix() const override;
+        bool                GetFrustum(Frustum& outFrustum) const override;
 
         /**
          * @brief Get camera type

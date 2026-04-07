@@ -1,6 +1,7 @@
 #include "PerspectiveCamera.hpp"
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
+#include "Engine/Math/Frustum.hpp"
 
 #include <stdexcept>
 
@@ -29,6 +30,30 @@ namespace enigma::graphic
     {
         // Perspective projection using FOV and aspect ratio
         return Mat44::MakePerspectiveProjection(m_fov, m_aspectRatio, m_nearPlane, m_farPlane);
+    }
+
+    bool PerspectiveCamera::GetFrustum(Frustum& outFrustum) const
+    {
+        if (m_aspectRatio <= 0.0f || m_nearPlane <= 0.0f || m_farPlane <= m_nearPlane)
+        {
+            return false;
+        }
+
+        Vec3 forward;
+        Vec3 left;
+        Vec3 up;
+        GetCameraBasis_IFwd_JLeft_KUp(forward, left, up);
+
+        outFrustum = Frustum::CreatePerspective(
+            m_position,
+            forward,
+            left,
+            up,
+            m_fov,
+            m_aspectRatio,
+            m_nearPlane,
+            m_farPlane);
+        return true;
     }
 
     CameraType PerspectiveCamera::GetCameraType() const

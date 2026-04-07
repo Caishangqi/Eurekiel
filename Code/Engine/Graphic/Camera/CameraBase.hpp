@@ -87,6 +87,11 @@ namespace enigma::graphic
         // [REFACTOR] Protected Helpers - Extracted from EnigmaCamera
         // ====================================================================
 
+        void GetCameraBasis_IFwd_JLeft_KUp(
+            Vec3& outForward,
+            Vec3& outLeft,
+            Vec3& outUp) const;
+
         /**
          * @brief Calculate camera-to-world transformation matrix
          * @return Matrix transforming camera space to world space

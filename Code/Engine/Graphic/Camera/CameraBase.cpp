@@ -75,6 +75,14 @@ namespace enigma::graphic
     // [REFACTOR] Protected Helpers - Extracted from EnigmaCamera.cpp
     // ========================================================================
 
+    void CameraBase::GetCameraBasis_IFwd_JLeft_KUp(
+        Vec3& outForward,
+        Vec3& outLeft,
+        Vec3& outUp) const
+    {
+        m_orientation.GetAsVectors_IFwd_JLeft_KUp(outForward, outLeft, outUp);
+    }
+
     Mat44 CameraBase::GetCameraToWorldTransform() const
     {
         // [REFACTOR] Rotation order: Translation * Z(yaw) * X(roll) * Y(pitch)

@@ -8,6 +8,7 @@
 // ============================================================================
 
 #include "CameraCommon.hpp"
+#include "ICullingVolumeProvider.hpp"
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 
 #include "Engine/Math/Mat44.hpp"
@@ -38,7 +39,7 @@ namespace enigma::graphic
      * camera->UpdateMatrixUniforms(uniforms);
      * ```
      */
-    class ICamera
+    class ICamera : public ICullingVolumeProvider
     {
     public:
         // ====================================================================

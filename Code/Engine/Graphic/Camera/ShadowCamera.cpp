@@ -5,6 +5,7 @@
 #include "ShadowCamera.hpp"
 
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp"
+#include "Engine/Math/Frustum.hpp"
 
 namespace enigma::graphic
 {
@@ -30,6 +31,25 @@ namespace enigma::graphic
     CameraType ShadowCamera::GetCameraType() const
     {
         return CameraType::Shadow;
+    }
+
+    bool ShadowCamera::GetFrustum(Frustum& outFrustum) const
+    {
+        Vec3 forward;
+        Vec3 left;
+        Vec3 up;
+        GetCameraBasis_IFwd_JLeft_KUp(forward, left, up);
+
+        outFrustum = Frustum::CreateOrthographic(
+            m_position,
+            forward,
+            left,
+            up,
+            m_bottomLeft,
+            m_topRight,
+            m_nearPlane,
+            m_farPlane);
+        return true;
     }
 
     void ShadowCamera::UpdateMatrixUniforms(MatricesUniforms& uniforms) const

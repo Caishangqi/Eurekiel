@@ -1,5 +1,6 @@
 #include "OrthographicCamera.hpp"
 #include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp"
+#include "Engine/Math/Frustum.hpp"
 
 namespace enigma::graphic
 {
@@ -51,6 +52,30 @@ namespace enigma::graphic
         }
 
         return projection;
+    }
+
+    bool OrthographicCamera::GetFrustum(Frustum& outFrustum) const
+    {
+        if (m_farPlane <= m_nearPlane)
+        {
+            return false;
+        }
+
+        Vec3 forward;
+        Vec3 left;
+        Vec3 up;
+        GetCameraBasis_IFwd_JLeft_KUp(forward, left, up);
+
+        outFrustum = Frustum::CreateOrthographic(
+            m_position,
+            forward,
+            left,
+            up,
+            m_bottomLeft,
+            m_topRight,
+            m_nearPlane,
+            m_farPlane);
+        return true;
     }
 
     CameraType OrthographicCamera::GetCameraType() const
