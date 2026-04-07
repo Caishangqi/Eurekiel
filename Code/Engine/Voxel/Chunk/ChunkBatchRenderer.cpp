@@ -54,6 +54,8 @@ namespace enigma::voxel
 
         g_theRendererSubsystem->SetVertexBuffer(item.geometry->vertexBuffer.get());
         g_theRendererSubsystem->SetIndexBuffer(item.geometry->indexBuffer.get());
-        g_theRendererSubsystem->DrawIndexed(item.indexCount, item.startIndex, 0);
+        const uint32_t startIndex = item.geometry->indexAllocation.startElement + item.startIndex;
+        const int32_t  baseVertex = static_cast<int32_t>(item.geometry->vertexAllocation.startElement);
+        g_theRendererSubsystem->DrawIndexed(item.indexCount, startIndex, baseVertex);
     }
 }

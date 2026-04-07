@@ -1,15 +1,27 @@
 #include "ChunkBatchCollector.hpp"
 
+#include "ChunkOcclusionCuller.hpp"
 #include "../World/World.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Graphic/Camera/ICamera.hpp"
+#include "Engine/Visibility/OcclusionCuller.hpp"
 
 namespace
 {
+    using enigma::graphic::CameraType;
     using enigma::voxel::ChunkBatchCollection;
     using enigma::voxel::ChunkBatchDrawItem;
     using enigma::voxel::ChunkBatchLayer;
     using enigma::voxel::ChunkRenderRegion;
+    using enigma::voxel::ChunkOcclusionCuller;
     using enigma::voxel::World;
+
+    enum class BatchCullingTarget : uint8_t
+    {
+        None = 0,
+        MainCamera,
+        ShadowCamera
+    };
 
     bool CanUseRegionBatch(
         const ChunkRenderRegion* region,
@@ -23,28 +35,113 @@ namespace
         return !region->geometry.GetSpanForLayer(layer).IsEmpty();
     }
 
-    void CollectLayerImpl(
+    void AppendRegionDrawItem(
         ChunkBatchCollection&       result,
-        World&                      world,
+        const ChunkRenderRegion&    region,
         ChunkBatchLayer             layer)
     {
-        auto& regions = world.GetChunkRenderRegionStorage().GetRegions();
-        for (auto& [regionId, region] : regions)
+        if (!CanUseRegionBatch(&region, layer))
+        {
+            return;
+        }
+
+        const auto& span = region.geometry.GetSpanForLayer(layer);
+        ChunkBatchDrawItem drawItem;
+        drawItem.regionId = region.id;
+        drawItem.geometry = &region.geometry;
+        drawItem.startIndex = span.startIndex;
+        drawItem.indexCount = span.indexCount;
+        result.batchItems.push_back(drawItem);
+    }
+
+    void CollectAllRegions(
+        ChunkBatchCollection& result,
+        World&                world,
+        ChunkBatchLayer       layer)
+    {
+        const auto& regions = world.GetChunkRenderRegionStorage().GetRegions();
+        for (const auto& [regionId, region] : regions)
         {
             UNUSED(regionId);
-            if (!CanUseRegionBatch(&region, layer))
+            AppendRegionDrawItem(result, region, layer);
+        }
+    }
+
+    BatchCullingTarget GetBatchCullingTarget(
+        const enigma::voxel::ChunkBatchViewContext& view,
+        ChunkBatchLayer                              layer)
+    {
+        if (view.camera == nullptr)
+        {
+            return BatchCullingTarget::None;
+        }
+
+        switch (view.camera->GetCameraType())
+        {
+        case CameraType::Perspective:
+        case CameraType::Orthographic:
+            return BatchCullingTarget::MainCamera;
+        case CameraType::Shadow:
+            return BatchCullingTarget::ShadowCamera;
+        default:
+            return BatchCullingTarget::None;
+        }
+    }
+
+    void UpdateCullingStats(
+        World&                                         world,
+        BatchCullingTarget                             cullingTarget,
+        const enigma::visibility::OcclusionCullResult& cullingResult)
+    {
+        auto& stats = world.MutableChunkBatchStats();
+        switch (cullingTarget)
+        {
+        case BatchCullingTarget::MainCamera:
+            stats.visibleRegions = cullingResult.visibleItemCount;
+            stats.culledRegions = cullingResult.culledItemCount;
+            break;
+        case BatchCullingTarget::ShadowCamera:
+            stats.shadowVisibleRegions = cullingResult.visibleItemCount;
+            stats.shadowCulledRegions = cullingResult.culledItemCount;
+            break;
+        default:
+            break;
+        }
+    }
+
+    bool CollectCulledRegions(
+        ChunkBatchCollection&                       result,
+        const enigma::voxel::ChunkBatchViewContext& view,
+        ChunkBatchLayer                              layer)
+    {
+        const BatchCullingTarget cullingTarget = GetBatchCullingTarget(view, layer);
+        if (cullingTarget == BatchCullingTarget::None || view.world == nullptr)
+        {
+            return false;
+        }
+
+        const ChunkOcclusionCuller domainCuller(view.world->GetChunkRenderRegionStorage());
+        const enigma::visibility::OcclusionCullResult cullingResult =
+            enigma::visibility::OcclusionCuller::Cull(*view.camera, domainCuller);
+        if (!cullingResult.volumeValid)
+        {
+            return false;
+        }
+
+        UpdateCullingStats(*view.world, cullingTarget, cullingResult);
+
+        for (const void* visibleItem : cullingResult.visibleItems)
+        {
+            const auto* region = static_cast<const ChunkRenderRegion*>(visibleItem);
+            if (region == nullptr)
             {
                 continue;
             }
 
-            const auto& span = region.geometry.GetSpanForLayer(layer);
-            ChunkBatchDrawItem drawItem;
-            drawItem.regionId   = region.id;
-            drawItem.geometry   = &region.geometry;
-            drawItem.startIndex = span.startIndex;
-            drawItem.indexCount = span.indexCount;
-            result.batchItems.push_back(drawItem);
+            AppendRegionDrawItem(result, *region, layer);
         }
+
+        return true;
     }
 }
 
@@ -60,10 +157,13 @@ namespace enigma::voxel
             return result;
         }
 
-        UNUSED(view.camera);
         UNUSED(view.visibilityHint);
 
-        CollectLayerImpl(result, *view.world, layer);
+        if (!CollectCulledRegions(result, view, layer))
+        {
+            CollectAllRegions(result, *view.world, layer);
+        }
+
         return result;
     }
 }

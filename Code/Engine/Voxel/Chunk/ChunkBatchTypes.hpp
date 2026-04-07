@@ -55,10 +55,51 @@ namespace enigma::voxel
         }
     };
 
+    struct ChunkBatchChunkLayerSlice
+    {
+        uint32_t startIndex = 0;
+        uint32_t indexCount = 0;
+        uint32_t reservedIndexCount = 0;
+
+        bool HasGeometry() const
+        {
+            return indexCount > 0;
+        }
+
+        bool HasReservedCapacity() const
+        {
+            return reservedIndexCount > 0;
+        }
+
+        uint32_t GetReservedEndIndex() const
+        {
+            return startIndex + reservedIndexCount;
+        }
+    };
+
+    struct ChunkBatchArenaAllocation
+    {
+        uint32_t startElement = 0;
+        uint32_t elementCount = 0;
+
+        bool IsValid() const
+        {
+            return elementCount > 0;
+        }
+
+        void Reset()
+        {
+            startElement = 0;
+            elementCount = 0;
+        }
+    };
+
     struct ChunkBatchRegionGeometry
     {
         std::shared_ptr<graphic::D12VertexBuffer> vertexBuffer;
         std::shared_ptr<graphic::D12IndexBuffer>  indexBuffer;
+        ChunkBatchArenaAllocation                 vertexAllocation;
+        ChunkBatchArenaAllocation                 indexAllocation;
 
         ChunkBatchLayerSpan opaque;
         ChunkBatchLayerSpan cutout;
@@ -71,6 +112,11 @@ namespace enigma::voxel
         bool IsEmpty() const
         {
             return opaque.IsEmpty() && cutout.IsEmpty() && translucent.IsEmpty();
+        }
+
+        bool HasValidArenaAllocations() const
+        {
+            return vertexAllocation.IsValid() && indexAllocation.IsValid();
         }
 
         ChunkBatchLayerSpan& GetSpanForLayer(ChunkBatchLayer layer)
@@ -105,13 +151,21 @@ namespace enigma::voxel
 
         bool IsValid() const
         {
-            return geometry != nullptr && geometry->gpuDataValid && indexCount > 0;
+            return geometry != nullptr &&
+                geometry->gpuDataValid &&
+                geometry->vertexBuffer != nullptr &&
+                geometry->indexBuffer != nullptr &&
+                geometry->HasValidArenaAllocations() &&
+                indexCount > 0;
         }
     };
 
     struct ChunkBatchStats
     {
         uint32_t visibleRegions = 0;
+        uint32_t culledRegions = 0;
+        uint32_t shadowVisibleRegions = 0;
+        uint32_t shadowCulledRegions = 0;
         uint32_t visibleChunks = 0;
         uint32_t batchedDraws = 0;
         uint32_t dirtyRegionRebuilds = 0;
@@ -119,6 +173,9 @@ namespace enigma::voxel
         void ResetFrameCounters()
         {
             visibleRegions = 0;
+            culledRegions = 0;
+            shadowVisibleRegions = 0;
+            shadowCulledRegions = 0;
             visibleChunks = 0;
             batchedDraws = 0;
             dirtyRegionRebuilds = 0;

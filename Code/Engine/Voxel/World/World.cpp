@@ -730,8 +730,6 @@ void World::Update(float deltaTime)
     m_chunkBatchStats.dirtyRegionRebuilds = rebuiltRegionCount;
 
     uint32_t activeChunkCount = 0;
-    std::unordered_set<ChunkBatchRegionId> visibleRegionIds;
-    visibleRegionIds.reserve(m_loadedChunks.size());
 
     for (const auto& [chunkKey, chunkPtr] : m_loadedChunks)
     {
@@ -742,11 +740,9 @@ void World::Update(float deltaTime)
         }
 
         activeChunkCount++;
-        visibleRegionIds.insert(GetChunkBatchRegionIdForChunk(chunkPtr->GetChunkCoords()));
     }
 
-    m_chunkBatchStats.visibleChunks  = activeChunkCount;
-    m_chunkBatchStats.visibleRegions = static_cast<uint32_t>(visibleRegionIds.size());
+    m_chunkBatchStats.visibleChunks = activeChunkCount;
 }
 
 bool World::SetEnableChunkDebug(bool enable)

@@ -10,10 +10,61 @@ namespace
 {
     using enigma::graphic::TerrainVertex;
     using enigma::voxel::Chunk;
-    using enigma::voxel::ChunkBatchLayerSpan;
+    using enigma::voxel::ChunkBatchChunkBuildOutput;
+    using enigma::voxel::ChunkBatchChunkLayerSlice;
     using enigma::voxel::ChunkBatchRegionBuildInput;
     using enigma::voxel::ChunkBatchRegionBuildOutput;
     using enigma::voxel::ChunkBatchRegionId;
+
+    constexpr uint32_t kVertexReserveAlignment = 8u;
+    constexpr uint32_t kIndexReserveAlignment  = 3u;
+
+    uint32_t AlignUp(uint32_t value, uint32_t alignment)
+    {
+        if (value == 0u || alignment == 0u)
+        {
+            return value;
+        }
+
+        const uint32_t remainder = value % alignment;
+        return (remainder == 0u) ? value : (value + alignment - remainder);
+    }
+
+    uint32_t ComputeReservedVertexCount(uint32_t actualCount)
+    {
+        if (actualCount == 0u)
+        {
+            return 0u;
+        }
+
+        const uint32_t slack = (std::max)(actualCount / 8u, 8u);
+        return AlignUp(actualCount + slack, kVertexReserveAlignment);
+    }
+
+    uint32_t ComputeReservedIndexCount(uint32_t actualCount)
+    {
+        if (actualCount == 0u)
+        {
+            return 0u;
+        }
+
+        const uint32_t slack = (std::max)(actualCount / 8u, 3u);
+        return AlignUp(actualCount + slack, kIndexReserveAlignment);
+    }
+
+    TerrainVertex MakeZeroTerrainVertex()
+    {
+        return TerrainVertex{
+            Vec3(),
+            Rgba8(),
+            Vec2(),
+            Vec3(),
+            Vec2(),
+            0u,
+            0u,
+            Vec2()
+        };
+    }
 
     Vec3 GetRegionOriginWorldPosition(const ChunkBatchRegionId& regionId)
     {
@@ -89,33 +140,8 @@ namespace
         }
     }
 
-    void ReserveOutputGeometry(ChunkBatchRegionBuildOutput& output, const std::vector<const Chunk*>& chunks)
-    {
-        size_t totalVertexCount = 0;
-        size_t totalIndexCount  = 0;
-
-        for (const Chunk* chunk : chunks)
-        {
-            const enigma::voxel::ChunkMesh* mesh = chunk->GetChunkMesh();
-            if (mesh == nullptr)
-            {
-                continue;
-            }
-
-            totalVertexCount += mesh->GetOpaqueVertexCount();
-            totalVertexCount += mesh->GetCutoutVertexCount();
-            totalVertexCount += mesh->GetTranslucentVertexCount();
-            totalIndexCount += mesh->GetOpaqueIndexCount();
-            totalIndexCount += mesh->GetCutoutIndexCount();
-            totalIndexCount += mesh->GetTranslucentIndexCount();
-        }
-
-        output.vertices.reserve(totalVertexCount);
-        output.indices.reserve(totalIndexCount);
-    }
-
     bool AppendLayerGeometry(
-        ChunkBatchRegionBuildOutput& output,
+        ChunkBatchChunkBuildOutput& output,
         const enigma::voxel::ChunkMesh& mesh,
         enigma::voxel::ChunkBatchLayer layer,
         const Vec3& translation)
@@ -137,7 +163,8 @@ namespace
             output.vertices.push_back(translatedVertex);
         }
 
-        output.indices.reserve(output.indices.size() + sourceIndices.size());
+        std::vector<uint32_t>& targetIndices = output.GetIndicesForLayer(layer);
+        targetIndices.reserve(targetIndices.size() + sourceIndices.size());
         for (uint32_t sourceIndex : sourceIndices)
         {
             if (sourceIndex >= sourceVertices.size())
@@ -145,56 +172,35 @@ namespace
                 ERROR_AND_DIE("ChunkBatchRegionBuilder encountered invalid layer geometry indices");
             }
 
-            output.indices.push_back(baseVertex + sourceIndex);
+            targetIndices.push_back(baseVertex + sourceIndex);
         }
 
         return true;
     }
 
-    ChunkBatchLayerSpan BuildLayerSpan(
-        ChunkBatchRegionBuildOutput& output,
-        const std::vector<const Chunk*>& chunks,
-        const ChunkBatchRegionId& regionId,
-        enigma::voxel::ChunkBatchLayer layer,
-        bool& hasWorldBounds,
-        AABB3& worldBounds)
+    ChunkBatchChunkBuildOutput BuildChunkGeometryInternal(const Chunk& chunk, const ChunkBatchRegionId& regionId)
     {
-        ChunkBatchLayerSpan span;
-        span.startIndex = static_cast<uint32_t>(output.indices.size());
+        ChunkBatchChunkBuildOutput output;
+        output.chunkCoords = chunk.GetChunkCoords();
 
-        for (const Chunk* chunk : chunks)
+        const enigma::voxel::ChunkMesh* mesh = chunk.GetChunkMesh();
+        if (mesh == nullptr)
         {
-            const enigma::voxel::ChunkMesh* mesh = chunk->GetChunkMesh();
-            if (mesh == nullptr)
-            {
-                continue;
-            }
-
-            const bool appended = AppendLayerGeometry(
-                output,
-                *mesh,
-                layer,
-                GetChunkRegionLocalTranslation(*chunk, regionId));
-            if (!appended)
-            {
-                continue;
-            }
-
-            const AABB3 chunkBounds = BuildChunkWorldBounds(*chunk);
-            if (!hasWorldBounds)
-            {
-                worldBounds    = chunkBounds;
-                hasWorldBounds = true;
-            }
-            else
-            {
-                worldBounds.StretchToIncludePoint(chunkBounds.m_mins);
-                worldBounds.StretchToIncludePoint(chunkBounds.m_maxs);
-            }
+            return output;
         }
 
-        span.indexCount = static_cast<uint32_t>(output.indices.size()) - span.startIndex;
-        return span;
+        const Vec3 translation = GetChunkRegionLocalTranslation(chunk, regionId);
+        AppendLayerGeometry(output, *mesh, enigma::voxel::ChunkBatchLayer::Opaque, translation);
+        AppendLayerGeometry(output, *mesh, enigma::voxel::ChunkBatchLayer::Cutout, translation);
+        AppendLayerGeometry(output, *mesh, enigma::voxel::ChunkBatchLayer::Translucent, translation);
+
+        if (output.HasGeometry())
+        {
+            output.worldBounds = BuildChunkWorldBounds(chunk);
+            output.hasWorldBounds = true;
+        }
+
+        return output;
     }
 
     std::vector<const Chunk*> GetSortedEligibleChunks(const ChunkBatchRegionBuildInput& input)
@@ -235,10 +241,146 @@ namespace
 
         return sortedChunks;
     }
+
+    uint32_t AssignVertexAllocations(std::vector<ChunkBatchChunkBuildOutput>& chunkOutputs)
+    {
+        uint32_t vertexCursor = 0u;
+        for (ChunkBatchChunkBuildOutput& chunkOutput : chunkOutputs)
+        {
+            const uint32_t reservedVertexCount = ComputeReservedVertexCount(static_cast<uint32_t>(chunkOutput.vertices.size()));
+            chunkOutput.vertexAllocation.startElement = vertexCursor;
+            chunkOutput.vertexAllocation.elementCount = reservedVertexCount;
+            vertexCursor += reservedVertexCount;
+        }
+
+        return vertexCursor;
+    }
+
+    uint32_t AssignLayerSlices(
+        std::vector<ChunkBatchChunkBuildOutput>& chunkOutputs,
+        enigma::voxel::ChunkBatchLayer           layer,
+        uint32_t                                 startIndex)
+    {
+        uint32_t indexCursor = startIndex;
+        for (ChunkBatchChunkBuildOutput& chunkOutput : chunkOutputs)
+        {
+            ChunkBatchChunkLayerSlice& chunkLayerSlice = chunkOutput.GetLayerSlice(layer);
+            const uint32_t actualIndexCount = static_cast<uint32_t>(chunkOutput.GetIndicesForLayer(layer).size());
+            const uint32_t reservedIndexCount = ComputeReservedIndexCount(actualIndexCount);
+
+            chunkLayerSlice.startIndex = indexCursor;
+            chunkLayerSlice.indexCount = actualIndexCount;
+            chunkLayerSlice.reservedIndexCount = reservedIndexCount;
+            indexCursor += reservedIndexCount;
+        }
+
+        return indexCursor;
+    }
+
+    enigma::voxel::ChunkBatchLayerSpan BuildRegionLayerSpan(
+        const std::vector<ChunkBatchChunkBuildOutput>& chunkOutputs,
+        enigma::voxel::ChunkBatchLayer                 layer)
+    {
+        enigma::voxel::ChunkBatchLayerSpan span;
+        bool hasActiveSlice = false;
+        uint32_t lastReservedEnd = 0u;
+
+        for (const ChunkBatchChunkBuildOutput& chunkOutput : chunkOutputs)
+        {
+            const ChunkBatchChunkLayerSlice& chunkLayerSlice = chunkOutput.GetLayerSlice(layer);
+            if (!chunkLayerSlice.HasGeometry())
+            {
+                continue;
+            }
+
+            if (!hasActiveSlice)
+            {
+                span.startIndex = chunkLayerSlice.startIndex;
+                hasActiveSlice = true;
+            }
+
+            lastReservedEnd = chunkLayerSlice.GetReservedEndIndex();
+        }
+
+        if (hasActiveSlice)
+        {
+            span.indexCount = lastReservedEnd - span.startIndex;
+        }
+
+        return span;
+    }
+
+    void BuildRegionCpuBuffers(ChunkBatchRegionBuildOutput& output)
+    {
+        if (!output.HasCpuGeometry())
+        {
+            return;
+        }
+
+        output.vertices.assign(output.totalVertexCapacity, MakeZeroTerrainVertex());
+        output.indices.assign(output.totalIndexCapacity, 0u);
+
+        for (const ChunkBatchChunkBuildOutput& chunkOutput : output.chunkOutputs)
+        {
+            if (!chunkOutput.HasGeometry())
+            {
+                continue;
+            }
+
+            for (size_t vertexIndex = 0; vertexIndex < chunkOutput.vertices.size(); ++vertexIndex)
+            {
+                output.vertices[chunkOutput.vertexAllocation.startElement + static_cast<uint32_t>(vertexIndex)] = chunkOutput.vertices[vertexIndex];
+            }
+
+            const uint32_t degenerateIndex = chunkOutput.vertexAllocation.startElement;
+            const enigma::voxel::ChunkBatchLayer layers[] = {
+                enigma::voxel::ChunkBatchLayer::Opaque,
+                enigma::voxel::ChunkBatchLayer::Cutout,
+                enigma::voxel::ChunkBatchLayer::Translucent
+            };
+
+            for (enigma::voxel::ChunkBatchLayer layer : layers)
+            {
+                const ChunkBatchChunkLayerSlice& chunkLayerSlice = chunkOutput.GetLayerSlice(layer);
+                if (!chunkLayerSlice.HasReservedCapacity())
+                {
+                    continue;
+                }
+
+                const uint32_t reservedEnd = chunkLayerSlice.GetReservedEndIndex();
+                for (uint32_t index = chunkLayerSlice.startIndex; index < reservedEnd; ++index)
+                {
+                    output.indices[index] = degenerateIndex;
+                }
+
+                const std::vector<uint32_t>& sourceIndices = chunkOutput.GetIndicesForLayer(layer);
+                for (uint32_t indexOffset = 0; indexOffset < static_cast<uint32_t>(sourceIndices.size()); ++indexOffset)
+                {
+                    const uint32_t sourceIndex = sourceIndices[indexOffset];
+                    if (sourceIndex >= chunkOutput.vertices.size())
+                    {
+                        ERROR_AND_DIE("ChunkBatchRegionBuilder encountered invalid chunk-local indices");
+                    }
+
+                    output.indices[chunkLayerSlice.startIndex + indexOffset] = chunkOutput.vertexAllocation.startElement + sourceIndex;
+                }
+            }
+        }
+    }
 }
 
 namespace enigma::voxel
 {
+    ChunkBatchChunkBuildOutput ChunkBatchRegionBuilder::BuildChunkGeometry(const Chunk& chunk, const ChunkBatchRegionId& regionId)
+    {
+        if (!IsChunkEligibleForBuild(&chunk, regionId))
+        {
+            return {};
+        }
+
+        return BuildChunkGeometryInternal(chunk, regionId);
+    }
+
     ChunkBatchRegionBuildOutput ChunkBatchRegionBuilder::BuildRegionGeometry(const ChunkBatchRegionBuildInput& input)
     {
         ChunkBatchRegionBuildOutput output;
@@ -254,18 +396,55 @@ namespace enigma::voxel
             return output;
         }
 
-        ReserveOutputGeometry(output, chunks);
-
+        output.chunkOutputs.reserve(chunks.size());
         bool hasWorldBounds = false;
-        AABB3 worldBounds(regionOriginWorld, regionOriginWorld);
 
-        output.geometry.opaque = BuildLayerSpan(output, chunks, input.regionId, ChunkBatchLayer::Opaque, hasWorldBounds, worldBounds);
-        output.geometry.cutout = BuildLayerSpan(output, chunks, input.regionId, ChunkBatchLayer::Cutout, hasWorldBounds, worldBounds);
-        output.geometry.translucent = BuildLayerSpan(output, chunks, input.regionId, ChunkBatchLayer::Translucent, hasWorldBounds, worldBounds);
+        for (const Chunk* chunk : chunks)
+        {
+            if (chunk == nullptr)
+            {
+                continue;
+            }
+
+            ChunkBatchChunkBuildOutput chunkOutput = BuildChunkGeometryInternal(*chunk, input.regionId);
+            if (!chunkOutput.HasGeometry())
+            {
+                continue;
+            }
+
+            if (!hasWorldBounds)
+            {
+                output.geometry.worldBounds = chunkOutput.worldBounds;
+                hasWorldBounds = true;
+            }
+            else
+            {
+                output.geometry.worldBounds.StretchToIncludePoint(chunkOutput.worldBounds.m_mins);
+                output.geometry.worldBounds.StretchToIncludePoint(chunkOutput.worldBounds.m_maxs);
+            }
+
+            output.chunkOutputs.push_back(std::move(chunkOutput));
+        }
+
+        if (output.chunkOutputs.empty())
+        {
+            return output;
+        }
+
+        output.totalVertexCapacity = AssignVertexAllocations(output.chunkOutputs);
+        uint32_t indexCursor = 0u;
+        indexCursor = AssignLayerSlices(output.chunkOutputs, ChunkBatchLayer::Opaque, indexCursor);
+        indexCursor = AssignLayerSlices(output.chunkOutputs, ChunkBatchLayer::Cutout, indexCursor);
+        indexCursor = AssignLayerSlices(output.chunkOutputs, ChunkBatchLayer::Translucent, indexCursor);
+        output.totalIndexCapacity = indexCursor;
+
+        output.geometry.opaque = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Opaque);
+        output.geometry.cutout = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Cutout);
+        output.geometry.translucent = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Translucent);
 
         if (hasWorldBounds)
         {
-            output.geometry.worldBounds = worldBounds;
+            BuildRegionCpuBuffers(output);
         }
 
         return output;

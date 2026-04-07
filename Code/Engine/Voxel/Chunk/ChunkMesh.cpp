@@ -314,10 +314,10 @@ void ChunkMesh::CompileToGPU(bool compileOpaque, bool compileCutout, bool compil
         (!m_opaqueGpuDataValid || !m_d12OpaqueVertexBuffer || !m_d12OpaqueIndexBuffer);
     if (needsOpaqueUpload)
     {
-        size_t opaqueVertexDataSize = sizeof(graphic::TerrainVertex) * m_opaqueTerrainVertices.size();
+        size_t opaqueVertexDataSize = sizeof(enigma::graphic::TerrainVertex) * m_opaqueTerrainVertices.size();
         size_t opaqueIndexDataSize  = sizeof(uint32_t) * m_opaqueIndices.size();
-        m_d12OpaqueVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(opaqueVertexDataSize, sizeof(graphic::TerrainVertex), m_opaqueTerrainVertices.data());
-        m_d12OpaqueIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(opaqueIndexDataSize, m_opaqueIndices.data());
+        m_d12OpaqueVertexBuffer     = enigma::graphic::D3D12RenderSystem::CreateVertexBuffer(opaqueVertexDataSize, sizeof(enigma::graphic::TerrainVertex), m_opaqueTerrainVertices.data());
+        m_d12OpaqueIndexBuffer      = enigma::graphic::D3D12RenderSystem::CreateIndexBuffer(opaqueIndexDataSize, m_opaqueIndices.data());
         m_opaqueGpuDataValid        = m_d12OpaqueVertexBuffer != nullptr && m_d12OpaqueIndexBuffer != nullptr;
     }
     else if (compileOpaque && !HasOpaqueGeometry())
@@ -332,10 +332,10 @@ void ChunkMesh::CompileToGPU(bool compileOpaque, bool compileCutout, bool compil
         (!m_cutoutGpuDataValid || !m_d12CutoutVertexBuffer || !m_d12CutoutIndexBuffer);
     if (needsCutoutUpload)
     {
-        size_t cutoutVertexDataSize = sizeof(graphic::TerrainVertex) * m_cutoutTerrainVertices.size();
+        size_t cutoutVertexDataSize = sizeof(enigma::graphic::TerrainVertex) * m_cutoutTerrainVertices.size();
         size_t cutoutIndexDataSize  = sizeof(uint32_t) * m_cutoutIndices.size();
-        m_d12CutoutVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(cutoutVertexDataSize, sizeof(graphic::TerrainVertex), m_cutoutTerrainVertices.data());
-        m_d12CutoutIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(cutoutIndexDataSize, m_cutoutIndices.data());
+        m_d12CutoutVertexBuffer     = enigma::graphic::D3D12RenderSystem::CreateVertexBuffer(cutoutVertexDataSize, sizeof(enigma::graphic::TerrainVertex), m_cutoutTerrainVertices.data());
+        m_d12CutoutIndexBuffer      = enigma::graphic::D3D12RenderSystem::CreateIndexBuffer(cutoutIndexDataSize, m_cutoutIndices.data());
         m_cutoutGpuDataValid        = m_d12CutoutVertexBuffer != nullptr && m_d12CutoutIndexBuffer != nullptr;
     }
     else if (compileCutout && !HasCutoutGeometry())
@@ -350,10 +350,10 @@ void ChunkMesh::CompileToGPU(bool compileOpaque, bool compileCutout, bool compil
         (!m_translucentGpuDataValid || !m_d12TranslucentVertexBuffer || !m_d12TranslucentIndexBuffer);
     if (needsTranslucentUpload)
     {
-        size_t translucentVertexDataSize = sizeof(graphic::TerrainVertex) * m_translucentTerrainVertices.size();
+        size_t translucentVertexDataSize = sizeof(enigma::graphic::TerrainVertex) * m_translucentTerrainVertices.size();
         size_t translucentIndexDataSize  = sizeof(uint32_t) * m_translucentIndices.size();
-        m_d12TranslucentVertexBuffer     = graphic::D3D12RenderSystem::CreateVertexBuffer(translucentVertexDataSize, sizeof(graphic::TerrainVertex), m_translucentTerrainVertices.data());
-        m_d12TranslucentIndexBuffer      = graphic::D3D12RenderSystem::CreateIndexBuffer(translucentIndexDataSize, m_translucentIndices.data());
+        m_d12TranslucentVertexBuffer     = enigma::graphic::D3D12RenderSystem::CreateVertexBuffer(translucentVertexDataSize, sizeof(enigma::graphic::TerrainVertex), m_translucentTerrainVertices.data());
+        m_d12TranslucentIndexBuffer      = enigma::graphic::D3D12RenderSystem::CreateIndexBuffer(translucentIndexDataSize, m_translucentIndices.data());
         m_translucentGpuDataValid        = m_d12TranslucentVertexBuffer != nullptr && m_d12TranslucentIndexBuffer != nullptr;
     }
     else if (compileTranslucent && !HasTranslucentGeometry())
