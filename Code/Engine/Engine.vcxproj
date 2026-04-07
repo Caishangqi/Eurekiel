@@ -597,6 +597,7 @@
     <ClCompile Include="Math\Disc2.cpp" />
     <ClCompile Include="Math\Easing.cpp" />
     <ClCompile Include="Math\EulerAngles.cpp" />
+    <ClCompile Include="Math\Frustum.cpp" />
     <ClCompile Include="Math\FloatRange.cpp" />
     <ClCompile Include="Math\IntRange.cpp" />
     <ClCompile Include="Math\IntVec2.cpp" />
@@ -684,6 +685,7 @@
     <ClCompile Include="Resource\Atlas\AtlasManager.cpp" />
     <ClCompile Include="Resource\Sound\SoundLoader.cpp" />
     <ClCompile Include="Resource\Sound\SoundResource.cpp" />
+    <ClCompile Include="Visibility\OcclusionCuller.cpp" />
     <ClCompile Include="Voxel\Biome\MultiNoiseBiomeSource.cpp" />
     <ClCompile Include="Voxel\Block\BlockIterator.cpp" />
     <ClCompile Include="Voxel\Block\BlockStateSerializer.cpp" />
@@ -699,6 +701,7 @@
     <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkBatchRegionBuilder.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkRenderRegionStorage.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkOcclusionCuller.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkBatchCollector.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkBatchRenderer.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkMesh.cpp" />
@@ -1051,6 +1054,7 @@
     <ClInclude Include="Graphic\Bundle\UserDefinedBundle.hpp"/>
     <ClInclude Include="Graphic\Camera\CameraBase.hpp"/>
     <ClInclude Include="Graphic\Camera\CameraCommon.hpp"/>
+    <ClInclude Include="Graphic\Camera\ICullingVolumeProvider.hpp"/>
     <ClInclude Include="Graphic\Camera\ICamera.hpp"/>
     <ClInclude Include="Graphic\Camera\OrthographicCamera.hpp"/>
     <ClInclude Include="Graphic\Camera\PerspectiveCamera.hpp"/>
@@ -1091,6 +1095,7 @@
     <ClInclude Include="Graphic\Shader\Common\FileSystemReader.hpp" />
     <ClInclude Include="Graphic\Shader\Common\IFileReader.hpp" />
     <ClInclude Include="Graphic\Shader\Common\ShaderCompilationHelper.hpp" />
+    <ClInclude Include="Graphic\Shader\Common\ShaderCompileOptions.hpp" />
     <ClInclude Include="Graphic\Shader\Common\ShaderIncludeHelper.hpp" />
     <ClInclude Include="Graphic\Shader\PSO\PSOManager.hpp" />
 
@@ -1269,6 +1274,7 @@
     <ClInclude Include="Math\Disc2.hpp" />
     <ClInclude Include="Math\Easing.hpp" />
     <ClInclude Include="Math\EulerAngles.hpp" />
+    <ClInclude Include="Math\Frustum.hpp" />
     <ClInclude Include="Math\FloatRange.hpp" />
     <ClInclude Include="Math\IntRange.hpp" />
     <ClInclude Include="Math\IntVec2.hpp" />
@@ -1353,6 +1359,8 @@
     <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
     <ClInclude Include="Resource\Sound\SoundLoader.hpp" />
     <ClInclude Include="Resource\Sound\SoundResource.hpp" />
+    <ClInclude Include="Visibility\ICullingDomainCuller.hpp" />
+    <ClInclude Include="Visibility\OcclusionCuller.hpp" />
     <!-- Graphic - Bindless Rendering System Headers -->
     <ClInclude Include="Voxel\Block\BlockPos.hpp" />
     <ClInclude Include="Voxel\Block\BlockState.hpp" />
@@ -1361,6 +1369,7 @@
     <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkBatchRegionBuilder.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkRenderRegionStorage.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkOcclusionCuller.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkBatchCollector.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkBatchRenderer.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkBatchTypes.hpp" />
