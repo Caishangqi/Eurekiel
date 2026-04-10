@@ -14,7 +14,9 @@ namespace enigma::voxel
         ChunkBatchRenderer& operator=(const ChunkBatchRenderer&) = delete;
 
         static uint32_t Submit(const ChunkBatchCollection& collection);
-
         static void SubmitDirect(const ChunkBatchDrawItem& item);
+
+    private:
+        static void BindRegionGeometry(const ChunkBatchRegionGeometry& geometry);
     };
 }

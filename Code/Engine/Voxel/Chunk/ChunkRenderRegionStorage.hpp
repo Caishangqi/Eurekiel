@@ -118,8 +118,14 @@ namespace enigma::voxel
         uint32_t GetVertexArenaRemainingCapacity() const;
         uint32_t GetIndexArenaCapacity() const { return m_indexArena.capacityIndices; }
         uint32_t GetIndexArenaRemainingCapacity() const;
+        const ChunkBatchArenaDiagnostics& GetArenaDiagnostics() const { return m_arenaDiagnostics; }
 
     private:
+        // First-version arena growth, buffer mutation, and active region publication stay synchronous on
+        // the owning thread. Future async reuse is limited to CPU-only planning / metadata staging and
+        // must re-enter through the modern ScheduleSubsystem completion path before any GPU state changes.
+        static constexpr const char* kFutureArenaPlanningTaskDomain = "chunk-batch-arena-region";
+
         ChunkRenderRegion& EnsureRegion(const ChunkBatchRegionId& regionId);
         void               EnqueueDirtyRegion(const ChunkBatchRegionId& regionId);
         void               RemoveQueuedDirtyRegion(const ChunkBatchRegionId& regionId);
@@ -128,17 +134,28 @@ namespace enigma::voxel
         bool               CommitBuildOutput(ChunkRenderRegion& region, const ChunkBatchRegionBuildOutput& buildOutput);
         std::vector<const Chunk*> GatherRegionChunks(ChunkRenderRegion& region);
         bool               RebuildRegionInternal(const ChunkBatchRegionId& regionId);
-        bool               TryApplyDirtyChunkReplacements(ChunkRenderRegion& region);
+        bool               TryApplyDirtyChunkReplacements(ChunkRenderRegion& region, ChunkBatchArenaFallbackReason& outFallbackReason);
         bool               AllocateVertexArenaSlice(uint32_t vertexCount, ChunkBatchArenaAllocation& outAllocation);
         bool               AllocateIndexArenaSlice(uint32_t indexCount, ChunkBatchArenaAllocation& outAllocation);
         void               FreeVertexArenaSlice(const ChunkBatchArenaAllocation& allocation);
         void               FreeIndexArenaSlice(const ChunkBatchArenaAllocation& allocation);
+        // Synchronous first-version boundary: these methods may build relocation plans in the future,
+        // but the actual grow/publication path remains owner-thread only.
         bool               EnsureVertexArenaCapacity(uint32_t minimumContiguousVertices);
         bool               EnsureIndexArenaCapacity(uint32_t minimumContiguousIndices);
         bool               UploadVertexArenaData(const ChunkBatchArenaAllocation& allocation, const graphic::TerrainVertex* vertices, uint32_t vertexCount) const;
         bool               UploadIndexArenaData(const ChunkBatchArenaAllocation& allocation, const std::vector<uint32_t>& indices) const;
+        // Future async work may prepare relocation metadata off-thread, but plan execution, buffer updates,
+        // and authoritative region allocation refresh stay synchronous in this storage owner.
+        bool               ApplyVertexArenaRelocationPlan(const ChunkBatchArenaRelocationPlan& relocationPlan);
+        bool               ApplyIndexArenaRelocationPlan(const ChunkBatchArenaRelocationPlan& relocationPlan);
+        void               RefreshRegionVertexAllocationsAfterRelocation(const ChunkBatchArenaRelocationPlan& relocationPlan);
+        void               RefreshRegionIndexAllocationsAfterRelocation(const ChunkBatchArenaRelocationPlan& relocationPlan);
+        void               RefreshRegionGeometryBindings(ChunkRenderRegion& region);
         void               RefreshVertexArenaBindings();
         void               RefreshIndexArenaBindings();
+        void               RecordArenaRelocation(const ChunkBatchArenaRelocationPlan& relocationPlan);
+        void               RecordReplacementFallback(ChunkBatchArenaFallbackReason reason);
 
     private:
         World*                                            m_world = nullptr;
@@ -148,6 +165,7 @@ namespace enigma::voxel
         std::unordered_set<ChunkBatchRegionId>            m_dirtyRegionSet;
         ChunkBatchVertexArenaState                        m_vertexArena;
         ChunkBatchIndexArenaState                         m_indexArena;
+        ChunkBatchArenaDiagnostics                        m_arenaDiagnostics;
         uint32_t                                          m_replacementUploadCount = 0;
         uint32_t                                          m_replacementFallbackCount = 0;
     };

@@ -23,7 +23,7 @@ namespace
         ShadowCamera
     };
 
-    bool CanUseRegionBatch(
+    bool CanUseDirectPreciseRegionBatch(
         const ChunkRenderRegion* region,
         ChunkBatchLayer          layer)
     {
@@ -32,26 +32,30 @@ namespace
             return false;
         }
 
-        return !region->geometry.GetSpanForLayer(layer).IsEmpty();
+        return region->geometry.SupportsDirectPreciseLayer(layer);
     }
 
-    void AppendRegionDrawItem(
+    void AppendRegionDrawItems(
         ChunkBatchCollection&       result,
         const ChunkRenderRegion&    region,
         ChunkBatchLayer             layer)
     {
-        if (!CanUseRegionBatch(&region, layer))
+        if (!CanUseDirectPreciseRegionBatch(&region, layer))
         {
             return;
         }
 
-        const auto& span = region.geometry.GetSpanForLayer(layer);
-        ChunkBatchDrawItem drawItem;
-        drawItem.regionId = region.id;
-        drawItem.geometry = &region.geometry;
-        drawItem.startIndex = span.startIndex;
-        drawItem.indexCount = span.indexCount;
-        result.batchItems.push_back(drawItem);
+        const auto& subDraws = region.geometry.GetSubDrawsForLayer(layer);
+        result.batchItems.reserve(result.batchItems.size() + subDraws.size());
+
+        for (const auto& subDraw : subDraws)
+        {
+            ChunkBatchDrawItem drawItem;
+            drawItem.regionId = region.id;
+            drawItem.geometry = &region.geometry;
+            drawItem.subDraw = &subDraw;
+            result.batchItems.push_back(drawItem);
+        }
     }
 
     void CollectAllRegions(
@@ -63,7 +67,7 @@ namespace
         for (const auto& [regionId, region] : regions)
         {
             UNUSED(regionId);
-            AppendRegionDrawItem(result, region, layer);
+            AppendRegionDrawItems(result, region, layer);
         }
     }
 
@@ -138,7 +142,7 @@ namespace
                 continue;
             }
 
-            AppendRegionDrawItem(result, *region, layer);
+            AppendRegionDrawItems(result, *region, layer);
         }
 
         return true;

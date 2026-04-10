@@ -700,6 +700,7 @@
     <ClCompile Include="Voxel\Builtin\BlockAir.cpp" />
     <ClCompile Include="Voxel\Builtin\DefaultBlock.cpp" />
     <ClCompile Include="Voxel\Chunk\Chunk.cpp" />
+    <ClCompile Include="Voxel\Chunk\ChunkBatchArenaRelocation.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkBatchRegionBuilder.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkRenderRegionStorage.cpp" />
     <ClCompile Include="Voxel\Chunk\ChunkOcclusionCuller.cpp" />
@@ -1368,6 +1369,7 @@
     <ClInclude Include="Voxel\Builtin\BlockAir.hpp" />
     <ClInclude Include="Voxel\Builtin\DefaultBlock.hpp" />
     <ClInclude Include="Voxel\Chunk\Chunk.hpp" />
+    <ClInclude Include="Voxel\Chunk\ChunkBatchArenaRelocation.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkBatchRegionBuilder.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkRenderRegionStorage.hpp" />
     <ClInclude Include="Voxel\Chunk\ChunkOcclusionCuller.hpp" />

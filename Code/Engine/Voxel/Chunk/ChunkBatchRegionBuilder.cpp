@@ -15,6 +15,7 @@ namespace
     using enigma::voxel::ChunkBatchRegionBuildInput;
     using enigma::voxel::ChunkBatchRegionBuildOutput;
     using enigma::voxel::ChunkBatchRegionId;
+    using enigma::voxel::ChunkBatchSubDraw;
 
     constexpr uint32_t kVertexReserveAlignment = 8u;
     constexpr uint32_t kIndexReserveAlignment  = 3u;
@@ -283,7 +284,7 @@ namespace
     {
         enigma::voxel::ChunkBatchLayerSpan span;
         bool hasActiveSlice = false;
-        uint32_t lastReservedEnd = 0u;
+        uint32_t lastDrawEnd = 0u;
 
         for (const ChunkBatchChunkBuildOutput& chunkOutput : chunkOutputs)
         {
@@ -299,15 +300,39 @@ namespace
                 hasActiveSlice = true;
             }
 
-            lastReservedEnd = chunkLayerSlice.GetReservedEndIndex();
+            lastDrawEnd = chunkLayerSlice.GetDrawEndIndex();
         }
 
         if (hasActiveSlice)
         {
-            span.indexCount = lastReservedEnd - span.startIndex;
+            span.indexCount = lastDrawEnd - span.startIndex;
         }
 
         return span;
+    }
+
+    std::vector<ChunkBatchSubDraw> BuildRegionSubDraws(
+        const std::vector<ChunkBatchChunkBuildOutput>& chunkOutputs,
+        enigma::voxel::ChunkBatchLayer                 layer)
+    {
+        std::vector<ChunkBatchSubDraw> subDraws;
+        subDraws.reserve(chunkOutputs.size());
+
+        for (const ChunkBatchChunkBuildOutput& chunkOutput : chunkOutputs)
+        {
+            const ChunkBatchChunkLayerSlice& chunkLayerSlice = chunkOutput.GetLayerSlice(layer);
+            if (!chunkLayerSlice.HasGeometry())
+            {
+                continue;
+            }
+
+            subDraws.push_back(ChunkBatchSubDraw{
+                chunkLayerSlice.startIndex,
+                chunkLayerSlice.indexCount
+            });
+        }
+
+        return subDraws;
     }
 
     void BuildRegionCpuBuffers(ChunkBatchRegionBuildOutput& output)
@@ -441,6 +466,9 @@ namespace enigma::voxel
         output.geometry.opaque = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Opaque);
         output.geometry.cutout = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Cutout);
         output.geometry.translucent = BuildRegionLayerSpan(output.chunkOutputs, ChunkBatchLayer::Translucent);
+        output.geometry.opaqueSubDraws = BuildRegionSubDraws(output.chunkOutputs, ChunkBatchLayer::Opaque);
+        output.geometry.cutoutSubDraws = BuildRegionSubDraws(output.chunkOutputs, ChunkBatchLayer::Cutout);
+        output.geometry.translucentSubDraws = BuildRegionSubDraws(output.chunkOutputs, ChunkBatchLayer::Translucent);
 
         if (hasWorldBounds)
         {

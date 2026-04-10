@@ -11,6 +11,7 @@ namespace
 {
     using enigma::graphic::PerObjectUniforms;
     using enigma::voxel::ChunkBatchDrawItem;
+    using enigma::voxel::ChunkBatchRegionGeometry;
     using enigma::voxel::ChunkBatchRenderer;
 
     void FillPerObjectUniforms(PerObjectUniforms& uniforms, const Mat44& modelMatrix)
@@ -26,6 +27,7 @@ namespace enigma::voxel
     uint32_t ChunkBatchRenderer::Submit(const ChunkBatchCollection& collection)
     {
         uint32_t submittedDrawCount = 0;
+        const ChunkBatchRegionGeometry* boundGeometry = nullptr;
 
         for (const ChunkBatchDrawItem& item : collection.batchItems)
         {
@@ -34,11 +36,34 @@ namespace enigma::voxel
                 continue;
             }
 
-            SubmitDirect(item);
+            if (boundGeometry != item.geometry)
+            {
+                BindRegionGeometry(*item.geometry);
+                boundGeometry = item.geometry;
+            }
+
+            const uint32_t startIndex = item.ResolveDirectPreciseStartIndex();
+            const int32_t  baseVertex = item.ResolveDirectPreciseBaseVertex();
+            g_theRendererSubsystem->DrawIndexed(item.subDraw->indexCount, startIndex, baseVertex);
             submittedDrawCount++;
         }
 
         return submittedDrawCount;
+    }
+
+    void ChunkBatchRenderer::BindRegionGeometry(const ChunkBatchRegionGeometry& geometry)
+    {
+        if (!geometry.HasValidDirectPreciseBuffers() || g_theRendererSubsystem == nullptr)
+        {
+            return;
+        }
+
+        PerObjectUniforms perObjectUniforms;
+        FillPerObjectUniforms(perObjectUniforms, geometry.regionModelMatrix);
+        g_theRendererSubsystem->GetUniformManager()->UploadBuffer(perObjectUniforms);
+
+        g_theRendererSubsystem->SetVertexBuffer(geometry.vertexBuffer.get());
+        g_theRendererSubsystem->SetIndexBuffer(geometry.indexBuffer.get());
     }
 
     void ChunkBatchRenderer::SubmitDirect(const ChunkBatchDrawItem& item)
@@ -48,14 +73,9 @@ namespace enigma::voxel
             return;
         }
 
-        PerObjectUniforms perObjectUniforms;
-        FillPerObjectUniforms(perObjectUniforms, item.geometry->regionModelMatrix);
-        g_theRendererSubsystem->GetUniformManager()->UploadBuffer(perObjectUniforms);
-
-        g_theRendererSubsystem->SetVertexBuffer(item.geometry->vertexBuffer.get());
-        g_theRendererSubsystem->SetIndexBuffer(item.geometry->indexBuffer.get());
-        const uint32_t startIndex = item.geometry->indexAllocation.startElement + item.startIndex;
-        const int32_t  baseVertex = static_cast<int32_t>(item.geometry->vertexAllocation.startElement);
-        g_theRendererSubsystem->DrawIndexed(item.indexCount, startIndex, baseVertex);
+        BindRegionGeometry(*item.geometry);
+        const uint32_t startIndex = item.ResolveDirectPreciseStartIndex();
+        const int32_t  baseVertex = item.ResolveDirectPreciseBaseVertex();
+        g_theRendererSubsystem->DrawIndexed(item.subDraw->indexCount, startIndex, baseVertex);
     }
 }
