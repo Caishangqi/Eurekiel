@@ -9,6 +9,7 @@ namespace enigma::core
     }
 
     RunnableTask::RunnableTask()
+        : RunnableTask(TaskTypeConstants::GENERIC)
     {
     }
 }

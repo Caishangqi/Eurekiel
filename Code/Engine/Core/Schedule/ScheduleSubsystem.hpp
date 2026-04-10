@@ -1,6 +1,8 @@
 #pragma once
 #include "Engine/Core/SubsystemManager.hpp"
+#include "KeyedTaskPolicyTracker.hpp"
 #include "TaskTypeRegistry.hpp"
+#include "TaskControlBlock.hpp"
 #include "RunnableTask.hpp"
 #include <vector>
 #include <mutex>
@@ -9,6 +11,7 @@
 #include <string>
 #include <map> // For per-type condition variables and priority queues
 #include <deque> // For task queues
+#include <unordered_map>
 
 #include "Engine/Core/LogCategory/LogCategory.hpp"
 
@@ -19,18 +22,6 @@ namespace enigma::core
     // Forward declarations
     class TaskWorkerThread;
     class YamlConfiguration;
-
-    //-----------------------------------------------------------------------------------------------
-    // Task Priority Enum
-    // Used to prioritize tasks in the pending queue
-    // - Normal: Default priority for world generation, file I/O, etc.
-    // - High: High priority for player interaction, immediate response needed
-    //-----------------------------------------------------------------------------------------------
-    enum class TaskPriority
-    {
-        Normal = 0, // Default priority
-        High = 1 // High priority (processed first)
-    };
 
     //-----------------------------------------------------------------------------------------------
     // Task Type Definition (from YAML configuration)
@@ -90,18 +81,18 @@ namespace enigma::core
     //
     // DESIGN PHILOSOPHY:
     // - Multi-threaded task scheduling system with type-based thread pools
-    // - Three-queue model: Pending -> Executing -> Completed
+    // - Explicit scheduler state flow: Pending -> Executing -> CompletionRecord drain
     // - Thread-safe queue operations using mutex/condition_variable
     // - Dynamic task type registration from YAML (no recompilation needed)
     //
     // LIFECYCLE:
     // 1. Construction: Initialize config reference
     // 2. Startup(): Load YAML config -> Create type registry -> Allocate worker threads
-    // 3. Runtime: AddTask() -> Workers execute -> RetrieveCompletedTasks()
+    // 3. Runtime: SubmitTask() -> Workers execute -> DrainCompletedTaskRecords()
     // 4. Shutdown(): Signal workers to stop, join threads, cleanup
     //
     // THREAD SAFETY:
-    // - All queue operations protected by m_queueMutex
+    // - Scheduler state containers protected by m_queueMutex
     // - Task state uses std::atomic for lock-free reads
     // - Per-type condition variables eliminate spurious wakeups
     //-----------------------------------------------------------------------------------------------
@@ -120,17 +111,18 @@ namespace enigma::core
         void Shutdown() override;
 
         //-------------------------------------------------------------------------------------------
-        // PHASE 1 API: Basic Task Management
+        // Modern Task Management API
         //-------------------------------------------------------------------------------------------
 
-        // Add a task to the pending queue (thread-safe)
-        // The task will be picked up by a worker thread of matching type
-        // Priority parameter: Normal (default) for world generation, High for player interaction
-        void AddTask(RunnableTask* task, TaskPriority priority = TaskPriority::Normal);
+        // Modern scheduler submission API.
+        TaskHandle SubmitTask(RunnableTask* task, const TaskSubmissionOptions& options = {});
 
-        // Retrieve all completed tasks and clear the completed queue (thread-safe)
-        // Caller is responsible for deleting the tasks
-        std::vector<RunnableTask*> RetrieveCompletedTasks();
+        // Modern task control API.
+        bool      RequestTaskCancellation(const TaskHandle& handle);
+        TaskState GetTaskState(const TaskHandle& handle) const;
+
+        // Modern completion drain API.
+        TaskResultDrainView DrainCompletedTaskRecords();
 
         // Get the type registry (for manual type registration in Phase 1)
         TaskTypeRegistry& GetTypeRegistry() { return m_typeRegistry; }
@@ -185,6 +177,12 @@ namespace enigma::core
         // Destroy all worker threads (called during Shutdown)
         void DestroyWorkerThreads();
 
+        TaskHandle allocateTaskHandle();
+        TaskControlBlock* findTaskControlBlock(const TaskHandle& handle);
+        const TaskControlBlock* findTaskControlBlock(const TaskHandle& handle) const;
+        TaskControlBlock* findTaskControlBlock(const RunnableTask* task);
+        const TaskControlBlock* findTaskControlBlock(const RunnableTask* task) const;
+
     private:
         //-------------------------------------------------------------------------------------------
         // Configuration & Registry
@@ -193,7 +191,7 @@ namespace enigma::core
         TaskTypeRegistry m_typeRegistry; // Task type -> thread count mapping
 
         //-------------------------------------------------------------------------------------------
-        // Three-Queue System (Pending -> Executing -> Completed)
+        // Scheduler State Containers
         // Pending tasks organized by Type -> Priority -> Queue for O(1) high-priority access
         //-------------------------------------------------------------------------------------------
         // Pending tasks: map<TaskType, map<Priority, deque<Task>>>
@@ -201,7 +199,11 @@ namespace enigma::core
         std::map<std::string, std::map<TaskPriority, std::deque<RunnableTask*>>> m_pendingTasksByType;
 
         std::vector<RunnableTask*> m_executingTasks; // Tasks currently being executed
-        std::vector<RunnableTask*> m_completedTasks; // Tasks finished execution
+        std::vector<TaskCompletionRecord> m_completedTaskRecords; // Modern completion transport
+        std::unordered_map<TaskHandle, TaskControlBlock, TaskHandleHasher> m_taskControlBlocks;
+        std::unordered_map<RunnableTask*, TaskHandle> m_taskHandleByPointer;
+        KeyedTaskPolicyTracker m_keyedTaskPolicyTracker;
+        std::atomic<uint64_t> m_nextTaskId{1ULL};
 
         //-------------------------------------------------------------------------------------------
         // Thread Synchronization (Per-Type Condition Variables - Plan 1)

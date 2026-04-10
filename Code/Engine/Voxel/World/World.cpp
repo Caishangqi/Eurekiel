@@ -16,11 +16,15 @@
 
 #include <cfloat>
 #include <algorithm>
+#include <exception>
 
 #include "Engine/Registry/Block/Block.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
 #include "Engine/Voxel/Block/VoxelShape.hpp"
 using namespace enigma::voxel;
+
+static const char* getTaskStateName(enigma::core::TaskState state);
+static const char* getTaskPolicyDecisionName(enigma::core::TaskPolicyDecision decision);
 
 //-----------------------------------------------------------------------------------------------
 // Helper function to convert impact normal to Direction enum
@@ -537,16 +541,28 @@ void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
     // Validate pointer again before accessing chunk state (double insurance)
     ChunkState currentState = chunk->GetState();
 
-    // Core logic: distinguish between Generating and other states
+    if (currentState == ChunkState::PendingUnload)
+    {
+        LogDebug("world", "Chunk (%d, %d) is already pending async unload", chunkCoordinateX, chunkCoordinateY);
+        return;
+    }
+
+    // Core logic: distinguish between async worker-owned states and other states
     if (currentState == ChunkState::Generating)
     {
-        // Currently generating: use delayed deletion
-        LogDebug("world", "Chunk (%d, %d) is generating, marking for delayed deletion", chunkCoordinateX, chunkCoordinateY);
+        LogDebug("world", "Chunk (%d, %d) is generating, requesting cancellation and marking PendingUnload",
+                 chunkCoordinateX, chunkCoordinateY);
+        RequestActiveChunkTaskCancellation(m_activeGenerateJobHandles, IntVec2(chunkCoordinateX, chunkCoordinateY), "generate");
         chunk->TrySetState(ChunkState::Generating, ChunkState::PendingUnload);
-
-        // [REMOVED] Delayed deletion - now using PendingUnload state
-        // Chunk will be deleted in next Update() cycle
-        m_loadedChunks.erase(it);
+        return;
+    }
+    else if (currentState == ChunkState::Loading)
+    {
+        LogDebug("world", "Chunk (%d, %d) is loading, requesting cancellation and marking PendingUnload",
+                 chunkCoordinateX, chunkCoordinateY);
+        RequestActiveChunkTaskCancellation(m_activeLoadJobHandles, IntVec2(chunkCoordinateX, chunkCoordinateY), "load");
+        chunk->TrySetState(ChunkState::Loading, ChunkState::PendingUnload);
+        return;
     }
     else
     {
@@ -1041,31 +1057,27 @@ void World::ActivateChunk(IntVec2 chunkCoords)
     }
 }
 
-void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
+bool World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
 {
+    UNUSED(chunk);
+
     // ===== Phase 5: Shutdown保护（防护点1） =====
     if (m_isShuttingDown.load())
     {
         LogDebug("world", "SubmitGenerateChunkJob rejected: world is shutting down");
-        return;
-    }
-
-    // Phase 3: Use IsInQueue() instead of tracking set
-    if (IsInQueue(m_pendingGenerateQueue, chunkCoords))
-    {
-        return; // Already in queue
+        return false;
     }
 
     if (!g_theSchedule)
     {
         LogError("world", "Cannot submit GenerateChunkJob - g_theSchedule not initialized");
-        return;
+        return false;
     }
 
     if (!m_worldGenerator)
     {
         LogError("world", "Cannot submit GenerateChunkJob - WorldGenerator not set");
-        return;
+        return false;
     }
 
     // Create GenerateChunkJob and transfer ownership to ScheduleSubsystem
@@ -1077,34 +1089,44 @@ void World::SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         static_cast<uint32_t>(m_worldSeed)
     );
 
-    // Submit to global ScheduleSubsystem (transfers ownership)
-    g_theSchedule->AddTask(job);
+    TaskSubmissionOptions options;
+    options.priority             = TaskPriority::Normal;
+    options.supportsCancellation = true;
 
-    // Phase 3: Set chunk state (no tracking set needed)
-    chunk->SetState(ChunkState::Generating);
+    const TaskHandle handle = g_theSchedule->SubmitTask(job, options);
+    if (!handle.IsValid())
+    {
+        LogError("world", "SubmitGenerateChunkJob failed to obtain task handle for chunk (%d, %d)",
+                 chunkCoords.x, chunkCoords.y);
+        return false;
+    }
 
-    LogDebug("world", "Submitted GenerateChunkJob for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
+    StoreActiveChunkTaskHandle(m_activeGenerateJobHandles, chunkCoords, handle);
+
+    LogDebug("world", "Submitted GenerateChunkJob for chunk (%d, %d) with handle (%llu,%u)",
+             chunkCoords.x, chunkCoords.y, handle.id, handle.generation);
+    return true;
 }
 
-void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
+bool World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
 {
-    // Phase 3: Use IsInQueue() instead of tracking set
-    if (IsInQueue(m_pendingLoadQueue, chunkCoords))
-    {
-        return; // Already in queue
-    }
+    UNUSED(chunk);
 
     if (!g_theSchedule)
     {
         LogError("world", "Cannot submit LoadChunkJob - g_theSchedule not initialized");
-        return;
+        return false;
     }
 
     if (!m_chunkStorage)
     {
         LogError("world", "Cannot submit LoadChunkJob - ChunkStorage not set");
-        return;
+        return false;
     }
+
+    TaskSubmissionOptions options;
+    options.priority             = TaskPriority::Normal;
+    options.supportsCancellation = true;
 
     // Try casting to ESFChunkStorage first
     ESFChunkStorage* esfStorage = dynamic_cast<ESFChunkStorage*>(m_chunkStorage.get());
@@ -1113,13 +1135,18 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         // Create LoadChunkJob for ESF format and transfer ownership to ScheduleSubsystem
         // [REFACTORED] Pass World* instead of Chunk* - Job will get Chunk via GetChunk()
         LoadChunkJob* job = new LoadChunkJob(chunkCoords, this, esfStorage);
-        g_theSchedule->AddTask(job);
+        const TaskHandle handle = g_theSchedule->SubmitTask(job, options);
+        if (!handle.IsValid())
+        {
+            LogError("world", "SubmitLoadChunkJob (ESF) failed to obtain task handle for chunk (%d, %d)",
+                     chunkCoords.x, chunkCoords.y);
+            return false;
+        }
 
-        // Phase 3: Set chunk state (no tracking set needed)
-        chunk->SetState(ChunkState::Loading);
-
-        LogDebug("world", "Submitted LoadChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
-        return;
+        StoreActiveChunkTaskHandle(m_activeLoadJobHandles, chunkCoords, handle);
+        LogDebug("world", "Submitted LoadChunkJob (ESF) for chunk (%d, %d) with handle (%llu,%u)",
+                 chunkCoords.x, chunkCoords.y, handle.id, handle.generation);
+        return true;
     }
 
     // Try casting to ESFSChunkStorage
@@ -1129,37 +1156,41 @@ void World::SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk)
         // Create LoadChunkJob for ESFS format and transfer ownership to ScheduleSubsystem
         // [REFACTORED] Pass World* instead of Chunk* - Job will get Chunk via GetChunk()
         LoadChunkJob* job = new LoadChunkJob(chunkCoords, this, esfsStorage);
-        g_theSchedule->AddTask(job);
+        const TaskHandle handle = g_theSchedule->SubmitTask(job, options);
+        if (!handle.IsValid())
+        {
+            LogError("world", "SubmitLoadChunkJob (ESFS) failed to obtain task handle for chunk (%d, %d)",
+                     chunkCoords.x, chunkCoords.y);
+            return false;
+        }
 
-        // Phase 3: Set chunk state (no tracking set needed)
-        chunk->SetState(ChunkState::Loading);
-
-        LogDebug("world", "Submitted LoadChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
-        return;
+        StoreActiveChunkTaskHandle(m_activeLoadJobHandles, chunkCoords, handle);
+        LogDebug("world", "Submitted LoadChunkJob (ESFS) for chunk (%d, %d) with handle (%llu,%u)",
+                 chunkCoords.x, chunkCoords.y, handle.id, handle.generation);
+        return true;
     }
 
     LogError("world", "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
+    return false;
 }
 
-void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
+bool World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
 {
-    // Phase 3: Use IsInQueue() instead of tracking set
-    if (IsInQueue(m_pendingSaveQueue, chunkCoords))
-    {
-        return; // Already in queue
-    }
-
     if (!g_theSchedule)
     {
         LogError("world", "Cannot submit SaveChunkJob - g_theSchedule not initialized");
-        return;
+        return false;
     }
 
     if (!m_chunkStorage)
     {
         LogError("world", "Cannot submit SaveChunkJob - ChunkStorage not set");
-        return;
+        return false;
     }
+
+    TaskSubmissionOptions options;
+    options.priority             = TaskPriority::Normal;
+    options.supportsCancellation = true;
 
     // Try casting to ESFChunkStorage first
     ESFChunkStorage* esfStorage = dynamic_cast<ESFChunkStorage*>(m_chunkStorage.get());
@@ -1167,13 +1198,18 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
     {
         // Create SaveChunkJob for ESF format (deep copy performed in constructor) and transfer ownership
         SaveChunkJob* job = new SaveChunkJob(chunkCoords, chunk, esfStorage);
-        g_theSchedule->AddTask(job);
+        const TaskHandle handle = g_theSchedule->SubmitTask(job, options);
+        if (!handle.IsValid())
+        {
+            LogError("world", "SubmitSaveChunkJob (ESF) failed to obtain task handle for chunk (%d, %d)",
+                     chunkCoords.x, chunkCoords.y);
+            return false;
+        }
 
-        // Phase 3: Set chunk state (no tracking set needed)
-        const_cast<Chunk*>(chunk)->SetState(ChunkState::Saving);
-
-        LogDebug("world", "Submitted SaveChunkJob (ESF) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
-        return;
+        StoreActiveChunkTaskHandle(m_activeSaveJobHandles, chunkCoords, handle);
+        LogDebug("world", "Submitted SaveChunkJob (ESF) for chunk (%d, %d) with handle (%llu,%u)",
+                 chunkCoords.x, chunkCoords.y, handle.id, handle.generation);
+        return true;
     }
 
     // Try casting to ESFSChunkStorage
@@ -1182,22 +1218,308 @@ void World::SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk)
     {
         // Create SaveChunkJob for ESFS format (deep copy performed in constructor) and transfer ownership
         SaveChunkJob* job = new SaveChunkJob(chunkCoords, chunk, esfsStorage);
-        g_theSchedule->AddTask(job);
+        const TaskHandle handle = g_theSchedule->SubmitTask(job, options);
+        if (!handle.IsValid())
+        {
+            LogError("world", "SubmitSaveChunkJob (ESFS) failed to obtain task handle for chunk (%d, %d)",
+                     chunkCoords.x, chunkCoords.y);
+            return false;
+        }
 
-        // Phase 3: Set chunk state (no tracking set needed)
-        const_cast<Chunk*>(chunk)->SetState(ChunkState::Saving);
-
-        LogDebug("world", "Submitted SaveChunkJob (ESFS) for chunk (%d, %d)", chunkCoords.x, chunkCoords.y);
-        return;
+        StoreActiveChunkTaskHandle(m_activeSaveJobHandles, chunkCoords, handle);
+        LogDebug("world", "Submitted SaveChunkJob (ESFS) for chunk (%d, %d) with handle (%llu,%u)",
+                 chunkCoords.x, chunkCoords.y, handle.id, handle.generation);
+        return true;
     }
 
     LogError("world", "ChunkStorage is neither ESFChunkStorage nor ESFSChunkStorage type");
+    return false;
+}
+
+void World::StoreActiveChunkTaskHandle(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords,
+                                       const enigma::core::TaskHandle& handle)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    handleMap[packedCoords]    = handle;
+}
+
+void World::ClearActiveChunkTaskHandle(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    handleMap.erase(packedCoords);
+}
+
+bool World::RequestActiveChunkTaskCancellation(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords,
+                                               const char* jobLabel)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    const auto    handleIt     = handleMap.find(packedCoords);
+    if (handleIt == handleMap.end() || !g_theSchedule)
+    {
+        return false;
+    }
+
+    bool cancellationRequested = false;
+    try
+    {
+        cancellationRequested = g_theSchedule->RequestTaskCancellation(handleIt->second);
+        LogDebug("world", "Requested %s job cancellation for chunk (%d, %d) handle (%llu,%u): %s",
+                 jobLabel,
+                 chunkCoords.x,
+                 chunkCoords.y,
+                 handleIt->second.id,
+                 handleIt->second.generation,
+                 cancellationRequested ? "accepted" : "already terminal");
+    }
+    catch (const std::exception& exception)
+    {
+        LogWarn("world", "Failed to request %s job cancellation for chunk (%d, %d): %s",
+                jobLabel,
+                chunkCoords.x,
+                chunkCoords.y,
+                exception.what());
+    }
+
+    handleMap.erase(handleIt);
+    return cancellationRequested;
+}
+
+bool World::FinalizePendingUnloadChunk(Chunk* chunk, IntVec2 chunkCoords, const char* jobLabel)
+{
+    if (chunk == nullptr || chunk->GetState() != ChunkState::PendingUnload)
+    {
+        return false;
+    }
+
+    if (chunk->GetMesh())
+    {
+        chunk->SetMesh(nullptr);
+    }
+
+    chunk->SetState(ChunkState::Inactive);
+    m_loadedChunks.erase(ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y));
+
+    LogDebug("world", "Finalized pending unload for chunk (%d, %d) after %s job completion",
+             chunkCoords.x, chunkCoords.y, jobLabel);
+    return true;
+}
+
+void World::LogDiscardedChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, const char* jobLabel, const char* reason) const
+{
+    LogWarn("world",
+            "Discarding %s chunk task handle (%llu,%u): reason=%s finalState=%s wasCancelled=%s isStale=%s policy=%s",
+            jobLabel,
+            record.handle.id,
+            record.handle.generation,
+            reason,
+            getTaskStateName(record.finalState),
+            record.wasCancelled ? "true" : "false",
+            record.isStale ? "true" : "false",
+            getTaskPolicyDecisionName(record.policyDecision));
+}
+
+void World::ProcessGenerateChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, GenerateChunkJob* job)
+{
+    const bool shouldPublish =
+        record.finalState == TaskState::Completed &&
+        !record.isStale &&
+        record.policyDecision == TaskPolicyDecision::Executed;
+
+    if (shouldPublish)
+    {
+        HandleGenerateChunkCompleted(job);
+        return;
+    }
+
+    const char* discardReason =
+        record.isStale ? "stale-result" :
+        record.finalState == TaskState::Cancelled ? "cancelled" :
+        record.finalState == TaskState::Failed ? "failed" :
+        "unexpected-terminal-metadata";
+    LogDiscardedChunkTaskRecord(record, "generate", discardReason);
+
+    const IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeGenerateJobHandles, coords);
+
+    Chunk* chunk = GetChunk(coords.x, coords.y);
+    if (!chunk)
+    {
+        LogDebug("world", "Discarded generate task for chunk (%d, %d) after chunk was already removed",
+                 coords.x, coords.y);
+        m_activeGenerateJobs--;
+        return;
+    }
+
+    const ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "discarded generate");
+        m_activeGenerateJobs--;
+        return;
+    }
+
+    if (currentState == ChunkState::Generating || currentState == ChunkState::PendingGenerate)
+    {
+        if (m_isShuttingDown.load())
+        {
+            chunk->SetState(ChunkState::Inactive);
+        }
+        else
+        {
+            chunk->SetState(ChunkState::PendingGenerate);
+            if (!IsInQueue(m_pendingGenerateQueue, coords))
+            {
+                m_pendingGenerateQueue.push_back(coords);
+            }
+        }
+    }
+    else
+    {
+        LogWarn("world",
+                "Generate task discard for chunk (%d, %d) saw unexpected chunk state %d",
+                coords.x, coords.y, static_cast<int>(currentState));
+    }
+
+    m_activeGenerateJobs--;
+}
+
+void World::ProcessLoadChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, LoadChunkJob* job)
+{
+    const bool shouldPublish =
+        record.finalState == TaskState::Completed &&
+        !record.isStale &&
+        record.policyDecision == TaskPolicyDecision::Executed;
+
+    if (shouldPublish)
+    {
+        HandleLoadChunkCompleted(job);
+        return;
+    }
+
+    const char* discardReason =
+        record.isStale ? "stale-result" :
+        record.finalState == TaskState::Cancelled ? "cancelled" :
+        record.finalState == TaskState::Failed ? "failed" :
+        "unexpected-terminal-metadata";
+    LogDiscardedChunkTaskRecord(record, "load", discardReason);
+
+    const IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeLoadJobHandles, coords);
+
+    Chunk* chunk = GetChunk(coords.x, coords.y);
+    if (!chunk)
+    {
+        LogDebug("world", "Discarded load task for chunk (%d, %d) after chunk was already removed",
+                 coords.x, coords.y);
+        m_activeLoadJobs--;
+        return;
+    }
+
+    const ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "discarded load");
+        m_activeLoadJobs--;
+        return;
+    }
+
+    if (currentState == ChunkState::Loading || currentState == ChunkState::PendingLoad || currentState == ChunkState::PendingGenerate)
+    {
+        if (m_isShuttingDown.load())
+        {
+            chunk->SetState(ChunkState::Inactive);
+        }
+        else if (record.finalState == TaskState::Failed)
+        {
+            chunk->SetState(ChunkState::PendingGenerate);
+            if (!IsInQueue(m_pendingGenerateQueue, coords))
+            {
+                m_pendingGenerateQueue.push_back(coords);
+            }
+        }
+        else
+        {
+            chunk->SetState(ChunkState::PendingLoad);
+            if (!IsInQueue(m_pendingLoadQueue, coords))
+            {
+                m_pendingLoadQueue.push_back(coords);
+            }
+        }
+    }
+    else
+    {
+        LogWarn("world",
+                "Load task discard for chunk (%d, %d) saw unexpected chunk state %d",
+                coords.x, coords.y, static_cast<int>(currentState));
+    }
+
+    m_activeLoadJobs--;
+}
+
+void World::ProcessSaveChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, SaveChunkJob* job)
+{
+    const bool shouldPublish =
+        record.finalState == TaskState::Completed &&
+        !record.isStale &&
+        record.policyDecision == TaskPolicyDecision::Executed;
+
+    if (shouldPublish)
+    {
+        HandleSaveChunkCompleted(job);
+        return;
+    }
+
+    const char* discardReason =
+        record.isStale ? "stale-result" :
+        record.finalState == TaskState::Cancelled ? "cancelled" :
+        record.finalState == TaskState::Failed ? "failed" :
+        "unexpected-terminal-metadata";
+    LogDiscardedChunkTaskRecord(record, "save", discardReason);
+
+    const IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeSaveJobHandles, coords);
+
+    Chunk* chunk = GetChunk(coords.x, coords.y);
+    if (!chunk)
+    {
+        LogDebug("world", "Discarded save task for chunk (%d, %d) after chunk was already removed",
+                 coords.x, coords.y);
+        m_activeSaveJobs--;
+        return;
+    }
+
+    const ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::Saving || currentState == ChunkState::PendingSave)
+    {
+        chunk->SetModified(true);
+        if (m_isShuttingDown.load())
+        {
+            chunk->SetState(ChunkState::Active);
+        }
+        else
+        {
+            chunk->SetState(ChunkState::PendingSave);
+            if (!IsInQueue(m_pendingSaveQueue, coords))
+            {
+                m_pendingSaveQueue.push_back(coords);
+            }
+        }
+    }
+    else
+    {
+        LogWarn("world",
+                "Save task discard for chunk (%d, %d) saw unexpected chunk state %d",
+                coords.x, coords.y, static_cast<int>(currentState));
+    }
+
+    m_activeSaveJobs--;
 }
 
 void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
 {
     // Phase 2.2: Use coordinates to query chunk (no pointer checks needed)
     IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeGenerateJobHandles, coords);
     Chunk*  chunk  = GetChunk(coords.x, coords.y);
 
     // If chunk doesn't exist, it was unloaded - gracefully return
@@ -1213,6 +1535,13 @@ void World::HandleGenerateChunkCompleted(GenerateChunkJob* job)
 
     // Verify state (should be Generating)
     ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "generate");
+        m_activeGenerateJobs--;
+        return;
+    }
+
     if (currentState != ChunkState::Generating)
     {
         LogWarn("world", "Chunk (%d, %d) state mismatch in HandleGenerateChunkCompleted (expected Generating, got %d)",
@@ -1243,6 +1572,7 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
 {
     // Phase 2.2: Use coordinates to query chunk (no pointer checks needed)
     IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeLoadJobHandles, coords);
     Chunk*  chunk  = GetChunk(coords.x, coords.y);
 
     // If chunk doesn't exist, it was unloaded - gracefully return
@@ -1258,6 +1588,13 @@ void World::HandleLoadChunkCompleted(LoadChunkJob* job)
 
     // Verify state (should be Loading)
     ChunkState currentState = chunk->GetState();
+    if (currentState == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "load");
+        m_activeLoadJobs--;
+        return;
+    }
+
     if (currentState != ChunkState::Loading)
     {
         LogWarn("world", "Chunk (%d, %d) state mismatch in HandleLoadChunkCompleted (expected Loading, got %d)",
@@ -1298,6 +1635,7 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
 {
     // Phase 2.2: Use coordinates to query chunk (no pointer checks needed)
     IntVec2 coords = job->GetChunkCoords();
+    ClearActiveChunkTaskHandle(m_activeSaveJobHandles, coords);
     Chunk*  chunk  = GetChunk(coords.x, coords.y);
 
     // If chunk doesn't exist, save was still successful - gracefully return
@@ -1361,8 +1699,20 @@ void World::ProcessJobQueues()
         // Transition to Generating and submit job
         if (chunk->TrySetState(ChunkState::PendingGenerate, ChunkState::Generating))
         {
-            SubmitGenerateChunkJob(chunkCoords, chunk);
-            m_activeGenerateJobs++; // Increment active counter
+            if (SubmitGenerateChunkJob(chunkCoords, chunk))
+            {
+                m_activeGenerateJobs++;
+            }
+            else
+            {
+                chunk->TrySetState(ChunkState::Generating, ChunkState::PendingGenerate);
+                if (!m_isShuttingDown.load())
+                {
+                    m_pendingGenerateQueue.push_front(chunkCoords);
+                }
+                break;
+            }
+
             LogDebug("world", "Submitted generate job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeGenerateJobs.load(), m_maxGenerateJobs);
@@ -1391,8 +1741,20 @@ void World::ProcessJobQueues()
         // Transition to Loading and submit job
         if (chunk->TrySetState(ChunkState::PendingLoad, ChunkState::Loading))
         {
-            SubmitLoadChunkJob(chunkCoords, chunk);
-            m_activeLoadJobs++; // Increment active counter
+            if (SubmitLoadChunkJob(chunkCoords, chunk))
+            {
+                m_activeLoadJobs++;
+            }
+            else
+            {
+                chunk->TrySetState(ChunkState::Loading, ChunkState::PendingLoad);
+                if (!m_isShuttingDown.load())
+                {
+                    m_pendingLoadQueue.push_front(chunkCoords);
+                }
+                break;
+            }
+
             LogDebug("world", "Submitted load job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeLoadJobs.load(), m_maxLoadJobs);
@@ -1421,8 +1783,20 @@ void World::ProcessJobQueues()
         // Transition to Saving and submit job
         if (chunk->TrySetState(ChunkState::PendingSave, ChunkState::Saving))
         {
-            SubmitSaveChunkJob(chunkCoords, chunk);
-            m_activeSaveJobs++; // Increment active counter
+            if (SubmitSaveChunkJob(chunkCoords, chunk))
+            {
+                m_activeSaveJobs++;
+            }
+            else
+            {
+                chunk->TrySetState(ChunkState::Saving, ChunkState::PendingSave);
+                if (!m_isShuttingDown.load())
+                {
+                    m_pendingSaveQueue.push_front(chunkCoords);
+                }
+                break;
+            }
+
             LogDebug("world", "Submitted save job for chunk (%d, %d) - Active: %d/%d",
                      chunkCoords.x, chunkCoords.y,
                      m_activeSaveJobs.load(), m_maxSaveJobs);
@@ -1608,29 +1982,44 @@ void World::ProcessCompletedChunkTasks()
         return; // No global ScheduleSubsystem, cannot process tasks
     }
 
-    // Retrieve all completed tasks from global ScheduleSubsystem (returns vector)
-    std::vector<RunnableTask*> completedTasks = g_theSchedule->RetrieveCompletedTasks();
+    TaskResultDrainView drainView = g_theSchedule->DrainCompletedTaskRecords();
 
-    // Process each completed task
-    for (RunnableTask* task : completedTasks)
+    for (const TaskCompletionRecord& record : drainView.records)
     {
-        // Attempt to downcast to ChunkJob types
+        RunnableTask* task = record.task;
+        if (task == nullptr)
+        {
+            LogWarn("world",
+                    "Encountered completion record with null task for handle (%llu,%u) finalState=%s policy=%s",
+                    record.handle.id,
+                    record.handle.generation,
+                    getTaskStateName(record.finalState),
+                    getTaskPolicyDecisionName(record.policyDecision));
+            continue;
+        }
+
         if (auto* genJob = dynamic_cast<GenerateChunkJob*>(task))
         {
-            HandleGenerateChunkCompleted(genJob);
+            ProcessGenerateChunkTaskRecord(record, genJob);
         }
         else if (auto* loadJob = dynamic_cast<LoadChunkJob*>(task))
         {
-            HandleLoadChunkCompleted(loadJob);
+            ProcessLoadChunkTaskRecord(record, loadJob);
         }
         else if (auto* saveJob = dynamic_cast<SaveChunkJob*>(task))
         {
-            HandleSaveChunkCompleted(saveJob);
+            ProcessSaveChunkTaskRecord(record, saveJob);
         }
-        // Phase 1: BuildMeshJob removed - mesh building now happens on main thread
-        // Other task types can be handled here in the future
+        else
+        {
+            LogWarn("world",
+                    "Unhandled scheduler completion type in World for handle (%llu,%u) finalState=%s policy=%s",
+                    record.handle.id,
+                    record.handle.generation,
+                    getTaskStateName(record.finalState),
+                    getTaskPolicyDecisionName(record.policyDecision));
+        }
 
-        // Delete the task (caller is responsible for cleanup)
         delete task;
     }
 }
@@ -1647,6 +2036,37 @@ void World::UpdateChunkMeshes()
     {
         LogDebug("world", "UpdateChunkMeshes: rebuilt %u meshes this frame, %zu remaining in queue",
                  rebuiltCount, m_pendingMeshRebuildQueue.size());
+    }
+}
+
+static const char* getTaskStateName(enigma::core::TaskState state)
+{
+    using enigma::core::TaskState;
+
+    switch (state)
+    {
+    case TaskState::Queued: return "Queued";
+    case TaskState::Executing: return "Executing";
+    case TaskState::CancelRequested: return "CancelRequested";
+    case TaskState::Completed: return "Completed";
+    case TaskState::Cancelled: return "Cancelled";
+    case TaskState::Failed: return "Failed";
+    default: return "Unknown";
+    }
+}
+
+static const char* getTaskPolicyDecisionName(enigma::core::TaskPolicyDecision decision)
+{
+    using enigma::core::TaskPolicyDecision;
+
+    switch (decision)
+    {
+    case TaskPolicyDecision::None: return "None";
+    case TaskPolicyDecision::Executed: return "Executed";
+    case TaskPolicyDecision::CoalescedToExisting: return "CoalescedToExisting";
+    case TaskPolicyDecision::SupersededBeforeExecution: return "SupersededBeforeExecution";
+    case TaskPolicyDecision::SupersededAfterExecution: return "SupersededAfterExecution";
+    default: return "Unknown";
     }
 }
 

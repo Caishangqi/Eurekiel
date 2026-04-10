@@ -2,6 +2,7 @@
 #include "ScheduleSubsystem.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include <exception>
 
 namespace enigma::core
 {
@@ -11,7 +12,7 @@ namespace enigma::core
           , m_system(system)
           , m_thread(nullptr)
     {
-        m_thread = new std::thread(&TaskWorkerThread::ThreadMain, this);
+        m_thread = new std::thread(&TaskWorkerThread::threadMain, this);
     }
 
     TaskWorkerThread::~TaskWorkerThread()
@@ -26,7 +27,7 @@ namespace enigma::core
     }
 
     //-----------------------------------------------------------------------------------------------
-    // ThreadMain: Worker thread's main execution loop (PHASE 2: Condition Variable Optimization)
+    // threadMain: Worker thread's main execution loop (PHASE 2: Condition Variable Optimization)
     //
     // ALGORITHM (Optimized Producer-Consumer Pattern):
     // 1. Loop until shutdown signal received
@@ -46,7 +47,7 @@ namespace enigma::core
     // 1. unique_lock: RAII-style mutex lock (can unlock/relock)
     // 2. GetConditionVariableForType(m_assignedType): Get type-specific CV
     // 3. cv.wait(lock, predicate): Atomically releases lock and sleeps
-    // 4. When AddTask() adds task of our type: notify_one() wakes ONE worker of that type
+    // 4. When SubmitTask() enqueues task of our type: notify_one() wakes ONE worker of that type
     // 5. Worker wakes up, reacquires lock, checks predicate, proceeds if true
     // 6. This eliminates spurious wakeups (only correct-type workers wake up)
     //
@@ -63,7 +64,7 @@ namespace enigma::core
     // - Predicate lambda safely checks shutdown and task availability
     // - Execute() runs outside critical section (parallel execution)
     //-----------------------------------------------------------------------------------------------
-    void TaskWorkerThread::ThreadMain()
+    void TaskWorkerThread::threadMain()
     {
         LogDebug(LogSchedule,
                  "Worker #%d (type='%s') started (Phase 2: CV optimization)",
@@ -107,10 +108,40 @@ namespace enigma::core
                          "Worker #%d executing task of type='%s'",
                          m_workerID, task->GetType().c_str());
 
-                task->SetState(TaskState::Executing);
-                task->Execute(); // This may take time (file I/O, computation, etc.)
+                if (task->IsCancellationRequested())
+                {
+                    task->SetState(TaskState::Cancelled);
+                    m_system->OnTaskCompleted(task);
 
-                // Mark task as completed (re-enters critical section internally)
+                    LogDebug(LogSchedule,
+                             "Worker #%d skipped cancelled task of type='%s'",
+                             m_workerID, task->GetType().c_str());
+                    continue;
+                }
+
+                try
+                {
+                    task->Execute(); // This may take time (file I/O, computation, etc.)
+                }
+                catch (const std::exception& exception)
+                {
+                    task->SetState(TaskState::Failed);
+                    LogError(LogSchedule,
+                             "Worker #%d task type='%s' failed with exception: %s",
+                             m_workerID,
+                             task->GetType().c_str(),
+                             exception.what());
+                }
+                catch (...)
+                {
+                    task->SetState(TaskState::Failed);
+                    LogError(LogSchedule,
+                             "Worker #%d task type='%s' failed with unknown exception",
+                             m_workerID,
+                             task->GetType().c_str());
+                }
+
+                // Hand terminal resolution back to the scheduler for completion recording.
                 m_system->OnTaskCompleted(task);
 
                 LogDebug(LogSchedule,

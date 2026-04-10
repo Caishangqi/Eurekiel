@@ -439,6 +439,7 @@
     <ClCompile Include="Core\Properties.cpp" />
     <ClCompile Include="Core\Rgba8.cpp" />
     <ClCompile Include="Core\Schedule\RunnableTask.cpp" />
+    <ClCompile Include="Core\Schedule\KeyedTaskPolicyTracker.cpp" />
     <ClCompile Include="Core\Schedule\ScheduleSubsystem.cpp" />
     <ClCompile Include="Core\Schedule\TaskWorkerThread.cpp" />
     <ClCompile Include="Core\Schedule\TaskTypeRegistry.cpp" />

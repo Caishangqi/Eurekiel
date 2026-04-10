@@ -189,13 +189,24 @@ namespace enigma::voxel
         void ActivateChunk(IntVec2 chunkCoords);
 
         // Submit chunk generation job to ScheduleSubsystem
-        void SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk);
+        bool SubmitGenerateChunkJob(IntVec2 chunkCoords, Chunk* chunk);
 
         // Submit chunk load job to ScheduleSubsystem
-        void SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk);
+        bool SubmitLoadChunkJob(IntVec2 chunkCoords, Chunk* chunk);
 
         // Submit chunk save job to ScheduleSubsystem
-        void SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk);
+        bool SubmitSaveChunkJob(IntVec2 chunkCoords, const Chunk* chunk);
+
+        void StoreActiveChunkTaskHandle(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords,
+                                        const enigma::core::TaskHandle& handle);
+        void ClearActiveChunkTaskHandle(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords);
+        bool RequestActiveChunkTaskCancellation(std::unordered_map<int64_t, enigma::core::TaskHandle>& handleMap, IntVec2 chunkCoords,
+                                                const char* jobLabel);
+        bool FinalizePendingUnloadChunk(Chunk* chunk, IntVec2 chunkCoords, const char* jobLabel);
+        void ProcessGenerateChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, GenerateChunkJob* job);
+        void ProcessLoadChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, LoadChunkJob* job);
+        void ProcessSaveChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, SaveChunkJob* job);
+        void LogDiscardedChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, const char* jobLabel, const char* reason) const;
 
         // Handle completed generation job
         void HandleGenerateChunkCompleted(GenerateChunkJob* job);
@@ -298,6 +309,9 @@ namespace enigma::voxel
         std::atomic<int> m_activeGenerateJobs{0}; // Currently processing generate jobs
         std::atomic<int> m_activeLoadJobs{0}; // Currently processing load jobs
         std::atomic<int> m_activeSaveJobs{0}; // Currently processing save jobs
+        std::unordered_map<int64_t, enigma::core::TaskHandle> m_activeGenerateJobHandles;
+        std::unordered_map<int64_t, enigma::core::TaskHandle> m_activeLoadJobHandles;
+        std::unordered_map<int64_t, enigma::core::TaskHandle> m_activeSaveJobHandles;
 
         // Job limits (Assignment 03 spec: "100s of generate, only a few load/save")
         // These prevent overwhelming the thread pool and ensure responsive chunk loading

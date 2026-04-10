@@ -26,7 +26,7 @@ namespace enigma::voxel
         }
 
         // Check cancellation before expensive IO
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             m_loadSuccess = false;
             return;
@@ -51,7 +51,7 @@ namespace enigma::voxel
         }
 
         // Check cancellation after loading
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             // Load completed but chunk is being unloaded
             m_loadSuccess = false;

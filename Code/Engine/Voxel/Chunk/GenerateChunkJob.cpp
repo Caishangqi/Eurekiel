@@ -48,7 +48,7 @@ namespace enigma::voxel
         }
 
         // Check cancellation before expensive work
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             return;
         }
@@ -76,7 +76,7 @@ namespace enigma::voxel
         }
 
         // Check cancellation after generation (before final state transition)
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             // Generation completed but chunk is being unloaded
             // Main thread will handle cleanup based on state

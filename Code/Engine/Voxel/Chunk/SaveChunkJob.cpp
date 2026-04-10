@@ -62,7 +62,7 @@ namespace enigma::voxel
     void SaveChunkJob::Execute()
     {
         // Check cancellation before expensive IO
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             return;
         }
@@ -89,7 +89,7 @@ namespace enigma::voxel
         }
 
         // Check cancellation after save (cleanup already happened, but respect flag)
-        if (IsCancelled())
+        if (IsCancellationRequested())
         {
             // Save completed but chunk is being unloaded
             // Main thread will handle final state transition

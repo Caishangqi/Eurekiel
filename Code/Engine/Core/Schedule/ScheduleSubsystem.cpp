@@ -1,12 +1,90 @@
 #include "ScheduleSubsystem.hpp"
+#include "ScheduleException.hpp"
 #include "TaskWorkerThread.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
 #include "Engine/Core/Yaml.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include <algorithm>
 
 using namespace enigma::core;
 DEFINE_LOG_CATEGORY(LogSchedule)
 ScheduleSubsystem* g_theSchedule = nullptr;
+
+namespace
+{
+    int countPendingTasksForType(
+        const std::map<std::string, std::map<TaskPriority, std::deque<RunnableTask*>>>& pendingTasksByType,
+        const std::string& typeStr)
+    {
+        const auto typeIt = pendingTasksByType.find(typeStr);
+        if (typeIt == pendingTasksByType.end())
+        {
+            return 0;
+        }
+
+        int totalPending = 0;
+        for (const auto& priorityPair : typeIt->second)
+        {
+            totalPending += static_cast<int>(priorityPair.second.size());
+        }
+
+        return totalPending;
+    }
+
+    int countPendingTasksTotal(
+        const std::map<std::string, std::map<TaskPriority, std::deque<RunnableTask*>>>& pendingTasksByType)
+    {
+        int totalPending = 0;
+        for (const auto& typePair : pendingTasksByType)
+        {
+            for (const auto& priorityPair : typePair.second)
+            {
+                totalPending += static_cast<int>(priorityPair.second.size());
+            }
+        }
+
+        return totalPending;
+    }
+
+    bool removePendingTaskByPointer(
+        std::map<std::string, std::map<TaskPriority, std::deque<RunnableTask*>>>& pendingTasksByType,
+        RunnableTask* task)
+    {
+        for (auto typeIt = pendingTasksByType.begin(); typeIt != pendingTasksByType.end(); ++typeIt)
+        {
+            auto& priorityMap = typeIt->second;
+            for (auto priorityIt = priorityMap.begin(); priorityIt != priorityMap.end(); ++priorityIt)
+            {
+                auto& taskQueue = priorityIt->second;
+                const auto taskIt = std::find(taskQueue.begin(), taskQueue.end(), task);
+                if (taskIt == taskQueue.end())
+                {
+                    continue;
+                }
+
+                taskQueue.erase(taskIt);
+
+                if (taskQueue.empty())
+                {
+                    priorityIt = priorityMap.erase(priorityIt);
+                    if (priorityIt == priorityMap.end())
+                    {
+                        break;
+                    }
+                }
+
+                if (priorityMap.empty())
+                {
+                    pendingTasksByType.erase(typeIt);
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 //-----------------------------------------------------------------------------------------------
 // LoadFromYaml: Parse YAML configuration WITHOUT logging (called before Logger is ready)
@@ -75,7 +153,7 @@ ScheduleSubsystem::ScheduleSubsystem(ScheduleConfig& config)
     : m_config(config)
 {
     // PERFORMANCE: Global log level is set to ERROR in module.yml to reduce console I/O overhead
-    // Debug logging causes 60% of AddTask time due to synchronous console writes
+    // Debug logging causes significant SubmitTask overhead due to synchronous console writes
     // All categories (including ScheduleSubsystem) inherit ERROR level from configuration
 }
 
@@ -144,61 +222,183 @@ void ScheduleSubsystem::Shutdown()
     }
 
     for (RunnableTask* task : m_executingTasks) { delete task; }
-    for (RunnableTask* task : m_completedTasks) { delete task; }
+    for (const TaskCompletionRecord& completionRecord : m_completedTaskRecords)
+    {
+        if (completionRecord.task != nullptr)
+        {
+            delete completionRecord.task;
+        }
+    }
 
     m_pendingTasksByType.clear();
     m_executingTasks.clear();
-    m_completedTasks.clear();
+    m_completedTaskRecords.clear();
+    m_taskControlBlocks.clear();
+    m_taskHandleByPointer.clear();
+    m_keyedTaskPolicyTracker.Clear();
 
     LogInfo(LogSchedule, "Shutdown complete");
 }
 
-void ScheduleSubsystem::AddTask(RunnableTask* task, TaskPriority priority)
+TaskHandle ScheduleSubsystem::SubmitTask(RunnableTask* task, const TaskSubmissionOptions& options)
 {
     if (!task)
     {
         LogError(LogSchedule,
-                 "Attempted to add null task");
-        return;
+                 "SubmitTask: Attempted to submit null task");
+        return {};
     }
 
-    std::string taskType    = task->GetType();
-    const char* priorityStr = (priority == TaskPriority::High) ? "High" : "Normal";
+    std::string taskType = task->GetType();
+    TaskHandle  resolvedHandle;
+    bool        shouldNotify = false;
 
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
 
-        // Insert into layered map: Type -> Priority -> Queue
-        // This is O(log k) where k is number of task types (typically < 10)
-        m_pendingTasksByType[taskType][priority].push_back(task);
+        TaskHandle submissionHandle = allocateTaskHandle();
+        KeyedTaskSubmissionDecision decision;
+        decision.resolvedHandle = submissionHandle;
 
-        int totalPending = 0;
-        for (const auto& typePair : m_pendingTasksByType)
+        if (options.taskKey.has_value())
         {
-            for (const auto& priorityPair : typePair.second)
+            decision = m_keyedTaskPolicyTracker.RegisterSubmission(submissionHandle, options);
+        }
+
+        if (!decision.shouldQueueTask)
+        {
+            delete task;
+            return decision.resolvedHandle;
+        }
+
+        resolvedHandle = decision.resolvedHandle;
+        task->AttachHandle(resolvedHandle);
+        task->SetState(TaskState::Queued);
+
+        TaskControlBlock controlBlock;
+        controlBlock.handle                 = resolvedHandle;
+        controlBlock.task                   = task;
+        controlBlock.state                  = TaskState::Queued;
+        controlBlock.cancellationRequested  = false;
+        controlBlock.supportsCancellation   = options.supportsCancellation;
+        controlBlock.wasCancelled           = false;
+        controlBlock.isStale                = false;
+        controlBlock.taskKey                = options.taskKey;
+        controlBlock.version                = options.version;
+        controlBlock.keyedPolicy            = options.keyedPolicy;
+        controlBlock.policyDecision         = decision.policyDecision;
+
+        if (decision.supersededHandle.has_value())
+        {
+            TaskControlBlock* supersededControlBlock = findTaskControlBlock(*decision.supersededHandle);
+            if (supersededControlBlock != nullptr && !supersededControlBlock->IsTerminal())
             {
-                totalPending += (int)priorityPair.second.size();
+                supersededControlBlock->isStale = true;
+                supersededControlBlock->policyDecision =
+                    supersededControlBlock->state == TaskState::Executing
+                    ? TaskPolicyDecision::SupersededAfterExecution
+                    : TaskPolicyDecision::SupersededBeforeExecution;
             }
         }
 
+        m_taskControlBlocks[resolvedHandle] = controlBlock;
+        m_taskHandleByPointer[task]         = resolvedHandle;
+
+        m_pendingTasksByType[taskType][options.priority].push_back(task);
+        shouldNotify = true;
+
         LogInfo(LogSchedule,
-                "AddTask: Added task type='%s' priority=%s (total pending: %d)",
-                taskType.c_str(), priorityStr, totalPending);
+                "SubmitTask: Added task type='%s' priority=%d handle=(%llu,%u) pending=%d",
+                taskType.c_str(),
+                static_cast<int>(options.priority),
+                resolvedHandle.id,
+                resolvedHandle.generation,
+                countPendingTasksTotal(m_pendingTasksByType));
     }
 
-    // Notify only workers of the matching type (Plan 1: Per-Type Condition Variables)
-    m_typeConditionVariables[taskType].notify_one();
+    if (shouldNotify)
+    {
+        m_typeConditionVariables[taskType].notify_one();
+    }
 
-    LogInfo(LogSchedule,
-            "AddTask: Notified workers of type '%s'", taskType.c_str());
+    return resolvedHandle;
 }
 
-std::vector<RunnableTask*> ScheduleSubsystem::RetrieveCompletedTasks()
+bool ScheduleSubsystem::RequestTaskCancellation(const TaskHandle& handle)
 {
     std::lock_guard<std::mutex> lock(m_queueMutex);
-    std::vector<RunnableTask*>  result = m_completedTasks;
-    m_completedTasks.clear();
-    return result;
+
+    TaskControlBlock* controlBlock = findTaskControlBlock(handle);
+    if (controlBlock == nullptr)
+    {
+        throw InvalidTaskHandleException("ScheduleSubsystem::RequestTaskCancellation: Invalid task handle");
+    }
+
+    if (!controlBlock->supportsCancellation || controlBlock->task == nullptr)
+    {
+        return false;
+    }
+
+    if (controlBlock->IsTerminal())
+    {
+        return false;
+    }
+
+    const bool firstRequest = controlBlock->task->RequestCancellation();
+    controlBlock->cancellationRequested = controlBlock->task->IsCancellationRequested();
+
+    if (controlBlock->state == TaskState::Queued && removePendingTaskByPointer(m_pendingTasksByType, controlBlock->task))
+    {
+        controlBlock->state        = TaskState::Cancelled;
+        controlBlock->wasCancelled = true;
+        controlBlock->task->SetState(TaskState::Cancelled);
+
+        if (m_keyedTaskPolicyTracker.IsTrackingTask(handle))
+        {
+            m_keyedTaskPolicyTracker.MarkTaskTerminal(handle);
+        }
+
+        m_completedTaskRecords.push_back(controlBlock->ToCompletionRecord());
+        return firstRequest;
+    }
+
+    controlBlock->state = TaskState::CancelRequested;
+    controlBlock->task->SetState(TaskState::CancelRequested);
+    return firstRequest;
+}
+
+TaskState ScheduleSubsystem::GetTaskState(const TaskHandle& handle) const
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    const TaskControlBlock* controlBlock = findTaskControlBlock(handle);
+    if (controlBlock == nullptr)
+    {
+        throw InvalidTaskHandleException("ScheduleSubsystem::GetTaskState: Invalid task handle");
+    }
+
+    return controlBlock->state;
+}
+
+TaskResultDrainView ScheduleSubsystem::DrainCompletedTaskRecords()
+{
+    std::lock_guard<std::mutex> lock(m_queueMutex);
+
+    TaskResultDrainView drainView;
+    drainView.records = std::move(m_completedTaskRecords);
+
+    for (const TaskCompletionRecord& record : drainView.records)
+    {
+        if (record.task != nullptr)
+        {
+            m_taskHandleByPointer.erase(record.task);
+        }
+
+        m_taskControlBlocks.erase(record.handle);
+    }
+
+    m_completedTaskRecords.clear();
+    return drainView;
 }
 
 RunnableTask* ScheduleSubsystem::GetNextTaskForType(const std::string& typeStr)
@@ -232,6 +432,16 @@ RunnableTask* ScheduleSubsystem::GetNextTaskForType(const std::string& typeStr)
         }
 
         m_executingTasks.push_back(task);
+        if (TaskControlBlock* controlBlock = findTaskControlBlock(task))
+        {
+            controlBlock->state = TaskState::Executing;
+            task->SetState(TaskState::Executing);
+
+            if (m_keyedTaskPolicyTracker.IsTrackingTask(controlBlock->handle))
+            {
+                m_keyedTaskPolicyTracker.MarkTaskExecuting(controlBlock->handle);
+            }
+        }
         return task;
     }
 
@@ -252,6 +462,16 @@ RunnableTask* ScheduleSubsystem::GetNextTaskForType(const std::string& typeStr)
         }
 
         m_executingTasks.push_back(task);
+        if (TaskControlBlock* controlBlock = findTaskControlBlock(task))
+        {
+            controlBlock->state = TaskState::Executing;
+            task->SetState(TaskState::Executing);
+
+            if (m_keyedTaskPolicyTracker.IsTrackingTask(controlBlock->handle))
+            {
+                m_keyedTaskPolicyTracker.MarkTaskExecuting(controlBlock->handle);
+            }
+        }
         return task;
     }
 
@@ -266,15 +486,52 @@ void ScheduleSubsystem::OnTaskCompleted(RunnableTask* task)
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
 
-        task->SetState(TaskState::Completed);
-
         auto it = std::find(m_executingTasks.begin(), m_executingTasks.end(), task);
         if (it != m_executingTasks.end())
         {
             m_executingTasks.erase(it);
         }
 
-        m_completedTasks.push_back(task);
+        TaskControlBlock* controlBlock = findTaskControlBlock(task);
+        if (controlBlock != nullptr)
+        {
+            TaskState finalState = task->GetState();
+            if (finalState != TaskState::Cancelled && finalState != TaskState::Failed)
+            {
+                finalState = controlBlock->cancellationRequested || task->IsCancellationRequested()
+                    ? TaskState::Cancelled
+                    : TaskState::Completed;
+            }
+
+            controlBlock->state        = finalState;
+            controlBlock->wasCancelled = finalState == TaskState::Cancelled;
+            task->SetState(finalState);
+
+            if (m_keyedTaskPolicyTracker.IsTrackingTask(controlBlock->handle))
+            {
+                const TaskFreshnessEvaluation freshness = m_keyedTaskPolicyTracker.EvaluateCompletion(controlBlock->handle);
+                controlBlock->isStale = freshness.isStale;
+                if (freshness.policyDecision != TaskPolicyDecision::Executed || freshness.isStale)
+                {
+                    controlBlock->policyDecision = freshness.policyDecision;
+                }
+
+                m_keyedTaskPolicyTracker.MarkTaskTerminal(controlBlock->handle);
+            }
+
+            m_completedTaskRecords.push_back(controlBlock->ToCompletionRecord());
+        }
+        else
+        {
+            TaskCompletionRecord completionRecord;
+            completionRecord.handle         = task->GetHandle();
+            completionRecord.task           = task;
+            completionRecord.finalState     = task->IsCancellationRequested() ? TaskState::Cancelled : TaskState::Completed;
+            completionRecord.wasCancelled   = completionRecord.finalState == TaskState::Cancelled;
+            completionRecord.policyDecision = TaskPolicyDecision::Executed;
+            task->SetState(completionRecord.finalState);
+            m_completedTaskRecords.push_back(completionRecord);
+        }
 
         // Plan 1: Check if there are more tasks of the SAME type pending
         shouldNotify = HasPendingTaskOfType(taskType);
@@ -359,35 +616,39 @@ bool ScheduleSubsystem::HasPendingTaskOfType(const std::string& typeStr) const
 
 int32_t ScheduleSubsystem::GetPendingTaskCount(const std::string& typeStr) const
 {
-    auto copyTemp = m_pendingTasksByType;
-    return (int32_t)copyTemp[typeStr].size();
+    std::scoped_lock lock(m_queueMutex);
+    return countPendingTasksForType(m_pendingTasksByType, typeStr);
 }
 
 int32_t ScheduleSubsystem::GetExecutingTaskCount(const std::string& typeStr) const
 {
-    int  result   = 0;
-    auto copyTemp = m_executingTasks;
-    for (const auto& executing_task : copyTemp)
+    std::scoped_lock lock(m_queueMutex);
+
+    int result = 0;
+    for (const RunnableTask* executingTask : m_executingTasks)
     {
-        if (executing_task->m_type == typeStr)
+        if (executingTask != nullptr && executingTask->GetType() == typeStr)
         {
             result++;
         }
     }
+
     return result;
 }
 
 int32_t ScheduleSubsystem::GetCompletedTaskCount(const std::string& typeStr) const
 {
-    int  result   = 0;
-    auto copyTemp = m_executingTasks;
-    for (const auto& completed_task : copyTemp)
+    std::scoped_lock lock(m_queueMutex);
+
+    int result = 0;
+    for (const TaskCompletionRecord& completionRecord : m_completedTaskRecords)
     {
-        if (completed_task->m_type == typeStr)
+        if (completionRecord.task != nullptr && completionRecord.task->GetType() == typeStr)
         {
             result++;
         }
     }
+
     return result;
 }
 
@@ -420,4 +681,46 @@ bool ScheduleSubsystem::HasExecutingTasks(const std::string& taskType) const
     }
 
     return false;
+}
+
+TaskHandle ScheduleSubsystem::allocateTaskHandle()
+{
+    TaskHandle handle;
+    handle.id         = m_nextTaskId.fetch_add(1ULL, std::memory_order_relaxed);
+    handle.generation = 1U;
+    return handle;
+}
+
+TaskControlBlock* ScheduleSubsystem::findTaskControlBlock(const TaskHandle& handle)
+{
+    const auto controlBlockIt = m_taskControlBlocks.find(handle);
+    return controlBlockIt != m_taskControlBlocks.end() ? &controlBlockIt->second : nullptr;
+}
+
+const TaskControlBlock* ScheduleSubsystem::findTaskControlBlock(const TaskHandle& handle) const
+{
+    const auto controlBlockIt = m_taskControlBlocks.find(handle);
+    return controlBlockIt != m_taskControlBlocks.end() ? &controlBlockIt->second : nullptr;
+}
+
+TaskControlBlock* ScheduleSubsystem::findTaskControlBlock(const RunnableTask* task)
+{
+    const auto handleIt = m_taskHandleByPointer.find(const_cast<RunnableTask*>(task));
+    if (handleIt == m_taskHandleByPointer.end())
+    {
+        return nullptr;
+    }
+
+    return findTaskControlBlock(handleIt->second);
+}
+
+const TaskControlBlock* ScheduleSubsystem::findTaskControlBlock(const RunnableTask* task) const
+{
+    const auto handleIt = m_taskHandleByPointer.find(const_cast<RunnableTask*>(task));
+    if (handleIt == m_taskHandleByPointer.end())
+    {
+        return nullptr;
+    }
+
+    return findTaskControlBlock(handleIt->second);
 }

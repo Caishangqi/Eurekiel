@@ -3,7 +3,6 @@
 #include "ChunkState.hpp"
 #include "Engine/Core/Schedule/RunnableTask.hpp"
 #include "Engine/Math/IntVec2.hpp"
-#include <atomic>
 #include <memory>
 
 namespace enigma::voxel
@@ -20,7 +19,6 @@ namespace enigma::voxel
         explicit ChunkJob(const std::string& taskType, IntVec2 chunkCoords)
             : RunnableTask(taskType)
               , m_chunkCoords(chunkCoords)
-              , m_isCancelled(false)
         {
         }
 
@@ -29,13 +27,12 @@ namespace enigma::voxel
         // Chunk identification
         IntVec2 GetChunkCoords() const { return m_chunkCoords; }
 
-        // Cancellation support (non-blocking, cooperative)
-        void RequestCancel() { m_isCancelled.store(true, std::memory_order_release); }
-        bool IsCancelled() const { return m_isCancelled.load(std::memory_order_acquire); }
+        // Legacy wrapper maintained until all chunk jobs switch to generic task APIs.
+        void RequestCancel() { RequestCancellation(); }
+        bool IsCancelled() const { return IsCancellationRequested(); }
 
     protected:
-        IntVec2           m_chunkCoords; // Chunk coordinates this job operates on
-        std::atomic<bool> m_isCancelled; // Cancellation flag (set by main thread, read by worker)
+        IntVec2 m_chunkCoords; // Chunk coordinates this job operates on
     };
 
     //-----------------------------------------------------------------------------------------------

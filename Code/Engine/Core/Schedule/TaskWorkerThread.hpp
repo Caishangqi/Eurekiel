@@ -27,7 +27,7 @@ namespace enigma::core
 
     private:
         // Thread entry point
-        void ThreadMain();
+        void threadMain();
 
     private:
         int m_workerID;                      // Unique thread ID
