@@ -18,6 +18,96 @@
 
 namespace enigma::graphic
 {
+    namespace
+    {
+        const char* GetQueueTypeName(CommandQueueType queueType)
+        {
+            switch (queueType)
+            {
+            case CommandQueueType::Graphics:
+                return "Graphics";
+            case CommandQueueType::Compute:
+                return "Compute";
+            case CommandQueueType::Copy:
+                return "Copy";
+            }
+
+            return "Unknown";
+        }
+
+        const char* GetFallbackReasonName(QueueFallbackReason reason)
+        {
+            switch (reason)
+            {
+            case QueueFallbackReason::None:
+                return "None";
+            case QueueFallbackReason::GraphicsOnlyMode:
+                return "GraphicsOnlyMode";
+            case QueueFallbackReason::RouteNotValidated:
+                return "RouteNotValidated";
+            case QueueFallbackReason::UnsupportedWorkload:
+                return "UnsupportedWorkload";
+            case QueueFallbackReason::RequiresGraphicsStateTransition:
+                return "RequiresGraphicsStateTransition";
+            case QueueFallbackReason::DedicatedQueueUnavailable:
+                return "DedicatedQueueUnavailable";
+            case QueueFallbackReason::QueueTypeUnavailable:
+                return "QueueTypeUnavailable";
+            case QueueFallbackReason::ResourceStateNotSupported:
+                return "ResourceStateNotSupported";
+            }
+
+            return "Unknown";
+        }
+
+        bool IsUnsupportedForComputeRoute(D3D12_RESOURCE_STATES state)
+        {
+            constexpr D3D12_RESOURCE_STATES kUnsupportedMask =
+                D3D12_RESOURCE_STATE_DEPTH_WRITE |
+                D3D12_RESOURCE_STATE_DEPTH_READ |
+                D3D12_RESOURCE_STATE_RESOLVE_SOURCE |
+                D3D12_RESOURCE_STATE_RESOLVE_DEST;
+
+            return (state & kUnsupportedMask) != 0;
+        }
+
+        bool NeedsGraphicsPreambleForCompute(D3D12_RESOURCE_STATES state)
+        {
+            constexpr D3D12_RESOURCE_STATES kDirectComputeSafeMask =
+                D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
+                D3D12_RESOURCE_STATE_COPY_SOURCE |
+                D3D12_RESOURCE_STATE_COPY_DEST |
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
+            if (state == D3D12_RESOURCE_STATE_COMMON)
+            {
+                return false;
+            }
+
+            return (state & ~kDirectComputeSafeMask) != 0;
+        }
+
+        void BindDescriptorHeapsIfNeeded(ID3D12GraphicsCommandList* commandList)
+        {
+            auto* heapMgr = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+            if (heapMgr)
+            {
+                heapMgr->SetDescriptorHeaps(commandList);
+            }
+        }
+
+        bool WaitAndRecycleSubmission(CommandListManager* commandListManager, const QueueSubmissionToken& token)
+        {
+            if (!commandListManager->WaitForSubmission(token))
+            {
+                return false;
+            }
+
+            commandListManager->UpdateCompletedCommandLists();
+            return true;
+        }
+    }
+
     // Static member definitions
     std::map<MipFilterMode, std::unique_ptr<ShaderProgram>> MipmapGenerator::s_shaderCache;
     bool MipmapGenerator::s_initialized = false;
@@ -156,41 +246,101 @@ namespace enigma::graphic
         }
 
         // Get required systems
-        auto* uniformMgr = g_theRendererSubsystem->GetUniformManager();
-        ID3D12Resource* resource = texture->GetResource();
-        ID3D12RootSignature* rootSig = D3D12RenderSystem::GetBindlessRootSignature()->GetRootSignature();
-
-        // Determine command list: use frame command list if available,
-        // otherwise self-acquire one (initialization-time mip generation)
-        auto* cmdList = D3D12RenderSystem::GetCurrentCommandList();
-        bool selfAcquired = false;
+        auto*                 uniformMgr         = g_theRendererSubsystem->GetUniformManager();
+        ID3D12Resource*       resource           = texture->GetResource();
+        auto*                 bindlessRootSig    = D3D12RenderSystem::GetBindlessRootSignature();
+        ID3D12RootSignature*  rootSig            = bindlessRootSig ? bindlessRootSig->GetRootSignature() : nullptr;
         auto* cmdListManager = D3D12RenderSystem::GetCommandListManager();
-
-        if (!cmdList)
+        if (!uniformMgr || !cmdListManager || !rootSig)
         {
-            // No frame command list (called during initialization, not during rendering)
-            // Acquire our own Graphics command list, same pattern as D12Resource::Upload()
-            if (!cmdListManager)
-            {
-                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: CommandListManager not available");
-                return;
-            }
-            cmdList = cmdListManager->AcquireCommandList(
-                CommandListManager::Type::Graphics, "MipGen_Init");
-            if (!cmdList)
-            {
-                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire command list");
-                return;
-            }
-            selfAcquired = true;
-
-            // Bind descriptor heaps for bindless access (normally done in BeginFrame)
-            auto* heapMgr = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
-            if (heapMgr)
-            {
-                heapMgr->SetDescriptorHeaps(cmdList);
-            }
+            ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Required DX12 runtime state is unavailable");
+            return;
         }
+
+        const bool                   hasActiveGraphicsCommandList = D3D12RenderSystem::GetCurrentCommandList() != nullptr;
+        const D3D12_RESOURCE_STATES  initialState                = texture->GetCurrentState();
+        const uint32_t               sourceSrvIndex              = texture->GetBindlessIndex();
+        QueueRouteContext            routeContext                = {};
+        routeContext.workload                                   = QueueWorkloadClass::MipmapGeneration;
+        routeContext.prefersAsyncExecution                      = true;
+        routeContext.allowGraphicsFallback                      = true;
+
+        if (sourceSrvIndex == UINT32_MAX)
+        {
+            ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: texture SRV bindless index is invalid");
+            return;
+        }
+
+        if (hasActiveGraphicsCommandList)
+        {
+            routeContext.forcedFallbackReason = QueueFallbackReason::RouteNotValidated;
+        }
+        else if (IsUnsupportedForComputeRoute(initialState))
+        {
+            routeContext.forcedFallbackReason = QueueFallbackReason::ResourceStateNotSupported;
+        }
+
+        const QueueRouteDecision routeDecision = D3D12RenderSystem::ResolveQueueRoute(routeContext);
+        const bool               usesComputeRoute = routeDecision.activeQueue == CommandQueueType::Compute;
+
+        if (routeDecision.UsesFallback())
+        {
+            LogDebug(LogRenderer,
+                     "MipmapGenerator: '%s' routed to %s (fallback=%s)",
+                     texture->GetDebugName().c_str(),
+                     GetQueueTypeName(routeDecision.activeQueue),
+                     GetFallbackReasonName(routeDecision.fallbackReason));
+        }
+
+        auto submitAndTrack = [&](ID3D12GraphicsCommandList* commandList) -> QueueSubmissionToken
+        {
+            QueueSubmissionToken submissionToken = cmdListManager->SubmitCommandList(commandList);
+            if (submissionToken.IsValid())
+            {
+                D3D12RenderSystem::RecordQueueSubmission(submissionToken, QueueWorkloadClass::MipmapGeneration);
+            }
+
+            return submissionToken;
+        };
+
+        auto insertQueueWaitOrBlock = [&](CommandQueueType waitingQueue, const QueueSubmissionToken& producerToken) -> bool
+        {
+            if (cmdListManager->InsertQueueWait(waitingQueue, producerToken))
+            {
+                D3D12RenderSystem::RecordQueueWaitInsertion(producerToken.queueType, waitingQueue);
+                return true;
+            }
+
+            LogWarn(LogRenderer,
+                    "MipmapGenerator: Falling back to CPU wait before %s queue consumption of '%s'",
+                    GetQueueTypeName(waitingQueue),
+                    texture->GetDebugName().c_str());
+            return WaitAndRecycleSubmission(cmdListManager, producerToken);
+        };
+
+        auto transitionResourceState = [&](ID3D12GraphicsCommandList* commandList,
+                                           D3D12_RESOURCE_STATES      beforeState,
+                                           D3D12_RESOURCE_STATES      afterState)
+        {
+            if (beforeState == afterState)
+            {
+                return;
+            }
+
+            D3D12RenderSystem::TransitionResource(commandList,
+                                                  resource,
+                                                  beforeState,
+                                                  afterState,
+                                                  texture->GetDebugName().c_str());
+        };
+
+        auto finalizeToShaderResource = [&](ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES beforeState)
+        {
+            transitionResourceState(commandList,
+                                    beforeState,
+                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            texture->SetCurrentState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        };
 
         // Calculate mip range
         uint32_t startMip = config.startMipLevel;
@@ -200,22 +350,144 @@ namespace enigma::graphic
             maxMip = (std::min)(startMip + 1 + config.mipLevelCount, mipLevels);
         }
 
-        // Transition entire resource to UNORDERED_ACCESS for compute shader.
-        // Both source and destination mips are accessed via RWTexture2D (UAV),
-        // avoiding the SRV state conflict that occurs with per-subresource barriers.
-        // When self-acquired, use manual transition (TransitionResourceTo needs GetCurrentCommandList)
-        D3D12_RESOURCE_STATES prevState = texture->GetCurrentState();
-        if (prevState != D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+        if (usesComputeRoute)
         {
-            D3D12RenderSystem::TransitionResource(
-                cmdList, resource, prevState,
-                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                texture->GetDebugName().c_str());
+            D3D12_RESOURCE_STATES computeSourceState = initialState;
+
+            if (NeedsGraphicsPreambleForCompute(initialState))
+            {
+                auto* preambleCommandList = cmdListManager->AcquireCommandList(CommandQueueType::Graphics, "MipGen_GraphicsPreamble");
+                if (!preambleCommandList)
+                {
+                    ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire graphics preamble command list");
+                    return;
+                }
+
+                transitionResourceState(preambleCommandList,
+                                        initialState,
+                                        D3D12_RESOURCE_STATE_COMMON);
+
+                QueueSubmissionToken preambleToken = submitAndTrack(preambleCommandList);
+                if (!preambleToken.IsValid())
+                {
+                    ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to submit graphics preamble");
+                    return;
+                }
+
+                if (!insertQueueWaitOrBlock(CommandQueueType::Compute, preambleToken))
+                {
+                    ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to synchronize graphics preamble with compute queue");
+                    return;
+                }
+
+                computeSourceState = D3D12_RESOURCE_STATE_COMMON;
+            }
+
+            auto* computeCommandList = cmdListManager->AcquireCommandList(CommandQueueType::Compute, "MipGen_Compute");
+            if (!computeCommandList)
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire compute command list");
+                return;
+            }
+
+            BindDescriptorHeapsIfNeeded(computeCommandList);
+
+            transitionResourceState(computeCommandList,
+                                    computeSourceState,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+            computeCommandList->SetComputeRootSignature(rootSig);
+            computeCommandList->SetPipelineState(computePSO);
+
+            for (uint32_t mip = startMip + 1; mip < maxMip; ++mip)
+            {
+                uint32_t dstWidth = (std::max)(1u, texture->GetWidth() >> mip);
+                uint32_t dstHeight = (std::max)(1u, texture->GetHeight() >> mip);
+
+                uint32_t dstUavIndex = texture->GetMipUavIndex(mip);
+
+                MipGenUniforms uniforms = {};
+                uniforms.srcTextureIndex      = sourceSrvIndex;
+                uniforms.dstMipUavIndex       = dstUavIndex;
+                uniforms.srcMipLevel          = mip - 1;
+                uniforms.samplerBindlessIndex = 0;
+                uniforms.dstWidth             = dstWidth;
+                uniforms.dstHeight            = dstHeight;
+                uniformMgr->UploadBuffer<MipGenUniforms>(uniforms);
+
+                computeCommandList->SetComputeRootConstantBufferView(
+                    BindlessRootSignature::ROOT_CBV_MIPGEN,
+                    uniformMgr->GetEngineBufferGPUAddress(11));
+
+                uint32_t groupsX = (dstWidth + 7) / 8;
+                uint32_t groupsY = (dstHeight + 7) / 8;
+                computeCommandList->Dispatch(groupsX, groupsY, 1);
+                D3D12RenderSystem::UAVBarrier(computeCommandList, resource);
+            }
+
+            transitionResourceState(computeCommandList,
+                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                    D3D12_RESOURCE_STATE_COMMON);
+
+            QueueSubmissionToken computeToken = submitAndTrack(computeCommandList);
+            if (!computeToken.IsValid())
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to submit compute workload");
+                return;
+            }
+
+            if (!insertQueueWaitOrBlock(CommandQueueType::Graphics, computeToken))
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to synchronize compute mip generation with graphics queue");
+                return;
+            }
+
+            auto* finalizeCommandList = cmdListManager->AcquireCommandList(CommandQueueType::Graphics, "MipGen_GraphicsFinalize");
+            if (!finalizeCommandList)
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire graphics finalize command list");
+                return;
+            }
+
+            finalizeToShaderResource(finalizeCommandList, D3D12_RESOURCE_STATE_COMMON);
+
+            QueueSubmissionToken finalizeToken = submitAndTrack(finalizeCommandList);
+            if (!finalizeToken.IsValid())
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to submit graphics finalize workload");
+                return;
+            }
+
+            if (!WaitAndRecycleSubmission(cmdListManager, finalizeToken))
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to wait for graphics finalize workload");
+            }
+
+            return;
         }
 
-        // Set compute root signature and PSO (once before the loop)
-        cmdList->SetComputeRootSignature(rootSig);
-        cmdList->SetPipelineState(computePSO);
+        // Use the active frame graphics list when the route is validated only as graphics.
+        ID3D12GraphicsCommandList* graphicsCommandList = D3D12RenderSystem::GetCurrentCommandList();
+        bool                       selfAcquiredGraphicsList = false;
+        if (!graphicsCommandList)
+        {
+            graphicsCommandList = cmdListManager->AcquireCommandList(CommandQueueType::Graphics, "MipGen_Graphics");
+            if (!graphicsCommandList)
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to acquire graphics command list");
+                return;
+            }
+
+            selfAcquiredGraphicsList = true;
+            BindDescriptorHeapsIfNeeded(graphicsCommandList);
+        }
+
+        transitionResourceState(graphicsCommandList,
+                                initialState,
+                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        graphicsCommandList->SetComputeRootSignature(rootSig);
+        graphicsCommandList->SetPipelineState(computePSO);
 
         // Per-mip dispatch loop
         // UAV indices are persistent on D12Texture (created once, reused every frame).
@@ -224,48 +496,49 @@ namespace enigma::graphic
             uint32_t dstWidth = (std::max)(1u, texture->GetWidth() >> mip);
             uint32_t dstHeight = (std::max)(1u, texture->GetHeight() >> mip);
 
-            // 1. Get persistent per-mip UAV indices from texture
-            uint32_t srcUavIndex = texture->GetMipUavIndex(mip - 1);
+            // Read from the texture SRV and write to the destination mip UAV.
             uint32_t dstUavIndex = texture->GetMipUavIndex(mip);
 
             // 2. Upload MipGenUniforms (PerDispatch auto-advances)
             MipGenUniforms uniforms = {};
-            uniforms.srcTextureIndex      = srcUavIndex;  // Persistent per-mip UAV index
+            uniforms.srcTextureIndex      = sourceSrvIndex;
             uniforms.dstMipUavIndex       = dstUavIndex;
-            uniforms.srcMipLevel          = mip - 1;      // For reference, not used by shader
-            uniforms.samplerBindlessIndex = 0;             // Unused with RWTexture2D approach
+            uniforms.srcMipLevel          = mip - 1; // Explicit source mip for all built-in variants
+            uniforms.samplerBindlessIndex = 0;       // Built-in box filter uses sampler0; Load-based variants ignore this field
             uniforms.dstWidth             = dstWidth;
             uniforms.dstHeight            = dstHeight;
             uniformMgr->UploadBuffer<MipGenUniforms>(uniforms);
 
             // 3. Bind CBV for this dispatch
-            cmdList->SetComputeRootConstantBufferView(
+            graphicsCommandList->SetComputeRootConstantBufferView(
                 BindlessRootSignature::ROOT_CBV_MIPGEN,
                 uniformMgr->GetEngineBufferGPUAddress(11));
 
             // 4. Dispatch compute shader
             uint32_t groupsX = (dstWidth + 7) / 8;
             uint32_t groupsY = (dstHeight + 7) / 8;
-            cmdList->Dispatch(groupsX, groupsY, 1);
+            graphicsCommandList->Dispatch(groupsX, groupsY, 1);
 
             // 5. UAV barrier (ensure writes complete before next mip reads)
-            D3D12RenderSystem::UAVBarrier(cmdList, resource);
+            D3D12RenderSystem::UAVBarrier(graphicsCommandList, resource);
         }
 
         // Transition back to shader resource for sampling
-        D3D12RenderSystem::TransitionResource(
-            cmdList, resource,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-            texture->GetDebugName().c_str());
-        texture->SetCurrentState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        finalizeToShaderResource(graphicsCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-        // If we self-acquired the command list, execute and wait for GPU completion
-        if (selfAcquired)
+        if (selfAcquiredGraphicsList)
         {
-            uint64_t fenceValue = cmdListManager->ExecuteCommandList(cmdList);
-            cmdListManager->WaitForFence(fenceValue);
-            cmdListManager->UpdateCompletedCommandLists();
+            QueueSubmissionToken submissionToken = submitAndTrack(graphicsCommandList);
+            if (!submissionToken.IsValid())
+            {
+                LogError(LogRenderer, "MipmapGenerator: SubmitCommandList failed for '%s'", texture->GetDebugName().c_str());
+                return;
+            }
+
+            if (!WaitAndRecycleSubmission(cmdListManager, submissionToken))
+            {
+                ERROR_RECOVERABLE("MipmapGenerator::GenerateMips: Failed to wait for graphics workload");
+            }
         }
     }
 } // namespace enigma::graphic

@@ -56,7 +56,8 @@ namespace enigma::graphic
         /// Subscribes to RendererEvents::OnPipelineReady for shader compilation.
         static void Initialize();
 
-        /// Generate mip chain for a texture using compute shader.
+        /// Generate mip chain for a texture using the routed queue path.
+        /// Prefers the compute candidate route and falls back to graphics when required.
         /// @param texture Target texture (must have mipLevels > 1 and UAV flag)
         /// @param config  Mipmap generation configuration (FilterMode or custom shader)
         static void GenerateMips(D12Texture* texture,

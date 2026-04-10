@@ -6,7 +6,8 @@
  * Premultiplies RGB by alpha before averaging, then divides by total alpha.
  * Solves white/gray fringe on cutout textures (leaves, grass, flowers).
  *
- * Uses RWTexture2D for both source and destination (UAV-safe).
+ * Uses Texture2D for source reads and RWTexture2D for destination writes.
+ * Source texels are fetched with Load() from the explicit source mip level.
  * Dispatched once per mip level by MipmapGenerator.
  */
 
@@ -18,16 +19,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (DTid.x >= g_dstWidth || DTid.y >= g_dstHeight)
         return;
 
-    // Bindless UAV access (SM6.6)
-    RWTexture2D<float4> srcMip = ResourceDescriptorHeap[g_srcTextureIndex];
+    // Bindless source SRV + destination UAV access (SM6.6)
+    Texture2D srcTexture = ResourceDescriptorHeap[g_srcTextureIndex];
     RWTexture2D<float4> dstMip = ResourceDescriptorHeap[g_dstMipUavIndex];
 
     // Load 2x2 source texels
     int2 srcCoord = DTid.xy * 2;
-    float4 s00 = srcMip[srcCoord];
-    float4 s10 = srcMip[srcCoord + int2(1, 0)];
-    float4 s01 = srcMip[srcCoord + int2(0, 1)];
-    float4 s11 = srcMip[srcCoord + int2(1, 1)];
+    float4 s00 = srcTexture.Load(int3(srcCoord, g_srcMipLevel));
+    float4 s10 = srcTexture.Load(int3(srcCoord + int2(1, 0), g_srcMipLevel));
+    float4 s01 = srcTexture.Load(int3(srcCoord + int2(0, 1), g_srcMipLevel));
+    float4 s11 = srcTexture.Load(int3(srcCoord + int2(1, 1), g_srcMipLevel));
 
     // Alpha-weighted RGB average
     float totalAlpha = s00.a + s10.a + s01.a + s11.a;

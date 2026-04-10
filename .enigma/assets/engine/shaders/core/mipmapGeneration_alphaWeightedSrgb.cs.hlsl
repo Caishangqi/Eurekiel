@@ -9,7 +9,8 @@
  *
  * Best for cutout textures (leaves, grass) authored in sRGB color space.
  *
- * Uses RWTexture2D for both source and destination (UAV-safe).
+ * Uses Texture2D for source reads and RWTexture2D for destination writes.
+ * Source texels are fetched with Load() from the explicit source mip level.
  * Dispatched once per mip level by MipmapGenerator.
  */
 
@@ -24,15 +25,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (DTid.x >= g_dstWidth || DTid.y >= g_dstHeight)
         return;
 
-    RWTexture2D<float4> srcMip = ResourceDescriptorHeap[g_srcTextureIndex];
+    Texture2D srcTexture = ResourceDescriptorHeap[g_srcTextureIndex];
     RWTexture2D<float4> dstMip = ResourceDescriptorHeap[g_dstMipUavIndex];
 
     // Load 2x2 source texels
     int2 srcCoord = DTid.xy * 2;
-    float4 s00 = srcMip[srcCoord];
-    float4 s10 = srcMip[srcCoord + int2(1, 0)];
-    float4 s01 = srcMip[srcCoord + int2(0, 1)];
-    float4 s11 = srcMip[srcCoord + int2(1, 1)];
+    float4 s00 = srcTexture.Load(int3(srcCoord, g_srcMipLevel));
+    float4 s10 = srcTexture.Load(int3(srcCoord + int2(1, 0), g_srcMipLevel));
+    float4 s01 = srcTexture.Load(int3(srcCoord + int2(0, 1), g_srcMipLevel));
+    float4 s11 = srcTexture.Load(int3(srcCoord + int2(1, 1), g_srcMipLevel));
 
     // Convert RGB to linear space
     float3 lin00 = SRGBToLinear(s00.rgb);
