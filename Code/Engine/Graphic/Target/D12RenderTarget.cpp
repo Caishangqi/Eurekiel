@@ -362,49 +362,26 @@ bool D12RenderTarget::FreeBindlessIndexInternal(BindlessIndexAllocator* allocato
 // ============================================================================
 
 /**
- * @brief 重写Upload()方法 - 复合资源模式
- *
- * 教学要点:
- * 1. Composite模式: RenderTarget是复合资源，包含2个D12Texture子资源
- * 2. 上传流程: 遍历子资源，调用每个子资源的Upload()
- * 3. API一致性: 通过重写虚函数而不是添加特殊方法（如MarkAsUploaded）
- * 4. 面向对象原则: 外层对象负责管理内部对象的生命周期
- *
- * 为什么之前的UploadToGPU()修复没有执行:
- * - RenderTargetManager调用m_renderTargets[i]->Upload()
- * - 这会调用基类D12Resource::Upload()
- * - 基类Upload()在174行检查IsValid()失败（m_isValid = false）
- * - 导致根本没有进入UploadToGPU()
- *
- * 正确的修复方案:
- * - 重写Upload()，直接管理子资源上传
- * - 不依赖基类的Upload()流程
- * - 确保子资源的m_isUploaded正确设置
+ * @brief Propagate the upload lifecycle to the owned textures.
  */
 bool D12RenderTarget::Upload(ID3D12GraphicsCommandList* commandList)
 {
     UNUSED(commandList)
 
-    // Composite Resource Pattern: Upload all sub-resources
-    // RenderTarget包含2个D12Texture：m_mainTexture和m_altTexture
+    // Render targets own two texture resources that must both satisfy the
+    // upload lifecycle before the composite wrapper is considered ready.
     bool success = true;
 
-    // 1. 上传主纹理
-    // RenderTarget纹理不需要CPU数据，是GPU直接写入的输出纹理
-    // 但仍需调用Upload()来设置m_isUploaded标记，通过RegisterBindless()安全检查
     if (m_mainTexture)
     {
         success &= m_mainTexture->Upload(commandList);
     }
 
-    // 2. 上传替代纹理（Ping-Pong渲染）
     if (m_altTexture)
     {
         success &= m_altTexture->Upload(commandList);
     }
 
-    // 3. 标记外层容器为已上传
-    // 这样外层RenderTarget和内层Texture的m_isUploaded都为true
     if (success)
     {
         m_isUploaded = true;

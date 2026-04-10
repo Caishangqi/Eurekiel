@@ -12,26 +12,26 @@
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/RTTypes.hpp"
-#include "Engine/Graphic/Target/RenderTargetHelper.hpp" // 阶段3.3: RenderTarget工具类
-#include "Engine/Graphic/Target/RenderTargetBinder.hpp" // RenderTarget绑定器
+#include "Engine/Graphic/Target/RenderTargetHelper.hpp" // Render-target helper utilities
+#include "Engine/Graphic/Target/RenderTargetBinder.hpp" // Unified RT binding
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
-#include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // [ADD] For UniformException hierarchy
-#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // [ADD] For ENGINE_BUFFER_RING_CAPACITY
-#include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms结构体
-#include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms结构体
-#include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // CustomImageManager类
-#include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO管理器
-#include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // 渲染状态验证器
-#include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface for new camera system
-#include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // M6.2: ShaderProgram
-#include "Engine/Graphic/Shader/Program/ShaderSource.hpp" // Shrimp Task 1: ShaderSource
-#include "Engine/Graphic/Shader/Program/ShaderProgramBuilder.hpp" // Shrimp Task 1: ShaderProgramBuilder
-#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Shrimp Task 2: 编译辅助工具
-#include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Shrimp Task 6: Include系统工具
-#include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // Shrimp Task 6: ShaderPath路径抽象
+#include "Engine/Graphic/Shader/Uniform/UniformCommon.hpp" // Uniform exception hierarchy
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp" // ENGINE_BUFFER_RING_CAPACITY
+#include "Engine/Graphic/Shader/Uniform/MatricesUniforms.hpp" // MatricesUniforms
+#include "Engine/Graphic/Shader/Uniform/PerObjectUniforms.hpp" // PerObjectUniforms
+#include "Engine/Graphic/Shader/Uniform/CustomImageManager.hpp" // Custom image slot manager
+#include "Engine/Graphic/Shader/PSO/PSOManager.hpp" // PSO manager
+#include "Engine/Graphic/Shader/PSO/RenderStateValidator.hpp" // Render-state validation
+#include "Engine/Graphic/Camera/ICamera.hpp" // ICamera interface
+#include "Engine/Graphic/Shader/Program/ShaderProgram.hpp" // ShaderProgram
+#include "Engine/Graphic/Shader/Program/ShaderSource.hpp" // ShaderSource
+#include "Engine/Graphic/Shader/Program/ShaderProgramBuilder.hpp" // ShaderProgramBuilder
+#include "Engine/Graphic/Shader/Common/ShaderCompilationHelper.hpp" // Compilation helpers
+#include "Engine/Graphic/Shader/Common/ShaderIncludeHelper.hpp" // Include helpers
+#include "Engine/Graphic/Shader/Program/Include/ShaderPath.hpp" // ShaderPath abstraction
 #include "Engine/Graphic/Resource/BindlessRootSignature.hpp"
-#include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // Option D: RingBuffer wrapper
-#include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // Option D: RingBuffer wrapper
+#include "Engine/Graphic/Integration/RingBuffer/VertexRingBuffer.hpp" // Ring-buffer wrapper
+#include "Engine/Graphic/Integration/RingBuffer/IndexRingBuffer.hpp"  // Ring-buffer wrapper
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutCommon.hpp"
 #include "Engine/Graphic/Resource/VertexLayout/VertexLayoutRegistry.hpp" // VertexLayout state management
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
@@ -47,7 +47,6 @@ void RendererSubsystem::RenderStatistics::Reset()
     activeShaderPrograms = 0;
 }
 
-// Milestone 3.0: 构造函数参数类型从Configuration改为RendererSubsystemConfig
 RendererSubsystem::RendererSubsystem(RendererSubsystemConfig& config)
 {
     m_configuration = config;
@@ -55,19 +54,19 @@ RendererSubsystem::RendererSubsystem(RendererSubsystemConfig& config)
 
 RendererSubsystem::~RendererSubsystem()
 {
+    if (!m_isShutdown)
+    {
+        Shutdown();
+    }
 }
 
 void RendererSubsystem::Initialize()
 {
     LogInfo(LogRenderer, "Initializing D3D12 rendering system...");
 
-    //-----------------------------------------------------------------------------------------------
-    // Milestone 3.0: 配置系统重构完成
-    // 配置已在构造函数中通过参数传入（m_configuration），无需在Initialize()中加载
-    // 删除了原有的ParseFromYaml()调用和m_config赋值代码
-    //-----------------------------------------------------------------------------------------------
+    // Configuration is injected through the constructor. Initialize() only consumes it.
 
-    // 获取窗口句柄（通过配置参数）
+    // Resolve the window handle from the subsystem configuration.
     HWND hwnd = nullptr;
     if (m_configuration.targetWindow)
     {
@@ -95,10 +94,11 @@ void RendererSubsystem::Initialize()
         return;
     }
 
-    // [INIT] Initialize engine default material
+    // Create engine-owned fallback textures before frontend services start.
     D3D12RenderSystem::PrepareDefaultTextures();
 
     m_isInitialized = true;
+    m_isShutdown    = false;
     LogInfo(LogRenderer, "D3D12RenderSystem initialized successfully through RendererSubsystem");
 
     // Create PSOManager
@@ -132,14 +132,12 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ColorTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
-    // Reference: requirements.md - Requirement 1: RendererSubsystemConfig 扩展
+    // Read color-target settings from RendererSubsystemConfig instead of hardcoding them.
     try
     {
         LogInfo(LogRenderer, "Creating ColorTextureProvider...");
 
-        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
-        // Always creates MAX_COLOR_TEXTURES (16) colortex, format from config
+        // Always create the full Iris color-target set with config-driven formats.
         std::vector<RenderTargetConfig> colorConfigs = m_configuration.GetColorTexConfigs();
 
         const int baseWidth  = m_configuration.renderWidth;
@@ -148,7 +146,6 @@ void RendererSubsystem::Startup()
         LogInfo(LogRenderer, "ColorTextureProvider configuration: %dx%d, %zu colortex",
                 baseWidth, baseHeight, colorConfigs.size());
 
-        // [RAII] Pass UniformManager to constructor for Shader RT Fetching
         m_colorTextureProvider = std::make_unique<ColorTextureProvider>(
             baseWidth, baseHeight, colorConfigs, m_uniformManager.get()
         );
@@ -186,7 +183,7 @@ void RendererSubsystem::Startup()
     }
     catch (const std::exception& e)
     {
-        LogError(LogRenderer, "Failed to create CustomImageManager: {}", e.what());
+        LogError(LogRenderer, "Failed to create CustomImageManager: %s", e.what());
         ERROR_AND_DIE(Stringf("CustomImageManager initialization failed! Error: %s", e.what()))
     }
 
@@ -328,7 +325,7 @@ void RendererSubsystem::Startup()
             m_uniformManager.get()
         );
 
-        LogInfo(LogRenderer, "SamplerProvider created successfully (5 default samplers)");
+        LogInfo(LogRenderer, "SamplerProvider created successfully (6 default samplers)");
     }
     catch (const std::exception& e)
     {
@@ -374,23 +371,35 @@ void RendererSubsystem::Startup()
 
 void RendererSubsystem::Shutdown()
 {
+    if (m_isShutdown)
+    {
+        return;
+    }
+
+    m_isShutdown = true;
     LogInfo(LogRenderer, "Shutting down...");
 
-    // ==================== Shutdown VertexLayoutRegistry ====================
-    // Cleanup static registry before D3D12RenderSystem shutdown
     if (VertexLayoutRegistry::IsInitialized())
     {
         VertexLayoutRegistry::Shutdown();
         LogInfo(LogRenderer, "VertexLayoutRegistry shutdown complete");
     }
 
-    // ==================== Release GPU descriptor-holding resources ====================
-    // CRITICAL: These must be destroyed BEFORE D3D12RenderSystem::Shutdown(),
-    // because their destructors call GlobalDescriptorHeapManager::Free*() which
-    // requires the heap manager to still be alive.
-    // Without this, the compiler-generated destructor would destroy these members
-    // AFTER D3D12RenderSystem::Shutdown() has already torn down the heap manager,
-    // causing a use-after-free crash in Sampler::Release() / FreeSampler().
+    ReleaseFrontendGpuResourcesBeforeBackendShutdown();
+
+    LogInfo(LogRenderer, "All GPU resources released before D3D12 shutdown");
+
+    if (D3D12RenderSystem::IsInitialized())
+    {
+        D3D12RenderSystem::Shutdown();
+    }
+
+    ResetFrontendShutdownState();
+}
+
+void RendererSubsystem::ReleaseFrontendGpuResourcesBeforeBackendShutdown() noexcept
+{
+    // Descriptor-owning frontend resources must die before backend teardown.
     m_samplerProvider.reset();
     m_customImageManager.reset();
     m_psoManager.reset();
@@ -400,27 +409,43 @@ void RendererSubsystem::Shutdown()
     m_lastObservedGraphicsCommandList = nullptr;
     m_lastObservedSrvHeap             = nullptr;
 
-    // Release RT providers (may hold descriptor references)
     m_renderTargetBinder.reset();
     m_colorTextureProvider.reset();
     m_depthTextureProvider.reset();
     m_shadowColorProvider.reset();
     m_shadowTextureProvider.reset();
 
-    // Release buffer resources
     m_immediateVertexRingBuffer.reset();
     m_immediateIndexRingBuffer.reset();
 
-    // Release UniformManager last (other providers may reference it)
+    // UniformManager stays last because providers may still reference it.
     m_uniformManager.reset();
-
-    LogInfo(LogRenderer, "All GPU resources released before D3D12 shutdown");
-
-    // Final step: 关闭D3D12RenderSystem (destroys GlobalDescriptorHeapManager)
-    D3D12RenderSystem::Shutdown();
 }
 
-// TODO: M2 - 移除PreparePipeline，实现新的灵活渲染接口
+void RendererSubsystem::ResetFrontendShutdownState() noexcept
+{
+    g_theRendererSubsystem = nullptr;
+
+    m_currentShaderProgram       = nullptr;
+    m_currentBlendMode           = BlendMode::Opaque;
+    m_currentBlendConfig         = BlendConfig::Opaque();
+    m_hasIndependentBlend        = false;
+    m_perRTBlendConfigs.fill(BlendConfig::Opaque());
+    m_currentDepthConfig         = DepthConfig::Enabled();
+    m_currentStencilTest         = StencilTestDetail::Disabled();
+    m_currentRasterizationConfig = RasterizationConfig::CullBack();
+    m_currentVertexLayout        = nullptr;
+    m_lastBoundPSO               = nullptr;
+    m_currentStencilRef          = 0;
+    m_graphicsPassScopeState.hasActiveScope = false;
+    m_viewportUniforms           = {};
+    m_renderStatistics.Reset();
+
+    m_isInitialized = false;
+    m_isStarted     = false;
+}
+
+// TODO: M2 - remove PreparePipeline and keep the flexible rendering API only.
 #pragma endregion
 
 #pragma region Shader Compilation
@@ -438,52 +463,35 @@ bool RendererSubsystem::IsReadyForRendering() const noexcept
 
 void RendererSubsystem::BeginFrame()
 {
-    // ========================================================================
-    // [CRITICAL] Broadcast OnBeginFrame event BEFORE frame starts
-    // ========================================================================
-    // This allows dependent systems to perform operations when GPU is idle:
-    // - ShaderBundleSubsystem: Process pending bundle load/unload requests
-    // - RT resource changes happen safely here (no active CommandList)
-    //
-    // Design: Uses MulticastDelegate for decoupling (DIP compliance)
-    // - RendererSubsystem doesn't know about ShaderBundleSubsystem
-    // - ShaderBundleSubsystem subscribes to this event in its Startup()
-    // - Synchronous execution guarantees all listeners complete first
-    // ========================================================================
+    // Broadcast the CPU-side pre-frame notification before the DX12 frame slot
+    // is acquired. This is not a resource-ownership boundary.
+    D3D12RenderSystem::SetFrameLifecyclePhase(FrameLifecyclePhase::PreFrameBegin);
     RendererEvents::OnBeginFrame.Broadcast();
 
-    // ========================================================================
-    // Pipeline 生命周期重构 - BeginFrame 阶段
-    // ========================================================================
-    // 职责对应 Minecraft renderLevel() 最开头:
-    // 1. DirectX 12 帧准备 (PrepareNextFrame)
-    // 2. 清屏操作 (对应 Minecraft CLEAR 注入点之前)
-    // 3. 重置RT绑定状态缓存 (ClearBindings)
-    // ========================================================================
-    // [IMPORTANT] 架构设计说明：
-    // - BeginFrame() 不绑定任何 RenderTarget
-    // - RT 绑定由 UseProgram() 负责（三种模式）
-    // - 保持职责单一，符合 SOLID 原则
-    // - 避免冗余绑定，保留 Hash 缓存性能优化
-    // ========================================================================
-    // [CRITICAL] Hash 缓存机制：
-    // - 目标：帧内优化（避免同一帧内的冗余 OMSetRenderTargets 调用）
-    // - 命中率：95-98%（复杂场景），性能提升 16.7 倍
-    // - 帧边界重置：每帧开始时调用 ClearBindings() 清除缓存
-    // - 业界标准：UE4/5、Unity、DirectX 12 官方建议
-    // ========================================================================
-    // 教学要点: 
-    // - 显式状态管理（现代图形API设计理念）
-    // - "谁使用谁绑定"原则
-    // - 性能优化与架构纯净性的平衡
-    // - 帧内优化 vs 跨帧优化（跨帧缓存是错误的设计）
-    // ========================================================================
+    // Reset CPU-only binding and layout caches before the DX12 frame begins.
+    m_currentVertexLayout = VertexLayoutRegistry::GetDefault();
 
-    // Reset Ring Buffers at frame start (Option D Architecture)
-    // Teaching points:
-    // - Per-Frame Append strategy: reset offset to 0, reuse buffer memory
-    // - RAII wrapper encapsulates reset logic
-    // - No need to recreate buffers each frame
+    // Clear stale CPU-side PSO and render-target cache state at the frame boundary.
+    m_lastBoundPSO = nullptr;
+    if (m_renderTargetBinder)
+    {
+        m_renderTargetBinder->ClearBindings();
+    }
+
+    const bool success = D3D12RenderSystem::BeginFrame(
+        m_configuration.defaultClearColor,
+        m_configuration.defaultClearDepth,
+        m_configuration.defaultClearStencil
+    );
+
+    if (!success)
+    {
+        LogWarn(LogRenderer, "BeginFrame - D3D12 frame setup failed");
+        return;
+    }
+
+    // Reset frame-local resource state only after the active frame slot has
+    // been retired, reset, and made safe for reuse by D3D12RenderSystem.
     if (m_immediateVertexRingBuffer)
     {
         m_immediateVertexRingBuffer->ResetForFrame();
@@ -493,19 +501,6 @@ void RendererSubsystem::BeginFrame()
         m_immediateIndexRingBuffer->ResetForFrame();
     }
 
-    // Reset VertexLayout to default at frame start
-    // Teaching points:
-    // - Ensures consistent state for each frame
-    // - Default layout is Vertex_PCUTBN (set by VertexLayoutRegistry)
-    // - RenderPass can override with SetVertexLayout() per draw call
-    m_currentVertexLayout = VertexLayoutRegistry::GetDefault();
-
-    // [CRITICAL FIX] 重置上一帧的PSO绑定状态（修复跨帧PSO缓存污染）
-    // 原因：CommandList在帧边界被重置，GPU状态失效，必须清除CPU侧的缓存
-    // 确保每帧第一次Draw调用时PSO被正确设置到CommandList
-    m_lastBoundPSO = nullptr;
-
-    // 重置Draw计数，配合Ring Buffer实现索引管理
     if (m_uniformManager)
     {
         m_uniformManager->ResetDrawCount();
@@ -514,27 +509,11 @@ void RendererSubsystem::BeginFrame()
 
     m_graphicsPassScopeState.hasActiveScope = false;
 
+    // Keep the remaining frame-local shader-visible activation work in one
+    // post-acquire block so it is aligned with safe slot ownership.
     if (m_customImageManager)
     {
-        m_customImageManager->OnBeginFrame();
-    }
-
-    // 1. DirectX 12 帧准备 - 获取下一帧的后台缓冲区
-    D3D12RenderSystem::PrepareNextFrame();
-
-    // ========================================================================
-    // [CRITICAL FIX] 重置RT绑定状态（修复跨帧Hash缓存污染问题）
-    // ========================================================================
-    // 教学要点：
-    // - Hash缓存的目标是帧内优化（95-98%命中率），而非跨帧优化
-    // - GPU状态在帧边界被SwapChain重置，必须清除缓存
-    // - 确保第一次UseProgram正确绑定RT（不被Hash缓存跳过）
-    // - 帧内后续调用仍然享受Hash缓存优化
-    // - 符合UE4/5、Unity、DirectX 12官方建议
-    // ========================================================================
-    if (m_renderTargetBinder)
-    {
-        m_renderTargetBinder->ClearBindings();
+        m_customImageManager->OnFrameSlotAcquired();
     }
 
     m_colorTextureProvider->UpdateIndices();
@@ -546,7 +525,6 @@ void RendererSubsystem::BeginFrame()
         m_samplerProvider->UpdateIndices();
     }
 
-    // Update viewport uniform and upload the buffer
     m_viewportUniforms.viewWidth   = (float)m_configuration.renderWidth;
     m_viewportUniforms.viewHeight  = (float)m_configuration.renderHeight;
     m_viewportUniforms.aspectRatio = m_viewportUniforms.viewWidth / m_viewportUniforms.viewHeight;
@@ -554,32 +532,10 @@ void RendererSubsystem::BeginFrame()
 
     if (m_configuration.enableAutoClearColor)
     {
-        // Clear SwapChain BackBuffer first
-        bool success = D3D12RenderSystem::BeginFrame(
-            m_configuration.defaultClearColor, //Configured default color
-            m_configuration.defaultClearDepth, // Depth clear value
-            m_configuration.defaultClearStencil // Template clear value
-        );
-
-        if (!success)
-        {
-            LogWarn(LogRenderer, "BeginFrame - D3D12 frame clear failed");
-        }
-
-        // Clear all GBuffer RTs and DepthTex (centralized clear strategy)
-        // This ensures clean state for the frame
-        // Clear order:
-        // 1. SwapChain BackBuffer: cleared by D3D12RenderSystem::BeginFrame (above)
-        // 2. GBuffer colortex (0-7): cleared here
-        // 3. DepthTex (0-2): cleared here (including stencil)
-        //
-        // Centralized approach benefits:
-        // - All RTs start with clean state
-        // - Multi-pass rendering can rely on preserved values (via LoadAction::Load)
-        // - No RT trailing artifacts
+        // Clear GBuffer render targets after the swap-chain back buffer has
+        // already been prepared by D3D12RenderSystem::BeginFrame().
         ClearAllRenderTargets();
-
-        LogDebug(LogRenderer, "BeginFrame - All render targets cleared (centralized strategy)");
+        LogDebug(LogRenderer, "BeginFrame - All render targets cleared");
     }
 
     SyncGraphicsRootBinderWithCommandList(D3D12RenderSystem::GetCurrentCommandList(), true);
@@ -925,6 +881,26 @@ ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
     return cmdMgr ? cmdMgr->GetCommandQueue(CommandListManager::Type::Graphics) : nullptr;
 }
 
+void RendererSubsystem::SetRequestedQueueExecutionMode(QueueExecutionMode mode) noexcept
+{
+    D3D12RenderSystem::SetRequestedQueueExecutionMode(mode);
+}
+
+QueueExecutionMode RendererSubsystem::GetRequestedQueueExecutionMode() const noexcept
+{
+    return D3D12RenderSystem::GetRequestedQueueExecutionMode();
+}
+
+QueueExecutionMode RendererSubsystem::GetActiveQueueExecutionMode() const noexcept
+{
+    return D3D12RenderSystem::GetActiveQueueExecutionMode();
+}
+
+const QueueExecutionDiagnostics& RendererSubsystem::GetQueueExecutionDiagnostics() const noexcept
+{
+    return D3D12RenderSystem::GetQueueExecutionDiagnostics();
+}
+
 //-----------------------------------------------------------------------------------------------
 // ImGui Integration Support (7 getter methods for IImGuiRenderContext)
 //-----------------------------------------------------------------------------------------------
@@ -983,11 +959,7 @@ bool RendererSubsystem::IsInitialized() const noexcept
 
 void RendererSubsystem::SetCustomImage(int slotIndex, D12Texture* texture)
 {
-    // [DELEGATION] 委托给CustomImageManager处理
-    // 教学要点：
-    // - 简单的委托模式（Delegation Pattern）
-    // - 封装实现细节，提供用户友好的接口
-    // - 完整的空指针检查
+    // Delegate slot updates to the dedicated custom image manager.
 
     if (m_customImageManager)
     {
@@ -1001,11 +973,7 @@ void RendererSubsystem::SetCustomImage(int slotIndex, D12Texture* texture)
 
 D12Texture* RendererSubsystem::GetCustomImage(int slotIndex) const
 {
-    // [DELEGATION] 委托给CustomImageManager处理
-    // 教学要点：
-    // - const方法，不修改对象状态
-    // - 返回原始指针（非所有权）
-    // - 空指针检查确保安全
+    // Delegate slot queries to the dedicated custom image manager.
 
     if (m_customImageManager)
     {
@@ -1018,11 +986,7 @@ D12Texture* RendererSubsystem::GetCustomImage(int slotIndex) const
 
 void RendererSubsystem::ClearCustomImage(int slotIndex)
 {
-    // [DELEGATION] 委托给CustomImageManager处理
-    // 教学要点：
-    // - 等价于SetCustomImage(slotIndex, nullptr)
-    // - 提供更清晰的语义
-    // - 完整的空指针检查
+    // Delegate slot clearing to the dedicated custom image manager.
 
     if (m_customImageManager)
     {

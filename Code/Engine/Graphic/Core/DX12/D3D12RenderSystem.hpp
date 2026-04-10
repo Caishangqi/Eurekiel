@@ -3,10 +3,11 @@
 #include "FrameContext.hpp"
 #include "../../Resource/Buffer/D12Buffer.hpp"
 #include "../../Resource/CommandListManager.hpp"
+#include "QueueRoutingPolicy.hpp"
 #include "../EnigmaGraphicCommon.hpp"
-#include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6索引分配器
-#include "../../Resource/GlobalDescriptorHeapManager.hpp"           // 全局描述符堆管理器
-#include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 Root Signature
+#include "../../Resource/BindlessIndexAllocator.hpp"                // SM6.6 bindless index allocator
+#include "../../Resource/GlobalDescriptorHeapManager.hpp"           // Global descriptor heap manager
+#include "../../Resource/BindlessRootSignature.hpp"                 // SM6.6 root signature
 #include "../../Mipmap/MipmapConfig.hpp"                            // MipmapConfig for CreateTexture2DWithMips
 #include "Engine/Core/Rgba8.hpp"
 #include <d3d12.h>
@@ -40,108 +41,71 @@ namespace enigma::graphic
     struct DepthTextureCreateInfo;
     enum class TextureUsage : uint32_t;
 
+    struct FrameSlotAcquisitionResult
+    {
+        bool                 success                      = false;
+        uint32_t             frameIndex                   = 0;
+        uint32_t             waitedFrameSlot              = 0;
+        bool                 hasTrackedRetirement         = false;
+        bool                 waitedOnRetirement           = false;
+        uint32_t             requestedFramesInFlightDepth = 0;
+        uint32_t             activeFramesInFlightDepth    = 0;
+        FrameLifecyclePhase  lifecyclePhase               = FrameLifecyclePhase::Idle;
+        QueueFenceSnapshot   completedFenceSnapshotBeforeWait = {};
+        std::array<bool, kCommandQueueTypeCount> participatingQueues = {};
+        std::array<bool, kCommandQueueTypeCount> expectedQueues      = {};
+        std::array<bool, kCommandQueueTypeCount> missingQueues       = {};
+        std::array<bool, kCommandQueueTypeCount> waitedQueues        = {};
+        QueueSubmissionToken graphicsToken              = {};
+        QueueSubmissionToken computeToken               = {};
+        QueueSubmissionToken copyToken                  = {};
+    };
+
     /**
-     * 教学目标：了解现代图形API封装层的设计模式
-     *
-     * D3D12RenderSystem类设计说明：
-     * - 对应Iris的IrisRenderSystem.java的DirectX 12实现
-     * - 提供静态API封装，管理整个DirectX 12底层系统
-     * - 职责范围：设备管理、命令队列管理、资源创建
-     * - 包含CommandListManager管理，遵循IrisRenderSystem的完整职责
-     * - 为RendererSubsystem提供底层DirectX 12 API封装
-     *
-     * DirectX 12 API参考：
-     * - ID3D12Device: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device
-     * - D3D12CreateDevice: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-d3d12createdevice
+     * Static DX12 backend facade used by RendererSubsystem.
+     * Owns device setup, queue coordination, resource creation, and frame execution state.
      */
     using namespace enigma::core;
     using namespace enigma::resource;
-    /**
-     * D3D12RenderSystem：DirectX 12渲染系统的静态封装
-     * 设计理念：对应Iris的IrisRenderSystem，管理完整的DirectX 12底层API
-     * 职责范围：设备创建、命令队列管理、缓冲区管理、调试支持
-     * 架构层次：底层API封装，为RendererSubsystem提供DirectX 12服务
-     * 与Iris对应：IrisRenderSystem.java的DirectX 12版本实现
-     */
     class D3D12RenderSystem
     {
     public:
         /**
-         * 初始化DirectX 12渲染系统（设备、命令系统和SwapChain）
-         * DirectX 12 API: D3D12CreateDevice, CreateDXGIFactory2, CreateSwapChainForHwnd
-         * 对应IrisRenderSystem.initialize()方法的完整DirectX 12实现
+         * Initialize the DX12 device, command system, and optional swap chain.
          *
-         * 教学要点：
-         * - 这是引擎层的统一初始化入口点，遵循 RendererSubsystem → D3D12RenderSystem → SwapChain 初始化流程
-         * - SwapChain自动创建，无需应用层手动管理
-         * - 完整的DirectX 12系统一次性初始化
-         *
-         * @param enableDebugLayer 是否启用调试层
-         * @param enableGPUValidation 是否启用GPU验证
-         * @param hwnd 窗口句柄，用于SwapChain创建（如果为nullptr则不创建SwapChain）
-         * @param renderWidth 渲染分辨率宽度（默认1920）
-         * @param renderHeight 渲染分辨率高度（默认1080）
-         * @return 是否初始化成功
+         * @param enableDebugLayer Enables the D3D12 debug layer.
+         * @param enableGPUValidation Enables GPU validation.
+         * @param hwnd Window handle used for swap-chain creation. Pass nullptr for headless mode.
+         * @param renderWidth Initial render width.
+         * @param renderHeight Initial render height.
+         * @return True on success.
          */
         static bool Initialize(bool        enableDebugLayer = true, bool enableGPUValidation = false, HWND hwnd = nullptr, uint32_t renderWidth = 1920, uint32_t renderHeight = 1080,
                                DXGI_FORMAT backbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM);
         static bool PrepareDefaultTextures();
         /**
-         * 关闭渲染系统，释放所有资源
-         * 包括设备、命令队列和CommandListManager
+         * Shutdown the render system and release device, queues, and command resources.
          */
         static void Shutdown();
 
         /**
-         * 检查渲染系统是否已初始化
-         * @return true表示系统已准备就绪
+         * Returns true once the render system is initialized.
          */
         static bool IsInitialized() { return s_device != nullptr; }
 
         static void SetViewport(int width, int height);
 
-        // ===== 缓冲区管理API（对应Iris的createBuffers等方法）=====
+        // ===== Buffer creation API =====
 
         /**
-         * 创建缓冲区（主要方法）
-         * 对应Iris的IrisRenderSystem.createBuffers()，但参数更丰富
-         *
-         * DirectX 12 API调用链：
-         * 1. ID3D12Device::CreateCommittedResource() - 创建缓冲区资源
-         * 2. ID3D12Resource::SetName() - 设置调试名称
-         * 3. ID3D12Resource::Map() - 映射初始数据（如果提供）
-         *
-         * @param createInfo 缓冲区创建信息
-         * @return 创建的D12Buffer智能指针，失败返回nullptr
+         * Create a generic buffer resource with optional initial data upload.
          */
         static std::unique_ptr<D12Buffer> CreateBuffer(const BufferCreateInfo& createInfo);
 
-        // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
+        // ===== Type-safe vertex/index buffer creation =====
 
         /**
-         * @brief 创建类型安全的VertexBuffer
-         * @param size 缓冲区大小（字节），必须是stride的整数倍
-         * @param stride 单个顶点的大小（字节）
-         * @param initialData 初始顶点数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return D12VertexBuffer智能指针
-         *
-         * 教学要点:
-         * 1. 类型安全：返回D12VertexBuffer而非D12Buffer
-         * 2. 封装stride逻辑：避免用户手动计算
-         * 3. 自动创建D3D12_VERTEX_BUFFER_VIEW
-         * 4. 推荐使用此方法代替CreateVertexBuffer()
-         *
-         * 使用示例:
-         * @code
-         * struct Vertex { Vec3 pos; Vec3 normal; Vec2 uv; };
-         * auto vb = D3D12RenderSystem::CreateVertexBufferTyped(
-         *     vertices.size() * sizeof(Vertex),
-         *     sizeof(Vertex),
-         *     vertices.data()
-         * );
-         * D3D12RenderSystem::BindVertexBuffer(vb->GetView());
-         * @endcode
+         * Create a type-safe vertex buffer and its cached view.
          */
         static std::unique_ptr<class D12VertexBuffer> CreateVertexBuffer(
             size_t      size,
@@ -151,29 +115,7 @@ namespace enigma::graphic
         );
 
         /**
-         * @brief 创建类型安全的IndexBuffer
-         * @param size 缓冲区大小（字节），必须是索引大小的整数倍
-         * @param format 索引格式（Uint16或Uint32）
-         * @param initialData 初始索引数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return D12IndexBuffer智能指针
-         *
-         * 教学要点:
-         * 1. 类型安全：返回D12IndexBuffer而非D12Buffer
-         * 2. 封装format逻辑：避免用户手动配置DXGI_FORMAT
-         * 3. 自动创建D3D12_INDEX_BUFFER_VIEW
-         * 4. 推荐使用此方法代替CreateIndexBuffer()
-         *
-         * 使用示例:
-         * @code
-         * std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
-         * auto ib = D3D12RenderSystem::CreateIndexBufferTyped(
-         *     indices.size() * sizeof(uint32_t),
-         *     D12IndexBuffer::IndexFormat::Uint32,
-         *     indices.data()
-         * );
-         * D3D12RenderSystem::BindIndexBuffer(ib->GetView());
-         * @endcode
+         * Create a type-safe index buffer and its cached view.
          */
         static std::unique_ptr<class D12IndexBuffer> CreateIndexBuffer(
             size_t      size,
@@ -182,46 +124,17 @@ namespace enigma::graphic
         );
 
         /**
-         * @brief 绑定VertexBuffer（重载：接受D12VertexBuffer*）
-         * @param vertexBuffer VertexBuffer指针
-         * @param slot 顶点缓冲区槽位（默认0）
-         *
-         * 教学要点:
-         * 1. 便捷接口：直接传递D12VertexBuffer指针
-         * 2. 内部调用GetView()获取D3D12_VERTEX_BUFFER_VIEW
-         * 3. 空指针检查，安全绑定
-         *
-         * 使用示例:
-         * @code
-         * auto vb = D3D12RenderSystem::CreateVertexBufferTyped(...);
-         * D3D12RenderSystem::BindVertexBuffer(vb.get());
-         * @endcode
+         * Bind a vertex buffer wrapper directly.
          */
         static void BindVertexBuffer(const class D12VertexBuffer* vertexBuffer, UINT slot = 0);
 
         /**
-         * @brief 绑定IndexBuffer（重载：接受D12IndexBuffer*）
-         * @param indexBuffer IndexBuffer指针
-         *
-         * 教学要点:
-         * 1. 便捷接口：直接传递D12IndexBuffer指针
-         * 2. 内部调用GetView()获取D3D12_INDEX_BUFFER_VIEW
-         * 3. 空指针检查，安全绑定
-         *
-         * 使用示例:
-         * @code
-         * auto ib = D3D12RenderSystem::CreateIndexBufferTyped(...);
-         * D3D12RenderSystem::BindIndexBuffer(ib.get());
-         * @endcode
+         * Bind an index buffer wrapper directly.
          */
         static void BindIndexBuffer(const class D12IndexBuffer* indexBuffer);
 
         /**
-         * 简化的创建常量缓冲区方法
-         * @param size 缓冲区大小（会自动对齐到256字节）
-         * @param initialData 初始常量数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return 常量缓冲区指针
+         * Create a constant buffer with 256-byte alignment.
          */
         static std::unique_ptr<D12Buffer> CreateConstantBuffer(
             size_t      size,
@@ -229,12 +142,7 @@ namespace enigma::graphic
             const char* debugName   = "ConstantBuffer");
 
         /**
-         * 创建结构化缓冲区（对应Iris的SSBO）
-         * @param elementCount 元素数量
-         * @param elementSize 单个元素大小
-         * @param initialData 初始数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return 结构化缓冲区指针
+         * Create a structured buffer for SSBO-style workloads.
          */
         static std::unique_ptr<D12Buffer> CreateStructuredBuffer(
             size_t      elementCount,
@@ -242,33 +150,16 @@ namespace enigma::graphic
             const void* initialData = nullptr,
             const char* debugName   = "StructuredBuffer");
 
-        // ===== 纹理创建API =====
+        // ===== Texture creation API =====
 
         /**
-         * 创建纹理（主要方法）
-         * 对应Iris的IrisRenderSystem.createTexture()，支持Bindless纹理架构
-         *
-         * DirectX 12 API调用链：
-         * 1. ID3D12Device::CreateCommittedResource() - 创建纹理资源
-         * 2. ID3D12Device::CreateShaderResourceView() - 创建SRV
-         * 3. ID3D12Device::CreateUnorderedAccessView() - 创建UAV (如果需要)
-         * 4. ID3D12Resource::SetName() - 设置调试名称
-         *
-         * @param createInfo 纹理创建信息
-         * @return 创建的D12Texture智能指针，失败返回nullptr
+         * Create a texture resource and its bindless-facing descriptors.
          */
         static std::unique_ptr<D12Texture>      CreateTexture(TextureCreateInfo& createInfo);
         static std::unique_ptr<D12DepthTexture> CreateDepthTexture(DepthTextureCreateInfo& createInfo);
 
         /**
-         * 简化的创建2D纹理方法
-         * @param width 纹理宽度
-         * @param height 纹理高度
-         * @param format 纹理格式
-         * @param usage 使用标志
-         * @param initialData 初始数据（可为nullptr）
-         * @param debugName 调试名称
-         * @return 2D纹理指针
+         * Create a 2D texture with an explicit usage mask.
          */
         static std::unique_ptr<D12Texture> CreateTexture2D(
             uint32_t     width,
@@ -279,7 +170,7 @@ namespace enigma::graphic
             const char*  debugName   = "Texture2D");
 
         /**
-         * 使用默认TextureUsage::ShaderResource
+         * Create a shader-resource 2D texture.
          */
         static std::unique_ptr<D12Texture> CreateTexture2D(
             uint32_t    width,
@@ -289,10 +180,10 @@ namespace enigma::graphic
             const char* debugName   = "Texture2D");
 
 
-        // ===== Image-based纹理创建API（Bindless集成） =====
+        // ===== Image-backed texture creation =====
 
         /**
-         * 从Image对象创建DirectX 12纹理（支持缓存）
+         * Create a cached DX12 texture from an Image object.
          */
         static std::shared_ptr<D12Texture> CreateTexture2D(Image& image, TextureUsage usage, const std::string& debugName = "");
         static std::shared_ptr<D12Texture> CreateTexture2D(const class ResourceLocation& resourceLocation, TextureUsage usage, const std::string& debugName = "");
@@ -313,70 +204,37 @@ namespace enigma::graphic
         static size_t GetTextureCacheSize();
         static void   ClearAllTextureCache();
 
-        // ===== 设备访问API =====
+        // ===== Device access API =====
 
         /**
-         * 获取DirectX 12设备接口
-         * @return ID3D12Device指针，用于高级操作
+         * Get the native DX12 device.
          */
         static ID3D12Device* GetDevice() { return s_device.Get(); }
 
         /**
-         * @brief 获取当前BackBuffer的RTV句柄
-         * @return D3D12_CPU_DESCRIPTOR_HANDLE RTV句柄
-         * @note M6.3新增 - 用于Present API绑定RTV
+         * Get the RTV for the current back buffer.
          */
         static D3D12_CPU_DESCRIPTOR_HANDLE GetBackBufferRTV();
 
-        // ===== 系统默认纹理API (用于材质系统Fallback) =====
+        // ===== Default fallback textures =====
 
         /**
-         * @brief 获取系统默认白色纹理 (1x1, RGBA = 255,255,255,255)
-         * @return 白色纹理的shared_ptr，用于材质系统Fallback
-         * 
-         * 教学要点:
-         * 1. 用途：当材质缺少漫反射贴图时的默认值
-         * 2. 初始化时机：D3D12RenderSystem::Initialize()中创建
-         * 3. 线程安全：静态成员，Initialize后只读访问
-         * 4. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
-         * 
-         * 使用示例:
-         * @code
-         * auto whiteTex = D3D12RenderSystem::GetDefaultWhiteTexture();
-         * uint32_t bindlessIndex = whiteTex->GetBindlessIndex().value();
-         * @endcode
+         * Get the default white texture used by material fallback paths.
          */
         static std::shared_ptr<D12Texture> GetDefaultWhiteTexture();
 
         /**
-         * @brief 获取系统默认黑色纹理 (1x1, RGBA = 0,0,0,255)
-         * @return 黑色纹理的shared_ptr，用于材质系统Fallback
-         * 
-         * 教学要点:
-         * 1. 用途：当材质缺少自发光/AO贴图时的默认值
-         * 2. 初始化时机：D3D12RenderSystem::Initialize()中创建
-         * 3. 线程安全：静态成员，Initialize后只读访问
-         * 4. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
+         * Get the default black texture used by material fallback paths.
          */
         static std::shared_ptr<D12Texture> GetDefaultBlackTexture();
 
         /**
-         * @brief 获取系统默认法线纹理 (1x1, RGBA = 128,128,255,255)
-         * @return 法线纹理的shared_ptr，用于材质系统Fallback
-         * 
-         * 教学要点:
-         * 1. 用途：当材质缺少法线贴图时的默认值（表示平坦表面）
-         * 2. 颜色含义：RGB(128,128,255) = 法线向上(0,0,1)
-         * 3. 初始化时机：D3D12RenderSystem::Initialize()中创建
-         * 4. 线程安全：静态成员，Initialize后只读访问
-         * 5. Bindless集成：已注册到全局描述符堆，可直接在着色器中使用
+         * Get the default flat normal map used by material fallback paths.
          */
         static std::shared_ptr<D12Texture> GetDefaultNormalTexture();
 
         /**
-         * @brief 获取当前BackBuffer的Resource指针
-         * @return ID3D12Resource* BackBuffer资源指针
-         * @note M6.3新增 - 用于Present API执行CopyResource
+         * Get the current back-buffer resource.
          */
         static ID3D12Resource* GetBackBufferResource();
 
@@ -388,152 +246,116 @@ namespace enigma::graphic
         static DXGI_FORMAT GetBackBufferFormat();
 
         /**
-         * 获取DXGI工厂接口
-         * @return IDXGIFactory4指针，用于交换链创建
+         * Get the DXGI factory used for swap-chain creation.
          */
         static IDXGIFactory4* GetDXGIFactory() { return s_dxgiFactory.Get(); }
 
         /**
-         * 获取选择的图形适配器
-         * @return IDXGIAdapter1指针
+         * Get the selected graphics adapter.
          */
         static IDXGIAdapter1* GetAdapter() { return s_adapter.Get(); }
 
-        // ===== 命令管理API =====
+        // ===== Command management API =====
 
         /**
-         * 获取命令队列管理器
-         * @return CommandListManager指针，对应IrisRenderSystem的命令管理功能
-         * @note D3D12RenderSystem作为DirectX 12底层API封装，负责管理CommandListManager实例
+         * Get the command-list manager owned by the render system.
          */
         static CommandListManager* GetCommandListManager();
 
-        // ===== SwapChain管理API （基于A/A/A决策的直接管理）=====
+        /**
+         * @brief Set the requested queue execution mode for future routing decisions.
+         */
+        static void SetRequestedQueueExecutionMode(QueueExecutionMode mode);
 
         /**
-         * 创建SwapChain（基于2.A决策 - D3D12RenderSystem直接管理）
-         * @param hwnd 窗口句柄
-         * @param width 缓冲区宽度
-         * @param height 缓冲区高度
-         * @param bufferCount 后台缓冲区数量（默认3个）
-         * @return 是否创建成功
+         * @brief Get the requested queue execution mode.
+         */
+        static QueueExecutionMode GetRequestedQueueExecutionMode();
+
+        /**
+         * @brief Get the currently active queue execution mode after fallback resolution.
+         */
+        static QueueExecutionMode GetActiveQueueExecutionMode();
+
+        /**
+         * @brief Get queue execution diagnostics collected by the runtime.
+         */
+        static const QueueExecutionDiagnostics& GetQueueExecutionDiagnostics();
+
+        /**
+         * @brief Force a full synchronization across every active queue before CPU-side resource mutation.
+         * @param reason Optional debug string describing why the full sync is required.
+         * @return True when all active queues are idle and completed wrappers are recycled.
+         */
+        static bool SynchronizeActiveQueues(const char* reason = nullptr);
+
+        // ===== Swap-chain API =====
+
+        /**
+         * Create the swap chain managed directly by D3D12RenderSystem.
          */
         static bool CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 3);
 
         /**
-         * 获取当前SwapChain后台缓冲区的RTV句柄
-         * @return 当前RTV句柄，用于ClearRenderTargetView和OMSetRenderTargets
+         * Get the RTV of the current swap-chain back buffer.
          */
         static D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentSwapChainRTV();
 
         /**
-         * 获取当前SwapChain后台缓冲区资源
-         * @return 当前后台缓冲区ID3D12Resource指针
+         * Get the current swap-chain back-buffer resource.
          */
         static ID3D12Resource* GetCurrentSwapChainBuffer();
 
         /**
-         * 呈现当前帧到屏幕
-         * @param vsync 是否启用垂直同步（默认true）
-         * @return 是否呈现成功
+         * Present the current frame.
          */
         static bool Present(bool vsync = true);
 
         /**
-         * 准备下一帧渲染（更新后台缓冲区索引）
+         * Advance to the next frame slot and back-buffer index.
          */
         static void PrepareNextFrame();
 
-        // ===== 调试API =====
+        // ===== Debug API =====
 
         /**
-         * 设置对象调试名称
-         * DirectX 12 API: ID3D12Object::SetName()
-         * @param object 要命名的DirectX对象
-         * @param name 调试名称
+         * Assign a debug name to a native DX12 object.
          */
         static void SetDebugName(ID3D12Object* object, const char* name);
 
         /**
-         * 检查设备是否支持某个特性
-         * DirectX 12 API: ID3D12Device::CheckFeatureSupport()
-         * @param feature 要检查的特性
-         * @return 是否支持
+         * Query whether a DX12 feature is supported.
          */
         static bool CheckFeatureSupport(D3D12_FEATURE feature);
 
-        // ===== 内存管理API =====
+        // ===== Memory API =====
 
         /**
-         * 获取GPU内存使用情况
-         * DXGI API: IDXGIAdapter3::QueryVideoMemoryInfo()
-         * @return 内存信息结构
+         * Query local GPU memory usage.
          */
         static DXGI_QUERY_VIDEO_MEMORY_INFO GetVideoMemoryInfo();
 
-        // ===== 渲染管线API (Milestone 2.6新增) =====
+        // ===== Frame execution API =====
 
         /**
-         * 开始帧渲染 - 清屏操作的正确位置
-         * 在标准DirectX 12管线中，Clear操作应该在BeginFrame执行，而非EndFrame
-         *
-         * 教学要点：
-         * - 这是每帧渲染的起始点，在这里执行清屏和初始化
-         * - 遵循DirectX 12最佳实践：BeginFrame → 清屏 → 渲染 → EndFrame
-         * - 替代了TestClearScreen中的测试逻辑，成为正式渲染管线的一部分
-         * - 使用引擎Rgba8颜色系统，提供类型安全和便捷的颜色操作
-         *
-         * @param clearColor 清屏颜色，使用引擎Rgba8类型(可选，默认为黑色)
-         * @param clearDepth 深度缓冲清除值(可选，默认为1.0f)
-         * @param clearStencil 模板缓冲清除值(可选，默认为0)
-         * @return 是否成功开始帧渲染
+         * Begin the current frame, retire the frame slot, and clear the swap chain.
          */
         static bool BeginFrame(const Rgba8& clearColor = Rgba8::BLACK, float clearDepth = 1.0f, uint8_t clearStencil = 0);
 
         /**
-         * 结束帧渲染 - 执行CommandList并Present
-         *
-         * 教学要点：
-         * - 这是每帧渲染的终点，负责提交所有渲染指令并显示到屏幕
-         * - 遵循DirectX 12标准管线：BeginFrame(清屏) → 渲染 → EndFrame(Present)
-         * - 处理资源状态转换、CommandList执行、SwapChain Present、GPU同步
-         * - 清理当前CommandList引用，为下一帧做准备
-         *
-         * 操作流程：
-         * 1. 检查CommandList有效性（必须先调用BeginFrame）
-         * 2. Transition BackBuffer: RENDER_TARGET → PRESENT
-         * 3. 执行CommandList（通过CommandListManager）
-         * 4. Present SwapChain（显示到屏幕）
-         * 5. 等待GPU fence（临时同步方案，后续优化为异步）
-         * 6. 重置s_currentGraphicsCommandList为nullptr
-         *
-         * @return 是否成功结束帧渲染
+         * End the current frame, submit the main graphics work, and present.
          */
         static bool EndFrame();
 
         /**
-         * 清除渲染目标
-         * DirectX 12 API: ID3D12GraphicsCommandList::ClearRenderTargetView()
-         *
-         * @param commandList 要使用的命令列表(如果为nullptr则自动获取)
-         * @param rtvHandle 渲染目标视图句柄(如果为空则使用当前SwapChain RTV)
-         * @param clearColor 清屏颜色，使用引擎Rgba8类型(如果使用默认值则为黑色)
-         * @return 是否清除成功
+         * Clear a render target using the supplied or implicit command list.
          */
         static bool ClearRenderTarget(ID3D12GraphicsCommandList*         commandList = nullptr,
                                       const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle   = nullptr,
                                       const Rgba8&                       clearColor  = Rgba8::BLACK);
 
         /**
-         * 清除深度模板缓冲
-         * DirectX 12 API: ID3D12GraphicsCommandList::ClearDepthStencilView()
-         *
-         * @param commandList 要使用的命令列表(如果为nullptr则自动获取)
-         * @param dsvHandle 深度模板视图句柄(如果为空则使用默认深度缓冲)
-         * @param clearDepth 深度清除值(0.0-1.0)
-         * @param clearStencil 模板清除值(0-255)
-         * @param clearFlags 清除标志(深度、模板或两者)
-         * @return 是否清除成功
+         * Clear a depth-stencil target using the supplied or implicit command list.
          */
         static bool ClearDepthStencil(ID3D12GraphicsCommandList*         commandList = nullptr,
                                       const D3D12_CPU_DESCRIPTOR_HANDLE* dsvHandle   = nullptr,
@@ -572,17 +394,10 @@ namespace enigma::graphic
             const struct RenderTargetConfig& config
         );
 
-        // ===== 资源创建API =====
+        // ===== Resource creation API =====
 
         /**
-         * 创建提交资源的统一接口
-         * DirectX 12 API: ID3D12Device::CreateCommittedResource()
-         * 为所有资源类型提供统一的资源创建入口
-         * @param heapProps 堆属性
-         * @param desc 资源描述
-         * @param initialState 初始资源状态
-         * @param resource 输出的资源指针
-         * @return 创建结果HRESULT
+         * Shared committed-resource creation helper used by engine resource wrappers.
          */
         static HRESULT CreateCommittedResource(
             const D3D12_HEAP_PROPERTIES& heapProps,
@@ -591,220 +406,63 @@ namespace enigma::graphic
             const D3D12_CLEAR_VALUE*     pOptimizedClearValue,
             ID3D12Resource**             resource);
 
-        // ===== SM6.6 Bindless资源管理API (Milestone 2.7重构) =====
+        // ===== Bindless resource API =====
 
         /**
-         * @brief 获取Bindless索引分配器
-         * @return BindlessIndexAllocator指针
-         *
-         * 教学要点:
-         * 1. 纯索引分配器：只负责索引的分配和释放（0-1,999,999）
-         * 2. 职责分离：索引管理与描述符创建完全分离
-         * 3. 资源使用流程：
-         *    - 分配索引：allocator->AllocateTextureIndex()
-         *    - 存储索引：resource->SetBindlessIndex(index)
-         *    - 创建描述符：resource->CreateDescriptorInGlobalHeap(device, heapManager)
+         * Get the bindless index allocator.
          */
         static BindlessIndexAllocator* GetBindlessIndexAllocator();
 
         /**
-         * @brief 获取全局描述符堆管理器
-         * @return GlobalDescriptorHeapManager指针
-         *
-         * 教学要点:
-         * 1. 全局堆管理：1,000,000容量的CBV_SRV_UAV堆 + 独立RTV/DSV堆
-         * 2. SM6.6索引创建：提供CreateShaderResourceView(device, resource, desc, index)等方法
-         * 3. 描述符堆绑定：提供SetDescriptorHeaps(commandList)方法
+         * Get the global descriptor-heap manager.
          */
         static GlobalDescriptorHeapManager* GetGlobalDescriptorHeapManager();
 
         /**
-         * @brief 获取SM6.6 Bindless Root Signature
-         * @return Root Signature对象
-         *
-         * 教学要点:
-         * 1. 极简Root Signature：只含128字节Root Constants
-         * 2. 全局唯一：所有PSO共享同一个Root Signature
-         * 3. 直接索引标志：D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
-         * 4. 性能优化：Root Signature切换从1000次/帧降至1次/帧（99.9%优化）
+         * Get the shared bindless root signature.
          */
         static BindlessRootSignature* GetBindlessRootSignature();
 
-        // ===== Buffer管理API - 细粒度操作 (Milestone M2新增) =====
+        // ===== Draw-state API =====
 
         /**
-         * @brief 绑定VertexBuffer到Pipeline
-         * @param bufferView VertexBufferView描述
-         * @param slot 顶点缓冲区槽位（默认0）
-         *
-         * 教学要点:
-         * 1. 对应Iris的BufferBinding操作
-         * 2. DirectX 12使用View描述符绑定（不直接绑定资源）
-         * 3. 支持多个VertexBuffer绑定（不同槽位）
-         * 4. 需要在Draw之前调用
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::IASetVertexBuffers()
-         *
-         * 使用示例:
-         * @code
-         * D3D12_VERTEX_BUFFER_VIEW vbView = myBuffer->GetView();
-         * D3D12RenderSystem::BindVertexBuffer(vbView);
-         * @endcode
+         * Bind a vertex-buffer view to the input assembler.
          */
         static void BindVertexBuffer(const D3D12_VERTEX_BUFFER_VIEW& bufferView, UINT slot = 0);
 
         /**
-         * @brief 绑定IndexBuffer到Pipeline
-         * @param bufferView IndexBufferView描述
-         *
-         * 教学要点:
-         * 1. 对应Iris的IndexBuffer绑定
-         * 2. IndexBuffer只有一个槽位（与VertexBuffer不同）
-         * 3. 支持16位和32位索引格式
-         * 4. 需要在DrawIndexed之前调用
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::IASetIndexBuffer()
-         *
-         * 使用示例:
-         * @code
-         * D3D12_INDEX_BUFFER_VIEW ibView = myIndexBuffer->GetView();
-         * D3D12RenderSystem::BindIndexBuffer(ibView);
-         * @endcode
+         * Bind an index-buffer view to the input assembler.
          */
         static void BindIndexBuffer(const D3D12_INDEX_BUFFER_VIEW& bufferView);
 
         /**
-         * @brief 执行Draw指令（非索引）
-         * @param vertexCount 顶点数量
-         * @param startVertex 起始顶点偏移
-         *
-         * 教学要点:
-         * 1. 对应OpenGL的glDrawArrays
-         * 2. 使用当前绑定的VertexBuffer
-         * 3. 不使用IndexBuffer
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::DrawInstanced()
-         *
-         * 使用示例:
-         * @code
-         * D3D12RenderSystem::Draw(3); // 绘制三角形
-         * @endcode
+         * Issue a non-indexed draw on the active graphics command list.
          */
         static void Draw(UINT vertexCount, UINT startVertex = 0);
 
         /**
-         * @brief 执行DrawIndexed指令
-         * @param indexCount 索引数量
-         * @param startIndex 起始索引偏移
-         * @param baseVertex 基础顶点偏移
-         *
-         * 教学要点:
-         * 1. 对应OpenGL的glDrawElements
-         * 2. 使用当前绑定的IndexBuffer + VertexBuffer
-         * 3. 支持baseVertex偏移（复用VertexBuffer）
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::DrawIndexedInstanced()
-         *
-         * 使用示例:
-         * @code
-         * D3D12RenderSystem::DrawIndexed(36); // 绘制立方体（12个三角形）
-         * @endcode
+         * Issue an indexed draw on the active graphics command list.
          */
         static void DrawIndexed(UINT indexCount, UINT startIndex = 0, INT baseVertex = 0);
 
         /**
-         * @brief 设置图元拓扑类型
-         * @param topology 拓扑类型（TRIANGLE_LIST, LINE_LIST等）
-         *
-         * 教学要点:
-         * 1. 定义顶点如何组成图元（三角形、线、点等）
-         * 2. 必须在Draw之前设置
-         * 3. 对应OpenGL的glDrawMode参数
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::IASetPrimitiveTopology()
-         *
-         * 使用示例:
-         * @code
-         * D3D12RenderSystem::SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-         * @endcode
+         * Set the primitive topology for subsequent draws.
          */
         static void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY topology);
 
-        // ===== PSO创建API (Milestone 3.0新增) =====
+        // ===== PSO API =====
 
         /**
-         * @brief 创建图形管线状态对象 (PSO)
-         * @param desc PSO描述符
-         * @return ComPtr<ID3D12PipelineState> PSO智能指针
-         *
-         * 教学要点:
-         * 1. 对应Iris的Program创建（OpenGL glCreateProgram + glLinkProgram）
-         * 2. PSO封装了完整的图形管线状态（着色器、混合、光栅化、深度模板等）
-         * 3. 使用ComPtr自动管理生命周期
-         * 4. 失败时返回nullptr，调用者需检查
-         *
-         * DirectX 12 API:
-         * - ID3D12Device::CreateGraphicsPipelineState()
-         *
-         * 使用示例:
-         * @code
-         * D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-         * psoDesc.pRootSignature = GetBindlessRootSignature();
-         * psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
-         * psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
-         * // ... 配置其他状态 ...
-         * auto pso = D3D12RenderSystem::CreateGraphicsPSO(psoDesc);
-         * @endcode
+         * Create a graphics pipeline state object.
          */
         static Microsoft::WRL::ComPtr<ID3D12PipelineState> CreateGraphicsPSO(
             const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc
         );
 
-        // ===== ResourceBarrier统一管理API =====
+        // ===== Resource-barrier API =====
 
         /**
-         * @brief 转换单个资源的状态
-         *
-         * 统一的资源状态转换API，封装DirectX 12 ResourceBarrier调用。
-         * 提供参数验证、日志记录和错误处理，简化上层代码的资源状态管理。
-         *
-         * 教学要点:
-         * 1. 资源状态转换是DirectX 12的核心概念，用于同步GPU操作
-         * 2. 状态转换必须在资源被使用前执行，确保GPU正确访问资源
-         * 3. 性能影响：状态转换有开销，应避免不必要的转换（相同状态会自动跳过）
-         * 4. 调试支持：debugName参数在PIX/RenderDoc中显示，便于性能分析
-         *
-         * 常见状态转换场景:
-         * - 渲染目标: RENDER_TARGET <-> PIXEL_SHADER_RESOURCE
-         * - 深度缓冲: DEPTH_WRITE <-> COPY_SOURCE/PIXEL_SHADER_RESOURCE
-         * - 纹理上传: COPY_DEST -> PIXEL_SHADER_RESOURCE
-         * - Present: RENDER_TARGET -> PRESENT
-         *
-         * DirectX 12 API:
-         * - ID3D12GraphicsCommandList::ResourceBarrier()
-         *
-         * @param cmdList 命令列表，用于记录ResourceBarrier指令（不能为nullptr）
-         * @param resource 要转换的资源（不能为nullptr）
-         * @param stateBefore 转换前的资源状态
-         * @param stateAfter 转换后的资源状态
-         * @param debugName 调试名称（可选），用于日志和性能分析工具
-         *
-         * 使用示例:
-         * @code
-         * // 将渲染目标转换为可着色器读取状态
-         * D3D12RenderSystem::TransitionResource(
-         *     cmdList,
-         *     renderTarget->GetResource(),
-         *     D3D12_RESOURCE_STATE_RENDER_TARGET,
-         *     D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-         *     "MainColorTexture"
-         * );
-         * @endcode
+         * Transition a resource between explicit DX12 states.
          */
         static void TransitionResource(
             ID3D12GraphicsCommandList* cmdList,
@@ -843,30 +501,10 @@ namespace enigma::graphic
             const D3D12_UNORDERED_ACCESS_VIEW_DESC&      desc
         );
 
-        // ===== Immediate模式渲染API (Milestone 2.6新增) =====
-
-        // ===== CommandList访问API (Milestone 2.6新增) =====
+        // ===== Command-list access API =====
 
         /**
-         * @brief 获取当前活动的Graphics CommandList
-         * @return 当前CommandList指针，如果未调用BeginFrame则返回nullptr
-         *
-         * 教学要点:
-         * 1. 提供对s_currentGraphicsCommandList的受控访问
-         * 2. 必须在BeginFrame()之后、EndFrame()之前调用
-         * 3. 用于手动记录渲染指令到当前帧的CommandList
-         * 4. 遵循DirectX 12最佳实践：一个CommandList记录整帧的渲染指令
-         *
-         * 使用示例:
-         * @code
-         * D3D12RenderSystem::BeginFrame();
-         * auto cmdList = D3D12RenderSystem::GetCurrentCommandList();
-         * if (cmdList) {
-         *     cmdList->SetPipelineState(pso.Get());
-         *     cmdList->DrawInstanced(3, 1, 0, 0);
-         * }
-         * D3D12RenderSystem::EndFrame();
-         * @endcode
+         * Get the active graphics command list for the current frame.
          */
         static ID3D12GraphicsCommandList* GetCurrentCommandList() { return s_currentGraphicsCommandList; }
 
@@ -878,60 +516,107 @@ namespace enigma::graphic
         // Global monotonically increasing frame counter
         static uint64_t GetFrameCount() { return s_globalFrameCount; }
 
+        // Current frame lifecycle phase for development-time orchestration checks.
+        static FrameLifecyclePhase GetFrameLifecyclePhase() { return s_frameLifecyclePhase; }
+
+        // Most recent frame-slot acquisition result captured by BeginFrame().
+        static const FrameSlotAcquisitionResult& GetLastFrameSlotAcquisitionResult() { return s_lastFrameSlotAcquisitionResult; }
+
+        // Update the frame lifecycle phase from renderer orchestration code.
+        static void SetFrameLifecyclePhase(FrameLifecyclePhase phase);
+
     private:
-        // 禁用实例化（纯静态类）
+        friend class D12Resource;
+        friend class MipmapGenerator;
+
+        // Static-only type.
         D3D12RenderSystem()                                    = delete;
         ~D3D12RenderSystem()                                   = delete;
         D3D12RenderSystem(const D3D12RenderSystem&)            = delete;
         D3D12RenderSystem& operator=(const D3D12RenderSystem&) = delete;
 
-        // ===== 核心DirectX 12对象（包含设备和命令系统）=====
-        static Microsoft::WRL::ComPtr<ID3D12Device>  s_device; // 主设备
-        static Microsoft::WRL::ComPtr<IDXGIFactory4> s_dxgiFactory; // DXGI工厂
-        static Microsoft::WRL::ComPtr<IDXGIAdapter1> s_adapter; // 图形适配器
+        // ===== Core DX12 objects =====
+        static Microsoft::WRL::ComPtr<ID3D12Device>  s_device; // Primary device
+        static Microsoft::WRL::ComPtr<IDXGIFactory4> s_dxgiFactory; // DXGI factory
+        static Microsoft::WRL::ComPtr<IDXGIAdapter1> s_adapter; // Selected adapter
 
-        // SwapChain管理（基于A/A/A决策的直接管理）
-        static Microsoft::WRL::ComPtr<IDXGISwapChain3> s_swapChain; // DXGI SwapChain
-        static Microsoft::WRL::ComPtr<ID3D12Resource>  s_swapChainBuffers[3]; // SwapChain后台缓冲区
-        static D3D12_CPU_DESCRIPTOR_HANDLE             s_swapChainRTVs[3]; // SwapChain RTV句柄
-        static uint32_t                                s_currentBackBufferIndex; // 当前后台缓冲区索引
-        static uint32_t                                s_swapChainBufferCount; // SwapChain缓冲区数量
-        static uint32_t                                s_swapChainWidth; // SwapChain宽度（用于Viewport和ScissorRect）
-        static uint32_t                                s_swapChainHeight; // SwapChain高度（用于Viewport和ScissorRect）
+        // Swap-chain state.
+        static Microsoft::WRL::ComPtr<IDXGISwapChain3> s_swapChain; // DXGI swap chain
+        static Microsoft::WRL::ComPtr<ID3D12Resource>  s_swapChainBuffers[3]; // Swap-chain back buffers
+        static D3D12_CPU_DESCRIPTOR_HANDLE             s_swapChainRTVs[3]; // Swap-chain RTVs
+        static uint32_t                                s_currentBackBufferIndex; // Active back-buffer index
+        static uint32_t                                s_swapChainBufferCount; // Swap-chain buffer count
+        static uint32_t                                s_swapChainWidth; // Swap-chain width
+        static uint32_t                                s_swapChainHeight; // Swap-chain height
         static DXGI_FORMAT                             s_backbufferFormat; // Backbuffer format (configurable via renderer.yml)
 
-        // 命令系统管理（对应IrisRenderSystem的命令管理职责）
-        static std::unique_ptr<CommandListManager> s_commandListManager; // 命令列表管理器
-        static ID3D12GraphicsCommandList*          s_currentGraphicsCommandList; // 当前活动的图形命令列表（用于M2灵活渲染API）
+        // Command-system state.
+        static std::unique_ptr<CommandListManager> s_commandListManager; // Command-list manager
+        static ID3D12GraphicsCommandList*          s_currentGraphicsCommandList; // Active graphics command list
 
-        // SM6.6 Bindless资源管理系统（Milestone 2.7重构）
-        static std::unique_ptr<BindlessIndexAllocator>      s_bindlessIndexAllocator; // 纯索引分配器（0-1,999,999）
-        static std::unique_ptr<GlobalDescriptorHeapManager> s_globalDescriptorHeapManager; // 全局描述符堆管理器（1M容量）
-        static std::unique_ptr<BindlessRootSignature>       s_bindlessRootSignature; // SM6.6极简Root Signature
+        // Bindless state.
+        static std::unique_ptr<BindlessIndexAllocator>      s_bindlessIndexAllocator; // Bindless index allocator
+        static std::unique_ptr<GlobalDescriptorHeapManager> s_globalDescriptorHeapManager; // Global descriptor heap manager
+        static std::unique_ptr<BindlessRootSignature>       s_bindlessRootSignature; // Shared bindless root signature
 
-        // 纹理缓存系统（Milestone Bindless新增）
+        // Texture cache.
         static std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> s_textureCache;
-        static std::mutex                                                      s_textureCacheMutex; // 缓存互斥锁（线程安全）
+        static std::mutex                                                      s_textureCacheMutex; // Texture-cache mutex
 
-        // 系统默认纹理（用于材质系统Fallback）
-        static std::shared_ptr<D12Texture> s_defaultWhiteTexture; // 白色纹理 (1x1, RGBA = 255,255,255,255)
-        static std::shared_ptr<D12Texture> s_defaultBlackTexture; // 黑色纹理 (1x1, RGBA = 0,0,0,255)
-        static std::shared_ptr<D12Texture> s_defaultNormalTexture; // 法线纹理 (1x1, RGBA = 128,128,255,255)
+        // Default fallback textures.
+        static std::shared_ptr<D12Texture> s_defaultWhiteTexture; // White fallback texture
+        static std::shared_ptr<D12Texture> s_defaultBlackTexture; // Black fallback texture
+        static std::shared_ptr<D12Texture> s_defaultNormalTexture; // Flat normal fallback texture
 
 
-        // 系统状态（移除重复的配置结构）
-        static bool s_isInitialized; // 初始化状态
+        // System state.
+        static bool s_isInitialized; // Initialization state
+        static bool s_isShuttingDown; // Shutdown fence for backend teardown
 
         // Multi-Frame In-Flight resources (Phase 1)
         static FrameContext s_frameContexts[4];   // per-frame GPU resources, upper bound 4
         static uint32_t     s_frameIndex;         // current frame slot [0, MAX_FRAMES_IN_FLIGHT)
         static uint64_t     s_globalFrameCount;   // global monotonic frame counter
+        static FrameLifecyclePhase       s_frameLifecyclePhase;
+        static FrameSlotAcquisitionResult s_lastFrameSlotAcquisitionResult;
 
-        // ===== 内部初始化方法 =====
-        static bool CreateDevice(bool enableGPUValidation); // 简化的设备创建方法
+        static QueueRoutingPolicy        s_queueRoutingPolicy;
+        static QueueExecutionMode        s_requestedQueueExecutionMode;
+        static QueueExecutionMode        s_activeQueueExecutionMode;
+        static QueueExecutionDiagnostics s_queueExecutionDiagnostics;
+
+        // ===== Internal initialization =====
+        static bool CreateDevice(bool enableGPUValidation); // Device creation helper
         static void EnableDebugLayer();
 
-        // ===== 内部辅助方法 =====
-        static size_t AlignConstantBufferSize(size_t size); // 常量缓冲区大小对齐
+        // ===== Internal helpers =====
+        static size_t AlignConstantBufferSize(size_t size); // Constant-buffer alignment helper
+        static QueueRouteDecision ResolveQueueRoute(const QueueRouteContext& context);
+        static ID3D12GraphicsCommandList* AcquireCommandListForWorkload(const QueueRouteContext& context,
+                                                                        ID3D12CommandAllocator* externalAllocator,
+                                                                        const std::string&      debugName,
+                                                                        bool                    useFrameAllocator);
+        static QueueSubmissionToken SubmitFrameScopedCommandList(ID3D12GraphicsCommandList* commandList,
+                                                                 const QueueRouteContext&   context);
+        static QueueSubmissionToken SubmitStandaloneCommandList(ID3D12GraphicsCommandList* commandList,
+                                                                QueueWorkloadClass         workload);
+        static void RegisterFrameSubmission(const QueueSubmissionToken& token);
+        static void RecordQueueRouteDecision(const QueueRouteDecision& decision);
+        static void RecordQueueSubmission(const QueueSubmissionToken& token,
+                                          QueueWorkloadClass         workload);
+        static void RecordQueueWaitInsertion(CommandQueueType producerQueue,
+                                             CommandQueueType consumerQueue);
+        static bool WaitForStandaloneSubmission(const QueueSubmissionToken& token);
+        static void SetActiveQueueExecutionModeInternal(QueueExecutionMode mode);
+        static bool ShouldDeferIndividualResourceRelease();
+        static void DeferResourceRelease(ID3D12Resource* resource, const char* debugName);
+        static void ProcessDeferredResourceReleases(bool forceRelease = false) noexcept;
+        static void DrainQueuesForShutdown() noexcept;
+        static void ResetFrameExecutionState() noexcept;
+        static void ReleaseFallbackTextures() noexcept;
+        static void ReleaseBindlessInfrastructure() noexcept;
+        static void ReleaseSwapChainResources() noexcept;
+        static void ReportLiveObjectsBeforeDeviceRelease() noexcept;
+        static void ReleaseDeviceObjects() noexcept;
     };
-} // namespace enigma:
+} // namespace enigma::graphic

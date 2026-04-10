@@ -253,14 +253,23 @@ namespace enigma::graphic
         bool                            m_pendingUnload = false;
         std::optional<ShaderBundleMeta> m_pendingMeta   = std::nullopt;
 
-        // Event subscription handle for cleanup
+        // Event subscription handles for renderer lifecycle cleanup.
         enigma::event::DelegateHandle m_onBeginFrameHandle = 0;
+        enigma::event::DelegateHandle m_onFrameSlotAcquiredHandle = 0;
 
         // Event subscription handle for MaterialIdMapper vertex event
         enigma::event::DelegateHandle m_onBuildVertexHandle = 0;
 
-        // Event callback - called by RendererEvents::OnBeginFrame
+        // Armed when pre-frame synchronization succeeds for a pending switch.
+        bool m_pendingSwitchReadyForFrameSlotAcquire = false;
+
+        // Pre-frame callback. This prepares a safe switch by draining active queues
+        // before BeginFrame acquires the next frame-local slot.
         void OnRendererBeginFrame();
+
+        // Post-acquire callback. This performs the actual bundle switch once
+        // frame-local uploads and provider updates are legal again.
+        void OnRendererFrameSlotAcquired();
     };
 }
 

@@ -391,16 +391,7 @@ namespace enigma::graphic
         // ==================== GPU资源上传(Milestone 2.7) ====================
 
         /**
-         * @brief 重写基类方法: 实现纹理特定的上传逻辑
-         * @param commandList Copy队列命令列表
-         * @param uploadContext Upload Heap上下文
-         * @return 上传成功返回true
-         *
-         * 教学要点:
-         * 1. 使用UploadContext::UploadTextureData()执行纹理上传
-         * 2. 计算rowPitch和slicePitch(行间距和切片间距)
-         * 3. 只上传Mip 0层级(其他Mip由GenerateMips()生成)
-         * 4. 资源状态转换由D12Resource::Upload()基类处理
+         * Records the texture copy commands for the selected upload path.
          */
         bool UploadToGPU(
             ID3D12GraphicsCommandList* commandList,
@@ -408,27 +399,33 @@ namespace enigma::graphic
         ) override;
 
         /**
-         * @brief 重写基类方法: 获取纹理上传后的目标状态
-         * @return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE(像素着色器资源)
-         *
-         * 教学要点: 纹理通常作为像素着色器资源使用
+         * Returns the steady-state texture usage after upload completion.
          */
         D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
 
         /**
-         * @brief 重写基类方法: 检查纹理是否需要CPU数据上传
-         * @return RenderTarget/DepthStencil返回false，其他纹理返回true
-         *
-         * 教学要点:
-         * 1. RenderTarget和DepthStencil是输出纹理，由GPU渲染写入
-         * 2. 普通纹理(贴图)是输入纹理，需要从CPU加载数据
-         * 3. 这个方法允许Upload()跳过对输出纹理的CPU数据检查
+         * Output textures do not require CPU source data.
          */
         bool RequiresCPUData() const override
         {
-            // 输出纹理(RenderTarget/DepthStencil)不需要CPU数据
             return !HasFlag(m_usage, TextureUsage::RenderTarget) &&
                 !HasFlag(m_usage, TextureUsage::DepthStencil);
+        }
+
+        /**
+         * Input textures created in a copy-safe state can use the copy-queue
+         * upload contract. Output textures stay on the no-copy lifecycle.
+         */
+        UploadContract GetUploadContract() const override
+        {
+            if (!RequiresCPUData())
+            {
+                return UploadContract::NoGpuUpload;
+            }
+
+            return HasCPUData() && IsCopyQueueStateCompatible()
+                       ? UploadContract::CopyReadyUpload
+                       : UploadContract::GraphicsStatefulUpload;
         }
 
         // ==================== 静态辅助方法 (受保护访问) ====================

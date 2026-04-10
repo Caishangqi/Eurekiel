@@ -4,10 +4,12 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <string>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
+#include "Engine/Graphic/Resource/CommandQueueTypes.hpp"
 
 namespace enigma::graphic
 {
@@ -41,12 +43,7 @@ namespace enigma::graphic
          * 
          * 教学要点: DX12支持三种不同用途的命令队列
          */
-        enum class Type
-        {
-            Graphics, // 图形命令 (绘制、状态设置等)
-            Compute, // 计算命令 (Compute Shader调度)
-            Copy // 复制命令 (资源复制、上传等)
-        };
+        using Type = CommandQueueType;
 
         /**
          * @brief 命令列表状态枚举
@@ -92,20 +89,16 @@ namespace enigma::graphic
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_computeQueue; // 计算命令队列 (智能指针)
         Microsoft::WRL::ComPtr<ID3D12CommandQueue> m_copyQueue; // 复制命令队列 (智能指针)
 
-        // 同步对象 (本类负责围栏管理)
-        // [IMPORTANT] Milestone 2.8 架构修复: 每个命令队列使用独立的Fence对象
-        // 教学要点: Microsoft官方最佳实践 - 避免多队列共享Fence导致的竞态条件
-        // 参考: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_graphicsFence      = nullptr; // Graphics队列Fence (智能指针)
-        uint64_t                            m_graphicsFenceValue = 0; // Graphics围栏值
+        // Queue-local fences remain separate. CPU waits use per-wait events to
+        // avoid cross-thread races on a shared Win32 event handle.
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_graphicsFence      = nullptr;
+        uint64_t                            m_graphicsFenceValue = 0;
 
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_computeFence      = nullptr; // Compute队列Fence (智能指针)
-        uint64_t                            m_computeFenceValue = 0; // Compute围栏值
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_computeFence      = nullptr;
+        uint64_t                            m_computeFenceValue = 0;
 
-        Microsoft::WRL::ComPtr<ID3D12Fence> m_copyFence      = nullptr; // Copy队列Fence (智能指针) [IMPORTANT] 核心修复
-        uint64_t                            m_copyFenceValue = 0; // Copy围栏值
-
-        HANDLE m_fenceEvent = nullptr; // 围栏事件句柄 (三个Fence共享)
+        Microsoft::WRL::ComPtr<ID3D12Fence> m_copyFence      = nullptr;
+        uint64_t                            m_copyFenceValue = 0;
 
         // 命令列表池 - 按类型分组
         std::vector<std::unique_ptr<CommandListWrapper>> m_graphicsCommandLists;
@@ -207,83 +200,61 @@ namespace enigma::graphic
         ID3D12GraphicsCommandList* AcquireCommandList(Type type, ID3D12CommandAllocator* externalAllocator, const std::string& debugName = "");
 
         /**
-         * @brief 提交命令列表执行
-         * @param commandList 要提交的命令列表
-         * @return 关联的围栏值，用于同步等待
-         * 
-         * 教学要点:
-         * 1. 关闭命令列表 (Close)
-         * 2. 提交到对应的命令队列执行
-         * 3. 发信号到围栏，标记这批命令的完成时机
-         * 4. 状态设置为Executing
+         * @brief Submit a command list and return a queue-scoped submission token.
          */
-        uint64_t ExecuteCommandList(ID3D12GraphicsCommandList* commandList);
+        QueueSubmissionToken SubmitCommandList(ID3D12GraphicsCommandList* commandList);
 
         /**
-         * @brief 批量提交多个命令列表
-         * @param commandLists 命令列表数组
-         * @param count 命令列表数量
-         * @return 关联的围栏值
-         * 
-         * 教学要点: 批量提交可以减少API调用开销，提升性能
+         * @brief Submit multiple command lists and return a queue-scoped submission token.
          */
-        uint64_t ExecuteCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count);
+        QueueSubmissionToken SubmitCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count);
 
         // ========================================================================
-        // 同步管理接口
+        // Synchronization API
         // ========================================================================
 
         /**
-         * @brief 等待特定围栏值完成
-         * @param fenceValue 要等待的围栏值
-         * @param timeoutMs 超时时间 (毫秒)，0表示立即返回，INFINITE表示无限等待
-         * @return 等待成功返回true，超时返回false
-         * 
-         * 教学要点: CPU等待GPU完成特定的命令批次
+         * @brief Wait for a specific queue submission token.
          */
-        bool WaitForFence(uint64_t fenceValue, uint32_t timeoutMs = INFINITE);
+        bool WaitForSubmission(const QueueSubmissionToken& token, uint32_t timeoutMs = INFINITE);
 
         /**
-         * @brief 等待GPU完成所有命令
-         * @param timeoutMs 超时时间 (毫秒)
-         * 
-         * 教学要点: 等待所有提交的命令完成，通常在帧结束或退出时使用
+         * @brief Query completion for a specific queue submission token.
+         */
+        bool IsSubmissionCompleted(const QueueSubmissionToken& token) const;
+
+        /**
+         * @brief Insert a GPU-side wait on one queue for work produced by another queue.
+         */
+        bool InsertQueueWait(Type waitingQueue, const QueueSubmissionToken& producerToken);
+
+        /**
+         * @brief Snapshot the latest completed fence value for every queue.
+         */
+        QueueFenceSnapshot GetCompletedFenceSnapshot() const;
+
+        /**
+         * @brief Snapshot the latest submitted fence value for every queue.
+         */
+        QueueSubmittedFenceSnapshot GetLastSubmittedFenceSnapshot() const;
+
+        /**
+         * @brief Wait until every initialized queue reaches its latest submitted fence value.
+         * @param timeoutMs Timeout in milliseconds.
          */
         bool WaitForGPU(uint32_t timeoutMs = INFINITE);
 
-        /**
-         * @brief 检查围栏值是否已完成
-         * @param fenceValue 要检查的围栏值
-         * @return 已完成返回true，否则返回false
-         * 
-         * 教学要点: 非阻塞检查，用于避免不必要的等待
-         */
-        bool IsFenceCompleted(uint64_t fenceValue) const;
-
-        /**
-         * @brief 获取当前已完成的围栏值
-         * @return GPU已完成的最大围栏值
-         */
-        uint64_t GetCompletedFenceValue() const;
-
         // ========================================================================
-        // 资源管理和维护接口
+        // Resource maintenance API
         // ========================================================================
 
         /**
-         * @brief 回收已完成的命令列表
-         * 
-         * 教学要点:
-         * 1. 检查执行中的命令列表，将完成的移回空闲队列
-         * 2. 重置命令分配器为下次使用做准备
-         * 3. 建议每帧调用一次以保持资源复用
+         * @brief Recycle completed command-list wrappers back into their available pools.
          */
         void UpdateCompletedCommandLists();
 
         /**
-         * @brief 强制回收所有命令列表 (等待GPU完成)
-         * 
-         * 教学要点: 用于分辨率变更等需要完全同步的场景
+         * @brief Force a full queue synchronization and recycle every completed command list.
          */
         void FlushAllCommandLists();
 
@@ -366,6 +337,11 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
+         * @brief Find a wrapper by queue-scoped submission token.
+         */
+        CommandListWrapper* FindWrapperBySubmissionToken(const QueueSubmissionToken& token);
+
+        /**
          * @brief 根据fenceValue查找对应的CommandListWrapper
          * @param fenceValue 要查找的围栏值
          * @return 找到的包装器指针，未找到返回nullptr
@@ -373,6 +349,15 @@ namespace enigma::graphic
          * 教学要点: 用于WaitForFence()智能选择正确的Fence对象
          */
         CommandListWrapper* FindWrapperByFenceValue(uint64_t fenceValue);
+
+        /**
+         * @brief Transitional raw-fence helpers kept internal until the remaining frame model is migrated.
+         */
+        uint64_t ExecuteCommandList(ID3D12GraphicsCommandList* commandList);
+        uint64_t ExecuteCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count);
+        bool     WaitForFence(uint64_t fenceValue, uint32_t timeoutMs = INFINITE);
+        bool     IsFenceCompleted(uint64_t fenceValue) const;
+        uint64_t GetCompletedFenceValue() const;
 
         /**
          * @brief 根据Type获取对应的Fence对象

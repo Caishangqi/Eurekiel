@@ -12,11 +12,10 @@
 
 namespace enigma::graphic
 {
-    // ===== D12Resource基类实现 =====
+    // ===== D12Resource base implementation =====
 
     /**
-     * 构造函数实现
-     * 教学要点：基类构造函数初始化通用属性
+     * Initialize common resource state for derived wrappers.
      */
     D12Resource::D12Resource()
         : m_resource(nullptr)
@@ -25,24 +24,19 @@ namespace enigma::graphic
           , m_size(0)
           , m_isValid(false)
     {
-        // 基类构造函数只进行基本初始化
-        // 实际资源创建由派生类负责
+        // Derived classes own actual resource creation.
     }
 
     /**
-     * 虚析构函数实现
-     * 教学要点：虚析构函数确保派生类正确释放资源
+     * Virtual destructor keeps derived resource cleanup safe.
      */
     D12Resource::~D12Resource()
     {
-        // 释放DirectX 12资源
         D12Resource::ReleaseResource();
     }
 
     /**
-     * 获取GPU虚拟地址实现
-     * DirectX 12 API: ID3D12Resource::GetGPUVirtualAddress()
-     * 教学要点：GPU虚拟地址是DX12 Bindless资源绑定的关键
+     * Return the GPU virtual address when the resource supports it.
      */
     D3D12_GPU_VIRTUAL_ADDRESS D12Resource::GetGPUVirtualAddress() const
     {
@@ -50,16 +44,11 @@ namespace enigma::graphic
         {
             return 0;
         }
-        // DirectX 12 API: ID3D12Resource::GetGPUVirtualAddress()
-        // 返回资源在GPU虚拟地址空间中的地址
-        // 用于Bindless描述符绑定和Shader Resource View
         return m_resource->GetGPUVirtualAddress();
     }
 
     /**
-     * 设置调试名称实现
-     * DirectX 12 API: ID3D12Object::SetName()
-     * 教学要点：调试名称对PIX调试和性能分析非常重要
+     * Apply a debug label to the native DX12 object.
      */
     void D12Resource::SetDebugName(const std::string& name)
     {
@@ -67,15 +56,12 @@ namespace enigma::graphic
 
         if (m_resource && !name.empty())
         {
-            // 转换为宽字符串
             size_t   len      = name.length();
             wchar_t* wideName = new wchar_t[len + 1];
 
             size_t convertedChars = 0;
             mbstowcs_s(&convertedChars, wideName, len + 1, name.c_str(), len);
 
-            // DirectX 12 API: ID3D12Object::SetName()
-            // 设置DirectX对象的调试名称，便于PIX调试
             m_resource->SetName(wideName);
 
             delete[] wideName;
@@ -83,21 +69,17 @@ namespace enigma::graphic
     }
 
     /**
-     * 设置资源指针（由派生类调用）
-     * 教学要点：统一的资源设置接口，确保状态一致性
+     * Replace the wrapped resource and refresh tracked state.
      */
     void D12Resource::SetResource(ID3D12Resource* resource, D3D12_RESOURCE_STATES initialState, size_t size)
     {
-        // 释放之前的资源
         ReleaseResource();
 
-        // 设置新资源
         m_resource     = resource;
         m_currentState = initialState;
         m_size         = size;
         m_isValid      = (resource != nullptr);
 
-        // 如果有调试名称，应用到新资源
         if (m_resource && !m_debugName.empty())
         {
             SetDebugName(m_debugName);
@@ -106,30 +88,26 @@ namespace enigma::graphic
 
     /**
      * Release resource implementation.
-     * With multi-frame in-flight (N>1), the GPU may still be referencing this
-     * resource from a previous frame. Flush all in-flight work before releasing.
+     * During runtime, multi-frame execution may leave prior queue submissions
+     * referencing this resource. Runtime release is deferred behind queue fences,
+     * while backend shutdown still owns the global drain path.
      */
     void D12Resource::ReleaseResource()
     {
         if (m_resource)
         {
-            // When multiple frames can be in-flight, the GPU may still be
-            // reading this resource from a previous frame's command list.
-            // Flush to ensure GPU is idle before releasing.
-            if (MAX_FRAMES_IN_FLIGHT > 1)
+            if (D3D12RenderSystem::ShouldDeferIndividualResourceRelease())
             {
-                auto* cmdListMgr = D3D12RenderSystem::GetCommandListManager();
-                if (cmdListMgr && cmdListMgr->IsInitialized())
-                {
-                    cmdListMgr->FlushAllCommandLists();
-                }
+                D3D12RenderSystem::DeferResourceRelease(m_resource, m_debugName.c_str());
+                m_resource = nullptr;
             }
-
-            m_resource->Release();
-            m_resource = nullptr;
+            else
+            {
+                m_resource->Release();
+                m_resource = nullptr;
+            }
         }
 
-        // Reset state
         m_currentState = D3D12_RESOURCE_STATE_COMMON;
         m_size         = 0;
         m_isValid      = false;
@@ -188,13 +166,11 @@ namespace enigma::graphic
     }
 
     // ========================================================================
-    // CPU数据管理实现 (Milestone 2.7)
+    // CPU data staging helpers (Milestone 2.7)
     // ========================================================================
 
     /**
-     * @brief 设置初始数据(CPU端)
-     *
-     * 教学要点: 复制数据到m_cpuData，等待Upload()调用
+     * @brief Cache CPU-side initialization data for a later Upload().
      */
     void D12Resource::SetInitialData(const void* data, size_t dataSize)
     {
@@ -204,7 +180,6 @@ namespace enigma::graphic
             return;
         }
 
-        // 复制数据到CPU缓存
         m_cpuData.resize(dataSize);
         memcpy(m_cpuData.data(), data, dataSize);
 
@@ -212,20 +187,12 @@ namespace enigma::graphic
     }
 
     /**
-     * @brief 上传资源到GPU
-     *
-     * 教学要点:
-     * 1. Template Method模式: 基类管理流程，子类实现细节
-     * 2. 使用Copy Command List专用队列
-     * 3. 同步等待上传完成
-     * 4. 虚函数: 复合资源可重写来管理子资源上传
+     * @brief Execute the selected upload contract for this resource.
      */
     bool D12Resource::Upload(ID3D12GraphicsCommandList* providedCommandList)
     {
-        UNUSED(providedCommandList) // 基类实现不使用外部命令列表，获取自己的
+        UNUSED(providedCommandList)
 
-        // 1. 检查是否有CPU数据（仅对需要CPU数据的资源）
-        // Milestone 3.0 Bug Fix: RenderTarget/DepthStencil不需要CPU数据
         if (RequiresCPUData() && !HasCPUData())
         {
             LogError(LogRenderer,
@@ -234,39 +201,38 @@ namespace enigma::graphic
             return false;
         }
 
-        // 2. 检查资源有效性
         if (!IsValid())
         {
             LogError(LogRenderer, "Upload: Resource '%s' is invalid", m_debugName.c_str());
             return false;
         }
 
-        // 2.5. Milestone 3.0 Bug Fix: 对于不需要CPU数据的资源（如RenderTarget），直接标记为已上传
-        // 教学要点:
-        // - RenderTarget/DepthStencil是GPU输出纹理，没有CPU数据
-        // - 它们的m_cpuData.size() == 0，导致UploadContext创建失败
-        // - 但仍需调用Upload()来设置m_isUploaded=true，通过RegisterBindless()的安全检查
-        // - 这里跳过实际的上传流程，直接标记完成
-        if (!RequiresCPUData())
+        const UploadContract        uploadContract = GetUploadContract();
+        const D3D12_RESOURCE_STATES targetState    = GetUploadDestinationState();
+        const char*                 uploadPathName = uploadContract == UploadContract::CopyReadyUpload
+                                                         ? "CopyReadyUpload"
+                                                         : "GraphicsStatefulUpload";
+
+        if (uploadContract == UploadContract::NoGpuUpload)
         {
             m_isUploaded = true;
+            LogDebug(LogRenderer,
+                     "Upload: Marked '%s' as uploaded without GPU copy work",
+                     m_debugName.c_str());
             return true;
         }
 
-        // 3. 获取CommandListManager
         auto* cmdListManager = D3D12RenderSystem::GetCommandListManager();
         if (!cmdListManager)
         {
-            LogError(LogRenderer,"Upload: CommandListManager not available");
+            LogError(LogRenderer, "Upload: CommandListManager not available");
             return false;
         }
 
-        // 4. 创建UploadContext (Upload Heap)
         auto* device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
-            LogError(LogRenderer,
-                     "Upload: Device not available");
+            LogError(LogRenderer, "Upload: Device not available");
             return false;
         }
 
@@ -277,74 +243,183 @@ namespace enigma::graphic
             return false;
         }
 
-        // 5. 获取Graphics Command List（而非Copy）
-        //  Milestone 2.8 修复: 使用Graphics Command List上传资源
-        //
-        // 教学要点 - 为什么使用Graphics而非Copy？
-        // 1. Copy Command List只支持有限的资源状态: COMMON, COPY_SOURCE, COPY_DEST
-        // 2. Uniform Buffer使用MemoryAccess::CPUToGPU创建，初始状态是GENERIC_READ (0x2C3)
-        // 3. GENERIC_READ包含PIXEL_SHADER_RESOURCE等Graphics专属标志
-        // 4. 在Copy Command List上转换GENERIC_READ ↔ COPY_DEST会导致DirectX错误:
-        //    "D3D12 ERROR: D3D12_RESOURCE_STATES has invalid flags (0x2c3) for copy command list"
-        // 5. Graphics Command List支持所有资源状态转换，包括GENERIC_READ
-        //
-        // Microsoft最佳实践:
-        // - Graphics Queue: 复杂操作、小数据传输、需要Graphics状态的资源
-        // - Copy Queue: 大量简单拷贝、纹理/大缓冲区上传、异步后台传输
-        //
-        // Uniform Buffer特性:
-        // - 数量少(11个)、大小小(几百字节)、上传频率低(初始化时)
-        // - 需要GENERIC_READ状态(用于Vertex/Pixel/Compute Shader读取)
-        // - 适合使用Graphics Queue而非Copy Queue
-        uint32_t availableBefore = cmdListManager->GetAvailableCount(CommandListManager::Type::Graphics);
-        uint32_t executingBefore = cmdListManager->GetExecutingCount(CommandListManager::Type::Graphics);
-        auto* commandList = cmdListManager->AcquireCommandList(CommandListManager::Type::Graphics, "ResourceUpload");
+        QueueRouteContext routeContext = {};
+        routeContext.workload = uploadContract == UploadContract::CopyReadyUpload
+                                    ? QueueWorkloadClass::CopyReadyUpload
+                                    : QueueWorkloadClass::GraphicsStatefulUpload;
+        routeContext.isCopySafe            = uploadContract == UploadContract::CopyReadyUpload;
+        routeContext.allowGraphicsFallback = true;
+
+        const QueueRouteDecision routeDecision = D3D12RenderSystem::ResolveQueueRoute(routeContext);
+
+        auto acquireCommandList = [&](CommandQueueType queueType, const char* debugName) -> ID3D12GraphicsCommandList*
+        {
+            return cmdListManager->AcquireCommandList(queueType, debugName);
+        };
+
+        auto submitAndTrack = [&](ID3D12GraphicsCommandList* commandList) -> QueueSubmissionToken
+        {
+            QueueSubmissionToken submissionToken = cmdListManager->SubmitCommandList(commandList);
+            if (submissionToken.IsValid())
+            {
+                D3D12RenderSystem::RecordQueueSubmission(submissionToken, routeContext.workload);
+            }
+
+            return submissionToken;
+        };
+
+        auto waitAndRecycle = [&](const QueueSubmissionToken& token) -> bool
+        {
+            if (!cmdListManager->WaitForSubmission(token))
+            {
+                return false;
+            }
+
+            cmdListManager->UpdateCompletedCommandLists();
+            return true;
+        };
+
+        auto transitionToCopyDest = [&](ID3D12GraphicsCommandList* commandList, D3D12_RESOURCE_STATES sourceState)
+        {
+            if (sourceState == D3D12_RESOURCE_STATE_COPY_DEST)
+            {
+                return;
+            }
+
+            D3D12RenderSystem::TransitionResource(commandList,
+                                                  m_resource,
+                                                  sourceState,
+                                                  D3D12_RESOURCE_STATE_COPY_DEST,
+                                                  m_debugName.c_str());
+        };
+
+        auto transitionToTargetState = [&](ID3D12GraphicsCommandList* commandList)
+        {
+            if (targetState == D3D12_RESOURCE_STATE_COPY_DEST)
+            {
+                return;
+            }
+
+            D3D12RenderSystem::TransitionResource(commandList,
+                                                  m_resource,
+                                                  D3D12_RESOURCE_STATE_COPY_DEST,
+                                                  targetState,
+                                                  m_debugName.c_str());
+        };
+
+        auto completeUpload = [&]() -> bool
+        {
+            m_currentState = targetState;
+            m_isUploaded   = true;
+            LogDebug(LogRenderer,
+                     "Upload: Completed '%s' via %s",
+                     m_debugName.c_str(),
+                     uploadPathName);
+            return true;
+        };
+
+        if (routeDecision.activeQueue == CommandQueueType::Copy)
+        {
+            auto* copyCommandList = acquireCommandList(CommandQueueType::Copy, "CopyReadyUpload");
+            if (!copyCommandList)
+            {
+                LogError(LogRenderer,
+                         "Upload: Failed to acquire Copy command list for '%s'",
+                         m_debugName.c_str());
+                return false;
+            }
+
+            transitionToCopyDest(copyCommandList, m_currentState);
+            if (!UploadToGPU(copyCommandList, uploadContext))
+            {
+                LogError(LogRenderer, "Upload: UploadToGPU failed for '%s'", m_debugName.c_str());
+                return false;
+            }
+
+            QueueSubmissionToken copyToken = submitAndTrack(copyCommandList);
+            if (!copyToken.IsValid())
+            {
+                LogError(LogRenderer,
+                         "Upload: Failed to submit copy upload for '%s'",
+                         m_debugName.c_str());
+                return false;
+            }
+
+            if (cmdListManager->InsertQueueWait(CommandQueueType::Graphics, copyToken))
+            {
+                D3D12RenderSystem::RecordQueueWaitInsertion(copyToken.queueType, CommandQueueType::Graphics);
+            }
+            else
+            {
+                core::LogWarn(LogRenderer,
+                              "Upload: Falling back to CPU wait for copy handoff of '%s'",
+                              m_debugName.c_str());
+
+                if (!waitAndRecycle(copyToken))
+                {
+                    return false;
+                }
+            }
+
+            auto* graphicsCommandList = acquireCommandList(CommandQueueType::Graphics, "CopyReadyUploadFinalize");
+            if (!graphicsCommandList)
+            {
+                LogError(LogRenderer,
+                         "Upload: Failed to acquire Graphics finalize command list for '%s'",
+                         m_debugName.c_str());
+                return false;
+            }
+
+            transitionToTargetState(graphicsCommandList);
+
+            QueueSubmissionToken finalizeToken = submitAndTrack(graphicsCommandList);
+            if (!finalizeToken.IsValid())
+            {
+                LogError(LogRenderer,
+                         "Upload: Failed to submit graphics finalize upload for '%s'",
+                         m_debugName.c_str());
+                return false;
+            }
+
+            if (!waitAndRecycle(finalizeToken))
+            {
+                return false;
+            }
+
+            return completeUpload();
+        }
+
+        auto* commandList = acquireCommandList(routeDecision.activeQueue, uploadPathName);
         if (!commandList)
         {
             LogError(LogRenderer,
-                     "Upload: Failed to acquire Graphics command list for '%s'",
+                     "Upload: Failed to acquire routed command list for '%s'",
                      m_debugName.c_str());
-            LogError(LogRenderer,
-                     "  Available Graphics Lists: %u, Executing: %u",
-                     availableBefore, executingBefore);
             return false;
         }
 
-        // 6. 资源状态转换: 当前状态 → COPY_DEST
-        D3D12RenderSystem::TransitionResource(commandList, m_resource, m_currentState, D3D12_RESOURCE_STATE_COPY_DEST, m_debugName.c_str());
-
-        // 7. 调用子类实现的上传逻辑
-        bool uploadSuccess = UploadToGPU(commandList, uploadContext);
-        if (!uploadSuccess)
+        transitionToCopyDest(commandList, m_currentState);
+        if (!UploadToGPU(commandList, uploadContext))
         {
             LogError(LogRenderer, "Upload: UploadToGPU failed for '%s'", m_debugName.c_str());
             return false;
         }
 
-        // 8. 资源状态转换: COPY_DEST → 目标状态
-        D3D12_RESOURCE_STATES targetState = GetUploadDestinationState();
+        transitionToTargetState(commandList);
 
-        D3D12RenderSystem::TransitionResource(commandList, m_resource,
-                                              D3D12_RESOURCE_STATE_COPY_DEST, targetState,
-                                              m_debugName.c_str());
+        QueueSubmissionToken submissionToken = submitAndTrack(commandList);
+        if (!submissionToken.IsValid())
+        {
+            LogError(LogRenderer, "Upload: SubmitCommandList failed for '%s'", m_debugName.c_str());
+            return false;
+        }
 
-        // 9. 执行命令列表并同步等待完成
-        uint64_t fenceValue = cmdListManager->ExecuteCommandList(commandList);
-        cmdListManager->WaitForFence(fenceValue);
+        if (!waitAndRecycle(submissionToken))
+        {
+            return false;
+        }
 
-        // 9.5. 立即回收已完成的命令列表 - 确保资源池化正确运作
-        // 教学要点: WaitForFence() 只等待GPU完成，不会自动回收命令列表
-        // UpdateCompletedCommandLists() 检查围栏值，将完成的命令列表放回可用队列
-        // 这是 DirectX 12 命令列表池化的正确实践
-        
-        cmdListManager->UpdateCompletedCommandLists();
-        
-        m_currentState = targetState;
-        m_isUploaded   = true;
-
-        LogDebug(LogRenderer,  "Upload: Successfully uploaded '%s' (%zu bytes)",  m_debugName.c_str(), GetCPUDataSize());
-
-        return true;
+        return completeUpload();
     }
 
     // ========================================================================

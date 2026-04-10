@@ -31,6 +31,30 @@
 
 namespace enigma::graphic
 {
+    namespace
+    {
+        bool IsPreAcquireFramePhase(FrameLifecyclePhase phase)
+        {
+            return phase == FrameLifecyclePhase::Idle
+                || phase == FrameLifecyclePhase::PreFrameBegin
+                || phase == FrameLifecyclePhase::RetiringFrameSlot;
+        }
+
+        const char* GetFrameLifecyclePhaseName(FrameLifecyclePhase phase)
+        {
+            switch (phase)
+            {
+            case FrameLifecyclePhase::Idle:               return "Idle";
+            case FrameLifecyclePhase::PreFrameBegin:      return "PreFrameBegin";
+            case FrameLifecyclePhase::RetiringFrameSlot:  return "RetiringFrameSlot";
+            case FrameLifecyclePhase::FrameSlotAcquired:  return "FrameSlotAcquired";
+            case FrameLifecyclePhase::RecordingFrame:     return "RecordingFrame";
+            case FrameLifecyclePhase::SubmittingFrame:    return "SubmittingFrame";
+            default:                                      return "Unknown";
+            }
+        }
+    }
+
     //-------------------------------------------------------------------------------------------
     // Constructor
     //-------------------------------------------------------------------------------------------
@@ -215,6 +239,16 @@ namespace enigma::graphic
     //-------------------------------------------------------------------------------------------
     void IndexRingBuffer::ResetForFrame()
     {
+        const FrameLifecyclePhase phase = D3D12RenderSystem::GetFrameLifecyclePhase();
+        if (IsPreAcquireFramePhase(phase))
+        {
+            ERROR_RECOVERABLE(Stringf(
+                "IndexRingBuffer::ResetForFrame called before frame slot acquisition (phase=%s, name=%s)",
+                GetFrameLifecyclePhaseName(phase),
+                m_debugName.c_str()
+            ));
+        }
+
         uint32_t frameIndex = D3D12RenderSystem::GetFrameIndex();
         constexpr uint32_t maxFIF = MAX_FRAMES_IN_FLIGHT;
 

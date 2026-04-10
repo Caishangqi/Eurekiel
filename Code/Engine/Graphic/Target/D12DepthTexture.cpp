@@ -246,12 +246,12 @@ namespace enigma::graphic
     {
         UNUSED(commandList)
         UNUSED(uploadContext)
-        ERROR_AND_DIE("D12DepthTexture::UploadToGPU not implemented")
+        return true;
     }
 
     D3D12_RESOURCE_STATES D12DepthTexture::GetUploadDestinationState() const
     {
-        ERROR_AND_DIE("D12DepthTexture::GetUploadDestinationState() not implemented")
+        return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
 
     // ==================== 深度操作接口 ====================

@@ -1,6 +1,7 @@
 ﻿#include "Engine/Graphic/Resource/CommandListManager.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/EngineCommon.hpp"
+#include "Engine/Graphic/Resource/CommandQueueException.hpp"
 #include <cassert>
 #include <string>
 
@@ -8,6 +9,106 @@
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 using namespace enigma::graphic;
+
+namespace
+{
+    struct ScopedEventHandle
+    {
+        HANDLE handle = nullptr;
+
+        ScopedEventHandle()
+        {
+            handle = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
+        }
+
+        ~ScopedEventHandle()
+        {
+            if (handle != nullptr)
+            {
+                CloseHandle(handle);
+                handle = nullptr;
+            }
+        }
+
+        ScopedEventHandle(const ScopedEventHandle&) = delete;
+        ScopedEventHandle& operator=(const ScopedEventHandle&) = delete;
+    };
+
+    const char* GetWaitResultName(DWORD waitResult)
+    {
+        switch (waitResult)
+        {
+        case WAIT_OBJECT_0:
+            return "WAIT_OBJECT_0";
+        case WAIT_TIMEOUT:
+            return "WAIT_TIMEOUT";
+        case WAIT_FAILED:
+            return "WAIT_FAILED";
+        case WAIT_ABANDONED:
+            return "WAIT_ABANDONED";
+        default:
+            return "WAIT_UNKNOWN";
+        }
+    }
+
+    bool WaitForFenceValue(ID3D12Fence* fence,
+                           uint64_t     fenceValue,
+                           uint32_t     timeoutMs,
+                           const char*  callerContext,
+                           const char*  queueName,
+                           std::string& errorMessage)
+    {
+        if (!fence || fenceValue == 0)
+        {
+            return true;
+        }
+
+        if (fence->GetCompletedValue() >= fenceValue)
+        {
+            return true;
+        }
+
+        ScopedEventHandle fenceEvent;
+        if (fenceEvent.handle == nullptr)
+        {
+            errorMessage = Stringf("%s: failed to create wait event for %s queue fence %llu (timeoutMs=%u, lastError=%lu)",
+                                   callerContext,
+                                   queueName,
+                                   fenceValue,
+                                   timeoutMs,
+                                   static_cast<unsigned long>(GetLastError()));
+            return false;
+        }
+
+        HRESULT hr = fence->SetEventOnCompletion(fenceValue, fenceEvent.handle);
+        if (FAILED(hr))
+        {
+            errorMessage = Stringf("%s: %s queue wait setup failed at fence %llu (timeoutMs=%u, HRESULT=0x%08X)",
+                                   callerContext,
+                                   queueName,
+                                   fenceValue,
+                                   timeoutMs,
+                                   hr);
+            return false;
+        }
+
+        DWORD waitResult = WaitForSingleObject(fenceEvent.handle, timeoutMs);
+        if (waitResult != WAIT_OBJECT_0)
+        {
+            errorMessage = Stringf("%s: %s queue wait failed at fence %llu (timeoutMs=%u, waitResult=%s/%lu, lastError=%lu)",
+                                   callerContext,
+                                   queueName,
+                                   fenceValue,
+                                   timeoutMs,
+                                   GetWaitResultName(waitResult),
+                                   static_cast<unsigned long>(waitResult),
+                                   static_cast<unsigned long>(waitResult == WAIT_FAILED ? GetLastError() : 0));
+            return false;
+        }
+
+        return true;
+    }
+}
 
 #pragma region CommandListWrapper
 CommandListManager::CommandListWrapper::CommandListWrapper()
@@ -225,15 +326,6 @@ bool CommandListManager::Initialize(uint32_t graphicsCount, uint32_t computeCoun
     }
     m_copyFence->SetName(L"Enigma Copy Queue Fence");
 
-    // 创建围栏事件 - 用于CPU等待GPU完成
-    // 教学要点: Win32事件对象用于阻塞CPU线程直到GPU完成特定操作
-    m_fenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
-    if (m_fenceEvent == nullptr)
-    {
-        LogError(LogRenderer, "Fail to create Fence Event, Abort Program");
-        ERROR_AND_DIE("Fail to create Fence Event, Abort Program")
-    }
-
     // ========================================================================
     // 第3步: 创建命令列表池 (Command List Pools)
     // ========================================================================
@@ -310,71 +402,19 @@ void CommandListManager::Shutdown()
         return;
     }
 
-    // 第1步: 等待所有GPU操作完成 - 确保没有资源正在使用中
-    // 教学要点: 在释放任何DirectX资源之前，必须确保GPU已完成所有相关操作
-    //  Milestone 2.8: 等待所有三个队列完成
-    if (m_fenceEvent)
-    {
-        // 等待Graphics队列
-        if (m_graphicsQueue && m_graphicsFence)
-        {
-            ++m_graphicsFenceValue;
-            m_graphicsQueue->Signal(m_graphicsFence.Get(), m_graphicsFenceValue);
-            if (m_graphicsFence->GetCompletedValue() < m_graphicsFenceValue)
-            {
-                m_graphicsFence->SetEventOnCompletion(m_graphicsFenceValue, m_fenceEvent);
-                WaitForSingleObject(m_fenceEvent, 5000);
-            }
-        }
+    FlushAllCommandLists();
 
-        // 等待Compute队列
-        if (m_computeQueue && m_computeFence)
-        {
-            ++m_computeFenceValue;
-            m_computeQueue->Signal(m_computeFence.Get(), m_computeFenceValue);
-            if (m_computeFence->GetCompletedValue() < m_computeFenceValue)
-            {
-                m_computeFence->SetEventOnCompletion(m_computeFenceValue, m_fenceEvent);
-                WaitForSingleObject(m_fenceEvent, 5000);
-            }
-        }
-
-        // 等待Copy队列
-        if (m_copyQueue && m_copyFence)
-        {
-            ++m_copyFenceValue;
-            m_copyQueue->Signal(m_copyFence.Get(), m_copyFenceValue);
-            if (m_copyFence->GetCompletedValue() < m_copyFenceValue)
-            {
-                m_copyFence->SetEventOnCompletion(m_copyFenceValue, m_fenceEvent);
-                WaitForSingleObject(m_fenceEvent, 5000);
-            }
-        }
-    }
-
-    // 第2步: 清理命令列表池 - 智能指针会自动释放DirectX对象
-    // 教学要点: 使用智能指针的好处 - 自动管理资源生命周期，避免内存泄漏
-
-    // 清空队列 (队列中只是指针，不拥有对象)
+    // Clear non-owning availability queues first.
     while (!m_availableGraphicsLists.empty()) m_availableGraphicsLists.pop();
     while (!m_availableComputeLists.empty()) m_availableComputeLists.pop();
     while (!m_availableCopyLists.empty()) m_availableCopyLists.pop();
 
     m_executingLists.clear();
 
-    // 清空容器 - unique_ptr会自动调用CommandListWrapper析构函数
     m_graphicsCommandLists.clear();
     m_computeCommandLists.clear();
     m_copyCommandLists.clear();
 
-    // 第3步: 清理同步对象
-    if (m_fenceEvent)
-    {
-        CloseHandle(m_fenceEvent);
-        m_fenceEvent = nullptr;
-    }
-
-    // 智能指针会自动释放围栏对象 (Milestone 2.8: 清理三个Fence)
     m_graphicsFence.Reset();
     m_graphicsFenceValue = 0;
 
@@ -384,7 +424,6 @@ void CommandListManager::Shutdown()
     m_copyFence.Reset();
     m_copyFenceValue = 0;
 
-    // 第4步: 清理命令队列 - 智能指针自动管理
     m_graphicsQueue.Reset();
     m_computeQueue.Reset();
     m_copyQueue.Reset();
@@ -392,58 +431,33 @@ void CommandListManager::Shutdown()
     m_initialized = false;
 }
 
-/**
- * @brief 等待GPU完成所有命令
- *
- *  Milestone 2.8: 等待所有三个队列的Fence完成
- */
 bool CommandListManager::WaitForGPU(uint32_t timeoutMs)
 {
-    if (!m_fenceEvent)
+    try
     {
+        std::string errorMessage;
+        if (!WaitForFenceValue(m_graphicsFence.Get(), m_graphicsFenceValue, timeoutMs, "CommandListManager::WaitForGPU", "Graphics", errorMessage))
+        {
+            throw CrossQueueSynchronizationException(errorMessage);
+        }
+
+        if (!WaitForFenceValue(m_computeFence.Get(), m_computeFenceValue, timeoutMs, "CommandListManager::WaitForGPU", "Compute", errorMessage))
+        {
+            throw CrossQueueSynchronizationException(errorMessage);
+        }
+
+        if (!WaitForFenceValue(m_copyFence.Get(), m_copyFenceValue, timeoutMs, "CommandListManager::WaitForGPU", "Copy", errorMessage))
+        {
+            throw CrossQueueSynchronizationException(errorMessage);
+        }
+
+        return true;
+    }
+    catch (const CrossQueueSynchronizationException& exception)
+    {
+        LogError(LogRenderer, "%s", exception.what());
         return false;
     }
-
-    // 等待Graphics队列
-    if (m_graphicsFence && m_graphicsFenceValue > 0)
-    {
-        if (m_graphicsFence->GetCompletedValue() < m_graphicsFenceValue)
-        {
-            HRESULT hr = m_graphicsFence->SetEventOnCompletion(m_graphicsFenceValue, m_fenceEvent);
-            if (FAILED(hr)) return false;
-
-            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
-            if (waitResult != WAIT_OBJECT_0) return false;
-        }
-    }
-
-    // 等待Compute队列
-    if (m_computeFence && m_computeFenceValue > 0)
-    {
-        if (m_computeFence->GetCompletedValue() < m_computeFenceValue)
-        {
-            HRESULT hr = m_computeFence->SetEventOnCompletion(m_computeFenceValue, m_fenceEvent);
-            if (FAILED(hr)) return false;
-
-            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
-            if (waitResult != WAIT_OBJECT_0) return false;
-        }
-    }
-
-    // 等待Copy队列
-    if (m_copyFence && m_copyFenceValue > 0)
-    {
-        if (m_copyFence->GetCompletedValue() < m_copyFenceValue)
-        {
-            HRESULT hr = m_copyFence->SetEventOnCompletion(m_copyFenceValue, m_fenceEvent);
-            if (FAILED(hr)) return false;
-
-            DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
-            if (waitResult != WAIT_OBJECT_0) return false;
-        }
-    }
-
-    return true;
 }
 
 ID3D12CommandQueue* CommandListManager::GetCommandQueue(Type type) const
@@ -813,11 +827,11 @@ ID3D12GraphicsCommandList* CommandListManager::AcquireCommandList(
  *
  * Microsoft文档: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/executing-and-synchronizing-command-lists
  */
-uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* commandList)
+QueueSubmissionToken CommandListManager::SubmitCommandList(ID3D12GraphicsCommandList* commandList)
 {
     if (!commandList || !m_initialized)
     {
-        return 0;
+        return {};
     }
 
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -826,16 +840,18 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     CommandListWrapper* wrapper = FindWrapper(commandList);
     if (!wrapper || wrapper->state != State::Recording)
     {
-        // TODO: 错误日志 - 找不到对应的包装器或状态不正确
-        return 0;
+        enigma::core::LogError(LogRenderer,
+                               "SubmitCommandList() - Invalid wrapper or state for command list");
+        return {};
     }
 
     // 关闭命令列表 - 结束录制阶段
     HRESULT hr = commandList->Close();
     if (FAILED(hr))
     {
-        // TODO: 错误日志 - 命令列表关闭失败
-        return 0;
+        enigma::core::LogError(LogRenderer,
+                               "SubmitCommandList() - Failed to close command list, HRESULT=0x%08X", hr);
+        return {};
     }
 
     wrapper->state = State::Closed;
@@ -844,8 +860,10 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     ID3D12CommandQueue* queue = GetCommandQueue(wrapper->type);
     if (!queue)
     {
-        // TODO: 错误日志 - 找不到对应的命令队列
-        return 0;
+        enigma::core::LogError(LogRenderer,
+                               "SubmitCommandList() - Failed to get queue for type %s",
+                               GetTypeName(wrapper->type));
+        return {};
     }
 
     // 提交命令列表到GPU执行
@@ -860,9 +878,9 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     if (!fence)
     {
         enigma::core::LogError(LogRenderer,
-                               "ExecuteCommandList() - Failed to get Fence for type %s",
+                               "SubmitCommandList() - Failed to get Fence for type %s",
                                GetTypeName(wrapper->type));
-        return 0;
+        return {};
     }
 
     // 增加围栏值并发送信号 - 标记这批命令的完成时机
@@ -871,9 +889,9 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     if (FAILED(hr))
     {
         enigma::core::LogError(LogRenderer,
-                               "ExecuteCommandList() - Signal failed for %s queue",
+                               "SubmitCommandList() - Signal failed for %s queue",
                                GetTypeName(wrapper->type));
-        return 0;
+        return {};
     }
 
     // 更新包装器状态
@@ -883,7 +901,7 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
     // 添加到执行中列表
     m_executingLists.push_back(wrapper);
 
-    return fenceValue; //  Milestone 2.8: 返回对应队列的Fence值
+    return { wrapper->type, fenceValue };
 }
 
 /**
@@ -895,11 +913,11 @@ uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* comma
  * - 验证所有命令列表为同一类型
  * - 使用对应类型的Fence和队列
  */
-uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count)
+QueueSubmissionToken CommandListManager::SubmitCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count)
 {
     if (!commandLists || count == 0 || !m_initialized)
     {
-        return 0;
+        return {};
     }
 
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -917,8 +935,8 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         if (!wrapper || wrapper->state != State::Recording)
         {
             enigma::core::LogError(LogRenderer,
-                                   "ExecuteCommandLists() - Invalid wrapper or state for command list %u", i);
-            return 0;
+                                   "SubmitCommandLists() - Invalid wrapper or state for command list %u", i);
+            return {};
         }
 
         //  Milestone 2.8: 验证所有命令列表类型一致
@@ -930,17 +948,17 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         else if (wrapper->type != batchType)
         {
             enigma::core::LogError(LogRenderer,
-                                   "ExecuteCommandLists() - Mixed types detected! Expected %s, got %s at index %u",
+                                   "SubmitCommandLists() - Mixed types detected! Expected %s, got %s at index %u",
                                    GetTypeName(batchType), GetTypeName(wrapper->type), i);
-            return 0;
+            return {};
         }
 
         HRESULT hr = commandLists[i]->Close();
         if (FAILED(hr))
         {
             enigma::core::LogError(LogRenderer,
-                                   "ExecuteCommandLists() - Failed to close command list %u", i);
-            return 0;
+                                   "SubmitCommandLists() - Failed to close command list %u", i);
+            return {};
         }
 
         wrapper->state = State::Closed;
@@ -952,9 +970,9 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     if (!queue)
     {
         enigma::core::LogError(LogRenderer,
-                               "ExecuteCommandLists() - Failed to get queue for type %s",
+                               "SubmitCommandLists() - Failed to get queue for type %s",
                                GetTypeName(batchType));
-        return 0;
+        return {};
     }
 
     // 批量提交
@@ -967,23 +985,23 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
     if (!fence)
     {
         enigma::core::LogError(LogRenderer,
-                               "ExecuteCommandLists() - Failed to get Fence for type %s",
+                               "SubmitCommandLists() - Failed to get Fence for type %s",
                                GetTypeName(batchType));
-        return 0;
+        return {};
     }
 
-    // 增加围栏值并发送信号
+    // Advance the queue fence and signal the submitted batch.
     ++fenceValue;
     HRESULT hr = queue->Signal(fence, fenceValue);
     if (FAILED(hr))
     {
         enigma::core::LogError(LogRenderer,
-                               "ExecuteCommandLists() - Signal failed for %s queue",
+                               "SubmitCommandLists() - Signal failed for %s queue",
                                GetTypeName(batchType));
-        return 0;
+        return {};
     }
 
-    // 更新所有包装器状态
+    // Mark every submitted wrapper as executing on this fence value.
     for (CommandListWrapper* wrapper : wrappers)
     {
         wrapper->state      = State::Executing;
@@ -991,176 +1009,234 @@ uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* cons
         m_executingLists.push_back(wrapper);
     }
 
-    return fenceValue; //  Milestone 2.8: 返回对应队列的Fence值
+    return { batchType, fenceValue };
 }
 
 // ========================================================================
-// 同步管理接口实现
+// Synchronization interface implementation
 // ========================================================================
 
 /**
- * @brief 等待特定围栏值完成
+ * @brief Wait until the queue-scoped submission token completes.
  *
- * 教学要点: CPU等待GPU完成特定命令批次的机制
- *
- *  Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
- *
- * Microsoft文档: https://learn.microsoft.com/zh-cn/windows/win32/direct3d12/user-mode-heap-synchronization
+ * Uses the token queue identity to select the correct fence for CPU-side waiting.
  */
+bool CommandListManager::WaitForSubmission(const QueueSubmissionToken& token, uint32_t timeoutMs)
+{
+    try
+    {
+        if (!token.IsValid())
+        {
+            throw InvalidQueueSubmissionTokenException(
+                Stringf("CommandListManager::WaitForSubmission: invalid submission token for queue %s (fence=%llu, timeoutMs=%u)",
+                        GetTypeName(token.queueType),
+                        token.fenceValue,
+                        timeoutMs));
+        }
+
+        ID3D12Fence* fence = GetFenceByType(token.queueType);
+        if (!fence)
+        {
+            throw CrossQueueSynchronizationException(
+                Stringf("CommandListManager::WaitForSubmission: fence is unavailable for queue %s (fence=%llu, timeoutMs=%u)",
+                        GetTypeName(token.queueType),
+                        token.fenceValue,
+                        timeoutMs));
+        }
+
+        std::string errorMessage;
+        if (!WaitForFenceValue(fence,
+                               token.fenceValue,
+                               timeoutMs,
+                               "CommandListManager::WaitForSubmission",
+                               GetTypeName(token.queueType),
+                               errorMessage))
+        {
+            throw CrossQueueSynchronizationException(errorMessage);
+        }
+
+        return true;
+    }
+    catch (const InvalidQueueSubmissionTokenException& exception)
+    {
+        LogWarn(LogRenderer, "%s", exception.what());
+        return false;
+    }
+    catch (const CrossQueueSynchronizationException& exception)
+    {
+        LogError(LogRenderer, "%s", exception.what());
+        return false;
+    }
+}
+
+// WaitForGPU is defined earlier in this file.
+
+/**
+ * @brief Query whether a queue-scoped submission token has completed.
+ *
+ * Uses the token queue identity to query the correct fence.
+ */
+bool CommandListManager::IsSubmissionCompleted(const QueueSubmissionToken& token) const
+{
+    if (!token.IsValid())
+    {
+        return false;
+    }
+
+    ID3D12Fence* fence = const_cast<CommandListManager*>(this)->GetFenceByType(token.queueType);
+    if (!fence)
+    {
+        return false;
+    }
+
+    return fence->GetCompletedValue() >= token.fenceValue;
+}
+
+/**
+ * @brief Get a queue completion snapshot for all command queues.
+ */
+QueueFenceSnapshot CommandListManager::GetCompletedFenceSnapshot() const
+{
+    QueueFenceSnapshot snapshot = {};
+    snapshot.graphicsCompleted  = m_graphicsFence ? m_graphicsFence->GetCompletedValue() : 0;
+    snapshot.computeCompleted   = m_computeFence ? m_computeFence->GetCompletedValue() : 0;
+    snapshot.copyCompleted      = m_copyFence ? m_copyFence->GetCompletedValue() : 0;
+    return snapshot;
+}
+
+QueueSubmittedFenceSnapshot CommandListManager::GetLastSubmittedFenceSnapshot() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    QueueSubmittedFenceSnapshot snapshot = {};
+    snapshot.graphicsSubmitted           = m_graphicsFenceValue;
+    snapshot.computeSubmitted            = m_computeFenceValue;
+    snapshot.copySubmitted               = m_copyFenceValue;
+    return snapshot;
+}
+
+bool CommandListManager::InsertQueueWait(Type waitingQueue, const QueueSubmissionToken& producerToken)
+{
+    try
+    {
+        if (!m_initialized)
+        {
+            throw CrossQueueSynchronizationException("CommandListManager::InsertQueueWait: manager is not initialized");
+        }
+
+        if (!producerToken.IsValid())
+        {
+            throw InvalidQueueSubmissionTokenException(
+                Stringf("CommandListManager::InsertQueueWait: invalid producer token for queue %s",
+                        GetTypeName(producerToken.queueType)));
+        }
+
+        if (waitingQueue == producerToken.queueType)
+        {
+            return true;
+        }
+
+        ID3D12CommandQueue* waitingCommandQueue = GetCommandQueue(waitingQueue);
+        ID3D12Fence*        producerFence       = GetFenceByType(producerToken.queueType);
+
+        if (!waitingCommandQueue || !producerFence)
+        {
+            throw CrossQueueSynchronizationException(
+                Stringf("CommandListManager::InsertQueueWait: failed to resolve wait from %s to %s",
+                        GetTypeName(producerToken.queueType),
+                        GetTypeName(waitingQueue)));
+        }
+
+        HRESULT hr = waitingCommandQueue->Wait(producerFence, producerToken.fenceValue);
+        if (FAILED(hr))
+        {
+            throw CrossQueueSynchronizationException(
+                Stringf("CommandListManager::InsertQueueWait: wait from %s to %s failed at fence %llu (HRESULT=0x%08X)",
+                        GetTypeName(producerToken.queueType),
+                        GetTypeName(waitingQueue),
+                        producerToken.fenceValue,
+                        hr));
+        }
+
+        return true;
+    }
+    catch (const InvalidQueueSubmissionTokenException& exception)
+    {
+        LogWarn(LogRenderer, "%s", exception.what());
+        return false;
+    }
+    catch (const CrossQueueSynchronizationException& exception)
+    {
+        LogWarn(LogRenderer, "%s", exception.what());
+        return false;
+    }
+}
+
+uint64_t CommandListManager::ExecuteCommandList(ID3D12GraphicsCommandList* commandList)
+{
+    return SubmitCommandList(commandList).fenceValue;
+}
+
+uint64_t CommandListManager::ExecuteCommandLists(ID3D12GraphicsCommandList* const* commandLists, uint32_t count)
+{
+    return SubmitCommandLists(commandLists, count).fenceValue;
+}
+
 bool CommandListManager::WaitForFence(uint64_t fenceValue, uint32_t timeoutMs)
 {
-    if (!m_fenceEvent)
+    if (fenceValue == 0)
     {
         return false;
     }
 
-    //  Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
-    // 教学要点: 通过wrapper->type确定应该等待哪个Fence
     CommandListWrapper* wrapper = FindWrapperByFenceValue(fenceValue);
-
-    ID3D12Fence* fence = nullptr;
     if (wrapper)
     {
-        // 找到了对应的wrapper，使用其type获取Fence
-        fence = GetFenceByType(wrapper->type);
+        return WaitForSubmission({ wrapper->type, fenceValue }, timeoutMs);
     }
-    else
+
+    QueueFenceSnapshot snapshot = GetCompletedFenceSnapshot();
+    if (snapshot.graphicsCompleted >= fenceValue ||
+        snapshot.computeCompleted >= fenceValue ||
+        snapshot.copyCompleted >= fenceValue)
     {
-        // 未找到wrapper，可能已经完成，尝试检查所有三个Fence
-        // 这是一个fallback机制，确保等待能够完成
-        // 优先检查Graphics（最常用）
-        if (m_graphicsFence && m_graphicsFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-        if (m_computeFence && m_computeFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-        if (m_copyFence && m_copyFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-
-        // 未找到匹配的Fence，使用Graphics Fence作为默认（兼容性处理）
-        fence = m_graphicsFence.Get();
-        enigma::core::LogWarn(LogRenderer,
-                              "WaitForFence() - Could not find wrapper for fenceValue %llu, using Graphics Fence",
-                              fenceValue);
+        return true;
     }
 
-    if (!fence)
-    {
-        enigma::core::LogError(LogRenderer,
-                               "WaitForFence() - Fence is null");
-        return false;
-    }
-
-    // 检查围栏是否已经完成
-    if (fence->GetCompletedValue() >= fenceValue)
-    {
-        return true; // 已经完成，无需等待
-    }
-
-    // 设置事件，当围栏到达指定值时触发
-    HRESULT hr = fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
-    if (FAILED(hr))
-    {
-        enigma::core::LogError(LogRenderer,
-                               "WaitForFence() - SetEventOnCompletion failed");
-        return false;
-    }
-
-    // 等待事件触发
-    DWORD waitResult = WaitForSingleObject(m_fenceEvent, timeoutMs);
-    return waitResult == WAIT_OBJECT_0;
+    enigma::core::LogWarn(LogRenderer,
+                          "WaitForFence() - Falling back to Graphics queue for untracked fence value %llu",
+                          fenceValue);
+    return WaitForSubmission({ Type::Graphics, fenceValue }, timeoutMs);
 }
 
-// WaitForGPU方法已在第313行定义，删除重复定义
-
-/**
- * @brief 检查围栏值是否已完成
- *
- *  Milestone 2.8: 智能Fence选择 - 根据fenceValue查找对应的Fence对象
- *
- * 教学要点: 与WaitForFence()类似,需要智能查找对应的Fence
- */
 bool CommandListManager::IsFenceCompleted(uint64_t fenceValue) const
 {
-    //  Milestone 2.8: 根据fenceValue智能查找对应的Fence对象
-    // 注意: 这里需要通过const_cast访问非const方法FindWrapperByFenceValue()
-    CommandListWrapper* wrapper = const_cast<CommandListManager*>(this)->FindWrapperByFenceValue(fenceValue);
+    if (fenceValue == 0)
+    {
+        return false;
+    }
 
-    ID3D12Fence* fence = nullptr;
+    CommandListWrapper* wrapper = const_cast<CommandListManager*>(this)->FindWrapperByFenceValue(fenceValue);
     if (wrapper)
     {
-        // 找到了对应的wrapper，使用其type获取Fence
-        fence = const_cast<CommandListManager*>(this)->GetFenceByType(wrapper->type);
-    }
-    else
-    {
-        // 未找到wrapper，可能已经完成，尝试检查所有三个Fence
-        // 这是一个fallback机制
-        if (m_graphicsFence && m_graphicsFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-        if (m_computeFence && m_computeFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-        if (m_copyFence && m_copyFence->GetCompletedValue() >= fenceValue)
-        {
-            return true;
-        }
-
-        // 未找到任何匹配的Fence
-        return false;
+        return IsSubmissionCompleted({ wrapper->type, fenceValue });
     }
 
-    if (!fence)
-    {
-        return false;
-    }
-
-    return fence->GetCompletedValue() >= fenceValue;
+    QueueFenceSnapshot snapshot = GetCompletedFenceSnapshot();
+    return snapshot.graphicsCompleted >= fenceValue ||
+           snapshot.computeCompleted >= fenceValue ||
+           snapshot.copyCompleted >= fenceValue;
 }
 
-/**
- * @brief 获取当前已完成的围栏值
- *
- *  Milestone 2.8: 返回三个Fence中的最小完成值 - 最保守的完成值
- *
- * 教学要点: 返回最小值确保这是"所有队列都完成"的安全值
- * - 如果返回最大值,可能某些队列还未完成
- * - 返回最小值是最保守的策略,确保跨队列同步安全
- */
 uint64_t CommandListManager::GetCompletedFenceValue() const
 {
-    uint64_t minCompletedValue = UINT64_MAX;
+    QueueFenceSnapshot snapshot = GetCompletedFenceSnapshot();
+    uint64_t           minCompletedValue = UINT64_MAX;
 
-    // 获取Graphics队列的完成值
-    if (m_graphicsFence)
-    {
-        uint64_t graphicsCompleted = m_graphicsFence->GetCompletedValue();
-        minCompletedValue          = (std::min)(minCompletedValue, graphicsCompleted);
-    }
+    minCompletedValue = (std::min)(minCompletedValue, snapshot.graphicsCompleted);
+    minCompletedValue = (std::min)(minCompletedValue, snapshot.computeCompleted);
+    minCompletedValue = (std::min)(minCompletedValue, snapshot.copyCompleted);
 
-    // 获取Compute队列的完成值
-    if (m_computeFence)
-    {
-        uint64_t computeCompleted = m_computeFence->GetCompletedValue();
-        minCompletedValue         = (std::min)(minCompletedValue, computeCompleted);
-    }
-
-    // 获取Copy队列的完成值
-    if (m_copyFence)
-    {
-        uint64_t copyCompleted = m_copyFence->GetCompletedValue();
-        minCompletedValue      = (std::min)(minCompletedValue, copyCompleted);
-    }
-
-    // 如果所有Fence都为null,返回0
     if (minCompletedValue == UINT64_MAX)
     {
         return 0;
@@ -1229,10 +1305,11 @@ void CommandListManager::FlushAllCommandLists()
         return;
     }
 
-    // Wait for all commands to complete
-    WaitForGPU();
+    if (!WaitForGPU())
+    {
+        ERROR_AND_DIE("CommandListManager::FlushAllCommandLists: failed to synchronize all active queues");
+    }
 
-    //Recycle all command lists
     UpdateCompletedCommandLists();
 }
 
@@ -1309,6 +1386,31 @@ CommandListManager::CommandListWrapper* CommandListManager::FindWrapper(ID3D12Gr
 // ========================================================================
 
 /**
+ * @brief 根据 queue-scoped token 查找对应的 CommandListWrapper
+ */
+CommandListManager::CommandListWrapper* CommandListManager::FindWrapperBySubmissionToken(const QueueSubmissionToken& token)
+{
+    if (!token.IsValid())
+    {
+        return nullptr;
+    }
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    for (auto* wrapper : m_executingLists)
+    {
+        if (wrapper &&
+            wrapper->type == token.queueType &&
+            wrapper->fenceValue == token.fenceValue)
+        {
+            return wrapper;
+        }
+    }
+
+    return nullptr;
+}
+
+/**
  * @brief 根据fenceValue查找对应的CommandListWrapper
  *
  * 教学要点: 用于WaitForFence()智能选择正确的Fence对象
@@ -1320,15 +1422,26 @@ CommandListManager::CommandListWrapper* CommandListManager::FindWrapperByFenceVa
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    CommandListWrapper* matchedWrapper = nullptr;
     for (auto* wrapper : m_executingLists)
     {
         if (wrapper && wrapper->fenceValue == fenceValue)
         {
-            return wrapper;
+            if (matchedWrapper != nullptr && matchedWrapper->type != wrapper->type)
+            {
+                enigma::core::LogWarn(LogRenderer,
+                                      "FindWrapperByFenceValue() - Ambiguous raw fence lookup for fence %llu across %s and %s queues",
+                                      fenceValue,
+                                      GetTypeName(matchedWrapper->type),
+                                      GetTypeName(wrapper->type));
+                return nullptr;
+            }
+
+            matchedWrapper = wrapper;
         }
     }
 
-    return nullptr;
+    return matchedWrapper;
 }
 
 /**

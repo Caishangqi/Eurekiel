@@ -1,8 +1,11 @@
 ﻿#include "D3D12RenderSystem.hpp"
 #include <cassert>
 #include <algorithm>
+#include <array>
+#include <vector>
 
 #include "Engine/Core/Logger/LoggerAPI.hpp"
+#include "Engine/Graphic/Integration/RendererEvents.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/D12DepthTexture.hpp"
@@ -16,6 +19,7 @@
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Mipmap/MipmapConfig.hpp"
+#include "Engine/Graphic/Resource/CommandQueueException.hpp"
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
@@ -24,12 +28,237 @@
 
 namespace enigma::graphic
 {
-    // ===== Static member variable initialization (including device and command system) =====
+    namespace
+    {
+        D3D12_COMMAND_LIST_TYPE ToNativeCommandListType(CommandQueueType queueType)
+        {
+            switch (queueType)
+            {
+            case CommandQueueType::Graphics:
+                return D3D12_COMMAND_LIST_TYPE_DIRECT;
+            case CommandQueueType::Compute:
+                return D3D12_COMMAND_LIST_TYPE_COMPUTE;
+            case CommandQueueType::Copy:
+                return D3D12_COMMAND_LIST_TYPE_COPY;
+            }
+
+            return D3D12_COMMAND_LIST_TYPE_DIRECT;
+        }
+
+        const char* GetQueueTypeName(CommandQueueType queueType)
+        {
+            switch (queueType)
+            {
+            case CommandQueueType::Graphics:
+                return "Graphics";
+            case CommandQueueType::Compute:
+                return "Compute";
+            case CommandQueueType::Copy:
+                return "Copy";
+            }
+
+            return "Unknown";
+        }
+
+        const char* GetQueueWorkloadName(QueueWorkloadClass workload)
+        {
+            switch (workload)
+            {
+            case QueueWorkloadClass::Unknown:
+                return "Unknown";
+            case QueueWorkloadClass::FrameGraphics:
+                return "FrameGraphics";
+            case QueueWorkloadClass::ImmediateGraphics:
+                return "ImmediateGraphics";
+            case QueueWorkloadClass::Present:
+                return "Present";
+            case QueueWorkloadClass::ImGui:
+                return "ImGui";
+            case QueueWorkloadClass::GraphicsStatefulUpload:
+                return "GraphicsStatefulUpload";
+            case QueueWorkloadClass::CopyReadyUpload:
+                return "CopyReadyUpload";
+            case QueueWorkloadClass::MipmapGeneration:
+                return "MipmapGeneration";
+            }
+
+            return "Unknown";
+        }
+
+        const char* GetQueueFallbackReasonName(QueueFallbackReason reason)
+        {
+            switch (reason)
+            {
+            case QueueFallbackReason::None:
+                return "None";
+            case QueueFallbackReason::GraphicsOnlyMode:
+                return "GraphicsOnlyMode";
+            case QueueFallbackReason::RouteNotValidated:
+                return "RouteNotValidated";
+            case QueueFallbackReason::UnsupportedWorkload:
+                return "UnsupportedWorkload";
+            case QueueFallbackReason::RequiresGraphicsStateTransition:
+                return "RequiresGraphicsStateTransition";
+            case QueueFallbackReason::DedicatedQueueUnavailable:
+                return "DedicatedQueueUnavailable";
+            case QueueFallbackReason::QueueTypeUnavailable:
+                return "QueueTypeUnavailable";
+            case QueueFallbackReason::ResourceStateNotSupported:
+                return "ResourceStateNotSupported";
+            }
+
+            return "Unknown";
+        }
+
+        uint32_t GetRequestedFramesInFlightDepthSnapshot()
+        {
+            if (g_theRendererSubsystem)
+            {
+                return g_theRendererSubsystem->GetConfiguration().maxFramesInFlight;
+            }
+
+            return MAX_FRAMES_IN_FLIGHT;
+        }
+
+        uint32_t GetActiveFramesInFlightDepthSnapshot()
+        {
+            return MAX_FRAMES_IN_FLIGHT;
+        }
+
+        const char* GetFrameLifecyclePhaseName(FrameLifecyclePhase phase)
+        {
+            switch (phase)
+            {
+            case FrameLifecyclePhase::Idle:
+                return "Idle";
+            case FrameLifecyclePhase::PreFrameBegin:
+                return "PreFrameBegin";
+            case FrameLifecyclePhase::RetiringFrameSlot:
+                return "RetiringFrameSlot";
+            case FrameLifecyclePhase::FrameSlotAcquired:
+                return "FrameSlotAcquired";
+            case FrameLifecyclePhase::RecordingFrame:
+                return "RecordingFrame";
+            case FrameLifecyclePhase::SubmittingFrame:
+                return "SubmittingFrame";
+            }
+
+            return "Unknown";
+        }
+
+        bool WaitForQueueDrainOnShutdown(ID3D12Device* device,
+                                         ID3D12CommandQueue* queue,
+                                         CommandQueueType queueType)
+        {
+            if (!device || !queue)
+            {
+                return true;
+            }
+
+            Microsoft::WRL::ComPtr<ID3D12Fence> shutdownFence;
+            HRESULT hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&shutdownFence));
+            if (FAILED(hr))
+            {
+                LogWarn(LogRenderer,
+                        "Shutdown: Failed to create temporary %s queue drain fence (HRESULT=0x%08X)",
+                        GetQueueTypeName(queueType),
+                        hr);
+                return false;
+            }
+
+            constexpr uint64_t kShutdownFenceValue = 1;
+            hr = queue->Signal(shutdownFence.Get(), kShutdownFenceValue);
+            if (FAILED(hr))
+            {
+                LogWarn(LogRenderer,
+                        "Shutdown: Failed to signal %s queue drain fence (HRESULT=0x%08X)",
+                        GetQueueTypeName(queueType),
+                        hr);
+                return false;
+            }
+
+            if (shutdownFence->GetCompletedValue() >= kShutdownFenceValue)
+            {
+                return true;
+            }
+
+            HANDLE fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+            if (!fenceEvent)
+            {
+                LogWarn(LogRenderer,
+                        "Shutdown: Failed to create wait event for %s queue drain",
+                        GetQueueTypeName(queueType));
+                return false;
+            }
+
+            hr = shutdownFence->SetEventOnCompletion(kShutdownFenceValue, fenceEvent);
+            if (FAILED(hr))
+            {
+                CloseHandle(fenceEvent);
+                LogWarn(LogRenderer,
+                        "Shutdown: Failed to arm %s queue drain fence event (HRESULT=0x%08X)",
+                        GetQueueTypeName(queueType),
+                        hr);
+                return false;
+            }
+
+            const DWORD waitResult = WaitForSingleObject(fenceEvent, INFINITE);
+            CloseHandle(fenceEvent);
+
+            if (waitResult != WAIT_OBJECT_0)
+            {
+                LogWarn(LogRenderer,
+                        "Shutdown: Waiting for %s queue drain returned unexpected result (%lu)",
+                        GetQueueTypeName(queueType),
+                        static_cast<unsigned long>(waitResult));
+                return false;
+            }
+
+            return true;
+        }
+
+        constexpr size_t kQueueWorkloadClassCount = 8;
+        constexpr size_t kQueueFallbackReasonCount = 8;
+        std::array<std::array<bool, kQueueFallbackReasonCount>, kQueueWorkloadClassCount> g_reportedMixedQueueFallbacks = {};
+
+        bool HasDedicatedQueuesAvailable(const CommandListManager* commandListManager)
+        {
+            if (!commandListManager)
+            {
+                return false;
+            }
+
+            return commandListManager->GetCommandQueue(CommandQueueType::Compute) != nullptr &&
+                   commandListManager->GetCommandQueue(CommandQueueType::Copy) != nullptr;
+        }
+
+        [[noreturn]] void ReportFatalQueueException(const CommandQueueException& exception)
+        {
+            ERROR_AND_DIE(Stringf("%s", exception.what()))
+        }
+
+        void ReportRecoverableQueueException(const CommandQueueException& exception)
+        {
+            ERROR_RECOVERABLE(Stringf("%s", exception.what()))
+        }
+
+        struct DeferredResourceReleaseEntry
+        {
+            Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
+            QueueSubmittedFenceSnapshot            submittedFenceSnapshot = {};
+            std::string                            debugName;
+        };
+
+        std::mutex                                g_deferredResourceReleaseMutex;
+        std::vector<DeferredResourceReleaseEntry> g_deferredResourceReleases;
+    }
+
+    // ===== Static member initialization =====
     Microsoft::WRL::ComPtr<ID3D12Device>  D3D12RenderSystem::s_device      = nullptr;
     Microsoft::WRL::ComPtr<IDXGIFactory4> D3D12RenderSystem::s_dxgiFactory = nullptr;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> D3D12RenderSystem::s_adapter     = nullptr;
 
-    // SwapChain management (based on A/A/A decision)
+    // SwapChain state
     Microsoft::WRL::ComPtr<IDXGISwapChain3> D3D12RenderSystem::s_swapChain              = nullptr;
     Microsoft::WRL::ComPtr<ID3D12Resource>  D3D12RenderSystem::s_swapChainBuffers[3]    = {nullptr};
     D3D12_CPU_DESCRIPTOR_HANDLE             D3D12RenderSystem::s_swapChainRTVs[3]       = {};
@@ -39,30 +268,37 @@ namespace enigma::graphic
     uint32_t                                D3D12RenderSystem::s_swapChainHeight        = 0;
     DXGI_FORMAT                             D3D12RenderSystem::s_backbufferFormat       = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-    // Command system management
+    // Command system state
     std::unique_ptr<CommandListManager> D3D12RenderSystem::s_commandListManager         = nullptr;
     ID3D12GraphicsCommandList*          D3D12RenderSystem::s_currentGraphicsCommandList = nullptr;
 
-    // SM6.6 Bindless resource management system (Milestone 2.7)
+    // Bindless infrastructure
     std::unique_ptr<BindlessIndexAllocator>      D3D12RenderSystem::s_bindlessIndexAllocator      = nullptr;
     std::unique_ptr<GlobalDescriptorHeapManager> D3D12RenderSystem::s_globalDescriptorHeapManager = nullptr;
     std::unique_ptr<BindlessRootSignature>       D3D12RenderSystem::s_bindlessRootSignature       = nullptr;
 
-    // Texture cache system (Milestone Bindless)
+    // Texture cache
     std::unordered_map<ResourceLocation, std::weak_ptr<D12Texture>> D3D12RenderSystem::s_textureCache;
     std::mutex                                                      D3D12RenderSystem::s_textureCacheMutex;
 
-    // 系统默认纹理（用于材质系统Fallback）
+    // Fallback textures
     std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultWhiteTexture  = nullptr;
     std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultBlackTexture  = nullptr;
     std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultNormalTexture = nullptr;
 
     bool D3D12RenderSystem::s_isInitialized = false;
+    bool D3D12RenderSystem::s_isShuttingDown = false;
 
-    // Multi-Frame In-Flight static members (Phase 1)
+    // Frame execution state
     FrameContext D3D12RenderSystem::s_frameContexts[4]  = {};
     uint32_t     D3D12RenderSystem::s_frameIndex        = 0;
     uint64_t     D3D12RenderSystem::s_globalFrameCount  = 0;
+    FrameLifecyclePhase        D3D12RenderSystem::s_frameLifecyclePhase = FrameLifecyclePhase::Idle;
+    FrameSlotAcquisitionResult D3D12RenderSystem::s_lastFrameSlotAcquisitionResult = {};
+    QueueRoutingPolicy        D3D12RenderSystem::s_queueRoutingPolicy          = {};
+    QueueExecutionMode        D3D12RenderSystem::s_requestedQueueExecutionMode = QueueExecutionMode::MixedQueueExperimental;
+    QueueExecutionMode        D3D12RenderSystem::s_activeQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
+    QueueExecutionDiagnostics D3D12RenderSystem::s_queueExecutionDiagnostics   = {};
 
     // ===== Public API implementation =====
 
@@ -82,6 +318,7 @@ namespace enigma::graphic
 
         // Store configured backbuffer format
         s_backbufferFormat = backbufferFormat;
+        s_isShuttingDown   = false;
 
         // 1. Enable debug layer (if requested)
         if (enableDebugLayer)
@@ -103,34 +340,59 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. Create per-frame command allocators for multi-frame in-flight
+        s_queueExecutionDiagnostics.ClearCounters();
+        s_queueExecutionDiagnostics.requestedMode = s_requestedQueueExecutionMode;
+        SetActiveQueueExecutionModeInternal(s_requestedQueueExecutionMode);
+        g_reportedMixedQueueFallbacks = {};
+
+        // 4. Create per-frame allocators for each queue.
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
         {
-            HRESULT hr = s_device->CreateCommandAllocator(
-                D3D12_COMMAND_LIST_TYPE_DIRECT,
-                IID_PPV_ARGS(&s_frameContexts[i].commandAllocator)
-            );
-            if (FAILED(hr))
+            FrameContext& frameContext = s_frameContexts[i];
+
+            auto createFrameAllocator = [&](CommandQueueType queueType, Microsoft::WRL::ComPtr<ID3D12CommandAllocator>& allocator) -> bool
             {
-                core::LogError(LogRenderer,
-                               "Failed to create command allocator for FrameContext[%u], HRESULT=0x%08X", i, hr);
+                HRESULT hr = s_device->CreateCommandAllocator(
+                    ToNativeCommandListType(queueType),
+                    IID_PPV_ARGS(&allocator)
+                );
+                if (FAILED(hr))
+                {
+                    core::LogError(LogRenderer,
+                                   "Failed to create %s allocator for FrameContext[%u], HRESULT=0x%08X",
+                                   GetQueueTypeName(queueType), i, hr);
+                    return false;
+                }
+
+                return true;
+            };
+
+            if (!createFrameAllocator(CommandQueueType::Graphics, frameContext.graphicsCommandAllocator) ||
+                !createFrameAllocator(CommandQueueType::Compute, frameContext.computeCommandAllocator) ||
+                !createFrameAllocator(CommandQueueType::Copy, frameContext.copyCommandAllocator))
+            {
                 return false;
             }
-            s_frameContexts[i].fenceValue = 0;
+
+            frameContext.ClearRetirement();
         }
         s_frameIndex       = 0;
         s_globalFrameCount = 0;
+        s_frameLifecyclePhase = FrameLifecyclePhase::Idle;
+        s_lastFrameSlotAcquisitionResult = {};
+        s_currentGraphicsCommandList = nullptr;
 
         core::LogInfo(LogRenderer,
-                      "Created %u FrameContext command allocators", MAX_FRAMES_IN_FLIGHT);
+                      "Created %u frame slots with Graphics/Compute/Copy allocators",
+                      MAX_FRAMES_IN_FLIGHT);
 
         // 5. Initialize SM6.6 Bindless components (Milestone 2.7)
 
-        // 5.1 Create Bindless Index Allocator (纯索引分配器)
+        // 5.1 Create the bindless index allocator.
         s_bindlessIndexAllocator = std::make_unique<BindlessIndexAllocator>();
-        // 构造函数自动初始化，无需调用Initialize()
+        // The constructor performs all required initialization.
 
-        // 5.2 Create Global Descriptor Heap Manager (全局描述符堆)
+        // 5.2 Create the global descriptor heaps.
         s_globalDescriptorHeapManager = std::make_unique<GlobalDescriptorHeapManager>();
         if (!s_globalDescriptorHeapManager->Initialize())
         {
@@ -142,7 +404,7 @@ namespace enigma::graphic
             return false;
         }
 
-        // 5.3 Create SM6.6 Bindless Root Signature (极简Root Signature)
+        // 5.3 Create the shared bindless root signature.
         s_bindlessRootSignature = std::make_unique<BindlessRootSignature>();
         if (!s_bindlessRootSignature->Initialize())
         {
@@ -182,12 +444,10 @@ namespace enigma::graphic
 
     bool D3D12RenderSystem::PrepareDefaultTextures()
     {
-        // 6. 创建系统默认纹理（用于材质系统Fallback）
-        // 教学要点：这些纹理在材质缺少贴图时作为默认值使用
-        // 注意：RGBA字节序为小端格式 (0xAABBGGRR)
+        // Create default fallback textures.
+        // RGBA values are stored in little-endian ABGR order.
 
-        // 6.1 白色纹理 (1x1, RGBA = 255,255,255,255)
-        // 用途：漫反射贴图缺失时的默认值
+        // White fallback texture for missing albedo maps.
         uint32_t whitePixel   = 0xFFFFFFFF; // ABGR: A=255, B=255, G=255, R=255
         s_defaultWhiteTexture = std::shared_ptr<D12Texture>(
             CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
@@ -203,8 +463,7 @@ namespace enigma::graphic
                           s_defaultWhiteTexture->GetBindlessIndex());
         }
 
-        // 6.2 黑色纹理 (1x1, RGBA = 0,0,0,255)
-        // 用途：自发光/AO贴图缺失时的默认值
+        // Black fallback texture for emissive and AO maps.
         uint32_t blackPixel   = 0xFF000000; // ABGR: A=255, B=0, G=0, R=0
         s_defaultBlackTexture = std::shared_ptr<D12Texture>(
             CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
@@ -220,9 +479,8 @@ namespace enigma::graphic
                           s_defaultBlackTexture->GetBindlessIndex());
         }
 
-        // 6.3 法线纹理 (1x1, RGBA = 128,128,255,255)
-        // 用途：法线贴图缺失时的默认值，表示平坦表面（法线向上）
-        // RGB(128,128,255) 解码后 = (0,0,1) 法线向上
+        // Flat normal fallback texture for missing normal maps.
+        // RGB(128,128,255) decodes to the +Z normal.
         uint32_t normalPixel   = 0xFFFF8080; // ABGR: A=255, B=255, G=128, R=128
         s_defaultNormalTexture = std::shared_ptr<D12Texture>(
             CreateTexture2D(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, TextureUsage::ShaderResource,
@@ -253,90 +511,19 @@ namespace enigma::graphic
             return;
         }
 
-        // 1. First close CommandListManager (wait for the GPU to complete all commands)
-        if (s_commandListManager)
-        {
-            s_commandListManager->Shutdown();
-            s_commandListManager.reset();
-        }
+        s_isShuttingDown = true;
 
-        // 2. Release FrameContext command allocators (GPU is idle after step 1)
-        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-        {
-            s_frameContexts[i].commandAllocator.Reset();
-            s_frameContexts[i].fenceValue = 0;
-        }
-        s_frameIndex       = 0;
-        s_globalFrameCount = 0;
+        DrainQueuesForShutdown();
+        ProcessDeferredResourceReleases(true);
+        ResetFrameExecutionState();
+        ReleaseFallbackTextures();
+        ReleaseBindlessInfrastructure();
+        ReleaseSwapChainResources();
+        ReportLiveObjectsBeforeDeviceRelease();
+        ReleaseDeviceObjects();
 
-        // 3. Release default textures (must be before Bindless components)
-        // 教学要点：这些纹理持有Bindless索引，必须先释放
-        if (s_defaultWhiteTexture)
-        {
-            s_defaultWhiteTexture.reset();
-        }
-        if (s_defaultBlackTexture)
-        {
-            s_defaultBlackTexture.reset();
-        }
-        if (s_defaultNormalTexture)
-        {
-            s_defaultNormalTexture.reset();
-        }
-
-        // 4. Clean up SM6.6 Bindless components (Milestone 2.7)
-        if (s_bindlessRootSignature)
-        {
-            s_bindlessRootSignature->Shutdown();
-            s_bindlessRootSignature.reset();
-        }
-
-        if (s_globalDescriptorHeapManager)
-        {
-            s_globalDescriptorHeapManager->Shutdown();
-            s_globalDescriptorHeapManager.reset();
-        }
-
-        if (s_bindlessIndexAllocator)
-        {
-            // BindlessIndexAllocator无需显式Shutdown，析构函数自动清理
-            s_bindlessIndexAllocator.reset();
-        }
-
-        // 5. Clean up SwapChain resources
-        for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
-        {
-            if (s_swapChainBuffers[i])
-            {
-                s_swapChainBuffers[i].Reset();
-            }
-            // Note: RTV descriptors are automatically released when BindlessIndexAllocator is destroyed
-            s_swapChainRTVs[i] = {};
-        }
-        s_swapChain.Reset();
-        s_currentBackBufferIndex = 0;
-        s_swapChainBufferCount   = 3;
-
-        // 6. Report live objects before releasing device (debug diagnostics)
-#if defined(_DEBUG)
-        {
-            Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
-            if (SUCCEEDED(s_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
-            {
-                DebuggerPrintf("\n========== D3D12 ReportLiveObjects (before device release) ==========\n");
-                debugDevice->ReportLiveDeviceObjects(
-                    D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
-                DebuggerPrintf("========== End ReportLiveObjects ==========\n\n");
-            }
-        }
-#endif
-
-        // 7. Release DirectX 12 object (ComPtr will be automatically released)
-        s_adapter.Reset();
-        s_dxgiFactory.Reset();
-        s_device.Reset();
-
-        s_isInitialized = false;
+        s_isInitialized  = false;
+        s_isShuttingDown = false;
 
         core::LogInfo(LogRenderer, "D3D12RenderSystem shutdown completed");
     }
@@ -1152,9 +1339,7 @@ namespace enigma::graphic
     // ===== Command Management API implementation =====
 
     /**
-     * Get command queue manager
-     * Command management function corresponding to IrisRenderSystem
-     * D3D12RenderSystem is a DirectX 12 underlying API encapsulation to directly manage CommandListManager instances
+     * Get the command-list manager owned by the render system.
      */
     CommandListManager* D3D12RenderSystem::GetCommandListManager()
     {
@@ -1165,8 +1350,468 @@ namespace enigma::graphic
         return s_commandListManager.get();
     }
 
+    void D3D12RenderSystem::SetRequestedQueueExecutionMode(QueueExecutionMode mode)
+    {
+        s_requestedQueueExecutionMode             = mode;
+        s_queueExecutionDiagnostics.requestedMode = mode;
+        SetActiveQueueExecutionModeInternal(mode);
+    }
+
+    QueueExecutionMode D3D12RenderSystem::GetRequestedQueueExecutionMode()
+    {
+        return s_requestedQueueExecutionMode;
+    }
+
+    QueueExecutionMode D3D12RenderSystem::GetActiveQueueExecutionMode()
+    {
+        return s_activeQueueExecutionMode;
+    }
+
+    void D3D12RenderSystem::SetFrameLifecyclePhase(FrameLifecyclePhase phase)
+    {
+        s_frameLifecyclePhase = phase;
+        s_queueExecutionDiagnostics.lifecyclePhase = phase;
+    }
+
+    const QueueExecutionDiagnostics& D3D12RenderSystem::GetQueueExecutionDiagnostics()
+    {
+        s_queueExecutionDiagnostics.requestedMode                = s_requestedQueueExecutionMode;
+        s_queueExecutionDiagnostics.activeMode                   = s_activeQueueExecutionMode;
+        s_queueExecutionDiagnostics.lifecyclePhase               = s_frameLifecyclePhase;
+        s_queueExecutionDiagnostics.requestedFramesInFlightDepth = GetRequestedFramesInFlightDepthSnapshot();
+        s_queueExecutionDiagnostics.activeFramesInFlightDepth    = GetActiveFramesInFlightDepthSnapshot();
+        return s_queueExecutionDiagnostics;
+    }
+
+    bool D3D12RenderSystem::SynchronizeActiveQueues(const char* reason)
+    {
+        try
+        {
+            if (!s_commandListManager)
+            {
+                throw CrossQueueSynchronizationException(
+                    Stringf("D3D12RenderSystem::SynchronizeActiveQueues: command list manager is unavailable%s%s",
+                            reason ? " for " : "",
+                            reason ? reason : ""));
+            }
+
+            if (s_currentGraphicsCommandList != nullptr)
+            {
+                throw CrossQueueSynchronizationException(
+                    Stringf("D3D12RenderSystem::SynchronizeActiveQueues: active graphics command list is still recording%s%s",
+                            reason ? " for " : "",
+                            reason ? reason : ""));
+            }
+
+            s_commandListManager->FlushAllCommandLists();
+            ProcessDeferredResourceReleases();
+            return true;
+        }
+        catch (const CrossQueueSynchronizationException& exception)
+        {
+            ReportFatalQueueException(exception);
+            return false;
+        }
+    }
+
+    bool D3D12RenderSystem::ShouldDeferIndividualResourceRelease()
+    {
+        return s_isInitialized &&
+               !s_isShuttingDown &&
+               MAX_FRAMES_IN_FLIGHT > 1 &&
+               s_commandListManager != nullptr &&
+               s_commandListManager->IsInitialized();
+    }
+
+    void D3D12RenderSystem::DeferResourceRelease(ID3D12Resource* resource, const char* debugName)
+    {
+        if (!resource)
+        {
+            return;
+        }
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> deferredResource;
+        deferredResource.Attach(resource);
+
+        if (!ShouldDeferIndividualResourceRelease())
+        {
+            return;
+        }
+
+        ProcessDeferredResourceReleases();
+
+        const QueueSubmittedFenceSnapshot submittedSnapshot =
+            s_commandListManager->GetLastSubmittedFenceSnapshot();
+        const QueueFenceSnapshot completedSnapshot =
+            s_commandListManager->GetCompletedFenceSnapshot();
+
+        if (!submittedSnapshot.HasTrackedWork() ||
+            submittedSnapshot.IsSatisfiedBy(completedSnapshot))
+        {
+            return;
+        }
+
+        DeferredResourceReleaseEntry entry = {};
+        entry.resource                     = std::move(deferredResource);
+        entry.submittedFenceSnapshot       = submittedSnapshot;
+        entry.debugName                    = debugName ? debugName : "";
+
+        std::lock_guard<std::mutex> lock(g_deferredResourceReleaseMutex);
+        g_deferredResourceReleases.push_back(std::move(entry));
+    }
+
+    void D3D12RenderSystem::ProcessDeferredResourceReleases(bool forceRelease) noexcept
+    {
+        if (!forceRelease)
+        {
+            if (!s_commandListManager || !s_commandListManager->IsInitialized())
+            {
+                return;
+            }
+
+            s_commandListManager->UpdateCompletedCommandLists();
+        }
+
+        const QueueFenceSnapshot completedSnapshot =
+            (forceRelease || !s_commandListManager || !s_commandListManager->IsInitialized())
+                ? QueueFenceSnapshot{ UINT64_MAX, UINT64_MAX, UINT64_MAX }
+                : s_commandListManager->GetCompletedFenceSnapshot();
+
+        std::lock_guard<std::mutex> lock(g_deferredResourceReleaseMutex);
+
+        auto it = g_deferredResourceReleases.begin();
+        while (it != g_deferredResourceReleases.end())
+        {
+            if (forceRelease || it->submittedFenceSnapshot.IsSatisfiedBy(completedSnapshot))
+            {
+                it = g_deferredResourceReleases.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    void D3D12RenderSystem::DrainQueuesForShutdown() noexcept
+    {
+        if (!s_commandListManager)
+        {
+            return;
+        }
+
+        const std::array<CommandQueueType, kCommandQueueTypeCount> queueTypes = {
+            CommandQueueType::Graphics,
+            CommandQueueType::Compute,
+            CommandQueueType::Copy
+        };
+
+        for (CommandQueueType queueType : queueTypes)
+        {
+            WaitForQueueDrainOnShutdown(
+                s_device.Get(),
+                s_commandListManager->GetCommandQueue(queueType),
+                queueType);
+        }
+
+        s_commandListManager->Shutdown();
+        s_commandListManager.reset();
+    }
+
+    void D3D12RenderSystem::ResetFrameExecutionState() noexcept
+    {
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+        {
+            s_frameContexts[i].graphicsCommandAllocator.Reset();
+            s_frameContexts[i].computeCommandAllocator.Reset();
+            s_frameContexts[i].copyCommandAllocator.Reset();
+            s_frameContexts[i].ClearRetirement();
+        }
+
+        s_frameIndex                 = 0;
+        s_globalFrameCount           = 0;
+        s_frameLifecyclePhase        = FrameLifecyclePhase::Idle;
+        s_lastFrameSlotAcquisitionResult = {};
+        s_currentGraphicsCommandList = nullptr;
+        s_requestedQueueExecutionMode = QueueExecutionMode::MixedQueueExperimental;
+        s_activeQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
+        s_queueExecutionDiagnostics.ClearCounters();
+        s_queueExecutionDiagnostics.requestedMode = s_requestedQueueExecutionMode;
+        s_queueExecutionDiagnostics.activeMode    = s_activeQueueExecutionMode;
+        g_reportedMixedQueueFallbacks = {};
+    }
+
+    void D3D12RenderSystem::ReleaseFallbackTextures() noexcept
+    {
+        s_defaultWhiteTexture.reset();
+        s_defaultBlackTexture.reset();
+        s_defaultNormalTexture.reset();
+        ClearAllTextureCache();
+    }
+
+    void D3D12RenderSystem::ReleaseBindlessInfrastructure() noexcept
+    {
+        if (s_bindlessRootSignature)
+        {
+            s_bindlessRootSignature->Shutdown();
+            s_bindlessRootSignature.reset();
+        }
+
+        if (s_globalDescriptorHeapManager)
+        {
+            s_globalDescriptorHeapManager->Shutdown();
+            s_globalDescriptorHeapManager.reset();
+        }
+
+        s_bindlessIndexAllocator.reset();
+    }
+
+    void D3D12RenderSystem::ReleaseSwapChainResources() noexcept
+    {
+        for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
+        {
+            s_swapChainBuffers[i].Reset();
+            s_swapChainRTVs[i] = {};
+        }
+
+        s_swapChain.Reset();
+        s_currentBackBufferIndex = 0;
+        s_swapChainBufferCount   = 3;
+        s_swapChainWidth         = 0;
+        s_swapChainHeight        = 0;
+        s_backbufferFormat       = DXGI_FORMAT_R8G8B8A8_UNORM;
+    }
+
+    void D3D12RenderSystem::ReportLiveObjectsBeforeDeviceRelease() noexcept
+    {
+#if defined(_DEBUG)
+        if (!s_device)
+        {
+            return;
+        }
+
+        Microsoft::WRL::ComPtr<ID3D12DebugDevice> debugDevice;
+        if (SUCCEEDED(s_device->QueryInterface(IID_PPV_ARGS(&debugDevice))))
+        {
+            DebuggerPrintf("\n========== D3D12 ReportLiveObjects (before device release) ==========\n");
+            debugDevice->ReportLiveDeviceObjects(
+                D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL);
+            DebuggerPrintf("========== End ReportLiveObjects ==========\n\n");
+        }
+#endif
+    }
+
+    void D3D12RenderSystem::ReleaseDeviceObjects() noexcept
+    {
+        s_adapter.Reset();
+        s_dxgiFactory.Reset();
+        s_device.Reset();
+    }
+
+    QueueRouteDecision D3D12RenderSystem::ResolveQueueRoute(const QueueRouteContext& context)
+    {
+        QueueRouteDecision decision = s_queueRoutingPolicy.Resolve(context, s_activeQueueExecutionMode);
+        RecordQueueRouteDecision(decision);
+        return decision;
+    }
+
+    ID3D12GraphicsCommandList* D3D12RenderSystem::AcquireCommandListForWorkload(const QueueRouteContext& context,
+                                                                                ID3D12CommandAllocator* externalAllocator,
+                                                                                const std::string&      debugName,
+                                                                                bool                    useFrameAllocator)
+    {
+        if (!s_commandListManager)
+        {
+            return nullptr;
+        }
+
+        QueueRouteDecision decision = ResolveQueueRoute(context);
+        ID3D12CommandAllocator* allocatorToUse = nullptr;
+
+        if (decision.activeQueue == CommandQueueType::Graphics && externalAllocator != nullptr)
+        {
+            allocatorToUse = externalAllocator;
+        }
+        else if (useFrameAllocator && s_frameIndex < MAX_FRAMES_IN_FLIGHT)
+        {
+            allocatorToUse = s_frameContexts[s_frameIndex].GetCommandAllocator(decision.activeQueue);
+        }
+
+        if (allocatorToUse != nullptr)
+        {
+            ID3D12GraphicsCommandList* commandList =
+                s_commandListManager->AcquireCommandList(decision.activeQueue, allocatorToUse, debugName);
+            if (commandList != nullptr && useFrameAllocator && s_frameIndex < MAX_FRAMES_IN_FLIGHT)
+            {
+                s_frameContexts[s_frameIndex].retirement.ExpectQueue(decision.activeQueue);
+            }
+
+            return commandList;
+        }
+
+        return s_commandListManager->AcquireCommandList(decision.activeQueue, debugName);
+    }
+
+    void D3D12RenderSystem::RegisterFrameSubmission(const QueueSubmissionToken& token)
+    {
+        if (!token.IsValid())
+        {
+            return;
+        }
+
+        s_frameContexts[s_frameIndex].retirement.RegisterSubmission(token);
+    }
+
+    QueueSubmissionToken D3D12RenderSystem::SubmitFrameScopedCommandList(ID3D12GraphicsCommandList* commandList,
+                                                                         const QueueRouteContext&   context)
+    {
+        if (!s_commandListManager || !commandList)
+        {
+            return {};
+        }
+
+        QueueSubmissionToken submissionToken = s_commandListManager->SubmitCommandList(commandList);
+        RecordQueueSubmission(submissionToken, context.workload);
+        RegisterFrameSubmission(submissionToken);
+        return submissionToken;
+    }
+
+    QueueSubmissionToken D3D12RenderSystem::SubmitStandaloneCommandList(ID3D12GraphicsCommandList* commandList,
+                                                                        QueueWorkloadClass         workload)
+    {
+        if (!s_commandListManager || !commandList)
+        {
+            return {};
+        }
+
+        QueueSubmissionToken submissionToken = s_commandListManager->SubmitCommandList(commandList);
+        RecordQueueSubmission(submissionToken, workload);
+        return submissionToken;
+    }
+
+    void D3D12RenderSystem::RecordQueueRouteDecision(const QueueRouteDecision& decision)
+    {
+        s_queueExecutionDiagnostics.requestedMode      = s_requestedQueueExecutionMode;
+        s_queueExecutionDiagnostics.activeMode         = s_activeQueueExecutionMode;
+        s_queueExecutionDiagnostics.lastFallbackReason = decision.fallbackReason;
+
+        const bool shouldReportMixedQueueFallback =
+            s_requestedQueueExecutionMode == QueueExecutionMode::MixedQueueExperimental &&
+            decision.requestedQueue != CommandQueueType::Graphics &&
+            decision.fallbackReason != QueueFallbackReason::None;
+
+        if (!shouldReportMixedQueueFallback)
+        {
+            return;
+        }
+
+        const size_t workloadIndex = static_cast<size_t>(decision.workload);
+        const size_t fallbackIndex = static_cast<size_t>(decision.fallbackReason);
+        const std::string fallbackMessage = Stringf(
+            "Mixed-queue validation fallback: workload=%s requested=%s active=%s reason=%s",
+            GetQueueWorkloadName(decision.workload),
+            GetQueueTypeName(decision.requestedQueue),
+            GetQueueTypeName(decision.activeQueue),
+            GetQueueFallbackReasonName(decision.fallbackReason));
+
+        if (workloadIndex >= kQueueWorkloadClassCount || fallbackIndex >= kQueueFallbackReasonCount)
+        {
+            ERROR_RECOVERABLE(fallbackMessage);
+            return;
+        }
+
+        if (g_reportedMixedQueueFallbacks[workloadIndex][fallbackIndex])
+        {
+            return;
+        }
+
+        g_reportedMixedQueueFallbacks[workloadIndex][fallbackIndex] = true;
+        LogWarn(LogRenderer, "%s", fallbackMessage.c_str());
+    }
+
+    void D3D12RenderSystem::RecordQueueSubmission(const QueueSubmissionToken& token,
+                                                  QueueWorkloadClass         workload)
+    {
+        if (!token.IsValid())
+        {
+            return;
+        }
+
+        s_queueExecutionDiagnostics.RecordSubmission(workload, token.queueType);
+    }
+
+    void D3D12RenderSystem::RecordQueueWaitInsertion(CommandQueueType producerQueue,
+                                                     CommandQueueType consumerQueue)
+    {
+        s_queueExecutionDiagnostics.RecordQueueWait(producerQueue, consumerQueue);
+    }
+
+    bool D3D12RenderSystem::WaitForStandaloneSubmission(const QueueSubmissionToken& token)
+    {
+        try
+        {
+            if (!token.IsValid())
+            {
+                throw InvalidQueueSubmissionTokenException(
+                    Stringf("D3D12RenderSystem::WaitForStandaloneSubmission: invalid token for queue %s",
+                            GetQueueTypeName(token.queueType)));
+            }
+
+            if (!s_commandListManager)
+            {
+                throw CrossQueueSynchronizationException(
+                    Stringf("D3D12RenderSystem::WaitForStandaloneSubmission: command list manager is unavailable for %s queue fence %llu",
+                            GetQueueTypeName(token.queueType),
+                            token.fenceValue));
+            }
+
+            if (!s_commandListManager->WaitForSubmission(token))
+            {
+                throw CrossQueueSynchronizationException(
+                    Stringf("D3D12RenderSystem::WaitForStandaloneSubmission: failed to retire %s queue fence %llu",
+                            GetQueueTypeName(token.queueType),
+                            token.fenceValue));
+            }
+
+            s_commandListManager->UpdateCompletedCommandLists();
+            return true;
+        }
+        catch (const InvalidQueueSubmissionTokenException& exception)
+        {
+            ReportRecoverableQueueException(exception);
+            return false;
+        }
+        catch (const CrossQueueSynchronizationException& exception)
+        {
+            ReportFatalQueueException(exception);
+            return false;
+        }
+    }
+
+    void D3D12RenderSystem::SetActiveQueueExecutionModeInternal(QueueExecutionMode mode)
+    {
+        QueueExecutionMode resolvedMode = mode;
+        if (mode == QueueExecutionMode::MixedQueueExperimental && !HasDedicatedQueuesAvailable(s_commandListManager.get()))
+        {
+            UnsupportedQueueRouteException exception(
+                "D3D12RenderSystem::SetActiveQueueExecutionModeInternal: falling back to GraphicsOnly because dedicated Compute/Copy queues are unavailable");
+            ReportRecoverableQueueException(exception);
+
+            resolvedMode = QueueExecutionMode::GraphicsOnly;
+            s_queueExecutionDiagnostics.lastFallbackReason = QueueFallbackReason::DedicatedQueueUnavailable;
+        }
+        else
+        {
+            s_queueExecutionDiagnostics.lastFallbackReason = QueueFallbackReason::None;
+        }
+
+        s_activeQueueExecutionMode             = resolvedMode;
+        s_queueExecutionDiagnostics.requestedMode = s_requestedQueueExecutionMode;
+        s_queueExecutionDiagnostics.activeMode    = resolvedMode;
+    }
+
     // ============================================================================
-    // M6.3: BackBuffer访问方法
+    // M6.3: Backbuffer access
     // ============================================================================
 
     D3D12_CPU_DESCRIPTOR_HANDLE D3D12RenderSystem::GetBackBufferRTV()
@@ -1543,7 +2188,7 @@ namespace enigma::graphic
             return;
         }
 
-        // 绑定IndexBuffer
+        // Bind the cached index-buffer view.
         s_currentGraphicsCommandList->IASetIndexBuffer(&bufferView);
     }
 
@@ -1556,7 +2201,7 @@ namespace enigma::graphic
             return;
         }
 
-        // 执行Draw指令（instanceCount=1, startInstance=0）
+        // Submit a single-instance draw.
         s_currentGraphicsCommandList->DrawInstanced(vertexCount, 1, startVertex, 0);
     }
 
@@ -1569,7 +2214,7 @@ namespace enigma::graphic
             return;
         }
 
-        // 执行DrawIndexed指令（instanceCount=1, startInstance=0）
+        // Submit a single-instance indexed draw.
         s_currentGraphicsCommandList->DrawIndexedInstanced(indexCount, 1, startIndex, baseVertex, 0);
     }
 
@@ -1582,39 +2227,21 @@ namespace enigma::graphic
             return;
         }
 
-        // 设置图元拓扑
+        // Update the IA primitive topology.
         s_currentGraphicsCommandList->IASetPrimitiveTopology(topology);
     }
 
-    // ===== 渲染管线API实现 (Milestone 2.6新增) =====
+    // ===== Frame execution API =====
 
     /**
-     * 开始帧渲染 - 帧初始化的正确位置
+     * Begin the current frame slot.
      *
-     * 职责范围（遵循单一职责原则）：
-     * 1. 准备下一帧（更新 SwapChain 缓冲区索引）
-     * 2. 获取并准备 CommandList（绑定 Descriptor Heaps）
-     * 3. 资源状态转换（PRESENT → RENDER_TARGET）
-     * 4. 清除渲染目标（ClearRenderTargetView）
-     * 5. 设置 Viewport 和 ScissorRect
+     * Responsibilities:
+     * - retire the slot by waiting on every tracked queue submission
+     * - reset per-queue allocators for the slot
+     * - acquire and initialize the main graphics command list
      *
-     * [IMPORTANT] 不负责的事项：
-     * - 不绑定 RenderTarget（由 UseProgram 通过 RenderTargetBinder 处理）
-     * - 不设置 PSO（由 UseProgram 处理）
-     * - 不绑定资源（由各自的 Bind 方法处理）
-     *
-     * 架构设计原因：
-     * - 职责单一：BeginFrame 只负责帧初始化，不涉及渲染状态管理
-     * - 灵活性：支持动态 RT 切换（GBuffer、Shadow Map、Post-processing）
-     * - 性能优化：UseProgram 的 Hash 缓存避免 70%+ 冗余 OMSetRenderTargets 调用
-     *
-     * 渲染管线流程：
-     * BeginFrame(清屏) → UseProgram(绑定RT+PSO) → Draw → EndFrame(Present)
-     *
-     * 教学价值：
-     * - 展示 SOLID 原则中的单一职责原则（SRP）
-     * - 说明如何通过职责分离提高代码可维护性
-     * - 体现现代渲染引擎的架构设计思想
+     * It intentionally does not bind PSOs, render targets, or material resources.
      */
     bool D3D12RenderSystem::BeginFrame(const Rgba8& clearColor, float clearDepth, uint8_t clearStencil)
     {
@@ -1626,30 +2253,158 @@ namespace enigma::graphic
             return false;
         }
 
+        ProcessDeferredResourceReleases();
         PrepareNextFrame();
 
-        // Wait for the current frame slot's previous submission to complete on GPU.
-        // When MAX_FRAMES_IN_FLIGHT=1, this always waits for the previous frame
-        // (identical to the old WaitForFence-in-EndFrame behavior).
         FrameContext& ctx = s_frameContexts[s_frameIndex];
-        if (ctx.fenceValue > 0)
+        const auto    trackedTokens = ctx.retirement.GetTrackedTokens();
+        const auto    expectedQueues = ctx.retirement.expectedQueues;
+        const auto    participatingQueues = ctx.retirement.GetTrackedQueues();
+        const auto    missingQueues = ctx.retirement.GetMissingQueues();
+        FrameSlotAcquisitionResult acquisitionResult = {};
+        acquisitionResult.frameIndex                   = s_frameIndex;
+        acquisitionResult.waitedFrameSlot              = s_frameIndex;
+        acquisitionResult.hasTrackedRetirement         = ctx.retirement.HasTrackedSubmissions();
+        acquisitionResult.requestedFramesInFlightDepth = GetRequestedFramesInFlightDepthSnapshot();
+        acquisitionResult.activeFramesInFlightDepth    = GetActiveFramesInFlightDepthSnapshot();
+        acquisitionResult.expectedQueues               = expectedQueues;
+        acquisitionResult.participatingQueues          = participatingQueues;
+        acquisitionResult.missingQueues                = missingQueues;
+        acquisitionResult.graphicsToken                = trackedTokens[0];
+        acquisitionResult.computeToken                 = trackedTokens[1];
+        acquisitionResult.copyToken                    = trackedTokens[2];
+        if (s_commandListManager)
         {
-            s_commandListManager->WaitForFence(ctx.fenceValue);
+            acquisitionResult.completedFenceSnapshotBeforeWait = s_commandListManager->GetCompletedFenceSnapshot();
         }
 
-        // Reset this frame's command allocator (GPU is done with it after fence wait)
-        ctx.commandAllocator->Reset();
+        auto publishAcquisitionResult = [&](FrameLifecyclePhase phase)
+        {
+            acquisitionResult.lifecyclePhase = phase;
+            s_lastFrameSlotAcquisitionResult = acquisitionResult;
+            s_queueExecutionDiagnostics.lifecyclePhase = phase;
+            s_queueExecutionDiagnostics.requestedFramesInFlightDepth = acquisitionResult.requestedFramesInFlightDepth;
+            s_queueExecutionDiagnostics.activeFramesInFlightDepth    = acquisitionResult.activeFramesInFlightDepth;
+            s_queueExecutionDiagnostics.lastBeginFrameHadTrackedRetirement = acquisitionResult.hasTrackedRetirement;
+            s_queueExecutionDiagnostics.lastBeginFrameWaitedOnRetirement   = acquisitionResult.waitedOnRetirement;
+            s_queueExecutionDiagnostics.lastWaitedFrameSlot                = acquisitionResult.waitedFrameSlot;
+            s_queueExecutionDiagnostics.lastCompletedFenceSnapshotBeforeWait =
+                acquisitionResult.completedFenceSnapshotBeforeWait;
+            s_queueExecutionDiagnostics.lastRetirementGraphicsToken = acquisitionResult.graphicsToken;
+            s_queueExecutionDiagnostics.lastRetirementComputeToken  = acquisitionResult.computeToken;
+            s_queueExecutionDiagnostics.lastRetirementCopyToken     = acquisitionResult.copyToken;
+            s_queueExecutionDiagnostics.lastRetirementParticipatingQueues = acquisitionResult.participatingQueues;
+            s_queueExecutionDiagnostics.lastRetirementExpectedQueues      = acquisitionResult.expectedQueues;
+            s_queueExecutionDiagnostics.lastRetirementMissingQueues       = acquisitionResult.missingQueues;
+            s_queueExecutionDiagnostics.lastRetirementWaitedQueues        = acquisitionResult.waitedQueues;
+        };
 
-        // Acquire command list with current frame's allocator (already Reset above)
-        s_currentGraphicsCommandList = s_commandListManager->AcquireCommandList(
-            CommandListManager::Type::Graphics,
-            ctx.commandAllocator.Get(),
-            "MainFrame Graphics Commands"
+        publishAcquisitionResult(FrameLifecyclePhase::RetiringFrameSlot);
+        SetFrameLifecyclePhase(FrameLifecyclePhase::RetiringFrameSlot);
+
+        if (ctx.retirement.HasMissingRegistrations())
+        {
+            ERROR_RECOVERABLE(Stringf(
+                "D3D12RenderSystem::BeginFrame detected missing frame retirement registration for slot %u while phase=%s (expected G=%u C=%u Copy=%u, tracked G=%u C=%u Copy=%u)",
+                s_frameIndex,
+                GetFrameLifecyclePhaseName(FrameLifecyclePhase::RetiringFrameSlot),
+                expectedQueues[0] ? 1 : 0,
+                expectedQueues[1] ? 1 : 0,
+                expectedQueues[2] ? 1 : 0,
+                participatingQueues[0] ? 1 : 0,
+                participatingQueues[1] ? 1 : 0,
+                participatingQueues[2] ? 1 : 0
+            ));
+        }
+
+        try
+        {
+            for (const QueueSubmissionToken& token : trackedTokens)
+            {
+                if (!token.IsValid())
+                {
+                    continue;
+                }
+
+                const size_t queueIndex = GetCommandQueueTypeIndex(token.queueType);
+                const uint64_t completedFenceValue =
+                    acquisitionResult.completedFenceSnapshotBeforeWait.GetCompletedFenceValue(token.queueType);
+                if (completedFenceValue < token.fenceValue)
+                {
+                    acquisitionResult.waitedQueues[queueIndex] = true;
+                    acquisitionResult.waitedOnRetirement = true;
+                }
+
+                if (!s_commandListManager->WaitForSubmission(token))
+                {
+                    throw FrameQueueRetirementException(
+                        Stringf("D3D12RenderSystem::BeginFrame: failed to retire frame slot %u on %s queue at fence %llu",
+                                s_frameIndex,
+                                GetQueueTypeName(token.queueType),
+                                token.fenceValue));
+                }
+            }
+        }
+        catch (const FrameQueueRetirementException& exception)
+        {
+            publishAcquisitionResult(FrameLifecyclePhase::Idle);
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
+            ReportFatalQueueException(exception);
+            return false;
+        }
+
+        ctx.ClearRetirement();
+
+        auto resetFrameAllocator = [&](CommandQueueType queueType) -> bool
+        {
+            ID3D12CommandAllocator* allocator = ctx.GetCommandAllocator(queueType);
+            if (!allocator)
+            {
+                LogError(LogRenderer,
+                         "BeginFrame: FrameContext[%u] has no %s allocator",
+                         s_frameIndex,
+                         GetQueueTypeName(queueType));
+                return false;
+            }
+
+            HRESULT hr = allocator->Reset();
+            if (FAILED(hr))
+            {
+                LogError(LogRenderer,
+                         "BeginFrame: Failed to reset %s allocator for frame slot %u, HRESULT=0x%08X",
+                         GetQueueTypeName(queueType),
+                         s_frameIndex,
+                         hr);
+                return false;
+            }
+
+            return true;
+        };
+
+        if (!resetFrameAllocator(CommandQueueType::Graphics) ||
+            !resetFrameAllocator(CommandQueueType::Compute) ||
+            !resetFrameAllocator(CommandQueueType::Copy))
+        {
+            publishAcquisitionResult(FrameLifecyclePhase::Idle);
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
+            return false;
+        }
+
+        QueueRouteContext frameAcquireContext = {};
+        frameAcquireContext.workload          = QueueWorkloadClass::FrameGraphics;
+
+        s_currentGraphicsCommandList = AcquireCommandListForWorkload(
+            frameAcquireContext,
+            ctx.GetCommandAllocator(CommandQueueType::Graphics),
+            "MainFrame Graphics Commands",
+            true
         );
 
         if (!s_currentGraphicsCommandList)
         {
             LogError(LogRenderer, "Failed to acquire command list for BeginFrame");
+            publishAcquisitionResult(FrameLifecyclePhase::Idle);
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
 
@@ -1663,10 +2418,17 @@ namespace enigma::graphic
                     "BeginFrame: GlobalDescriptorHeapManager is null - Bindless features may not work");
         }
 
+        acquisitionResult.success        = true;
+        publishAcquisitionResult(FrameLifecyclePhase::FrameSlotAcquired);
+        SetFrameLifecyclePhase(FrameLifecyclePhase::FrameSlotAcquired);
+        RendererEvents::OnFrameSlotAcquired.Broadcast();
+        SetFrameLifecyclePhase(FrameLifecyclePhase::RecordingFrame);
+
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {
             LogError(LogRenderer, "BeginFrame: Failed to get current SwapChain buffer");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
 
@@ -1679,6 +2441,7 @@ namespace enigma::graphic
         if (!ClearRenderTarget(s_currentGraphicsCommandList, &currentRTV, clearColor))
         {
             LogError(LogRenderer, "Failed to clear render target in BeginFrame");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
 
@@ -1705,22 +2468,10 @@ namespace enigma::graphic
     }
 
     /**
-     * End frame rendering - execute CommandList, Present, record fence
-     *
-     * Flow:
-     * 1. Transition BackBuffer: RENDER_TARGET -> PRESENT
-     * 2. Execute CommandList (submit to GPU queue)
-     * 3. Present SwapChain
-     * 4. Record fence value in FrameContext, advance frame index
-     * 5. Recycle completed command list wrappers
-     * 6. Clear current command list reference
-     *
-     * Note: No WaitForFence here - the wait moves to BeginFrame,
-     * enabling CPU/GPU pipelining when MAX_FRAMES_IN_FLIGHT > 1.
+     * End the frame, submit the main graphics list, and retire the slot by token.
      */
     bool D3D12RenderSystem::EndFrame()
     {
-        // 1. 检查CommandList有效性
         if (!s_currentGraphicsCommandList)
         {
             LogError(LogRenderer,
@@ -1732,25 +2483,32 @@ namespace enigma::graphic
         {
             LogError(LogRenderer,
                      "EndFrame: SwapChain not initialized");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
+
+        SetFrameLifecyclePhase(FrameLifecyclePhase::SubmittingFrame);
 
         ID3D12Resource* currentBackBuffer = GetCurrentSwapChainBuffer();
         if (!currentBackBuffer)
         {
             LogError(LogRenderer, "EndFrame: Failed to get current SwapChain buffer");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
         TransitionResource(s_currentGraphicsCommandList, currentBackBuffer,
                            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT,
                            "SwapChain BackBuffer");
 
-        // 2. Execute CommandList (submit to GPU queue)
-        uint64_t fenceValue = s_commandListManager->ExecuteCommandList(s_currentGraphicsCommandList);
-        if (fenceValue == 0)
+        QueueRouteContext frameSubmitContext = {};
+        frameSubmitContext.workload          = QueueWorkloadClass::FrameGraphics;
+
+        QueueSubmissionToken submissionToken = SubmitFrameScopedCommandList(s_currentGraphicsCommandList, frameSubmitContext);
+        if (!submissionToken.IsValid())
         {
             LogError(LogRenderer,
                      "EndFrame: Failed to execute command list");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
 
@@ -1759,27 +2517,27 @@ namespace enigma::graphic
         {
             LogError(LogRenderer,
                      "EndFrame: Failed to present frame");
+            SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
             return false;
         }
 
-        // 4. Record fence value in current FrameContext and advance frame index
-        // The fence wait moves to BeginFrame - GPU executes asynchronously
-        s_frameContexts[s_frameIndex].fenceValue = fenceValue;
+        // Slot retirement happens in BeginFrame, preserving CPU/GPU overlap.
         s_frameIndex = (s_frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
         s_globalFrameCount++;
 
         // 5. Recycle completed command list wrappers
         s_commandListManager->UpdateCompletedCommandLists();
+        ProcessDeferredResourceReleases();
 
         // 6. Clear current command list reference for next frame
         s_currentGraphicsCommandList = nullptr;
+        SetFrameLifecyclePhase(FrameLifecyclePhase::Idle);
 
         return true;
     }
 
     /**
-     * 清除渲染目标
-     * 从TestClearScreen迁移的核心清屏逻辑，适配为正式API并使用引擎颜色系统
+     * Clear a render target with either a caller-owned command list or a standalone submission.
      */
     bool D3D12RenderSystem::ClearRenderTarget(ID3D12GraphicsCommandList*         commandList,
                                               const D3D12_CPU_DESCRIPTOR_HANDLE* rtvHandle,
@@ -1791,27 +2549,22 @@ namespace enigma::graphic
             return false;
         }
 
-        // 1. 转换Rgba8为DirectX 12需要的float数组
         float clearColorAsFloats[4];
         clearColor.GetAsFloats(clearColorAsFloats);
 
-        // 添加详细的颜色转换调试日志 (Milestone 2.6 诊断)
-        /*core::LogInfo(LogRenderer,
-                      "ClearRenderTarget - Input Rgba8: r=%d, g=%d, b=%d, a=%d",
-                      clearColor.r, clearColor.g, clearColor.b, clearColor.a);
-        core::LogInfo(LogRenderer,
-                      "ClearRenderTarget - Converted floats: r=%.3f, g=%.3f, b=%.3f, a=%.3f",
-                      clearColorAsFloats[0], clearColorAsFloats[1], clearColorAsFloats[2], clearColorAsFloats[3]);*/
-
-        // 2. 获取命令列表 (如果未提供)
         ID3D12GraphicsCommandList* actualCommandList = commandList;
         bool                       needToExecute     = false;
 
         if (!actualCommandList)
         {
-            actualCommandList = s_commandListManager->AcquireCommandList(
-                CommandListManager::Type::Graphics,
-                "ClearRenderTarget Command List"
+            QueueRouteContext clearContext = {};
+            clearContext.workload          = QueueWorkloadClass::ImmediateGraphics;
+
+            actualCommandList = AcquireCommandListForWorkload(
+                clearContext,
+                nullptr,
+                "ClearRenderTarget Command List",
+                false
             );
 
             if (!actualCommandList)
@@ -1822,117 +2575,59 @@ namespace enigma::graphic
             needToExecute = true;
         }
 
-        // 3. 获取RTV句柄 (如果未提供，使用当前SwapChain RTV)
-        D3D12_CPU_DESCRIPTOR_HANDLE actualRtvHandle;
-        ID3D12Resource*             targetResource = nullptr;
+        D3D12_CPU_DESCRIPTOR_HANDLE actualRtvHandle = {};
 
         if (rtvHandle)
         {
             actualRtvHandle = *rtvHandle;
-            // TODO: 需要从rtvHandle追踪到对应的资源，暂时使用SwapChain资源
-            targetResource = GetCurrentSwapChainBuffer();
         }
         else
         {
             actualRtvHandle = GetCurrentSwapChainRTV();
-            targetResource  = GetCurrentSwapChainBuffer();
-        }
-
-        if (!targetResource)
-        {
-            core::LogError(LogRenderer, "No valid render target resource for ClearRenderTarget");
-            return false;
-        }
-
-        // [OK] 资源状态管理 - 由调用者负责
-        //
-        // Bug Fix (2025-10-21 最终修复): ClearRenderTarget 不负责状态转换
-        //
-        // 设计决策：
-        // - ClearRenderTarget 假设资源已处于 RENDER_TARGET 状态
-        // - 调用者（如 BeginFrame）负责在调用前转换状态
-        // - 这样避免了重复的状态转换和复杂的状态跟踪
-        //
-        // 调用约定：
-        // 1. 外部提供 commandList：调用者负责状态转换（BeginFrame 的情况）
-        // 2. 内部创建 commandList（needToExecute=true）：仍然假设外部已转换状态
-        //
-        // 为什么不在这里添加 barrier：
-        // - BeginFrame 已经转换了状态（PRESENT → RENDER_TARGET）
-        // - 避免重复的 barrier 调用
-        // - 保持函数职责单一（清屏，不管理状态）
-        //
-        // 结论：不在 ClearRenderTarget 中添加 barrier
-
-        // 4. 设置渲染目标
-        actualCommandList->OMSetRenderTargets(1, &actualRtvHandle, FALSE, nullptr);
-
-        // 5. 执行清屏操作 (使用转换后的float颜色数组)
-        actualCommandList->ClearRenderTargetView(actualRtvHandle, clearColorAsFloats, 0, nullptr);
-
-        // 6. 只有当我们内部获取命令列表时才自动执行，如果外部传入则由外部控制执行时机
-        if (needToExecute)
-        {
-            uint64_t fenceValue = s_commandListManager->ExecuteCommandList(actualCommandList);
-            if (fenceValue > 0)
+            if (!GetCurrentSwapChainBuffer())
             {
-                // 等待命令执行完成
-                s_commandListManager->WaitForFence(fenceValue);
-            }
-            else
-            {
-                core::LogError(LogRenderer, "Failed to execute ClearRenderTarget command list");
+                core::LogError(LogRenderer, "No valid swap-chain target for ClearRenderTarget");
                 return false;
             }
         }
-        // 如果commandList是外部传入的，则不执行，让调用者决定何时执行
+
+        // Resource-state transitions are caller-owned.
+        // Callers must ensure the target is already in RENDER_TARGET state.
+        actualCommandList->OMSetRenderTargets(1, &actualRtvHandle, FALSE, nullptr);
+
+        actualCommandList->ClearRenderTargetView(actualRtvHandle, clearColorAsFloats, 0, nullptr);
+
+        if (needToExecute)
+        {
+            QueueSubmissionToken submissionToken = SubmitStandaloneCommandList(actualCommandList,
+                                                                              QueueWorkloadClass::ImmediateGraphics);
+            if (!submissionToken.IsValid())
+            {
+                core::LogError(LogRenderer, "Failed to submit ClearRenderTarget command list");
+                return false;
+            }
+
+            if (!WaitForStandaloneSubmission(submissionToken))
+            {
+                core::LogError(LogRenderer, "Failed to retire ClearRenderTarget command list");
+                return false;
+            }
+        }
 
         return true;
     }
 
-    // ===== SwapChain管理API实现 （基于A/A/A决策）=====
+    // ===== Swap-chain management =====
 
     /**
-     * [IMPORTANT] DirectX 12官方最佳实践：SwapChain Buffer状态管理
-     *
-     * 关键发现（基于Microsoft DirectX 12 SDK d3d12.h）：
-     *
-     * 1. D3D12_RESOURCE_STATE_PRESENT == D3D12_RESOURCE_STATE_COMMON (都等于 0)
-     *    - 这两个状态在数值上完全等价
-     *    - SwapChain buffer创建后自动处于COMMON/PRESENT状态
-     *    - 无需显式初始化转换！
-     *
-     * 2. 官方示例代码（如D3D12HelloWorld）的标准做法：
-     *    - CreateSwapChain后不做任何状态初始化
-     *    - BeginFrame: PRESENT → RENDER_TARGET
-     *    - EndFrame: RENDER_TARGET → PRESENT
-     *    - IDXGISwapChain::Present()兼容PRESENT和COMMON状态
-     *
-     * 3. 删除InitializeSwapChainBufferStates()的理由：
-     *    - COMMON → PRESENT的转换实际上是0 → 0，完全无效
-     *    - DirectX 12会忽略这种无操作Barrier
-     *    - 创建额外的CommandList、执行、同步都是不必要的开销
-     *    - 违反KISS原则和DirectX 12最佳实践
-     *
-     * 4. 正确的资源状态流程（符合Microsoft官方示例）：
-     *    - SwapChain创建 → buffer自动处于COMMON(=PRESENT)
-     *    - BeginFrame → PRESENT → RENDER_TARGET
-     *    - 渲染操作
-     *    - EndFrame → RENDER_TARGET → PRESENT
-     *    - Present() → 显示（要求PRESENT或COMMON状态）
-     *
-     * 教学价值：
-     * - 展示了如何根据官方API定义优化代码
-     * - 证明了查阅官方文档的重要性
-     * - 体现了"简单即是美"的工程哲学
-     *
-     * 参考资料：
-     * - DirectX 12 SDK: C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\d3d12.h (Line 3177)
-     * - Microsoft DirectX-Graphics-Samples: https://github.com/microsoft/DirectX-Graphics-Samples
+     * Swap-chain buffers start in COMMON/PRESENT because both states resolve to zero.
+     * We follow the standard DX12 flow:
+     * CreateSwapChain -> BeginFrame transition to RENDER_TARGET -> EndFrame transition to PRESENT.
+     * There is no explicit initialization barrier because a COMMON -> PRESENT barrier is a no-op.
      */
 
     /**
-     * 创建SwapChain及其RTV描述符
+     * Create the swap chain and its RTV descriptors.
      */
     bool D3D12RenderSystem::CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount)
     {
@@ -1942,13 +2637,12 @@ namespace enigma::graphic
             return false;
         }
 #undef min
-        s_swapChainBufferCount = std::min(bufferCount, 3u); // 限制最多3个缓冲区
+        s_swapChainBufferCount = std::min(bufferCount, 3u); // Clamp to the supported back-buffer count.
 
-        // 存储SwapChain尺寸（用于BeginFrame中的Viewport和ScissorRect设置）
+        // Cache swap-chain dimensions for BeginFrame viewport and scissor setup.
         s_swapChainWidth  = width;
         s_swapChainHeight = height;
 
-        // 1. 创建SwapChain描述符
         DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
         swapChainDesc.BufferCount           = s_swapChainBufferCount;
         swapChainDesc.Width                 = width;
@@ -1960,10 +2654,9 @@ namespace enigma::graphic
         swapChainDesc.SampleDesc.Quality    = 0;
         swapChainDesc.Flags                 = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-        // 2. 创建SwapChain (使用CommandListManager的Graphics队列)
         Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChain1;
         HRESULT                                 hr = s_dxgiFactory->CreateSwapChainForHwnd(
-            s_commandListManager->GetCommandQueue(CommandListManager::Type::Graphics), // 使用Graphics队列
+            s_commandListManager->GetCommandQueue(CommandListManager::Type::Graphics), // Swap-chain present remains graphics-queue owned.
             hwnd,
             &swapChainDesc,
             nullptr,
@@ -1977,7 +2670,6 @@ namespace enigma::graphic
             return false;
         }
 
-        // 3. 转换为SwapChain3接口
         hr = swapChain1.As(&s_swapChain);
         if (FAILED(hr))
         {
@@ -1985,21 +2677,17 @@ namespace enigma::graphic
             return false;
         }
 
-        // 4. 禁用Alt+Enter全屏切换（可选）
+        // Disable the default Alt+Enter fullscreen toggle.
         s_dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
 
-        // 5. 为每个SwapChain缓冲区创建RTV描述符
-        // 使用GlobalDescriptorHeapManager的RTV堆
         if (!s_globalDescriptorHeapManager)
         {
             LogError("D3D12RenderSystem", "GlobalDescriptorHeapManager not available for RTV creation");
             return false;
         }
 
-        // 6. 为每个SwapChain缓冲区创建RTV
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
-            // 获取SwapChain缓冲区资源
             hr = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_swapChainBuffers[i]));
             if (FAILED(hr))
             {
@@ -2007,7 +2695,6 @@ namespace enigma::graphic
                 return false;
             }
 
-            // 分配RTV描述符
             auto rtvAllocation = s_globalDescriptorHeapManager->AllocateRtv();
             if (!rtvAllocation.isValid)
             {
@@ -2017,7 +2704,6 @@ namespace enigma::graphic
 
             s_swapChainRTVs[i] = rtvAllocation.cpuHandle;
 
-            // 创建RTV描述符
             D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
             rtvDesc.Format                        = DXGI_FORMAT_R8G8B8A8_UNORM;
             rtvDesc.ViewDimension                 = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -2029,40 +2715,22 @@ namespace enigma::graphic
                 s_swapChainRTVs[i]
             );
 
-            // 设置调试名称
             std::string debugName = "SwapChain Buffer " + std::to_string(i);
             SetDebugName(s_swapChainBuffers[i].Get(), debugName.c_str());
         }
 
-        // 7. 初始化当前缓冲区索引
         s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
 
         LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
 
-        // [IMPORTANT] DirectX 12官方最佳实践：无需显式初始化SwapChain buffer状态
-        //
-        // 理由（基于Microsoft DirectX 12 SDK官方定义）：
-        // 1. D3D12_RESOURCE_STATE_PRESENT == D3D12_RESOURCE_STATE_COMMON == 0
-        // 2. SwapChain buffer创建后自动处于COMMON/PRESENT状态
-        // 3. BeginFrame会正确处理 PRESENT → RENDER_TARGET 转换
-        // 4. 符合Microsoft官方示例代码（D3D12HelloWorld等）的标准做法
-        //
-        // 之前的错误设计：
-        // - InitializeSwapChainBufferStates()执行0→0的无效状态转换
-        // - 浪费了CommandList创建、执行、同步的开销
-        // - 违反了KISS原则和DirectX 12最佳实践
-        //
-        // 正确的状态流程：
-        // - CreateSwapChain → buffer自动处于COMMON(=PRESENT) ✅
-        // - BeginFrame → PRESENT → RENDER_TARGET ✅
-        // - EndFrame → RENDER_TARGET → PRESENT ✅
-        // - Present() → 显示（兼容PRESENT和COMMON） ✅
+        // No explicit swap-chain state bootstrap is required.
+        // BeginFrame and EndFrame own the only meaningful transitions.
 
         return true;
     }
 
     /**
-     * 获取当前SwapChain后台缓冲区的RTV句柄
+     * Get the RTV handle for the active swap-chain back buffer.
      */
     D3D12_CPU_DESCRIPTOR_HANDLE D3D12RenderSystem::GetCurrentSwapChainRTV()
     {
@@ -2070,7 +2738,7 @@ namespace enigma::graphic
     }
 
     /**
-     * 获取当前SwapChain后台缓冲区资源
+     * Get the resource for the active swap-chain back buffer.
      */
     ID3D12Resource* D3D12RenderSystem::GetCurrentSwapChainBuffer()
     {
@@ -2078,7 +2746,7 @@ namespace enigma::graphic
     }
 
     /**
-     * 呈现当前帧到屏幕
+     * Present the current frame.
      */
     bool D3D12RenderSystem::Present(bool vsync)
     {
@@ -2102,7 +2770,7 @@ namespace enigma::graphic
     }
 
     /**
-     * 准备下一帧渲染（更新后台缓冲区索引）
+     * Refresh the active back-buffer index before frame setup.
      */
     void D3D12RenderSystem::PrepareNextFrame()
     {
@@ -2113,35 +2781,21 @@ namespace enigma::graphic
     }
 
 
-    // ===== 纹理缓存管理API实现 (Milestone Bindless新增) =====
+    // ===== Texture-cache management =====
 
     /**
-     * 清理未使用的纹理缓存条目
-     * 
-     * 教学要点：
-     * 1. 遍历缓存map,检查weak_ptr是否已过期
-     * 2. 移除所有过期的weak_ptr条目
-     * 3. 线程安全操作(使用mutex)
-     * 4. 返回清理的条目数量用于调试和统计
-     * 
-     * 使用场景：
-     * - 定期调用以清理内存
-     * - 在关键帧之前调用以优化性能
-     * - 在资源加载后调用以整理缓存
+     * Remove expired entries from the texture cache.
      */
     void D3D12RenderSystem::ClearUnusedTextures()
     {
         std::lock_guard<std::mutex> lock(s_textureCacheMutex);
 
-        // 使用erase-remove惯用法清理过期weak_ptr
         size_t initialSize = s_textureCache.size();
 
         for (auto it = s_textureCache.begin(); it != s_textureCache.end();)
         {
-            // 尝试锁定weak_ptr
             if (it->second.expired())
             {
-                // weak_ptr已过期,删除该条目
                 it = s_textureCache.erase(it);
             }
             else
@@ -2168,17 +2822,7 @@ namespace enigma::graphic
     }
 
     /**
-     * 获取当前纹理缓存大小
-     * 
-     * 教学要点：
-     * 1. 线程安全地获取缓存map大小
-     * 2. 返回的是条目数量,而非内存大小
-     * 3. 包括已过期的weak_ptr条目(调用ClearUnusedTextures清理)
-     * 
-     * 使用场景：
-     * - 性能监控和调试
-     * - 缓存管理策略决策
-     * - UI显示资源统计信息
+     * Return the current texture-cache entry count.
      */
     size_t D3D12RenderSystem::GetTextureCacheSize()
     {
@@ -2187,23 +2831,7 @@ namespace enigma::graphic
     }
 
     /**
-     * 清空整个纹理缓存
-     * 
-     * 教学要点：
-     * 1. 强制清空所有缓存条目
-     * 2. 不会删除纹理资源本身(shared_ptr仍可能存活)
-     * 3. 仅移除缓存map中的weak_ptr引用
-     * 4. 线程安全操作
-     * 
-     * 使用场景：
-     * - 关卡切换时清理缓存
-     * - 内存压力大时强制释放
-     * - 开发调试时重置资源状态
-     * 
-     * ⚠️ 警告：
-     * - 调用后所有纹理将需要重新加载
-     * - 可能导致短暂的性能下降
-     * - 应谨慎使用,避免在渲染关键路径调用
+     * Clear every texture-cache entry without forcing resource destruction.
      */
     void D3D12RenderSystem::ClearAllTextureCache()
     {

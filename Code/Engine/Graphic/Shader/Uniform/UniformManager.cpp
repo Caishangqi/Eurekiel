@@ -15,6 +15,56 @@
 
 namespace enigma::graphic
 {
+    namespace
+    {
+        bool IsBootstrapFrameUpload(FrameLifecyclePhase phase)
+        {
+            return phase == FrameLifecyclePhase::Idle
+                && D3D12RenderSystem::GetFrameCount() == 0;
+        }
+
+        bool IsPreAcquireFramePhase(FrameLifecyclePhase phase)
+        {
+            return phase == FrameLifecyclePhase::Idle
+                || phase == FrameLifecyclePhase::PreFrameBegin
+                || phase == FrameLifecyclePhase::RetiringFrameSlot;
+        }
+
+        bool RequiresPostAcquireFrameSlot(UpdateFrequency frequency)
+        {
+            return frequency == UpdateFrequency::PerFrame
+                || frequency == UpdateFrequency::PerPass
+                || frequency == UpdateFrequency::PerObject;
+        }
+
+        const char* GetFrameLifecyclePhaseName(FrameLifecyclePhase phase)
+        {
+            switch (phase)
+            {
+            case FrameLifecyclePhase::Idle:               return "Idle";
+            case FrameLifecyclePhase::PreFrameBegin:      return "PreFrameBegin";
+            case FrameLifecyclePhase::RetiringFrameSlot:  return "RetiringFrameSlot";
+            case FrameLifecyclePhase::FrameSlotAcquired:  return "FrameSlotAcquired";
+            case FrameLifecyclePhase::RecordingFrame:     return "RecordingFrame";
+            case FrameLifecyclePhase::SubmittingFrame:    return "SubmittingFrame";
+            default:                                      return "Unknown";
+            }
+        }
+
+        const char* GetUpdateFrequencyName(UpdateFrequency frequency)
+        {
+            switch (frequency)
+            {
+            case UpdateFrequency::PerObject:   return "PerObject";
+            case UpdateFrequency::PerPass:     return "PerPass";
+            case UpdateFrequency::PerFrame:    return "PerFrame";
+            case UpdateFrequency::Static:      return "Static";
+            case UpdateFrequency::PerDispatch: return "PerDispatch";
+            default:                           return "Unknown";
+            }
+        }
+    }
+
     UniformManager::UniformManager()
     {
         // Step 1: Get GlobalDescriptorHeapManager
@@ -70,8 +120,9 @@ namespace enigma::graphic
 
         m_initialized = true;
 
-        // Subscribe to OnBeginFrame to auto-update frame index on all strategies
-        m_beginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &UniformManager::SetFrameIndex);
+        // Subscribe after slot acquisition so frame-indexed state only advances
+        // once the active frame partition is safe to reuse.
+        m_frameSlotAcquiredHandle = RendererEvents::OnFrameSlotAcquired.Add(this, &UniformManager::SetFrameIndex);
 
         LogInfo(LogUniform, "UniformManager: %u Ring Descriptors allocated (Frames=%u * Draws=%u * Slots=%u)",
                 totalDescriptors, MAX_FRAMES_IN_FLIGHT, BindlessRootSignature::MAX_RING_FRAMES, BindlessRootSignature::MAX_CUSTOM_BUFFERS);
@@ -79,11 +130,11 @@ namespace enigma::graphic
 
     UniformManager::~UniformManager()
     {
-        // Unsubscribe from OnBeginFrame delegate
-        if (m_beginFrameHandle != 0)
+        // Unsubscribe from the post-retirement frame-slot-acquired delegate.
+        if (m_frameSlotAcquiredHandle != 0)
         {
-            RendererEvents::OnBeginFrame.Remove(m_beginFrameHandle);
-            m_beginFrameHandle = 0;
+            RendererEvents::OnFrameSlotAcquired.Remove(m_frameSlotAcquiredHandle);
+            m_frameSlotAcquiredHandle = 0;
         }
     }
 
@@ -442,6 +493,20 @@ namespace enigma::graphic
         if (size > state.elementSize)
         {
             LogWarn(LogUniform, "Data size (%zu) exceeds element size (%zu)", size, state.elementSize);
+        }
+
+        const FrameLifecyclePhase phase = D3D12RenderSystem::GetFrameLifecyclePhase();
+        if (RequiresPostAcquireFrameSlot(state.frequency)
+            && IsPreAcquireFramePhase(phase)
+            && !IsBootstrapFrameUpload(phase))
+        {
+            ERROR_RECOVERABLE(Stringf(
+                "UniformManager::UploadBufferInternal called before frame slot acquisition (phase=%s, slot=%u, space=%u, frequency=%s)",
+                GetFrameLifecyclePhaseName(phase),
+                state.slot,
+                static_cast<uint32_t>(state.space),
+                GetUpdateFrequencyName(state.frequency)
+            ));
         }
 
         // Strategy pattern: get current write index

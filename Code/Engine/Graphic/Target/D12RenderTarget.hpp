@@ -274,20 +274,8 @@ namespace enigma::graphic
         // ========================================================================
 
         /**
-         * @brief 重写Upload()方法 - 复合资源模式
-         * @param commandList 命令列表（可选）
-         * @return 上传成功返回true
-         *
-         * 教学要点:
-         * 1. Composite模式: RenderTarget是复合资源，包含2个D12Texture子资源
-         * 2. 上传流程: 遍历子资源，调用每个子资源的Upload()
-         * 3. API一致性: 通过重写虚函数而不是添加特殊方法
-         * 4. 面向对象原则: 遵循Template Method模式
-         *
-         * 为什么重写Upload()而不是UploadToGPU():
-         * - Upload()是public接口，管理完整的上传流程
-         * - UploadToGPU()是protected，只负责具体的数据传输
-         * - 复合资源需要在外层管理子资源上传，而不是在内部实现
+         * Propagates the upload lifecycle to the owned textures and marks the
+         * composite wrapper as uploaded once both child resources are ready.
          */
         bool Upload(ID3D12GraphicsCommandList* commandList = nullptr) override;
 

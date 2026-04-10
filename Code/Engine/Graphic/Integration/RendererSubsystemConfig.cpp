@@ -245,52 +245,54 @@ namespace enigma::graphic
 
         if (!yamlOpt.has_value())
         {
-            // 文件不存在或加载失败，记录警告并返回nullopt
             LogWarn("RendererSubsystemConfig",
-                    "Failed to load config from: {}. Using default config.",
+                    "Failed to load config from: %s. Using default config.",
                     yamlPath.c_str());
             return std::nullopt;
         }
 
-        // 步骤2: 创建配置对象（使用默认值初始化）
         RendererSubsystemConfig result = GetDefault();
 
-        // 步骤3: 解析基础渲染配置
-        // YAML路径: rendering.*
+        // Parse base rendering settings from rendering.*
         result.renderWidth       = yamlOpt->GetInt("rendering.width", 1920);
         result.renderHeight      = yamlOpt->GetInt("rendering.height", 1080);
-        result.maxFramesInFlight = yamlOpt->GetInt("rendering.maxFramesInFlight", 3);
+        const int requestedFramesInFlightDepth = yamlOpt->GetInt(
+            "rendering.maxFramesInFlight",
+            static_cast<int>(GetDefaultRequestedFramesInFlightDepth()));
 
-        // 参数验证: 分辨率必须大于0
-        if (result.renderWidth <= 0 || result.renderHeight <= 0)
+        if (result.renderWidth == 0 || result.renderHeight == 0)
         {
             LogWarn("RendererSubsystemConfig",
-                    "Invalid resolution {}x{}. Using default 1920x1080.",
+                    "Invalid resolution %ux%u. Using default 1920x1080.",
                     result.renderWidth, result.renderHeight);
             result.renderWidth  = 1920;
             result.renderHeight = 1080;
         }
 
-        // 参数验证: maxFramesInFlight必须在 [2, 3] 范围内
-        if (result.maxFramesInFlight < 2 || result.maxFramesInFlight > 3)
+        const uint32_t requestedFramesInFlightValue = requestedFramesInFlightDepth > 0
+            ? static_cast<uint32_t>(requestedFramesInFlightDepth)
+            : 0u;
+        result.SetRequestedFramesInFlightDepth(requestedFramesInFlightValue);
+
+        const FramesInFlightConfig framesInFlight = result.GetFramesInFlightConfig();
+        if (framesInFlight.requestedDepth != requestedFramesInFlightValue)
         {
             LogWarn("RendererSubsystemConfig",
-                    "rendering.maxFramesInFlight {} out of range [2, 3]. Using default 3.",
-                    result.maxFramesInFlight);
-            result.maxFramesInFlight = 3;
+                    "rendering.maxFramesInFlight %d is outside [%u, %u]. Using requested depth %u.",
+                    requestedFramesInFlightDepth,
+                    MIN_FRAMES_IN_FLIGHT_DEPTH,
+                    framesInFlight.maxSupportedDepth,
+                    framesInFlight.requestedDepth);
         }
 
-        // 步骤4: 解析调试配置
-        // YAML路径: debug.*
+        // Parse debug settings from debug.*
         result.enableDebugLayer        = yamlOpt->GetBoolean("debug.enableDebugLayer", true);
         result.enableGPUValidation     = yamlOpt->GetBoolean("debug.enableGPUValidation", true);
         result.enableBindlessResources = yamlOpt->GetBoolean("debug.enableBindlessResources", true);
 
-        // 步骤5.5: 解析Shader编译配置
-        // YAML路径: shader.entryPoint
+        // Parse shader compilation settings from shader.entryPoint.
         result.shaderEntryPoint = yamlOpt->GetString("shader.entryPoint", "main");
 
-        // 参数验证: 入口点名称不能为空
         if (result.shaderEntryPoint.empty())
         {
             LogWarn("RendererSubsystemConfig",
@@ -302,8 +304,7 @@ namespace enigma::graphic
 
         std::string bbFormatStr = yamlOpt->GetString("rendering.backbufferFormat", "");
 
-        // Parse VSync setting
-        // YAML path: rendering.vsync
+        // Parse VSync from rendering.vsync.
         result.enableVSync = yamlOpt->GetBoolean("rendering.vsync", true);
         LogInfo("RendererSubsystemConfig", "VSync: %s", result.enableVSync ? "enabled" : "disabled");
         if (!bbFormatStr.empty())
@@ -322,7 +323,7 @@ namespace enigma::graphic
             }
         }
 
-        // Step 8: Parse rendertargets configuration
+        // Parse render target configuration.
         ParseRenderTargetsConfig(*yamlOpt, result);
 
         return result;
@@ -336,10 +337,7 @@ namespace enigma::graphic
     {
         RendererSubsystemConfig config;
 
-        // 默认值已在struct定义中设置:
-        // - gbufferColorTexCount = 8 (平衡内存和功能)
-        // - renderWidth = 1920 (Full HD)
-        // - renderHeight = 1080 (Full HD)
+        config.SetRequestedFramesInFlightDepth(GetDefaultRequestedFramesInFlightDepth());
 
         // Initialize default RT configs
         // ColorTex default: R8G8B8A8_UNORM, clear to black

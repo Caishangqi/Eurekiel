@@ -34,6 +34,7 @@
 
 #include "Engine/Core/Yaml.hpp"
 #include "Engine/Core/Rgba8.hpp"
+#include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
 #include "Engine/Graphic/Target/RTTypes.hpp"
 #include <optional>
 #include <cstdint>
@@ -139,20 +140,42 @@ namespace enigma::graphic
         uint32_t renderHeight = 1080;
 
         /**
-         * @brief 最大飞行帧数
+         * @brief Requested frames-in-flight depth from serialized configuration
          *
-         * 范围: [2-3]
-         * - 2: 双缓冲（低延迟，GPU可能等待）
-         * - 3: 三缓冲（推荐，平衡延迟和性能）
-         *
-         * 教学要点:
-         * - Frame Pipelining: CPU和GPU并行工作
-         * - 输入延迟: 更多飞行帧 = 更高延迟
-         * - 性能权衡: 减少GPU等待 vs 增加输入延迟
-         *
-         * @note 合并自Configuration::maxFramesInFlight
+         * This remains the YAML-backed input field for compatibility.
+         * Runtime code should prefer GetFramesInFlightConfig() so requested and
+         * active depth stay explicit.
          */
-        uint32_t maxFramesInFlight = 3;
+        uint32_t maxFramesInFlight = GetDefaultRequestedFramesInFlightDepth();
+
+        FramesInFlightConfig GetFramesInFlightConfig() const noexcept
+        {
+            FramesInFlightConfig config = GetDefaultFramesInFlightConfig();
+            config.requestedDepth       = maxFramesInFlight;
+            return NormalizeFramesInFlightConfig(config);
+        }
+
+        uint32_t GetRequestedFramesInFlightDepth() const noexcept
+        {
+            return GetFramesInFlightConfig().requestedDepth;
+        }
+
+        uint32_t GetActiveFramesInFlightDepth() const noexcept
+        {
+            return GetFramesInFlightConfig().activeDepth;
+        }
+
+        uint32_t GetMaxSupportedFramesInFlightDepth() const noexcept
+        {
+            return GetFramesInFlightConfig().maxSupportedDepth;
+        }
+
+        void SetRequestedFramesInFlightDepth(uint32_t requestedDepth) noexcept
+        {
+            FramesInFlightConfig config = GetFramesInFlightConfig();
+            config.requestedDepth       = requestedDepth;
+            maxFramesInFlight           = NormalizeFramesInFlightConfig(config).requestedDepth;
+        }
 
         /**
          * @brief 启用DirectX 12调试层

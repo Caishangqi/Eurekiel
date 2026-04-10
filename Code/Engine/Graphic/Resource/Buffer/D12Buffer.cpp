@@ -396,19 +396,26 @@ namespace enigma::graphic
         resourceDesc.Layout              = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; // 行主序布局
         resourceDesc.Flags               = GetResourceFlags(m_usage); // 根据用途设置标志
 
-        // 3. 确定初始资源状态
+        const bool initializeForCopyReadyUpload =
+            m_memoryAccess == MemoryAccess::GPUOnly &&
+            createInfo.initialData != nullptr &&
+            createInfo.size > 0;
+
+        // 3. Determine the initial resource state
         D3D12_RESOURCE_STATES initialState;
         switch (m_memoryAccess)
         {
         case MemoryAccess::GPUOnly:
-            initialState = D3D12_RESOURCE_STATE_COMMON; // GPU专用，通用状态
+            initialState = initializeForCopyReadyUpload
+                               ? D3D12_RESOURCE_STATE_COPY_DEST
+                               : D3D12_RESOURCE_STATE_COMMON;
             break;
         case MemoryAccess::CPUToGPU:
         case MemoryAccess::CPUWritable:
-            initialState = D3D12_RESOURCE_STATE_GENERIC_READ; // CPU可写，GPU读取状态
+            initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
             break;
         case MemoryAccess::GPUToCPU:
-            initialState = D3D12_RESOURCE_STATE_COPY_DEST; // GPU写入，拷贝目标状态
+            initialState = D3D12_RESOURCE_STATE_COPY_DEST;
             break;
         default:
             initialState = D3D12_RESOURCE_STATE_COMMON;

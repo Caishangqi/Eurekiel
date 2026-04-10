@@ -199,16 +199,10 @@ namespace enigma::graphic
         }
 
         /**
-         * @brief 上传资源到GPU (虚函数 - 支持复合资源重写)
-         * @param commandList 可选的命令列表（复合资源可能需要传递给子资源）
-         * @return 成功返回true，失败返回false
+         * Executes the resource upload contract.
          *
-         * 教学要点:
-         * 1. Template Method模式: 基类管理流程，子类实现细节
-         * 2. 使用Copy Command List专用队列
-         * 3. 同步等待上传完成(KISS原则)
-         * 4. 上传后设置m_isUploaded = true
-         * 5. 虚函数设计: 复合资源(如RenderTarget)可重写此方法来管理子资源上传
+         * The base implementation routes work through the approved upload path
+         * and blocks until the upload is safe for graphics consumption.
          */
         virtual bool Upload(ID3D12GraphicsCommandList* commandList = nullptr);
 
@@ -283,16 +277,15 @@ namespace enigma::graphic
         // GPU资源上传接口 (Milestone 2.7) - 纯虚函数由子类实现
         // ========================================================================
 
+        enum class UploadContract
+        {
+            NoGpuUpload,
+            GraphicsStatefulUpload,
+            CopyReadyUpload
+        };
+
         /**
-         * @brief 上传资源到GPU (纯虚函数 - 由子类实现具体上传逻辑)
-         * @param commandList Copy Command List
-         * @param uploadContext Upload Heap上下文
-         * @return 成功返回true，失败返回false
-         *
-         * 教学要点:
-         * 1. Template Method模式: 基类Upload()管理流程，子类UploadToGPU()实现细节
-         * 2. 子类实现: D12Texture使用UploadTextureData(), D12Buffer使用UploadBufferData()
-         * 3. Copy Command List: 专用队列，避免阻塞Graphics/Compute队列
+         * Records copy commands into the caller-owned command list.
          */
         virtual bool UploadToGPU(
             ID3D12GraphicsCommandList* commandList,
@@ -300,29 +293,34 @@ namespace enigma::graphic
         ) = 0;
 
         /**
-         * @brief 获取上传后的目标资源状态 (纯虚函数 - 由子类指定)
-         * @return 上传完成后资源应处于的状态
-         *
-         * 教学要点:
-         * 1. D12Texture返回: D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE (像素着色器资源)
-         * 2. D12Buffer返回: D3D12_RESOURCE_STATE_GENERIC_READ (通用读取)
-         * 3. 状态转换由基类Upload()统一管理
+         * Returns the state required after upload completion.
          */
         virtual D3D12_RESOURCE_STATES GetUploadDestinationState() const = 0;
 
         /**
-         * @brief 检查资源是否需要CPU数据上传 (虚函数 - 子类可重写)
-         * @return 需要CPU数据返回true，否则返回false
-         *
-         * 教学要点:
-         * 1. RenderTarget/DepthStencil纹理作为输出纹理，不需要CPU数据
-         * 2. 普通纹理(贴图)、缓冲区需要CPU数据
-         * 3. 默认实现返回true(大多数资源需要CPU数据)
-         * 4. 子类可重写返回false来跳过CPU数据检查
+         * Returns true when the resource requires CPU-side source data.
          */
         virtual bool RequiresCPUData() const
         {
-            return true; // 默认需要CPU数据
+            return true;
+        }
+
+        /**
+         * Selects the upload contract used by the base Upload() implementation.
+         */
+        virtual UploadContract GetUploadContract() const
+        {
+            return RequiresCPUData() ? UploadContract::GraphicsStatefulUpload
+                                     : UploadContract::NoGpuUpload;
+        }
+
+        /**
+         * Returns true when the current state can be prepared on the copy queue.
+         */
+        bool IsCopyQueueStateCompatible() const noexcept
+        {
+            return m_currentState == D3D12_RESOURCE_STATE_COMMON ||
+                   m_currentState == D3D12_RESOURCE_STATE_COPY_DEST;
         }
 
         /**

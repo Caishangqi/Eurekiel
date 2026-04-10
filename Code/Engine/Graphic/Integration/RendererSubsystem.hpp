@@ -134,7 +134,7 @@ namespace enigma::graphic
          * - Release all advanced rendering components
          * - Entrust D3D12RenderSystem to clean up underlying resources
          *
-         * @note The destructor will call this method, but calling it explicitly is safer
+         * @note The destructor falls back to this method. Explicit shutdown remains preferred.
          */
         void Shutdown() override;
 
@@ -1295,6 +1295,26 @@ namespace enigma::graphic
          */
         ID3D12CommandQueue* GetCommandQueue() const noexcept;
 
+        /**
+         * @brief Set the requested queue execution mode used by the DX12 backend.
+         */
+        void SetRequestedQueueExecutionMode(QueueExecutionMode mode) noexcept;
+
+        /**
+         * @brief Get the requested queue execution mode.
+         */
+        QueueExecutionMode GetRequestedQueueExecutionMode() const noexcept;
+
+        /**
+         * @brief Get the currently active queue execution mode after fallback resolution.
+         */
+        QueueExecutionMode GetActiveQueueExecutionMode() const noexcept;
+
+        /**
+         * @brief Get runtime queue execution diagnostics.
+         */
+        const QueueExecutionDiagnostics& GetQueueExecutionDiagnostics() const noexcept;
+
         // ============================================================
         // ImGui Integration Support (7 getter methods for IImGuiRenderContext)
         // ============================================================
@@ -1415,6 +1435,8 @@ namespace enigma::graphic
 
         void SyncGraphicsRootBinderWithCommandList(ID3D12GraphicsCommandList* commandList, bool resetDiagnostics) const noexcept;
         void SyncGraphicsRootBinderWithSrvHeap(ID3D12DescriptorHeap* srvHeap) const noexcept;
+        void ReleaseFrontendGpuResourcesBeforeBackendShutdown() noexcept;
+        void ResetFrontendShutdownState() noexcept;
 
         /// Swap chain - double buffered display (requires window handle, managed by subsystem)
         Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
@@ -1425,19 +1447,19 @@ namespace enigma::graphic
         /// Immediate index RingBuffer - encapsulates IBO + offset management
         std::unique_ptr<IndexRingBuffer> m_immediateIndexRingBuffer;
 
-        /// RenderTarget管理器 - 管理16个colortex RenderTarget (Iris兼容)
+        /// Manages the 16 Iris-compatible color targets.
         std::unique_ptr<ColorTextureProvider> m_colorTextureProvider;
 
-        /// 深度纹理管理器 - 管理3个深度纹理 (Iris depthtex0/1/2)
+        /// Manages the Iris depth textures.
         std::unique_ptr<DepthTextureProvider> m_depthTextureProvider;
 
-        /// Shadow Color管理器 - 管理8个shadowcolor RenderTarget (Iris兼容)
+        /// Manages the Iris-compatible shadow color targets.
         std::unique_ptr<ShadowColorProvider> m_shadowColorProvider;
 
-        /// Shadow Target管理器 - 管理2个shadowtex纹理 (Iris兼容)
+        /// Manages the Iris shadow depth targets.
         std::unique_ptr<ShadowTextureProvider> m_shadowTextureProvider;
 
-        /// RenderTarget绑定器 - 统一RT绑定接口 (组合4个Manager)
+        /// Aggregates the render-target providers behind one binding interface.
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;
 
         /// Graphics root-state binder for dirty root signature, CBV, and descriptor table binding
@@ -1449,12 +1471,12 @@ namespace enigma::graphic
         /// Blit shader for PresentRenderTarget format mismatch fallback (lazy-initialized)
         std::shared_ptr<ShaderProgram> m_blitProgram;
 
-        // ==================== Uniform管理组件 (Phase 3) ====================
+        // ==================== Uniform management (Phase 3) ====================
 
-        /// Uniform管理器 - 管理所有Uniform Buffer（包括CustomImageIndexBuffer）
+        /// Owns uniform-buffer uploads, including the custom-image index buffer.
         std::unique_ptr<class UniformManager> m_uniformManager;
 
-        /// CustomImage管理器 - 管理16个CustomImage槽位的纹理绑定
+        /// Tracks texture bindings for the 16 custom-image slots.
         std::unique_ptr<CustomImageManager> m_customImageManager;
 
         struct GraphicsPassScopeState
@@ -1464,9 +1486,9 @@ namespace enigma::graphic
 
         GraphicsPassScopeState m_graphicsPassScopeState;
 
-        // ==================== PSO管理组件 ====================
+        // ==================== PSO management ====================
 
-        /// PSO管理器 - 动态创建和缓存PSO
+        /// Creates and caches pipeline state objects on demand.
         std::unique_ptr<PSOManager> m_psoManager;
 
         // PSO state caching for deferred binding
@@ -1489,25 +1511,22 @@ namespace enigma::graphic
         /// Current stencil reference value (CommandList dynamic state)
         uint8_t m_currentStencilRef = 0;
 
-        // ==================== 配置和状态 ====================
+        // ==================== Configuration and state ====================
 
-        /// RendererSubsystem配置（Milestone 3.0: 配置系统重构完成）
-        /// - 合并了旧的内嵌Configuration结构体
-        /// - 从renderer.yml加载，包含所有14个配置参数
-        /// - 遵循"一个子系统一个配置文件"原则
+        /// RendererSubsystem configuration loaded from renderer.yml.
         RendererSubsystemConfig m_configuration;
 
-        /// 渲染统计信息
+        /// Render statistics
         mutable RenderStatistics m_renderStatistics;
         mutable ID3D12GraphicsCommandList* m_lastObservedGraphicsCommandList = nullptr;
         mutable ID3D12DescriptorHeap*      m_lastObservedSrvHeap             = nullptr;
 
-        /// 初始化状态标志
+        /// Lifecycle state flags
         bool m_isInitialized = false;
         bool m_isStarted     = false;
         bool m_isShutdown    = false;
 
-        /// 调试状态 (子系统级别的调试，底层调试由D3D12RenderSystem管理)
+        /// Subsystem-level debug toggle
         bool m_debugRenderingEnabled = false;
 
         /// Uniforms

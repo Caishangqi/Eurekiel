@@ -21,12 +21,13 @@
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Bundle/BundleException.hpp"
+#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Bundle/Helper/JsonHelper.hpp"
 #include "Engine/Graphic/Bundle/Helper/ShaderBundleFileHelper.hpp"
 #include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
-#include "Engine/Graphic/Integration/RendererEvents.hpp" // For OnBeginFrame subscription
+#include "Engine/Graphic/Integration/RendererEvents.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 #include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
 #include "Engine/Graphic/Target/ShadowColorProvider.hpp"
@@ -193,10 +194,14 @@ void ShaderBundleSubsystem::Startup()
         g_theImGui->RegisterWindow("ShaderBundle", [this]() { ImguiShaderBundle::Show(this); });
     }
 
-    // Subscribe to RendererEvents::OnBeginFrame for deferred bundle switching
-    // This ensures RT changes happen at frame boundaries (GPU idle), avoiding D3D12 ERROR #924
+    // Pre-frame callback prepares a safe switch by synchronizing active queues.
     m_onBeginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &ShaderBundleSubsystem::OnRendererBeginFrame);
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed to OnBeginFrame event");
+    // Post-acquire callback performs the actual resource mutation once frame-local
+    // uploads and provider writes are legal again.
+    m_onFrameSlotAcquiredHandle = RendererEvents::OnFrameSlotAcquired.Add(
+        this,
+        &ShaderBundleSubsystem::OnRendererFrameSlotAcquired);
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed to renderer frame lifecycle events");
 
     g_theShaderBundleSubsystem = this;
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Startup complete. %s bundle active.", m_currentBundle == m_engineBundle ? "Engine" : m_currentBundle->GetName().c_str());
@@ -215,12 +220,20 @@ void ShaderBundleSubsystem::Shutdown()
 {
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Shutting down...");
 
-    // Unsubscribe from RendererEvents::OnBeginFrame
+    // Unsubscribe from renderer lifecycle delegates.
     if (m_onBeginFrameHandle != 0)
     {
         RendererEvents::OnBeginFrame.Remove(m_onBeginFrameHandle);
         m_onBeginFrameHandle = 0;
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from OnBeginFrame event");
+    }
+    if (m_onFrameSlotAcquiredHandle != 0)
+    {
+        RendererEvents::OnFrameSlotAcquired.Remove(m_onFrameSlotAcquiredHandle);
+        m_onFrameSlotAcquiredHandle = 0;
+    }
+    if (m_onBeginFrameHandle == 0 && m_onFrameSlotAcquiredHandle == 0)
+    {
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from renderer frame lifecycle events");
     }
 
     // Remove MaterialIdMapper subscription
@@ -245,32 +258,61 @@ void ShaderBundleSubsystem::Shutdown()
 //-----------------------------------------------------------------------------------------------
 // Update
 //
-// [REFACTOR] Per-frame update - pending requests now handled via OnBeginFrame event
+// [REFACTOR] Per-frame update - pending requests are resolved across the renderer
+// lifecycle callbacks so queue synchronization stays pre-frame and resource
+// mutation stays post-acquire.
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::Update(float deltaTime)
 {
     UNUSED(deltaTime)
-    // [NOTE] Pending requests are now processed via RendererEvents::OnBeginFrame callback
-    // This ensures RT changes happen after previous frame completes but before
-    // new frame's CommandList starts recording
+    // Pending requests are processed from renderer lifecycle callbacks.
 }
 
 //-----------------------------------------------------------------------------------------------
 // OnRendererBeginFrame
 //
-// Event callback for RendererEvents::OnBeginFrame
-// Called at the very beginning of each frame when GPU is idle
-// Safe to modify RT resources here without causing D3D12 ERROR #924
+// Event callback for RendererEvents::OnBeginFrame.
+// This stage only prepares a pending switch by draining active GPU work.
+// It must not mutate frame-local renderer state before slot acquisition.
 //-----------------------------------------------------------------------------------------------
 void ShaderBundleSubsystem::OnRendererBeginFrame()
 {
-    // Skip if no pending requests
+    if (!m_pendingLoad && !m_pendingUnload)
+    {
+        m_pendingSwitchReadyForFrameSlotAcquire = false;
+        return;
+    }
+
+    if (!D3D12RenderSystem::SynchronizeActiveQueues("ShaderBundleSubsystem::OnRendererBeginFrame"))
+    {
+        m_pendingSwitchReadyForFrameSlotAcquire = false;
+        return;
+    }
+
+    m_pendingSwitchReadyForFrameSlotAcquire = true;
+}
+
+//-----------------------------------------------------------------------------------------------
+// OnRendererFrameSlotAcquired
+//
+// Event callback for RendererEvents::OnFrameSlotAcquired.
+// At this point the frame slot is safe to reuse, so provider uniform uploads and
+// render-target reconfiguration triggered by bundle switching are legal again.
+//-----------------------------------------------------------------------------------------------
+void ShaderBundleSubsystem::OnRendererFrameSlotAcquired()
+{
+    if (!m_pendingSwitchReadyForFrameSlotAcquire)
+    {
+        return;
+    }
+
+    m_pendingSwitchReadyForFrameSlotAcquire = false;
+
     if (!m_pendingLoad && !m_pendingUnload)
     {
         return;
     }
 
-    // Process pending unload request first (if both are set, unload takes precedence)
     if (m_pendingUnload)
     {
         m_pendingUnload = false;
@@ -282,7 +324,6 @@ void ShaderBundleSubsystem::OnRendererBeginFrame()
         return;
     }
 
-    // Process pending load request
     if (m_pendingLoad && m_pendingMeta.has_value())
     {
         m_pendingLoad         = false;

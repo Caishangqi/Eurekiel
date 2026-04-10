@@ -578,8 +578,16 @@ namespace enigma::graphic
         // 2. 创建资源描述符
         D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(createInfo);
 
-        // 3. Determine the initial resource status
-        D3D12_RESOURCE_STATES initialState = GetInitialState(m_usage);
+        const bool initializeForCopyReadyUpload =
+            createInfo.initialData != nullptr &&
+            createInfo.dataSize > 0 &&
+            !HasFlag(m_usage, TextureUsage::RenderTarget) &&
+            !HasFlag(m_usage, TextureUsage::DepthStencil);
+
+        // 3. Determine the initial resource state
+        D3D12_RESOURCE_STATES initialState = initializeForCopyReadyUpload
+                                                 ? D3D12_RESOURCE_STATE_COPY_DEST
+                                                 : GetInitialState(m_usage);
 
         // 4. Construct OptimizedClearValue (RenderTarget Fast Clear optimization)
         //Teaching points:

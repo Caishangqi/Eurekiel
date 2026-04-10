@@ -1,57 +1,36 @@
 #pragma once
 
 // ============================================================================
-// RendererEvents.hpp - Static MulticastDelegate events for Renderer lifecycle
+// RendererEvents.hpp - Static renderer lifecycle notifications
 //
-// Design Philosophy:
-//   - Decouples RendererSubsystem from dependent systems (DIP compliance)
-//   - Allows systems to hook into frame lifecycle without direct coupling
-//   - Single-threaded execution guaranteed (Broadcast is synchronous)
-//
-// Usage:
-//   // In dependent system (e.g., ShaderBundleSubsystem::Startup)
-//   RendererEvents::OnBeginFrame.Add(this, &ShaderBundleSubsystem::OnBeginFrame);
-//
-//   // In RendererSubsystem::BeginFrame
-//   RendererEvents::OnBeginFrame.Broadcast();
+// Design notes:
+//   - Decouples RendererSubsystem from dependent systems
+//   - Broadcast is synchronous and notification-only unless stated otherwise
+//   - Ownership-sensitive listeners must bind to the explicit post-retirement hook
 // ============================================================================
 
 #include "Engine/Core/Event/MulticastDelegate.hpp"
 
 namespace enigma::graphic
 {
-    // Centralized Renderer event definitions
+    // Centralized renderer lifecycle notifications.
     struct RendererEvents
     {
-        // ====================================================================
-        // Pipeline Lifecycle Events
-        // ====================================================================
-
         // Fired once at the end of RendererSubsystem::Startup().
-        // All core systems are ready: UniformManager, ColorTextureProvider,
-        // DepthTextureProvider, SamplerProvider, RingBuffers, etc.
-        // Subscribers can safely compile shaders, create PSOs, register buffers.
+        // Core renderer services are ready for CPU-side registration work.
         static enigma::event::MulticastDelegate<> OnPipelineReady;
 
-        // ====================================================================
-        // Frame Lifecycle Events
-        // ====================================================================
-
-        // Fired at the very beginning of BeginFrame, BEFORE any rendering setup
-        // Use this for operations that need to happen when GPU is idle:
-        // - RT resource changes (format, size)
-        // - ShaderBundle switching
-        // - Resource cleanup
-        //
-        // IMPORTANT: This is synchronous - all listeners complete before
-        // BeginFrame continues. Safe for RT modifications.
+        // Fired synchronously near the start of RendererSubsystem::BeginFrame().
+        // This is the pre-retirement CPU notification for work that does not
+        // require frame-slot ownership or frame-local resource mutation.
         static enigma::event::MulticastDelegate<> OnBeginFrame;
 
-        // Fired at the end of EndFrame, AFTER Present
-        // Use this for:
-        // - Statistics collection
-        // - Debug output
-        // - Frame-end cleanup
+        // Fired after the active frame slot has been retired and is safe to
+        // reuse for frame-local reset or upload work.
+        static enigma::event::MulticastDelegate<> OnFrameSlotAcquired;
+
+        // Fired at the end of EndFrame after present submission work.
+        // This is also notification-only and does not imply queue completion.
         static enigma::event::MulticastDelegate<> OnEndFrame;
     };
 } // namespace enigma::graphic

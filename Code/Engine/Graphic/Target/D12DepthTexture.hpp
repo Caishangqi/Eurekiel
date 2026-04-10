@@ -210,14 +210,7 @@ namespace enigma::graphic
         D3D12_RESOURCE_STATES GetUploadDestinationState() const override;
 
         /**
-         * @brief Override D12Resource virtual function: depth texture does not require CPU data
-         * @return always returns false
-         *
-         *Teaching points:
-         * 1. The depth texture is the GPU rendering output target and is written directly by the GPU.
-         * 2. Unlike Input Texture (texture), depth texture does not require CPU data to be uploaded.
-         * 3. Override this method to let the base class Upload() skip CPU data checking
-         * 4. Consistent with the design of D12RenderTarget::RequiresCPUData()
+         * Depth textures are produced by GPU rendering and do not consume CPU upload data.
          */
         bool RequiresCPUData() const override { return false; }
 

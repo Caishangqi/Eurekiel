@@ -93,10 +93,10 @@ namespace enigma::graphic
         /// @brief Increment draw count (call after each Draw)
         void IncrementDrawCount();
 
-        /// @brief Reset draw count (call in BeginFrame)
+        /// @brief Reset draw count during post-retirement frame activation.
         void ResetDrawCount();
 
-        /// @brief Update frame index on all buffer strategies (subscribed to OnBeginFrame delegate)
+        /// @brief Update frame index on all buffer strategies after frame-slot acquisition.
         void SetFrameIndex();
 
         /// @brief Reset pass-scope tracking for the current frame and reseed PerPass strategies.
@@ -221,8 +221,8 @@ namespace enigma::graphic
         // Initialization flag
         bool m_initialized = false;
 
-        // Delegate handle for OnBeginFrame subscription (multi-frame in-flight)
-        enigma::event::DelegateHandle m_beginFrameHandle = 0;
+        // Delegate handle for the post-retirement frame-slot-acquired subscription.
+        enigma::event::DelegateHandle m_frameSlotAcquiredHandle = 0;
 
         // ========================================================================
         // [REFACTORED] Unified Internal Buffer Operations
