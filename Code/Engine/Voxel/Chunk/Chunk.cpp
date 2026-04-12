@@ -1,5 +1,5 @@
 ﻿#include "Chunk.hpp"
-#include "ChunkMeshHelper.hpp"
+#include "ChunkMeshBuilder.hpp"
 #include "../World/World.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
@@ -14,6 +14,11 @@
 #include "Engine/Voxel/Builtin/DefaultBlock.hpp"
 
 using namespace enigma::voxel;
+
+namespace
+{
+    std::atomic<uint64_t> g_nextChunkInstanceId{ 1ULL };
+}
 
 // Optimized bit-shift coordinate to index conversion
 // Formula: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
@@ -33,6 +38,7 @@ inline void Chunk::IndexToCoords(size_t index, int32_t& x, int32_t& y, int32_t& 
 
 Chunk::Chunk(IntVec2 chunkCoords) : m_chunkCoords(chunkCoords)
 {
+    m_instanceId = g_nextChunkInstanceId.fetch_add(1ULL, std::memory_order_relaxed);
     core::LogInfo("chunk", "Chunk created: %d, %d", m_chunkCoords.x, m_chunkCoords.y);
     m_blocks.reserve(BLOCKS_PER_CHUNK * sizeof(BlockState*));
 
@@ -59,6 +65,12 @@ Chunk::~Chunk() = default;
 BlockState* Chunk::GetBlock(int32_t x, int32_t y, int32_t z)
 {
     // Optimized bit-shift index calculation: index = x + (y << CHUNK_BITS_X) + (z << (CHUNK_BITS_X + CHUNK_BITS_Y))
+    size_t index = CoordsToIndex(x, y, z);
+    return m_blocks[index];
+}
+
+BlockState* Chunk::GetBlock(int32_t x, int32_t y, int32_t z) const
+{
     size_t index = CoordsToIndex(x, y, z);
     return m_blocks[index];
 }
@@ -184,41 +196,22 @@ void Chunk::MarkDirty()
 
 bool Chunk::RebuildMesh()
 {
-    auto newMesh = ChunkMeshHelper::BuildMesh(this);
+    ChunkMeshBuilder builder;
+    auto             newMesh = builder.BuildMesh(this);
 
     if (newMesh)
     {
-        // Replace the old mesh with new one
-        m_mesh    = std::move(newMesh);
-        m_isDirty = false;
-
-        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshHelper");
+        SetMesh(std::move(newMesh));
+        core::LogInfo("chunk", "Chunk mesh rebuilt using ChunkMeshBuilder");
         return true;
     }
-    else
-    {
-        //--------------------------------------------------------------------------------------------------
-        // Phase 2: 跨边界隐藏面剔除 - 修复空mesh fallback问题
-        //
-        // 问题：之前的逻辑将BuildMesh()返回nullptr视为错误，创建空mesh作为fallback。
-        //       但nullptr是合法的延迟（等待邻居激活），不应创建空mesh。
-        //
-        // 解决：允许Active的Chunk暂时无mesh，保持m_isDirty = true允许重试。
-        //       当邻居激活时，Chunk::SetState()会通知本Chunk重建（Task 2.2）。
-        //
-        // Assignment 05要求："You may need to change your code to allow for active chunks 
-        //                     that don't have meshes"
-        //--------------------------------------------------------------------------------------------------
 
-        // BuildMesh返回nullptr是合法的延迟（等待邻居加载），不是错误
-        core::LogDebug("chunk",
-                       "RebuildMesh: delayed for chunk (%d, %d) - waiting for neighbors to load",
-                       m_chunkCoords.x, m_chunkCoords.y);
+    // Snapshot prerequisites may still be missing during sync fallback.
+    core::LogDebug("chunk",
+                   "RebuildMesh: deferred for chunk (%d, %d) - snapshot prerequisites are not ready",
+                   m_chunkCoords.x, m_chunkCoords.y);
 
-        // 保持m_isDirty = true，下次UpdateChunkMeshes()会重试
-        // 不创建空mesh，允许Active的Chunk暂时无mesh（符合Assignment 05要求）
-        return false;
-    }
+    return false;
 }
 
 void Chunk::SetMesh(std::unique_ptr<ChunkMesh> mesh)
@@ -235,6 +228,11 @@ ChunkMesh* Chunk::GetMesh() const
 bool Chunk::NeedsMeshRebuild() const
 {
     return m_isDirty;
+}
+
+bool Chunk::CanPublishMesh() const
+{
+    return GetState() == ChunkState::Active;
 }
 
 /**

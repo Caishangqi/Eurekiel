@@ -32,6 +32,7 @@ namespace enigma::resource
 namespace enigma::graphic
 {
     class D12DepthTexture;
+    class BufferTransferCoordinator;
     class RendererSubsystem;
     class D12Texture;
     class BindlessIndexAllocator;
@@ -105,7 +106,12 @@ namespace enigma::graphic
         // ===== Type-safe vertex/index buffer creation =====
 
         /**
-         * Create a type-safe vertex buffer and its cached view.
+         * Create a type-safe vertex buffer from the unified create-info contract.
+         */
+        static std::unique_ptr<class D12VertexBuffer> CreateVertexBuffer(const BufferCreateInfo& createInfo);
+
+        /**
+         * Legacy convenience wrapper for dynamic-upload vertex buffers.
          */
         static std::unique_ptr<class D12VertexBuffer> CreateVertexBuffer(
             size_t      size,
@@ -115,7 +121,12 @@ namespace enigma::graphic
         );
 
         /**
-         * Create a type-safe index buffer and its cached view.
+         * Create a type-safe index buffer from the unified create-info contract.
+         */
+        static std::unique_ptr<class D12IndexBuffer> CreateIndexBuffer(const BufferCreateInfo& createInfo);
+
+        /**
+         * Legacy convenience wrapper for dynamic-upload index buffers.
          */
         static std::unique_ptr<class D12IndexBuffer> CreateIndexBuffer(
             size_t      size,
@@ -527,6 +538,7 @@ namespace enigma::graphic
 
     private:
         friend class D12Resource;
+        friend class BufferTransferCoordinator;
         friend class MipmapGenerator;
 
         // Static-only type.

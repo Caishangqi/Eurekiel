@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ChunkBatchTypes.hpp"
+#include "Engine/Graphic/Resource/CommandQueueTypes.hpp"
 
 namespace enigma::graphic
 {
@@ -76,11 +77,34 @@ namespace enigma::voxel
         }
     };
 
+    struct RetiredArenaAllocation
+    {
+        ChunkBatchArenaAllocation       allocation;
+        graphic::QueueSubmissionToken   retireAfterGraphicsToken = {};
+
+        bool IsReadyForReuse(const graphic::QueueFenceSnapshot& completedSnapshot) const
+        {
+            if (!allocation.IsValid())
+            {
+                return false;
+            }
+
+            if (!retireAfterGraphicsToken.IsValid())
+            {
+                return true;
+            }
+
+            return completedSnapshot.GetCompletedFenceValue(retireAfterGraphicsToken.queueType) >=
+                   retireAfterGraphicsToken.fenceValue;
+        }
+    };
+
     struct ChunkBatchVertexArenaState
     {
         std::shared_ptr<graphic::D12VertexBuffer> buffer;
         uint32_t                                  capacityVertices = 0;
         std::vector<ChunkBatchArenaAllocation>    freeRanges;
+        std::vector<RetiredArenaAllocation>       retiredRanges;
     };
 
     struct ChunkBatchIndexArenaState
@@ -88,6 +112,7 @@ namespace enigma::voxel
         std::shared_ptr<graphic::D12IndexBuffer> buffer;
         uint32_t                                 capacityIndices = 0;
         std::vector<ChunkBatchArenaAllocation>   freeRanges;
+        std::vector<RetiredArenaAllocation>      retiredRanges;
     };
 
     class ChunkRenderRegionStorage
@@ -139,12 +164,16 @@ namespace enigma::voxel
         bool               AllocateIndexArenaSlice(uint32_t indexCount, ChunkBatchArenaAllocation& outAllocation);
         void               FreeVertexArenaSlice(const ChunkBatchArenaAllocation& allocation);
         void               FreeIndexArenaSlice(const ChunkBatchArenaAllocation& allocation);
+        void               RetireVertexArenaSlice(const ChunkBatchArenaAllocation& allocation);
+        void               RetireIndexArenaSlice(const ChunkBatchArenaAllocation& allocation);
+        void               DrainRetiredArenaAllocations();
+        void               DrainRetiredVertexArenaAllocations(const graphic::QueueFenceSnapshot& completedSnapshot);
+        void               DrainRetiredIndexArenaAllocations(const graphic::QueueFenceSnapshot& completedSnapshot);
+        graphic::QueueSubmissionToken CaptureLatestGraphicsRetirementToken() const;
         // Synchronous first-version boundary: these methods may build relocation plans in the future,
         // but the actual grow/publication path remains owner-thread only.
         bool               EnsureVertexArenaCapacity(uint32_t minimumContiguousVertices);
         bool               EnsureIndexArenaCapacity(uint32_t minimumContiguousIndices);
-        bool               UploadVertexArenaData(const ChunkBatchArenaAllocation& allocation, const graphic::TerrainVertex* vertices, uint32_t vertexCount) const;
-        bool               UploadIndexArenaData(const ChunkBatchArenaAllocation& allocation, const std::vector<uint32_t>& indices) const;
         // Future async work may prepare relocation metadata off-thread, but plan execution, buffer updates,
         // and authoritative region allocation refresh stay synchronous in this storage owner.
         bool               ApplyVertexArenaRelocationPlan(const ChunkBatchArenaRelocationPlan& relocationPlan);

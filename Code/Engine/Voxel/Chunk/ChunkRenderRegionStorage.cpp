@@ -10,12 +10,26 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Core/StringUtils.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Resource/Buffer/BufferTransferCoordinator.hpp"
+#include "Engine/Graphic/Resource/Buffer/D12Buffer.hpp"
 #include "../World/World.hpp"
 
 namespace
 {
+    using enigma::graphic::BufferCopySpan;
+    using enigma::graphic::BufferCreateInfo;
+    using enigma::graphic::BufferTransferBatch;
+    using enigma::graphic::BufferTransferCoordinator;
+    using enigma::graphic::BufferTransferTransition;
+    using enigma::graphic::BufferUploadSpan;
+    using enigma::graphic::BufferUsage;
+    using enigma::graphic::BufferUsagePolicy;
+    using enigma::graphic::CommandQueueType;
     using enigma::graphic::D12IndexBuffer;
+    using enigma::graphic::D12Buffer;
     using enigma::graphic::D12VertexBuffer;
+    using enigma::graphic::MemoryAccess;
+    using enigma::graphic::QueueSubmissionToken;
     using enigma::graphic::TerrainVertex;
     using enigma::voxel::Chunk;
     using enigma::voxel::ChunkBatchArenaAllocation;
@@ -40,10 +54,21 @@ namespace
     using enigma::voxel::ChunkBatchVertexArenaState;
     using enigma::voxel::ChunkRenderRegion;
     using enigma::voxel::ChunkRenderRegionStorage;
+    using enigma::voxel::RetiredArenaAllocation;
     using enigma::voxel::World;
 
     constexpr uint32_t kDefaultVertexArenaCapacity = 4096;
     constexpr uint32_t kDefaultIndexArenaCapacity  = 16384;
+
+    struct ChunkGeometryTransferPlan
+    {
+        BufferTransferBatch uploadBatch;
+
+        bool HasUploadWork() const noexcept
+        {
+            return uploadBatch.HasUploadWork();
+        }
+    };
 
     struct PendingChunkReplacement
     {
@@ -109,6 +134,26 @@ namespace
         }
 
         return static_cast<uint32_t>(newCapacity);
+    }
+
+    bool HasContiguousFreeRange(
+        const std::vector<ChunkBatchArenaAllocation>& freeRanges,
+        uint32_t                                      requestedCount)
+    {
+        if (requestedCount == 0u)
+        {
+            return true;
+        }
+
+        for (const ChunkBatchArenaAllocation& freeRange : freeRanges)
+        {
+            if (freeRange.elementCount >= requestedCount)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     bool TryAllocateRange(
@@ -194,6 +239,25 @@ namespace
         freeRanges = std::move(mergedRanges);
     }
 
+    void DrainRetiredRanges(
+        std::vector<ChunkBatchArenaAllocation>& freeRanges,
+        std::vector<RetiredArenaAllocation>&    retiredRanges,
+        const enigma::graphic::QueueFenceSnapshot& completedSnapshot)
+    {
+        auto retiredIt = retiredRanges.begin();
+        while (retiredIt != retiredRanges.end())
+        {
+            if (!retiredIt->IsReadyForReuse(completedSnapshot))
+            {
+                ++retiredIt;
+                continue;
+            }
+
+            FreeRange(freeRanges, retiredIt->allocation);
+            retiredIt = retiredRanges.erase(retiredIt);
+        }
+    }
+
     uint32_t SumFreeRangeCapacity(const std::vector<ChunkBatchArenaAllocation>& freeRanges)
     {
         uint32_t totalFreeCapacity = 0u;
@@ -203,6 +267,161 @@ namespace
         }
 
         return totalFreeCapacity;
+    }
+
+    uint64_t ComputeByteOffset(const ChunkBatchArenaAllocation& allocation, size_t bytesPerElement)
+    {
+        return static_cast<uint64_t>(allocation.startElement) * static_cast<uint64_t>(bytesPerElement);
+    }
+
+    uint64_t ComputeByteSize(uint32_t elementCount, size_t bytesPerElement)
+    {
+        return static_cast<uint64_t>(elementCount) * static_cast<uint64_t>(bytesPerElement);
+    }
+
+    BufferCreateInfo MakeChunkVertexArenaCreateInfo(uint32_t capacityVertices)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = sizeof(TerrainVertex) * static_cast<size_t>(capacityVertices);
+        createInfo.usage        = BufferUsage::VertexBuffer;
+        createInfo.memoryAccess = MemoryAccess::GPUOnly;
+        createInfo.initialData  = nullptr;
+        createInfo.debugName    = "ChunkBatchVertexArena";
+        createInfo.byteStride   = sizeof(TerrainVertex);
+        createInfo.usagePolicy  = BufferUsagePolicy::GpuOnlyCopyReady;
+        return createInfo;
+    }
+
+    BufferCreateInfo MakeChunkIndexArenaCreateInfo(uint32_t capacityIndices)
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = sizeof(uint32_t) * static_cast<size_t>(capacityIndices);
+        createInfo.usage        = BufferUsage::IndexBuffer;
+        createInfo.memoryAccess = MemoryAccess::GPUOnly;
+        createInfo.initialData  = nullptr;
+        createInfo.debugName    = "ChunkBatchIndexArena";
+        createInfo.byteStride   = sizeof(uint32_t);
+        createInfo.usagePolicy  = BufferUsagePolicy::GpuOnlyCopyReady;
+        return createInfo;
+    }
+
+    bool HasTransitionForBuffer(
+        const std::vector<BufferTransferTransition>& transitions,
+        const D12Buffer*                             buffer)
+    {
+        return std::any_of(
+            transitions.begin(),
+            transitions.end(),
+            [buffer](const BufferTransferTransition& transition)
+            {
+                return transition.buffer == buffer;
+            });
+    }
+
+    void AppendTransitionIfMissing(
+        std::vector<BufferTransferTransition>& transitions,
+        D12Buffer*                             buffer,
+        D3D12_RESOURCE_STATES                  transferState,
+        D3D12_RESOURCE_STATES                  finalState,
+        const char*                            debugName)
+    {
+        if (buffer == nullptr || HasTransitionForBuffer(transitions, buffer))
+        {
+            return;
+        }
+
+        transitions.push_back(BufferTransferTransition{
+            buffer,
+            transferState,
+            finalState,
+            debugName
+        });
+    }
+
+    bool ExecuteUploadBatchAndWait(const BufferTransferBatch& batch)
+    {
+        if (!batch.HasUploadWork())
+        {
+            return true;
+        }
+
+        BufferTransferCoordinator coordinator;
+        auto execution = coordinator.ExecuteUploadBatch(batch);
+        if (!execution.IsValid())
+        {
+            return false;
+        }
+
+        return coordinator.WaitForTransferCompletion(execution);
+    }
+
+    bool ExecuteCopyBatchAndWait(const BufferTransferBatch& batch)
+    {
+        if (!batch.HasCopyWork())
+        {
+            return true;
+        }
+
+        BufferTransferCoordinator coordinator;
+        auto execution = coordinator.ExecuteCopyBatch(batch);
+        if (!execution.IsValid())
+        {
+            return false;
+        }
+
+        return coordinator.WaitForTransferCompletion(execution);
+    }
+
+    bool IsGraphicsSubmissionComplete(
+        const QueueSubmissionToken& token,
+        const enigma::graphic::QueueFenceSnapshot& completedSnapshot)
+    {
+        if (!token.IsValid())
+        {
+            return true;
+        }
+
+        return completedSnapshot.GetCompletedFenceValue(token.queueType) >= token.fenceValue;
+    }
+
+    bool WaitForLatestGraphicsWorkCompletion()
+    {
+        auto* commandListManager = enigma::graphic::D3D12RenderSystem::GetCommandListManager();
+        if (commandListManager == nullptr)
+        {
+            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Command list manager is unavailable while waiting for graphics work");
+            return false;
+        }
+
+        commandListManager->UpdateCompletedCommandLists();
+        const enigma::graphic::QueueSubmittedFenceSnapshot submittedSnapshot =
+            commandListManager->GetLastSubmittedFenceSnapshot();
+        const QueueSubmissionToken latestGraphicsToken = {
+            CommandQueueType::Graphics,
+            submittedSnapshot.graphicsSubmitted
+        };
+        if (!latestGraphicsToken.IsValid())
+        {
+            return true;
+        }
+
+        const enigma::graphic::QueueFenceSnapshot completedSnapshot =
+            commandListManager->GetCompletedFenceSnapshot();
+        if (IsGraphicsSubmissionComplete(latestGraphicsToken, completedSnapshot))
+        {
+            return true;
+        }
+
+        if (!commandListManager->WaitForSubmission(latestGraphicsToken))
+        {
+            ERROR_RECOVERABLE(Stringf(
+                "ChunkRenderRegionStorage: Failed to retire graphics queue fence %llu before arena mutation",
+                latestGraphicsToken.fenceValue));
+            return false;
+        }
+
+        commandListManager->UpdateCompletedCommandLists();
+        return true;
     }
 
     template <typename TBuffer>
@@ -332,6 +551,48 @@ namespace enigma::voxel
         m_world = world;
     }
 
+    graphic::QueueSubmissionToken ChunkRenderRegionStorage::CaptureLatestGraphicsRetirementToken() const
+    {
+        auto* commandListManager = graphic::D3D12RenderSystem::GetCommandListManager();
+        if (commandListManager == nullptr)
+        {
+            return {};
+        }
+
+        const graphic::QueueSubmittedFenceSnapshot submittedSnapshot =
+            commandListManager->GetLastSubmittedFenceSnapshot();
+        if (submittedSnapshot.graphicsSubmitted == 0)
+        {
+            return {};
+        }
+
+        return { graphic::CommandQueueType::Graphics, submittedSnapshot.graphicsSubmitted };
+    }
+
+    void ChunkRenderRegionStorage::DrainRetiredVertexArenaAllocations(const graphic::QueueFenceSnapshot& completedSnapshot)
+    {
+        DrainRetiredRanges(m_vertexArena.freeRanges, m_vertexArena.retiredRanges, completedSnapshot);
+    }
+
+    void ChunkRenderRegionStorage::DrainRetiredIndexArenaAllocations(const graphic::QueueFenceSnapshot& completedSnapshot)
+    {
+        DrainRetiredRanges(m_indexArena.freeRanges, m_indexArena.retiredRanges, completedSnapshot);
+    }
+
+    void ChunkRenderRegionStorage::DrainRetiredArenaAllocations()
+    {
+        auto* commandListManager = graphic::D3D12RenderSystem::GetCommandListManager();
+        if (commandListManager == nullptr)
+        {
+            return;
+        }
+
+        commandListManager->UpdateCompletedCommandLists();
+        const graphic::QueueFenceSnapshot completedSnapshot = commandListManager->GetCompletedFenceSnapshot();
+        DrainRetiredVertexArenaAllocations(completedSnapshot);
+        DrainRetiredIndexArenaAllocations(completedSnapshot);
+    }
+
     uint32_t ChunkRenderRegionStorage::GetVertexArenaRemainingCapacity() const
     {
         return SumFreeRangeCapacity(m_vertexArena.freeRanges);
@@ -384,8 +645,8 @@ namespace enigma::voxel
 
     void ChunkRenderRegionStorage::ReleaseRegionArenaAllocations(ChunkRenderRegion& region)
     {
-        FreeVertexArenaSlice(region.geometry.vertexAllocation);
-        FreeIndexArenaSlice(region.geometry.indexAllocation);
+        RetireVertexArenaSlice(region.geometry.vertexAllocation);
+        RetireIndexArenaSlice(region.geometry.indexAllocation);
         region.geometry.vertexAllocation.Reset();
         region.geometry.indexAllocation.Reset();
     }
@@ -414,8 +675,24 @@ namespace enigma::voxel
             return true;
         }
 
+        DrainRetiredArenaAllocations();
+        if (!m_vertexArena.retiredRanges.empty())
+        {
+            if (!WaitForLatestGraphicsWorkCompletion())
+            {
+                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to drain pending graphics work before vertex arena growth");
+                return false;
+            }
+
+            DrainRetiredArenaAllocations();
+            if (HasContiguousFreeRange(m_vertexArena.freeRanges, minimumContiguousVertices))
+            {
+                return true;
+            }
+        }
+
         // Future async reuse is limited to CPU-only relocation planning. The grow itself, persistent-memory
-        // copy, and active region publication stay on the owning thread in the first version.
+        // copy scheduling, and active region publication stay on the owning thread in the first version.
         const ChunkBatchArenaRelocationPlan relocationPlan = ChunkBatchArenaRelocationPlanner::BuildPlanFromFreeRanges(
             ChunkBatchArenaKind::Vertex,
             m_vertexArena.capacityVertices,
@@ -438,8 +715,24 @@ namespace enigma::voxel
             return true;
         }
 
+        DrainRetiredArenaAllocations();
+        if (!m_indexArena.retiredRanges.empty())
+        {
+            if (!WaitForLatestGraphicsWorkCompletion())
+            {
+                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to drain pending graphics work before index arena growth");
+                return false;
+            }
+
+            DrainRetiredArenaAllocations();
+            if (HasContiguousFreeRange(m_indexArena.freeRanges, minimumContiguousIndices))
+            {
+                return true;
+            }
+        }
+
         // Future async reuse is limited to CPU-only relocation planning. The grow itself, persistent-memory
-        // copy, and active region publication stay on the owning thread in the first version.
+        // copy scheduling, and active region publication stay on the owning thread in the first version.
         const ChunkBatchArenaRelocationPlan relocationPlan = ChunkBatchArenaRelocationPlanner::BuildPlanFromFreeRanges(
             ChunkBatchArenaKind::Index,
             m_indexArena.capacityIndices,
@@ -457,6 +750,8 @@ namespace enigma::voxel
 
     bool ChunkRenderRegionStorage::AllocateVertexArenaSlice(uint32_t vertexCount, ChunkBatchArenaAllocation& outAllocation)
     {
+        DrainRetiredArenaAllocations();
+
         if (TryAllocateRange(m_vertexArena.freeRanges, vertexCount, outAllocation))
         {
             return true;
@@ -478,6 +773,8 @@ namespace enigma::voxel
 
     bool ChunkRenderRegionStorage::AllocateIndexArenaSlice(uint32_t indexCount, ChunkBatchArenaAllocation& outAllocation)
     {
+        DrainRetiredArenaAllocations();
+
         if (TryAllocateRange(m_indexArena.freeRanges, indexCount, outAllocation))
         {
             return true;
@@ -507,77 +804,80 @@ namespace enigma::voxel
         FreeRange(m_indexArena.freeRanges, allocation);
     }
 
-    bool ChunkRenderRegionStorage::UploadVertexArenaData(
-        const ChunkBatchArenaAllocation& allocation,
-        const graphic::TerrainVertex*    vertices,
-        uint32_t                         vertexCount) const
+    void ChunkRenderRegionStorage::RetireVertexArenaSlice(const ChunkBatchArenaAllocation& allocation)
     {
-        if (!ValidateUploadRange(m_vertexArena.buffer, allocation, sizeof(TerrainVertex), vertexCount))
+        if (!allocation.IsValid())
         {
-            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Invalid vertex arena upload range");
-            return false;
+            return;
         }
 
-        void* const mappedData = m_vertexArena.buffer->GetPersistentMappedData();
-        if (mappedData == nullptr)
+        const graphic::QueueSubmissionToken retireToken = CaptureLatestGraphicsRetirementToken();
+        if (!retireToken.IsValid())
         {
-            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Vertex arena is not persistently mapped");
-            return false;
+            FreeVertexArenaSlice(allocation);
+            return;
         }
 
-        const size_t writeOffset = sizeof(TerrainVertex) * static_cast<size_t>(allocation.startElement);
-        const size_t writeSize   = sizeof(TerrainVertex) * static_cast<size_t>(vertexCount);
-        std::memcpy(static_cast<unsigned char*>(mappedData) + writeOffset, vertices, writeSize);
-        return true;
+        m_vertexArena.retiredRanges.push_back({ allocation, retireToken });
     }
 
-    bool ChunkRenderRegionStorage::UploadIndexArenaData(
-        const ChunkBatchArenaAllocation& allocation,
-        const std::vector<uint32_t>&     indices) const
+    void ChunkRenderRegionStorage::RetireIndexArenaSlice(const ChunkBatchArenaAllocation& allocation)
     {
-        if (!ValidateUploadRange(m_indexArena.buffer, allocation, sizeof(uint32_t), indices.size()))
+        if (!allocation.IsValid())
         {
-            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Invalid index arena upload range");
-            return false;
+            return;
         }
 
-        void* const mappedData = m_indexArena.buffer->GetPersistentMappedData();
-        if (mappedData == nullptr)
+        const graphic::QueueSubmissionToken retireToken = CaptureLatestGraphicsRetirementToken();
+        if (!retireToken.IsValid())
         {
-            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Index arena is not persistently mapped");
-            return false;
+            FreeIndexArenaSlice(allocation);
+            return;
         }
 
-        const size_t writeOffset = sizeof(uint32_t) * static_cast<size_t>(allocation.startElement);
-        const size_t writeSize   = sizeof(uint32_t) * indices.size();
-        std::memcpy(static_cast<unsigned char*>(mappedData) + writeOffset, indices.data(), writeSize);
-        return true;
+        m_indexArena.retiredRanges.push_back({ allocation, retireToken });
     }
 
     bool ChunkRenderRegionStorage::ApplyVertexArenaRelocationPlan(const ChunkBatchArenaRelocationPlan& relocationPlan)
     {
-        const size_t newBufferSize = sizeof(TerrainVertex) * static_cast<size_t>(relocationPlan.newCapacity);
         std::unique_ptr<D12VertexBuffer> newBuffer = graphic::D3D12RenderSystem::CreateVertexBuffer(
-            newBufferSize,
-            sizeof(TerrainVertex),
-            nullptr,
-            "ChunkBatchVertexArena");
+            MakeChunkVertexArenaCreateInfo(relocationPlan.newCapacity));
         if (!newBuffer)
         {
             return false;
         }
 
-        const std::shared_ptr<D12VertexBuffer> oldBuffer = m_vertexArena.buffer;
-        std::shared_ptr<D12VertexBuffer>       newSharedBuffer(std::move(newBuffer));
+        std::shared_ptr<D12VertexBuffer> oldBuffer = m_vertexArena.buffer;
+        std::shared_ptr<D12VertexBuffer> newSharedBuffer(std::move(newBuffer));
+        if (oldBuffer != nullptr && !WaitForLatestGraphicsWorkCompletion())
+        {
+            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to retire graphics work before vertex arena relocation");
+            return false;
+        }
+
         if (oldBuffer != nullptr && relocationPlan.HasCopySpans())
         {
-            void* const oldMappedData = oldBuffer->GetPersistentMappedData();
-            void* const newMappedData = newSharedBuffer->GetPersistentMappedData();
-            if (oldMappedData == nullptr || newMappedData == nullptr)
-            {
-                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to migrate used vertex arena ranges");
-                return false;
-            }
+            BufferTransferBatch transferBatch = {};
+            transferBatch.workload       = enigma::graphic::QueueWorkloadClass::ChunkArenaRelocation;
+            transferBatch.preferredQueue = CommandQueueType::Copy;
+            AppendTransitionIfMissing(
+                transferBatch.preTransferTransitions,
+                oldBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_SOURCE,
+                oldBuffer->GetCurrentState(),
+                "ChunkBatchVertexArenaRelocationSource");
+            AppendTransitionIfMissing(
+                transferBatch.preTransferTransitions,
+                newSharedBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                "ChunkBatchVertexArenaRelocationDestination");
+            AppendTransitionIfMissing(
+                transferBatch.postTransferTransitions,
+                newSharedBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                "ChunkBatchVertexArenaRelocationDestination");
 
             for (const auto& copySpan : relocationPlan.copySpans)
             {
@@ -586,19 +886,26 @@ namespace enigma::voxel
                     ERROR_AND_DIE("ChunkRenderRegionStorage: Vertex arena relocation plan contains an invalid copy span");
                 }
 
-                const size_t sourceOffset = sizeof(TerrainVertex) * static_cast<size_t>(copySpan.sourceAllocation.startElement);
-                const size_t destinationOffset = sizeof(TerrainVertex) * static_cast<size_t>(copySpan.destinationAllocation.startElement);
-                const size_t copySize = sizeof(TerrainVertex) * static_cast<size_t>(copySpan.sourceAllocation.elementCount);
-                std::memcpy(
-                    static_cast<unsigned char*>(newMappedData) + destinationOffset,
-                    static_cast<unsigned char*>(oldMappedData) + sourceOffset,
-                    copySize);
+                transferBatch.copySpans.push_back(BufferCopySpan{
+                    oldBuffer.get(),
+                    newSharedBuffer.get(),
+                    ComputeByteOffset(copySpan.sourceAllocation, sizeof(TerrainVertex)),
+                    ComputeByteOffset(copySpan.destinationAllocation, sizeof(TerrainVertex)),
+                    ComputeByteSize(copySpan.sourceAllocation.elementCount, sizeof(TerrainVertex))
+                });
+            }
+
+            if (!ExecuteCopyBatchAndWait(transferBatch))
+            {
+                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to migrate used vertex arena ranges");
+                return false;
             }
         }
 
         m_vertexArena.buffer = newSharedBuffer;
         m_vertexArena.capacityVertices = relocationPlan.newCapacity;
         m_vertexArena.freeRanges.clear();
+        m_vertexArena.retiredRanges.clear();
         if (relocationPlan.newCapacity > relocationPlan.relocatedElementCount)
         {
             m_vertexArena.freeRanges.push_back(ChunkBatchArenaAllocation{
@@ -610,32 +917,50 @@ namespace enigma::voxel
         RefreshRegionVertexAllocationsAfterRelocation(relocationPlan);
         RefreshVertexArenaBindings();
         RecordArenaRelocation(relocationPlan);
+        oldBuffer.reset();
         return true;
     }
 
     bool ChunkRenderRegionStorage::ApplyIndexArenaRelocationPlan(const ChunkBatchArenaRelocationPlan& relocationPlan)
     {
-        const size_t newBufferSize = sizeof(uint32_t) * static_cast<size_t>(relocationPlan.newCapacity);
         std::unique_ptr<D12IndexBuffer> newBuffer = graphic::D3D12RenderSystem::CreateIndexBuffer(
-            newBufferSize,
-            nullptr,
-            "ChunkBatchIndexArena");
+            MakeChunkIndexArenaCreateInfo(relocationPlan.newCapacity));
         if (!newBuffer)
         {
             return false;
         }
 
-        const std::shared_ptr<D12IndexBuffer> oldBuffer = m_indexArena.buffer;
-        std::shared_ptr<D12IndexBuffer>       newSharedBuffer(std::move(newBuffer));
+        std::shared_ptr<D12IndexBuffer> oldBuffer = m_indexArena.buffer;
+        std::shared_ptr<D12IndexBuffer> newSharedBuffer(std::move(newBuffer));
+        if (oldBuffer != nullptr && !WaitForLatestGraphicsWorkCompletion())
+        {
+            ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to retire graphics work before index arena relocation");
+            return false;
+        }
+
         if (oldBuffer != nullptr && relocationPlan.HasCopySpans())
         {
-            void* const oldMappedData = oldBuffer->GetPersistentMappedData();
-            void* const newMappedData = newSharedBuffer->GetPersistentMappedData();
-            if (oldMappedData == nullptr || newMappedData == nullptr)
-            {
-                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to migrate used index arena ranges");
-                return false;
-            }
+            BufferTransferBatch transferBatch = {};
+            transferBatch.workload       = enigma::graphic::QueueWorkloadClass::ChunkArenaRelocation;
+            transferBatch.preferredQueue = CommandQueueType::Copy;
+            AppendTransitionIfMissing(
+                transferBatch.preTransferTransitions,
+                oldBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_SOURCE,
+                oldBuffer->GetCurrentState(),
+                "ChunkBatchIndexArenaRelocationSource");
+            AppendTransitionIfMissing(
+                transferBatch.preTransferTransitions,
+                newSharedBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                "ChunkBatchIndexArenaRelocationDestination");
+            AppendTransitionIfMissing(
+                transferBatch.postTransferTransitions,
+                newSharedBuffer.get(),
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                "ChunkBatchIndexArenaRelocationDestination");
 
             for (const auto& copySpan : relocationPlan.copySpans)
             {
@@ -644,19 +969,26 @@ namespace enigma::voxel
                     ERROR_AND_DIE("ChunkRenderRegionStorage: Index arena relocation plan contains an invalid copy span");
                 }
 
-                const size_t sourceOffset = sizeof(uint32_t) * static_cast<size_t>(copySpan.sourceAllocation.startElement);
-                const size_t destinationOffset = sizeof(uint32_t) * static_cast<size_t>(copySpan.destinationAllocation.startElement);
-                const size_t copySize = sizeof(uint32_t) * static_cast<size_t>(copySpan.sourceAllocation.elementCount);
-                std::memcpy(
-                    static_cast<unsigned char*>(newMappedData) + destinationOffset,
-                    static_cast<unsigned char*>(oldMappedData) + sourceOffset,
-                    copySize);
+                transferBatch.copySpans.push_back(BufferCopySpan{
+                    oldBuffer.get(),
+                    newSharedBuffer.get(),
+                    ComputeByteOffset(copySpan.sourceAllocation, sizeof(uint32_t)),
+                    ComputeByteOffset(copySpan.destinationAllocation, sizeof(uint32_t)),
+                    ComputeByteSize(copySpan.sourceAllocation.elementCount, sizeof(uint32_t))
+                });
+            }
+
+            if (!ExecuteCopyBatchAndWait(transferBatch))
+            {
+                ERROR_RECOVERABLE("ChunkRenderRegionStorage: Failed to migrate used index arena ranges");
+                return false;
             }
         }
 
         m_indexArena.buffer = newSharedBuffer;
         m_indexArena.capacityIndices = relocationPlan.newCapacity;
         m_indexArena.freeRanges.clear();
+        m_indexArena.retiredRanges.clear();
         if (relocationPlan.newCapacity > relocationPlan.relocatedElementCount)
         {
             m_indexArena.freeRanges.push_back(ChunkBatchArenaAllocation{
@@ -668,6 +1000,7 @@ namespace enigma::voxel
         RefreshRegionIndexAllocationsAfterRelocation(relocationPlan);
         RefreshIndexArenaBindings();
         RecordArenaRelocation(relocationPlan);
+        oldBuffer.reset();
         return true;
     }
 
@@ -857,24 +1190,86 @@ namespace enigma::voxel
             return false;
         }
 
-        if (!UploadVertexArenaData(newVertexAllocation, buildOutput.vertices.data(), static_cast<uint32_t>(buildOutput.vertices.size())))
+        if (!ValidateUploadRange(
+                m_vertexArena.buffer,
+                newVertexAllocation,
+                sizeof(TerrainVertex),
+                buildOutput.vertices.size()))
         {
             RecordReplacementFallback(ChunkBatchArenaFallbackReason::VertexArenaUploadFailed);
             FreeVertexArenaSlice(newVertexAllocation);
             FreeIndexArenaSlice(newIndexAllocation);
-            ERROR_RECOVERABLE(Stringf("ChunkRenderRegionStorage: Failed to upload shared arena data for region (%d, %d)",
+            ERROR_RECOVERABLE(Stringf("ChunkRenderRegionStorage: Invalid vertex upload range for region (%d, %d)",
                 region.id.regionCoords.x,
                 region.id.regionCoords.y));
             region.buildFailed = true;
             return false;
         }
 
-        if (!UploadIndexArenaData(newIndexAllocation, buildOutput.indices))
+        if (!ValidateUploadRange(
+                m_indexArena.buffer,
+                newIndexAllocation,
+                sizeof(uint32_t),
+                buildOutput.indices.size()))
         {
             RecordReplacementFallback(ChunkBatchArenaFallbackReason::IndexArenaUploadFailed);
             FreeVertexArenaSlice(newVertexAllocation);
             FreeIndexArenaSlice(newIndexAllocation);
-            ERROR_RECOVERABLE(Stringf("ChunkRenderRegionStorage: Failed to upload shared arena data for region (%d, %d)",
+            ERROR_RECOVERABLE(Stringf("ChunkRenderRegionStorage: Invalid index upload range for region (%d, %d)",
+                region.id.regionCoords.x,
+                region.id.regionCoords.y));
+            region.buildFailed = true;
+            return false;
+        }
+
+        ChunkGeometryTransferPlan transferPlan = {};
+        transferPlan.uploadBatch.workload       = enigma::graphic::QueueWorkloadClass::ChunkGeometryUpload;
+        transferPlan.uploadBatch.preferredQueue = CommandQueueType::Copy;
+
+        AppendTransitionIfMissing(
+            transferPlan.uploadBatch.preTransferTransitions,
+            m_vertexArena.buffer.get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            "ChunkBatchVertexArena");
+        AppendTransitionIfMissing(
+            transferPlan.uploadBatch.postTransferTransitions,
+            m_vertexArena.buffer.get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            "ChunkBatchVertexArena");
+        transferPlan.uploadBatch.uploadSpans.push_back(BufferUploadSpan{
+            m_vertexArena.buffer.get(),
+            ComputeByteOffset(newVertexAllocation, sizeof(TerrainVertex)),
+            buildOutput.vertices.data(),
+            ComputeByteSize(static_cast<uint32_t>(buildOutput.vertices.size()), sizeof(TerrainVertex))
+        });
+
+        AppendTransitionIfMissing(
+            transferPlan.uploadBatch.preTransferTransitions,
+            m_indexArena.buffer.get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            "ChunkBatchIndexArena");
+        AppendTransitionIfMissing(
+            transferPlan.uploadBatch.postTransferTransitions,
+            m_indexArena.buffer.get(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            "ChunkBatchIndexArena");
+        transferPlan.uploadBatch.uploadSpans.push_back(BufferUploadSpan{
+            m_indexArena.buffer.get(),
+            ComputeByteOffset(newIndexAllocation, sizeof(uint32_t)),
+            buildOutput.indices.data(),
+            ComputeByteSize(static_cast<uint32_t>(buildOutput.indices.size()), sizeof(uint32_t))
+        });
+
+        if (!transferPlan.HasUploadWork() || !ExecuteUploadBatchAndWait(transferPlan.uploadBatch))
+        {
+            RecordReplacementFallback(ChunkBatchArenaFallbackReason::VertexArenaUploadFailed);
+            FreeVertexArenaSlice(newVertexAllocation);
+            FreeIndexArenaSlice(newIndexAllocation);
+            ERROR_RECOVERABLE(Stringf("ChunkRenderRegionStorage: Failed to execute shared arena transfer batch for region (%d, %d)",
                 region.id.regionCoords.x,
                 region.id.regionCoords.y));
             region.buildFailed = true;
@@ -914,8 +1309,8 @@ namespace enigma::voxel
             region.chunkSlices.emplace(GetChunkKey(chunkOutput.chunkCoords), runtimeSlice);
         }
 
-        FreeVertexArenaSlice(oldVertexAllocation);
-        FreeIndexArenaSlice(oldIndexAllocation);
+        RetireVertexArenaSlice(oldVertexAllocation);
+        RetireIndexArenaSlice(oldIndexAllocation);
         return true;
     }
 
@@ -981,6 +1376,20 @@ namespace enigma::voxel
             outFallbackReason = reason;
             return false;
         };
+
+        auto* commandListManager = graphic::D3D12RenderSystem::GetCommandListManager();
+        if (commandListManager == nullptr)
+        {
+            return failWithFallback(ChunkBatchArenaFallbackReason::ReplacementStateInvalid);
+        }
+
+        commandListManager->UpdateCompletedCommandLists();
+        const graphic::QueueFenceSnapshot completedSnapshot = commandListManager->GetCompletedFenceSnapshot();
+        const QueueSubmissionToken latestGraphicsToken = CaptureLatestGraphicsRetirementToken();
+        if (!IsGraphicsSubmissionComplete(latestGraphicsToken, completedSnapshot))
+        {
+            return failWithFallback(ChunkBatchArenaFallbackReason::ReplacementStateInvalid);
+        }
 
         std::vector<int64_t> dirtyChunkKeys(region.dirtyChunkKeys.begin(), region.dirtyChunkKeys.end());
         std::sort(dirtyChunkKeys.begin(), dirtyChunkKeys.end());
@@ -1055,40 +1464,70 @@ namespace enigma::voxel
         for (PendingChunkReplacement& replacement : pendingReplacements)
         {
             ChunkBatchChunkRuntimeSlice& runtimeSlice = *replacement.runtimeSlice;
-            if (!replacement.clearSlice && !replacement.buildOutput.vertices.empty())
+            BufferTransferBatch          replacementBatch = {};
+            replacementBatch.workload       = enigma::graphic::QueueWorkloadClass::ChunkGeometryUpload;
+            replacementBatch.preferredQueue = CommandQueueType::Copy;
+
+            std::vector<std::vector<uint32_t>> replacementIndexUploads;
+            replacementIndexUploads.reserve(3u);
+
+            const bool  hasVertexUpload    = !replacement.clearSlice && !replacement.buildOutput.vertices.empty();
+            bool        nextHasWorldBounds = false;
+            AABB3       nextWorldBounds    = runtimeSlice.worldBounds;
+            uint32_t    nextIndexCounts[3] = {};
+
+            if (hasVertexUpload)
             {
                 const ChunkBatchArenaAllocation absoluteVertexAllocation = MakeAbsoluteAllocation(
                     region.geometry.vertexAllocation,
                     runtimeSlice.vertexAllocation.startElement,
                     static_cast<uint32_t>(replacement.buildOutput.vertices.size()));
-                if (!UploadVertexArenaData(
-                    absoluteVertexAllocation,
-                    replacement.buildOutput.vertices.data(),
-                    static_cast<uint32_t>(replacement.buildOutput.vertices.size())))
+                if (!ValidateUploadRange(
+                        m_vertexArena.buffer,
+                        absoluteVertexAllocation,
+                        sizeof(TerrainVertex),
+                        replacement.buildOutput.vertices.size()))
                 {
                     return failWithFallback(ChunkBatchArenaFallbackReason::ReplacementVertexUploadFailed);
                 }
 
-                runtimeSlice.worldBounds = replacement.buildOutput.worldBounds;
-                runtimeSlice.hasWorldBounds = replacement.buildOutput.hasWorldBounds;
-            }
-            else
-            {
-                runtimeSlice.hasWorldBounds = false;
+                AppendTransitionIfMissing(
+                    replacementBatch.preTransferTransitions,
+                    m_vertexArena.buffer.get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    "ChunkBatchVertexArena");
+                AppendTransitionIfMissing(
+                    replacementBatch.postTransferTransitions,
+                    m_vertexArena.buffer.get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    "ChunkBatchVertexArena");
+                replacementBatch.uploadSpans.push_back(BufferUploadSpan{
+                    m_vertexArena.buffer.get(),
+                    ComputeByteOffset(absoluteVertexAllocation, sizeof(TerrainVertex)),
+                    replacement.buildOutput.vertices.data(),
+                    ComputeByteSize(static_cast<uint32_t>(replacement.buildOutput.vertices.size()), sizeof(TerrainVertex))
+                });
+
+                nextWorldBounds = replacement.buildOutput.worldBounds;
+                nextHasWorldBounds = replacement.buildOutput.hasWorldBounds;
             }
 
             for (ChunkBatchLayer layer : layers)
             {
                 ChunkBatchChunkLayerSlice& runtimeLayerSlice = runtimeSlice.GetLayerSlice(layer);
+                const size_t               layerIndex = static_cast<size_t>(layer);
                 if (!runtimeLayerSlice.HasReservedCapacity())
                 {
-                    runtimeLayerSlice.indexCount = 0u;
+                    nextIndexCounts[layerIndex] = 0u;
                     continue;
                 }
 
-                std::vector<uint32_t> layerUploadIndices(
+                replacementIndexUploads.emplace_back(
                     runtimeLayerSlice.reservedIndexCount,
                     runtimeSlice.vertexAllocation.startElement);
+                std::vector<uint32_t>& layerUploadIndices = replacementIndexUploads.back();
 
                 if (!replacement.clearSlice)
                 {
@@ -1104,21 +1543,59 @@ namespace enigma::voxel
                         layerUploadIndices[indexOffset] = runtimeSlice.vertexAllocation.startElement + sourceIndex;
                     }
 
-                    runtimeLayerSlice.indexCount = static_cast<uint32_t>(sourceIndices.size());
+                    nextIndexCounts[layerIndex] = static_cast<uint32_t>(sourceIndices.size());
                 }
                 else
                 {
-                    runtimeLayerSlice.indexCount = 0u;
+                    nextIndexCounts[layerIndex] = 0u;
                 }
 
                 const ChunkBatchArenaAllocation absoluteIndexAllocation = MakeAbsoluteAllocation(
                     region.geometry.indexAllocation,
                     runtimeLayerSlice.startIndex,
                     runtimeLayerSlice.reservedIndexCount);
-                if (!UploadIndexArenaData(absoluteIndexAllocation, layerUploadIndices))
+                if (!ValidateUploadRange(
+                        m_indexArena.buffer,
+                        absoluteIndexAllocation,
+                        sizeof(uint32_t),
+                        layerUploadIndices.size()))
                 {
                     return failWithFallback(ChunkBatchArenaFallbackReason::ReplacementIndexUploadFailed);
                 }
+
+                AppendTransitionIfMissing(
+                    replacementBatch.preTransferTransitions,
+                    m_indexArena.buffer.get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    "ChunkBatchIndexArena");
+                AppendTransitionIfMissing(
+                    replacementBatch.postTransferTransitions,
+                    m_indexArena.buffer.get(),
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                    D3D12_RESOURCE_STATE_GENERIC_READ,
+                    "ChunkBatchIndexArena");
+                replacementBatch.uploadSpans.push_back(BufferUploadSpan{
+                    m_indexArena.buffer.get(),
+                    ComputeByteOffset(absoluteIndexAllocation, sizeof(uint32_t)),
+                    layerUploadIndices.data(),
+                    ComputeByteSize(runtimeLayerSlice.reservedIndexCount, sizeof(uint32_t))
+                });
+            }
+
+            if (!ExecuteUploadBatchAndWait(replacementBatch))
+            {
+                return failWithFallback(
+                    hasVertexUpload
+                        ? ChunkBatchArenaFallbackReason::ReplacementVertexUploadFailed
+                        : ChunkBatchArenaFallbackReason::ReplacementIndexUploadFailed);
+            }
+
+            runtimeSlice.worldBounds = nextWorldBounds;
+            runtimeSlice.hasWorldBounds = nextHasWorldBounds;
+            for (ChunkBatchLayer layer : layers)
+            {
+                runtimeSlice.GetLayerSlice(layer).indexCount = nextIndexCounts[static_cast<size_t>(layer)];
             }
 
             appliedReplacementCount++;

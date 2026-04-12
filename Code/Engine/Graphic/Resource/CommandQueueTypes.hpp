@@ -27,7 +27,9 @@ namespace enigma::graphic
         ImGui,
         GraphicsStatefulUpload,
         CopyReadyUpload,
-        MipmapGeneration
+        MipmapGeneration,
+        ChunkGeometryUpload,
+        ChunkArenaRelocation
     };
 
     enum class QueueFallbackReason
@@ -53,6 +55,7 @@ namespace enigma::graphic
     };
 
     static constexpr size_t kCommandQueueTypeCount = 3;
+    static constexpr size_t kQueueWorkloadClassCount = static_cast<size_t>(QueueWorkloadClass::ChunkArenaRelocation) + 1;
 
     constexpr size_t GetCommandQueueTypeIndex(CommandQueueType queueType) noexcept
     {
@@ -269,8 +272,8 @@ namespace enigma::graphic
         std::array<bool, kCommandQueueTypeCount> lastRetirementExpectedQueues = {};
         std::array<bool, kCommandQueueTypeCount> lastRetirementMissingQueues = {};
         std::array<bool, kCommandQueueTypeCount> lastRetirementWaitedQueues = {};
-        std::array<std::array<uint64_t, 3>, 8> workloadSubmissionsByQueue = {};
-        std::array<std::array<uint64_t, 3>, 3> queueWaitsByProducerConsumer = {};
+        std::array<std::array<uint64_t, kCommandQueueTypeCount>, kQueueWorkloadClassCount> workloadSubmissionsByQueue = {};
+        std::array<std::array<uint64_t, kCommandQueueTypeCount>, kCommandQueueTypeCount> queueWaitsByProducerConsumer = {};
         QueueFallbackReason lastFallbackReason = QueueFallbackReason::None;
 
         void RecordSubmission(QueueWorkloadClass workload, CommandQueueType queueType) noexcept

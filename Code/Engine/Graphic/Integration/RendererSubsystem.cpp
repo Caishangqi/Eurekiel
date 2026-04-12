@@ -1099,11 +1099,6 @@ void RendererSubsystem::EndCamera(const ICamera& camera)
 
 D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned stride)
 {
-    // 教学要点：
-    // 1. 调用D3D12RenderSystem::CreateVertexBufferTyped()创建新架构的VertexBuffer
-    // 2. 返回裸指针，调用者负责管理生命周期
-    // 3. 使用nullptr作为initialData（后续通过UpdateBuffer上传数据）
-
     if (size == 0 || stride == 0)
     {
         LogError(LogRenderer,
@@ -1112,8 +1107,16 @@ D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned str
         return nullptr;
     }
 
-    // 调用D3D12RenderSystem创建D12VertexBuffer
-    auto vertexBuffer = D3D12RenderSystem::CreateVertexBuffer(size, stride, nullptr, "AppVertexBuffer");
+    BufferCreateInfo createInfo;
+    createInfo.size         = size;
+    createInfo.usage        = BufferUsage::VertexBuffer;
+    createInfo.memoryAccess = MemoryAccess::CPUWritable;
+    createInfo.initialData  = nullptr;
+    createInfo.debugName    = "AppVertexBuffer";
+    createInfo.byteStride   = stride;
+    createInfo.usagePolicy  = BufferUsagePolicy::DynamicUpload;
+
+    auto vertexBuffer = D3D12RenderSystem::CreateVertexBuffer(createInfo);
 
     if (!vertexBuffer)
     {
@@ -1189,13 +1192,6 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
         return;
     }
 
-    // 教学要点：
-    // - D12VertexBuffer使用Map/Unmap模式进行CPU更新
-    // - Map()将GPU内存映射到CPU可访问地址空间
-    // - Unmap()取消映射并确保GPU可见性
-    // - 对应DirectX 11的UpdateSubresource，但DirectX 12更显式
-
-    // 检查越界
     if (offset + size > buffer->GetSize())
     {
         LogError(LogRenderer,
@@ -1204,7 +1200,14 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
         return;
     }
 
-    // Map缓冲区（获取CPU可访问指针）
+    if (!buffer->SupportsCpuMapping())
+    {
+        LogError(LogRenderer,
+                 "UpdateBuffer: Buffer '%s' does not support CPU mapping",
+                 buffer->GetDebugName().c_str());
+        return;
+    }
+
     void* mappedPtr = buffer->Map(nullptr);
     if (!mappedPtr)
     {
@@ -1212,10 +1215,8 @@ void RendererSubsystem::UpdateBuffer(D12VertexBuffer* buffer, const void* data, 
         return;
     }
 
-    // 将数据拷贝到映射的内存（支持offset）
     memcpy(static_cast<uint8_t*>(mappedPtr) + offset, data, size);
 
-    // Unmap缓冲区（使数据对GPU可见）
     D3D12_RANGE writtenRange = {offset, offset + size};
     buffer->Unmap(&writtenRange);
 

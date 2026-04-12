@@ -4,6 +4,7 @@
 #include "ChunkMesh.hpp"
 #include "ChunkSerializationInterfaces.hpp"
 #include "ChunkState.hpp"
+#include "MeshBuild/ChunkMeshingDispatchContext.hpp"
 #include <array>
 #include <memory>
 #include <atomic>
@@ -62,7 +63,8 @@ namespace enigma::voxel
      *
      * THREADING DESIGN:
      * - Block access is safe during single-threaded generation
-     * - Mesh building happens on main thread (deferred via m_isDirty flag)
+     * - CPU mesh building can run on worker threads through snapshot-based tasks
+     * - Mesh publication stays on the main thread through World-owned completion handling
      * - State transitions use atomic operations for async loading system
      *
      * MEMORY OPTIMIZATION:
@@ -140,6 +142,7 @@ namespace enigma::voxel
 
         // Block Access - PUBLIC for World class access
         BlockState* GetBlock(int32_t x, int32_t y, int32_t z); // Local coordinates
+        BlockState* GetBlock(int32_t x, int32_t y, int32_t z) const; // Local coordinates (read-only)
         void        SetBlock(int32_t x, int32_t y, int32_t z, BlockState* state); // World generation (no modify flag)
         void        SetBlockByPlayer(int32_t x, int32_t y, int32_t z, BlockState* state); // Player action (sets modify flag)
         BlockState* GetBlock(const BlockPos& worldPos); // World coordinates
@@ -162,10 +165,11 @@ namespace enigma::voxel
 
         // Mesh Management - PUBLIC for rendering system
         void       MarkDirty(); // Mark chunk as needing mesh rebuild
-        bool       RebuildMesh(); // Regenerate ChunkMesh from block data using ChunkMeshHelper
-        void       SetMesh(std::unique_ptr<ChunkMesh> mesh); // Set new mesh (used by ChunkMeshHelper)
+        bool       RebuildMesh(); // Synchronous fallback wrapper around ChunkMeshBuilder
+        void       SetMesh(std::unique_ptr<ChunkMesh> mesh); // Set new mesh after CPU meshing
         ChunkMesh* GetMesh() const; // Get mesh for rendering
         bool       NeedsMeshRebuild() const; // Check if mesh needs rebuilding
+        bool       CanPublishMesh() const; // Main-thread mesh publication legality
 
         //-------------------------------------------------------------------------------------------
         // State Management - PUBLIC for World management
@@ -203,6 +207,7 @@ namespace enigma::voxel
         IntVec2  GetChunkCoords() const { return m_chunkCoords; }
         int32_t  GetChunkX() const { return m_chunkCoords.x; }
         int32_t  GetChunkY() const { return m_chunkCoords.y; }
+        uint64_t GetInstanceId() const { return m_instanceId; }
         BlockPos GetWorldPos() const; // Bottom corner world position
 
         ChunkAttachmentHolder&       GetAttachmentHolder() { return m_attachmentHolder; }
@@ -210,6 +215,8 @@ namespace enigma::voxel
 
         // [A05] Neighbor chunk access for BlockIterator
         void   SetWorld(class World* world) { m_world = world; }
+        World* GetWorld() const { return m_world; }
+        bool   CanReadForMeshing() const { return m_world != nullptr && IsActive(); }
         Chunk* GetNorthNeighbor() const;
         Chunk* GetSouthNeighbor() const;
         Chunk* GetEastNeighbor() const;
@@ -248,6 +255,7 @@ namespace enigma::voxel
         //-------------------------------------------------------------------------------------------
         // Core Data
         //-------------------------------------------------------------------------------------------
+        uint64_t                   m_instanceId = 0;
         IntVec2                    m_chunkCoords = IntVec2(0, 0);
         std::vector<BlockState*>   m_blocks; // Block storage
         std::unique_ptr<ChunkMesh> m_mesh; // Compiled mesh for rendering

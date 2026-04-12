@@ -7,6 +7,7 @@
 #include "ThirdParty/imgui/imgui.h"
 #include "ThirdParty/imgui/imgui_internal.h"
 #include "ThirdParty/imgui/backends/imgui_impl_win32.h"
+#include "ThirdParty/implot/implot.h"
 
 // ImGui backend implementation
 #include <filesystem>
@@ -244,6 +245,7 @@ namespace enigma::core
     {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
+        ImPlot::CreateContext();
 
         ImGuiIO& io = ImGui::GetIO();
 
@@ -329,6 +331,9 @@ namespace enigma::core
 
         // Close the Win32 platform layer
         ImGui_ImplWin32_Shutdown();
+
+        // Destroy ImPlot before the parent ImGui context.
+        ImPlot::DestroyContext();
 
         // Destroy ImGui context
         ImGui::DestroyContext();

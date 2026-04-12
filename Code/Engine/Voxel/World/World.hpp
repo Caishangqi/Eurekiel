@@ -11,6 +11,9 @@
 #include "../Chunk/ChunkJob.hpp"
 #include "../Chunk/GenerateChunkJob.hpp"
 #include "../Chunk/LoadChunkJob.hpp"
+#include "../Chunk/MeshBuild/ChunkMeshBuildInputFactory.hpp"
+#include "../Chunk/MeshBuild/AsyncChunkMeshDiagnostics.hpp"
+#include "../Chunk/MeshBuild/ChunkMeshBuildTask.hpp"
 #include "../Chunk/SaveChunkJob.hpp"
 #include "../Generation/TerrainGenerator.hpp"
 #include "ESFWorldStorage.hpp"
@@ -24,6 +27,7 @@
 #include <vector>
 #include <deque>
 #include <atomic>
+#include <optional>
 
 class Texture;
 
@@ -45,6 +49,18 @@ namespace enigma::voxel
          * - Integration and scheduling of world generators
          * - Unified portal for rendering and updating
          */
+    struct ChunkMeshBuildState
+    {
+        uint64_t                                   latestRequestedVersion = 0;
+        uint64_t                                   latestSubmittedVersion = 0;
+        uint64_t                                   chunkInstanceId        = 0;
+        std::optional<enigma::core::TaskHandle>    activeHandle;
+        bool                                       pendingDispatch        = false;
+        bool                                       important              = false;
+        bool                                       activeImportant        = false;
+        bool                                       activeRequiresWorkerMaterialization = false;
+    };
+
     class World
     {
     public:
@@ -95,6 +111,7 @@ namespace enigma::voxel
         Chunk* GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
         Chunk* GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY) const;
         Chunk* GetChunk(const BlockPos& blockPosition) const;
+        Chunk* ResolveChunkForMeshing(const ChunkMeshingDispatchContext& context) const;
         void   UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
         bool   IsChunkLoaded(int32_t chunkCoordinateX, int32_t chunkCoordinateY);
 
@@ -119,6 +136,7 @@ namespace enigma::voxel
         const ChunkBatchStats&                               GetChunkBatchStats() const { return m_chunkBatchStats; }
         ChunkRenderRegionStorage&                            GetChunkRenderRegionStorage() { return m_chunkRenderRegionStorage; }
         const ChunkRenderRegionStorage&                      GetChunkRenderRegionStorage() const { return m_chunkRenderRegionStorage; }
+        const AsyncChunkMeshDiagnostics&                     GetAsyncChunkMeshDiagnostics() const { return m_asyncChunkMeshDiagnostics; }
         uint32_t                                             GetMaxChunkBatchRegionRebuildsPerFrame() const { return m_maxChunkBatchRegionRebuildsPerFrame; }
 
         // 调试功能
@@ -151,6 +169,9 @@ namespace enigma::voxel
         const std::string& GetWorldName() const { return m_worldName; }
         uint64_t           GetWorldSeed() const { return m_worldSeed; }
         const std::string& GetWorldPath() const { return m_worldPath; }
+        uint64_t           GetWorldLifetimeToken() const { return m_worldLifetimeToken.load(); }
+        void               OnWorkerMaterializationStarted();
+        void               OnWorkerMaterializationFinished(AsyncChunkMeshMaterializationStatus status);
 
         //-------------------------------------------------------------------------------------------
         // Phase 3: Async Task Management (Multi-threaded Chunk Loading)
@@ -166,7 +187,7 @@ namespace enigma::voxel
 
         // Mark a chunk as needing mesh rebuild and add to queue
         // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
-        void ScheduleChunkMeshRebuild(Chunk* chunk);
+        void ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant = false);
 
         // [R5.0] Mark all loaded chunks as dirty and schedule mesh rebuild
         // Called when ShaderBundle switches (material ID mappings change)
@@ -206,6 +227,7 @@ namespace enigma::voxel
         void ProcessGenerateChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, GenerateChunkJob* job);
         void ProcessLoadChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, LoadChunkJob* job);
         void ProcessSaveChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, SaveChunkJob* job);
+        void ProcessChunkMeshBuildTaskRecord(const enigma::core::TaskCompletionRecord& record, ChunkMeshBuildTask* task);
         void LogDiscardedChunkTaskRecord(const enigma::core::TaskCompletionRecord& record, const char* jobLabel, const char* reason) const;
 
         // Handle completed generation job
@@ -216,15 +238,46 @@ namespace enigma::voxel
 
         // Handle completed save job
         void HandleSaveChunkCompleted(SaveChunkJob* job);
+        void HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionRecord& record,
+                                           ChunkMeshBuildTask* task,
+                                           std::optional<ChunkMeshBuildResult> result);
+        bool ShouldRequeueDiscardedChunkMeshBuild(const enigma::core::TaskCompletionRecord& record,
+                                                  const std::optional<ChunkMeshBuildResult>& result,
+                                                  const Chunk& chunk,
+                                                  const ChunkMeshBuildState& buildState) const;
+        bool CanPublishChunkMeshBuildResult(const Chunk& chunk,
+                                            const ChunkMeshBuildState& buildState,
+                                            const ChunkMeshBuildTask& task,
+                                            const ChunkMeshBuildResult& result,
+                                            const char*& rejectionReason) const;
+        void QueueChunkMeshBuildRetry(Chunk& chunk, ChunkMeshBuildState& buildState, IntVec2 chunkCoords);
+        bool IsImportantChunkMeshBuild(const Chunk& chunk, bool forceImportant = false) const;
+        bool HasImportantChunkMeshBuildInFlight() const;
+        void RunImportantChunkBoundedWait();
+        void RefreshAsyncChunkMeshDiagnosticsSnapshot();
+        void CancelActiveChunkMeshBuilds(const char* reason);
+        bool HasOutstandingChunkMeshBuildWork() const;
+        void ClearAsyncChunkMeshBuildState();
+        void ReleaseLoadedChunkRuntimeState();
 
         //-------------------------------------------------------------------------------------------
-        // Phase 1: Main Thread Mesh Building (Assignment 03 Requirements)
+        // Async Chunk Mesh Dispatch
         //-------------------------------------------------------------------------------------------
 
-        // Update chunk meshes on main thread (called from Update())
+        // Update chunk mesh requests (called from Update())
         void UpdateChunkMeshes();
+        uint32_t DispatchQueuedChunkMeshBuilds(uint32_t maxDispatchCount);
         uint32_t RebuildQueuedChunkMeshes(uint32_t maxRebuildCount);
         bool     RebuildChunkMeshNow(Chunk* chunk);
+        bool     SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildState);
+        bool     RequestChunkMeshBuildCancellation(IntVec2 chunkCoords, const char* reason);
+        bool     CanDispatchAsyncChunkMeshBuilds() const;
+        void     RefreshAsyncChunkMeshMode();
+        void     EnqueueChunkMeshBuildRequest(IntVec2 chunkCoords);
+        void     RemovePendingChunkMeshBuildRequest(IntVec2 chunkCoords);
+        ChunkMeshBuildState& GetOrCreateChunkMeshBuildState(IntVec2 chunkCoords);
+        ChunkMeshBuildState* FindChunkMeshBuildState(IntVec2 chunkCoords);
+        void     EraseChunkMeshBuildState(IntVec2 chunkCoords);
 
         // Sort mesh rebuild queue by distance to player (nearest first)
         void SortMeshQueueByDistance();
@@ -320,21 +373,53 @@ namespace enigma::voxel
         int m_maxSaveJobs     = 32; // Increased for better save throughput (lower priority than load)
 
         //-------------------------------------------------------------------------------------------
-        // Phase 1: Main Thread Mesh Building Queue (Assignment 03 Requirements)
+        // Async Chunk Mesh Build State
         //-------------------------------------------------------------------------------------------
-        std::deque<Chunk*> m_pendingMeshRebuildQueue; // Chunks waiting for mesh rebuild on main thread
-        int                m_maxMeshRebuildsPerFrame = 2; // Maximum mesh rebuilds per frame (Assignment 03 spec)
+        std::unordered_map<int64_t, ChunkMeshBuildState> m_chunkMeshBuildStates;
+        std::deque<IntVec2>                              m_pendingChunkMeshBuildQueue;
+        AsyncChunkMeshDiagnostics                        m_asyncChunkMeshDiagnostics;
+        bool                                             m_asyncChunkMeshEnabled = true;
+        int                                              m_maxMeshRebuildsPerFrame = 2; // Maximum chunk mesh dispatches/rebuilds per frame
+        float                                            m_importantChunkDistanceThreshold = 2.0f;
+        bool                                             m_enableImportantChunkBoundedWait = true;
+        uint32_t                                         m_importantChunkWaitBudgetMicros = 750;
+        uint32_t                                         m_importantChunkWaitYieldLimit   = 8;
         uint32_t           m_maxChunkBatchRegionRebuildsPerFrame = 2;
 
         //-------------------------------------------------------------------------------------------
         // Phase 5: Graceful Shutdown State
         //-------------------------------------------------------------------------------------------
         std::atomic<bool> m_isShuttingDown{false}; // Shutdown flag (thread-safe)
+        std::atomic<uint64_t> m_worldLifetimeToken{1};
 
         //-------------------------------------------------------------------------------------------
         // [REFACTORED] Lighting System State - Now uses VoxelLightEngine
         //-------------------------------------------------------------------------------------------
         std::unique_ptr<VoxelLightEngine> m_voxelLightEngine; // Composite light engine
         int                               m_skyDarken = 0; // Computed from time (0 at noon, 11 at midnight)
+        struct AsyncChunkMeshWorkerCounterSnapshot
+        {
+            uint64_t attempts          = 0;
+            uint64_t succeeded         = 0;
+            uint64_t retryLater        = 0;
+            uint64_t resolveFailed     = 0;
+            uint64_t missingNeighbors  = 0;
+            uint64_t validationFailed  = 0;
+        };
+
+        std::atomic<uint64_t> m_workerMaterializationAttempts{0};
+        std::atomic<uint64_t> m_workerMaterializationSucceeded{0};
+        std::atomic<uint64_t> m_workerMaterializationRetryLater{0};
+        std::atomic<uint64_t> m_workerMaterializationResolveFailed{0};
+        std::atomic<uint64_t> m_workerMaterializationMissingNeighbors{0};
+        std::atomic<uint64_t> m_workerMaterializationValidationFailed{0};
+        std::atomic<uint64_t> m_workerMaterializationExecutingCount{0};
+        std::atomic<uint8_t>  m_lastWorkerMaterializationStatus{
+            static_cast<uint8_t>(AsyncChunkMeshMaterializationStatus::None)
+        };
+        std::atomic<uint8_t>  m_lastWorkerMaterializationFailure{
+            static_cast<uint8_t>(AsyncChunkMeshMaterializationStatus::None)
+        };
+        AsyncChunkMeshWorkerCounterSnapshot m_previousWorkerMaterializationCounters;
     };
 }

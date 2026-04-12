@@ -4,7 +4,6 @@
 #include "../Chunk/ChunkStorageConfig.hpp"
 #include "../Chunk/ESFSChunkSerializer.hpp"
 #include "../Chunk/ChunkHelper.hpp"
-#include "../Chunk/ChunkMeshHelper.hpp"
 #include "../Block/PlacementContext.hpp"
 
 #include "Engine/Core/EngineCommon.hpp"
@@ -16,7 +15,9 @@
 
 #include <cfloat>
 #include <algorithm>
+#include <chrono>
 #include <exception>
+#include <thread>
 
 #include "Engine/Registry/Block/Block.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
@@ -110,7 +111,7 @@ void World::SetBlockState(const BlockPos& pos, BlockState* state) const
 
         // Mark chunk for mesh rebuild on main thread
         // This ensures visual feedback when player places/breaks blocks
-        const_cast<World*>(this)->ScheduleChunkMeshRebuild(chunk);
+        const_cast<World*>(this)->ScheduleChunkMeshRebuild(chunk, true);
     }
 }
 
@@ -515,6 +516,88 @@ Chunk* World::GetChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY) const
     return nullptr;
 }
 
+Chunk* World::ResolveChunkForMeshing(const ChunkMeshingDispatchContext& context) const
+{
+    if (m_isShuttingDown.load())
+    {
+        return nullptr;
+    }
+
+    if (context.worldLifetimeToken != 0 && context.worldLifetimeToken != m_worldLifetimeToken.load())
+    {
+        return nullptr;
+    }
+
+    Chunk* chunk = GetChunk(context.chunkCoords.x, context.chunkCoords.y);
+    if (chunk == nullptr)
+    {
+        return nullptr;
+    }
+
+    if (chunk->GetChunkCoords() != context.chunkCoords)
+    {
+        return nullptr;
+    }
+
+    if (chunk->GetInstanceId() != context.chunkInstanceId)
+    {
+        return nullptr;
+    }
+
+    if (!chunk->CanReadForMeshing())
+    {
+        return nullptr;
+    }
+
+    return chunk;
+}
+
+void World::OnWorkerMaterializationStarted()
+{
+    m_workerMaterializationAttempts.fetch_add(1, std::memory_order_relaxed);
+    m_workerMaterializationExecutingCount.fetch_add(1, std::memory_order_relaxed);
+}
+
+void World::OnWorkerMaterializationFinished(AsyncChunkMeshMaterializationStatus status)
+{
+    const uint64_t executingBeforeDecrement = m_workerMaterializationExecutingCount.load(std::memory_order_relaxed);
+    if (executingBeforeDecrement > 0)
+    {
+        m_workerMaterializationExecutingCount.fetch_sub(1, std::memory_order_relaxed);
+    }
+    else
+    {
+        m_workerMaterializationExecutingCount.store(0, std::memory_order_relaxed);
+    }
+
+    m_lastWorkerMaterializationStatus.store(static_cast<uint8_t>(status), std::memory_order_relaxed);
+
+    if (status == AsyncChunkMeshMaterializationStatus::Materialized)
+    {
+        m_workerMaterializationSucceeded.fetch_add(1, std::memory_order_relaxed);
+        m_lastWorkerMaterializationFailure.store(
+            static_cast<uint8_t>(AsyncChunkMeshMaterializationStatus::None),
+            std::memory_order_relaxed);
+        return;
+    }
+
+    m_workerMaterializationRetryLater.fetch_add(1, std::memory_order_relaxed);
+    m_lastWorkerMaterializationFailure.store(static_cast<uint8_t>(status), std::memory_order_relaxed);
+
+    if (status == AsyncChunkMeshMaterializationStatus::ResolveChunkFailed)
+    {
+        m_workerMaterializationResolveFailed.fetch_add(1, std::memory_order_relaxed);
+    }
+    else if (status == AsyncChunkMeshMaterializationStatus::MissingHorizontalNeighbors)
+    {
+        m_workerMaterializationMissingNeighbors.fetch_add(1, std::memory_order_relaxed);
+    }
+    else
+    {
+        m_workerMaterializationValidationFailed.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
 void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
 {
     int64_t chunkPackID = ChunkHelper::PackCoordinates(chunkCoordinateX, chunkCoordinateY);
@@ -539,12 +622,39 @@ void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
     m_chunkRenderRegionStorage.NotifyChunkUnloaded(IntVec2(chunkCoordinateX, chunkCoordinateY));
 
     // Validate pointer again before accessing chunk state (double insurance)
-    ChunkState currentState = chunk->GetState();
+    const IntVec2 chunkCoords(chunkCoordinateX, chunkCoordinateY);
+    ChunkState    currentState = chunk->GetState();
 
     if (currentState == ChunkState::PendingUnload)
     {
         LogDebug("world", "Chunk (%d, %d) is already pending async unload", chunkCoordinateX, chunkCoordinateY);
         return;
+    }
+
+    ChunkMeshBuildState* meshBuildState      = FindChunkMeshBuildState(chunkCoords);
+    const bool           hasActiveMeshBuild  = meshBuildState != nullptr && meshBuildState->activeHandle.has_value();
+    const bool           hasPendingMeshBuild = meshBuildState != nullptr && meshBuildState->pendingDispatch;
+
+    if (hasActiveMeshBuild)
+    {
+        LogDebug("world", "Chunk (%d, %d) has active mesh build, requesting cancellation and marking PendingUnload",
+                 chunkCoordinateX, chunkCoordinateY);
+        RequestChunkMeshBuildCancellation(chunkCoords, "unload");
+        if (currentState == ChunkState::Active)
+        {
+            chunk->SetState(ChunkState::PendingUnload);
+        }
+        else
+        {
+            chunk->TrySetState(currentState, ChunkState::PendingUnload);
+        }
+        return;
+    }
+
+    if (hasPendingMeshBuild)
+    {
+        RemovePendingChunkMeshBuildRequest(chunkCoords);
+        EraseChunkMeshBuildState(chunkCoords);
     }
 
     // Core logic: distinguish between async worker-owned states and other states
@@ -584,6 +694,7 @@ void World::UnloadChunk(int32_t chunkCoordinateX, int32_t chunkCoordinateY)
         }
 
         chunk->TrySetState(currentState, ChunkState::Inactive);
+        EraseChunkMeshBuildState(chunkCoords);
         m_loadedChunks.erase(it);
         // unique_ptr will automatically delete the chunk
     }
@@ -723,6 +834,7 @@ void World::Update(float deltaTime)
 {
     UNUSED(deltaTime)
     m_chunkBatchStats.ResetFrameCounters();
+    m_asyncChunkMeshDiagnostics.ClearFrame();
 
     // Phase 3: Update nearby chunks (activate/deactivate based on player position)
     UpdateNearbyChunks();
@@ -739,8 +851,9 @@ void World::Update(float deltaTime)
     // [REFACTORED] Process dirty lighting via VoxelLightEngine
     m_voxelLightEngine->RunLightUpdates();
 
-    // Phase 1: Update chunk meshes on main thread (Assignment 03 requirement)
+    // Dispatch mesh build work and optionally wait a bounded amount for important chunks.
     UpdateChunkMeshes();
+    RunImportantChunkBoundedWait();
 
     const uint32_t rebuiltRegionCount = m_chunkRenderRegionStorage.RebuildDirtyRegions(m_maxChunkBatchRegionRebuildsPerFrame);
     m_chunkBatchStats.dirtyRegionRebuilds = rebuiltRegionCount;
@@ -759,6 +872,7 @@ void World::Update(float deltaTime)
     }
 
     m_chunkBatchStats.visibleChunks = activeChunkCount;
+    RefreshAsyncChunkMeshDiagnosticsSnapshot();
 }
 
 bool World::SetEnableChunkDebug(bool enable)
@@ -962,15 +1076,37 @@ bool World::LoadWorld()
 
 void World::CloseWorld()
 {
-    // Save world data
-    SaveWorld();
+    WaitForPendingTasks();
+    m_worldLifetimeToken.fetch_add(1);
+
+    if (m_worldManager != nullptr)
+    {
+        SaveWorld();
+    }
+
+    ReleaseLoadedChunkRuntimeState();
+    ClearAsyncChunkMeshBuildState();
+
+    m_pendingGenerateQueue.clear();
+    m_pendingLoadQueue.clear();
+    m_pendingSaveQueue.clear();
+
+    m_activeGenerateJobHandles.clear();
+    m_activeLoadJobHandles.clear();
+    m_activeSaveJobHandles.clear();
+    m_activeGenerateJobs.store(0);
+    m_activeLoadJobs.store(0);
+    m_activeSaveJobs.store(0);
 
     // Turn off the storage system
     if (m_chunkStorage)
     {
         m_chunkStorage->Close();
         LogInfo("world", "Chunk storage closed for world '%s'", m_worldName.c_str());
+        m_chunkStorage.reset();
     }
+
+    m_chunkSerializer.reset();
 
     // Reset the manager
     m_worldManager.reset();
@@ -1296,6 +1432,8 @@ bool World::FinalizePendingUnloadChunk(Chunk* chunk, IntVec2 chunkCoords, const 
         chunk->SetMesh(nullptr);
     }
 
+    RemovePendingChunkMeshBuildRequest(chunkCoords);
+    EraseChunkMeshBuildState(chunkCoords);
     chunk->SetState(ChunkState::Inactive);
     m_loadedChunks.erase(ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y));
 
@@ -1671,6 +1809,565 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
     LogDebug("world", "Chunk (%d, %d) save completed, now Active", coords.x, coords.y);
 }
 
+bool World::RequestChunkMeshBuildCancellation(IntVec2 chunkCoords, const char* reason)
+{
+    ChunkMeshBuildState* buildState = FindChunkMeshBuildState(chunkCoords);
+    if (buildState == nullptr || !buildState->activeHandle.has_value() || g_theSchedule == nullptr)
+    {
+        return false;
+    }
+
+    bool cancellationRequested = false;
+    try
+    {
+        cancellationRequested = g_theSchedule->RequestTaskCancellation(*buildState->activeHandle);
+        LogDebug("world", "Requested mesh build cancellation for chunk (%d, %d) handle (%llu,%u): %s (%s)",
+                 chunkCoords.x,
+                 chunkCoords.y,
+                 buildState->activeHandle->id,
+                 buildState->activeHandle->generation,
+                 cancellationRequested ? "accepted" : "already terminal",
+                 reason);
+    }
+    catch (const std::exception& exception)
+    {
+        LogWarn("world", "Failed to request mesh build cancellation for chunk (%d, %d): %s",
+                chunkCoords.x,
+                chunkCoords.y,
+                exception.what());
+    }
+
+    return cancellationRequested;
+}
+
+bool World::IsImportantChunkMeshBuild(const Chunk& chunk, bool forceImportant) const
+{
+    if (forceImportant)
+    {
+        return true;
+    }
+
+    return GetChunkDistanceToPlayer(chunk.GetChunkX(), chunk.GetChunkY()) <= m_importantChunkDistanceThreshold;
+}
+
+bool World::ShouldRequeueDiscardedChunkMeshBuild(const enigma::core::TaskCompletionRecord& record,
+                                                 const std::optional<ChunkMeshBuildResult>& result,
+                                                 const Chunk& chunk,
+                                                 const ChunkMeshBuildState& buildState) const
+{
+    if (m_isShuttingDown.load() || !chunk.CanPublishMesh())
+    {
+        return false;
+    }
+
+    if (buildState.pendingDispatch || buildState.activeHandle.has_value())
+    {
+        return false;
+    }
+
+    if (result.has_value())
+    {
+        if (result->chunkCoords != chunk.GetChunkCoords())
+        {
+            return false;
+        }
+
+        if (result->chunkInstanceId != chunk.GetInstanceId() ||
+            result->chunkInstanceId != buildState.chunkInstanceId)
+        {
+            return false;
+        }
+
+        if (result->buildVersion != 0 && result->buildVersion != buildState.latestRequestedVersion)
+        {
+            return false;
+        }
+    }
+
+    return (result.has_value() && result->RequiresRetry()) ||
+           !result.has_value() ||
+           record.finalState == TaskState::Failed;
+}
+
+bool World::CanPublishChunkMeshBuildResult(const Chunk& chunk,
+                                           const ChunkMeshBuildState& buildState,
+                                           const ChunkMeshBuildTask& task,
+                                           const ChunkMeshBuildResult& result,
+                                           const char*& rejectionReason) const
+{
+    rejectionReason = nullptr;
+
+    if (m_isShuttingDown.load())
+    {
+        rejectionReason = "shutdown-active";
+        return false;
+    }
+
+    if (result.chunkCoords != task.GetChunkCoords() || result.chunkCoords != chunk.GetChunkCoords())
+    {
+        ERROR_RECOVERABLE(Stringf("Chunk mesh build result coordinate mismatch: task=(%d,%d) result=(%d,%d) chunk=(%d,%d)",
+                                  task.GetChunkCoords().x,
+                                  task.GetChunkCoords().y,
+                                  result.chunkCoords.x,
+                                  result.chunkCoords.y,
+                                  chunk.GetChunkCoords().x,
+                                  chunk.GetChunkCoords().y));
+        rejectionReason = "coords-mismatch";
+        return false;
+    }
+
+    if (!chunk.CanPublishMesh())
+    {
+        rejectionReason = "chunk-state-not-publishable";
+        return false;
+    }
+
+    if (result.chunkInstanceId != task.GetChunkInstanceId())
+    {
+        ERROR_RECOVERABLE(Stringf("Chunk mesh build result instance mismatch with task for chunk (%d,%d): task=%llu result=%llu",
+                                  result.chunkCoords.x,
+                                  result.chunkCoords.y,
+                                  task.GetChunkInstanceId(),
+                                  result.chunkInstanceId));
+        rejectionReason = "task-instance-mismatch";
+        return false;
+    }
+
+    if (result.chunkInstanceId != chunk.GetInstanceId() ||
+        result.chunkInstanceId != buildState.chunkInstanceId)
+    {
+        rejectionReason = "chunk-instance-mismatch";
+        return false;
+    }
+
+    if (result.buildVersion != task.GetBuildVersion())
+    {
+        ERROR_RECOVERABLE(Stringf("Chunk mesh build result version mismatch with task for chunk (%d,%d): task=%llu result=%llu",
+                                  result.chunkCoords.x,
+                                  result.chunkCoords.y,
+                                  task.GetBuildVersion(),
+                                  result.buildVersion));
+        rejectionReason = "task-version-mismatch";
+        return false;
+    }
+
+    if (result.buildVersion != buildState.latestSubmittedVersion)
+    {
+        rejectionReason = "submitted-version-mismatch";
+        return false;
+    }
+
+    if (result.buildVersion != buildState.latestRequestedVersion)
+    {
+        rejectionReason = "requested-version-mismatch";
+        return false;
+    }
+
+    if (buildState.pendingDispatch)
+    {
+        rejectionReason = "pending-dispatch-exists";
+        return false;
+    }
+
+    if (buildState.activeHandle.has_value())
+    {
+        rejectionReason = "newer-task-active";
+        return false;
+    }
+
+    return true;
+}
+
+void World::QueueChunkMeshBuildRetry(Chunk& chunk, ChunkMeshBuildState& buildState, IntVec2 chunkCoords)
+{
+    if (m_isShuttingDown.load() ||
+        !chunk.CanPublishMesh() ||
+        buildState.pendingDispatch ||
+        buildState.activeHandle.has_value())
+    {
+        return;
+    }
+
+    buildState.important = buildState.important || IsImportantChunkMeshBuild(chunk);
+    chunk.MarkDirty();
+    buildState.pendingDispatch = true;
+    EnqueueChunkMeshBuildRequest(chunkCoords);
+    SortMeshQueueByDistance();
+    m_asyncChunkMeshDiagnostics.frame.queued++;
+    m_asyncChunkMeshDiagnostics.cumulative.queued++;
+}
+
+bool World::HasImportantChunkMeshBuildInFlight() const
+{
+    for (const auto& [packedCoords, buildState] : m_chunkMeshBuildStates)
+    {
+        UNUSED(packedCoords);
+        if (buildState.activeHandle.has_value() && buildState.activeImportant)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void World::RunImportantChunkBoundedWait()
+{
+    if (!m_enableImportantChunkBoundedWait ||
+        m_importantChunkWaitBudgetMicros == 0 ||
+        m_importantChunkWaitYieldLimit == 0 ||
+        m_asyncChunkMeshDiagnostics.fallbackActive ||
+        g_theSchedule == nullptr ||
+        !HasImportantChunkMeshBuildInFlight())
+    {
+        return;
+    }
+
+    using Clock = std::chrono::steady_clock;
+
+    m_asyncChunkMeshDiagnostics.frame.boundedWaitAttempts++;
+    m_asyncChunkMeshDiagnostics.cumulative.boundedWaitAttempts++;
+
+    const Clock::time_point startTime = Clock::now();
+    uint32_t                yieldCount = 0;
+    bool                    satisfied  = false;
+
+    while (yieldCount < m_importantChunkWaitYieldLimit)
+    {
+        ProcessCompletedChunkTasks();
+        if (!HasImportantChunkMeshBuildInFlight())
+        {
+            satisfied = true;
+            break;
+        }
+
+        const uint64_t elapsedMicros = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - startTime).count()
+        );
+        if (elapsedMicros >= m_importantChunkWaitBudgetMicros)
+        {
+            break;
+        }
+
+        std::this_thread::yield();
+        yieldCount++;
+    }
+
+    const uint64_t waitedMicros = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - startTime).count()
+    );
+
+    m_asyncChunkMeshDiagnostics.frame.boundedWaitYieldCount += yieldCount;
+    m_asyncChunkMeshDiagnostics.cumulative.boundedWaitYieldCount += yieldCount;
+    m_asyncChunkMeshDiagnostics.frame.boundedWaitMicroseconds += waitedMicros;
+    m_asyncChunkMeshDiagnostics.cumulative.boundedWaitMicroseconds += waitedMicros;
+
+    if (satisfied)
+    {
+        m_asyncChunkMeshDiagnostics.frame.boundedWaitSatisfied++;
+        m_asyncChunkMeshDiagnostics.cumulative.boundedWaitSatisfied++;
+    }
+    else
+    {
+        m_asyncChunkMeshDiagnostics.frame.boundedWaitTimedOut++;
+        m_asyncChunkMeshDiagnostics.cumulative.boundedWaitTimedOut++;
+    }
+}
+
+static uint64_t ComputeMonotonicDelta(uint64_t currentValue, uint64_t& previousValue) noexcept
+{
+    const uint64_t delta = currentValue >= previousValue ? currentValue - previousValue : currentValue;
+    previousValue = currentValue;
+    return delta;
+}
+
+void World::RefreshAsyncChunkMeshDiagnosticsSnapshot()
+{
+    m_asyncChunkMeshDiagnostics.live.queuedBacklog = static_cast<uint64_t>(m_pendingChunkMeshBuildQueue.size());
+
+    for (const auto& [packedCoords, buildState] : m_chunkMeshBuildStates)
+    {
+        UNUSED(packedCoords);
+
+        if (buildState.pendingDispatch)
+        {
+            m_asyncChunkMeshDiagnostics.live.pendingDispatchCount++;
+            if (buildState.important)
+            {
+                m_asyncChunkMeshDiagnostics.live.importantPendingCount++;
+            }
+        }
+
+        if (!buildState.activeHandle.has_value())
+        {
+            continue;
+        }
+
+        m_asyncChunkMeshDiagnostics.live.activeHandleCount++;
+        if (buildState.activeImportant)
+        {
+            m_asyncChunkMeshDiagnostics.live.importantActiveCount++;
+        }
+
+        if (g_theSchedule == nullptr)
+        {
+            continue;
+        }
+
+        try
+        {
+            const enigma::core::TaskState taskState = g_theSchedule->GetTaskState(*buildState.activeHandle);
+            switch (taskState)
+            {
+            case TaskState::Queued:
+                m_asyncChunkMeshDiagnostics.live.schedulerQueuedCount++;
+                if (buildState.activeRequiresWorkerMaterialization)
+                {
+                    m_asyncChunkMeshDiagnostics.live.workerMaterializationQueuedCount++;
+                }
+                if (buildState.activeImportant)
+                {
+                    m_asyncChunkMeshDiagnostics.live.importantQueuedCount++;
+                }
+                break;
+            case TaskState::Executing:
+            case TaskState::CancelRequested:
+                m_asyncChunkMeshDiagnostics.live.schedulerExecutingCount++;
+                if (buildState.activeImportant)
+                {
+                    m_asyncChunkMeshDiagnostics.live.importantExecutingCount++;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+        catch (const std::exception&)
+        {
+            // The task can become terminal between drain passes.
+        }
+    }
+
+    m_asyncChunkMeshDiagnostics.live.workerMaterializationExecutingCount =
+        m_workerMaterializationExecutingCount.load(std::memory_order_relaxed);
+    m_asyncChunkMeshDiagnostics.live.workerMaterializationInFlight =
+        m_asyncChunkMeshDiagnostics.live.workerMaterializationQueuedCount +
+        m_asyncChunkMeshDiagnostics.live.workerMaterializationExecutingCount;
+
+    const uint64_t attempts = m_workerMaterializationAttempts.load(std::memory_order_relaxed);
+    const uint64_t succeeded = m_workerMaterializationSucceeded.load(std::memory_order_relaxed);
+    const uint64_t retryLater = m_workerMaterializationRetryLater.load(std::memory_order_relaxed);
+    const uint64_t resolveFailed = m_workerMaterializationResolveFailed.load(std::memory_order_relaxed);
+    const uint64_t missingNeighbors = m_workerMaterializationMissingNeighbors.load(std::memory_order_relaxed);
+    const uint64_t validationFailed = m_workerMaterializationValidationFailed.load(std::memory_order_relaxed);
+
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationAttempts =
+        ComputeMonotonicDelta(attempts, m_previousWorkerMaterializationCounters.attempts);
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationSucceeded =
+        ComputeMonotonicDelta(succeeded, m_previousWorkerMaterializationCounters.succeeded);
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationRetryLater =
+        ComputeMonotonicDelta(retryLater, m_previousWorkerMaterializationCounters.retryLater);
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationResolveFailed =
+        ComputeMonotonicDelta(resolveFailed, m_previousWorkerMaterializationCounters.resolveFailed);
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationMissingNeighbors =
+        ComputeMonotonicDelta(missingNeighbors, m_previousWorkerMaterializationCounters.missingNeighbors);
+    m_asyncChunkMeshDiagnostics.frame.workerMaterializationValidationFailed =
+        ComputeMonotonicDelta(validationFailed, m_previousWorkerMaterializationCounters.validationFailed);
+
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationAttempts = attempts;
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationSucceeded = succeeded;
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationRetryLater = retryLater;
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationResolveFailed = resolveFailed;
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationMissingNeighbors = missingNeighbors;
+    m_asyncChunkMeshDiagnostics.cumulative.workerMaterializationValidationFailed = validationFailed;
+
+    const auto lastStatus = static_cast<AsyncChunkMeshMaterializationStatus>(
+        m_lastWorkerMaterializationStatus.load(std::memory_order_relaxed));
+    const auto lastFailure = static_cast<AsyncChunkMeshMaterializationStatus>(
+        m_lastWorkerMaterializationFailure.load(std::memory_order_relaxed));
+    m_asyncChunkMeshDiagnostics.lastWorkerMaterializationStatus =
+        GetAsyncChunkMeshMaterializationStatusName(lastStatus);
+    m_asyncChunkMeshDiagnostics.lastWorkerMaterializationFailureReason =
+        GetAsyncChunkMeshMaterializationStatusName(lastFailure);
+}
+
+void World::ProcessChunkMeshBuildTaskRecord(const enigma::core::TaskCompletionRecord& record, ChunkMeshBuildTask* task)
+{
+    const IntVec2 coords = task->GetChunkCoords();
+    ChunkMeshBuildState* buildState = FindChunkMeshBuildState(coords);
+    if (buildState != nullptr &&
+        buildState->activeHandle.has_value() &&
+        *buildState->activeHandle == record.handle)
+    {
+        buildState->activeHandle.reset();
+        buildState->activeImportant = false;
+        buildState->activeRequiresWorkerMaterialization = false;
+    }
+
+    m_asyncChunkMeshDiagnostics.frame.completed++;
+    m_asyncChunkMeshDiagnostics.cumulative.completed++;
+
+    std::optional<ChunkMeshBuildResult> result = task->TakeResult();
+
+    const bool completedNormally =
+        record.finalState == TaskState::Completed &&
+        !record.isStale &&
+        record.policyDecision == TaskPolicyDecision::Executed;
+
+    if (completedNormally)
+    {
+        HandleChunkMeshBuildCompleted(record, task, std::move(result));
+        return;
+    }
+
+    if (record.isStale)
+    {
+        m_asyncChunkMeshDiagnostics.frame.discardedStale++;
+        m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
+    }
+
+    if (record.finalState == TaskState::Cancelled)
+    {
+        m_asyncChunkMeshDiagnostics.frame.discardedCancelled++;
+        m_asyncChunkMeshDiagnostics.cumulative.discardedCancelled++;
+    }
+
+    const char* discardReason =
+        record.isStale ? "stale-result" :
+        record.finalState == TaskState::Cancelled ? "cancelled" :
+        record.finalState == TaskState::Failed ? "failed" :
+        "unexpected-terminal-metadata";
+    LogDiscardedChunkTaskRecord(record, "mesh-build", discardReason);
+
+    Chunk* chunk = GetChunk(coords.x, coords.y);
+    if (chunk != nullptr && chunk->GetState() == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "mesh build");
+        return;
+    }
+
+    if (buildState != nullptr &&
+        chunk != nullptr &&
+        ShouldRequeueDiscardedChunkMeshBuild(record, result, *chunk, *buildState))
+    {
+        if (result.has_value() && result->RequiresRetry())
+        {
+            m_asyncChunkMeshDiagnostics.frame.retryLater++;
+            m_asyncChunkMeshDiagnostics.cumulative.retryLater++;
+        }
+        QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
+    }
+
+    if (chunk == nullptr)
+    {
+        EraseChunkMeshBuildState(coords);
+    }
+}
+
+void World::HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionRecord& record,
+                                          ChunkMeshBuildTask* task,
+                                          std::optional<ChunkMeshBuildResult> result)
+{
+    UNUSED(record);
+
+    const IntVec2 coords = task->GetChunkCoords();
+    Chunk*        chunk  = GetChunk(coords.x, coords.y);
+    if (chunk == nullptr)
+    {
+        LogDebug("world", "Discarding mesh build result for chunk (%d, %d) after unload", coords.x, coords.y);
+        EraseChunkMeshBuildState(coords);
+        return;
+    }
+
+    if (chunk->GetState() == ChunkState::PendingUnload)
+    {
+        FinalizePendingUnloadChunk(chunk, coords, "mesh build");
+        return;
+    }
+
+    ChunkMeshBuildState* buildState = FindChunkMeshBuildState(coords);
+    if (buildState == nullptr)
+    {
+        LogWarn("world", "Missing mesh build state for completed chunk (%d, %d)", coords.x, coords.y);
+        return;
+    }
+
+    if (!chunk->CanPublishMesh())
+    {
+        m_asyncChunkMeshDiagnostics.frame.discardedStale++;
+        m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
+        LogWarn("world", "Discarding mesh build result for chunk (%d, %d) because state is %d",
+                coords.x,
+                coords.y,
+                static_cast<int>(chunk->GetState()));
+        return;
+    }
+
+    if (!result.has_value())
+    {
+        LogWarn("world", "Chunk mesh build task for chunk (%d, %d) completed without result payload", coords.x, coords.y);
+        QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
+        return;
+    }
+
+    if (result->RequiresRetry())
+    {
+        m_asyncChunkMeshDiagnostics.frame.retryLater++;
+        m_asyncChunkMeshDiagnostics.cumulative.retryLater++;
+        QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
+        LogDebug("world", "Chunk mesh build requested retry for chunk (%d, %d) version=%llu: %s",
+                coords.x,
+                coords.y,
+                result->buildVersion,
+                result->detail.c_str());
+        return;
+    }
+
+    if (result->status == ChunkMeshBuildResultStatus::Cancelled)
+    {
+        m_asyncChunkMeshDiagnostics.frame.discardedCancelled++;
+        m_asyncChunkMeshDiagnostics.cumulative.discardedCancelled++;
+        LogDebug("world", "Chunk mesh build result cancelled for chunk (%d, %d) version=%llu",
+                 coords.x, coords.y, result->buildVersion);
+        return;
+    }
+
+    if (result->status != ChunkMeshBuildResultStatus::Built || !result->HasMesh())
+    {
+        LogWarn("world", "Chunk mesh build failed for chunk (%d, %d) version=%llu: %s",
+                coords.x,
+                coords.y,
+                result->buildVersion,
+                result->detail.c_str());
+        QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
+        return;
+    }
+
+    const char* rejectionReason = nullptr;
+    if (!CanPublishChunkMeshBuildResult(*chunk, *buildState, *task, *result, rejectionReason))
+    {
+        m_asyncChunkMeshDiagnostics.frame.discardedStale++;
+        m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
+        LogDebug("world",
+                 "Discarding mesh build result for chunk (%d, %d) version=%llu: %s",
+                 coords.x,
+                 coords.y,
+                 result->buildVersion,
+                 rejectionReason != nullptr ? rejectionReason : "illegal-publish");
+        return;
+    }
+
+    chunk->SetMesh(std::move(result->mesh));
+    m_chunkRenderRegionStorage.NotifyChunkMeshReady(chunk);
+    m_asyncChunkMeshDiagnostics.frame.published++;
+    m_asyncChunkMeshDiagnostics.cumulative.published++;
+
+    LogDebug("world", "Published mesh build result for chunk (%d, %d) version=%llu",
+             coords.x,
+             coords.y,
+             result->buildVersion);
+}
+
 //-------------------------------------------------------------------------------------------
 // Phase 4: Job Queue Management Implementation
 //-------------------------------------------------------------------------------------------
@@ -1927,6 +2624,8 @@ void World::CancelPendingJobsForChunk(IntVec2 coords)
         m_pendingSaveQueue.end()
     );
 
+    RemovePendingChunkMeshBuildRequest(coords);
+
     LogDebug("world", "Cancelled pending jobs for chunk (%d, %d)", coords.x, coords.y);
 }
 
@@ -2010,6 +2709,10 @@ void World::ProcessCompletedChunkTasks()
         {
             ProcessSaveChunkTaskRecord(record, saveJob);
         }
+        else if (auto* chunkMeshBuildTask = dynamic_cast<ChunkMeshBuildTask*>(task))
+        {
+            ProcessChunkMeshBuildTaskRecord(record, chunkMeshBuildTask);
+        }
         else
         {
             LogWarn("world",
@@ -2025,17 +2728,29 @@ void World::ProcessCompletedChunkTasks()
 }
 
 //-----------------------------------------------------------------------------------------------
-// Phase 1: Main Thread Mesh Building Implementation (Assignment 03 Requirements)
+// Phase 1: Chunk Mesh Dispatch Implementation
 //-----------------------------------------------------------------------------------------------
 
 void World::UpdateChunkMeshes()
 {
-    const uint32_t rebuiltCount = RebuildQueuedChunkMeshes(static_cast<uint32_t>(m_maxMeshRebuildsPerFrame));
+    RefreshAsyncChunkMeshMode();
 
-    if (rebuiltCount > 0)
+    if (m_asyncChunkMeshDiagnostics.fallbackActive)
     {
-        LogDebug("world", "UpdateChunkMeshes: rebuilt %u meshes this frame, %zu remaining in queue",
-                 rebuiltCount, m_pendingMeshRebuildQueue.size());
+        const uint32_t rebuiltCount = RebuildQueuedChunkMeshes(static_cast<uint32_t>(m_maxMeshRebuildsPerFrame));
+        if (rebuiltCount > 0)
+        {
+            LogDebug("world", "UpdateChunkMeshes: sync fallback rebuilt %u meshes this frame, %zu pending requests remain",
+                     rebuiltCount, m_pendingChunkMeshBuildQueue.size());
+        }
+        return;
+    }
+
+    const uint32_t dispatchedCount = DispatchQueuedChunkMeshBuilds(static_cast<uint32_t>(m_maxMeshRebuildsPerFrame));
+    if (dispatchedCount > 0)
+    {
+        LogDebug("world", "UpdateChunkMeshes: dispatched %u async mesh builds this frame, %zu pending requests remain",
+                 dispatchedCount, m_pendingChunkMeshBuildQueue.size());
     }
 }
 
@@ -2070,20 +2785,324 @@ static const char* getTaskPolicyDecisionName(enigma::core::TaskPolicyDecision de
     }
 }
 
+bool World::CanDispatchAsyncChunkMeshBuilds() const
+{
+    if (!m_asyncChunkMeshEnabled)
+    {
+        return false;
+    }
+
+    if (g_theSchedule == nullptr)
+    {
+        return false;
+    }
+
+    return g_theSchedule->GetTypeRegistry().IsTypeRegistered(enigma::core::TaskTypeConstants::MESH_BUILDING) &&
+           g_theSchedule->GetTypeRegistry().GetThreadCount(enigma::core::TaskTypeConstants::MESH_BUILDING) > 0;
+}
+
+void World::RefreshAsyncChunkMeshMode()
+{
+    m_asyncChunkMeshDiagnostics.asyncEnabled = m_asyncChunkMeshEnabled;
+
+    if (!m_asyncChunkMeshEnabled)
+    {
+        m_asyncChunkMeshDiagnostics.mode               = AsyncChunkMeshMode::SyncFallback;
+        m_asyncChunkMeshDiagnostics.fallbackActive     = true;
+        m_asyncChunkMeshDiagnostics.lastFallbackReason = "AsyncDisabled";
+        return;
+    }
+
+    if (g_theSchedule == nullptr)
+    {
+        m_asyncChunkMeshDiagnostics.mode               = AsyncChunkMeshMode::SyncFallback;
+        m_asyncChunkMeshDiagnostics.fallbackActive     = true;
+        m_asyncChunkMeshDiagnostics.lastFallbackReason = "ScheduleUnavailable";
+        return;
+    }
+
+    if (!g_theSchedule->GetTypeRegistry().IsTypeRegistered(enigma::core::TaskTypeConstants::MESH_BUILDING) ||
+        g_theSchedule->GetTypeRegistry().GetThreadCount(enigma::core::TaskTypeConstants::MESH_BUILDING) <= 0)
+    {
+        m_asyncChunkMeshDiagnostics.mode               = AsyncChunkMeshMode::SyncFallback;
+        m_asyncChunkMeshDiagnostics.fallbackActive     = true;
+        m_asyncChunkMeshDiagnostics.lastFallbackReason = "MeshBuildingTaskTypeUnavailable";
+        return;
+    }
+
+    m_asyncChunkMeshDiagnostics.mode               = AsyncChunkMeshMode::AsyncEnabled;
+    m_asyncChunkMeshDiagnostics.fallbackActive     = false;
+    m_asyncChunkMeshDiagnostics.lastFallbackReason = "None";
+}
+
+void World::CancelActiveChunkMeshBuilds(const char* reason)
+{
+    for (auto& [packedCoords, buildState] : m_chunkMeshBuildStates)
+    {
+        if (buildState.activeHandle.has_value())
+        {
+            int32_t chunkX = 0;
+            int32_t chunkY = 0;
+            ChunkHelper::UnpackCoordinates(packedCoords, chunkX, chunkY);
+            RequestChunkMeshBuildCancellation(IntVec2(chunkX, chunkY), reason);
+        }
+
+        buildState.pendingDispatch = false;
+        buildState.important       = false;
+        buildState.activeImportant = false;
+    }
+
+    m_pendingChunkMeshBuildQueue.clear();
+}
+
+bool World::HasOutstandingChunkMeshBuildWork() const
+{
+    if (!m_pendingChunkMeshBuildQueue.empty())
+    {
+        return true;
+    }
+
+    for (const auto& [packedCoords, buildState] : m_chunkMeshBuildStates)
+    {
+        UNUSED(packedCoords);
+
+        if (buildState.pendingDispatch || buildState.activeHandle.has_value())
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void World::ClearAsyncChunkMeshBuildState()
+{
+    m_pendingChunkMeshBuildQueue.clear();
+    m_chunkMeshBuildStates.clear();
+    m_asyncChunkMeshDiagnostics.ClearAll();
+    m_asyncChunkMeshDiagnostics.asyncEnabled = m_asyncChunkMeshEnabled;
+    m_workerMaterializationAttempts.store(0, std::memory_order_relaxed);
+    m_workerMaterializationSucceeded.store(0, std::memory_order_relaxed);
+    m_workerMaterializationRetryLater.store(0, std::memory_order_relaxed);
+    m_workerMaterializationResolveFailed.store(0, std::memory_order_relaxed);
+    m_workerMaterializationMissingNeighbors.store(0, std::memory_order_relaxed);
+    m_workerMaterializationValidationFailed.store(0, std::memory_order_relaxed);
+    m_workerMaterializationExecutingCount.store(0, std::memory_order_relaxed);
+    m_lastWorkerMaterializationStatus.store(
+        static_cast<uint8_t>(AsyncChunkMeshMaterializationStatus::None),
+        std::memory_order_relaxed);
+    m_lastWorkerMaterializationFailure.store(
+        static_cast<uint8_t>(AsyncChunkMeshMaterializationStatus::None),
+        std::memory_order_relaxed);
+    m_previousWorkerMaterializationCounters = {};
+}
+
+void World::ReleaseLoadedChunkRuntimeState()
+{
+    for (auto& [packedCoords, chunkPtr] : m_loadedChunks)
+    {
+        UNUSED(packedCoords);
+
+        if (chunkPtr == nullptr)
+        {
+            continue;
+        }
+
+        Chunk*         chunk       = chunkPtr.get();
+        const IntVec2  chunkCoords = chunk->GetChunkCoords();
+
+        UndirtyAllBlocksInChunk(chunk);
+        m_chunkRenderRegionStorage.NotifyChunkUnloaded(chunkCoords);
+
+        if (chunk->GetMesh() != nullptr)
+        {
+            chunk->SetMesh(nullptr);
+        }
+
+        chunk->SetState(ChunkState::Inactive);
+    }
+
+    m_loadedChunks.clear();
+}
+
+ChunkMeshBuildState& World::GetOrCreateChunkMeshBuildState(IntVec2 chunkCoords)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    return m_chunkMeshBuildStates[packedCoords];
+}
+
+ChunkMeshBuildState* World::FindChunkMeshBuildState(IntVec2 chunkCoords)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    const auto    stateIt      = m_chunkMeshBuildStates.find(packedCoords);
+    return stateIt != m_chunkMeshBuildStates.end() ? &stateIt->second : nullptr;
+}
+
+void World::EraseChunkMeshBuildState(IntVec2 chunkCoords)
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    m_chunkMeshBuildStates.erase(packedCoords);
+}
+
+void World::EnqueueChunkMeshBuildRequest(IntVec2 chunkCoords)
+{
+    const auto existingIt = std::find(m_pendingChunkMeshBuildQueue.begin(), m_pendingChunkMeshBuildQueue.end(), chunkCoords);
+    if (existingIt == m_pendingChunkMeshBuildQueue.end())
+    {
+        m_pendingChunkMeshBuildQueue.push_back(chunkCoords);
+    }
+}
+
+void World::RemovePendingChunkMeshBuildRequest(IntVec2 chunkCoords)
+{
+    m_pendingChunkMeshBuildQueue.erase(
+        std::remove(m_pendingChunkMeshBuildQueue.begin(), m_pendingChunkMeshBuildQueue.end(), chunkCoords),
+        m_pendingChunkMeshBuildQueue.end()
+    );
+}
+
+bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildState)
+{
+    if (chunk == nullptr || !chunk->IsActive() || !chunk->NeedsMeshRebuild())
+    {
+        return false;
+    }
+
+    if (!CanDispatchAsyncChunkMeshBuilds())
+    {
+        return false;
+    }
+
+    const IntVec2      chunkCoords     = chunk->GetChunkCoords();
+    const uint64_t     chunkInstanceId = chunk->GetInstanceId();
+    const uint64_t     buildVersion    = buildState.latestRequestedVersion;
+    const enigma::core::TaskPriority priority  =
+        buildState.important ? enigma::core::TaskPriority::High : enigma::core::TaskPriority::Normal;
+    ChunkMeshBuildInput input;
+    if (!ChunkMeshBuildInputFactory::TryCreate(*chunk, buildVersion, buildState.important, input))
+    {
+        buildState.pendingDispatch = true;
+        LogDebug("world", "Deferred mesh build task submission for chunk (%d, %d) version=%llu because dispatch context is not ready",
+                 chunkCoords.x, chunkCoords.y, buildVersion);
+        return false;
+    }
+
+    const bool requiresWorkerMaterialization = input.RequiresWorkerMaterialization();
+    if (!requiresWorkerMaterialization)
+    {
+        m_asyncChunkMeshDiagnostics.frame.mainThreadSnapshotBuildCount++;
+        m_asyncChunkMeshDiagnostics.cumulative.mainThreadSnapshotBuildCount++;
+    }
+
+    ChunkMeshBuildTask* task = new ChunkMeshBuildTask(std::move(input), this, priority);
+
+    enigma::core::TaskSubmissionOptions options;
+    options.priority             = priority;
+    options.supportsCancellation = true;
+    options.taskKey              = MakeChunkMeshBuildTaskKey(chunkCoords);
+    options.version              = buildVersion;
+    options.keyedPolicy          = enigma::core::KeyedTaskPolicy::LatestOnly;
+
+    const enigma::core::TaskHandle handle = g_theSchedule->SubmitTask(task, options);
+    if (!handle.IsValid())
+    {
+        delete task;
+        LogError("world", "Failed to submit chunk mesh build task for chunk (%d, %d) version=%llu",
+                 chunkCoords.x, chunkCoords.y, buildVersion);
+        return false;
+    }
+
+    buildState.latestSubmittedVersion = buildVersion;
+    buildState.chunkInstanceId        = chunkInstanceId;
+    buildState.pendingDispatch        = false;
+    buildState.activeImportant        = buildState.important;
+    buildState.activeRequiresWorkerMaterialization = requiresWorkerMaterialization;
+    buildState.activeHandle           = handle;
+    m_asyncChunkMeshDiagnostics.frame.submitted++;
+    m_asyncChunkMeshDiagnostics.cumulative.submitted++;
+
+    LogDebug("world", "Submitted chunk mesh build task for chunk (%d, %d) version=%llu handle=(%llu,%u) priority=%s",
+             chunkCoords.x,
+             chunkCoords.y,
+             buildVersion,
+             handle.id,
+             handle.generation,
+             priority == enigma::core::TaskPriority::High ? "High" : "Normal");
+    return true;
+}
+
+uint32_t World::DispatchQueuedChunkMeshBuilds(uint32_t maxDispatchCount)
+{
+    uint32_t dispatchCount = 0;
+    size_t   iterationBudget = m_pendingChunkMeshBuildQueue.size();
+
+    while (dispatchCount < maxDispatchCount &&
+           iterationBudget-- > 0 &&
+           !m_pendingChunkMeshBuildQueue.empty())
+    {
+        const IntVec2 chunkCoords = m_pendingChunkMeshBuildQueue.front();
+        m_pendingChunkMeshBuildQueue.pop_front();
+
+        Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
+        if (chunk == nullptr || !chunk->IsActive() || !chunk->NeedsMeshRebuild())
+        {
+            continue;
+        }
+
+        ChunkMeshBuildState& buildState = GetOrCreateChunkMeshBuildState(chunkCoords);
+        if (!buildState.pendingDispatch)
+        {
+            continue;
+        }
+
+        if (SubmitChunkMeshBuildTask(chunk, buildState))
+        {
+            dispatchCount++;
+            m_asyncChunkMeshDiagnostics.frame.executing++;
+            m_asyncChunkMeshDiagnostics.cumulative.executing++;
+        }
+        else if (buildState.pendingDispatch)
+        {
+            m_pendingChunkMeshBuildQueue.push_back(chunkCoords);
+        }
+    }
+
+    return dispatchCount;
+}
+
 uint32_t World::RebuildQueuedChunkMeshes(uint32_t maxRebuildCount)
 {
     uint32_t rebuiltCount = 0;
-    while (rebuiltCount < maxRebuildCount && !m_pendingMeshRebuildQueue.empty())
+
+    while (rebuiltCount < maxRebuildCount && !m_pendingChunkMeshBuildQueue.empty())
     {
-        Chunk* chunk = m_pendingMeshRebuildQueue.front();
-        m_pendingMeshRebuildQueue.pop_front();
+        const IntVec2 chunkCoords = m_pendingChunkMeshBuildQueue.front();
+        m_pendingChunkMeshBuildQueue.pop_front();
+
+        Chunk* chunk = GetChunk(chunkCoords.x, chunkCoords.y);
+        if (chunk == nullptr || !chunk->IsActive() || !chunk->NeedsMeshRebuild())
+        {
+            continue;
+        }
+
+        ChunkMeshBuildState& buildState = GetOrCreateChunkMeshBuildState(chunkCoords);
+        if (!buildState.pendingDispatch)
+        {
+            continue;
+        }
+
+        buildState.pendingDispatch        = false;
+        buildState.latestSubmittedVersion = buildState.latestRequestedVersion;
+        buildState.chunkInstanceId        = chunk->GetInstanceId();
+        buildState.activeImportant        = false;
+        buildState.activeRequiresWorkerMaterialization = false;
+        buildState.activeHandle.reset();
 
         if (RebuildChunkMeshNow(chunk))
         {
             rebuiltCount++;
-
-            LogDebug("world", "Rebuilt mesh for chunk (%d, %d) on main thread (%u/%u this pass)",
-                     chunk->GetChunkX(), chunk->GetChunkY(), rebuiltCount, maxRebuildCount);
+            m_asyncChunkMeshDiagnostics.frame.syncFallbackCount++;
+            m_asyncChunkMeshDiagnostics.cumulative.syncFallbackCount++;
         }
     }
 
@@ -2092,6 +3111,12 @@ uint32_t World::RebuildQueuedChunkMeshes(uint32_t maxRebuildCount)
 
 bool World::RebuildChunkMeshNow(Chunk* chunk)
 {
+    if (!m_asyncChunkMeshDiagnostics.fallbackActive)
+    {
+        ERROR_RECOVERABLE("World::RebuildChunkMeshNow is fallback-only but async mesh mode is still active");
+        return false;
+    }
+
     if (chunk == nullptr || !chunk->IsActive() || !chunk->NeedsMeshRebuild())
     {
         return false;
@@ -2112,37 +3137,50 @@ bool World::RebuildChunkMeshNow(Chunk* chunk)
     return true;
 }
 
-void World::ScheduleChunkMeshRebuild(Chunk* chunk)
+void World::ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant)
 {
-    if (!chunk)
+    if (!chunk || m_isShuttingDown.load())
     {
         return;
     }
 
-    // Mark chunk as needing mesh rebuild
+    const IntVec2 chunkCoords = chunk->GetChunkCoords();
+
     chunk->MarkDirty();
-    m_chunkRenderRegionStorage.MarkChunkDirty(chunk->GetChunkCoords());
+    m_chunkRenderRegionStorage.MarkChunkDirty(chunkCoords);
 
-    // Check if chunk is already in queue
-    auto it = std::find(m_pendingMeshRebuildQueue.begin(), m_pendingMeshRebuildQueue.end(), chunk);
-    if (it == m_pendingMeshRebuildQueue.end())
+    ChunkMeshBuildState& buildState = GetOrCreateChunkMeshBuildState(chunkCoords);
+    buildState.latestRequestedVersion++;
+    buildState.chunkInstanceId = chunk->GetInstanceId();
+    buildState.pendingDispatch = true;
+    buildState.important       = IsImportantChunkMeshBuild(*chunk, forceImportant);
+
+    EnqueueChunkMeshBuildRequest(chunkCoords);
+    SortMeshQueueByDistance();
+
+    if (buildState.activeHandle.has_value())
     {
-        // Add to queue and sort by distance
-        m_pendingMeshRebuildQueue.push_back(chunk);
-        SortMeshQueueByDistance();
-
-        LogDebug("world", "Marked chunk (%d, %d) dirty, added to mesh rebuild queue (size: %zu)",
-                 chunk->GetChunkX(), chunk->GetChunkY(), m_pendingMeshRebuildQueue.size());
+        RequestChunkMeshBuildCancellation(chunkCoords, "superseded rebuild request");
     }
+
+    m_asyncChunkMeshDiagnostics.frame.queued++;
+    m_asyncChunkMeshDiagnostics.cumulative.queued++;
+
+    LogDebug("world", "Queued chunk mesh rebuild for chunk (%d, %d) version=%llu pending=%zu important=%s",
+             chunkCoords.x,
+             chunkCoords.y,
+             buildState.latestRequestedVersion,
+             m_pendingChunkMeshBuildQueue.size(),
+             buildState.important ? "true" : "false");
 }
 
 void World::InvalidateAllChunkMeshes()
 {
     for (auto& [key, chunk] : m_loadedChunks)
     {
+        UNUSED(key);
         if (chunk)
         {
-            chunk->MarkDirty();
             ScheduleChunkMeshRebuild(chunk.get());
         }
     }
@@ -2156,22 +3194,31 @@ void World::InvalidateAllChunkMeshes()
 
 void World::SortMeshQueueByDistance()
 {
-    if (m_pendingMeshRebuildQueue.empty()) return;
+    if (m_pendingChunkMeshBuildQueue.empty()) return;
 
     // Phase 4: Use partial_sort for better performance (only sort first N elements)
     // Only need to sort up to m_maxMeshRebuildsPerFrame elements
     size_t sortCount = (std::min)(
         static_cast<size_t>(m_maxMeshRebuildsPerFrame),
-        m_pendingMeshRebuildQueue.size()
+        m_pendingChunkMeshBuildQueue.size()
     );
 
     std::partial_sort(
-        m_pendingMeshRebuildQueue.begin(),
-        m_pendingMeshRebuildQueue.begin() + sortCount,
-        m_pendingMeshRebuildQueue.end(),
-        [this](Chunk* a, Chunk* b)
+        m_pendingChunkMeshBuildQueue.begin(),
+        m_pendingChunkMeshBuildQueue.begin() + sortCount,
+        m_pendingChunkMeshBuildQueue.end(),
+        [this](const IntVec2& a, const IntVec2& b)
         {
-            return GetChunkDistanceToPlayer(a) < GetChunkDistanceToPlayer(b);
+            const ChunkMeshBuildState* stateA = FindChunkMeshBuildState(a);
+            const ChunkMeshBuildState* stateB = FindChunkMeshBuildState(b);
+            const bool aImportant = stateA != nullptr && stateA->important;
+            const bool bImportant = stateB != nullptr && stateB->important;
+            if (aImportant != bImportant)
+            {
+                return aImportant > bImportant;
+            }
+
+            return GetChunkDistanceToPlayer(a.x, a.y) < GetChunkDistanceToPlayer(b.x, b.y);
         }
     );
 }
@@ -2193,64 +3240,99 @@ float World::GetChunkDistanceToPlayer(Chunk* chunk) const
 
 void World::PrepareShutdown()
 {
-    LogInfo("world", "Preparing graceful shutdown: stopping new task submissions");
-    m_isShuttingDown.store(true);
+    const bool wasAlreadyShuttingDown = m_isShuttingDown.exchange(true);
+    LogInfo("world", "%s graceful shutdown: stopping new task submissions",
+            wasAlreadyShuttingDown ? "Continuing" : "Preparing");
 
     // Phase 3: Log current pending task counts using queues instead of tracking sets
-    LogInfo("world", "Pending tasks at shutdown: Generate=%zu, Load=%zu, Save=%zu",
+    LogInfo("world", "Pending tasks at shutdown: Generate=%zu, Load=%zu, Save=%zu, MeshBuild=%zu",
             m_pendingGenerateQueue.size(),
             m_pendingLoadQueue.size(),
-            m_pendingSaveQueue.size());
+            m_pendingSaveQueue.size(),
+            m_pendingChunkMeshBuildQueue.size());
 }
 
 //------------------------------------------------------------------------------------------------------------------
-// Shutdown fix: wait for all jobs to complete
-//
-// Problem: Previously, I only waited for the Pending queue, which caused the Generator to be destructed while the Job in the Executing queue was still running.
-// Solution: Add Executing queue waiting to ensure that all Worker threads are completed before destructing resources.
-// Assignment 03: "Handles shut down nicely by waiting on all threads to complete"
+// Shutdown fix: cancel world-owned dispatch queues, then drain tracked scheduler work to terminal state.
+// This keeps close-world lifecycle ownership inside World instead of relying on external callers.
 //------------------------------------------------------------------------------------------------------------------
 void World::WaitForPendingTasks()
 {
-    // Mark shutdown status
-    m_isShuttingDown.store(true);
+    PrepareShutdown();
 
-    // Phase 1: Wait for the Pending queue to be empty
-    LogInfo("world", "Shutdown Phase 1: Waiting for pending queues to drain...");
-    LogInfo("world", "  Pending tasks: Generate=%zu, Load=%zu, Save=%zu",
-            m_pendingGenerateQueue.size(),
-            m_pendingLoadQueue.size(),
-            m_pendingSaveQueue.size());
-
-    while (!m_pendingGenerateQueue.empty() || !m_pendingLoadQueue.empty() || !m_pendingSaveQueue.empty())
+    auto cancelHandleMap = [this](auto& handleMap, const char* jobLabel)
     {
-        std::this_thread::yield();
-    }
+        std::vector<IntVec2> pendingCoords;
+        pendingCoords.reserve(handleMap.size());
 
-    LogInfo("world", "Shutdown Phase 1: All pending queues drained");
+        for (const auto& [packedCoords, handle] : handleMap)
+        {
+            UNUSED(handle);
 
-    // Phase 2: Wait for the Executing queue to be empty (new fix)
-    // Wait for all executing Chunk generation tasks to complete
-    LogInfo("world", "Shutdown Phase 2: Waiting for executing tasks to complete...");
+            int32_t chunkX = 0;
+            int32_t chunkY = 0;
+            ChunkHelper::UnpackCoordinates(packedCoords, chunkX, chunkY);
+            pendingCoords.emplace_back(chunkX, chunkY);
+        }
+
+        for (const IntVec2& chunkCoords : pendingCoords)
+        {
+            RequestActiveChunkTaskCancellation(handleMap, chunkCoords, jobLabel);
+        }
+    };
+
+    const size_t droppedGenerateRequests = m_pendingGenerateQueue.size();
+    const size_t droppedLoadRequests     = m_pendingLoadQueue.size();
+    const size_t droppedSaveRequests     = m_pendingSaveQueue.size();
+    const size_t droppedMeshRequests     = m_pendingChunkMeshBuildQueue.size();
+
+    CancelActiveChunkMeshBuilds("shutdown");
+    cancelHandleMap(m_activeGenerateJobHandles, "generate");
+    cancelHandleMap(m_activeLoadJobHandles, "load");
+    cancelHandleMap(m_activeSaveJobHandles, "save");
+
+    m_pendingGenerateQueue.clear();
+    m_pendingLoadQueue.clear();
+    m_pendingSaveQueue.clear();
+    m_pendingChunkMeshBuildQueue.clear();
+
+    LogInfo("world",
+            "Shutdown drain: cleared world-side pending requests Generate=%zu, Load=%zu, Save=%zu, MeshBuild=%zu",
+            droppedGenerateRequests,
+            droppedLoadRequests,
+            droppedSaveRequests,
+            droppedMeshRequests);
 
     if (!g_theSchedule)
     {
-        LogWarn("world", "ScheduleSubsystem not available, skipping executing task wait");
+        const bool hasOutstandingTrackedWork =
+            m_activeGenerateJobs.load() > 0 ||
+            m_activeLoadJobs.load() > 0 ||
+            m_activeSaveJobs.load() > 0 ||
+            HasOutstandingChunkMeshBuildWork();
+
+        if (hasOutstandingTrackedWork)
+        {
+            ERROR_RECOVERABLE("World::WaitForPendingTasks cannot drain outstanding tasks because ScheduleSubsystem is unavailable");
+        }
+
         return;
     }
 
-    while (g_theSchedule->HasExecutingTasks("ChunkGen"))
+    LogInfo("world", "Shutdown drain: waiting for active generate/load/save/mesh tasks to reach terminal state...");
+    while (m_activeGenerateJobs.load() > 0 ||
+           m_activeLoadJobs.load() > 0 ||
+           m_activeSaveJobs.load() > 0 ||
+           !m_activeGenerateJobHandles.empty() ||
+           !m_activeLoadJobHandles.empty() ||
+           !m_activeSaveJobHandles.empty() ||
+           HasOutstandingChunkMeshBuildWork())
     {
+        ProcessCompletedChunkTasks();
         std::this_thread::yield();
     }
 
-    LogInfo("world", "Shutdown Phase 2: All executing tasks completed");
-
-    // Phase 3: Get completed task results
-    LogInfo("world", "Shutdown Phase 3: Retrieving completed job results...");
     ProcessCompletedChunkTasks();
-    LogInfo("world", "Shutdown Phase 3: Job results retrieved");
-
     LogInfo("world", "WaitForPendingTasks complete - safe to shutdown");
 }
 
@@ -2407,7 +3489,7 @@ void World::DigBlock(const BlockIterator& blockIter)
     chunk->SetBlockByPlayer(localX, localY, localZ, airState);
 
     // 6. Schedule chunk mesh rebuild
-    ScheduleChunkMeshRebuild(chunk);
+    ScheduleChunkMeshRebuild(chunk, true);
 
     LogDebug("world", "DigBlock: Removed block at (%d, %d, %d)",
              blockIter.GetBlockPos().x, blockIter.GetBlockPos().y, blockIter.GetBlockPos().z);
@@ -2462,7 +3544,7 @@ void World::PlaceBlock(const BlockIterator& blockIter, BlockState* newState)
     chunk->SetBlockByPlayer(localX, localY, localZ, newState);
 
     // 6. Schedule chunk mesh rebuild
-    ScheduleChunkMeshRebuild(chunk);
+    ScheduleChunkMeshRebuild(chunk, true);
 
     // 7. Notify 6 neighbors about block change (for stairs shape update, etc.)
     //    This is critical for stairs/slab auto-connection feature
@@ -2568,7 +3650,7 @@ void World::PlaceBlock(const BlockIterator&        blockIter, enigma::registry::
                 int32_t localX, localY, localZ;
                 raycast.m_hitBlockIter.GetLocalCoords(localX, localY, localZ);
                 clickedChunk->SetBlockByPlayer(localX, localY, localZ, mergedState);
-                ScheduleChunkMeshRebuild(clickedChunk);
+                ScheduleChunkMeshRebuild(clickedChunk, true);
 
                 LogDebug("world", "PlaceBlock (context): Merged slab at clickedPos (%d, %d, %d)",
                          ctx.clickedPos.x, ctx.clickedPos.y, ctx.clickedPos.z);

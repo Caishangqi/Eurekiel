@@ -425,16 +425,7 @@ namespace enigma::graphic
         void EndCamera(const ICamera& camera);
 
         /**
-         * @brief 创建VertexBuffer
-         * @param size 缓冲区大小（字节）
-         * @param stride 顶点步长（字节）
-         * @return D12VertexBuffer指针
-         *
-         * 教学要点：
-         * - 创建GPU可见的顶点缓冲区
-         * - 使用D3D12RenderSystem::CreateVertexBufferTyped()
-         * - 返回D12VertexBuffer*（新架构）
-         * - 调用者负责管理生命周期（或由RendererSubsystem内部管理）
+         * Creates an engine-facing dynamic vertex buffer.
          */
         D12VertexBuffer* CreateVertexBuffer(size_t size, unsigned stride);
 
@@ -465,7 +456,7 @@ namespace enigma::graphic
         void SetIndexBuffer(D12IndexBuffer* buffer);
 
         /**
-         * @brief 更新Buffer数据（CPU → GPU）
+         * Updates a CPU-writable vertex buffer through the dynamic upload path.
          * @param buffer 目标D12VertexBuffer
          * @param data CPU数据指针
          * @param size 数据大小（字节）

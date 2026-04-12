@@ -1,146 +1,387 @@
-﻿#include "ChunkMeshBuilder.hpp"
+#include "ChunkMeshBuilder.hpp"
+
 #include "Chunk.hpp"
+#include "MeshBuild/ChunkMeshBuildInputFactory.hpp"
+#include "MeshBuild/ChunkMeshingSnapshot.hpp"
 #include "../../Registry/Block/Block.hpp"
+#include "../Fluid/FluidState.hpp"
+#include "../World/TerrainVertexLayout.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
-#include "Engine/Renderer/Model/BlockRenderMesh.hpp"
 #include "Engine/Math/Mat44.hpp"
-#include "../../Voxel/Property/PropertyTypes.hpp"
 #include "Engine/Registry/Block/BlockRegistry.hpp"
-#include "../Block/BlockIterator.hpp"
+#include "Engine/Registry/Block/RenderShape.hpp"
+#include "Engine/Renderer/Model/BlockRenderMesh.hpp"
+
+#include <algorithm>
+#include <array>
+#include <string>
 
 using namespace enigma::voxel;
+using namespace enigma::registry::block;
+
+namespace
+{
+    static const std::array<Direction, 6> kAllDirections = {
+        Direction::NORTH,
+        Direction::SOUTH,
+        Direction::EAST,
+        Direction::WEST,
+        Direction::UP,
+        Direction::DOWN
+    };
+
+    static const Vec3 FACE_NORMALS[6] = {
+        Vec3(0.0f, 1.0f, 0.0f),
+        Vec3(0.0f, -1.0f, 0.0f),
+        Vec3(1.0f, 0.0f, 0.0f),
+        Vec3(-1.0f, 0.0f, 0.0f),
+        Vec3(0.0f, 0.0f, 1.0f),
+        Vec3(0.0f, 0.0f, -1.0f),
+    };
+
+    struct LightingData
+    {
+        float skyLight   = 1.0f / 15.0f;
+        float blockLight = 0.0f;
+    };
+
+    struct AOOffset
+    {
+        int dx;
+        int dy;
+        int dz;
+    };
+
+    static const float AO_CURVE[4] = { 1.0f, 0.7f, 0.5f, 0.2f };
+
+    static const AOOffset AO_OFFSETS_UP[4][3] = {
+        {{-1, 0, 1}, {0, -1, 1}, {-1, -1, 1}},
+        {{1, 0, 1}, {0, -1, 1}, {1, -1, 1}},
+        {{1, 0, 1}, {0, 1, 1}, {1, 1, 1}},
+        {{-1, 0, 1}, {0, 1, 1}, {-1, 1, 1}},
+    };
+
+    static const AOOffset AO_OFFSETS_DOWN[4][3] = {
+        {{-1, 0, -1}, {0, -1, -1}, {-1, -1, -1}},
+        {{-1, 0, -1}, {0, 1, -1}, {-1, 1, -1}},
+        {{1, 0, -1}, {0, 1, -1}, {1, 1, -1}},
+        {{1, 0, -1}, {0, -1, -1}, {1, -1, -1}},
+    };
+
+    static const AOOffset AO_OFFSETS_NORTH[4][3] = {
+        {{-1, 1, 0}, {0, 1, -1}, {-1, 1, -1}},
+        {{-1, 1, 0}, {0, 1, 1}, {-1, 1, 1}},
+        {{1, 1, 0}, {0, 1, 1}, {1, 1, 1}},
+        {{1, 1, 0}, {0, 1, -1}, {1, 1, -1}},
+    };
+
+    static const AOOffset AO_OFFSETS_SOUTH[4][3] = {
+        {{1, -1, 0}, {0, -1, -1}, {1, -1, -1}},
+        {{1, -1, 0}, {0, -1, 1}, {1, -1, 1}},
+        {{-1, -1, 0}, {0, -1, 1}, {-1, -1, 1}},
+        {{-1, -1, 0}, {0, -1, -1}, {-1, -1, -1}},
+    };
+
+    static const AOOffset AO_OFFSETS_EAST[4][3] = {
+        {{1, 1, 0}, {1, 0, -1}, {1, 1, -1}},
+        {{1, 1, 0}, {1, 0, 1}, {1, 1, 1}},
+        {{1, -1, 0}, {1, 0, 1}, {1, -1, 1}},
+        {{1, -1, 0}, {1, 0, -1}, {1, -1, -1}},
+    };
+
+    static const AOOffset AO_OFFSETS_WEST[4][3] = {
+        {{-1, -1, 0}, {-1, 0, -1}, {-1, -1, -1}},
+        {{-1, -1, 0}, {-1, 0, 1}, {-1, -1, 1}},
+        {{-1, 1, 0}, {-1, 0, 1}, {-1, 1, 1}},
+        {{-1, 1, 0}, {-1, 0, -1}, {-1, 1, -1}},
+    };
+
+    Vec3 GetFaceNormal(Direction direction)
+    {
+        return FACE_NORMALS[static_cast<int>(direction)];
+    }
+
+    constexpr float GetDirectionalShade(Direction direction)
+    {
+        switch (direction)
+        {
+        case Direction::EAST: return 0.7f;
+        case Direction::WEST: return 0.6f;
+        case Direction::SOUTH: return 0.8f;
+        case Direction::NORTH: return 0.75f;
+        case Direction::UP: return 1.0f;
+        case Direction::DOWN: return 0.5f;
+        default: return 1.0f;
+        }
+    }
+
+    bool IsOccluder(BlockState* blockState)
+    {
+        return blockState != nullptr &&
+               blockState->GetBlock() != nullptr &&
+               blockState->CanOcclude();
+    }
+
+    float CalculateVertexAO(bool side1, bool side2, bool corner)
+    {
+        int occluderCount = 0;
+        if (side1 && side2)
+        {
+            occluderCount = 3;
+        }
+        else
+        {
+            occluderCount = (side1 ? 1 : 0) + (side2 ? 1 : 0) + (corner ? 1 : 0);
+        }
+
+        return AO_CURVE[occluderCount];
+    }
+
+    bool ShouldFlipQuad(const float aoValues[4])
+    {
+        const float brightness02 = aoValues[0] + aoValues[2];
+        const float brightness13 = aoValues[1] + aoValues[3];
+        return brightness13 > brightness02;
+    }
+
+    const AOOffset (*GetAOOffsets(Direction direction))[3]
+    {
+        switch (direction)
+        {
+        case Direction::NORTH: return AO_OFFSETS_NORTH;
+        case Direction::SOUTH: return AO_OFFSETS_SOUTH;
+        case Direction::EAST: return AO_OFFSETS_EAST;
+        case Direction::WEST: return AO_OFFSETS_WEST;
+        case Direction::UP: return AO_OFFSETS_UP;
+        case Direction::DOWN: return AO_OFFSETS_DOWN;
+        default: return AO_OFFSETS_UP;
+        }
+    }
+
+    BlockState* GetBlockAtOffset(const ChunkMeshingSnapshot& snapshot,
+                                 int32_t x,
+                                 int32_t y,
+                                 int32_t z,
+                                 int dx,
+                                 int dy,
+                                 int dz)
+    {
+        return snapshot.GetBlock(x + dx, y + dy, z + dz);
+    }
+
+    void CalculateFaceAO(const ChunkMeshingSnapshot& snapshot,
+                         int32_t x,
+                         int32_t y,
+                         int32_t z,
+                         Direction direction,
+                         float outAO[4])
+    {
+        const AOOffset (*offsets)[3] = GetAOOffsets(direction);
+
+        for (int vertexIndex = 0; vertexIndex < 4; ++vertexIndex)
+        {
+            BlockState* side1Block =
+                GetBlockAtOffset(snapshot, x, y, z, offsets[vertexIndex][0].dx, offsets[vertexIndex][0].dy, offsets[vertexIndex][0].dz);
+            BlockState* side2Block =
+                GetBlockAtOffset(snapshot, x, y, z, offsets[vertexIndex][1].dx, offsets[vertexIndex][1].dy, offsets[vertexIndex][1].dz);
+            BlockState* cornerBlock =
+                GetBlockAtOffset(snapshot, x, y, z, offsets[vertexIndex][2].dx, offsets[vertexIndex][2].dy, offsets[vertexIndex][2].dz);
+
+            outAO[vertexIndex] = CalculateVertexAO(IsOccluder(side1Block),
+                                                   IsOccluder(side2Block),
+                                                   IsOccluder(cornerBlock));
+        }
+    }
+
+    LightingData GetNeighborLighting(const ChunkMeshingSnapshot& snapshot,
+                                     int32_t x,
+                                     int32_t y,
+                                     int32_t z,
+                                     Direction direction)
+    {
+        int dx = 0;
+        int dy = 0;
+        int dz = 0;
+
+        switch (direction)
+        {
+        case Direction::NORTH: dy = 1; break;
+        case Direction::SOUTH: dy = -1; break;
+        case Direction::EAST: dx = 1; break;
+        case Direction::WEST: dx = -1; break;
+        case Direction::UP: dz = 1; break;
+        case Direction::DOWN: dz = -1; break;
+        }
+
+        const ChunkMeshingLightSample sample = snapshot.GetLight(x + dx, y + dy, z + dz);
+
+        LightingData result;
+        result.skyLight   = static_cast<float>(sample.skyLight) / 15.0f;
+        result.blockLight = static_cast<float>(sample.blockLight) / 15.0f;
+
+        const float totalLight = (std::max)(result.skyLight, result.blockLight);
+        if (totalLight < 1.0f / 15.0f)
+        {
+            result.skyLight = 1.0f / 15.0f;
+        }
+
+        return result;
+    }
+}
 
 ChunkMeshBuilder::ChunkMeshBuilder()
 {
-    air = registry::block::BlockRegistry::GetBlock("simpleminer", "air");
+    m_air = registry::block::BlockRegistry::GetBlock("simpleminer", "air");
 }
 
-std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk)
+ChunkMeshBuildResult ChunkMeshBuilder::Build(const ChunkMeshBuildInput& input) const
 {
-    // ===== Phase 4: 入口状态检查（防护点1） =====
-    if (!chunk)
+    ChunkMeshBuildResult result;
+    result.chunkCoords     = input.GetChunkCoords();
+    result.chunkInstanceId = input.GetChunkInstanceId();
+    result.buildVersion    = input.GetBuildVersion();
+
+    if (!input.HasSnapshot())
     {
-        core::LogWarn("ChunkMeshBuilder", "Attempted to build mesh for null chunk");
-        return nullptr;
+        result.status = ChunkMeshBuildResultStatus::Failed;
+        result.detail = "MissingSnapshot";
+        core::LogWarn("ChunkMeshBuilder", "Build called without snapshot for chunk (%d, %d)",
+                      input.GetChunkCoords().x, input.GetChunkCoords().y);
+        return result;
     }
 
-    ChunkState state = chunk->GetState();
-    if (state != ChunkState::Active)
+    const ChunkMeshingSnapshot& snapshot = *input.snapshot;
+    if (!snapshot.HasAllHorizontalNeighbors())
     {
-        core::LogDebug("ChunkMeshBuilder", "BuildMesh: chunk not in valid state (state=%s), aborting", chunk->GetStateName());
-        return nullptr;
+        result.status = ChunkMeshBuildResultStatus::RetryLater;
+        result.detail = "MissingHorizontalNeighbors";
+        return result;
     }
 
-    auto chunkMesh  = std::make_unique<ChunkMesh>();
-    int  blockCount = 0;
+    auto   chunkMesh = std::make_unique<ChunkMesh>();
+    int    blockCount = 0;
+    size_t opaqueQuadCount = 0;
+    size_t cutoutQuadCount = 0;
+    size_t translucentQuadCount = 0;
 
-    core::LogInfo("ChunkMeshBuilder", "Building mesh for chunk...");
-
-    // Assignment 2: Two-pass optimization
-    // First pass: Count visible faces to pre-allocate memory
-    size_t opaqueQuadCount      = 0;
-    size_t transparentQuadCount = 0;
-
-    // First pass: Count quads needed
-    static const std::vector<enigma::voxel::Direction> allDirections = {
-        enigma::voxel::Direction::NORTH,
-        enigma::voxel::Direction::SOUTH,
-        enigma::voxel::Direction::EAST,
-        enigma::voxel::Direction::WEST,
-        enigma::voxel::Direction::UP,
-        enigma::voxel::Direction::DOWN
-    };
-
-    for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
+    for (int32_t x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
-        for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
+        for (int32_t y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
         {
-            for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
+            for (int32_t z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
-                int           blockIndex = x + (y << Chunk::CHUNK_BITS_X) + (z << (Chunk::CHUNK_BITS_X + Chunk::CHUNK_BITS_Y));
-                BlockIterator iterator(chunk, blockIndex);
-                BlockState*   blockState = iterator.GetBlock();
-
-                if (ShouldRenderBlock(blockState))
+                BlockState* blockState = snapshot.GetCenterBlock(x, y, z);
+                if (!ShouldRenderBlock(blockState))
                 {
-                    for (const auto& direction : allDirections)
+                    continue;
+                }
+
+                const RenderType renderType = GetBlockRenderType(blockState);
+                for (Direction direction : kAllDirections)
+                {
+                    if (!ShouldRenderFace(snapshot, blockState, x, y, z, direction))
                     {
-                        if (ShouldRenderFace(iterator, direction))
-                        {
-                            opaqueQuadCount++;
-                        }
+                        continue;
+                    }
+
+                    switch (renderType)
+                    {
+                    case RenderType::SOLID:
+                        opaqueQuadCount++;
+                        break;
+                    case RenderType::CUTOUT:
+                        cutoutQuadCount++;
+                        break;
+                    case RenderType::TRANSLUCENT:
+                        translucentQuadCount++;
+                        break;
                     }
                 }
             }
         }
     }
 
-    // Pre-allocate memory based on count
-    chunkMesh->Reserve(opaqueQuadCount, transparentQuadCount);
+    chunkMesh->Reserve(opaqueQuadCount, cutoutQuadCount, translucentQuadCount);
 
-    // Second pass: Actually build the mesh
-    for (int x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
+    for (int32_t x = 0; x < Chunk::CHUNK_SIZE_X; ++x)
     {
-        for (int y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
+        for (int32_t y = 0; y < Chunk::CHUNK_SIZE_Y; ++y)
         {
-            for (int z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
+            for (int32_t z = 0; z < Chunk::CHUNK_SIZE_Z; ++z)
             {
-                if (chunk->GetState() != ChunkState::Active) return nullptr;
-
-                int           blockIndex = x + (y << Chunk::CHUNK_BITS_X) + (z << (Chunk::CHUNK_BITS_X + Chunk::CHUNK_BITS_Y));
-                BlockIterator iterator(chunk, blockIndex);
-                BlockState*   blockState = iterator.GetBlock();
-
-                if (ShouldRenderBlock(blockState))
+                BlockState* blockState = snapshot.GetCenterBlock(x, y, z);
+                if (!ShouldRenderBlock(blockState))
                 {
-                    BlockPos blockPos = GetBlockPosition(x, y, z);
-                    AddBlockToMesh(chunkMesh.get(), blockState, blockPos, iterator);
-                    blockCount++;
+                    continue;
                 }
+
+                AddBlockToMesh(*chunkMesh, blockState, GetBlockPosition(x, y, z), snapshot, x, y, z);
+                blockCount++;
             }
         }
     }
 
-    core::LogInfo("ChunkMeshBuilder", "Chunk mesh built successfully. Blocks: %d, Vertices: %zu, Triangles: %zu",
-                  blockCount, chunkMesh->GetOpaqueVertexCount(), chunkMesh->GetOpaqueTriangleCount());
+    result.metrics.opaqueVertexCount      = chunkMesh->GetOpaqueVertexCount();
+    result.metrics.cutoutVertexCount      = chunkMesh->GetCutoutVertexCount();
+    result.metrics.translucentVertexCount = chunkMesh->GetTranslucentVertexCount();
+    result.metrics.opaqueIndexCount       = chunkMesh->GetOpaqueIndexCount();
+    result.metrics.cutoutIndexCount       = chunkMesh->GetCutoutIndexCount();
+    result.metrics.translucentIndexCount  = chunkMesh->GetTranslucentIndexCount();
+    result.mesh                           = std::move(chunkMesh);
+    result.status                         = ChunkMeshBuildResultStatus::Built;
+    result.detail                         = "Built";
 
-    return chunkMesh;
+    core::LogDebug("ChunkMeshBuilder",
+                   "Built snapshot mesh for chunk (%d, %d), blocks=%d, opaque=%llu, cutout=%llu, translucent=%llu",
+                   input.GetChunkCoords().x,
+                   input.GetChunkCoords().y,
+                   blockCount,
+                   result.metrics.opaqueVertexCount,
+                   result.metrics.cutoutVertexCount,
+                   result.metrics.translucentVertexCount);
+    return result;
 }
 
-void ChunkMeshBuilder::RebuildMesh(Chunk* chunk)
+std::unique_ptr<ChunkMesh> ChunkMeshBuilder::BuildMesh(Chunk* chunk) const
 {
-    if (!chunk)
+    if (chunk == nullptr)
     {
-        return;
+        core::LogWarn("ChunkMeshBuilder", "Attempted to build mesh for null chunk");
+        return nullptr;
     }
 
-    // Build new mesh
-    auto newMesh = BuildMesh(chunk);
+    ChunkMeshBuildInput input;
+    if (!ChunkMeshBuildInputFactory::TryCreate(*chunk, 0, false, input))
+    {
+        core::LogDebug("ChunkMeshBuilder", "Snapshot creation deferred for chunk (%d, %d)",
+                       chunk->GetChunkX(), chunk->GetChunkY());
+        return nullptr;
+    }
 
-    // Set the new mesh on the chunk
-    if (newMesh)
+    ChunkMeshBuildResult result = Build(input);
+    if (result.status != ChunkMeshBuildResultStatus::Built)
     {
-        newMesh->CompileToGPU(); // Compile before setting
-        chunk->SetMesh(std::move(newMesh));
-        core::LogInfo("ChunkMeshBuilder", "Successfully rebuilt and set mesh for chunk");
+        if (result.status == ChunkMeshBuildResultStatus::Failed)
+        {
+            core::LogWarn("ChunkMeshBuilder", "Failed to build snapshot mesh for chunk (%d, %d): %s",
+                          chunk->GetChunkX(), chunk->GetChunkY(), result.detail.c_str());
+        }
+        return nullptr;
     }
-    else
-    {
-        core::LogError("ChunkMeshBuilder", "Failed to rebuild mesh for chunk");
-    }
+
+    return std::move(result.mesh);
 }
 
-void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockState, const BlockPos& blockPos, const BlockIterator& iterator)
+void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh& chunkMesh,
+                                      BlockState* blockState,
+                                      const BlockPos& blockPos,
+                                      const ChunkMeshingSnapshot& snapshot,
+                                      int32_t x,
+                                      int32_t y,
+                                      int32_t z) const
 {
-    if (!chunkMesh || !blockState)
+    if (blockState == nullptr)
     {
-        return;
-    }
-
-    Chunk* chunk = iterator.GetChunk();
-    if (!chunk || chunk->GetState() != ChunkState::Active)
-    {
-        core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk invalid or not Active, aborting");
         return;
     }
 
@@ -150,138 +391,186 @@ void ChunkMeshBuilder::AddBlockToMesh(ChunkMesh* chunkMesh, BlockState* blockSta
         return;
     }
 
-    static const std::vector<enigma::voxel::Direction> allDirections = {
-        enigma::voxel::Direction::NORTH,
-        enigma::voxel::Direction::SOUTH,
-        enigma::voxel::Direction::EAST,
-        enigma::voxel::Direction::WEST,
-        enigma::voxel::Direction::UP,
-        enigma::voxel::Direction::DOWN
-    };
+    const RenderType renderType = GetBlockRenderType(blockState);
+    const Vec3       blockPosVec3(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
+    const Mat44      blockToChunkTransform = Mat44::MakeTranslation3D(blockPosVec3);
 
-    Vec3  blockPosVec3(static_cast<float>(blockPos.x), static_cast<float>(blockPos.y), static_cast<float>(blockPos.z));
-    Mat44 blockToChunkTransform = Mat44::MakeTranslation3D(blockPosVec3);
-
-    for (const auto& direction : allDirections)
+    for (Direction direction : kAllDirections)
     {
-        if (chunk->GetState() != ChunkState::Active)
-        {
-            core::LogDebug("ChunkMeshBuilder", "AddBlockToMesh: chunk state changed during face iteration, aborting");
-            return;
-        }
-
-        if (!ShouldRenderFace(iterator, direction))
+        if (!ShouldRenderFace(snapshot, blockState, x, y, z, direction))
         {
             continue;
         }
 
-        const auto* renderFace = blockRenderMesh->GetFace(direction);
-        if (!renderFace || renderFace->vertices.empty())
+        const auto renderFaces = blockRenderMesh->GetFaces(direction);
+        if (renderFaces.empty())
         {
-            continue; // Skip faces without geometry
+            continue;
         }
 
-        // Transform vertices from block space to chunk space
-        std::vector<Vertex_PCU> transformedVertices((int)renderFace->vertices.size(), Vertex_PCU());
+        const LightingData lighting = GetNeighborLighting(snapshot, x, y, z, direction);
+        float              aoValues[4] = {};
+        CalculateFaceAO(snapshot, x, y, z, direction, aoValues);
+        const bool         flipQuad = ShouldFlipQuad(aoValues);
+        const float        directionalShade = GetDirectionalShade(direction);
+        const uint8_t      shade = static_cast<uint8_t>(directionalShade * 255.0f);
+        const Vec3         faceNormal = GetFaceNormal(direction);
+        const Vec2         lightmapCoord(lighting.blockLight, lighting.skyLight);
 
-        for (int i = 0; i < (int)renderFace->vertices.size(); ++i)
+        for (const auto* renderFace : renderFaces)
         {
-            Vertex_PCU transformedVertex = renderFace->vertices[i];
-            // Transform position from block space (0,0,0)-(1,1,1) to chunk space
-            transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(renderFace->vertices[i].m_position);
-            transformedVertices[i]       = transformedVertex;
-        }
-        /*for (const auto& vertex : renderFace->vertices)
-        {
-            Vertex_PCU transformedVertex = vertex;
-            // Transform position from block space (0,0,0)-(1,1,1) to chunk space
-            transformedVertex.m_position = blockToChunkTransform.TransformPosition3D(vertex.m_position);
-            transformedVertices.push_back(transformedVertex);
-        }*/
+            if (renderFace == nullptr || renderFace->vertices.size() < 4)
+            {
+                continue;
+            }
 
-        // Convert vertices to quads and add to chunk mesh
-        // Assuming each face has 4 vertices arranged as a quad
-        if (transformedVertices.size() >= 4)
-        {
-            std::array<Vertex_PCU, 4> quad = {
-                transformedVertices[0],
-                transformedVertices[1],
-                transformedVertices[2],
-                transformedVertices[3]
-            };
+            std::array<graphic::TerrainVertex, 4> terrainQuad;
+            for (int vertexIndex = 0; vertexIndex < 4; ++vertexIndex)
+            {
+                const Vertex_PCU& srcVertex = renderFace->vertices[vertexIndex];
+                terrainQuad[vertexIndex].m_position      = blockToChunkTransform.TransformPosition3D(srcVertex.m_position);
+                terrainQuad[vertexIndex].m_uvTexCoords   = srcVertex.m_uvTextCoords;
+                terrainQuad[vertexIndex].m_normal        = faceNormal;
+                terrainQuad[vertexIndex].m_lightmapCoord = lightmapCoord;
 
-            // Add the quad to chunk mesh
-            // For Assignment01, we treat all geometry as opaque
-            chunkMesh->AddOpaqueQuad(quad);
-        }
-        else if (transformedVertices.size() > 0)
-        {
-            core::LogWarn("ChunkMeshBuilder", "Face has %zu vertices, expected 4 for quad conversion", transformedVertices.size());
+                if (renderType == RenderType::TRANSLUCENT)
+                {
+                    const uint8_t shadedValue = static_cast<uint8_t>(shade * aoValues[vertexIndex]);
+                    terrainQuad[vertexIndex].m_color = Rgba8(shadedValue, shadedValue, shadedValue, 255);
+                }
+                else
+                {
+                    const uint8_t ao = static_cast<uint8_t>(aoValues[vertexIndex] * 255.0f);
+                    terrainQuad[vertexIndex].m_color = Rgba8(shade, shade, shade, ao);
+                }
+            }
+
+            if (graphic::TerrainVertexLayout::OnBuildVertexLayout.HasListeners())
+            {
+                const std::string namespacedBlockName =
+                    blockState->GetBlock()->GetNamespace() + ":" + blockState->GetBlock()->GetRegistryName();
+                graphic::TerrainVertexLayout::OnBuildVertexLayout.Broadcast(terrainQuad.data(), namespacedBlockName);
+            }
+
+            switch (renderType)
+            {
+            case RenderType::SOLID:
+                chunkMesh.AddOpaqueTerrainQuad(terrainQuad, flipQuad);
+                break;
+            case RenderType::CUTOUT:
+                chunkMesh.AddCutoutTerrainQuad(terrainQuad, flipQuad);
+                break;
+            case RenderType::TRANSLUCENT:
+                chunkMesh.AddTranslucentTerrainQuad(terrainQuad, flipQuad);
+
+                if (direction == Direction::UP && !blockState->GetFluidState().IsEmpty())
+                {
+                    BlockState* upBlock = snapshot.GetBlock(x, y, z + 1);
+                    bool        needBackface = true;
+                    if (upBlock != nullptr && !upBlock->GetFluidState().IsEmpty() &&
+                        upBlock->GetFluidState().IsSame(blockState->GetFluidState()))
+                    {
+                        needBackface = false;
+                    }
+
+                    if (needBackface)
+                    {
+                        std::array<graphic::TerrainVertex, 4> backfaceQuad = terrainQuad;
+                        const Vec3 flippedNormal = -faceNormal;
+                        for (graphic::TerrainVertex& vertex : backfaceQuad)
+                        {
+                            vertex.m_normal = flippedNormal;
+                        }
+
+                        chunkMesh.AddTranslucentTerrainQuadBackface(backfaceQuad, flipQuad);
+                    }
+                }
+                break;
+            }
         }
     }
 }
 
 bool ChunkMeshBuilder::ShouldRenderBlock(BlockState* blockState) const
 {
-    if (!blockState)
+    if (blockState == nullptr || blockState->GetBlock() == nullptr)
     {
         return false;
     }
 
-    // Assignment 1 simplified: render all non-air blocks
-    // Air blocks should have a specific registry name or be null
-
-    if (!blockState->GetBlock())
+    if (blockState->GetBlock() == m_air.get())
     {
-        return false; // No block type (air)
+        return false;
     }
 
-    /*if (!blockState || blockState->GetBlock() == airBlock.get())
+    const RenderShape renderShape = blockState->GetBlock()->GetRenderShape(blockState);
+    return renderShape != RenderShape::INVISIBLE;
+}
+
+bool ChunkMeshBuilder::ShouldRenderFace(const ChunkMeshingSnapshot& snapshot,
+                                        BlockState* currentBlock,
+                                        int32_t x,
+                                        int32_t y,
+                                        int32_t z,
+                                        Direction direction) const
+{
+    if (currentBlock == nullptr || currentBlock->GetBlock() == nullptr)
     {
         return false;
-    }*/
+    }
 
-    // Get block registry name to check for air
-    //std::string blockName = blockState->GetBlock()->GetRegistryName();
+    int dx = 0;
+    int dy = 0;
+    int dz = 0;
 
-    // Don't render air blocks
-    if (blockState->GetBlock() == air.get())
+    switch (direction)
+    {
+    case Direction::NORTH: dy = 1; break;
+    case Direction::SOUTH: dy = -1; break;
+    case Direction::EAST: dx = 1; break;
+    case Direction::WEST: dx = -1; break;
+    case Direction::UP: dz = 1; break;
+    case Direction::DOWN: dz = -1; break;
+    }
+
+    BlockState* neighborBlock = snapshot.GetBlock(x + dx, y + dy, z + dz);
+    if (neighborBlock == nullptr || neighborBlock->GetBlock() == nullptr)
+    {
+        return true;
+    }
+
+    if (currentBlock->GetBlock()->SkipRendering(currentBlock, neighborBlock, direction))
     {
         return false;
+    }
+
+    const RenderType currentRenderType = GetBlockRenderType(currentBlock);
+    if (neighborBlock->CanOcclude())
+    {
+        if (currentRenderType == RenderType::SOLID)
+        {
+            return false;
+        }
+
+        if (currentRenderType == RenderType::TRANSLUCENT && !currentBlock->GetFluidState().IsEmpty())
+        {
+            return false;
+        }
+
+        return true;
     }
 
     return true;
 }
 
-bool ChunkMeshBuilder::ShouldRenderFace(const BlockIterator& iterator, Direction direction) const
+RenderType ChunkMeshBuilder::GetBlockRenderType(BlockState* blockState) const
 {
-    // Get neighbor block in the specified direction
-    BlockIterator neighborIterator = iterator.GetNeighbor(direction);
-
-    // Render face if neighbor is invalid (chunk boundary or unloaded chunk)
-    if (!neighborIterator.IsValid())
+    if (blockState == nullptr || blockState->GetBlock() == nullptr)
     {
-        return true;
+        return RenderType::SOLID;
     }
 
-    // Get neighbor block state
-    BlockState* neighborBlock = neighborIterator.GetBlock();
-
-    // Render face if neighbor is air (null pointer)
-    if (!neighborBlock)
-    {
-        return true;
-    }
-
-    // [Phase 3] Use IsFullOpaque flag for precise face culling
-    // If neighbor is fully opaque, this face is hidden and should not be rendered
-    if (neighborBlock->IsFullOpaque())
-    {
-        return false;
-    }
-
-    // Render face for translucent or non-full blocks (water, glass, etc.)
-    return true;
+    return blockState->GetBlock()->GetRenderType();
 }
 
 BlockPos ChunkMeshBuilder::GetBlockPosition(int x, int y, int z) const

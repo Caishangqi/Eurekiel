@@ -6,7 +6,7 @@ namespace enigma::registry::block
      * @brief Render pass classification for blocks
      * 
      * Determines which render pass a block belongs to.
-     * Used by ChunkMeshHelper to route blocks to correct render pass.
+     * Used by chunk meshing to route blocks to the correct render pass.
      * 
      * [MINECRAFT REF] ItemBlockRenderTypes / RenderType
      */

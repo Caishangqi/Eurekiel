@@ -55,6 +55,15 @@ namespace enigma::graphic
                 }
                 break;
 
+            case QueueWorkloadClass::ChunkGeometryUpload:
+            case QueueWorkloadClass::ChunkArenaRelocation:
+                if (!context.isCopySafe)
+                {
+                    decision.activeQueue    = CommandQueueType::Graphics;
+                    decision.fallbackReason = QueueFallbackReason::ResourceStateNotSupported;
+                }
+                break;
+
             case QueueWorkloadClass::MipmapGeneration:
                 if (context.requiresGraphicsStateTransition)
                 {
@@ -75,6 +84,8 @@ namespace enigma::graphic
             switch (workload)
             {
             case QueueWorkloadClass::CopyReadyUpload:
+            case QueueWorkloadClass::ChunkGeometryUpload:
+            case QueueWorkloadClass::ChunkArenaRelocation:
                 return CommandQueueType::Copy;
 
             case QueueWorkloadClass::MipmapGeneration:

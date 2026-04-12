@@ -42,7 +42,7 @@ namespace enigma::voxel
         //   - flipQuad=false (NORMAL): triangles (0,1,2) and (0,2,3) - split along 0-2 diagonal
         //   - flipQuad=true  (FLIP):   triangles (0,1,3) and (1,2,3) - split along 1-3 diagonal
         //
-        // Use ShouldFlipQuad() in ChunkMeshHelper to determine the flip based on AO values.
+        // Use the chunk meshing builder AO orientation logic to determine the flip.
         // ========================================================================
         void AddOpaqueTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);
         void AddCutoutTerrainQuad(const std::array<graphic::TerrainVertex, 4>& vertices, bool flipQuad);

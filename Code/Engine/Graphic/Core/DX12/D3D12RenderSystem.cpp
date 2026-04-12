@@ -80,6 +80,10 @@ namespace enigma::graphic
                 return "CopyReadyUpload";
             case QueueWorkloadClass::MipmapGeneration:
                 return "MipmapGeneration";
+            case QueueWorkloadClass::ChunkGeometryUpload:
+                return "ChunkGeometryUpload";
+            case QueueWorkloadClass::ChunkArenaRelocation:
+                return "ChunkArenaRelocation";
             }
 
             return "Unknown";
@@ -217,9 +221,9 @@ namespace enigma::graphic
             return true;
         }
 
-        constexpr size_t kQueueWorkloadClassCount = 8;
+        constexpr size_t kQueueWorkloadClassCountLocal = enigma::graphic::kQueueWorkloadClassCount;
         constexpr size_t kQueueFallbackReasonCount = 8;
-        std::array<std::array<bool, kQueueFallbackReasonCount>, kQueueWorkloadClassCount> g_reportedMixedQueueFallbacks = {};
+        std::array<std::array<bool, kQueueFallbackReasonCount>, kQueueWorkloadClassCountLocal> g_reportedMixedQueueFallbacks = {};
 
         bool HasDedicatedQueuesAvailable(const CommandListManager* commandListManager)
         {
@@ -607,22 +611,39 @@ namespace enigma::graphic
         }
     }
 
-    // ===== 类型安全的VertexBuffer/IndexBuffer创建API (Milestone 2.X新增) =====
-
-    /**
-     * @brief 创建类型安全的VertexBuffer
-     *
-     * 教学要点:
-     * 1. 使用D12VertexBuffer构造函数，自动封装stride逻辑
-     * 2. 返回具体类型指针，提供类型安全的接口
-     * 3. 失败时返回nullptr（D12VertexBuffer构造函数内部assert）
-     */
-    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBuffer(
-        size_t size, size_t stride, const void* initialData, const char* debugName)
+    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBuffer(const BufferCreateInfo& createInfo)
     {
+        if (!s_isInitialized || !s_device)
+        {
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized");
+            assert(false && "D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        if (createInfo.size == 0)
+        {
+            assert(false && "Vertex buffer size must be greater than 0");
+            return nullptr;
+        }
+
+        if (createInfo.byteStride == 0)
+        {
+            ERROR_RECOVERABLE("D3D12RenderSystem::CreateVertexBuffer: byteStride must be greater than 0");
+            return nullptr;
+        }
+
+        if (createInfo.size % createInfo.byteStride != 0)
+        {
+            ERROR_RECOVERABLE("D3D12RenderSystem::CreateVertexBuffer: size must be a multiple of byteStride");
+            return nullptr;
+        }
+
+        BufferCreateInfo normalizedCreateInfo = createInfo;
+        normalizedCreateInfo.usage = BufferUsage::VertexBuffer;
+
         try
         {
-            return std::make_unique<D12VertexBuffer>(size, stride, initialData, debugName);
+            return std::make_unique<D12VertexBuffer>(normalizedCreateInfo);
         }
         catch (const std::exception& e)
         {
@@ -632,20 +653,47 @@ namespace enigma::graphic
         }
     }
 
-    /**
-     * @brief 创建类型安全的IndexBuffer
-     *
-     * 教学要点:
-     * 1. 使用D12IndexBuffer构造函数，自动封装format逻辑
-     * 2. 返回具体类型指针，提供类型安全的接口
-     * 3. 失败时返回nullptr
-     */
-    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBuffer(
-        size_t size, const void* initialData, const char* debugName) // [SIMPLIFIED] Always Uint32
+    std::unique_ptr<D12VertexBuffer> D3D12RenderSystem::CreateVertexBuffer(
+        size_t size, size_t stride, const void* initialData, const char* debugName)
     {
+        BufferCreateInfo createInfo;
+        createInfo.size         = size;
+        createInfo.usage        = BufferUsage::VertexBuffer;
+        createInfo.memoryAccess = MemoryAccess::CPUWritable;
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+        createInfo.byteStride   = stride;
+        createInfo.usagePolicy  = BufferUsagePolicy::DynamicUpload;
+        return CreateVertexBuffer(createInfo);
+    }
+
+    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBuffer(const BufferCreateInfo& createInfo)
+    {
+        if (!s_isInitialized || !s_device)
+        {
+            core::LogError(LogRenderer, "D3D12RenderSystem not initialized");
+            assert(false && "D3D12RenderSystem not initialized");
+            return nullptr;
+        }
+
+        if (createInfo.size == 0)
+        {
+            assert(false && "Index buffer size must be greater than 0");
+            return nullptr;
+        }
+
+        if (createInfo.size % D12IndexBuffer::INDEX_SIZE != 0)
+        {
+            ERROR_RECOVERABLE("D3D12RenderSystem::CreateIndexBuffer: size must be a multiple of INDEX_SIZE");
+            return nullptr;
+        }
+
+        BufferCreateInfo normalizedCreateInfo = createInfo;
+        normalizedCreateInfo.usage = BufferUsage::IndexBuffer;
+
         try
         {
-            return std::make_unique<D12IndexBuffer>(size, initialData, debugName);
+            return std::make_unique<D12IndexBuffer>(normalizedCreateInfo);
         }
         catch (const std::exception& e)
         {
@@ -653,6 +701,19 @@ namespace enigma::graphic
                            "Failed to create D12IndexBuffer: %s", e.what());
             return nullptr;
         }
+    }
+
+    std::unique_ptr<D12IndexBuffer> D3D12RenderSystem::CreateIndexBuffer(
+        size_t size, const void* initialData, const char* debugName) // [SIMPLIFIED] Always Uint32
+    {
+        BufferCreateInfo createInfo;
+        createInfo.size         = size;
+        createInfo.usage        = BufferUsage::IndexBuffer;
+        createInfo.memoryAccess = MemoryAccess::CPUWritable;
+        createInfo.initialData  = initialData;
+        createInfo.debugName    = debugName;
+        createInfo.usagePolicy  = BufferUsagePolicy::DynamicUpload;
+        return CreateIndexBuffer(createInfo);
     }
 
     /**
@@ -1714,7 +1775,7 @@ namespace enigma::graphic
             GetQueueTypeName(decision.activeQueue),
             GetQueueFallbackReasonName(decision.fallbackReason));
 
-        if (workloadIndex >= kQueueWorkloadClassCount || fallbackIndex >= kQueueFallbackReasonCount)
+        if (workloadIndex >= kQueueWorkloadClassCountLocal || fallbackIndex >= kQueueFallbackReasonCount)
         {
             ERROR_RECOVERABLE(fallbackMessage);
             return;

@@ -118,6 +118,16 @@ namespace enigma::graphic
          */
         ID3D12Resource* GetUploadBuffer() const { return m_uploadBuffer.Get(); }
 
+        /**
+         * Returns the persistently mapped upload pointer for batched staging writes.
+         */
+        void* GetMappedData() const { return m_mappedData; }
+
+        /**
+         * Returns the aligned upload-buffer size in bytes.
+         */
+        size_t GetUploadSize() const { return m_uploadSize; }
+
     private:
         Microsoft::WRL::ComPtr<ID3D12Resource> m_uploadBuffer; // Upload Heap资源
         void*                                  m_mappedData; // CPU映射指针

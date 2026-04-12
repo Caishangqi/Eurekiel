@@ -7,105 +7,35 @@
 namespace enigma::graphic
 {
     /**
-     * @brief D12VertexBuffer类 - DirectX 12顶点缓冲区封装
-     *
-     * 教学要点:
-     * 1. 继承自D12Buffer，利用基类的资源管理能力
-     * 2. 添加顶点缓冲区特有的stride和view管理
-     * 3. 提供D3D12_VERTEX_BUFFER_VIEW用于Input Assembler绑定
-     * 4. 不需要Bindless支持（通过IA阶段直接绑定）
-     *
-     * 架构设计:
-     * - 职责单一: 只管理顶点缓冲区特有逻辑（stride + view）
-     * - 资源管理: 完全继承D12Buffer的RAII和状态管理
-     * - 绑定机制: 使用IASetVertexBuffers()而非描述符堆
-     * - 类型安全: 编译时确保stride和size的正确关系
-     *
-     * DirectX 12 API参考:
-     * - D3D12_VERTEX_BUFFER_VIEW: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_vertex_buffer_view
-     * - IASetVertexBuffers: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12graphicscommandlist-iasetvertexbuffers
-     *
-     * ============================================================================
-     * Bindless Architecture Interaction (IMPORTANT)
-     * ============================================================================
-     *
-     * VertexBuffers DO NOT require Bindless support because:
-     *
-     * 1. Binding Mechanism Difference:
-     *    - VertexBuffer: Bound via Input Assembler (IA) stage using IASetVertexBuffers()
-     *    - Textures/StructuredBuffers: Bound via Descriptor Heaps (require Bindless indices)
-     *
-     * 2. DirectX 12 Pipeline:
-     *    - VertexBuffer → Fixed-function IA stage → Vertex Shader
-     *    - No descriptor heap involved, no Bindless index needed
-     *
-     * 3. GPU Access Pattern:
-     *    - VertexBuffer: Sequential access by IA stage (fixed pipeline)
-     *    - Textures: Random access by shaders (requires descriptor table)
-     *
-     * 4. Exception - Mesh Shaders (Future):
-     *    - If using Mesh Shaders, VertexBuffer needs to be accessed as StructuredBuffer
-     *    - In that case, Bindless support would be required
-     *    - Current implementation: Traditional graphics pipeline (no Mesh Shader)
-     *
-     * Therefore, this class does NOT implement:
-     * - AllocateBindlessIndexInternal() (returns INVALID_BINDLESS_INDEX)
-     * - CreateDescriptorInGlobalHeap() (empty implementation)
-     *
-     * @see D12Texture for comparison (requires Bindless support)
-     * ============================================================================
+     * Typed vertex-buffer wrapper with cached IA view metadata.
      */
     class D12VertexBuffer : public D12Buffer
     {
     public:
         /**
-         * @brief 构造函数：创建顶点缓冲区
-         * @param size 缓冲区总大小（字节），必须是stride的整数倍
-         * @param stride 单个顶点的大小（字节）
-         * @param initialData 初始顶点数据（可为nullptr）
-         * @param debugName 调试名称
-         *
-         * 教学要点:
-         * 1. 使用BufferUsage::VertexBuffer标志
-         * 2. 根据initialData选择MemoryAccess模式:
-         *    - 有数据: CPUToGPU (需要上传)
-         *    - 无数据: GPUOnly (最高性能)
-         * 3. 自动创建D3D12_VERTEX_BUFFER_VIEW
-         * 4. stride必须 > 0，size必须是stride的整数倍
+         * Legacy convenience constructor.
          */
         D12VertexBuffer(size_t size, size_t stride, const void* initialData = nullptr, const char* debugName = "VertexBuffer");
 
         /**
-         * @brief 析构函数：自动释放资源
-         *
-         * 教学要点: 基类D12Buffer已处理资源释放，这里无需额外操作
+         * Policy-aware creation contract used by the refactored render system.
          */
+        explicit D12VertexBuffer(const BufferCreateInfo& createInfo);
+
         ~D12VertexBuffer() override = default;
 
-        // ========================================================================
-        // 顶点缓冲区特有接口
-        // ========================================================================
-
         /**
-         * @brief 获取顶点stride（单个顶点大小）
-         * @return stride（字节）
+         * Returns the vertex stride in bytes.
          */
         size_t GetStride() const { return m_stride; }
 
         /**
-         * @brief 获取顶点数量
-         * @return 顶点数量（size / stride）
+         * Returns the vertex count derived from size and stride.
          */
         size_t GetVertexCount() const { return GetSize() / m_stride; }
 
         /**
-         * @brief 获取D3D12_VERTEX_BUFFER_VIEW（用于绑定到IA阶段）
-         * @return VertexBufferView引用
-         *
-         * 教学要点:
-         * 1. 这是DirectX 12绑定顶点缓冲区的核心结构
-         * 2. 包含GPU地址、大小和stride
-         * 3. 传递给IASetVertexBuffers()使用
+         * Returns the cached IA view.
          */
         const D3D12_VERTEX_BUFFER_VIEW& GetView() const { return m_view; }
 
@@ -223,19 +153,11 @@ namespace enigma::graphic
         void ReleaseResource() override;
 
     private:
-        // ========================================================================
-        // VertexBuffer特有成员变量
-        // ========================================================================
-
-        size_t                   m_stride; // 单个顶点大小（字节）
-        D3D12_VERTEX_BUFFER_VIEW m_view; // DirectX 12 VertexBufferView
+        size_t                   m_stride; // Vertex stride in bytes
+        D3D12_VERTEX_BUFFER_VIEW m_view; // Cached IA view
 
         /**
-         * @brief 更新VertexBufferView
-         *
-         * 教学要点:
-         * 1. 根据m_resource更新m_view
-         * 2. 在构造函数和资源创建后调用
+         * Rebuilds the cached IA view after resource changes.
          */
         void UpdateView();
     };

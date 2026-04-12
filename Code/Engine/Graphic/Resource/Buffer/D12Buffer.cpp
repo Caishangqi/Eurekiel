@@ -12,45 +12,46 @@
 
 namespace enigma::graphic
 {
-    // ===== D12Buffer类实现 =====
+    namespace
+    {
+        bool IsCpuMappableAccess(MemoryAccess access)
+        {
+            return access != MemoryAccess::GPUOnly;
+        }
 
-    /**
-     * 构造函数实现
-     * 参考Iris的ShaderStorageBuffer构造函数逻辑
-     */
+        bool IsPersistentlyMappableAccess(MemoryAccess access)
+        {
+            return access == MemoryAccess::CPUToGPU || access == MemoryAccess::CPUWritable;
+        }
+    }
+
     D12Buffer::D12Buffer(const BufferCreateInfo& createInfo)
-        : D12Resource() // 调用基类构造函数
+        : D12Resource()
           , m_usage(createInfo.usage)
+          , m_usagePolicy(createInfo.usagePolicy)
           , m_memoryAccess(createInfo.memoryAccess)
           , m_mappedData(nullptr)
-          , m_formattedDebugName() // 初始化格式化调试名称
+          , m_formattedDebugName()
           , m_byteStride(createInfo.byteStride)
     {
-        // 教学注释：验证输入参数的有效性
         assert(createInfo.size > 0 && "Buffer size must be greater than 0");
 
-        // 创建DirectX 12资源
         if (!CreateD3D12Resource(createInfo))
         {
-            // 创建失败，保持无效状态
             return;
         }
 
-        // 设置调试名称（使用基类方法）
         if (createInfo.debugName)
         {
             SetDebugName(createInfo.debugName);
         }
 
-        // 复制初始数据到CPU端（如果提供了）
         if (createInfo.initialData && createInfo.size > 0)
         {
             SetInitialData(createInfo.initialData, createInfo.size);
         }
 
-        // 如果提供了初始数据且缓冲区支持CPU写入，则进行数据拷贝
-        // 对应Iris的ShaderStorageBuffer中content的处理
-        if (createInfo.initialData && (m_memoryAccess == MemoryAccess::CPUToGPU || m_memoryAccess == MemoryAccess::CPUWritable))
+        if (createInfo.initialData && SupportsCpuMapping())
         {
             void* mappedPtr = Map();
             if (mappedPtr)
@@ -61,102 +62,105 @@ namespace enigma::graphic
         }
     }
 
-    /**
-     * 析构函数实现
-     * 对应Iris的ShaderStorageBuffer.destroy()方法
-     */
     D12Buffer::~D12Buffer()
     {
-        // 如果有持久映射，先取消持久映射
         UnmapPersistent();
 
-        // 如果当前有映射，先取消映射
         if (m_mappedData)
         {
             Unmap();
         }
-
-        // ComPtr会自动释放DirectX 12资源
-        // 这里不需要显式调用Release()
     }
 
-    /**
-     * 移动构造函数
-     */
     D12Buffer::D12Buffer(D12Buffer&& other) noexcept
-        : D12Resource(std::move(other)) // 调用基类移动构造函数
+        : D12Resource(std::move(other))
           , m_usage(other.m_usage)
+          , m_usagePolicy(other.m_usagePolicy)
           , m_memoryAccess(other.m_memoryAccess)
           , m_mappedData(other.m_mappedData)
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
           , m_byteStride(other.m_byteStride)
-          , m_persistentMappedData(other.m_persistentMappedData) // 转移持久映射指针
-          , m_isPersistentlyMapped(other.m_isPersistentlyMapped) // 转移持久映射状态
+          , m_persistentMappedData(other.m_persistentMappedData)
+          , m_isPersistentlyMapped(other.m_isPersistentlyMapped)
     {
-        // 清空源对象
         other.m_mappedData           = nullptr;
-        other.m_persistentMappedData = nullptr; // 清空源对象的持久映射指针
-        other.m_isPersistentlyMapped = false; // 清空源对象的持久映射状态
+        other.m_persistentMappedData = nullptr;
+        other.m_isPersistentlyMapped = false;
     }
 
-    /**
-     * 移动赋值操作符
-     */
     D12Buffer& D12Buffer::operator=(D12Buffer&& other) noexcept
     {
         if (this != &other)
         {
-            // 释放当前的持久映射
             UnmapPersistent();
 
-            // 释放当前资源
             if (m_mappedData)
             {
                 Unmap();
             }
 
-            // 调用基类移动赋值
             D12Resource::operator=(std::move(other));
 
-            // 移动D12Buffer特有成员
             m_usage                = other.m_usage;
+            m_usagePolicy          = other.m_usagePolicy;
             m_memoryAccess         = other.m_memoryAccess;
             m_mappedData           = other.m_mappedData;
             m_formattedDebugName   = std::move(other.m_formattedDebugName);
             m_byteStride           = other.m_byteStride;
-            m_persistentMappedData = other.m_persistentMappedData; // 转移持久映射指针
-            m_isPersistentlyMapped = other.m_isPersistentlyMapped; // 转移持久映射状态
+            m_persistentMappedData = other.m_persistentMappedData;
+            m_isPersistentlyMapped = other.m_isPersistentlyMapped;
 
-            // 清空源对象
             other.m_mappedData           = nullptr;
-            other.m_persistentMappedData = nullptr; // 清空源对象的持久映射指针
-            other.m_isPersistentlyMapped = false; // 清空源对象的持久映射状态
+            other.m_persistentMappedData = nullptr;
+            other.m_isPersistentlyMapped = false;
         }
         return *this;
     }
 
-    /**
-     * 映射CPU内存
-     * 对应OpenGL的glMapBuffer功能
-     */
+    bool D12Buffer::SupportsCpuMapping() const
+    {
+        return IsCpuMappableAccess(m_memoryAccess) &&
+               m_usagePolicy != BufferUsagePolicy::GpuOnlyCopyReady;
+    }
+
+    bool D12Buffer::SupportsPersistentMapping() const
+    {
+        return IsPersistentlyMappableAccess(m_memoryAccess) &&
+               m_usagePolicy != BufferUsagePolicy::GpuOnlyCopyReady;
+    }
+
+    void* D12Buffer::GetPersistentMappedData() const
+    {
+        if (m_usagePolicy == BufferUsagePolicy::GpuOnlyCopyReady)
+        {
+            ERROR_RECOVERABLE("D12Buffer::GetPersistentMappedData: GpuOnlyCopyReady buffers do not expose persistent CPU pointers");
+            return nullptr;
+        }
+
+        return m_persistentMappedData;
+    }
+
     void* D12Buffer::Map(const D3D12_RANGE* readRange)
     {
-        auto* resource = GetResource(); // 使用基类方法获取资源
+        auto* resource = GetResource();
         if (!resource || m_mappedData)
         {
             return nullptr;
         }
 
-        // 只有CPU可访问的缓冲区才能映射
-        if (m_memoryAccess == MemoryAccess::GPUOnly)
+        if (!SupportsCpuMapping())
         {
-            assert(false && "Cannot map GPU-only buffer");
+            if (m_usagePolicy == BufferUsagePolicy::GpuOnlyCopyReady)
+            {
+                ERROR_RECOVERABLE("D12Buffer::Map: GpuOnlyCopyReady buffers do not allow direct CPU mapping");
+            }
+            else
+            {
+                ERROR_RECOVERABLE("D12Buffer::Map: This buffer does not support CPU mapping");
+            }
             return nullptr;
         }
 
-        // DirectX 12 API: ID3D12Resource::Map()
-        // 映射GPU资源到CPU可访问的内存地址
-        // readRange: 指定CPU将读取的内存范围（可为nullptr表示不读取）
         HRESULT hr = resource->Map(0, readRange, &m_mappedData);
 
         if (FAILED(hr))
@@ -168,36 +172,20 @@ namespace enigma::graphic
         return m_mappedData;
     }
 
-    /**
-     * 取消映射CPU内存
-     * 对应OpenGL的glUnmapBuffer功能
-     */
     void D12Buffer::Unmap(const D3D12_RANGE* writtenRange)
     {
-        auto* resource = GetResource(); // 使用基类方法获取资源
+        auto* resource = GetResource();
         if (!resource || !m_mappedData)
         {
             return;
         }
 
-        // DirectX 12 API: ID3D12Resource::Unmap()
-        // 取消GPU资源的CPU内存映射
-        // writtenRange: 指定CPU修改的内存范围（可为nullptr表示整个范围）
         resource->Unmap(0, writtenRange);
         m_mappedData = nullptr;
     }
 
-    /**
-     * 持久映射CPU内存（DirectX 12推荐模式）
-     * 教学要点:
-     * 1. 只有UPLOAD堆的缓冲区才能持久映射
-     * 2. 使用CD3DX12_RANGE(0,0)表示CPU不读取，只写入
-     * 3. 整个生命周期保持映射状态，避免反复Map/Unmap开销
-     * 4. 重复调用返回同一指针，避免重复映射
-     */
     void* D12Buffer::MapPersistent()
     {
-        // 如果已经持久映射，直接返回缓存的指针
         if (m_isPersistentlyMapped)
         {
             return m_persistentMappedData;
@@ -210,16 +198,20 @@ namespace enigma::graphic
             return nullptr;
         }
 
-        // 只有CPU可访问的缓冲区才能持久映射
-        if (m_memoryAccess != MemoryAccess::CPUToGPU && m_memoryAccess != MemoryAccess::CPUWritable)
+        if (!SupportsPersistentMapping())
         {
-            core::LogError("D12Buffer",
-                           "MapPersistent: Only UPLOAD heap buffers (CPUToGPU/CPUWritable) can be persistently mapped");
+            if (m_usagePolicy == BufferUsagePolicy::GpuOnlyCopyReady)
+            {
+                ERROR_RECOVERABLE("D12Buffer::MapPersistent: GpuOnlyCopyReady buffers do not allow persistent CPU mapping");
+            }
+            else
+            {
+                core::LogError("D12Buffer",
+                               "MapPersistent: Only UPLOAD heap buffers (CPUToGPU/CPUWritable) can be persistently mapped");
+            }
             return nullptr;
         }
 
-        // 使用CD3DX12_RANGE(0,0)表示CPU不读取
-        // 这是DirectX 12的最佳实践，避免缓存同步开销
         CD3DX12_RANGE readRange(0, 0);
         HRESULT       hr = resource->Map(0, &readRange, &m_persistentMappedData);
 
@@ -240,16 +232,8 @@ namespace enigma::graphic
         return m_persistentMappedData;
     }
 
-    /**
-     * 取消持久映射
-     * 教学要点:
-     * 1. 在析构函数中调用，确保资源正确释放
-     * 2. 检查状态标志，避免重复Unmap
-     * 3. 清空指针和状态标志，防止悬空指针
-     */
     void D12Buffer::UnmapPersistent()
     {
-        // 如果未持久映射，无需操作
         if (!m_isPersistentlyMapped)
         {
             return;
@@ -258,7 +242,6 @@ namespace enigma::graphic
         auto* resource = GetResource();
         if (resource)
         {
-            // 取消映射（writtenRange=nullptr表示整个范围都被写入）
             resource->Unmap(0, nullptr);
 
             core::LogDebug("D12Buffer",
@@ -266,7 +249,6 @@ namespace enigma::graphic
                            GetDebugName().empty() ? "<unnamed>" : GetDebugName().c_str());
         }
 
-        // 清空状态
         m_persistentMappedData = nullptr;
         m_isPersistentlyMapped = false;
     }

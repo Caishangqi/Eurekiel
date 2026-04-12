@@ -43,8 +43,7 @@ namespace enigma::graphic
     };
 
     /**
-     * Memory access mode enumeration
-     * Determines the access mode of the buffer between GPU/CPU
+     * Controls CPU/GPU visibility for the backing resource.
      */
     enum class MemoryAccess
     {
@@ -55,20 +54,35 @@ namespace enigma::graphic
     };
 
     /**
-     * Buffer creation information structure
-     * Corresponding to Iris' BuiltShaderStorageInfo, but adapts to DirectX 12
+     * Declares the intended lifetime and upload model of a buffer.
+     */
+    enum class BufferUsagePolicy : uint8_t
+    {
+        DynamicUpload,
+        GpuOnlyCopyReady
+    };
+
+    /**
+     * Generic buffer creation contract.
      */
     struct BufferCreateInfo
     {
-        size_t       size; // Buffer size (bytes)
-        BufferUsage  usage; // Use flag
-        MemoryAccess memoryAccess; // Memory access mode
-        const void*  initialData; // Initial data pointer (can be nullptr)
-        const char*  debugName; // Debug name (corresponding to Iris' GLDebug.nameObject)
-        size_t       byteStride; // StructuredBuffer element size (bytes)
+        size_t            size; // Buffer size in bytes
+        BufferUsage       usage; // Usage flags
+        MemoryAccess      memoryAccess; // Requested memory access mode
+        const void*       initialData; // Optional initial data
+        const char*       debugName; // Optional debug name
+        size_t            byteStride; // Structured-buffer element size in bytes
+        BufferUsagePolicy usagePolicy; // Upload/update policy
 
-        // 默认构造
-        BufferCreateInfo() : size(0), usage(BufferUsage::Default), memoryAccess(MemoryAccess::GPUOnly), initialData(nullptr), debugName(nullptr), byteStride(0)
+        BufferCreateInfo()
+            : size(0)
+            , usage(BufferUsage::Default)
+            , memoryAccess(MemoryAccess::GPUOnly)
+            , initialData(nullptr)
+            , debugName(nullptr)
+            , byteStride(0)
+            , usagePolicy(BufferUsagePolicy::DynamicUpload)
         {
         }
     };
@@ -118,6 +132,26 @@ namespace enigma::graphic
         BufferUsage GetUsage() const { return m_usage; }
 
         /**
+         * Returns the declared upload/update policy.
+         */
+        BufferUsagePolicy GetUsagePolicy() const { return m_usagePolicy; }
+
+        /**
+         * Returns the resolved memory access mode.
+         */
+        MemoryAccess GetMemoryAccess() const { return m_memoryAccess; }
+
+        /**
+         * Returns whether direct CPU mapping is allowed for this buffer.
+         */
+        bool SupportsCpuMapping() const;
+
+        /**
+         * Returns whether persistent mapping is allowed for this buffer.
+         */
+        bool SupportsPersistentMapping() const;
+
+        /**
          * 获取GPU虚拟地址（继承自D12Resource）
          * DirectX 12 API: ID3D12Resource::GetGPUVirtualAddress()
          * @return 用于bindless资源绑定的GPU地址
@@ -157,7 +191,7 @@ namespace enigma::graphic
          * 获取持久映射的CPU内存指针
          * @return 如果已持久映射返回有效指针，否则返回nullptr
          */
-        void* GetPersistentMappedData() const { return m_persistentMappedData; }
+        void* GetPersistentMappedData() const;
 
         /**
          * 检查缓冲区是否处于持久映射状态
@@ -257,15 +291,15 @@ namespace enigma::graphic
         // ==================== D12Buffer特有成员变量 ====================
         // 注意：m_resource, m_size, m_debugName, m_currentState 等已在基类D12Resource中定义
 
-        BufferUsage         m_usage; // 缓冲区使用类型
-        MemoryAccess        m_memoryAccess; // 内存访问模式
-        void*               m_mappedData; // 映射的CPU内存指针
-        mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
-        size_t              m_byteStride; // StructuredBuffer元素大小（字节）
+        BufferUsage         m_usage; // Buffer usage flags
+        BufferUsagePolicy   m_usagePolicy = BufferUsagePolicy::DynamicUpload; // Declared upload policy
+        MemoryAccess        m_memoryAccess; // Resolved memory access mode
+        void*               m_mappedData; // Temporary mapped CPU pointer
+        mutable std::string m_formattedDebugName; // Cached formatted debug name
+        size_t              m_byteStride; // Structured-buffer element size in bytes
 
-        // Persistent Mapping支持
-        void* m_persistentMappedData = nullptr; // 持久映射的CPU内存指针
-        bool  m_isPersistentlyMapped = false; // 是否处于持久映射状态
+        void* m_persistentMappedData = nullptr; // Persistent CPU pointer
+        bool  m_isPersistentlyMapped = false; // Persistent mapping state
 
         /**
          * 内部方法：创建DirectX 12资源

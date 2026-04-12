@@ -4,71 +4,84 @@
 
 using namespace enigma::graphic;
 
-// ============================================================================
-// Constructor and destructor
-// ============================================================================
-D12VertexBuffer::D12VertexBuffer(size_t size, size_t stride, const void* initialData, const char* debugName)
-    : D12Buffer([&]()
-      {
-          BufferCreateInfo info;
-          info.size  = size;
-          info.usage = BufferUsage::VertexBuffer;
-          // Teaching points: The application layer VertexBuffer needs to be updated frequently, so use CPUWritable uniformly.
-          // Even if there is no initialData, it may be updated later through UpdateBuffer
-          // Refer to Iris: Dynamic vertex data uses UPLOAD heap (D3D12_HEAP_TYPE_UPLOAD)
-          info.memoryAccess = MemoryAccess::CPUWritable;
-          info.initialData  = initialData;
-          info.debugName    = debugName;
-          return info;
-      }())
-      , m_stride(stride)
-      , m_view{}
+namespace
 {
-    //Teaching points: Parameter verification - ensure the legality of the input
-    assert(stride > 0 && "Vertex stride must be greater than 0");
-    assert(size % stride == 0 && "Buffer size must be multiple of stride");
+    BufferCreateInfo MakeDynamicVertexBufferCreateInfo(size_t size, size_t stride, const void* initialData, const char* debugName)
+    {
+        BufferCreateInfo info;
+        info.size        = size;
+        info.usage       = BufferUsage::VertexBuffer;
+        info.memoryAccess = MemoryAccess::CPUWritable;
+        info.initialData = initialData;
+        info.debugName   = debugName;
+        info.byteStride  = stride;
+        info.usagePolicy = BufferUsagePolicy::DynamicUpload;
+        return info;
+    }
 
-    //Teaching points: Create D3D12_VERTEX_BUFFER_VIEW
-    // This is the key structure for DirectX 12 bound vertex buffers
-    UpdateView();
+    BufferCreateInfo NormalizeVertexBufferCreateInfo(const BufferCreateInfo& createInfo)
+    {
+        BufferCreateInfo normalized = createInfo;
+        normalized.usage = BufferUsage::VertexBuffer;
 
-    // Persistent mapping buffer, supports Ring Buffer copy strategy of DrawVertexBuffer
-    // Teaching points: The VertexBuffer of the UPLOAD heap needs to be persistently mapped so that:
-    // 1. DrawVertexBuffer can read data through GetPersistentMappedData()
-    // 2. Data can be copied to the renderer’s Ring Buffer
-    // 3. Avoid the overhead of Map/Unmap per frame
-    MapPersistent();
+        switch (normalized.usagePolicy)
+        {
+        case BufferUsagePolicy::DynamicUpload:
+            normalized.memoryAccess = MemoryAccess::CPUWritable;
+            break;
+        case BufferUsagePolicy::GpuOnlyCopyReady:
+            if (normalized.memoryAccess != MemoryAccess::GPUOnly)
+            {
+                ERROR_RECOVERABLE("D12VertexBuffer: GpuOnlyCopyReady forces GPUOnly memory access");
+            }
+            normalized.memoryAccess = MemoryAccess::GPUOnly;
+            break;
+        default:
+            normalized.memoryAccess = MemoryAccess::CPUWritable;
+            break;
+        }
+
+        return normalized;
+    }
 }
 
-// ============================================================================
-// VertexBufferView management
-// ============================================================================
+D12VertexBuffer::D12VertexBuffer(size_t size, size_t stride, const void* initialData, const char* debugName)
+    : D12VertexBuffer(MakeDynamicVertexBufferCreateInfo(size, stride, initialData, debugName))
+{
+}
+
+D12VertexBuffer::D12VertexBuffer(const BufferCreateInfo& createInfo)
+    : D12Buffer(NormalizeVertexBufferCreateInfo(createInfo))
+      , m_stride(createInfo.byteStride)
+      , m_view{}
+{
+    assert(m_stride > 0 && "Vertex stride must be greater than 0");
+    assert(GetSize() % m_stride == 0 && "Buffer size must be multiple of stride");
+
+    UpdateView();
+
+    if (SupportsPersistentMapping())
+    {
+        MapPersistent();
+    }
+}
+
 void D12VertexBuffer::UpdateView()
 {
-    // Teaching points: Obtain the resource pointer of the base class
     auto* resource = GetResource();
     if (!resource)
     {
-        // Clear the view when the resource is invalid
         m_view = {};
         return;
     }
 
-    // Teaching points: Construct D3D12_VERTEX_BUFFER_VIEW
-    // 1. BufferLocation: GPU virtual address (obtained from ID3D12Resource)
-    // 2. SizeInBytes: total buffer size
-    // 3. StrideInBytes: single vertex size
     m_view.BufferLocation = resource->GetGPUVirtualAddress();
     m_view.SizeInBytes    = static_cast<UINT>(GetSize());
     m_view.StrideInBytes  = static_cast<UINT>(m_stride);
 }
 
-// ============================================================================
-// Debug interface implementation
-// ============================================================================
 void D12VertexBuffer::SetDebugName(const std::string& name)
 {
-    // Teaching points: Call the base class implementation and set the DirectX object name
     D12Buffer::SetDebugName(name);
 }
 
@@ -85,14 +98,8 @@ std::string D12VertexBuffer::GetDebugInfo() const
     return oss.str();
 }
 
-// ============================================================================
-// Resource release
-// ============================================================================
 void D12VertexBuffer::ReleaseResource()
 {
-    // Teaching points: Clean up VertexBufferView
     m_view = {};
-
-    // Call the base class implementation to release DirectX resources
     D12Buffer::ReleaseResource();
 }

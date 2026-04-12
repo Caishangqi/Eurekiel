@@ -27,6 +27,7 @@ namespace enigma::core
         constexpr const char* GENERIC   = "Generic";
         constexpr const char* FILE_IO   = "FileIO";
         constexpr const char* CHUNK_GEN = "ChunkGen";
+        constexpr const char* MESH_BUILDING = "MeshBuilding";
         constexpr const char* RENDERING = "Rendering";
     }
 
