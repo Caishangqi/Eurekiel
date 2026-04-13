@@ -987,6 +987,7 @@
     <ClInclude Include="Core\Buffer\BufferSerializable.hpp" />
     <ClInclude Include="Core\Buffer\ByteBuffer.hpp" />
     <ClInclude Include="Core\Buffer\Endian.hpp" />
+    <ClInclude Include="Core\BuildPreferences.hpp" />
     <ClInclude Include="Core\Clock.hpp" />
     <ClInclude Include="Core\Console\DevConsole.hpp" />
     <ClInclude Include="Core\Console\Imgui\ImguiConsoleFullRenderer.hpp" />
@@ -1012,7 +1013,12 @@
     <ClInclude Include="Core\Properties.hpp" />
     <ClInclude Include="Core\Rgba8.hpp" />
     <ClInclude Include="Core\Schedule\RunnableTask.hpp" />
+    <ClInclude Include="Core\Schedule\KeyedTaskPolicyTracker.hpp" />
+    <ClInclude Include="Core\Schedule\ScheduleException.hpp" />
+    <ClInclude Include="Core\Schedule\ScheduleTaskTypes.hpp" />
     <ClInclude Include="Core\Schedule\ScheduleSubsystem.hpp" />
+    <ClInclude Include="Core\Schedule\TaskControlBlock.hpp" />
+    <ClInclude Include="Core\Schedule\TaskHandle.hpp" />
     <ClInclude Include="Core\Schedule\TaskWorkerThread.hpp" />
     <ClInclude Include="Core\StringUtils.hpp" />
     <ClInclude Include="Core\Schedule\TaskTypeRegistry.hpp" />
@@ -1117,6 +1123,7 @@
 
     <ClInclude Include="Graphic\Shader\Program\VirtualPathReader.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\CustomImageManager.hpp" />
+    <ClInclude Include="Graphic\Shader\Uniform\BufferUpdateStrategy.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\CustomImageUniforms.hpp"/>
     <ClInclude Include="Graphic\Shader\Uniform\PerObjectUniforms.hpp" />
     <ClInclude Include="Graphic\Shader\Uniform\SamplerIndicesUniforms.hpp"/>
@@ -1218,6 +1225,8 @@
     <!-- Graphic System - New Iris-Compatible Architecture -->
     <!-- Core DirectX 12 API Layer (Static封装，对应Iris的IrisRenderSystem) -->
     <ClInclude Include="Graphic\Core\DX12\D3D12RenderSystem.hpp" />
+    <ClInclude Include="Graphic\Core\DX12\FrameContext.hpp" />
+    <ClInclude Include="Graphic\Core\DX12\QueueRoutingPolicy.hpp" />
     <!-- Pipeline Layer (M1清理 - 删除旧Phase系统) -->
     <!-- 已删除: IWorldRenderingPipeline.hpp, IShaderRenderingPipeline.hpp -->
     <!-- 已删除: VanillaRenderingPipeline.hpp, PipelineManager.hpp -->
@@ -1254,6 +1263,8 @@
     <!-- Resource Management -->
     <ClInclude Include="Graphic\Resource\BindlessIndexAllocator.hpp" />
     <ClInclude Include="Graphic\Resource\CommandListManager.hpp" />
+    <ClInclude Include="Graphic\Resource\CommandQueueException.hpp" />
+    <ClInclude Include="Graphic\Resource\CommandQueueTypes.hpp" />
     <ClInclude Include="Graphic\Resource\Buffer\D12Buffer.hpp" />
     <ClInclude Include="Graphic\Resource\D12Resources.hpp" />
     <ClInclude Include="Graphic\Resource\UploadContext.hpp" />
