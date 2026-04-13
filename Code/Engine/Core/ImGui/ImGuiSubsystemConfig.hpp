@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include <string>
-#include "ThirdParty/json/json.hpp"
+#include "ThirdParty/json/single_include/nlohmann/json.hpp"
 
 namespace enigma::graphic
 {

@@ -2,7 +2,7 @@
 #include "Engine/Core/Vertex_PCU.hpp"
 #include "Engine/Math/Vec4.hpp"
 #include "Engine/Resource/Loader/ResourceLoader.hpp"
-#include "ThirdParty/json/json.hpp"
+#include "ThirdParty/json/single_include/nlohmann/json.hpp"
 
 class VertexBuffer;
 class IndexBuffer;

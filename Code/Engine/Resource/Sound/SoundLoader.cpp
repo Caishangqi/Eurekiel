@@ -1,6 +1,6 @@
 #include "SoundLoader.hpp"
 #include "Engine/Core/ErrorWarningAssert.hpp"
-#include <ThirdParty/json/json.hpp>
+#include <ThirdParty/json/single_include/nlohmann/json.hpp>
 #include <fstream>
 
 using namespace enigma::resource;

@@ -1,3 +1,15 @@
 [submodule "Code/ThirdParty/implot"]
 	path = Code/ThirdParty/implot
 	url = https://github.com/epezent/implot.git
+[submodule "Code/ThirdParty/imgui"]
+	path = Code/ThirdParty/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "Code/ThirdParty/googletest"]
+	path = Code/ThirdParty/googletest
+	url = https://github.com/google/googletest.git
+[submodule "Code/ThirdParty/json"]
+	path = Code/ThirdParty/json
+	url = https://github.com/nlohmann/json.git
+[submodule "Code/ThirdParty/stb"]
+	path = Code/ThirdParty/stb
+	url = https://github.com/nothings/stb.git
