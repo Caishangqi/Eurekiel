@@ -674,6 +674,8 @@
     <ClCompile Include="Resource\BlockState\BlockStateBuilder.cpp" />
     <ClCompile Include="Resource\BlockState\BlockStateDefinition.cpp" />
     <ClCompile Include="Resource\BlockState\BlockStateLoader.cpp" />
+    <ClCompile Include="Resource\Loader\ModelLoader\GlbModelLoader.cpp" />
+    <ClCompile Include="Resource\Loader\ModelLoader\ObjModelLoader.cpp" />
     <ClCompile Include="Resource\Model\ModelFormat.cpp" />
     <ClCompile Include="Resource\Model\ModelLoader.cpp" />
     <ClCompile Include="Resource\Model\ModelResource.cpp" />
@@ -682,6 +684,7 @@
     <ClCompile Include="Resource\ResourceMapper.cpp" />
     <ClCompile Include="Resource\ResourceMetadata.cpp" />
     <ClCompile Include="Resource\ResourceCommon.cpp" />
+    <ClCompile Include="Resource\Resource.cpp" />
     <ClCompile Include="Resource\ResourceSubsystem.cpp" />
     <ClCompile Include="Resource\Atlas\ImageResource.cpp" />
     <ClCompile Include="Resource\Atlas\ImageLoader.cpp" />
@@ -990,6 +993,7 @@
     <ClInclude Include="Core\BuildPreferences.hpp" />
     <ClInclude Include="Core\Clock.hpp" />
     <ClInclude Include="Core\Console\DevConsole.hpp" />
+    <ClInclude Include="Core\DevConsole.hpp" />
     <ClInclude Include="Core\Console\Imgui\ImguiConsoleFullRenderer.hpp" />
     <ClInclude Include="Core\CubicHermiteSpline.hpp" />
     <ClInclude Include="Core\Engine.hpp" />
@@ -1366,6 +1370,10 @@
     <ClInclude Include="Resource\BlockState\BlockStateBuilder.hpp" />
     <ClInclude Include="Resource\BlockState\BlockStateDefinition.hpp" />
     <ClInclude Include="Resource\BlockState\BlockStateLoader.hpp" />
+    <ClInclude Include="Resource\Loader\Loader.hpp" />
+    <ClInclude Include="Resource\Loader\ModelLoader\GlbModelLoader.hpp" />
+    <ClInclude Include="Resource\Loader\ModelLoader\ModelLoader.hpp" />
+    <ClInclude Include="Resource\Loader\ModelLoader\ObjModelLoader.hpp" />
     <ClInclude Include="Resource\Model\ModelFormat.hpp" />
     <ClInclude Include="Resource\Model\ModelLoader.hpp" />
     <ClInclude Include="Resource\Model\ModelResource.hpp" />
@@ -1374,6 +1382,7 @@
     <ClInclude Include="Resource\ResourceMapper.hpp" />
     <ClInclude Include="Resource\ResourceMetadata.hpp" />
     <ClInclude Include="Resource\ResourceCommon.hpp" />
+    <ClInclude Include="Resource\Resource.hpp" />
     <ClInclude Include="Resource\ResourceSubsystem.hpp" />
     <ClInclude Include="Resource\Atlas\AtlasConfig.hpp" />
     <ClInclude Include="Resource\Atlas\ImageResource.hpp" />
@@ -1383,6 +1392,7 @@
     <ClInclude Include="Resource\Atlas\AtlasManager.hpp" />
     <ClInclude Include="Resource\Sound\SoundLoader.hpp" />
     <ClInclude Include="Resource\Sound\SoundResource.hpp" />
+    <ClInclude Include="Resource\SoundResource.hpp" />
     <ClInclude Include="Visibility\ICullingDomainCuller.hpp" />
     <ClInclude Include="Visibility\OcclusionCuller.hpp" />
     <!-- Graphic - Bindless Rendering System Headers -->
