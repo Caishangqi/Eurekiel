@@ -13,3 +13,12 @@
 [submodule "Code/ThirdParty/stb"]
 	path = Code/ThirdParty/stb
 	url = https://github.com/nothings/stb.git
+[submodule "Code/ThirdParty/TineyXML2"]
+	path = Code/ThirdParty/TineyXML2
+	url = https://github.com/leethomason/tinyxml2.git
+[submodule "Code/ThirdParty/tinygltf"]
+	path = Code/ThirdParty/tinygltf
+	url = https://github.com/syoyo/tinygltf.git
+[submodule "Code/ThirdParty/d3dx12"]
+	path = Code/ThirdParty/d3dx12
+	url = https://github.com/microsoft/DirectX-Headers.git

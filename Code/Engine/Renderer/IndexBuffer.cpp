@@ -1,6 +1,6 @@
 ﻿#include "IndexBuffer.hpp"
 
-#include <ThirdParty/d3dx12/d3dx12.h>
+#include <ThirdParty/d3dx12/include/directx/d3dx12.h>
 
 #include "GraphicsError.hpp"
 #include "Renderer.hpp"

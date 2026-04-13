@@ -6,7 +6,7 @@
 
 #include "Engine/Renderer/IRenderer.hpp"
 #include <vector>
-#include <ThirdParty/d3dx12/d3dx12.h>
+#include <ThirdParty/d3dx12/include/directx/d3dx12.h>
 #include <wrl/client.h>
 
 #include "DirectX12/DescriptorAllocator.hpp"

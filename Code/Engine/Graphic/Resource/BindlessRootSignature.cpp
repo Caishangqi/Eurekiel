@@ -2,7 +2,7 @@
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 
-#include "ThirdParty/d3dx12/d3dx12.h"
+#include "ThirdParty/d3dx12/include/directx/d3dx12.h"
 
 namespace enigma::graphic
 {

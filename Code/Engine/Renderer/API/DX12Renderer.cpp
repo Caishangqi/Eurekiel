@@ -1,6 +1,6 @@
 ﻿#include "DX12Renderer.hpp"
 
-#include "ThirdParty/d3dx12/d3dx12.h"
+#include "ThirdParty/d3dx12/include/directx/d3dx12.h"
 
 #include <d3dcompiler.h>
 #include <dxgi1_6.h>
