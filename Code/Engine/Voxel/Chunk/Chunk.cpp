@@ -467,20 +467,20 @@ BlockPos Chunk::GetWorldPos() const
 /**
  * @brief Set chunk state with activation event detection
  *
- * When chunk transitions from non-Active to Active state, notifies 4 horizontal
- * neighbors to rebuild their mesh. This ensures boundary blocks correctly update
- * their face visibility for cross-chunk hidden face culling.
+ * When chunk transitions from non-Active to Active state, notifies World that
+ * this chunk became readable for meshing. World then handles waiting-target
+ * wakeups before any generic neighbor mesh refresh propagation.
  *
  * Architecture:
  * - Task 2.1: BuildMesh() returns nullptr if neighbor not active
- * - Task 2.2: SetState() detects activation → notifies neighbors
- * - World::UpdateChunkMeshes() rebuilds neighbors from dirty queue
+ * - Task 2.2: SetState() detects activation → notifies world coordination
+ * - World wakes dependency waits before generic neighbor refresh propagation
  * - Task 2.1: BuildMesh() now sees active neighbor → correct culling
  *
  * Thread Safety:
  * - AtomicChunkState::Load/Store are thread-safe
- * - NotifyNeighborsDirty() must run on main thread
- *   (World::MarkChunkDirty accesses non-thread-safe queue)
+ * - NotifyChunkBecameMeshReadable() must run on main thread
+ *   (World mesh queue and wait registry are main-thread owned)
  *
  * @param newState New chunk state to set
  */
@@ -489,15 +489,14 @@ void Chunk::SetState(ChunkState newState)
     ChunkState oldState = m_state.Load();
     m_state.Store(newState);
 
-    // [Phase 2] Cross-Chunk Hidden Face Culling
-    // When chunk activates, neighbors need to rebuild mesh
-    // (their BuildMesh() previously returned nullptr because this chunk was not active)
+    // Activation makes this chunk readable for meshing again.
+    // World coordinates dependency wakes first, then generic neighbor refresh.
     if (oldState != ChunkState::Active && newState == ChunkState::Active)
     {
-        core::LogDebug("chunk", "Chunk (%d, %d) activated (state %s -> %s), notifying neighbors to rebuild mesh",
+        core::LogDebug("chunk", "Chunk (%d, %d) activated (state %s -> %s), notifying world mesh readiness coordination",
                        m_chunkCoords.x, m_chunkCoords.y,
                        ChunkStateToString(oldState), ChunkStateToString(newState));
-        NotifyNeighborsDirty();
+        NotifyChunkBecameMeshReadable();
     }
 }
 
@@ -640,69 +639,20 @@ void Chunk::InitializeLighting(World* world)
 //-------------------------------------------------------------------------------------------
 
 /**
- * @brief Notify 4 horizontal neighbors to rebuild mesh
+ * @brief Notify World that this chunk became readable for meshing
  *
- * Called when this chunk activates. Neighbors that are already active need to
- * rebuild their mesh because boundary block faces may change visibility.
- *
- * Why not notify in constructor?
- * - Chunk creation happens during terrain generation (neighbors may not exist yet)
- * - Only activation matters (neighbors might already be loaded by then)
- *
- * Why not notify Up/Down neighbors?
- * - Chunk height is 256 blocks (Z=0 to Z=255), covers entire world height
- * - No vertical chunk neighbors exist in SimpleMiner
- *
- * Performance:
- * - Low frequency event (only when chunk activates)
- * - 4 pointer lookups + up to 4 MarkChunkDirty() calls (~100ns)
- * - World::MarkChunkDirty() automatically de-duplicates (std::find check)
- *
- * @see World::MarkChunkDirty() - Adds chunk to m_pendingMeshRebuildQueue
- * @see World::UpdateChunkMeshes() - Processes dirty queue on main thread
+ * World owns both waiting-registry wakeup and generic neighbor refresh
+ * coordination. Chunk only reports the readability transition.
  */
-void Chunk::NotifyNeighborsDirty()
+void Chunk::NotifyChunkBecameMeshReadable()
 {
     if (!m_world)
     {
-        core::LogWarn("chunk", "NotifyNeighborsDirty: m_world is null, cannot notify neighbors");
+        core::LogWarn("chunk", "NotifyChunkBecameMeshReadable: m_world is null, cannot notify world");
         return;
     }
 
-    // Get 4 horizontal neighbors (Up/Down don't exist - Z in same chunk)
-    Chunk* neighbors[] = {
-        GetEastNeighbor(), // X + 1
-        GetWestNeighbor(), // X - 1
-        GetNorthNeighbor(), // Y + 1
-        GetSouthNeighbor() // Y - 1
-    };
-
-    const char* neighborNames[] = {"East", "West", "North", "South"};
-
-    int notifiedCount = 0;
-    for (int i = 0; i < 4; ++i)
-    {
-        Chunk* neighbor = neighbors[i];
-        if (neighbor && neighbor->IsActive())
-        {
-            // Add neighbor to World's dirty queue for mesh rebuild
-            // World::MarkChunkDirty() already checks for duplicates (std::find)
-            m_world->ScheduleChunkMeshRebuild(neighbor);
-            notifiedCount++;
-
-            core::LogDebug("chunk", "  -> Marked %s neighbor (%d, %d) dirty",
-                           neighborNames[i],
-                           neighbor->GetChunkX(),
-                           neighbor->GetChunkY());
-        }
-    }
-
-    core::LogDebug("chunk", "NotifyNeighborsDirty: notified %d active neighbors (E=%s W=%s N=%s S=%s)",
-                   notifiedCount,
-                   (neighbors[0] && neighbors[0]->IsActive()) ? "OK" : "NO",
-                   (neighbors[1] && neighbors[1]->IsActive()) ? "OK" : "NO",
-                   (neighbors[2] && neighbors[2]->IsActive()) ? "OK" : "NO",
-                   (neighbors[3] && neighbors[3]->IsActive()) ? "OK" : "NO");
+    m_world->HandleChunkBecameMeshReadable(*this);
 }
 
 //-------------------------------------------------------------------------------------------

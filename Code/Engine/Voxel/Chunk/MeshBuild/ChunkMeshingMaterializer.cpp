@@ -2,6 +2,8 @@
 
 #include "Engine/Voxel/Chunk/Chunk.hpp"
 
+#include <algorithm>
+
 using namespace enigma::voxel;
 
 namespace
@@ -29,15 +31,25 @@ namespace
         return sample;
     }
 
-    const Chunk* ResolveHorizontalNeighbor(const Chunk& chunk, Direction direction)
+    ChunkMeshingLightSample MakeDefaultLightSample()
     {
+        return {};
+    }
+
+    const Chunk* ResolveReadableNeighbor(const Chunk* chunk, Direction direction)
+    {
+        if (chunk == nullptr)
+        {
+            return nullptr;
+        }
+
         const Chunk* neighbor = nullptr;
         switch (direction)
         {
-        case Direction::NORTH: neighbor = chunk.GetNorthNeighbor(); break;
-        case Direction::SOUTH: neighbor = chunk.GetSouthNeighbor(); break;
-        case Direction::EAST: neighbor = chunk.GetEastNeighbor(); break;
-        case Direction::WEST: neighbor = chunk.GetWestNeighbor(); break;
+        case Direction::NORTH: neighbor = chunk->GetNorthNeighbor(); break;
+        case Direction::SOUTH: neighbor = chunk->GetSouthNeighbor(); break;
+        case Direction::EAST: neighbor = chunk->GetEastNeighbor(); break;
+        case Direction::WEST: neighbor = chunk->GetWestNeighbor(); break;
         case Direction::UP:
         case Direction::DOWN:
             break;
@@ -49,6 +61,11 @@ namespace
         }
 
         return neighbor;
+    }
+
+    const Chunk* ResolveHorizontalNeighbor(const Chunk& chunk, Direction direction)
+    {
+        return ResolveReadableNeighbor(&chunk, direction);
     }
 
     bool CopyHorizontalNeighborPlane(const Chunk& sourceChunk, Direction direction, ChunkMeshingSnapshot& snapshot)
@@ -109,6 +126,39 @@ namespace
         return false;
     }
 
+    void FillHorizontalNeighborPlane(Direction direction,
+                                     ChunkMeshingSnapshot& snapshot,
+                                     BlockState* blockValue = nullptr,
+                                     ChunkMeshingLightSample lightValue = {})
+    {
+        switch (direction)
+        {
+        case Direction::NORTH:
+            std::fill(snapshot.northEdgeBlocks.begin(), snapshot.northEdgeBlocks.end(), blockValue);
+            std::fill(snapshot.northEdgeLights.begin(), snapshot.northEdgeLights.end(), lightValue);
+            break;
+
+        case Direction::SOUTH:
+            std::fill(snapshot.southEdgeBlocks.begin(), snapshot.southEdgeBlocks.end(), blockValue);
+            std::fill(snapshot.southEdgeLights.begin(), snapshot.southEdgeLights.end(), lightValue);
+            break;
+
+        case Direction::EAST:
+            std::fill(snapshot.eastEdgeBlocks.begin(), snapshot.eastEdgeBlocks.end(), blockValue);
+            std::fill(snapshot.eastEdgeLights.begin(), snapshot.eastEdgeLights.end(), lightValue);
+            break;
+
+        case Direction::WEST:
+            std::fill(snapshot.westEdgeBlocks.begin(), snapshot.westEdgeBlocks.end(), blockValue);
+            std::fill(snapshot.westEdgeLights.begin(), snapshot.westEdgeLights.end(), lightValue);
+            break;
+
+        case Direction::UP:
+        case Direction::DOWN:
+            break;
+        }
+    }
+
     void CopyDiagonalCornerColumn(const Chunk* sourceChunk, int32_t sourceX, int32_t sourceY, std::vector<BlockState*>& targetBlocks)
     {
         if (sourceChunk == nullptr || !sourceChunk->CanReadForMeshing())
@@ -120,6 +170,55 @@ namespace
         {
             targetBlocks[GetCornerIndex(z)] = sourceChunk->GetBlock(sourceX, sourceY, z);
         }
+    }
+
+    const Chunk* ResolveDiagonalCornerNeighbor(const Chunk* primaryNeighbor,
+                                               Direction primaryDirection,
+                                               const Chunk* secondaryNeighbor,
+                                               Direction secondaryDirection)
+    {
+        if (primaryNeighbor == nullptr || secondaryNeighbor == nullptr)
+        {
+            return nullptr;
+        }
+
+        const Chunk* diagonalNeighbor = ResolveReadableNeighbor(primaryNeighbor, primaryDirection);
+        if (diagonalNeighbor != nullptr)
+        {
+            return diagonalNeighbor;
+        }
+
+        return ResolveReadableNeighbor(secondaryNeighbor, secondaryDirection);
+    }
+
+    ChunkMeshNeighborDependencyMask CollectMissingHorizontalNeighborMask(const Chunk* northChunk,
+                                                                        const Chunk* southChunk,
+                                                                        const Chunk* eastChunk,
+                                                                        const Chunk* westChunk) noexcept
+    {
+        ChunkMeshNeighborDependencyMask missingMask = kChunkMeshNeighborDependencyMaskNone;
+
+        if (northChunk == nullptr)
+        {
+            missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::North);
+        }
+
+        if (southChunk == nullptr)
+        {
+            missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::South);
+        }
+
+        if (eastChunk == nullptr)
+        {
+            missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::East);
+        }
+
+        if (westChunk == nullptr)
+        {
+            missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::West);
+        }
+
+        return missingMask;
     }
 }
 
@@ -159,7 +258,10 @@ ChunkMeshingMaterializationResult ChunkMeshingMaterializer::TryMaterialize(const
     }
 
     outSnapshot.Reset();
-    outSnapshot.chunkCoords = chunk.GetChunkCoords();
+    outSnapshot.chunkCoords               = chunk.GetChunkCoords();
+    outSnapshot.neighborPolicyKind        = context.neighborReadiness.policyKind;
+    outSnapshot.activationKind            = context.neighborReadiness.activationKind;
+    outSnapshot.usesRelaxedNeighborAccess = context.UsesRelaxedNeighborAccess();
 
     const bool captureCenterBlocks = context.RequiresCaptureHint(ChunkMeshingCaptureHint::CenterBlockData);
     const bool captureLights       = context.RequiresCaptureHint(ChunkMeshingCaptureHint::LightingData);
@@ -190,61 +292,65 @@ ChunkMeshingMaterializationResult ChunkMeshingMaterializer::TryMaterialize(const
     const Chunk* southChunk = ResolveHorizontalNeighbor(chunk, Direction::SOUTH);
     const Chunk* eastChunk  = ResolveHorizontalNeighbor(chunk, Direction::EAST);
     const Chunk* westChunk  = ResolveHorizontalNeighbor(chunk, Direction::WEST);
-    if (northChunk == nullptr || southChunk == nullptr || eastChunk == nullptr || westChunk == nullptr)
+    const ChunkMeshNeighborDependencyMask missingHorizontalMask =
+        CollectMissingHorizontalNeighborMask(northChunk, southChunk, eastChunk, westChunk);
+
+    outSnapshot.missingHorizontalNeighborMask = missingHorizontalMask;
+    outSnapshot.requiresNeighborRefinement =
+        context.RequiresRefinement() && HasAnyChunkMeshNeighborDependencies(missingHorizontalMask);
+
+    if (HasAnyChunkMeshNeighborDependencies(missingHorizontalMask) && !context.UsesRelaxedNeighborAccess())
     {
         return {ChunkMeshingMaterializationStatus::MissingHorizontalNeighbors, "MissingHorizontalNeighbors"};
     }
 
-    outSnapshot.hasNorthNeighbor = CopyHorizontalNeighborPlane(*northChunk, Direction::NORTH, outSnapshot);
-    outSnapshot.hasSouthNeighbor = CopyHorizontalNeighborPlane(*southChunk, Direction::SOUTH, outSnapshot);
-    outSnapshot.hasEastNeighbor  = CopyHorizontalNeighborPlane(*eastChunk, Direction::EAST, outSnapshot);
-    outSnapshot.hasWestNeighbor  = CopyHorizontalNeighborPlane(*westChunk, Direction::WEST, outSnapshot);
-    if (!outSnapshot.HasAllHorizontalNeighbors())
+    if (northChunk != nullptr)
+    {
+        outSnapshot.hasNorthNeighbor = CopyHorizontalNeighborPlane(*northChunk, Direction::NORTH, outSnapshot);
+    }
+    else
+    {
+        FillHorizontalNeighborPlane(Direction::NORTH, outSnapshot, nullptr, MakeDefaultLightSample());
+    }
+
+    if (southChunk != nullptr)
+    {
+        outSnapshot.hasSouthNeighbor = CopyHorizontalNeighborPlane(*southChunk, Direction::SOUTH, outSnapshot);
+    }
+    else
+    {
+        FillHorizontalNeighborPlane(Direction::SOUTH, outSnapshot, nullptr, MakeDefaultLightSample());
+    }
+
+    if (eastChunk != nullptr)
+    {
+        outSnapshot.hasEastNeighbor = CopyHorizontalNeighborPlane(*eastChunk, Direction::EAST, outSnapshot);
+    }
+    else
+    {
+        FillHorizontalNeighborPlane(Direction::EAST, outSnapshot, nullptr, MakeDefaultLightSample());
+    }
+
+    if (westChunk != nullptr)
+    {
+        outSnapshot.hasWestNeighbor = CopyHorizontalNeighborPlane(*westChunk, Direction::WEST, outSnapshot);
+    }
+    else
+    {
+        FillHorizontalNeighborPlane(Direction::WEST, outSnapshot, nullptr, MakeDefaultLightSample());
+    }
+
+    if (!context.UsesRelaxedNeighborAccess() && !outSnapshot.HasAllHorizontalNeighbors())
     {
         return {ChunkMeshingMaterializationStatus::MissingHorizontalNeighbors, "MissingHorizontalNeighbors"};
     }
 
     if (context.RequiresCaptureHint(ChunkMeshingCaptureHint::DiagonalCorners))
     {
-        const Chunk* northEastChunk = northChunk->GetEastNeighbor();
-        if (northEastChunk == nullptr || !northEastChunk->CanReadForMeshing())
-        {
-            northEastChunk = eastChunk->GetNorthNeighbor();
-            if (northEastChunk != nullptr && !northEastChunk->CanReadForMeshing())
-            {
-                northEastChunk = nullptr;
-            }
-        }
-
-        const Chunk* northWestChunk = northChunk->GetWestNeighbor();
-        if (northWestChunk == nullptr || !northWestChunk->CanReadForMeshing())
-        {
-            northWestChunk = westChunk->GetNorthNeighbor();
-            if (northWestChunk != nullptr && !northWestChunk->CanReadForMeshing())
-            {
-                northWestChunk = nullptr;
-            }
-        }
-
-        const Chunk* southEastChunk = southChunk->GetEastNeighbor();
-        if (southEastChunk == nullptr || !southEastChunk->CanReadForMeshing())
-        {
-            southEastChunk = eastChunk->GetSouthNeighbor();
-            if (southEastChunk != nullptr && !southEastChunk->CanReadForMeshing())
-            {
-                southEastChunk = nullptr;
-            }
-        }
-
-        const Chunk* southWestChunk = southChunk->GetWestNeighbor();
-        if (southWestChunk == nullptr || !southWestChunk->CanReadForMeshing())
-        {
-            southWestChunk = westChunk->GetSouthNeighbor();
-            if (southWestChunk != nullptr && !southWestChunk->CanReadForMeshing())
-            {
-                southWestChunk = nullptr;
-            }
-        }
+        const Chunk* northEastChunk = ResolveDiagonalCornerNeighbor(northChunk, Direction::EAST, eastChunk, Direction::NORTH);
+        const Chunk* northWestChunk = ResolveDiagonalCornerNeighbor(northChunk, Direction::WEST, westChunk, Direction::NORTH);
+        const Chunk* southEastChunk = ResolveDiagonalCornerNeighbor(southChunk, Direction::EAST, eastChunk, Direction::SOUTH);
+        const Chunk* southWestChunk = ResolveDiagonalCornerNeighbor(southChunk, Direction::WEST, westChunk, Direction::SOUTH);
 
         CopyDiagonalCornerColumn(northEastChunk, 0, 0, outSnapshot.northEastCornerBlocks);
         CopyDiagonalCornerColumn(northWestChunk, Chunk::CHUNK_MAX_X, 0, outSnapshot.northWestCornerBlocks);

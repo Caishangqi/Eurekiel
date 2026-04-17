@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Math/IntVec2.hpp"
+#include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshNeighborReadiness.hpp"
 #include "Engine/Voxel/Chunk/ChunkMesh.hpp"
 
 #include <cstdint>
@@ -50,6 +51,10 @@ namespace enigma::voxel
         uint64_t                    chunkInstanceId = 0;
         uint64_t                    buildVersion    = 0;
         ChunkMeshBuildResultStatus  status          = ChunkMeshBuildResultStatus::Failed;
+        ChunkMeshNeighborDependencyMask missingHorizontalNeighborMask = kChunkMeshNeighborDependencyMaskNone;
+        bool                        usedRelaxedNeighborAccess = false;
+        bool                        partialMeshBuilt = false;
+        bool                        requiresNeighborRefinement = false;
         std::unique_ptr<ChunkMesh>  mesh;
         ChunkMeshBuildMetrics       metrics;
         std::string                 detail;
@@ -62,6 +67,16 @@ namespace enigma::voxel
         bool RequiresRetry() const noexcept
         {
             return status == ChunkMeshBuildResultStatus::RetryLater;
+        }
+
+        bool HasMissingHorizontalNeighbors() const noexcept
+        {
+            return HasAnyChunkMeshNeighborDependencies(missingHorizontalNeighborMask);
+        }
+
+        bool IsPartialMeshResult() const noexcept
+        {
+            return partialMeshBuilt;
         }
     };
 }

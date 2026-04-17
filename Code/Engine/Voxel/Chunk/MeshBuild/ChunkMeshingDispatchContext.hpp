@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshNeighborReadiness.hpp"
 #include "Engine/Math/IntVec2.hpp"
 
 #include <cstdint>
@@ -28,12 +29,13 @@ namespace enigma::voxel
 
     struct ChunkMeshingDispatchContext
     {
-        IntVec2  chunkCoords       = IntVec2(0, 0);
-        uint64_t chunkInstanceId   = 0;
-        uint64_t buildVersion      = 0;
-        uint64_t worldLifetimeToken = 0;
-        uint32_t captureHintMask   = kDefaultChunkMeshingCaptureHintMask;
-        bool     important         = false;
+        IntVec2                              chunkCoords       = IntVec2(0, 0);
+        uint64_t                             chunkInstanceId   = 0;
+        uint64_t                             buildVersion      = 0;
+        uint64_t                             worldLifetimeToken = 0;
+        uint32_t                             captureHintMask   = kDefaultChunkMeshingCaptureHintMask;
+        ChunkMeshNeighborReadinessAssessment neighborReadiness;
+        bool                                 important         = false;
 
         bool IsValid() const noexcept
         {
@@ -43,6 +45,26 @@ namespace enigma::voxel
         bool RequiresCaptureHint(ChunkMeshingCaptureHint hint) const noexcept
         {
             return (captureHintMask & ToChunkMeshingCaptureHintMask(hint)) != 0u;
+        }
+
+        bool ShouldWaitForNeighbors() const noexcept
+        {
+            return neighborReadiness.shouldWaitForNeighbors;
+        }
+
+        bool UsesRelaxedNeighborAccess() const noexcept
+        {
+            return neighborReadiness.UsesRelaxedNeighborAccess();
+        }
+
+        bool RequiresRefinement() const noexcept
+        {
+            return neighborReadiness.requiresRefinement;
+        }
+
+        ChunkMeshNeighborDependencyMask GetMissingHorizontalNeighborMask() const noexcept
+        {
+            return neighborReadiness.missingHorizontalMask;
         }
     };
 }

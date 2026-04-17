@@ -251,12 +251,6 @@ ChunkMeshBuildResult ChunkMeshBuilder::Build(const ChunkMeshBuildInput& input) c
     }
 
     const ChunkMeshingSnapshot& snapshot = *input.snapshot;
-    if (!snapshot.HasAllHorizontalNeighbors())
-    {
-        result.status = ChunkMeshBuildResultStatus::RetryLater;
-        result.detail = "MissingHorizontalNeighbors";
-        return result;
-    }
 
     auto   chunkMesh = std::make_unique<ChunkMesh>();
     int    blockCount = 0;

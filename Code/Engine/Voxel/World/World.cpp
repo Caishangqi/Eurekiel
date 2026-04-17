@@ -26,6 +26,7 @@ using namespace enigma::voxel;
 
 static const char* getTaskStateName(enigma::core::TaskState state);
 static const char* getTaskPolicyDecisionName(enigma::core::TaskPolicyDecision decision);
+static size_t s_chunkMeshNeighborReadableNoWakeLogCount = 0;
 
 //-----------------------------------------------------------------------------------------------
 // Helper function to convert impact normal to Direction enum
@@ -1146,6 +1147,10 @@ void World::ActivateChunk(IntVec2 chunkCoords)
         // Chunk already being processed or active
         LogDebug("world", "Chunk (%d, %d) already in state %d, skipping activation",
                  chunkCoords.x, chunkCoords.y, static_cast<int>(currentState));
+        if (chunk->CanReadForMeshing())
+        {
+            HandleChunkMeshNeighborReadable(chunkCoords);
+        }
         return;
     }
 
@@ -1809,6 +1814,17 @@ void World::HandleSaveChunkCompleted(SaveChunkJob* job)
     LogDebug("world", "Chunk (%d, %d) save completed, now Active", coords.x, coords.y);
 }
 
+void World::HandleChunkBecameMeshReadable(Chunk& chunk)
+{
+    if (m_isShuttingDown.load())
+    {
+        return;
+    }
+
+    HandleChunkMeshNeighborReadable(chunk.GetChunkCoords());
+    QueueNeighborExposureRefreshesForReadableChunk(chunk);
+}
+
 bool World::RequestChunkMeshBuildCancellation(IntVec2 chunkCoords, const char* reason)
 {
     ChunkMeshBuildState* buildState = FindChunkMeshBuildState(chunkCoords);
@@ -1848,6 +1864,438 @@ bool World::IsImportantChunkMeshBuild(const Chunk& chunk, bool forceImportant) c
     }
 
     return GetChunkDistanceToPlayer(chunk.GetChunkX(), chunk.GetChunkY()) <= m_importantChunkDistanceThreshold;
+}
+
+ChunkMeshNeighborDependencyMask World::CollectMissingHorizontalNeighborMask(const Chunk& chunk) const
+{
+    ChunkMeshNeighborDependencyMask missingMask = kChunkMeshNeighborDependencyMaskNone;
+
+    const Chunk* northNeighbor = chunk.GetNorthNeighbor();
+    if (northNeighbor == nullptr || !northNeighbor->CanReadForMeshing())
+    {
+        missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::North);
+    }
+
+    const Chunk* southNeighbor = chunk.GetSouthNeighbor();
+    if (southNeighbor == nullptr || !southNeighbor->CanReadForMeshing())
+    {
+        missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::South);
+    }
+
+    const Chunk* eastNeighbor = chunk.GetEastNeighbor();
+    if (eastNeighbor == nullptr || !eastNeighbor->CanReadForMeshing())
+    {
+        missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::East);
+    }
+
+    const Chunk* westNeighbor = chunk.GetWestNeighbor();
+    if (westNeighbor == nullptr || !westNeighbor->CanReadForMeshing())
+    {
+        missingMask |= ToChunkMeshNeighborDependencyMask(ChunkMeshHorizontalNeighbor::West);
+    }
+
+    return missingMask;
+}
+
+ChunkMeshNeighborReadinessAssessment World::EvaluateChunkMeshNeighborReadiness(const Chunk& chunk,
+                                                                               const ChunkMeshBuildState& buildState) const
+{
+    ChunkMeshNeighborReadinessAssessment readiness;
+    readiness.activationKind = (buildState.waitingForNeighbors || buildState.refinementPending) ?
+        ChunkMeshBuildActivationKind::NeighborReadableWake :
+        ChunkMeshBuildActivationKind::RebuildRequest;
+    readiness.policyKind = buildState.important ?
+        ChunkMeshNeighborPolicyKind::RelaxedNeighborAccess :
+        ChunkMeshNeighborPolicyKind::StrictNeighborGate;
+    readiness.missingHorizontalMask = CollectMissingHorizontalNeighborMask(chunk);
+
+    if (!readiness.HasMissingHorizontalNeighbors())
+    {
+        return readiness;
+    }
+
+    if (buildState.important)
+    {
+        readiness.policyKind = ChunkMeshNeighborPolicyKind::RelaxedNeighborAccess;
+        readiness.shouldUseAvailableNeighborData = true;
+        readiness.requiresRefinement = true;
+    }
+    else
+    {
+        readiness.policyKind = ChunkMeshNeighborPolicyKind::StrictNeighborGate;
+        readiness.shouldWaitForNeighbors = true;
+    }
+
+    return readiness;
+}
+
+void World::ClearChunkMeshNeighborWaitState(ChunkMeshBuildState& buildState, IntVec2 chunkCoords, const char* reason)
+{
+    const bool hadWaitEntry = buildState.waitingForNeighbors ||
+                              m_chunkMeshNeighborWaitRegistry.HasWaitEntry(chunkCoords);
+    if (hadWaitEntry)
+    {
+        m_asyncChunkMeshDiagnostics.frame.neighborWaitCancelled++;
+        m_asyncChunkMeshDiagnostics.cumulative.neighborWaitCancelled++;
+        LogInfo("world",
+                "Clearing chunk mesh wait state for chunk (%d, %d) reason=%s version=%llu pendingDispatch=%s activeHandle=%s refinementPending=%s partialPublished=%s",
+                chunkCoords.x,
+                chunkCoords.y,
+                reason,
+                buildState.latestRequestedVersion,
+                buildState.pendingDispatch ? "true" : "false",
+                buildState.activeHandle.has_value() ? "true" : "false",
+                buildState.refinementPending ? "true" : "false",
+                buildState.partialMeshPublished ? "true" : "false");
+    }
+
+    m_chunkMeshNeighborWaitRegistry.CancelWaitForTarget(chunkCoords);
+    buildState.waitingForNeighbors = false;
+    buildState.waitingNeighborMask = kChunkMeshNeighborDependencyMaskNone;
+}
+
+bool World::RegisterChunkMeshNeighborWait(Chunk& chunk,
+                                          ChunkMeshBuildState& buildState,
+                                          const ChunkMeshNeighborReadinessAssessment& readiness)
+{
+    if (!readiness.shouldWaitForNeighbors || !readiness.HasMissingHorizontalNeighbors())
+    {
+        return false;
+    }
+
+    buildState.pendingNeighborReadiness = readiness;
+    buildState.pendingDispatch = false;
+    buildState.waitingForNeighbors = true;
+    buildState.waitingNeighborMask = readiness.missingHorizontalMask;
+
+    ChunkMeshNeighborWaitEntry waitEntry;
+    waitEntry.targetChunkCoords = chunk.GetChunkCoords();
+    waitEntry.targetChunkInstanceId = chunk.GetInstanceId();
+    waitEntry.buildVersion = buildState.latestRequestedVersion;
+    waitEntry.waitingNeighborMask = readiness.missingHorizontalMask;
+    waitEntry.important = buildState.important;
+    waitEntry.awaitingRefinement = buildState.refinementPending;
+    m_chunkMeshNeighborWaitRegistry.RegisterWait(waitEntry);
+    m_asyncChunkMeshDiagnostics.frame.neighborWaitRegistered++;
+    m_asyncChunkMeshDiagnostics.cumulative.neighborWaitRegistered++;
+
+    LogInfo("world",
+            "Chunk mesh build for chunk (%d, %d) is waiting for neighbors mask=0x%02x version=%llu important=%s awaitingRefinement=%s",
+            waitEntry.targetChunkCoords.x,
+            waitEntry.targetChunkCoords.y,
+            static_cast<unsigned int>(waitEntry.waitingNeighborMask),
+            waitEntry.buildVersion,
+            waitEntry.important ? "true" : "false",
+            waitEntry.awaitingRefinement ? "true" : "false");
+
+    if (HasChunkMeshNeighborDependency(waitEntry.waitingNeighborMask, ChunkMeshHorizontalNeighbor::North))
+    {
+        LogInfo("world",
+                "Chunk mesh wait dependency target=(%d, %d) waits for North neighbor (%d, %d) version=%llu",
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y + 1,
+                waitEntry.buildVersion);
+    }
+
+    if (HasChunkMeshNeighborDependency(waitEntry.waitingNeighborMask, ChunkMeshHorizontalNeighbor::South))
+    {
+        LogInfo("world",
+                "Chunk mesh wait dependency target=(%d, %d) waits for South neighbor (%d, %d) version=%llu",
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y - 1,
+                waitEntry.buildVersion);
+    }
+
+    if (HasChunkMeshNeighborDependency(waitEntry.waitingNeighborMask, ChunkMeshHorizontalNeighbor::East))
+    {
+        LogInfo("world",
+                "Chunk mesh wait dependency target=(%d, %d) waits for East neighbor (%d, %d) version=%llu",
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.targetChunkCoords.x + 1,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.buildVersion);
+    }
+
+    if (HasChunkMeshNeighborDependency(waitEntry.waitingNeighborMask, ChunkMeshHorizontalNeighbor::West))
+    {
+        LogInfo("world",
+                "Chunk mesh wait dependency target=(%d, %d) waits for West neighbor (%d, %d) version=%llu",
+                waitEntry.targetChunkCoords.x,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.targetChunkCoords.x - 1,
+                waitEntry.targetChunkCoords.y,
+                waitEntry.buildVersion);
+    }
+    return true;
+}
+
+bool World::ShouldPruneChunkMeshNeighborWait(const ChunkMeshNeighborWaitEntry& entry) const
+{
+    if (m_isShuttingDown.load())
+    {
+        return true;
+    }
+
+    Chunk* targetChunk = GetChunk(entry.targetChunkCoords.x, entry.targetChunkCoords.y);
+    if (targetChunk == nullptr || !targetChunk->CanReadForMeshing())
+    {
+        return true;
+    }
+
+    const ChunkMeshBuildState* buildState = const_cast<World*>(this)->FindChunkMeshBuildState(entry.targetChunkCoords);
+    if (buildState == nullptr)
+    {
+        return true;
+    }
+
+    if (buildState->chunkInstanceId != entry.targetChunkInstanceId)
+    {
+        return true;
+    }
+
+    if (buildState->latestRequestedVersion != entry.buildVersion)
+    {
+        return true;
+    }
+
+    if (entry.awaitingRefinement)
+    {
+        return !buildState->refinementPending;
+    }
+
+    if (!buildState->waitingForNeighbors)
+    {
+        return true;
+    }
+
+    return !targetChunk->NeedsMeshRebuild();
+}
+
+void World::HandleChunkMeshNeighborReadable(IntVec2 readableChunkCoords)
+{
+    if (m_isShuttingDown.load())
+    {
+        return;
+    }
+
+    m_chunkMeshNeighborWaitRegistry.PruneInvalidEntries([this](const ChunkMeshNeighborWaitEntry& entry)
+    {
+        const char* pruneReason = nullptr;
+
+        if (m_isShuttingDown.load())
+        {
+            pruneReason = "shutdown-active";
+        }
+        else
+        {
+            Chunk* targetChunk = GetChunk(entry.targetChunkCoords.x, entry.targetChunkCoords.y);
+            if (targetChunk == nullptr)
+            {
+                pruneReason = "target-chunk-missing";
+            }
+            else if (!targetChunk->CanReadForMeshing())
+            {
+                pruneReason = "target-chunk-unreadable";
+            }
+            else
+            {
+                const ChunkMeshBuildState* buildState = const_cast<World*>(this)->FindChunkMeshBuildState(entry.targetChunkCoords);
+                if (buildState == nullptr)
+                {
+                    pruneReason = "build-state-missing";
+                }
+                else if (buildState->chunkInstanceId != entry.targetChunkInstanceId)
+                {
+                    pruneReason = "chunk-instance-mismatch";
+                }
+                else if (buildState->latestRequestedVersion != entry.buildVersion)
+                {
+                    pruneReason = "build-version-mismatch";
+                }
+                else if (entry.awaitingRefinement)
+                {
+                    if (!buildState->refinementPending)
+                    {
+                        pruneReason = "refinement-pending-cleared";
+                    }
+                }
+                else if (!buildState->waitingForNeighbors)
+                {
+                    pruneReason = "waiting-cleared";
+                }
+                else if (!targetChunk->NeedsMeshRebuild())
+                {
+                    pruneReason = "target-no-longer-needs-rebuild";
+                }
+            }
+        }
+
+        if (pruneReason != nullptr)
+        {
+            LogInfo("world",
+                    "Pruned chunk mesh wait target=(%d, %d) version=%llu reason=%s awaitingRefinement=%s mask=0x%02x",
+                    entry.targetChunkCoords.x,
+                    entry.targetChunkCoords.y,
+                    entry.buildVersion,
+                    pruneReason,
+                    entry.awaitingRefinement ? "true" : "false",
+                    static_cast<unsigned int>(entry.waitingNeighborMask));
+            return true;
+        }
+
+        return false;
+    });
+
+    const size_t activeWaitEntryCount = m_chunkMeshNeighborWaitRegistry.GetEntryCount();
+    const std::vector<ChunkMeshNeighborWaitEntry> wakeEntries =
+        m_chunkMeshNeighborWaitRegistry.CollectWakeEntries(readableChunkCoords);
+    if (wakeEntries.empty())
+    {
+        if (activeWaitEntryCount > 0u)
+        {
+            ++s_chunkMeshNeighborReadableNoWakeLogCount;
+            if (s_chunkMeshNeighborReadableNoWakeLogCount <= 32u ||
+                (s_chunkMeshNeighborReadableNoWakeLogCount % 128u) == 0u)
+            {
+                LogInfo("world",
+                        "Neighbor-readable event for chunk (%d, %d) found no wake targets; activeWaitEntries=%zu sampleIndex=%zu",
+                        readableChunkCoords.x,
+                        readableChunkCoords.y,
+                        activeWaitEntryCount,
+                        s_chunkMeshNeighborReadableNoWakeLogCount);
+            }
+        }
+        return;
+    }
+
+    LogInfo("world",
+            "Neighbor-readable event for chunk (%d, %d) matched %zu waiting targets; activeWaitEntries=%zu",
+            readableChunkCoords.x,
+            readableChunkCoords.y,
+            wakeEntries.size(),
+            activeWaitEntryCount);
+
+    bool queuedAnyWake = false;
+    for (const ChunkMeshNeighborWaitEntry& entry : wakeEntries)
+    {
+        const bool shouldPrune = ShouldPruneChunkMeshNeighborWait(entry);
+        m_chunkMeshNeighborWaitRegistry.CancelWait(entry.targetChunkCoords,
+                                                   entry.targetChunkInstanceId,
+                                                   entry.buildVersion);
+
+        ChunkMeshBuildState* buildState = FindChunkMeshBuildState(entry.targetChunkCoords);
+        if (shouldPrune || buildState == nullptr)
+        {
+            LogInfo("world",
+                    "Neighbor-readable wake skipped for chunk (%d, %d) via neighbor (%d, %d) version=%llu: shouldPrune=%s buildStateMissing=%s",
+                    entry.targetChunkCoords.x,
+                    entry.targetChunkCoords.y,
+                    readableChunkCoords.x,
+                    readableChunkCoords.y,
+                    entry.buildVersion,
+                    shouldPrune ? "true" : "false",
+                    buildState == nullptr ? "true" : "false");
+            continue;
+        }
+
+        buildState->waitingForNeighbors = false;
+        buildState->waitingNeighborMask = kChunkMeshNeighborDependencyMaskNone;
+
+        if (buildState->pendingDispatch || buildState->activeHandle.has_value())
+        {
+            LogInfo("world",
+                    "Neighbor-readable wake deferred for chunk (%d, %d) via neighbor (%d, %d) version=%llu: pendingDispatch=%s activeHandle=%s awaitingRefinement=%s",
+                    entry.targetChunkCoords.x,
+                    entry.targetChunkCoords.y,
+                    readableChunkCoords.x,
+                    readableChunkCoords.y,
+                    entry.buildVersion,
+                    buildState->pendingDispatch ? "true" : "false",
+                    buildState->activeHandle.has_value() ? "true" : "false",
+                    entry.awaitingRefinement ? "true" : "false");
+            continue;
+        }
+
+        buildState->pendingDispatch = true;
+        buildState->pendingNeighborReadiness.activationKind = ChunkMeshBuildActivationKind::NeighborReadableWake;
+        EnqueueChunkMeshBuildRequest(entry.targetChunkCoords);
+        queuedAnyWake = true;
+        m_asyncChunkMeshDiagnostics.frame.queued++;
+        m_asyncChunkMeshDiagnostics.cumulative.queued++;
+        m_asyncChunkMeshDiagnostics.frame.neighborWaitWoken++;
+        m_asyncChunkMeshDiagnostics.cumulative.neighborWaitWoken++;
+        if (entry.awaitingRefinement)
+        {
+            m_asyncChunkMeshDiagnostics.frame.refinementBuildQueued++;
+            m_asyncChunkMeshDiagnostics.cumulative.refinementBuildQueued++;
+        }
+
+        LogInfo("world",
+                "Neighbor-readable wake queued chunk mesh rebuild for chunk (%d, %d) via neighbor (%d, %d) version=%llu awaitingRefinement=%s",
+                entry.targetChunkCoords.x,
+                entry.targetChunkCoords.y,
+                readableChunkCoords.x,
+                readableChunkCoords.y,
+                entry.buildVersion,
+                entry.awaitingRefinement ? "true" : "false");
+    }
+
+    if (queuedAnyWake)
+    {
+        SortMeshQueueByDistance();
+    }
+}
+
+void World::QueueNeighborExposureRefreshesForReadableChunk(Chunk& readableChunk)
+{
+    Chunk* neighbors[] = {
+        readableChunk.GetEastNeighbor(),
+        readableChunk.GetWestNeighbor(),
+        readableChunk.GetNorthNeighbor(),
+        readableChunk.GetSouthNeighbor()
+    };
+
+    const IntVec2 readableChunkCoords = readableChunk.GetChunkCoords();
+    for (Chunk* neighbor : neighbors)
+    {
+        if (neighbor == nullptr || !neighbor->CanReadForMeshing())
+        {
+            continue;
+        }
+
+        if (neighbor->GetChunkMesh() == nullptr)
+        {
+            continue;
+        }
+
+        ChunkMeshBuildState* buildState = FindChunkMeshBuildState(neighbor->GetChunkCoords());
+        if (buildState != nullptr &&
+            (buildState->waitingForNeighbors || buildState->refinementPending || buildState->pendingDispatch))
+        {
+            continue;
+        }
+
+        ScheduleChunkMeshRebuild(neighbor);
+        LogInfo("world",
+                "Neighbor-refresh queued chunk mesh rebuild for chunk (%d, %d) via newly readable chunk (%d, %d)",
+                neighbor->GetChunkX(),
+                neighbor->GetChunkY(),
+                readableChunkCoords.x,
+                readableChunkCoords.y);
+    }
+}
+
+namespace
+{
+    bool IsMissingHorizontalNeighborRetry(const ChunkMeshBuildResult& result) noexcept
+    {
+        return result.RequiresRetry() && result.detail == "MissingHorizontalNeighbors";
+    }
 }
 
 bool World::ShouldRequeueDiscardedChunkMeshBuild(const enigma::core::TaskCompletionRecord& record,
@@ -2089,6 +2537,21 @@ void World::RefreshAsyncChunkMeshDiagnosticsSnapshot()
     {
         UNUSED(packedCoords);
 
+        if (buildState.waitingForNeighbors)
+        {
+            m_asyncChunkMeshDiagnostics.live.waitingForNeighborsCount++;
+        }
+
+        if (buildState.partialMeshPublished)
+        {
+            m_asyncChunkMeshDiagnostics.live.partialMeshPublishedCount++;
+        }
+
+        if (buildState.refinementPending)
+        {
+            m_asyncChunkMeshDiagnostics.live.refinementPendingCount++;
+        }
+
         if (buildState.pendingDispatch)
         {
             m_asyncChunkMeshDiagnostics.live.pendingDispatchCount++;
@@ -2201,6 +2664,7 @@ void World::ProcessChunkMeshBuildTaskRecord(const enigma::core::TaskCompletionRe
     {
         buildState->activeHandle.reset();
         buildState->activeImportant = false;
+        buildState->activeNeighborReadiness = {};
         buildState->activeRequiresWorkerMaterialization = false;
     }
 
@@ -2312,6 +2776,22 @@ void World::HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionReco
 
     if (result->RequiresRetry())
     {
+        if (IsMissingHorizontalNeighborRetry(*result))
+        {
+            const ChunkMeshNeighborReadinessAssessment readiness =
+                EvaluateChunkMeshNeighborReadiness(*chunk, *buildState);
+            if (readiness.shouldWaitForNeighbors && RegisterChunkMeshNeighborWait(*chunk, *buildState, readiness))
+            {
+                LogDebug("world",
+                         "Chunk mesh build switched to neighbor wait for chunk (%d, %d) version=%llu after worker retry: %s",
+                         coords.x,
+                         coords.y,
+                         result->buildVersion,
+                         result->detail.c_str());
+                return;
+            }
+        }
+
         m_asyncChunkMeshDiagnostics.frame.retryLater++;
         m_asyncChunkMeshDiagnostics.cumulative.retryLater++;
         QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
@@ -2361,6 +2841,83 @@ void World::HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionReco
     m_chunkRenderRegionStorage.NotifyChunkMeshReady(chunk);
     m_asyncChunkMeshDiagnostics.frame.published++;
     m_asyncChunkMeshDiagnostics.cumulative.published++;
+
+    const bool wasPartialMeshPublished = buildState->partialMeshPublished;
+    const bool shouldWaitForRefinement =
+        result->IsPartialMeshResult() &&
+        result->requiresNeighborRefinement &&
+        result->HasMissingHorizontalNeighbors();
+
+    ClearChunkMeshNeighborWaitState(*buildState, coords, "publish-result");
+    buildState->partialMeshPublished = result->IsPartialMeshResult();
+    buildState->refinementPending = false;
+
+    if (shouldWaitForRefinement)
+    {
+        ChunkMeshNeighborReadinessAssessment refinementReadiness =
+            EvaluateChunkMeshNeighborReadiness(*chunk, *buildState);
+        refinementReadiness.activationKind = ChunkMeshBuildActivationKind::NeighborReadableWake;
+        refinementReadiness.shouldUseAvailableNeighborData = true;
+        refinementReadiness.requiresRefinement = true;
+
+        chunk->MarkDirty();
+        if (refinementReadiness.HasMissingHorizontalNeighbors())
+        {
+            refinementReadiness.shouldWaitForNeighbors = true;
+            buildState->refinementPending = true;
+            if (!RegisterChunkMeshNeighborWait(*chunk, *buildState, refinementReadiness))
+            {
+                buildState->refinementPending = false;
+                LogWarn("world",
+                        "Published partial mesh for chunk (%d, %d) without refinement wait registration; missing mask=0x%02x version=%llu",
+                        coords.x,
+                        coords.y,
+                        static_cast<unsigned int>(refinementReadiness.missingHorizontalMask),
+                        result->buildVersion);
+            }
+        }
+        else
+        {
+            buildState->pendingDispatch = true;
+            EnqueueChunkMeshBuildRequest(coords);
+            SortMeshQueueByDistance();
+            m_asyncChunkMeshDiagnostics.frame.queued++;
+            m_asyncChunkMeshDiagnostics.cumulative.queued++;
+            m_asyncChunkMeshDiagnostics.frame.refinementBuildQueued++;
+            m_asyncChunkMeshDiagnostics.cumulative.refinementBuildQueued++;
+            LogInfo("world",
+                    "Queued immediate refinement rebuild for chunk (%d, %d) version=%llu after partial publish because current missing mask resolved (resultMask=0x%02x)",
+                    coords.x,
+                    coords.y,
+                    result->buildVersion,
+                    static_cast<unsigned int>(result->missingHorizontalNeighborMask));
+        }
+    }
+
+    if (buildState->partialMeshPublished)
+    {
+        m_asyncChunkMeshDiagnostics.frame.partialBuildPublished++;
+        m_asyncChunkMeshDiagnostics.cumulative.partialBuildPublished++;
+        LogInfo("world",
+                "Published partial mesh build result for chunk (%d, %d) version=%llu missingMask=0x%02x refinementPending=%s",
+                coords.x,
+                coords.y,
+                result->buildVersion,
+                static_cast<unsigned int>(result->missingHorizontalNeighborMask),
+                buildState->refinementPending ? "true" : "false");
+        return;
+    }
+
+    if (wasPartialMeshPublished)
+    {
+        m_asyncChunkMeshDiagnostics.frame.refinementBuildPublished++;
+        m_asyncChunkMeshDiagnostics.cumulative.refinementBuildPublished++;
+        LogInfo("world", "Published refinement mesh build result for chunk (%d, %d) version=%llu",
+                coords.x,
+                coords.y,
+                result->buildVersion);
+        return;
+    }
 
     LogDebug("world", "Published mesh build result for chunk (%d, %d) version=%llu",
              coords.x,
@@ -2879,6 +3436,7 @@ void World::ClearAsyncChunkMeshBuildState()
 {
     m_pendingChunkMeshBuildQueue.clear();
     m_chunkMeshBuildStates.clear();
+    m_chunkMeshNeighborWaitRegistry.Clear();
     m_asyncChunkMeshDiagnostics.ClearAll();
     m_asyncChunkMeshDiagnostics.asyncEnabled = m_asyncChunkMeshEnabled;
     m_workerMaterializationAttempts.store(0, std::memory_order_relaxed);
@@ -2941,6 +3499,25 @@ ChunkMeshBuildState* World::FindChunkMeshBuildState(IntVec2 chunkCoords)
 void World::EraseChunkMeshBuildState(IntVec2 chunkCoords)
 {
     const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    const auto    buildStateIt = m_chunkMeshBuildStates.find(packedCoords);
+    if (buildStateIt != m_chunkMeshBuildStates.end())
+    {
+        ClearChunkMeshNeighborWaitState(buildStateIt->second, chunkCoords, "erase-build-state");
+        m_chunkMeshBuildStates.erase(buildStateIt);
+        return;
+    }
+
+    if (m_chunkMeshNeighborWaitRegistry.HasWaitEntry(chunkCoords))
+    {
+        LogInfo("world",
+                "Clearing chunk mesh wait state for chunk (%d, %d) reason=erase-build-state-without-build-state version=0 pendingDispatch=false activeHandle=false refinementPending=false partialPublished=false",
+                chunkCoords.x,
+                chunkCoords.y);
+        m_asyncChunkMeshDiagnostics.frame.neighborWaitCancelled++;
+        m_asyncChunkMeshDiagnostics.cumulative.neighborWaitCancelled++;
+    }
+
+    m_chunkMeshNeighborWaitRegistry.CancelWaitForTarget(chunkCoords);
     m_chunkMeshBuildStates.erase(packedCoords);
 }
 
@@ -2976,6 +3553,15 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
     const IntVec2      chunkCoords     = chunk->GetChunkCoords();
     const uint64_t     chunkInstanceId = chunk->GetInstanceId();
     const uint64_t     buildVersion    = buildState.latestRequestedVersion;
+    const ChunkMeshNeighborReadinessAssessment readiness =
+        EvaluateChunkMeshNeighborReadiness(*chunk, buildState);
+    buildState.pendingNeighborReadiness = readiness;
+    if (RegisterChunkMeshNeighborWait(*chunk, buildState, readiness))
+    {
+        return false;
+    }
+
+    ClearChunkMeshNeighborWaitState(buildState, chunkCoords, "submit-build-task");
     const enigma::core::TaskPriority priority  =
         buildState.important ? enigma::core::TaskPriority::High : enigma::core::TaskPriority::Normal;
     ChunkMeshBuildInput input;
@@ -2985,6 +3571,12 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
         LogDebug("world", "Deferred mesh build task submission for chunk (%d, %d) version=%llu because dispatch context is not ready",
                  chunkCoords.x, chunkCoords.y, buildVersion);
         return false;
+    }
+    input.dispatchContext.neighborReadiness = readiness;
+    if (readiness.UsesRelaxedNeighborAccess() && readiness.HasMissingHorizontalNeighbors())
+    {
+        m_asyncChunkMeshDiagnostics.frame.partialBuildSubmitted++;
+        m_asyncChunkMeshDiagnostics.cumulative.partialBuildSubmitted++;
     }
 
     const bool requiresWorkerMaterialization = input.RequiresWorkerMaterialization();
@@ -3016,6 +3608,7 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
     buildState.chunkInstanceId        = chunkInstanceId;
     buildState.pendingDispatch        = false;
     buildState.activeImportant        = buildState.important;
+    buildState.activeNeighborReadiness = readiness;
     buildState.activeRequiresWorkerMaterialization = requiresWorkerMaterialization;
     buildState.activeHandle           = handle;
     m_asyncChunkMeshDiagnostics.frame.submitted++;
@@ -3154,6 +3747,12 @@ void World::ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant)
     buildState.chunkInstanceId = chunk->GetInstanceId();
     buildState.pendingDispatch = true;
     buildState.important       = IsImportantChunkMeshBuild(*chunk, forceImportant);
+    buildState.pendingNeighborReadiness = {};
+    buildState.pendingNeighborReadiness.policyKind = buildState.important ?
+        ChunkMeshNeighborPolicyKind::RelaxedNeighborAccess :
+        ChunkMeshNeighborPolicyKind::StrictNeighborGate;
+    buildState.pendingNeighborReadiness.activationKind = ChunkMeshBuildActivationKind::RebuildRequest;
+    ClearChunkMeshNeighborWaitState(buildState, chunkCoords, "schedule-rebuild");
 
     EnqueueChunkMeshBuildRequest(chunkCoords);
     SortMeshQueueByDistance();

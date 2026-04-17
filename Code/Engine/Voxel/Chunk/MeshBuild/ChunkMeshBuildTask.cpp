@@ -106,6 +106,18 @@ void ChunkMeshBuildTask::Execute()
 
     ChunkMeshBuilder builder;
     result = builder.Build(buildInput);
+    if (buildInput.snapshot)
+    {
+        result.missingHorizontalNeighborMask = buildInput.snapshot->missingHorizontalNeighborMask;
+        result.usedRelaxedNeighborAccess     = buildInput.snapshot->UsesRelaxedNeighborAccess();
+        result.partialMeshBuilt              = buildInput.snapshot->IsPartialHorizontalSnapshot();
+        result.requiresNeighborRefinement    = buildInput.snapshot->RequiresNeighborRefinement();
+
+        if (result.status == ChunkMeshBuildResultStatus::Built && result.IsPartialMeshResult())
+        {
+            result.detail = "BuiltPartial";
+        }
+    }
 
     if (IsCancellationRequested())
     {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshNeighborReadiness.hpp"
 #include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshingScratch.hpp"
 #include "Engine/Voxel/Property/PropertyTypes.hpp"
 
@@ -15,6 +16,11 @@ namespace enigma::voxel
         static constexpr size_t kCornerColumnBlockCount   = ChunkMeshingScratch::kCornerColumnBlockCount;
 
         IntVec2                                chunkCoords = IntVec2(0, 0);
+        ChunkMeshNeighborPolicyKind            neighborPolicyKind = ChunkMeshNeighborPolicyKind::StrictNeighborGate;
+        ChunkMeshBuildActivationKind           activationKind = ChunkMeshBuildActivationKind::RebuildRequest;
+        ChunkMeshNeighborDependencyMask        missingHorizontalNeighborMask = kChunkMeshNeighborDependencyMaskNone;
+        bool                                   usesRelaxedNeighborAccess = false;
+        bool                                   requiresNeighborRefinement = false;
         std::shared_ptr<ChunkMeshingScratch>   scratch;
         std::vector<BlockState*>&              centerBlocks;
         std::vector<ChunkMeshingLightSample>&  centerLights;
@@ -40,6 +46,10 @@ namespace enigma::voxel
 
         void Reset();
         bool HasAllHorizontalNeighbors() const noexcept;
+        bool HasMissingHorizontalNeighbors() const noexcept;
+        bool UsesRelaxedNeighborAccess() const noexcept;
+        bool RequiresNeighborRefinement() const noexcept;
+        bool IsPartialHorizontalSnapshot() const noexcept;
         BlockState* GetCenterBlock(int32_t x, int32_t y, int32_t z) const;
         ChunkMeshingLightSample GetCenterLight(int32_t x, int32_t y, int32_t z) const;
         BlockState* GetBlock(int32_t x, int32_t y, int32_t z) const;

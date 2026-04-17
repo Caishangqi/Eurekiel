@@ -177,7 +177,7 @@ namespace enigma::voxel
 
         // New: Atomic State Machine (Thread-Safe)
         ChunkState  GetState() const { return m_state.Load(); }
-        void        SetState(ChunkState newState); // [Phase 2] Moved to cpp for state transition detection
+        void        SetState(ChunkState newState); // Activation transitions notify world-side mesh readiness coordination
         bool        TrySetState(ChunkState expected, ChunkState desired) { return m_state.CompareAndSwap(expected, desired); }
         const char* GetStateName() const { return m_state.GetStateName(); }
 
@@ -314,24 +314,19 @@ namespace enigma::voxel
         std::vector<uint8_t> m_flags; // Flags: IsSky, IsLightDirty, CanOcclude, IsSolid, IsVisible
 
         //-------------------------------------------------------------------------------------------
-        // [Phase 2] Neighbor Notification for Cross-Chunk Hidden Face Culling
+        // [Phase 2] Mesh Readiness Coordination
         //-------------------------------------------------------------------------------------------
         /**
-         * @brief Notify 4 horizontal neighbors to rebuild mesh
+         * @brief Notify the world that this chunk became readable for meshing
          *
          * Called when this chunk transitions from non-Active to Active state.
-         * Neighbors need to rebuild their mesh because boundary block faces
-         * may change (hidden face culling depends on neighbor activation).
+         * World then coordinates two separate behaviors:
+         * - Wake waiting/refinement chunk rebuilds that depend on this chunk.
+         * - Refresh already-built neighbor meshes whose boundary faces changed.
          *
-         * Implementation:
-         * - Checks if neighbor is active (GetEastNeighbor()->IsActive())
-         * - Calls World::MarkChunkDirty() to add neighbor to dirty queue
-         * - Only notifies ACTIVE neighbors (inactive ones will rebuild later)
-         *
-         * @see Task 2.1 - BuildMesh() checks neighbor activation
-         * @see Task 2.2 - SetState() detects activation event
+         * This method no longer performs direct neighbor scheduling itself.
          */
-        void NotifyNeighborsDirty();
+        void NotifyChunkBecameMeshReadable();
 
         //-------------------------------------------------------------------------------------------
         // [A05] Lighting System - Boundary Block Marking

@@ -11,11 +11,13 @@
 #include "../Chunk/ChunkJob.hpp"
 #include "../Chunk/GenerateChunkJob.hpp"
 #include "../Chunk/LoadChunkJob.hpp"
+#include "../Chunk/MeshBuild/ChunkMeshNeighborReadiness.hpp"
 #include "../Chunk/MeshBuild/ChunkMeshBuildInputFactory.hpp"
 #include "../Chunk/MeshBuild/AsyncChunkMeshDiagnostics.hpp"
 #include "../Chunk/MeshBuild/ChunkMeshBuildTask.hpp"
 #include "../Chunk/SaveChunkJob.hpp"
 #include "../Generation/TerrainGenerator.hpp"
+#include "ChunkMeshNeighborWaitRegistry.hpp"
 #include "ESFWorldStorage.hpp"
 #include "VoxelRaycastResult3D.hpp"
 #include "../../Math/Vec3.hpp"
@@ -57,7 +59,13 @@ namespace enigma::voxel
         std::optional<enigma::core::TaskHandle>    activeHandle;
         bool                                       pendingDispatch        = false;
         bool                                       important              = false;
+        ChunkMeshNeighborReadinessAssessment       pendingNeighborReadiness;
+        bool                                       waitingForNeighbors    = false;
+        ChunkMeshNeighborDependencyMask            waitingNeighborMask    = kChunkMeshNeighborDependencyMaskNone;
+        bool                                       partialMeshPublished   = false;
+        bool                                       refinementPending      = false;
         bool                                       activeImportant        = false;
+        ChunkMeshNeighborReadinessAssessment       activeNeighborReadiness;
         bool                                       activeRequiresWorkerMaterialization = false;
     };
 
@@ -185,8 +193,12 @@ namespace enigma::voxel
         // Phase 2: Cross-Chunk Hidden Face Culling Support
         //-------------------------------------------------------------------------------------------
 
+        // Coordinate readable-chunk activation at world scope so waiting wakeups
+        // run before generic neighbor exposure refresh propagation.
+        void HandleChunkBecameMeshReadable(Chunk& chunk);
+
         // Mark a chunk as needing mesh rebuild and add to queue
-        // Called by Chunk::NotifyNeighborsDirty() when a chunk becomes active
+        // Called by lifecycle, block edits, explicit invalidation, and controlled neighbor refresh
         void ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant = false);
 
         // [R5.0] Mark all loaded chunks as dirty and schedule mesh rebuild
@@ -250,6 +262,16 @@ namespace enigma::voxel
                                             const ChunkMeshBuildTask& task,
                                             const ChunkMeshBuildResult& result,
                                             const char*& rejectionReason) const;
+        ChunkMeshNeighborDependencyMask CollectMissingHorizontalNeighborMask(const Chunk& chunk) const;
+        ChunkMeshNeighborReadinessAssessment EvaluateChunkMeshNeighborReadiness(const Chunk& chunk,
+                                                                                const ChunkMeshBuildState& buildState) const;
+        void ClearChunkMeshNeighborWaitState(ChunkMeshBuildState& buildState, IntVec2 chunkCoords, const char* reason);
+        bool RegisterChunkMeshNeighborWait(Chunk& chunk,
+                                           ChunkMeshBuildState& buildState,
+                                           const ChunkMeshNeighborReadinessAssessment& readiness);
+        bool ShouldPruneChunkMeshNeighborWait(const ChunkMeshNeighborWaitEntry& entry) const;
+        void HandleChunkMeshNeighborReadable(IntVec2 readableChunkCoords);
+        void QueueNeighborExposureRefreshesForReadableChunk(Chunk& readableChunk);
         void QueueChunkMeshBuildRetry(Chunk& chunk, ChunkMeshBuildState& buildState, IntVec2 chunkCoords);
         bool IsImportantChunkMeshBuild(const Chunk& chunk, bool forceImportant = false) const;
         bool HasImportantChunkMeshBuildInFlight() const;
@@ -376,6 +398,7 @@ namespace enigma::voxel
         // Async Chunk Mesh Build State
         //-------------------------------------------------------------------------------------------
         std::unordered_map<int64_t, ChunkMeshBuildState> m_chunkMeshBuildStates;
+        ChunkMeshNeighborWaitRegistry                    m_chunkMeshNeighborWaitRegistry;
         std::deque<IntVec2>                              m_pendingChunkMeshBuildQueue;
         AsyncChunkMeshDiagnostics                        m_asyncChunkMeshDiagnostics;
         bool                                             m_asyncChunkMeshEnabled = true;

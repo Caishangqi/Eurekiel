@@ -36,13 +36,38 @@ ChunkMeshingSnapshot::ChunkMeshingSnapshot(std::shared_ptr<ChunkMeshingScratch> 
 
 void ChunkMeshingSnapshot::Reset()
 {
-    chunkCoords = IntVec2(0, 0);
+    chunkCoords                    = IntVec2(0, 0);
+    neighborPolicyKind             = ChunkMeshNeighborPolicyKind::StrictNeighborGate;
+    activationKind                 = ChunkMeshBuildActivationKind::RebuildRequest;
+    missingHorizontalNeighborMask  = kChunkMeshNeighborDependencyMaskNone;
+    usesRelaxedNeighborAccess      = false;
+    requiresNeighborRefinement     = false;
     scratch->BeginBuild();
 }
 
 bool ChunkMeshingSnapshot::HasAllHorizontalNeighbors() const noexcept
 {
     return hasNorthNeighbor && hasSouthNeighbor && hasEastNeighbor && hasWestNeighbor;
+}
+
+bool ChunkMeshingSnapshot::HasMissingHorizontalNeighbors() const noexcept
+{
+    return HasAnyChunkMeshNeighborDependencies(missingHorizontalNeighborMask);
+}
+
+bool ChunkMeshingSnapshot::UsesRelaxedNeighborAccess() const noexcept
+{
+    return usesRelaxedNeighborAccess;
+}
+
+bool ChunkMeshingSnapshot::RequiresNeighborRefinement() const noexcept
+{
+    return requiresNeighborRefinement;
+}
+
+bool ChunkMeshingSnapshot::IsPartialHorizontalSnapshot() const noexcept
+{
+    return UsesRelaxedNeighborAccess() && HasMissingHorizontalNeighbors();
 }
 
 BlockState* ChunkMeshingSnapshot::GetCenterBlock(int32_t x, int32_t y, int32_t z) const
