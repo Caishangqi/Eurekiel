@@ -18,7 +18,7 @@
 task_types:
   # Generic tasks: CPU-bound work, miscellaneous operations
   - type: Generic
-    threads: 4
+    threads: 8
     description: General-purpose CPU-bound tasks
 
   # File I/O: Asynchronous file operations (loading, saving)
@@ -33,12 +33,12 @@ task_types:
 
   # Mesh Building: Async chunk mesh construction (CPU-intensive, priority-based)
   - type: MeshBuilding
-    threads: 2
+    threads: 4
     description: Asynchronous chunk mesh building with priority support
 
   # Rendering: Render preparation tasks (deprecated, use MeshBuilding)
   - type: Rendering
-    threads: 1
+    threads: 4
     description: Render preparation (legacy, prefer MeshBuilding for mesh tasks)
 
   # Network: Network I/O and packet processing (future)
