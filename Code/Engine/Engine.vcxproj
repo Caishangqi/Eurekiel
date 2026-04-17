@@ -755,6 +755,7 @@
     <ClCompile Include="Voxel\VoxelCommon.cpp" />
     <ClCompile Include="Voxel\World\ESFSWorldStorage.cpp" />
     <ClCompile Include="Voxel\World\ESFWorldStorage.cpp" />
+    <ClCompile Include="Voxel\World\ChunkMeshNeighborWaitRegistry.cpp" />
     <ClCompile Include="Voxel\Property\Property.cpp" />
     <ClCompile Include="Voxel\Property\PropertyRegistry.cpp" />
     <ClCompile Include="Voxel\Property\PropertyTypes.cpp" />
@@ -1415,6 +1416,7 @@
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshBuildInputFactory.hpp" />
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshBuildResult.hpp" />
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshBuildTask.hpp" />
+    <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshNeighborReadiness.hpp" />
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshingDispatchContext.hpp" />
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshingMaterializer.hpp" />
     <ClInclude Include="Voxel\Chunk\MeshBuild\ChunkMeshingScratch.hpp" />
@@ -1440,6 +1442,7 @@
     <ClInclude Include="Voxel\Property\PropertyTypes.hpp" />
     <ClInclude Include="Voxel\World\ESFSWorldStorage.hpp" />
     <ClInclude Include="Voxel\World\ESFWorldStorage.hpp" />
+    <ClInclude Include="Voxel\World\ChunkMeshNeighborWaitRegistry.hpp" />
     <ClInclude Include="Voxel\World\World.hpp" />
     <ClInclude Include="Window\Window.hpp" />
   </ItemGroup>
