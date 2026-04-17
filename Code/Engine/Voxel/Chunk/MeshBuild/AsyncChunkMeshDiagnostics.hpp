@@ -77,6 +77,13 @@ namespace enigma::voxel
         uint64_t executing                     = 0;
         uint64_t completed                     = 0;
         uint64_t published                     = 0;
+        uint64_t neighborWaitRegistered        = 0;
+        uint64_t neighborWaitWoken             = 0;
+        uint64_t neighborWaitCancelled         = 0;
+        uint64_t partialBuildSubmitted         = 0;
+        uint64_t partialBuildPublished         = 0;
+        uint64_t refinementBuildQueued         = 0;
+        uint64_t refinementBuildPublished      = 0;
         uint64_t mainThreadSnapshotBuildCount  = 0;
         uint64_t workerMaterializationAttempts = 0;
         uint64_t workerMaterializationSucceeded = 0;
@@ -105,6 +112,9 @@ namespace enigma::voxel
         uint64_t workerMaterializationQueuedCount = 0;
         uint64_t workerMaterializationExecutingCount = 0;
         uint64_t workerMaterializationInFlight = 0;
+        uint64_t waitingForNeighborsCount = 0;
+        uint64_t partialMeshPublishedCount = 0;
+        uint64_t refinementPendingCount = 0;
         uint64_t importantPendingCount    = 0;
         uint64_t importantActiveCount     = 0;
         uint64_t importantQueuedCount     = 0;
