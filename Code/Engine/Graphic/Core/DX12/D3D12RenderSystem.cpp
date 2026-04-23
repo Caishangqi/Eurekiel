@@ -150,9 +150,9 @@ namespace enigma::graphic
             return "Unknown";
         }
 
-        bool WaitForQueueDrainOnShutdown(ID3D12Device* device,
+        bool WaitForQueueDrainOnShutdown(ID3D12Device*       device,
                                          ID3D12CommandQueue* queue,
-                                         CommandQueueType queueType)
+                                         CommandQueueType    queueType)
         {
             if (!device || !queue)
             {
@@ -160,7 +160,7 @@ namespace enigma::graphic
             }
 
             Microsoft::WRL::ComPtr<ID3D12Fence> shutdownFence;
-            HRESULT hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&shutdownFence));
+            HRESULT                             hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&shutdownFence));
             if (FAILED(hr))
             {
                 LogWarn(LogRenderer,
@@ -171,7 +171,7 @@ namespace enigma::graphic
             }
 
             constexpr uint64_t kShutdownFenceValue = 1;
-            hr = queue->Signal(shutdownFence.Get(), kShutdownFenceValue);
+            hr                                     = queue->Signal(shutdownFence.Get(), kShutdownFenceValue);
             if (FAILED(hr))
             {
                 LogWarn(LogRenderer,
@@ -221,8 +221,8 @@ namespace enigma::graphic
             return true;
         }
 
-        constexpr size_t kQueueWorkloadClassCountLocal = enigma::graphic::kQueueWorkloadClassCount;
-        constexpr size_t kQueueFallbackReasonCount = 8;
+        constexpr size_t                                                                       kQueueWorkloadClassCountLocal = enigma::graphic::kQueueWorkloadClassCount;
+        constexpr size_t                                                                       kQueueFallbackReasonCount     = 8;
         std::array<std::array<bool, kQueueFallbackReasonCount>, kQueueWorkloadClassCountLocal> g_reportedMixedQueueFallbacks = {};
 
         bool HasDedicatedQueuesAvailable(const CommandListManager* commandListManager)
@@ -233,7 +233,7 @@ namespace enigma::graphic
             }
 
             return commandListManager->GetCommandQueue(CommandQueueType::Compute) != nullptr &&
-                   commandListManager->GetCommandQueue(CommandQueueType::Copy) != nullptr;
+                commandListManager->GetCommandQueue(CommandQueueType::Copy) != nullptr;
         }
 
         [[noreturn]] void ReportFatalQueueException(const CommandQueueException& exception)
@@ -248,7 +248,7 @@ namespace enigma::graphic
 
         struct DeferredResourceReleaseEntry
         {
-            Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
+            Microsoft::WRL::ComPtr<ID3D12Resource> resource               = nullptr;
             QueueSubmittedFenceSnapshot            submittedFenceSnapshot = {};
             std::string                            debugName;
         };
@@ -290,19 +290,19 @@ namespace enigma::graphic
     std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultBlackTexture  = nullptr;
     std::shared_ptr<D12Texture> D3D12RenderSystem::s_defaultNormalTexture = nullptr;
 
-    bool D3D12RenderSystem::s_isInitialized = false;
+    bool D3D12RenderSystem::s_isInitialized  = false;
     bool D3D12RenderSystem::s_isShuttingDown = false;
 
     // Frame execution state
-    FrameContext D3D12RenderSystem::s_frameContexts[4]  = {};
-    uint32_t     D3D12RenderSystem::s_frameIndex        = 0;
-    uint64_t     D3D12RenderSystem::s_globalFrameCount  = 0;
-    FrameLifecyclePhase        D3D12RenderSystem::s_frameLifecyclePhase = FrameLifecyclePhase::Idle;
+    FrameContext               D3D12RenderSystem::s_frameContexts[4]               = {};
+    uint32_t                   D3D12RenderSystem::s_frameIndex                     = 0;
+    uint64_t                   D3D12RenderSystem::s_globalFrameCount               = 0;
+    FrameLifecyclePhase        D3D12RenderSystem::s_frameLifecyclePhase            = FrameLifecyclePhase::Idle;
     FrameSlotAcquisitionResult D3D12RenderSystem::s_lastFrameSlotAcquisitionResult = {};
-    QueueRoutingPolicy        D3D12RenderSystem::s_queueRoutingPolicy          = {};
-    QueueExecutionMode        D3D12RenderSystem::s_requestedQueueExecutionMode = QueueExecutionMode::MixedQueueExperimental;
-    QueueExecutionMode        D3D12RenderSystem::s_activeQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
-    QueueExecutionDiagnostics D3D12RenderSystem::s_queueExecutionDiagnostics   = {};
+    QueueRoutingPolicy         D3D12RenderSystem::s_queueRoutingPolicy             = {};
+    QueueExecutionMode         D3D12RenderSystem::s_requestedQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
+    QueueExecutionMode         D3D12RenderSystem::s_activeQueueExecutionMode       = QueueExecutionMode::MixedQueueExperimental;
+    QueueExecutionDiagnostics  D3D12RenderSystem::s_queueExecutionDiagnostics      = {};
 
     // ===== Public API implementation =====
 
@@ -380,11 +380,11 @@ namespace enigma::graphic
 
             frameContext.ClearRetirement();
         }
-        s_frameIndex       = 0;
-        s_globalFrameCount = 0;
-        s_frameLifecyclePhase = FrameLifecyclePhase::Idle;
+        s_frameIndex                     = 0;
+        s_globalFrameCount               = 0;
+        s_frameLifecyclePhase            = FrameLifecyclePhase::Idle;
         s_lastFrameSlotAcquisitionResult = {};
-        s_currentGraphicsCommandList = nullptr;
+        s_currentGraphicsCommandList     = nullptr;
 
         core::LogInfo(LogRenderer,
                       "Created %u frame slots with Graphics/Compute/Copy allocators",
@@ -639,7 +639,7 @@ namespace enigma::graphic
         }
 
         BufferCreateInfo normalizedCreateInfo = createInfo;
-        normalizedCreateInfo.usage = BufferUsage::VertexBuffer;
+        normalizedCreateInfo.usage            = BufferUsage::VertexBuffer;
 
         try
         {
@@ -689,7 +689,7 @@ namespace enigma::graphic
         }
 
         BufferCreateInfo normalizedCreateInfo = createInfo;
-        normalizedCreateInfo.usage = BufferUsage::IndexBuffer;
+        normalizedCreateInfo.usage            = BufferUsage::IndexBuffer;
 
         try
         {
@@ -1430,7 +1430,7 @@ namespace enigma::graphic
 
     void D3D12RenderSystem::SetFrameLifecyclePhase(FrameLifecyclePhase phase)
     {
-        s_frameLifecyclePhase = phase;
+        s_frameLifecyclePhase                      = phase;
         s_queueExecutionDiagnostics.lifecyclePhase = phase;
     }
 
@@ -1478,10 +1478,10 @@ namespace enigma::graphic
     bool D3D12RenderSystem::ShouldDeferIndividualResourceRelease()
     {
         return s_isInitialized &&
-               !s_isShuttingDown &&
-               MAX_FRAMES_IN_FLIGHT > 1 &&
-               s_commandListManager != nullptr &&
-               s_commandListManager->IsInitialized();
+            !s_isShuttingDown &&
+            MAX_FRAMES_IN_FLIGHT > 1 &&
+            s_commandListManager != nullptr &&
+            s_commandListManager->IsInitialized();
     }
 
     void D3D12RenderSystem::DeferResourceRelease(ID3D12Resource* resource, const char* debugName)
@@ -1535,7 +1535,7 @@ namespace enigma::graphic
 
         const QueueFenceSnapshot completedSnapshot =
             (forceRelease || !s_commandListManager || !s_commandListManager->IsInitialized())
-                ? QueueFenceSnapshot{ UINT64_MAX, UINT64_MAX, UINT64_MAX }
+                ? QueueFenceSnapshot{UINT64_MAX, UINT64_MAX, UINT64_MAX}
                 : s_commandListManager->GetCompletedFenceSnapshot();
 
         std::lock_guard<std::mutex> lock(g_deferredResourceReleaseMutex);
@@ -1589,17 +1589,17 @@ namespace enigma::graphic
             s_frameContexts[i].ClearRetirement();
         }
 
-        s_frameIndex                 = 0;
-        s_globalFrameCount           = 0;
-        s_frameLifecyclePhase        = FrameLifecyclePhase::Idle;
+        s_frameIndex                     = 0;
+        s_globalFrameCount               = 0;
+        s_frameLifecyclePhase            = FrameLifecyclePhase::Idle;
         s_lastFrameSlotAcquisitionResult = {};
-        s_currentGraphicsCommandList = nullptr;
-        s_requestedQueueExecutionMode = QueueExecutionMode::MixedQueueExperimental;
-        s_activeQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
+        s_currentGraphicsCommandList     = nullptr;
+        s_requestedQueueExecutionMode    = QueueExecutionMode::MixedQueueExperimental;
+        s_activeQueueExecutionMode       = QueueExecutionMode::MixedQueueExperimental;
         s_queueExecutionDiagnostics.ClearCounters();
         s_queueExecutionDiagnostics.requestedMode = s_requestedQueueExecutionMode;
         s_queueExecutionDiagnostics.activeMode    = s_activeQueueExecutionMode;
-        g_reportedMixedQueueFallbacks = {};
+        g_reportedMixedQueueFallbacks             = {};
     }
 
     void D3D12RenderSystem::ReleaseFallbackTextures() noexcept
@@ -1677,16 +1677,16 @@ namespace enigma::graphic
     }
 
     ID3D12GraphicsCommandList* D3D12RenderSystem::AcquireCommandListForWorkload(const QueueRouteContext& context,
-                                                                                ID3D12CommandAllocator* externalAllocator,
-                                                                                const std::string&      debugName,
-                                                                                bool                    useFrameAllocator)
+                                                                                ID3D12CommandAllocator*  externalAllocator,
+                                                                                const std::string&       debugName,
+                                                                                bool                     useFrameAllocator)
     {
         if (!s_commandListManager)
         {
             return nullptr;
         }
 
-        QueueRouteDecision decision = ResolveQueueRoute(context);
+        QueueRouteDecision      decision       = ResolveQueueRoute(context);
         ID3D12CommandAllocator* allocatorToUse = nullptr;
 
         if (decision.activeQueue == CommandQueueType::Graphics && externalAllocator != nullptr)
@@ -1766,8 +1766,8 @@ namespace enigma::graphic
             return;
         }
 
-        const size_t workloadIndex = static_cast<size_t>(decision.workload);
-        const size_t fallbackIndex = static_cast<size_t>(decision.fallbackReason);
+        const size_t      workloadIndex   = static_cast<size_t>(decision.workload);
+        const size_t      fallbackIndex   = static_cast<size_t>(decision.fallbackReason);
         const std::string fallbackMessage = Stringf(
             "Mixed-queue validation fallback: workload=%s requested=%s active=%s reason=%s",
             GetQueueWorkloadName(decision.workload),
@@ -1791,7 +1791,7 @@ namespace enigma::graphic
     }
 
     void D3D12RenderSystem::RecordQueueSubmission(const QueueSubmissionToken& token,
-                                                  QueueWorkloadClass         workload)
+                                                  QueueWorkloadClass          workload)
     {
         if (!token.IsValid())
         {
@@ -1858,7 +1858,7 @@ namespace enigma::graphic
                 "D3D12RenderSystem::SetActiveQueueExecutionModeInternal: falling back to GraphicsOnly because dedicated Compute/Copy queues are unavailable");
             ReportRecoverableQueueException(exception);
 
-            resolvedMode = QueueExecutionMode::GraphicsOnly;
+            resolvedMode                                   = QueueExecutionMode::GraphicsOnly;
             s_queueExecutionDiagnostics.lastFallbackReason = QueueFallbackReason::DedicatedQueueUnavailable;
         }
         else
@@ -1866,7 +1866,7 @@ namespace enigma::graphic
             s_queueExecutionDiagnostics.lastFallbackReason = QueueFallbackReason::None;
         }
 
-        s_activeQueueExecutionMode             = resolvedMode;
+        s_activeQueueExecutionMode                = resolvedMode;
         s_queueExecutionDiagnostics.requestedMode = s_requestedQueueExecutionMode;
         s_queueExecutionDiagnostics.activeMode    = resolvedMode;
     }
@@ -2031,8 +2031,8 @@ namespace enigma::graphic
             };
 
             D3D12_INFO_QUEUE_FILTER filter = {};
-            filter.DenyList.NumIDs  = _countof(suppressedIds);
-            filter.DenyList.pIDList = suppressedIds;
+            filter.DenyList.NumIDs         = _countof(suppressedIds);
+            filter.DenyList.pIDList        = suppressedIds;
             infoQueue->AddStorageFilterEntries(&filter);
 
             LogInfo(LogRenderer, "D3D12 Info Queue: Suppressed %u known harmless warnings", _countof(suppressedIds));
@@ -2317,12 +2317,12 @@ namespace enigma::graphic
         ProcessDeferredResourceReleases();
         PrepareNextFrame();
 
-        FrameContext& ctx = s_frameContexts[s_frameIndex];
-        const auto    trackedTokens = ctx.retirement.GetTrackedTokens();
-        const auto    expectedQueues = ctx.retirement.expectedQueues;
-        const auto    participatingQueues = ctx.retirement.GetTrackedQueues();
-        const auto    missingQueues = ctx.retirement.GetMissingQueues();
-        FrameSlotAcquisitionResult acquisitionResult = {};
+        FrameContext&              ctx                 = s_frameContexts[s_frameIndex];
+        const auto                 trackedTokens       = ctx.retirement.GetTrackedTokens();
+        const auto                 expectedQueues      = ctx.retirement.expectedQueues;
+        const auto                 participatingQueues = ctx.retirement.GetTrackedQueues();
+        const auto                 missingQueues       = ctx.retirement.GetMissingQueues();
+        FrameSlotAcquisitionResult acquisitionResult   = {};
         acquisitionResult.frameIndex                   = s_frameIndex;
         acquisitionResult.waitedFrameSlot              = s_frameIndex;
         acquisitionResult.hasTrackedRetirement         = ctx.retirement.HasTrackedSubmissions();
@@ -2341,19 +2341,19 @@ namespace enigma::graphic
 
         auto publishAcquisitionResult = [&](FrameLifecyclePhase phase)
         {
-            acquisitionResult.lifecyclePhase = phase;
-            s_lastFrameSlotAcquisitionResult = acquisitionResult;
-            s_queueExecutionDiagnostics.lifecyclePhase = phase;
-            s_queueExecutionDiagnostics.requestedFramesInFlightDepth = acquisitionResult.requestedFramesInFlightDepth;
-            s_queueExecutionDiagnostics.activeFramesInFlightDepth    = acquisitionResult.activeFramesInFlightDepth;
-            s_queueExecutionDiagnostics.lastBeginFrameHadTrackedRetirement = acquisitionResult.hasTrackedRetirement;
-            s_queueExecutionDiagnostics.lastBeginFrameWaitedOnRetirement   = acquisitionResult.waitedOnRetirement;
-            s_queueExecutionDiagnostics.lastWaitedFrameSlot                = acquisitionResult.waitedFrameSlot;
+            acquisitionResult.lifecyclePhase                                 = phase;
+            s_lastFrameSlotAcquisitionResult                                 = acquisitionResult;
+            s_queueExecutionDiagnostics.lifecyclePhase                       = phase;
+            s_queueExecutionDiagnostics.requestedFramesInFlightDepth         = acquisitionResult.requestedFramesInFlightDepth;
+            s_queueExecutionDiagnostics.activeFramesInFlightDepth            = acquisitionResult.activeFramesInFlightDepth;
+            s_queueExecutionDiagnostics.lastBeginFrameHadTrackedRetirement   = acquisitionResult.hasTrackedRetirement;
+            s_queueExecutionDiagnostics.lastBeginFrameWaitedOnRetirement     = acquisitionResult.waitedOnRetirement;
+            s_queueExecutionDiagnostics.lastWaitedFrameSlot                  = acquisitionResult.waitedFrameSlot;
             s_queueExecutionDiagnostics.lastCompletedFenceSnapshotBeforeWait =
                 acquisitionResult.completedFenceSnapshotBeforeWait;
-            s_queueExecutionDiagnostics.lastRetirementGraphicsToken = acquisitionResult.graphicsToken;
-            s_queueExecutionDiagnostics.lastRetirementComputeToken  = acquisitionResult.computeToken;
-            s_queueExecutionDiagnostics.lastRetirementCopyToken     = acquisitionResult.copyToken;
+            s_queueExecutionDiagnostics.lastRetirementGraphicsToken       = acquisitionResult.graphicsToken;
+            s_queueExecutionDiagnostics.lastRetirementComputeToken        = acquisitionResult.computeToken;
+            s_queueExecutionDiagnostics.lastRetirementCopyToken           = acquisitionResult.copyToken;
             s_queueExecutionDiagnostics.lastRetirementParticipatingQueues = acquisitionResult.participatingQueues;
             s_queueExecutionDiagnostics.lastRetirementExpectedQueues      = acquisitionResult.expectedQueues;
             s_queueExecutionDiagnostics.lastRetirementMissingQueues       = acquisitionResult.missingQueues;
@@ -2387,13 +2387,13 @@ namespace enigma::graphic
                     continue;
                 }
 
-                const size_t queueIndex = GetCommandQueueTypeIndex(token.queueType);
+                const size_t   queueIndex          = GetCommandQueueTypeIndex(token.queueType);
                 const uint64_t completedFenceValue =
                     acquisitionResult.completedFenceSnapshotBeforeWait.GetCompletedFenceValue(token.queueType);
                 if (completedFenceValue < token.fenceValue)
                 {
                     acquisitionResult.waitedQueues[queueIndex] = true;
-                    acquisitionResult.waitedOnRetirement = true;
+                    acquisitionResult.waitedOnRetirement       = true;
                 }
 
                 if (!s_commandListManager->WaitForSubmission(token))
@@ -2479,7 +2479,7 @@ namespace enigma::graphic
                     "BeginFrame: GlobalDescriptorHeapManager is null - Bindless features may not work");
         }
 
-        acquisitionResult.success        = true;
+        acquisitionResult.success = true;
         publishAcquisitionResult(FrameLifecyclePhase::FrameSlotAcquired);
         SetFrameLifecyclePhase(FrameLifecyclePhase::FrameSlotAcquired);
         RendererEvents::OnFrameSlotAcquired.Broadcast();
@@ -2586,8 +2586,8 @@ namespace enigma::graphic
         s_frameIndex = (s_frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
         s_globalFrameCount++;
 
-        // 5. Recycle completed command list wrappers
-        s_commandListManager->UpdateCompletedCommandLists();
+        // 5. Recycle completed command list wrappers + release deferred resources
+        // ProcessDeferredResourceReleases already calls UpdateCompletedCommandLists internally.
         ProcessDeferredResourceReleases();
 
         // 6. Clear current command list reference for next frame
@@ -2661,7 +2661,7 @@ namespace enigma::graphic
         if (needToExecute)
         {
             QueueSubmissionToken submissionToken = SubmitStandaloneCommandList(actualCommandList,
-                                                                              QueueWorkloadClass::ImmediateGraphics);
+                                                                               QueueWorkloadClass::ImmediateGraphics);
             if (!submissionToken.IsValid())
             {
                 core::LogError(LogRenderer, "Failed to submit ClearRenderTarget command list");
