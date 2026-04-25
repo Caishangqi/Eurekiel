@@ -15,6 +15,29 @@
 Eurekiel is a 3D and 2D game engine designed from the ground up for voxel game development and scalable projects. It provides a dedicated voxel-based render pipeline and tools for game design without
 compromising resource efficiency.
 
+## Development
+
+Open `Engine.sln` from the repository root for Engine-focused development. The solution contains the Engine static library and Engine test targets without pulling in any game-side application project.
+
+### Unit Tests
+
+`Engine.UnitTests` is the default test executable for fast, deterministic Engine tests. Tests are grouped by Engine module under `Code/Tests/Engine.UnitTests/Tests/`:
+
+```text
+Code/Tests/Engine.UnitTests/
+  Main.cpp
+  Tests/
+    Core/
+    Math/
+```
+
+Build and run the Debug test target with MSBuild:
+
+```powershell
+msbuild Engine.sln /t:Engine_UnitTests /p:Configuration=Debug /p:Platform=x64
+Temporary/Engine.UnitTests_x64_Debug/Engine.UnitTests.exe
+```
+
 ## Feature
 
 > Description of the feature here. This could be a feature that adds new functionality, improves existing features, or enhances the overall performance of the engine.
