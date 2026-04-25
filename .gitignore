@@ -1,14 +1,25 @@
-﻿.idea
-.vs
+# IDE state
+.idea/
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
 Engine.vcxproj.filters
+
+# Build output
+Temporary/
+x64/
+Debug/
+Release/
 *.obj
 *.pdb
-Temporary
-/.idea/
-/.vs/
-*.user
-*.filter
+*.ilk
+*.idb
+*.tlog
+*.lastbuildstate
+*.log
 
-# Claude Code 文档文件 - 仅本地使用
+# Local assistant notes
 CLAUDE.md
 Updated_Architecture_Summary.md
