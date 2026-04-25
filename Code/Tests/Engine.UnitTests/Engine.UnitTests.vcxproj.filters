@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{C70C103D-BB2C-4D86-8340-092A611E37F3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tests">
+      <UniqueIdentifier>{77AA518B-9336-4F00-B7DE-74B98B28A08E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tests\Core">
+      <UniqueIdentifier>{28D9DAEC-8A9F-47A9-85BE-7E32065982B2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{F9F1A464-FD64-4C87-B945-CCB275BF9E39}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Tests\Core\Test_ByteBuffer.cpp">
+      <Filter>Tests\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\googletest\googletest\src\gtest-all.cc">
+      <Filter>ThirdParty</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

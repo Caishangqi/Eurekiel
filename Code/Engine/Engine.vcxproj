@@ -125,7 +125,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <SolutionDir>$(MSBuildThisFileDirectory)..\..\..\Thesis\</SolutionDir>
+    <EngineRootDir>$(MSBuildThisFileDirectory)..\..\</EngineRootDir>
+    <SolutionDir Condition="'$(SolutionDir)' == '' Or '$(SolutionDir)' == '*Undefined*'">$(EngineRootDir)</SolutionDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>$(SolutionDir)Temporary\$(ProjectName)_$(PlatformShortName)_$(Configuration)\</OutDir>

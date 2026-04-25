@@ -1,0 +1,33 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35222.181
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Engine.UnitTests", "Code\Tests\Engine.UnitTests\Engine.UnitTests.vcxproj", "{57EB1492-1E1F-4B21-B446-3A633F14F166}"
+	ProjectSection(ProjectDependencies) = postProject
+		{CC3DFA34-A261-4F91-B446-63D998B7B880} = {CC3DFA34-A261-4F91-B446-63D998B7B880}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Engine", "Code\Engine\Engine.vcxproj", "{CC3DFA34-A261-4F91-B446-63D998B7B880}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{57EB1492-1E1F-4B21-B446-3A633F14F166}.Debug|x64.ActiveCfg = Debug|x64
+		{57EB1492-1E1F-4B21-B446-3A633F14F166}.Debug|x64.Build.0 = Debug|x64
+		{57EB1492-1E1F-4B21-B446-3A633F14F166}.Release|x64.ActiveCfg = Release|x64
+		{57EB1492-1E1F-4B21-B446-3A633F14F166}.Release|x64.Build.0 = Release|x64
+		{CC3DFA34-A261-4F91-B446-63D998B7B880}.Debug|x64.ActiveCfg = Debug|x64
+		{CC3DFA34-A261-4F91-B446-63D998B7B880}.Debug|x64.Build.0 = Debug|x64
+		{CC3DFA34-A261-4F91-B446-63D998B7B880}.Release|x64.ActiveCfg = Release|x64
+		{CC3DFA34-A261-4F91-B446-63D998B7B880}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {777068A5-3A76-4676-A75E-30D5BB3619D3}
+	EndGlobalSection
+EndGlobal
