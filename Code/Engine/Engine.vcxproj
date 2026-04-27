@@ -495,6 +495,7 @@
     <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.cpp"/>
     <ClCompile Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.cpp"/>
     <ClCompile Include="Graphic\Bundle\MaterialIdMapper.cpp"/>
+    <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleReloadAdapter.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.cpp"/>
     <ClCompile Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.cpp"/>
     <ClCompile Include="Graphic\Bundle\ProgramFallbackChain.cpp"/>
@@ -522,6 +523,12 @@
     <ClCompile Include="Graphic\Integration\RendererSubsystemImGuiContext.cpp" />
     <ClCompile Include="Graphic\Integration\RendererEvents.cpp"/>
     <ClCompile Include="Graphic\Mipmap\MipmapGenerator.cpp"/>
+    <ClCompile Include="Graphic\Reload\RenderPipelineReloadCoordinator.cpp"/>
+    <ClCompile Include="Graphic\Reload\RenderPipelineReloadDiagnostics.cpp"/>
+    <ClCompile Include="Graphic\Reload\RenderPipelineReloadEvents.cpp"/>
+    <ClCompile Include="Graphic\Reload\RenderPipelineReloadException.cpp"/>
+    <ClCompile Include="Graphic\Reload\RenderPipelineReloadRequestGate.cpp"/>
+    <ClCompile Include="Graphic\Reload\RendererFrontendReloadService.cpp"/>
     <ClCompile Include="Graphic\Resource\BindlessIndexAllocator.cpp" />
     <ClCompile Include="Graphic\Resource\BindlessRootSignature.cpp" />
     <ClCompile Include="Graphic\Resource\Buffer\D12Buffer.cpp" />
@@ -1070,6 +1077,7 @@
     <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleInfo.hpp"/>
     <ClInclude Include="Graphic\Bundle\Imgui\ImguiShaderBundleSelector.hpp"/>
     <ClInclude Include="Graphic\Bundle\MaterialIdMapper.hpp"/>
+    <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleReloadAdapter.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystem.hpp"/>
     <ClInclude Include="Graphic\Bundle\Integration\ShaderBundleSubsystemConfiguration.hpp"/>
     <ClInclude Include="Graphic\Bundle\ProgramFallbackChain.hpp"/>
@@ -1104,7 +1112,15 @@
     <ClInclude Include="Graphic\Resource\Buffer\BufferHelper.hpp" />
     <ClInclude Include="Graphic\Resource\Buffer\BufferTransferCoordinator.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
+    <ClInclude Include="Graphic\Integration\RendererFrontendReloadScope.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadCoordinator.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadDiagnostics.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadEvents.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadException.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadRequestGate.hpp" />
+    <ClInclude Include="Graphic\Reload\RenderPipelineReloadTypes.hpp" />
+    <ClInclude Include="Graphic\Reload\RendererFrontendReloadService.hpp" />
     <ClInclude Include="Graphic\Resource\Buffer\D12IndexBuffer.hpp" />
     <ClInclude Include="Graphic\Resource\Buffer\D12VertexBuffer.hpp" />
     <ClInclude Include="Graphic\Resource\VertexLayout\Layouts\Vertex_PCULayout.hpp"/>

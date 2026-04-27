@@ -300,6 +300,9 @@ namespace enigma::graphic
          */
         static bool SynchronizeActiveQueues(const char* reason = nullptr);
 
+        static QueueSubmittedFenceSnapshot GetLastSubmittedFenceSnapshot();
+        static QueueFenceSnapshot GetCompletedFenceSnapshot();
+
         // ===== Swap-chain API =====
 
         /**

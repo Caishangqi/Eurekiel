@@ -21,6 +21,15 @@ namespace
 
 bool ChunkMeshBuildInputFactory::TryCreate(const Chunk& chunk, uint64_t buildVersion, bool important, ChunkMeshBuildInput& outInput)
 {
+    return TryCreate(chunk, buildVersion, important, {}, outInput);
+}
+
+bool ChunkMeshBuildInputFactory::TryCreate(const Chunk& chunk,
+                                           uint64_t buildVersion,
+                                           bool important,
+                                           enigma::graphic::RenderPipelineReloadGeneration reloadGeneration,
+                                           ChunkMeshBuildInput& outInput)
+{
     outInput = {};
 
     if (!chunk.IsActive() || chunk.GetWorld() == nullptr)
@@ -29,5 +38,6 @@ bool ChunkMeshBuildInputFactory::TryCreate(const Chunk& chunk, uint64_t buildVer
     }
 
     outInput.dispatchContext = MakeDispatchContext(chunk, buildVersion, important);
+    outInput.reloadGeneration = reloadGeneration;
     return true;
 }

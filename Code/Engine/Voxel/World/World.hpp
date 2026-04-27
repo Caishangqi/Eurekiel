@@ -20,6 +20,7 @@
 #include "ChunkMeshNeighborWaitRegistry.hpp"
 #include "ESFWorldStorage.hpp"
 #include "VoxelRaycastResult3D.hpp"
+#include "Engine/Graphic/Reload/RenderPipelineReloadTypes.hpp"
 #include "../../Math/Vec3.hpp"
 #include "../../Math/IntVec2.hpp"
 #include "../../Core/Schedule/ScheduleSubsystem.hpp"
@@ -56,6 +57,9 @@ namespace enigma::voxel
         uint64_t                                   latestRequestedVersion = 0;
         uint64_t                                   latestSubmittedVersion = 0;
         uint64_t                                   chunkInstanceId        = 0;
+        enigma::graphic::RenderPipelineReloadGeneration requestedReloadGeneration;
+        enigma::graphic::RenderPipelineReloadGeneration submittedReloadGeneration;
+        enigma::graphic::RenderPipelineReloadGeneration publishedReloadGeneration;
         std::optional<enigma::core::TaskHandle>    activeHandle;
         bool                                       pendingDispatch        = false;
         bool                                       important              = false;
@@ -206,6 +210,12 @@ namespace enigma::voxel
         // Reference: Iris levelRenderer.allChanged() on shader pack switch
         void InvalidateAllChunkMeshes();
 
+        void BeginReloadGeneration(enigma::graphic::RenderPipelineReloadGeneration generation);
+        void MarkLoadedChunksForReload(enigma::graphic::RenderPipelineReloadGeneration generation);
+        enigma::graphic::RenderPipelineReloadChunkGateSnapshot GetReloadChunkGateSnapshot(
+            enigma::graphic::RenderPipelineReloadGeneration generation) const;
+        void EndReloadGeneration(enigma::graphic::RenderPipelineReloadGeneration generation);
+
         //-------------------------------------------------------------------------------------------
         // [REFACTORED] Lighting System - Now delegates to VoxelLightEngine
         //-------------------------------------------------------------------------------------------
@@ -299,6 +309,7 @@ namespace enigma::voxel
         void     RemovePendingChunkMeshBuildRequest(IntVec2 chunkCoords);
         ChunkMeshBuildState& GetOrCreateChunkMeshBuildState(IntVec2 chunkCoords);
         ChunkMeshBuildState* FindChunkMeshBuildState(IntVec2 chunkCoords);
+        const ChunkMeshBuildState* FindChunkMeshBuildState(IntVec2 chunkCoords) const;
         void     EraseChunkMeshBuildState(IntVec2 chunkCoords);
 
         // Sort mesh rebuild queue by distance to player (nearest first)
@@ -401,6 +412,9 @@ namespace enigma::voxel
         ChunkMeshNeighborWaitRegistry                    m_chunkMeshNeighborWaitRegistry;
         std::deque<IntVec2>                              m_pendingChunkMeshBuildQueue;
         AsyncChunkMeshDiagnostics                        m_asyncChunkMeshDiagnostics;
+        enigma::graphic::RenderPipelineReloadGeneration  m_currentReloadGeneration;
+        enigma::graphic::RenderPipelineReloadGeneration  m_activeReloadGeneration;
+        std::unordered_set<int64_t>                      m_reloadAffectedVisibleChunkKeys;
         bool                                             m_asyncChunkMeshEnabled = true;
         int                                              m_maxMeshRebuildsPerFrame = 2; // Maximum chunk mesh dispatches/rebuilds per frame
         float                                            m_importantChunkDistanceThreshold = 2.0f;

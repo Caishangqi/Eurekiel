@@ -21,13 +21,13 @@
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Core/Logger/LoggerAPI.hpp"
 #include "Engine/Graphic/Bundle/BundleException.hpp"
-#include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Bundle/Helper/JsonHelper.hpp"
 #include "Engine/Graphic/Bundle/Helper/ShaderBundleFileHelper.hpp"
 #include "Engine/Graphic/Bundle/Imgui/ImguiShaderBundle.hpp"
+#include "Engine/Graphic/Bundle/Integration/ShaderBundleReloadAdapter.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 #include "Engine/Graphic/Integration/RendererSubsystem.hpp"
-#include "Engine/Graphic/Integration/RendererEvents.hpp"
+#include "Engine/Graphic/Reload/RendererFrontendReloadService.hpp"
 #include "Engine/Graphic/Bundle/Directive/PackRenderTargetDirectives.hpp"
 #include "Engine/Graphic/Target/ShadowTextureProvider.hpp"
 #include "Engine/Graphic/Target/ShadowColorProvider.hpp"
@@ -177,15 +177,15 @@ void ShaderBundleSubsystem::Startup()
         }
     }
 
-    // Step 5: Fire OnShaderBundleLoaded event (EventSystem for backward compatibility)
-    // Only fire if we're still using engine bundle (LoadShaderBundle already fires events)
+    // Step 5: Fire committed engine-bundle startup events.
+    // Only fire if we're still using engine bundle (LoadShaderBundle already fires events).
     if (m_currentBundle == m_engineBundle)
     {
         EventArgs args;
         args.SetValue("bundleName", m_engineBundle->GetName());
         FireEvent(EVENT_SHADER_BUNDLE_LOADED, args);
 
-        // Step 6: Broadcast MulticastDelegate event
+        // Step 6: Broadcast committed lifecycle event.
         ShaderBundleEvents::OnBundleLoaded.Broadcast(m_engineBundle.get());
     }
 
@@ -194,14 +194,14 @@ void ShaderBundleSubsystem::Startup()
         g_theImGui->RegisterWindow("ShaderBundle", [this]() { ImguiShaderBundle::Show(this); });
     }
 
-    // Pre-frame callback prepares a safe switch by synchronizing active queues.
-    m_onBeginFrameHandle = RendererEvents::OnBeginFrame.Add(this, &ShaderBundleSubsystem::OnRendererBeginFrame);
-    // Post-acquire callback performs the actual resource mutation once frame-local
-    // uploads and provider writes are legal again.
-    m_onFrameSlotAcquiredHandle = RendererEvents::OnFrameSlotAcquired.Add(
-        this,
-        &ShaderBundleSubsystem::OnRendererFrameSlotAcquired);
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed to renderer frame lifecycle events");
+    m_reloadAdapter = std::make_unique<ShaderBundleReloadAdapter>(*this);
+    if (g_theRendererSubsystem)
+    {
+        m_frontendReloadService = std::make_unique<RendererFrontendReloadService>(*g_theRendererSubsystem);
+    }
+    m_reloadCoordinator.SetServices(m_reloadAdapter.get(), m_frontendReloadService.get());
+    m_reloadCoordinator.SubscribeRendererEvents();
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Subscribed reload coordinator to renderer frame lifecycle events");
 
     g_theShaderBundleSubsystem = this;
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Startup complete. %s bundle active.", m_currentBundle == m_engineBundle ? "Engine" : m_currentBundle->GetName().c_str());
@@ -220,21 +220,11 @@ void ShaderBundleSubsystem::Shutdown()
 {
     LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Shutting down...");
 
-    // Unsubscribe from renderer lifecycle delegates.
-    if (m_onBeginFrameHandle != 0)
-    {
-        RendererEvents::OnBeginFrame.Remove(m_onBeginFrameHandle);
-        m_onBeginFrameHandle = 0;
-    }
-    if (m_onFrameSlotAcquiredHandle != 0)
-    {
-        RendererEvents::OnFrameSlotAcquired.Remove(m_onFrameSlotAcquiredHandle);
-        m_onFrameSlotAcquiredHandle = 0;
-    }
-    if (m_onBeginFrameHandle == 0 && m_onFrameSlotAcquiredHandle == 0)
-    {
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed from renderer frame lifecycle events");
-    }
+    m_reloadCoordinator.UnsubscribeRendererEvents();
+    m_reloadCoordinator.SetServices(nullptr, nullptr);
+    m_frontendReloadService.reset();
+    m_reloadAdapter.reset();
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unsubscribed reload coordinator from renderer frame lifecycle events");
 
     // Remove MaterialIdMapper subscription
     if (m_onBuildVertexHandle != 0)
@@ -265,74 +255,7 @@ void ShaderBundleSubsystem::Shutdown()
 void ShaderBundleSubsystem::Update(float deltaTime)
 {
     UNUSED(deltaTime)
-    // Pending requests are processed from renderer lifecycle callbacks.
-}
-
-//-----------------------------------------------------------------------------------------------
-// OnRendererBeginFrame
-//
-// Event callback for RendererEvents::OnBeginFrame.
-// This stage only prepares a pending switch by draining active GPU work.
-// It must not mutate frame-local renderer state before slot acquisition.
-//-----------------------------------------------------------------------------------------------
-void ShaderBundleSubsystem::OnRendererBeginFrame()
-{
-    if (!m_pendingLoad && !m_pendingUnload)
-    {
-        m_pendingSwitchReadyForFrameSlotAcquire = false;
-        return;
-    }
-
-    if (!D3D12RenderSystem::SynchronizeActiveQueues("ShaderBundleSubsystem::OnRendererBeginFrame"))
-    {
-        m_pendingSwitchReadyForFrameSlotAcquire = false;
-        return;
-    }
-
-    m_pendingSwitchReadyForFrameSlotAcquire = true;
-}
-
-//-----------------------------------------------------------------------------------------------
-// OnRendererFrameSlotAcquired
-//
-// Event callback for RendererEvents::OnFrameSlotAcquired.
-// At this point the frame slot is safe to reuse, so provider uniform uploads and
-// render-target reconfiguration triggered by bundle switching are legal again.
-//-----------------------------------------------------------------------------------------------
-void ShaderBundleSubsystem::OnRendererFrameSlotAcquired()
-{
-    if (!m_pendingSwitchReadyForFrameSlotAcquire)
-    {
-        return;
-    }
-
-    m_pendingSwitchReadyForFrameSlotAcquire = false;
-
-    if (!m_pendingLoad && !m_pendingUnload)
-    {
-        return;
-    }
-
-    if (m_pendingUnload)
-    {
-        m_pendingUnload = false;
-        m_pendingLoad   = false; // Cancel any pending load
-        m_pendingMeta   = std::nullopt;
-
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Processing deferred unload request");
-        UnloadShaderBundle();
-        return;
-    }
-
-    if (m_pendingLoad && m_pendingMeta.has_value())
-    {
-        m_pendingLoad         = false;
-        ShaderBundleMeta meta = m_pendingMeta.value();
-        m_pendingMeta         = std::nullopt;
-
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Processing deferred load request for: %s", meta.name.c_str());
-        LoadShaderBundle(meta);
-    }
+    // Transactional reload requests are driven by RenderPipelineReloadCoordinator.
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -456,119 +379,23 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
 
     try
     {
-        // Get path aliases from configuration for shader include resolution
-        auto pathAliases = m_config.GetPathAliasMap();
+        ShaderBundleReloadAdapter adapter(*this);
+        auto prepared = adapter.PrepareLoad(meta);
 
-        // [RAII] Create bundle with engine bundle reference for fallback
-        // ShaderBundle initializes in constructor (load fallback rules, discover UserDefinedBundles, precompile)
-        auto bundle = std::make_shared<ShaderBundle>(meta, m_engineBundle, pathAliases);
-
-        // Apply RT configs from bundle directives to providers
-        auto* rtDirectives = bundle->GetRTDirectives();
-        if (rtDirectives && g_theRendererSubsystem)
+        if (g_theRendererSubsystem)
         {
-            auto* colorProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ColorTex);
-            auto* depthProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::DepthTex);
-            auto* shadowColorProvider = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowColor);
-            auto* shadowTexProvider   = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowTex);
-
-            // Apply colortex configs
-            if (colorProvider)
-            {
-                for (int i = 0; i <= rtDirectives->GetMaxColorTexIndex(); ++i)
-                {
-                    if (rtDirectives->HasColorTexConfig(i))
-                    {
-                        colorProvider->SetRtConfig(i, rtDirectives->GetColorTexConfig(i));
-                    }
-                }
-            }
-
-            // Apply depthtex configs
-            if (depthProvider)
-            {
-                for (int i = 0; i <= rtDirectives->GetMaxDepthTexIndex(); ++i)
-                {
-                    if (rtDirectives->HasDepthTexConfig(i))
-                    {
-                        depthProvider->SetRtConfig(i, rtDirectives->GetDepthTexConfig(i));
-                    }
-                }
-            }
-
-            // Apply shadowcolor configs
-            if (shadowColorProvider)
-            {
-                for (int i = 0; i <= rtDirectives->GetMaxShadowColorIndex(); ++i)
-                {
-                    if (rtDirectives->HasShadowColorConfig(i))
-                    {
-                        shadowColorProvider->SetRtConfig(i, rtDirectives->GetShadowColorConfig(i));
-                    }
-                }
-            }
-
-            // Apply shadowtex configs
-            if (shadowTexProvider)
-            {
-                for (int i = 0; i <= rtDirectives->GetMaxShadowTexIndex(); ++i)
-                {
-                    if (rtDirectives->HasShadowTexConfig(i))
-                    {
-                        shadowTexProvider->SetRtConfig(i, rtDirectives->GetShadowTexConfig(i));
-                    }
-                }
-            }
-
-            LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Applied RT configs from bundle directives");
-
-            // Apply shadow map resolution from bundle const directives
-            // Iris pattern: const int shadowMapResolution = 2048; in any shader source
-            auto shadowRes = bundle->GetConstInt("shadowMapResolution");
-            if (shadowRes.has_value())
-            {
-                int res = shadowRes.value();
-                if (res > 0 && res <= 16384)
-                {
-                    auto* stProvider = dynamic_cast<ShadowTextureProvider*>(shadowTexProvider);
-                    auto* scProvider = dynamic_cast<ShadowColorProvider*>(shadowColorProvider);
-
-                    if (stProvider) stProvider->SetResolution(res, res);
-                    if (scProvider) scProvider->SetResolution(res, res);
-                }
-            }
+            RendererFrontendReloadService frontendReloadService(*g_theRendererSubsystem);
+            frontendReloadService.ApplyReloadScope(adapter.BuildFrontendReloadScope(prepared));
         }
 
-        // Remove previous MaterialIdMapper subscription before switching bundles
-        if (m_onBuildVertexHandle != 0)
-        {
-            TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
-            m_onBuildVertexHandle = 0;
-        }
+        adapter.ApplyPreparedBundle(std::move(prepared));
 
-        // Load MaterialIdMapper from block.properties and subscribe to vertex event
-        {
-            auto  blockPropertiesPath = meta.path / "shaders" / "block.properties";
-            auto* mapper              = bundle->GetMaterialIdMapper();
-            if (!mapper->Load(blockPropertiesPath))
-            {
-                LogWarn(LogShaderBundle, "ShaderBundleSubsystem:: MaterialIdMapper load failed or empty for '%s' (non-blocking)",
-                        meta.name.c_str());
-            }
-            // Subscribe even if Load returned false (mapper will just return 0 for all queries)
-            m_onBuildVertexHandle = TerrainVertexLayout::OnBuildVertexLayout.Add(
-                mapper, &MaterialIdMapper::OnBuildVertex);
-        }
-
-        // Set as current bundle
-        m_currentBundle = bundle;
-
-        // Fire OnShaderBundleLoaded event (EventSystem for backward compatibility)
+        // Fire committed bundle-loaded event.
         EventArgs args;
-        args.SetValue("bundleName", bundle->GetName());
+        args.SetValue("bundleName", m_currentBundle->GetName());
         FireEvent(EVENT_SHADER_BUNDLE_LOADED, args);
 
-        // Broadcast MulticastDelegate event
+        // Broadcast committed lifecycle event.
         ShaderBundleEvents::OnBundleLoaded.Broadcast(m_currentBundle.get());
 
         // [AUTO-SAVE] Save current loaded bundle name to config file
@@ -577,7 +404,7 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
 
         // Return success
         result.success = true;
-        result.bundle  = bundle;
+        result.bundle  = m_currentBundle;
 
         LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Bundle loaded successfully: %s",
                 meta.name.c_str());
@@ -586,6 +413,14 @@ ShaderBundleResult ShaderBundleSubsystem::LoadShaderBundle(const ShaderBundleMet
     {
         // Log error but do not crash
         ERROR_RECOVERABLE(Stringf("ShaderBundleSubsystem:: Failed to load bundle '%s': %s", meta.name.c_str(), e.what()))
+
+        result.success      = false;
+        result.errorMessage = e.what();
+        result.bundle       = nullptr;
+    }
+    catch (const std::exception& e)
+    {
+        ERROR_RECOVERABLE(Stringf("ShaderBundleSubsystem:: Failed to apply bundle '%s': %s", meta.name.c_str(), e.what()))
 
         result.success      = false;
         result.errorMessage = e.what();
@@ -613,54 +448,47 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
         previousBundleName = m_currentBundle->GetName();
     }
 
-    // Broadcast MulticastDelegate unload event (before reset)
-    ShaderBundleEvents::OnBundleUnloaded.Broadcast();
-
-    // Remove MaterialIdMapper subscription before unloading bundle
-    if (m_onBuildVertexHandle != 0)
+    try
     {
-        TerrainVertexLayout::OnBuildVertexLayout.Remove(m_onBuildVertexHandle);
-        m_onBuildVertexHandle = 0;
-    }
+        ShaderBundleReloadAdapter adapter(*this);
+        auto prepared = adapter.PrepareUnloadToEngine();
 
-    // Reset RT configs to engine defaults before switching bundles
-    if (g_theRendererSubsystem)
+        if (g_theRendererSubsystem)
+        {
+            RendererFrontendReloadService frontendReloadService(*g_theRendererSubsystem);
+            frontendReloadService.ApplyReloadScope(adapter.BuildFrontendReloadScope(prepared));
+        }
+
+        adapter.ApplyPreparedBundle(std::move(prepared));
+
+        // Broadcast MulticastDelegate unload event after the engine bundle is stable.
+        ShaderBundleEvents::OnBundleUnloaded.Broadcast();
+
+        // Fire committed bundle-unloaded event.
+        EventArgs args;
+        args.SetValue("bundleName", previousBundleName);
+        FireEvent(EVENT_SHADER_BUNDLE_UNLOADED, args);
+
+        // Broadcast MulticastDelegate load event (engine bundle now active)
+        ShaderBundleEvents::OnBundleLoaded.Broadcast(m_engineBundle.get());
+
+        // [AUTO-SAVE] Clear current loaded bundle name and save to config file
+        m_config.SetCurrentLoadedBundle("");
+        m_config.SaveToYaml(CONFIG_FILE_PATH);
+
+        result.success = true;
+        result.bundle  = m_engineBundle;
+
+        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unloaded bundle. Reset to engine default.");
+    }
+    catch (const std::exception& e)
     {
-        const auto& config = g_theRendererSubsystem->GetConfiguration();
+        ERROR_RECOVERABLE(Stringf("ShaderBundleSubsystem:: Failed to unload bundle: %s", e.what()))
 
-        auto* colorProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ColorTex);
-        auto* depthProvider       = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::DepthTex);
-        auto* shadowColorProvider = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowColor);
-        auto* shadowTexProvider   = g_theRendererSubsystem->GetRenderTargetProvider(RenderTargetType::ShadowTex);
-
-        if (colorProvider) colorProvider->ResetToDefault(config.GetColorTexConfigs());
-        if (depthProvider) depthProvider->ResetToDefault(config.GetDepthTexConfigs());
-        if (shadowColorProvider) shadowColorProvider->ResetToDefault(config.GetShadowColorConfigs());
-        if (shadowTexProvider) shadowTexProvider->ResetToDefault(config.GetShadowTexConfigs());
-
-        LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Reset RT configs to engine defaults");
+        result.success      = false;
+        result.errorMessage = e.what();
+        result.bundle       = m_currentBundle;
     }
-
-    // Reset to engine bundle
-    m_currentBundle = m_engineBundle;
-
-    // Fire OnShaderBundleUnloaded event (EventSystem for backward compatibility)
-    EventArgs args;
-    args.SetValue("bundleName", previousBundleName);
-    FireEvent(EVENT_SHADER_BUNDLE_UNLOADED, args);
-
-    // Broadcast MulticastDelegate load event (engine bundle now active)
-    ShaderBundleEvents::OnBundleLoaded.Broadcast(m_engineBundle.get());
-
-    // [AUTO-SAVE] Clear current loaded bundle name and save to config file
-    m_config.SetCurrentLoadedBundle("");
-    m_config.SaveToYaml(CONFIG_FILE_PATH);
-
-    // Always succeeds
-    result.success = true;
-    result.bundle  = m_engineBundle;
-
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Unloaded bundle. Reset to engine default.");
 
     return result;
 }
@@ -671,14 +499,26 @@ ShaderBundleResult ShaderBundleSubsystem::UnloadShaderBundle()
 // Request to load a ShaderBundle at the start of next frame
 // This is the safe way to switch bundles from ImGui or mid-frame code
 //-----------------------------------------------------------------------------------------------
-void ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta)
+bool ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta)
 {
-    m_pendingLoad   = true;
-    m_pendingUnload = false; // Cancel any pending unload
-    m_pendingMeta   = meta;
+    const bool accepted = m_reloadCoordinator.RequestLoadShaderBundle(meta);
+    if (!accepted)
+    {
+        LogWarn(LogShaderBundle,
+                "ShaderBundleSubsystem:: Ignored load request for '%s': %s",
+                meta.name.c_str(),
+                ToString(m_reloadCoordinator.GetRequestGate().GetLastIgnoredReason()));
+        return false;
+    }
 
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Queued load request for: %s (will execute next frame)",
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Accepted reload load request for: %s",
             meta.name.c_str());
+    return true;
+}
+
+bool ShaderBundleSubsystem::IsCurrentShaderBundle(const ShaderBundleMeta& meta) const
+{
+    return m_currentBundle != nullptr && IsSameShaderBundleMeta(m_currentBundle->GetMeta(), meta);
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -687,11 +527,17 @@ void ShaderBundleSubsystem::RequestLoadShaderBundle(const ShaderBundleMeta& meta
 // Request to unload current bundle at the start of next frame
 // This is the safe way to unload bundles from ImGui or mid-frame code
 //-----------------------------------------------------------------------------------------------
-void ShaderBundleSubsystem::RequestUnloadShaderBundle()
+bool ShaderBundleSubsystem::RequestUnloadShaderBundle()
 {
-    m_pendingUnload = true;
-    m_pendingLoad   = false; // Cancel any pending load
-    m_pendingMeta   = std::nullopt;
+    const bool accepted = m_reloadCoordinator.RequestUnloadShaderBundle();
+    if (!accepted)
+    {
+        LogWarn(LogShaderBundle,
+                "ShaderBundleSubsystem:: Ignored unload request: %s",
+                ToString(m_reloadCoordinator.GetRequestGate().GetLastIgnoredReason()));
+        return false;
+    }
 
-    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Queued unload request (will execute next frame)");
+    LogInfo(LogShaderBundle, "ShaderBundleSubsystem:: Accepted reload unload request");
+    return true;
 }

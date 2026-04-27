@@ -41,17 +41,23 @@
 //-----------------------------------------------------------------------------------------------
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 #include "ShaderBundleSubsystemConfiguration.hpp"
 #include "Engine/Core/SubsystemManager.hpp"
 #include "Engine/Core/Event/MulticastDelegate.hpp" // For DelegateHandle
+#include "Engine/Graphic/Bundle/Integration/ShaderBundleReloadAdapter.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundle.hpp"
 #include "Engine/Graphic/Bundle/ShaderBundleCommon.hpp"
 #include "Engine/Graphic/Core/EnigmaGraphicCommon.hpp"
+#include "Engine/Graphic/Reload/RendererFrontendReloadService.hpp"
+#include "Engine/Graphic/Reload/RenderPipelineReloadCoordinator.hpp"
 
 namespace enigma::graphic
 {
+    class ShaderBundleReloadAdapter;
+
     class ShaderBundleSubsystem : public enigma::core::EngineSubsystem
     {
         DECLARE_SUBSYSTEM(ShaderBundleSubsystem, "ShaderBundleSubsystem", 300)
@@ -178,26 +184,23 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         // RequestLoadShaderBundle
         //
-        // Request to load a ShaderBundle at the start of next frame
-        // This is the safe way to switch bundles from ImGui or mid-frame code
+        // Request a transactional ShaderBundle load through the reload coordinator.
         //
         // Parameters:
         //   meta - Metadata of the bundle to load
         //
-        // Note: The actual load happens in Update() at frame start, avoiding
-        //       D3D12 ERROR #924 (render target deleted while in use)
+        // Returns false when another reload/apply/frame-slot mutation is already active.
         //-------------------------------------------------------------------------------------------
-        void RequestLoadShaderBundle(const ShaderBundleMeta& meta);
+        bool RequestLoadShaderBundle(const ShaderBundleMeta& meta);
 
         //-------------------------------------------------------------------------------------------
         // RequestUnloadShaderBundle
         //
-        // Request to unload current bundle at the start of next frame
-        // This is the safe way to unload bundles from ImGui or mid-frame code
+        // Request a transactional unload back to the engine bundle.
         //
-        // Note: The actual unload happens via OnRendererBeginFrame callback
+        // Returns false when another reload/apply/frame-slot mutation is already active.
         //-------------------------------------------------------------------------------------------
-        void RequestUnloadShaderBundle();
+        bool RequestUnloadShaderBundle();
 
         //-------------------------------------------------------------------------------------------
         // GetCurrentShaderBundle
@@ -208,6 +211,7 @@ namespace enigma::graphic
         //   shared_ptr to current bundle (engine bundle if no user bundle loaded)
         //-------------------------------------------------------------------------------------------
         std::shared_ptr<ShaderBundle> GetCurrentShaderBundle() { return m_currentBundle; }
+        bool IsCurrentShaderBundle(const ShaderBundleMeta& meta) const;
 
         //-------------------------------------------------------------------------------------------
         // GetEngineShaderBundle
@@ -219,9 +223,14 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         std::shared_ptr<ShaderBundle> GetEngineShaderBundle() { return m_engineBundle; }
 
+        RenderPipelineReloadCoordinator& GetReloadCoordinator() noexcept { return m_reloadCoordinator; }
+        const RenderPipelineReloadCoordinator& GetReloadCoordinator() const noexcept { return m_reloadCoordinator; }
+
 #pragma endregion
 
     private:
+        friend class ShaderBundleReloadAdapter;
+
         //-------------------------------------------------------------------------------------------
         // DiscoverUserBundles
         //
@@ -247,29 +256,15 @@ namespace enigma::graphic
         // The discovered list of user bundles in .enigma/shaderpacks
         std::vector<ShaderBundleMeta> m_discoveredListMeta;
 
-        // Pending request state for deferred bundle switching
-        // This ensures RT changes happen at frame boundaries, not mid-frame
-        bool                            m_pendingLoad   = false;
-        bool                            m_pendingUnload = false;
-        std::optional<ShaderBundleMeta> m_pendingMeta   = std::nullopt;
-
-        // Event subscription handles for renderer lifecycle cleanup.
-        enigma::event::DelegateHandle m_onBeginFrameHandle = 0;
-        enigma::event::DelegateHandle m_onFrameSlotAcquiredHandle = 0;
+        // Owns request serialization and renderer lifecycle notifications for
+        // transactional shader bundle reloads.
+        RenderPipelineReloadCoordinator m_reloadCoordinator;
+        std::unique_ptr<ShaderBundleReloadAdapter> m_reloadAdapter;
+        std::unique_ptr<RendererFrontendReloadService> m_frontendReloadService;
 
         // Event subscription handle for MaterialIdMapper vertex event
         enigma::event::DelegateHandle m_onBuildVertexHandle = 0;
 
-        // Armed when pre-frame synchronization succeeds for a pending switch.
-        bool m_pendingSwitchReadyForFrameSlotAcquire = false;
-
-        // Pre-frame callback. This prepares a safe switch by draining active queues
-        // before BeginFrame acquires the next frame-local slot.
-        void OnRendererBeginFrame();
-
-        // Post-acquire callback. This performs the actual bundle switch once
-        // frame-local uploads and provider updates are legal again.
-        void OnRendererFrameSlotAcquired();
     };
 }
 

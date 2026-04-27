@@ -1475,6 +1475,16 @@ namespace enigma::graphic
         }
     }
 
+    QueueSubmittedFenceSnapshot D3D12RenderSystem::GetLastSubmittedFenceSnapshot()
+    {
+        return s_commandListManager ? s_commandListManager->GetLastSubmittedFenceSnapshot() : QueueSubmittedFenceSnapshot{};
+    }
+
+    QueueFenceSnapshot D3D12RenderSystem::GetCompletedFenceSnapshot()
+    {
+        return s_commandListManager ? s_commandListManager->GetCompletedFenceSnapshot() : QueueFenceSnapshot{};
+    }
+
     bool D3D12RenderSystem::ShouldDeferIndividualResourceRelease()
     {
         return s_isInitialized &&

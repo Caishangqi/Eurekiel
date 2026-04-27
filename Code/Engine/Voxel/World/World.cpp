@@ -16,6 +16,7 @@
 #include <cfloat>
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <exception>
 #include <thread>
 
@@ -2296,6 +2297,14 @@ namespace
     {
         return result.RequiresRetry() && result.detail == "MissingHorizontalNeighbors";
     }
+
+    bool IsReloadGenerationRejectionReason(const char* reason) noexcept
+    {
+        return reason != nullptr &&
+               (std::strcmp(reason, "task-reload-generation-mismatch") == 0 ||
+                std::strcmp(reason, "submitted-reload-generation-mismatch") == 0 ||
+                std::strcmp(reason, "requested-reload-generation-mismatch") == 0);
+    }
 }
 
 bool World::ShouldRequeueDiscardedChunkMeshBuild(const enigma::core::TaskCompletionRecord& record,
@@ -2327,6 +2336,11 @@ bool World::ShouldRequeueDiscardedChunkMeshBuild(const enigma::core::TaskComplet
         }
 
         if (result->buildVersion != 0 && result->buildVersion != buildState.latestRequestedVersion)
+        {
+            return false;
+        }
+
+        if (result->reloadGeneration != buildState.requestedReloadGeneration)
         {
             return false;
         }
@@ -2408,6 +2422,29 @@ bool World::CanPublishChunkMeshBuildResult(const Chunk& chunk,
     if (result.buildVersion != buildState.latestRequestedVersion)
     {
         rejectionReason = "requested-version-mismatch";
+        return false;
+    }
+
+    if (result.reloadGeneration != task.GetReloadGeneration())
+    {
+        ERROR_RECOVERABLE(Stringf("Chunk mesh build result generation mismatch with task for chunk (%d,%d): task=%llu result=%llu",
+                                  result.chunkCoords.x,
+                                  result.chunkCoords.y,
+                                  task.GetReloadGeneration().value,
+                                  result.reloadGeneration.value));
+        rejectionReason = "task-reload-generation-mismatch";
+        return false;
+    }
+
+    if (result.reloadGeneration != buildState.submittedReloadGeneration)
+    {
+        rejectionReason = "submitted-reload-generation-mismatch";
+        return false;
+    }
+
+    if (result.reloadGeneration != buildState.requestedReloadGeneration)
+    {
+        rejectionReason = "requested-reload-generation-mismatch";
         return false;
     }
 
@@ -2688,6 +2725,12 @@ void World::ProcessChunkMeshBuildTaskRecord(const enigma::core::TaskCompletionRe
     {
         m_asyncChunkMeshDiagnostics.frame.discardedStale++;
         m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
+        if (result.has_value() && buildState != nullptr &&
+            result->reloadGeneration != buildState->requestedReloadGeneration)
+        {
+            m_asyncChunkMeshDiagnostics.frame.discardedStaleReloadGeneration++;
+            m_asyncChunkMeshDiagnostics.cumulative.discardedStaleReloadGeneration++;
+        }
     }
 
     if (record.finalState == TaskState::Cancelled)
@@ -2774,6 +2817,43 @@ void World::HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionReco
         return;
     }
 
+    if (result->status != ChunkMeshBuildResultStatus::Cancelled)
+    {
+        const char* identityRejectionReason = nullptr;
+        if (!CanPublishChunkMeshBuildResult(*chunk, *buildState, *task, *result, identityRejectionReason))
+        {
+            m_asyncChunkMeshDiagnostics.frame.discardedStale++;
+            m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
+
+            if (IsReloadGenerationRejectionReason(identityRejectionReason))
+            {
+                m_asyncChunkMeshDiagnostics.frame.discardedStaleReloadGeneration++;
+                m_asyncChunkMeshDiagnostics.cumulative.discardedStaleReloadGeneration++;
+            }
+
+            if (chunk->NeedsMeshRebuild() &&
+                !buildState->pendingDispatch &&
+                !buildState->activeHandle.has_value())
+            {
+                QueueChunkMeshBuildRetry(*chunk, *buildState, coords);
+                if (IsReloadGenerationRejectionReason(identityRejectionReason))
+                {
+                    m_asyncChunkMeshDiagnostics.frame.rescheduledStaleReloadGeneration++;
+                    m_asyncChunkMeshDiagnostics.cumulative.rescheduledStaleReloadGeneration++;
+                }
+            }
+
+            LogDebug("world",
+                     "Discarding mesh build result for chunk (%d, %d) version=%llu generation=%llu before publish handling: %s",
+                     coords.x,
+                     coords.y,
+                     result->buildVersion,
+                     result->reloadGeneration.value,
+                     identityRejectionReason != nullptr ? identityRejectionReason : "identity-rejected");
+            return;
+        }
+    }
+
     if (result->RequiresRetry())
     {
         if (IsMissingHorizontalNeighborRetry(*result))
@@ -2823,24 +2903,11 @@ void World::HandleChunkMeshBuildCompleted(const enigma::core::TaskCompletionReco
         return;
     }
 
-    const char* rejectionReason = nullptr;
-    if (!CanPublishChunkMeshBuildResult(*chunk, *buildState, *task, *result, rejectionReason))
-    {
-        m_asyncChunkMeshDiagnostics.frame.discardedStale++;
-        m_asyncChunkMeshDiagnostics.cumulative.discardedStale++;
-        LogDebug("world",
-                 "Discarding mesh build result for chunk (%d, %d) version=%llu: %s",
-                 coords.x,
-                 coords.y,
-                 result->buildVersion,
-                 rejectionReason != nullptr ? rejectionReason : "illegal-publish");
-        return;
-    }
-
     chunk->SetMesh(std::move(result->mesh));
     m_chunkRenderRegionStorage.NotifyChunkMeshReady(chunk);
     m_asyncChunkMeshDiagnostics.frame.published++;
     m_asyncChunkMeshDiagnostics.cumulative.published++;
+    buildState->publishedReloadGeneration = result->reloadGeneration;
 
     const bool wasPartialMeshPublished = buildState->partialMeshPublished;
     const bool shouldWaitForRefinement =
@@ -3496,6 +3563,13 @@ ChunkMeshBuildState* World::FindChunkMeshBuildState(IntVec2 chunkCoords)
     return stateIt != m_chunkMeshBuildStates.end() ? &stateIt->second : nullptr;
 }
 
+const ChunkMeshBuildState* World::FindChunkMeshBuildState(IntVec2 chunkCoords) const
+{
+    const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
+    const auto    stateIt      = m_chunkMeshBuildStates.find(packedCoords);
+    return stateIt != m_chunkMeshBuildStates.end() ? &stateIt->second : nullptr;
+}
+
 void World::EraseChunkMeshBuildState(IntVec2 chunkCoords)
 {
     const int64_t packedCoords = ChunkHelper::PackCoordinates(chunkCoords.x, chunkCoords.y);
@@ -3553,6 +3627,7 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
     const IntVec2      chunkCoords     = chunk->GetChunkCoords();
     const uint64_t     chunkInstanceId = chunk->GetInstanceId();
     const uint64_t     buildVersion    = buildState.latestRequestedVersion;
+    const enigma::graphic::RenderPipelineReloadGeneration reloadGeneration = buildState.requestedReloadGeneration;
     const ChunkMeshNeighborReadinessAssessment readiness =
         EvaluateChunkMeshNeighborReadiness(*chunk, buildState);
     buildState.pendingNeighborReadiness = readiness;
@@ -3565,7 +3640,7 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
     const enigma::core::TaskPriority priority  =
         buildState.important ? enigma::core::TaskPriority::High : enigma::core::TaskPriority::Normal;
     ChunkMeshBuildInput input;
-    if (!ChunkMeshBuildInputFactory::TryCreate(*chunk, buildVersion, buildState.important, input))
+    if (!ChunkMeshBuildInputFactory::TryCreate(*chunk, buildVersion, buildState.important, reloadGeneration, input))
     {
         buildState.pendingDispatch = true;
         LogDebug("world", "Deferred mesh build task submission for chunk (%d, %d) version=%llu because dispatch context is not ready",
@@ -3605,6 +3680,7 @@ bool World::SubmitChunkMeshBuildTask(Chunk* chunk, ChunkMeshBuildState& buildSta
     }
 
     buildState.latestSubmittedVersion = buildVersion;
+    buildState.submittedReloadGeneration = reloadGeneration;
     buildState.chunkInstanceId        = chunkInstanceId;
     buildState.pendingDispatch        = false;
     buildState.activeImportant        = buildState.important;
@@ -3686,6 +3762,7 @@ uint32_t World::RebuildQueuedChunkMeshes(uint32_t maxRebuildCount)
 
         buildState.pendingDispatch        = false;
         buildState.latestSubmittedVersion = buildState.latestRequestedVersion;
+        buildState.submittedReloadGeneration = buildState.requestedReloadGeneration;
         buildState.chunkInstanceId        = chunk->GetInstanceId();
         buildState.activeImportant        = false;
         buildState.activeRequiresWorkerMaterialization = false;
@@ -3693,6 +3770,7 @@ uint32_t World::RebuildQueuedChunkMeshes(uint32_t maxRebuildCount)
 
         if (RebuildChunkMeshNow(chunk))
         {
+            buildState.publishedReloadGeneration = buildState.submittedReloadGeneration;
             rebuiltCount++;
             m_asyncChunkMeshDiagnostics.frame.syncFallbackCount++;
             m_asyncChunkMeshDiagnostics.cumulative.syncFallbackCount++;
@@ -3744,6 +3822,7 @@ void World::ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant)
 
     ChunkMeshBuildState& buildState = GetOrCreateChunkMeshBuildState(chunkCoords);
     buildState.latestRequestedVersion++;
+    buildState.requestedReloadGeneration = m_currentReloadGeneration;
     buildState.chunkInstanceId = chunk->GetInstanceId();
     buildState.pendingDispatch = true;
     buildState.important       = IsImportantChunkMeshBuild(*chunk, forceImportant);
@@ -3775,20 +3854,172 @@ void World::ScheduleChunkMeshRebuild(Chunk* chunk, bool forceImportant)
 
 void World::InvalidateAllChunkMeshes()
 {
+    MarkLoadedChunksForReload(m_currentReloadGeneration);
+}
+
+void World::BeginReloadGeneration(enigma::graphic::RenderPipelineReloadGeneration generation)
+{
+    m_currentReloadGeneration = generation;
+    m_activeReloadGeneration = generation;
+    m_reloadAffectedVisibleChunkKeys.clear();
+
+    LogInfo("world", "BeginReloadGeneration: generation=%llu", generation.value);
+}
+
+void World::MarkLoadedChunksForReload(enigma::graphic::RenderPipelineReloadGeneration generation)
+{
+    if (generation.IsValid() && m_activeReloadGeneration != generation)
+    {
+        BeginReloadGeneration(generation);
+    }
+
+    m_currentReloadGeneration = generation;
+
+    size_t affectedVisibleChunkCount = 0;
+    size_t queuedChunkCount = 0;
+
     for (auto& [key, chunk] : m_loadedChunks)
     {
-        UNUSED(key);
-        if (chunk)
+        if (chunk == nullptr || !chunk->IsActive())
         {
-            ScheduleChunkMeshRebuild(chunk.get());
+            continue;
         }
+
+        if (generation.IsValid())
+        {
+            m_reloadAffectedVisibleChunkKeys.insert(key);
+            affectedVisibleChunkCount++;
+        }
+
+        ScheduleChunkMeshRebuild(chunk.get(), generation.IsValid());
+        queuedChunkCount++;
     }
 
     // Sort by player distance - nearest chunks rebuild first
     SortMeshQueueByDistance();
 
-    LogInfo("world", "InvalidateAllChunkMeshes: queued %zu chunks for mesh rebuild",
-            m_loadedChunks.size());
+    LogInfo("world",
+            "MarkLoadedChunksForReload: generation=%llu affectedVisible=%zu queued=%zu",
+            generation.value,
+            affectedVisibleChunkCount,
+            queuedChunkCount);
+}
+
+enigma::graphic::RenderPipelineReloadChunkGateSnapshot World::GetReloadChunkGateSnapshot(
+    enigma::graphic::RenderPipelineReloadGeneration generation) const
+{
+    enigma::graphic::RenderPipelineReloadChunkGateSnapshot snapshot;
+    snapshot.generation = generation;
+
+    uint32_t missingBuildStateCount = 0;
+    uint32_t reloadGenerationMismatchCount = 0;
+
+    for (const int64_t packedCoords : m_reloadAffectedVisibleChunkKeys)
+    {
+        int32_t chunkX = 0;
+        int32_t chunkY = 0;
+        ChunkHelper::UnpackCoordinates(packedCoords, chunkX, chunkY);
+
+        const Chunk* chunk = GetChunk(chunkX, chunkY);
+        if (chunk == nullptr || !chunk->IsActive())
+        {
+            continue;
+        }
+
+        snapshot.affectedVisibleChunks++;
+
+        const ChunkMeshBuildState* buildState = FindChunkMeshBuildState(IntVec2(chunkX, chunkY));
+        if (buildState == nullptr)
+        {
+            missingBuildStateCount++;
+            continue;
+        }
+
+        if (buildState->requestedReloadGeneration != generation)
+        {
+            reloadGenerationMismatchCount++;
+        }
+
+        if (buildState->pendingDispatch)
+        {
+            snapshot.pendingDispatchCount++;
+        }
+
+        if (buildState->activeHandle.has_value())
+        {
+            snapshot.activeWorkerCount++;
+        }
+
+        if (buildState->waitingForNeighbors)
+        {
+            snapshot.waitingForNeighborsCount++;
+        }
+
+        if (buildState->partialMeshPublished && buildState->publishedReloadGeneration == generation)
+        {
+            snapshot.partialMeshPublishedCount++;
+        }
+
+        if (buildState->refinementPending)
+        {
+            snapshot.refinementPendingCount++;
+        }
+
+        const bool hasUnpublishedWork =
+            buildState->pendingDispatch ||
+            buildState->activeHandle.has_value() ||
+            buildState->publishedReloadGeneration != generation;
+        if (!hasUnpublishedWork)
+        {
+            snapshot.rebuiltAndPublishedChunks++;
+        }
+    }
+
+    snapshot.completionSatisfied =
+        snapshot.affectedVisibleChunks == snapshot.rebuiltAndPublishedChunks &&
+        missingBuildStateCount == 0 &&
+        reloadGenerationMismatchCount == 0;
+
+    if (!snapshot.completionSatisfied)
+    {
+        if (missingBuildStateCount > 0)
+        {
+            snapshot.blockingReason = "missing-build-state";
+        }
+        else if (reloadGenerationMismatchCount > 0)
+        {
+            snapshot.blockingReason = "reload-generation-mismatch";
+        }
+        else if (snapshot.pendingDispatchCount > 0)
+        {
+            snapshot.blockingReason = "pending-dispatch";
+        }
+        else if (snapshot.activeWorkerCount > 0)
+        {
+            snapshot.blockingReason = "active-worker";
+        }
+        else if (snapshot.waitingForNeighborsCount > 0)
+        {
+            snapshot.blockingReason = "waiting-for-neighbors";
+        }
+        else
+        {
+            snapshot.blockingReason = "awaiting-publish";
+        }
+    }
+
+    return snapshot;
+}
+
+void World::EndReloadGeneration(enigma::graphic::RenderPipelineReloadGeneration generation)
+{
+    if (m_activeReloadGeneration == generation)
+    {
+        m_activeReloadGeneration.Reset();
+        m_reloadAffectedVisibleChunkKeys.clear();
+    }
+
+    LogInfo("world", "EndReloadGeneration: generation=%llu", generation.value);
 }
 
 void World::SortMeshQueueByDistance()

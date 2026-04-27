@@ -51,6 +51,7 @@ namespace enigma::graphic
     class DepthTextureManager;
     class PSOManager;
     class CustomImageManager;
+    struct RendererFrontendReloadScope;
     class VertexLayout; // Forward declaration for VertexLayout state API
     class VertexRingBuffer; // Forward declaration for RingBuffer wrapper (Option D architecture)
     class IndexRingBuffer; // Forward declaration for RingBuffer wrapper
@@ -405,6 +406,15 @@ namespace enigma::graphic
         IRenderTargetProvider* GetRenderTargetProvider(RenderTargetType rtType);
 
         /**
+         * Apply renderer-owned frontend state changes for a reload transaction.
+         *
+         * The scope is intentionally shader-bundle agnostic. Callers must convert
+         * domain-specific state into render target configs, shadow resolution, and
+         * custom image slots before crossing this boundary.
+         */
+        void ReloadFrontendState(const RendererFrontendReloadScope& scope);
+
+        /**
          * @brief Begin camera rendering - ICamera interface version
          * @param camera ICamera interface reference (supports all camera types)
          *
@@ -603,112 +613,13 @@ namespace enigma::graphic
         void DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>& vbo, const std::shared_ptr<D12IndexBuffer>& ibo);
 
         /**
-         * @brief 使用Shader处理后输出到BackBuffer（M6.3核心API）
-         * @param finalProgram final阶段Shader（如色调映射、后处理）
-         * @param inputRTs 输入RT索引列表（保留参数，Bindless架构下自动访问）
-         * 
-         * @details
-         * **Iris对应关系**：
-         * - 对应Iris的final.fsh语义
-         * - 执行最终屏幕输出前的后处理（色调映射、Bloom、DOF等）
-         * - 输出到gl_FragColor（等价于我们的BackBuffer）
-         * 
-         * **常见使用场景**：
-         * 1. 色调映射（Tone Mapping）：HDR→LDR转换
-         * 2. 后处理效果：Bloom、DOF、Motion Blur、Vignette
-         * 3. 颜色校正：Gamma校正、色彩分级
-         * 4. 抗锯齿：FXAA、SMAA后处理
-         * 
-         * **输入（读取colortex）**：
-         * - Bindless架构：colortex索引已在ColorTargetsIndexBuffer中
-         * - Shader自动访问：allTextures[colorTargets.readIndices[0]]
-         * - 无需手动绑定SRV（与传统架构不同）
-         * 
-         * **输出（写入BackBuffer）**：
-         * - OMSetRenderTargets(backBufferRTV) 指定输出目标
-         * - Shader的SV_Target输出到BackBuffer（不是colortex）
-         * 
-         * **执行流程**：
-         * 1. 绑定BackBuffer为RTV（输出目标）
-         * 2. UseProgram(finalProgram)设置PSO
-         * 3. DrawFullscreenQuad()绘制
-         * 
-         * @code
-         * // 基础用法：Iris final.fsh等价实现
-         * auto finalProgram = GetShaderProgram(ProgramId::FINAL);
-         * renderer->PresentWithShader(finalProgram); // Shader自动读取colortex0-15
-         * 
-         * // 完整示例：色调映射 + Gamma校正
-         * renderer->BeginFrame();
-         * // ... 渲染场景到colortex0 ...
-         * auto finalProgram = GetShaderProgram(ProgramId::FINAL);
-         * renderer->PresentWithShader(finalProgram); // 后处理并输出到屏幕
-         * renderer->EndFrame(); // Present到屏幕
-         * @endcode
-         * 
-         * **教学要点**：
-         * - 理解Bindless架构的自动纹理访问机制
-         * - 学习DirectX 12的OMSetRenderTargets()动态绑定
-         * - 掌握全屏后处理的标准流程
-         * - 理解Iris final.fsh在延迟渲染管线中的作用
-         * 
-         * **注意事项**：
-         * - BackBuffer格式固定为DXGI_FORMAT_R8G8B8A8_UNORM
-         * - finalProgram必须输出到SV_Target0
-         * - 确保在EndFrame()之前调用（Present之前）
-         * 
-         * @note inputRTs参数保留用于未来的验证或优化，当前Bindless架构下无需显式绑定
-         */
-        void PresentWithShader(std::shared_ptr<ShaderProgram> finalProgram,
-                               const std::vector<uint32_t>&   inputRTs = {0});
-
-        /**
-         * @brief 直接拷贝RT到BackBuffer（M6.3便捷API）
-         * @param rtIndex RT索引 [0, activeColorTexCount)
-         * @param rtType RT类型（默认ColorTex，可选ShadowColor/DepthTex）
-         * 
-         * @details
-         * **使用场景**：
-         * 1. 快速调试：直接查看任意RT内容（GBuffer、Shadow、Depth等）
-         * 2. 简单输出：无需后处理的场景（如UI渲染结果）
-         * 3. 性能测试：跳过Shader开销，测试纯拷贝性能
-         * 
-         * **实现方式**：
-         * - 使用ID3D12GraphicsCommandList::CopyResource()执行GPU拷贝
-         * - 比PresentWithShader()更快（无Shader开销）
-         * - 但无法进行后处理（色调映射、Gamma校正等）
-         * 
-         * **执行流程**：
-         * 1. 参数验证（rtIndex范围检查）
-         * 2. 资源状态转换（RT→COPY_SOURCE, BackBuffer→COPY_DEST）
-         * 3. CopyResource()执行GPU拷贝
-         * 4. 恢复资源状态
-         * 
-         * @code
-         * // 基础用法：输出colortex0到屏幕
-         * renderer->PresentRenderTarget(0); // 最简单的输出方式
-         * 
-         * // 调试用法：查看GBuffer内容
-         * renderer->PresentRenderTarget(1); // 查看colortex1（如法线）
-         * renderer->PresentRenderTarget(2); // 查看colortex2（如深度）
-         * 
-         * // 输出Shadow Map
-         * renderer->PresentRenderTarget(0, RTType::ShadowColor);
-         * @endcode
-         * 
-         * **教学要点**：
-         * - 理解DirectX 12的CopyResource()操作
-         * - 学习资源状态转换（Resource Barrier）的重要性
-         * - 掌握调试渲染管线的技巧
-         * 
-         * **注意事项**：
-         * - RT和BackBuffer必须格式兼容（都是R8G8B8A8_UNORM）
-         * - 分辨率必须一致，否则拷贝失败
-         * - 不执行任何后处理（直接拷贝原始数据）
-         * 
-         * **性能对比**：
-         * - PresentRenderTarget(): ~0.1ms（纯拷贝）
-         * - PresentWithShader(): ~0.5-2ms（含Shader执行）
+         * @brief Present a render target to the swap-chain backbuffer.
+         * @param rtIndex Render target index.
+         * @param rtType Render target type.
+         *
+         * Uses CopyResource when source and backbuffer formats match. Uses the
+         * internal shader blit path for HDR/float targets that need conversion.
+         * ImGui is drawn after scene presentation in both paths.
          */
         void PresentRenderTarget(int rtIndex, RenderTargetType rtType = RenderTargetType::ColorTex);
 
@@ -791,21 +702,11 @@ namespace enigma::graphic
         void ClearAllRenderTargets();
 
         /**
-         * @brief [DEPRECATED] Get current blend mode
-         * @return Current BlendMode
-         *
-         * Teaching Points:
-         * - Kept for backward compatibility
-         * - Returns mode derived from m_currentBlendConfig
-         */
-        [[nodiscard]] BlendMode GetBlendMode() const noexcept { return m_currentBlendMode; }
-
-        /**
-         * @brief Set blend configuration (replaces SetBlendMode)
+         * @brief Set blend configuration.
          * @param config Blend configuration (blend enable, factors, operations)
          *
          * Teaching Points:
-         * - More flexible than BlendMode enum
+         * - Uses explicit blend factors and operations.
          * - Follows RasterizationConfig design pattern
          * - Use static presets: BlendConfig::Opaque(), Alpha(), Additive(), etc.
          *
@@ -1418,11 +1319,11 @@ namespace enigma::graphic
          */
         bool PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList);
 
-        /// Initialize blit shader program (lazy, first call only)
-        void InitializeBlitProgram();
+        /// Ensure the present blit shader is compiled.
+        void EnsurePresentBlitProgram();
 
-        /// Present RT to backbuffer via draw call (format mismatch fallback)
-        void PresentRenderTargetWithDraw(int rtIndex, RenderTargetType rtType, D3D12_RESOURCE_STATES sourceInitialState);
+        /// Present RT to backbuffer via shader blit for format conversion.
+        void PresentRenderTargetWithShaderBlit(int rtIndex, RenderTargetType rtType, D3D12_RESOURCE_STATES sourceInitialState);
 
         void SyncGraphicsRootBinderWithCommandList(ID3D12GraphicsCommandList* commandList, bool resetDiagnostics) const noexcept;
         void SyncGraphicsRootBinderWithSrvHeap(ID3D12DescriptorHeap* srvHeap) const noexcept;
@@ -1459,8 +1360,8 @@ namespace enigma::graphic
         /// Full Screen Draw
         std::unique_ptr<class FullQuadsRenderer> m_fullQuadsRenderer;
 
-        /// Blit shader for PresentRenderTarget format mismatch fallback (lazy-initialized)
-        std::shared_ptr<ShaderProgram> m_blitProgram;
+        /// Blit shader used when PresentRenderTarget must convert formats.
+        std::shared_ptr<ShaderProgram> m_presentBlitProgram;
 
         // ==================== Uniform management (Phase 3) ====================
 
@@ -1484,8 +1385,7 @@ namespace enigma::graphic
 
         // PSO state caching for deferred binding
         ShaderProgram*             m_currentShaderProgram       = nullptr;
-        BlendMode                  m_currentBlendMode           = BlendMode::Opaque; // [DEPRECATED] Kept for backward compatibility
-        BlendConfig                m_currentBlendConfig         = BlendConfig::Opaque(); // Dynamic Sampler System
+        BlendConfig                m_currentBlendConfig         = BlendConfig::Opaque();
         bool                       m_hasIndependentBlend        = false; // Per-RT blend active flag
         std::array<BlendConfig, 8> m_perRTBlendConfigs          = {}; // Per-RT blend overrides
         DepthConfig                m_currentDepthConfig         = DepthConfig::Enabled();

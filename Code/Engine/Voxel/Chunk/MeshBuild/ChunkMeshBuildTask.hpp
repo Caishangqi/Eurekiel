@@ -46,6 +46,7 @@ namespace enigma::voxel
         const ChunkMeshBuildInput& GetInput() const noexcept { return m_input; }
         uint64_t                   GetChunkInstanceId() const noexcept { return m_input.GetChunkInstanceId(); }
         uint64_t                   GetBuildVersion() const noexcept { return m_input.GetBuildVersion(); }
+        enigma::graphic::RenderPipelineReloadGeneration GetReloadGeneration() const noexcept { return m_input.GetReloadGeneration(); }
         bool                       IsImportant() const noexcept { return m_input.IsImportant(); }
         enigma::core::TaskPriority GetPriority() const noexcept { return m_priority; }
 

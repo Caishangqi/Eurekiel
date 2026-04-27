@@ -50,6 +50,7 @@ void ChunkMeshBuildTask::Execute()
     result.chunkCoords     = m_input.GetChunkCoords();
     result.chunkInstanceId = m_input.GetChunkInstanceId();
     result.buildVersion    = m_input.GetBuildVersion();
+    result.reloadGeneration = m_input.GetReloadGeneration();
 
     if (IsCancellationRequested())
     {

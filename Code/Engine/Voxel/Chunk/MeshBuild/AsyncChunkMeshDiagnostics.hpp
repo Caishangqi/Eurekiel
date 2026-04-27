@@ -92,6 +92,8 @@ namespace enigma::voxel
         uint64_t workerMaterializationMissingNeighbors = 0;
         uint64_t workerMaterializationValidationFailed = 0;
         uint64_t discardedStale                = 0;
+        uint64_t discardedStaleReloadGeneration = 0;
+        uint64_t rescheduledStaleReloadGeneration = 0;
         uint64_t discardedCancelled            = 0;
         uint64_t retryLater                    = 0;
         uint64_t syncFallbackCount             = 0;

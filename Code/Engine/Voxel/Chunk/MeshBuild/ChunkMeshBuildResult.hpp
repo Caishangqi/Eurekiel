@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Graphic/Reload/RenderPipelineReloadTypes.hpp"
 #include "Engine/Math/IntVec2.hpp"
 #include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshNeighborReadiness.hpp"
 #include "Engine/Voxel/Chunk/ChunkMesh.hpp"
@@ -50,6 +51,7 @@ namespace enigma::voxel
         IntVec2                     chunkCoords     = IntVec2(0, 0);
         uint64_t                    chunkInstanceId = 0;
         uint64_t                    buildVersion    = 0;
+        enigma::graphic::RenderPipelineReloadGeneration reloadGeneration;
         ChunkMeshBuildResultStatus  status          = ChunkMeshBuildResultStatus::Failed;
         ChunkMeshNeighborDependencyMask missingHorizontalNeighborMask = kChunkMeshNeighborDependencyMaskNone;
         bool                        usedRelaxedNeighborAccess = false;

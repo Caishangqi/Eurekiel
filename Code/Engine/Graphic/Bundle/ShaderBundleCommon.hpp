@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <system_error>
 #include <vector>
 #include <unordered_map>
 
@@ -89,6 +90,30 @@ namespace enigma::graphic
         //-------------------------------------------------------------------------------------------
         static std::optional<ShaderBundleMeta> FromBundlePath(const std::filesystem::path& bundlePath, bool isEngineBundle = false);
     };
+
+    inline std::filesystem::path NormalizeShaderBundlePathForCompare(const std::filesystem::path& path)
+    {
+        std::error_code error;
+        const std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(path, error);
+        return (error ? path : canonicalPath).lexically_normal();
+    }
+
+    inline bool IsSameShaderBundleMeta(const ShaderBundleMeta& lhs, const ShaderBundleMeta& rhs)
+    {
+        if (lhs.isEngineBundle != rhs.isEngineBundle)
+        {
+            return false;
+        }
+
+        const std::filesystem::path lhsPath = NormalizeShaderBundlePathForCompare(lhs.path);
+        const std::filesystem::path rhsPath = NormalizeShaderBundlePathForCompare(rhs.path);
+        if (!lhsPath.empty() && lhsPath == rhsPath)
+        {
+            return true;
+        }
+
+        return lhs.name == rhs.name && lhs.path.lexically_normal() == rhs.path.lexically_normal();
+    }
 
     //-------------------------------------------------------------------------------------------
     // ShaderBundleResult

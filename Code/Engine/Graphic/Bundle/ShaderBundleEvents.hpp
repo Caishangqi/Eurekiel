@@ -16,7 +16,7 @@ namespace enigma::graphic
         // Fired after a Bundle is loaded - parameter is the newly loaded Bundle
         static enigma::event::MulticastDelegate<ShaderBundle*> OnBundleLoaded;
 
-        // Fired after a Bundle is unloaded (before switching back to Engine Bundle)
+        // Fired after an unload transaction commits.
         static enigma::event::MulticastDelegate<> OnBundleUnloaded;
     };
 } // namespace enigma::graphic

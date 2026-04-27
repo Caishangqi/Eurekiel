@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Graphic/Reload/RenderPipelineReloadTypes.hpp"
 #include "Engine/Voxel/Chunk/MeshBuild/ChunkMeshingDispatchContext.hpp"
 
 #include <cstdint>
@@ -13,6 +14,7 @@ namespace enigma::voxel
     {
         ChunkMeshingDispatchContext                 dispatchContext;
         std::shared_ptr<const ChunkMeshingSnapshot> snapshot;
+        enigma::graphic::RenderPipelineReloadGeneration reloadGeneration;
 
         const IntVec2& GetChunkCoords() const noexcept
         {
@@ -27,6 +29,11 @@ namespace enigma::voxel
         uint64_t GetBuildVersion() const noexcept
         {
             return dispatchContext.buildVersion;
+        }
+
+        enigma::graphic::RenderPipelineReloadGeneration GetReloadGeneration() const noexcept
+        {
+            return reloadGeneration;
         }
 
         bool IsImportant() const noexcept

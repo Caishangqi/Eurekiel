@@ -240,6 +240,7 @@ ChunkMeshBuildResult ChunkMeshBuilder::Build(const ChunkMeshBuildInput& input) c
     result.chunkCoords     = input.GetChunkCoords();
     result.chunkInstanceId = input.GetChunkInstanceId();
     result.buildVersion    = input.GetBuildVersion();
+    result.reloadGeneration = input.GetReloadGeneration();
 
     if (!input.HasSnapshot())
     {

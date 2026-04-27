@@ -83,16 +83,30 @@ namespace enigma::graphic
             hasUserBundleLoaded = !currentBundle->GetMeta().isEngineBundle;
         }
 
-        // Load button
+        bool selectedBundleIsCurrent = false;
+        if (s_selectedIndex >= 0 && s_selectedIndex < static_cast<int>(discoveredBundles.size()))
+        {
+            selectedBundleIsCurrent = subsystem->IsCurrentShaderBundle(discoveredBundles[s_selectedIndex]);
+        }
+
+        if (selectedBundleIsCurrent)
+        {
+            ImGui::BeginDisabled();
+        }
+
         if (ImGui::Button("Load Selected"))
         {
             if (s_selectedIndex >= 0 && s_selectedIndex < static_cast<int>(discoveredBundles.size()))
             {
                 const auto& selectedMeta = discoveredBundles[s_selectedIndex];
-                // [REFACTOR] Use deferred loading to avoid mid-frame RT resource changes
-                // This prevents D3D12 ERROR #924 (render target deleted while in use)
+                // Reload coordinator serializes accepted requests and ignores busy ones.
                 subsystem->RequestLoadShaderBundle(selectedMeta);
             }
+        }
+
+        if (selectedBundleIsCurrent)
+        {
+            ImGui::EndDisabled();
         }
 
         ImGui::SameLine();
@@ -105,15 +119,21 @@ namespace enigma::graphic
 
         if (ImGui::Button("Unload"))
         {
-            // [REFACTOR] Use deferred unloading to avoid mid-frame RT resource changes
+            // Reload coordinator serializes accepted requests and ignores busy ones.
             subsystem->RequestUnloadShaderBundle();
         }
 
         if (!hasUserBundleLoaded)
         {
             ImGui::EndDisabled();
+        }
+
+        if (selectedBundleIsCurrent || !hasUserBundleLoaded)
+        {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(Engine bundle active)");
+            ImGui::TextColored(
+                ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
+                selectedBundleIsCurrent ? "(Current bundle active)" : "(Engine bundle active)");
         }
     }
 } // namespace enigma::graphic

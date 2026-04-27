@@ -6,6 +6,7 @@
 #include "Engine/Core/StringUtils.hpp"
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
+#include "Engine/Graphic/Integration/RendererFrontendReloadScope.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp"
 #include "Engine/Graphic/Mipmap/MipmapGenerator.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
@@ -37,7 +38,54 @@
 #include "Engine/Graphic/Shader/Uniform/CameraUniforms.hpp"
 #include "Engine/Graphic/Target/IRenderTargetProvider.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp" // Decoupled frame lifecycle events
+
+#include <stdexcept>
+
 enigma::graphic::RendererSubsystem* g_theRendererSubsystem = nullptr;
+
+namespace
+{
+    void RequireReloadDependency(const char* dependencyName, const void* dependency)
+    {
+        if (dependency != nullptr)
+        {
+            return;
+        }
+
+        throw std::invalid_argument(Stringf("Renderer frontend reload requires %s", dependencyName));
+    }
+
+    void ApplyIndexedRenderTargetConfigs(
+        IRenderTargetProvider* provider,
+        const std::vector<IndexedRenderTargetConfig>& configs,
+        const char* providerName)
+    {
+        if (configs.empty())
+        {
+            return;
+        }
+
+        RequireReloadDependency(providerName, provider);
+
+        for (const IndexedRenderTargetConfig& indexedConfig : configs)
+        {
+            provider->SetRtConfig(indexedConfig.index, indexedConfig.config);
+        }
+    }
+
+    void ValidateCustomImageSlot(int slotIndex)
+    {
+        if (slotIndex >= 0 && slotIndex < CustomImageManager::MAX_CUSTOM_IMAGE_SLOTS)
+        {
+            return;
+        }
+
+        throw std::invalid_argument(Stringf(
+            "Renderer frontend reload custom image slot %d is out of range 0-%d",
+            slotIndex,
+            CustomImageManager::MAX_CUSTOM_IMAGE_SLOTS - 1));
+    }
+}
 
 #pragma region Lifecycle Management
 void RendererSubsystem::RenderStatistics::Reset()
@@ -405,7 +453,7 @@ void RendererSubsystem::ReleaseFrontendGpuResourcesBeforeBackendShutdown() noexc
     m_psoManager.reset();
     m_graphicsRootBinder.reset();
     m_fullQuadsRenderer.reset();
-    m_blitProgram.reset();
+    m_presentBlitProgram.reset();
     m_lastObservedGraphicsCommandList = nullptr;
     m_lastObservedSrvHeap             = nullptr;
 
@@ -427,7 +475,6 @@ void RendererSubsystem::ResetFrontendShutdownState() noexcept
     g_theRendererSubsystem = nullptr;
 
     m_currentShaderProgram       = nullptr;
-    m_currentBlendMode           = BlendMode::Opaque;
     m_currentBlendConfig         = BlendConfig::Opaque();
     m_hasIndependentBlend        = false;
     m_perRTBlendConfigs.fill(BlendConfig::Opaque());
@@ -445,7 +492,6 @@ void RendererSubsystem::ResetFrontendShutdownState() noexcept
     m_isStarted     = false;
 }
 
-// TODO: M2 - remove PreparePipeline and keep the flexible rendering API only.
 #pragma endregion
 
 #pragma region Shader Compilation
@@ -862,17 +908,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
 
 #pragma endregion
 
-#pragma region Rendering API
-// TODO: M2 - 实现60+ API灵活渲染接口
-// BeginCamera/EndCamera, UseProgram, DrawVertexBuffer, etc.
-// 替代旧的Phase系统（已删除IWorldRenderingPipeline/PipelineManager）
-#pragma endregion
-
-#pragma region RenderTarget Management
-// TODO: M2 - 实现RenderTarget管理接口
-// ConfigureGBuffer, FlipRenderTarget, SwitchDepthBuffer等
-#pragma endregion
-
 #pragma region State Management
 
 ID3D12CommandQueue* RendererSubsystem::GetCommandQueue() const noexcept
@@ -1080,6 +1115,107 @@ IRenderTargetProvider* RendererSubsystem::GetRenderTargetProvider(RenderTargetTy
     }
 
     return m_renderTargetBinder->GetProvider(rtType);
+}
+
+void RendererSubsystem::ReloadFrontendState(const RendererFrontendReloadScope& scope)
+{
+    if (scope.HasRenderTargetConfigConflict())
+    {
+        throw std::invalid_argument(
+            "Renderer frontend reload scope cannot reset render targets and apply explicit render target configs");
+    }
+
+    if (scope.shadowMapResolution.has_value() && scope.shadowMapResolution.value() <= 0)
+    {
+        throw std::invalid_argument(Stringf(
+            "Renderer frontend reload shadow map resolution must be positive: %d",
+            scope.shadowMapResolution.value()));
+    }
+
+    if (m_psoManager)
+    {
+        m_psoManager->ClearCache();
+    }
+
+    m_currentShaderProgram = nullptr;
+    m_currentVertexLayout  = VertexLayoutRegistry::GetDefault();
+    m_lastBoundPSO         = nullptr;
+
+    if (m_renderTargetBinder)
+    {
+        m_renderTargetBinder->ClearBindings();
+    }
+
+    if (scope.resetRenderTargetsToEngineDefaults)
+    {
+        RequireReloadDependency("ColorTextureProvider", m_colorTextureProvider.get());
+        RequireReloadDependency("DepthTextureProvider", m_depthTextureProvider.get());
+        RequireReloadDependency("ShadowColorProvider", m_shadowColorProvider.get());
+        RequireReloadDependency("ShadowTextureProvider", m_shadowTextureProvider.get());
+
+        m_colorTextureProvider->ResetToDefault(m_configuration.GetColorTexConfigs());
+        m_depthTextureProvider->ResetToDefault(m_configuration.GetDepthTexConfigs());
+        m_shadowColorProvider->ResetToDefault(m_configuration.GetShadowColorConfigs());
+        m_shadowTextureProvider->ResetToDefault(m_configuration.GetShadowTexConfigs());
+    }
+    else
+    {
+        ApplyIndexedRenderTargetConfigs(
+            m_colorTextureProvider.get(),
+            scope.colorTexConfigs,
+            "ColorTextureProvider");
+        ApplyIndexedRenderTargetConfigs(
+            m_depthTextureProvider.get(),
+            scope.depthTexConfigs,
+            "DepthTextureProvider");
+        ApplyIndexedRenderTargetConfigs(
+            m_shadowColorProvider.get(),
+            scope.shadowColorConfigs,
+            "ShadowColorProvider");
+        ApplyIndexedRenderTargetConfigs(
+            m_shadowTextureProvider.get(),
+            scope.shadowTexConfigs,
+            "ShadowTextureProvider");
+    }
+
+    if (scope.shadowMapResolution.has_value())
+    {
+        RequireReloadDependency("ShadowColorProvider", m_shadowColorProvider.get());
+        RequireReloadDependency("ShadowTextureProvider", m_shadowTextureProvider.get());
+
+        const int resolution = scope.shadowMapResolution.value();
+        m_shadowColorProvider->SetResolution(resolution, resolution);
+        m_shadowTextureProvider->SetResolution(resolution, resolution);
+    }
+
+    if (m_colorTextureProvider)
+    {
+        m_colorTextureProvider->UpdateIndices();
+    }
+    if (m_depthTextureProvider)
+    {
+        m_depthTextureProvider->UpdateIndices();
+    }
+    if (m_shadowColorProvider)
+    {
+        m_shadowColorProvider->UpdateIndices();
+    }
+    if (m_shadowTextureProvider)
+    {
+        m_shadowTextureProvider->UpdateIndices();
+    }
+
+    if (!scope.clearCustomImageSlots.empty())
+    {
+        RequireReloadDependency("CustomImageManager", m_customImageManager.get());
+        m_customImageManager->OnFrameSlotAcquired();
+
+        for (const int slotIndex : scope.clearCustomImageSlots)
+        {
+            ValidateCustomImageSlot(slotIndex);
+            m_customImageManager->ClearCustomImage(slotIndex);
+        }
+    }
 }
 
 // BeginCamera - ICamera interface version
@@ -1480,44 +1616,10 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
 // M6.3: Present RT输出API
 // ============================================================================
 
-void RendererSubsystem::PresentWithShader(std::shared_ptr<ShaderProgram> finalProgram,
-                                          const std::vector<uint32_t>&   inputRTs)
-{
-    if (!finalProgram)
-    {
-        LogError(LogRenderer, "PresentWithShader: finalProgram is nullptr");
-        return;
-    }
-
-    auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
-    auto cmdList       = GetCurrentCommandList();
-
-    if (!cmdList)
-    {
-        LogError(LogRenderer, "PresentWithShader: CommandList is nullptr");
-        return;
-    }
-
-    // 核心：绑定BackBuffer为RTV（Shader输出目标）
-    // 教学要点：OMSetRenderTargets决定Shader的SV_Target输出位置
-    cmdList->OMSetRenderTargets(1, &backBufferRTV, FALSE, nullptr);
-
-    // 输入纹理（colortex0-15）通过Bindless自动访问：
-    // - ColorTargetsIndexBuffer已包含所有colortex的Bindless索引
-    // - Shader通过索引直接访问：allTextures[colorTargets.readIndices[0]]
-    // - 无需手动绑定SRV（Bindless架构优势）
-    // inputRTs参数保留用于未来的验证或优化
-    UNUSED(inputRTs);
-
-    UseProgram(finalProgram);
-
-    LogDebug(LogRenderer, "PresentWithShader: Rendered to BackBuffer");
-}
-
 void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType)
 {
     // ========================================================================
-    // [REFACTORED] Provider-based Architecture + Format Mismatch Fallback
+    // Provider-based presentation with format conversion when needed.
     // ========================================================================
 
     // Step 1: Get provider
@@ -1537,23 +1639,13 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         return;
     }
 
-    // Step 3: Select Main or Alt resource based on FlipState
-    ID3D12Resource* sourceRT       = nullptr;
-    bool            useAltResource = false;
-
-    if (provider->SupportsFlipState())
-    {
-        sourceRT = provider->GetMainResource(rtIndex);
-    }
-    else
-    {
-        sourceRT = provider->GetMainResource(rtIndex);
-    }
+    // Step 3: Select source resource.
+    ID3D12Resource* sourceRT = provider->GetMainResource(rtIndex);
 
     if (!sourceRT)
     {
-        LogError(LogRenderer, "PresentRenderTarget: Source resource is null (rtIndex=%d, rtType=%d, useAlt=%d)",
-                 rtIndex, static_cast<int>(rtType), useAltResource ? 1 : 0);
+        LogError(LogRenderer, "PresentRenderTarget: Source resource is null (rtIndex=%d, rtType=%d)",
+                 rtIndex, static_cast<int>(rtType));
         return;
     }
 
@@ -1572,24 +1664,21 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
         sourceInitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
 
-    // Step 4.5: Format compatibility check — fast path (CopyResource) or fallback (Draw)
+    // Step 4.5: Use CopyResource when possible, otherwise use shader blit conversion.
     DXGI_FORMAT sourceFormat     = provider->GetFormat(rtIndex);
     DXGI_FORMAT backbufferFormat = D3D12RenderSystem::GetBackBufferFormat();
 
     if (sourceFormat != backbufferFormat)
     {
-        // Fallback path: draw call with blit shader
-        LogInfo(LogRenderer, "PresentRenderTarget: Format mismatch (source=%d vs backbuffer=%d), using draw fallback",
-                static_cast<int>(sourceFormat), static_cast<int>(backbufferFormat));
-        PresentRenderTargetWithDraw(rtIndex, rtType, sourceInitialState);
+        LogDebug(LogRenderer, "PresentRenderTarget: Format mismatch (source=%d vs backbuffer=%d), using shader blit",
+                 static_cast<int>(sourceFormat), static_cast<int>(backbufferFormat));
+        PresentRenderTargetWithShaderBlit(rtIndex, rtType, sourceInitialState);
         g_theImGui->Render();
         return;
     }
 
-    g_theImGui->Render();
-
     // ========================================================================
-    // Fast path: CopyResource (formats match)
+    // Copy path: source and backbuffer formats match.
     // ========================================================================
 
     ID3D12GraphicsCommandList* cmdList = GetCurrentCommandList();
@@ -1629,50 +1718,55 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
 
     cmdList->ResourceBarrier(2, barriers);
+
+    // Draw ImGui after the present copy so the scene output cannot overwrite UI.
+    auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
+    cmdList->OMSetRenderTargets(1, &backBufferRTV, FALSE, nullptr);
+    g_theImGui->Render();
 }
 
 // ============================================================================
-// InitializeBlitProgram - Lazy init blit shader for format mismatch fallback
+// EnsurePresentBlitProgram - Lazy init blit shader for format conversion
 // ============================================================================
 
-void RendererSubsystem::InitializeBlitProgram()
+void RendererSubsystem::EnsurePresentBlitProgram()
 {
-    if (m_blitProgram)
+    if (m_presentBlitProgram)
         return;
 
     std::filesystem::path vsPath = ".enigma/assets/engine/shaders/program/final.vs.hlsl";
     std::filesystem::path psPath = ".enigma/assets/engine/shaders/program/final.ps.hlsl";
 
-    LogInfo(LogRenderer, "InitializeBlitProgram: Compiling engine blit shader (final.vs + final.ps)");
-    m_blitProgram = CreateShaderProgramFromFiles(vsPath, psPath, "engine_blit");
+    LogInfo(LogRenderer, "EnsurePresentBlitProgram: Compiling engine blit shader (final.vs + final.ps)");
+    m_presentBlitProgram = CreateShaderProgramFromFiles(vsPath, psPath, "engine_blit");
 
-    if (!m_blitProgram)
+    if (!m_presentBlitProgram)
     {
-        LogError(LogRenderer, "InitializeBlitProgram: Failed to compile blit shader");
+        LogError(LogRenderer, "EnsurePresentBlitProgram: Failed to compile blit shader");
     }
 }
 
 // ============================================================================
-// PresentRenderTargetWithDraw - Draw call fallback for format mismatch
+// PresentRenderTargetWithShaderBlit - Draw call for format conversion
 // ============================================================================
 
-void RendererSubsystem::PresentRenderTargetWithDraw(
+void RendererSubsystem::PresentRenderTargetWithShaderBlit(
     int                   rtIndex,
     RenderTargetType      rtType,
     D3D12_RESOURCE_STATES sourceInitialState)
 {
     // Step 1: Lazy-init blit program
-    InitializeBlitProgram();
-    if (!m_blitProgram)
+    EnsurePresentBlitProgram();
+    if (!m_presentBlitProgram)
     {
-        LogError(LogRenderer, "PresentRenderTargetWithDraw: Blit program unavailable, cannot present");
+        LogError(LogRenderer, "PresentRenderTargetWithShaderBlit: Blit program unavailable, cannot present");
         return;
     }
 
     auto cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
-        LogError(LogRenderer, "PresentRenderTargetWithDraw: CommandList is null");
+        LogError(LogRenderer, "PresentRenderTargetWithShaderBlit: CommandList is null");
         return;
     }
 
@@ -1684,7 +1778,7 @@ void RendererSubsystem::PresentRenderTargetWithDraw(
         cmdList, sourceRT,
         sourceInitialState,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-        "PresentRenderTargetWithDraw::SourceToSRV"
+        "PresentRenderTargetWithShaderBlit::SourceToSRV"
     );
 
     // Step 3: Bind backbuffer as RTV
@@ -1696,7 +1790,7 @@ void RendererSubsystem::PresentRenderTargetWithDraw(
     m_renderTargetBinder->SetBackbufferOverride(backbufferFormat);
 
     // Step 5: Cache blit shader (PSO created at Draw time via PreparePSOAndBindings)
-    m_currentShaderProgram = m_blitProgram.get();
+    m_currentShaderProgram = m_presentBlitProgram.get();
 
     // Step 6: Draw full-screen quad
     FullQuadsRenderer::DrawFullQuads();
@@ -1709,7 +1803,7 @@ void RendererSubsystem::PresentRenderTargetWithDraw(
         cmdList, sourceRT,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
         sourceInitialState,
-        "PresentRenderTargetWithDraw::RestoreSource"
+        "PresentRenderTargetWithShaderBlit::RestoreSource"
     );
 }
 
