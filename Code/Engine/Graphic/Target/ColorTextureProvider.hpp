@@ -128,18 +128,6 @@ namespace enigma::graphic
          */
         std::shared_ptr<D12RenderTarget> GetRenderTarget(int index) const;
 
-    private:
-        // ========================================================================
-        // Private Methods
-        // ========================================================================
-
-        /**
-         * @brief Register index buffer to UniformManager for GPU upload
-         * @param uniformMgr UniformManager pointer (dependency injection)
-         * @note Called internally by constructor (RAII pattern)
-         */
-        void RegisterUniform(UniformManager* uniformMgr) override;
-
         // ========================================================================
         // Extended API (ColorTexture-specific)
         // ========================================================================
@@ -164,6 +152,18 @@ namespace enigma::graphic
          * @param newHeight New base height
          */
         void OnResize(int newWidth, int newHeight);
+
+    private:
+        // ========================================================================
+        // Private Methods
+        // ========================================================================
+
+        /**
+         * @brief Register index buffer to UniformManager for GPU upload
+         * @param uniformMgr UniformManager pointer (dependency injection)
+         * @note Called internally by constructor (RAII pattern)
+         */
+        void RegisterUniform(UniformManager* uniformMgr) override;
 
         /**
          * @brief Generate mipmaps for all enabled RTs

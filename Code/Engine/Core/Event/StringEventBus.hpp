@@ -33,7 +33,7 @@ namespace enigma::event
      * This class provides a string-keyed event dispatch system, primarily used for:
      * - Console commands (e.g., "quit", "help", "clear")
      * - Input events (e.g., "KeyPressed", "KeyReleased", "CharInput")
-     * - Window events (e.g., "WindowCloseEvent")
+     * - Legacy command-style events that do not have a typed delegate
      * 
      * Unlike the type-safe EventBus, this uses string event names and
      * NamedStrings (EventArgs) for flexible, dynamic event handling.

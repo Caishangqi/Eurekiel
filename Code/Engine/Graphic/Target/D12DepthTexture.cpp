@@ -9,26 +9,11 @@
 
 namespace enigma::graphic
 {
-    // ===== D12DepthTexture类实现 - 对应Iris DepthTexture.java =====
-
-    /**
-     * 构造函数实现 - 对应Iris DepthTexture构造函数
-     *
-     * Iris参考实现:
-     * ```java
-     * public DepthTexture(String name, int width, int height, DepthBufferFormat format) {
-     *     super(IrisRenderSystem.createTexture(GL_TEXTURE_2D));
-     *     int texture = getGlId();
-     *     resize(width, height, format);
-     *     GLDebug.nameObject(GL43C.GL_TEXTURE, texture, name);
-     *     // 设置纹理参数 (MIN_FILTER, MAG_FILTER, WRAP_S, WRAP_T)
-     * }
-     * ```
-     */
     D12DepthTexture::D12DepthTexture(const DepthTextureCreateInfo& createInfo)
-        : D12Resource() // 调用基类构造函数，对应Iris的super(IrisRenderSystem.createTexture())
+        : D12Resource()
           , m_dsvHandle{0}
           , m_srvHandle{0}
+          , m_dsvHeapIndex(UINT32_MAX)
           , m_hasSRV(false)
           , m_name(createInfo.name)
           , m_width(createInfo.width)
@@ -41,63 +26,39 @@ namespace enigma::graphic
           , m_supportSampling(true)
           , m_hasValidDSV(false)
           , m_hasValidSRV(false)
-          , m_formattedDebugName() // 初始化格式化调试名称
+          , m_formattedDebugName()
     {
-        // 教学注释：验证输入参数的有效性
         assert(createInfo.width > 0 && "Depth texture width must be greater than 0");
         assert(createInfo.height > 0 && "Depth texture height must be greater than 0");
         assert(!createInfo.name.empty() && "Depth texture name cannot be empty");
 
-        // 1. 创建深度纹理资源 - 对应Iris的resize()调用
         if (!CreateDepthResource())
         {
-            // 创建失败，保持无效状态
             return;
         }
 
-        // 2. 创建深度模板视图 - DirectX 12特有，Iris中OpenGL自动处理
         if (!CreateDepthStencilView())
         {
             return;
         }
 
-        // 3. 如果支持采样（D32_FLOAT格式），创建SRV - 对应Iris中可采样深度纹理
         if (m_supportSampling)
         {
             CreateShaderResourceView();
         }
 
-        // 4. Set the debugging name - corresponding to Iris' GLDebug.nameObject()
         D12DepthTexture::SetDebugName(createInfo.name);
-
-        // 资源创建成功后，基类的SetResource方法已经设置了有效状态
-        // 不需要手动设置m_isValid
     }
 
-    /**
-     * 析构函数实现 - 对应Iris的destroyInternal()
-     *
-     * Iris参考实现:
-     * ```java
-     * protected void destroyInternal() {
-     *     GlStateManager._deleteTexture(getGlId());
-     * }
-     * ```
-     */
     D12DepthTexture::~D12DepthTexture()
     {
-        // ComPtr会自动释放DirectX 12资源
-        // 描述符会在描述符堆销毁时自动释放
-        // 基类析构函数会处理资源释放
     }
 
-    /**
-     * 移动构造函数
-     */
     D12DepthTexture::D12DepthTexture(D12DepthTexture&& other) noexcept
-        : D12Resource(std::move(other)) // 调用基类移动构造函数
+        : D12Resource(std::move(other))
           , m_dsvHandle(other.m_dsvHandle)
           , m_srvHandle(other.m_srvHandle)
+          , m_dsvHeapIndex(other.m_dsvHeapIndex)
           , m_hasSRV(other.m_hasSRV)
           , m_name(std::move(other.m_name))
           , m_width(other.m_width)
@@ -110,9 +71,9 @@ namespace enigma::graphic
           , m_hasValidSRV(other.m_hasValidSRV)
           , m_formattedDebugName(std::move(other.m_formattedDebugName))
     {
-        // 清空源对象
         other.m_dsvHandle       = {0};
         other.m_srvHandle       = {0};
+        other.m_dsvHeapIndex    = UINT32_MAX;
         other.m_hasSRV          = false;
         other.m_width           = 0;
         other.m_height          = 0;
@@ -123,19 +84,15 @@ namespace enigma::graphic
         other.m_hasValidSRV     = false;
     }
 
-    /**
-     * 移动赋值操作符
-     */
     D12DepthTexture& D12DepthTexture::operator=(D12DepthTexture&& other) noexcept
     {
         if (this != &other)
         {
-            // 调用基类移动赋值
             D12Resource::operator=(std::move(other));
 
-            // 移动D12DepthTexture特有成员
             m_dsvHandle          = other.m_dsvHandle;
             m_srvHandle          = other.m_srvHandle;
+            m_dsvHeapIndex       = other.m_dsvHeapIndex;
             m_hasSRV             = other.m_hasSRV;
             m_name               = std::move(other.m_name);
             m_width              = other.m_width;
@@ -148,9 +105,9 @@ namespace enigma::graphic
             m_hasValidSRV        = other.m_hasValidSRV;
             m_formattedDebugName = std::move(other.m_formattedDebugName);
 
-            // 清空源对象
             other.m_dsvHandle       = {0};
             other.m_srvHandle       = {0};
+            other.m_dsvHeapIndex    = UINT32_MAX;
             other.m_hasSRV          = false;
             other.m_width           = 0;
             other.m_height          = 0;
@@ -254,51 +211,52 @@ namespace enigma::graphic
         return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
 
-    // ==================== 深度操作接口 ====================
-
-    /**
-     * 调整深度纹理尺寸 - 对应Iris的resize方法
-     *
-     * Iris参考实现:
-     * ```java
-     * void resize(int width, int height, DepthBufferFormat format) {
-     *     IrisRenderSystem.texImage2D(getTextureId(), GL_TEXTURE_2D, 0,
-     *         format.getGlInternalFormat(), width, height, 0,
-     *         format.getGlType(), format.getGlFormat(), null);
-     * }
-     * ```
-     */
     bool D12DepthTexture::Resize(uint32_t newWidth, uint32_t newHeight)
     {
         if (newWidth == m_width && newHeight == m_height)
         {
-            return true; // 尺寸未变化，无需重建
+            return true;
         }
 
-        // DirectX 12需要重新创建资源，不像OpenGL可以直接调用texImage2D
+        const bool wasBindlessRegistered = IsBindlessRegistered();
+
         m_width  = newWidth;
         m_height = newHeight;
+        m_isUploaded = false;
 
-        // 重新创建深度资源
         if (!CreateDepthResource())
         {
             return false;
         }
 
-        // 重新创建DSV
         if (!CreateDepthStencilView())
         {
             return false;
         }
 
-        // 如果之前有SRV，重新创建
         if (m_hasSRV)
         {
             CreateShaderResourceView();
         }
 
-        // 重新设置调试名称
         SetDebugName(m_name);
+
+        if (!Upload())
+        {
+            return false;
+        }
+
+        if (wasBindlessRegistered)
+        {
+            auto* device      = D3D12RenderSystem::GetDevice();
+            auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
+            if (!device || !heapManager)
+            {
+                return false;
+            }
+
+            CreateDescriptorInGlobalHeap(device, heapManager);
+        }
 
         return true;
     }
@@ -692,12 +650,8 @@ namespace enigma::graphic
         return true;
     }
 
-    /**
-     * 创建深度模板视图
-     */
     bool D12DepthTexture::CreateDepthStencilView()
     {
-        // 1. 获取全局描述符堆管理器并分配DSV句柄
         auto* heapManager = D3D12RenderSystem::GetGlobalDescriptorHeapManager();
         if (!heapManager)
         {
@@ -705,24 +659,25 @@ namespace enigma::graphic
             return false;
         }
 
-        // 分配DSV描述符
-        auto dsvAlloc = heapManager->AllocateDsv();
-        if (!dsvAlloc.isValid)
+        if (m_dsvHeapIndex == UINT32_MAX)
         {
-            LogError(LogRenderer, "[D12DepthTexture] Failed to allocate DSV for '%s'", m_name.c_str());
-            return false;
+            auto dsvAlloc = heapManager->AllocateDsv();
+            if (!dsvAlloc.isValid)
+            {
+                LogError(LogRenderer, "[D12DepthTexture] Failed to allocate DSV for '%s'", m_name.c_str());
+                return false;
+            }
+
+            m_dsvHandle    = dsvAlloc.cpuHandle;
+            m_dsvHeapIndex = dsvAlloc.heapIndex;
         }
 
-        m_dsvHandle = dsvAlloc.cpuHandle;
-
-        // 2. 配置DSV描述符
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
         dsvDesc.Format                        = m_depthFormat;
         dsvDesc.ViewDimension                 = D3D12_DSV_DIMENSION_TEXTURE2D;
         dsvDesc.Flags                         = D3D12_DSV_FLAG_NONE;
         dsvDesc.Texture2D.MipSlice            = 0;
 
-        // 3. 创建DSV
         auto device = D3D12RenderSystem::GetDevice();
         if (!device)
         {
@@ -734,13 +689,11 @@ namespace enigma::graphic
             device,
             GetResource(),
             &dsvDesc,
-            dsvAlloc.heapIndex
+            m_dsvHeapIndex
         );
 
-        // 4. 设置有效标志
         m_hasValidDSV = true;
 
-        // 5. 添加成功日志
         const char* formatStr = "";
         switch (m_depthFormat)
         {

@@ -522,6 +522,10 @@
     <ClCompile Include="Graphic\Integration\RendererSubsystemConfig.cpp" />
     <ClCompile Include="Graphic\Integration\RendererSubsystemImGuiContext.cpp" />
     <ClCompile Include="Graphic\Integration\RendererEvents.cpp"/>
+    <ClCompile Include="Graphic\Integration\RendererFrontendMutationGate.cpp"/>
+    <ClCompile Include="Graphic\Integration\RendererWindowResizeCoordinator.cpp"/>
+    <ClCompile Include="Graphic\Integration\WindowResizeDiagnostics.cpp"/>
+    <ClCompile Include="Graphic\Integration\WindowResizeException.cpp"/>
     <ClCompile Include="Graphic\Mipmap\MipmapGenerator.cpp"/>
     <ClCompile Include="Graphic\Reload\RenderPipelineReloadCoordinator.cpp"/>
     <ClCompile Include="Graphic\Reload\RenderPipelineReloadDiagnostics.cpp"/>
@@ -771,6 +775,7 @@
     <ClCompile Include="Voxel\World\VoxelRaycastResult3D.cpp" />
     <ClCompile Include="Voxel\World\World.cpp" />
     <ClCompile Include="Window\Window.cpp" />
+    <ClCompile Include="Window\WindowEvents.cpp" />
     <Content Include="..\..\.enigma\assets\engine\resource_type_category" />
     <Content Include="..\..\.enigma\assets\engine\shaders\shaders.properties" />
     <Content Include="..\..\.enigma\assets\engine\sounds\ambient\weather\rain1.ogg" />
@@ -1113,7 +1118,11 @@
     <ClInclude Include="Graphic\Resource\Buffer\BufferTransferCoordinator.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemConfig.hpp" />
     <ClInclude Include="Graphic\Integration\RendererFrontendReloadScope.hpp" />
+    <ClInclude Include="Graphic\Integration\RendererFrontendMutationGate.hpp" />
+    <ClInclude Include="Graphic\Integration\RendererWindowResizeCoordinator.hpp" />
     <ClInclude Include="Graphic\Integration\RendererSubsystemImGuiContext.hpp" />
+    <ClInclude Include="Graphic\Integration\WindowResizeDiagnostics.hpp" />
+    <ClInclude Include="Graphic\Integration\WindowResizeException.hpp" />
     <ClInclude Include="Graphic\Reload\RenderPipelineReloadCoordinator.hpp" />
     <ClInclude Include="Graphic\Reload\RenderPipelineReloadDiagnostics.hpp" />
     <ClInclude Include="Graphic\Reload\RenderPipelineReloadEvents.hpp" />
@@ -1462,6 +1471,7 @@
     <ClInclude Include="Voxel\World\ChunkMeshNeighborWaitRegistry.hpp" />
     <ClInclude Include="Voxel\World\World.hpp" />
     <ClInclude Include="Window\Window.hpp" />
+    <ClInclude Include="Window\WindowEvents.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="..\..\.enigma\assets\engine\shaders\post\" />

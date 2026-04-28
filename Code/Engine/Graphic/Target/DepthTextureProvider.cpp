@@ -1,8 +1,3 @@
-// ============================================================================
-// DepthTextureProvider.cpp - [REFACTOR] Refactored from DepthTextureManager
-// Implements IRenderTargetProvider for depthtex0-2 management
-// ============================================================================
-
 #include "DepthTextureProvider.hpp"
 #include "../Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
@@ -15,6 +10,76 @@
 
 namespace enigma::graphic
 {
+    namespace
+    {
+        int CalculateScaledDimension(int baseDimension, float scale)
+        {
+            const int dimension = static_cast<int>(static_cast<float>(baseDimension) * scale);
+            return (dimension > 0) ? dimension : 1;
+        }
+
+        RenderTargetConfig ResolveDepthTargetConfig(
+            RenderTargetConfig config,
+            int                baseWidth,
+            int                baseHeight)
+        {
+            config.width  = CalculateScaledDimension(baseWidth, config.widthScale);
+            config.height = CalculateScaledDimension(baseHeight, config.heightScale);
+            return config;
+        }
+
+        bool HasDifferentDepthClearValue(const ClearValue& lhs, const ClearValue& rhs)
+        {
+            return lhs.depthStencil.depth != rhs.depthStencil.depth ||
+                   lhs.depthStencil.stencil != rhs.depthStencil.stencil;
+        }
+
+        bool RequiresDepthTextureRebuild(
+            const RenderTargetConfig&             currentConfig,
+            const RenderTargetConfig&             nextConfig,
+            const std::shared_ptr<D12DepthTexture>& depthTexture)
+        {
+            if (!depthTexture)
+            {
+                return true;
+            }
+
+            return currentConfig.format != nextConfig.format ||
+                   currentConfig.width != nextConfig.width ||
+                   currentConfig.height != nextConfig.height ||
+                   currentConfig.sampleCount != nextConfig.sampleCount ||
+                   HasDifferentDepthClearValue(currentConfig.clearValue, nextConfig.clearValue) ||
+                   depthTexture->GetWidth() != static_cast<uint32_t>(nextConfig.width) ||
+                   depthTexture->GetHeight() != static_cast<uint32_t>(nextConfig.height) ||
+                   depthTexture->GetDepthFormat() != nextConfig.format;
+        }
+
+        std::shared_ptr<D12DepthTexture> CreateDepthTexture(const RenderTargetConfig& config)
+        {
+            DepthTextureCreateInfo createInfo(
+                config.name,
+                static_cast<uint32_t>(config.width),
+                static_cast<uint32_t>(config.height),
+                config.format,
+                config.clearValue.depthStencil.depth,
+                config.clearValue.depthStencil.stencil
+            );
+
+            auto depthTexture = std::make_shared<D12DepthTexture>(createInfo);
+            depthTexture->Upload();
+            depthTexture->RegisterBindless();
+            return depthTexture;
+        }
+
+        void UnregisterDepthTexture(const std::shared_ptr<D12DepthTexture>& depthTexture)
+        {
+            if (depthTexture && depthTexture->IsBindlessRegistered())
+            {
+                depthTexture->UnregisterBindless();
+            }
+        }
+    }
+
     // ============================================================================
     // Constructor
     // ============================================================================
@@ -54,7 +119,7 @@ namespace enigma::graphic
         // Create depth textures
         for (size_t i = 0; i < configs.size(); ++i)
         {
-            const auto& config = configs[i];
+            const auto config = ResolveDepthTargetConfig(configs[i], baseWidth, baseHeight);
 
             // Validate config (RenderTargetConfig uses width/height > 0 and non-empty name)
             if (config.width <= 0 || config.height <= 0 || config.name.empty())
@@ -67,23 +132,7 @@ namespace enigma::graphic
             // Save config
             m_configs.push_back(config);
 
-            // Create depth texture using RenderTargetConfig fields
-            // RenderTargetConfig: name, width, height, format
-            DepthTextureCreateInfo createInfo(
-                config.name,
-                static_cast<uint32_t>(config.width),
-                static_cast<uint32_t>(config.height),
-                config.format,
-                1.0f, // clearDepth
-                0 // clearStencil
-            );
-
-            m_depthTextures.push_back(std::make_shared<D12DepthTexture>(createInfo));
-
-            // [FIX] True Bindless Flow: Create() -> Upload() -> RegisterBindless()
-            // Without this, GetBindlessIndex() returns INVALID_BINDLESS_INDEX (-1)
-            m_depthTextures.back()->Upload();
-            m_depthTextures.back()->RegisterBindless();
+            m_depthTextures.push_back(CreateDepthTexture(config));
         }
 
         // [RAII] Register uniform buffer and perform initial upload
@@ -241,33 +290,23 @@ namespace enigma::graphic
         }
 
         const RenderTargetConfig& currentConfig = m_configs[index];
+        const RenderTargetConfig nextConfig = ResolveDepthTargetConfig(config, m_baseWidth, m_baseHeight);
 
-        // [REFACTOR] Only rebuild if format changes
-        bool needRebuild = (currentConfig.format != config.format) ||
-            (currentConfig.width != config.width) ||
-            (currentConfig.height != config.height);
+        const bool needRebuild = RequiresDepthTextureRebuild(
+            currentConfig,
+            nextConfig,
+            m_depthTextures[index]);
 
         // Update config
-        m_configs[index] = config;
+        m_configs[index] = nextConfig;
 
         if (needRebuild)
         {
-            // Recreate depth texture
-            DepthTextureCreateInfo createInfo(
-                config.name,
-                static_cast<uint32_t>(config.width),
-                static_cast<uint32_t>(config.height),
-                config.format,
-                1.0f,
-                0
-            );
-
-            m_depthTextures[index] = std::make_shared<D12DepthTexture>(createInfo);
-            m_depthTextures[index]->Upload();
-            m_depthTextures[index]->RegisterBindless();
+            UnregisterDepthTexture(m_depthTextures[index]);
+            m_depthTextures[index] = CreateDepthTexture(nextConfig);
 
             LogInfo(LogRenderTargetProvider, "depthtex%d rebuilt (%dx%d, format=%d)",
-                    index, config.width, config.height, static_cast<int>(config.format));
+                    index, nextConfig.width, nextConfig.height, static_cast<int>(nextConfig.format));
 
             UpdateIndices();
         }
@@ -284,11 +323,7 @@ namespace enigma::graphic
 
         for (int i = 1; i < count; ++i)
         {
-            // Only reset if format differs
-            if (m_configs[i].format != defaultConfigs[i].format)
-            {
-                SetRtConfig(i, defaultConfigs[i]);
-            }
+            SetRtConfig(i, defaultConfigs[i]);
         }
 
         LogInfo(LogRenderTargetProvider,
@@ -395,30 +430,6 @@ namespace enigma::graphic
     }
 
     // ============================================================================
-    // Extended API - Iris-compatible Copy Methods
-    // ============================================================================
-
-    // ============================================================================
-    // [REMOVED] Resource State Transition API - Moved to D12DepthTexture
-    // ============================================================================
-    //
-    // The following methods have been REMOVED per OCP (Open-Closed Principle):
-    // - TransitionToShaderResource(int index)
-    // - TransitionToDepthWrite(int index)
-    // - TransitionAllToShaderResource()
-    // - TransitionAllToDepthWrite()
-    //
-    // [MIGRATION] Use D12DepthTexture methods directly:
-    //   Old: provider->TransitionToShaderResource(0);
-    //   New: provider->GetDepthTexture(0)->TransitionToShaderResource();
-    //
-    // For batch operations, iterate manually:
-    //   for (int i = 0; i < provider->GetCount(); ++i) {
-    //       provider->GetDepthTexture(i)->TransitionToShaderResource();
-    //   }
-    // ============================================================================
-
-    // ============================================================================
     // Extended API - Resize
     // ============================================================================
 
@@ -429,32 +440,23 @@ namespace enigma::graphic
             throw std::invalid_argument("DepthTextureProvider: Invalid resize dimensions");
         }
 
-        m_baseWidth  = newWidth;
-        m_baseHeight = newHeight;
-
         for (size_t i = 0; i < m_depthTextures.size(); ++i)
         {
             if (!m_depthTextures[i]) continue;
 
-            int targetWidth  = newWidth;
+            int targetWidth = newWidth;
             int targetHeight = newHeight;
 
-            // depthtex1-N maintain aspect ratio
             if (i > 0 && i < m_configs.size())
             {
-                float widthRatio  = static_cast<float>(m_configs[i].width) / static_cast<float>(m_baseWidth);
-                float heightRatio = static_cast<float>(m_configs[i].height) / static_cast<float>(m_baseHeight);
-
-                targetWidth  = static_cast<int>(newWidth * widthRatio);
-                targetHeight = static_cast<int>(newHeight * heightRatio);
-
-                m_configs[i].width  = targetWidth;
-                m_configs[i].height = targetHeight;
+                m_configs[i] = ResolveDepthTargetConfig(m_configs[i], newWidth, newHeight);
+                targetWidth = m_configs[i].width;
+                targetHeight = m_configs[i].height;
             }
-            else if (i == 0)
+            else if (i < m_configs.size())
             {
-                m_configs[0].width  = newWidth;
-                m_configs[0].height = newHeight;
+                m_configs[i].width = targetWidth;
+                m_configs[i].height = targetHeight;
             }
 
             bool success = m_depthTextures[i]->Resize(
@@ -467,6 +469,9 @@ namespace enigma::graphic
                 throw std::runtime_error("Failed to resize depthtex" + std::to_string(i));
             }
         }
+
+        m_baseWidth  = newWidth;
+        m_baseHeight = newHeight;
 
         LogInfo(LogRenderTargetProvider, "DepthTextureProvider resized to %dx%d", newWidth, newHeight);
     }
@@ -562,19 +567,14 @@ namespace enigma::graphic
             throw CopyOperationFailedException("DepthTextureProvider", srcIndex, dstIndex);
         }
 
-        // [FIX] Use tracked state instead of hardcoded DEPTH_WRITE
-        // CopyDepth may be called when resources are in any state (e.g. PIXEL_SHADER_RESOURCE)
         D3D12_RESOURCE_STATES srcPrevState = srcTex->GetCurrentState();
         D3D12_RESOURCE_STATES dstPrevState = dstTex->GetCurrentState();
 
-        // Transition to COPY states using tracked state as before-state
         srcTex->TransitionResourceTo(D3D12_RESOURCE_STATE_COPY_SOURCE);
         dstTex->TransitionResourceTo(D3D12_RESOURCE_STATE_COPY_DEST);
 
-        // Copy
         cmdList->CopyResource(dstResource, srcResource);
 
-        // Transition back to original states (tracked state updated automatically)
         srcTex->TransitionResourceTo(srcPrevState);
         dstTex->TransitionResourceTo(dstPrevState);
     }

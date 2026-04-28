@@ -42,6 +42,15 @@ using namespace enigma::graphic;
 
 namespace enigma::graphic
 {
+    enum class RendererResizeReason
+    {
+        Unknown,
+        WindowClientSizeChanged,
+        WindowModeChanged
+    };
+
+    [[nodiscard]] const char* ToString(RendererResizeReason reason) noexcept;
+
     class IRenderTargetProvider;
     class ShaderProgram;
     class ShaderSource;
@@ -52,6 +61,7 @@ namespace enigma::graphic
     class PSOManager;
     class CustomImageManager;
     struct RendererFrontendReloadScope;
+    class RendererWindowResizeCoordinator;
     class VertexLayout; // Forward declaration for VertexLayout state API
     class VertexRingBuffer; // Forward declaration for RingBuffer wrapper (Option D architecture)
     class IndexRingBuffer; // Forward declaration for RingBuffer wrapper
@@ -413,6 +423,7 @@ namespace enigma::graphic
          * custom image slots before crossing this boundary.
          */
         void ReloadFrontendState(const RendererFrontendReloadScope& scope);
+        bool ResizeFrontendState(uint32_t width, uint32_t height, RendererResizeReason reason);
 
         /**
          * @brief Begin camera rendering - ICamera interface version
@@ -1350,6 +1361,9 @@ namespace enigma::graphic
 
         /// Manages the Iris shadow depth targets.
         std::unique_ptr<ShadowTextureProvider> m_shadowTextureProvider;
+
+        /// Serializes window resize and fullscreen transactions at renderer frame boundaries.
+        std::unique_ptr<RendererWindowResizeCoordinator> m_windowResizeCoordinator;
 
         /// Aggregates the render-target providers behind one binding interface.
         std::unique_ptr<class RenderTargetBinder> m_renderTargetBinder;

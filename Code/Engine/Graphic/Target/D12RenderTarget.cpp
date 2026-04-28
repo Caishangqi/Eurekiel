@@ -9,23 +9,21 @@
 using namespace enigma::graphic;
 
 // ============================================================================
-// D12RenderTarget::Builder 实现
+// D12RenderTarget::Builder
 // ============================================================================
 
 std::shared_ptr<D12RenderTarget> D12RenderTarget::Builder::Build()
 {
-    // 参数验证
     if (m_width <= 0 || m_height <= 0)
     {
         throw std::invalid_argument("Width and height must be greater than zero");
     }
 
-    // 使用私有构造函数创建RenderTarget (Builder是friend类)
     return std::shared_ptr<D12RenderTarget>(new D12RenderTarget(*this));
 }
 
 // ============================================================================
-// D12RenderTarget 构造函数和生命周期管理
+// D12RenderTarget lifecycle
 // ============================================================================
 
 D12RenderTarget::D12RenderTarget(const Builder& builder)
@@ -41,28 +39,26 @@ D12RenderTarget::D12RenderTarget(const Builder& builder)
       , m_clearValue(builder.m_clearValue)
       , m_mainTextureIndex(INVALID_BINDLESS_INDEX)
       , m_altTextureIndex(INVALID_BINDLESS_INDEX)
+      , m_mainRtvHeapIndex(UINT32_MAX)
+      , m_altRtvHeapIndex(UINT32_MAX)
 {
-    // 设置调试名称
     if (!builder.m_name.empty())
     {
         SetDebugName(builder.m_name);
     }
 
-    // 初始化双纹理和描述符
     InitializeTextures(m_width, m_height);
     CreateDescriptors();
 
-    // 标记为有效 (继承自D12Resource)
     m_isValid = (m_mainTexture && m_altTexture);
 }
 
 // ============================================================================
-// 纹理初始化 (对应Iris setupTexture方法)
+// Texture initialization
 // ============================================================================
 
 void D12RenderTarget::InitializeTextures(int width, int height)
 {
-    // 创建主纹理 (对应Iris mainTexture)
     TextureCreateInfo mainTexInfo{};
     mainTexInfo.type      = TextureType::Texture2D;
     mainTexInfo.width     = static_cast<uint32_t>(width);
@@ -71,42 +67,29 @@ void D12RenderTarget::InitializeTextures(int width, int height)
     mainTexInfo.mipLevels = m_enableMipmap ? CalculateMipCount(width, height) : 1;
     mainTexInfo.arraySize = 1;
     mainTexInfo.format    = m_format;
-    // Milestone 3.0 Bug Fix: RenderTarget must support both RTV and SRV
-    // - RTV for render output (OMSetRenderTargets)
-    // - SRV for shader sampling (history frame read / Ping-Pong rendering)
     mainTexInfo.usage      = TextureUsage::RenderTarget | TextureUsage::ShaderResource;
 
-    // Mipmap support: add UAV flag for compute shader mipmap generation
     if (m_enableMipmap)
     {
         mainTexInfo.usage = mainTexInfo.usage | TextureUsage::UnorderedAccess;
     }
-    mainTexInfo.clearValue = m_clearValue; // Pass clear value for Fast Clear optimization
+    mainTexInfo.clearValue = m_clearValue;
 
-    // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
-    // Bug: (GetDebugName() + "_MainTex").c_str() 返回的指针在表达式结束后立即悬垂
-    // Fix: 使用局部std::string变量延长临时对象生命周期
     std::string mainTexDebugName = GetDebugName() + "_MainTex";
     mainTexInfo.debugName        = mainTexDebugName.c_str();
 
     m_mainTexture = std::make_shared<D12Texture>(mainTexInfo);
 
-    // 创建替代纹理 (对应Iris altTexture - 用于Ping-Pong渲染)
     TextureCreateInfo altTexInfo = mainTexInfo;
 
-    // [FIX] 修复临时字符串悬垂指针 (2025-11-09)
     std::string altTexDebugName = GetDebugName() + "_AltTex";
     altTexInfo.debugName        = altTexDebugName.c_str();
 
     m_altTexture = std::make_shared<D12Texture>(altTexInfo);
-
-    // 教学要点: Iris通过双纹理实现Ping-Pong渲染
-    // - 一个用于渲染输出
-    // - 另一个保存历史帧数据,供着色器采样
 }
 
 // ============================================================================
-// 描述符创建 (DirectX 12专有)
+// Descriptor creation
 // ============================================================================
 
 void D12RenderTarget::CreateDescriptors()
@@ -123,19 +106,30 @@ void D12RenderTarget::CreateDescriptors()
         throw std::runtime_error("Failed to get GlobalDescriptorHeapManager");
     }
 
-    // 分配RTV描述符 (渲染目标视图 - 用于渲染输出)
-    auto mainRtvAlloc = heapManager->AllocateRtv();
-    auto altRtvAlloc  = heapManager->AllocateRtv();
-
-    if (!mainRtvAlloc.isValid || !altRtvAlloc.isValid)
+    if (m_mainRtvHeapIndex == UINT32_MAX)
     {
-        throw std::runtime_error("Failed to allocate RTV descriptors");
+        auto mainRtvAlloc = heapManager->AllocateRtv();
+        if (!mainRtvAlloc.isValid)
+        {
+            throw std::runtime_error("Failed to allocate main RTV descriptor");
+        }
+
+        m_mainRTV          = mainRtvAlloc.cpuHandle;
+        m_mainRtvHeapIndex = mainRtvAlloc.heapIndex;
     }
 
-    m_mainRTV = mainRtvAlloc.cpuHandle;
-    m_altRTV  = altRtvAlloc.cpuHandle;
+    if (m_altRtvHeapIndex == UINT32_MAX)
+    {
+        auto altRtvAlloc = heapManager->AllocateRtv();
+        if (!altRtvAlloc.isValid)
+        {
+            throw std::runtime_error("Failed to allocate alt RTV descriptor");
+        }
 
-    // 创建RTV视图
+        m_altRTV          = altRtvAlloc.cpuHandle;
+        m_altRtvHeapIndex = altRtvAlloc.heapIndex;
+    }
+
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
     rtvDesc.Format                        = m_format;
     rtvDesc.ViewDimension                 = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -146,29 +140,22 @@ void D12RenderTarget::CreateDescriptors()
         device,
         m_mainTexture->GetResource(),
         &rtvDesc,
-        mainRtvAlloc.heapIndex
+        m_mainRtvHeapIndex
     );
 
     heapManager->CreateRenderTargetView(
         device,
         m_altTexture->GetResource(),
         &rtvDesc,
-        altRtvAlloc.heapIndex
+        m_altRtvHeapIndex
     );
 
-    // SRV会在纹理注册到Bindless系统时自动创建
-    // 这里只获取纹理的SRV句柄供传统绑定使用
     m_mainSRV = m_mainTexture->GetSRVHandle();
     m_altSRV  = m_altTexture->GetSRVHandle();
-
-    // 教学要点:
-    // - RTV用于渲染输出 (OMSetRenderTargets)
-    // - SRV用于着色器采样 (SetGraphicsRootDescriptorTable)
-    // - DirectX 12需要显式创建每种视图类型
 }
 
 // ============================================================================
-// Bindless索引注册 (Milestone 3.0核心功能)
+// Bindless index registration
 // ============================================================================
 
 void D12RenderTarget::CreateDescriptorInGlobalHeap(
@@ -177,25 +164,18 @@ void D12RenderTarget::CreateDescriptorInGlobalHeap(
 {
     if (!IsBindlessRegistered())
     {
-        return; // 未注册Bindless,不需要创建描述符
+        return;
     }
 
-    // 获取主纹理和替代纹理的Bindless索引
     m_mainTextureIndex = m_mainTexture->GetBindlessIndex();
     m_altTextureIndex  = m_altTexture->GetBindlessIndex();
-
-    // 教学要点:
-    // 1. RenderTarget的Bindless注册委托给内部D12Texture
-    // 2. m_mainTexture和m_altTexture各自管理自己的Bindless索引
-    // 3. 双纹理索引存储在RenderTarget中,供RenderTargetManager使用
-    // 4. 着色器通过这些索引访问: ResourceDescriptorHeap[mainTextureIndex]
 
     UNUSED(device)
     UNUSED(heapManager)
 }
 
 // ============================================================================
-// 尺寸管理 (对应Iris resize方法)
+// Size management
 // ============================================================================
 
 void D12RenderTarget::Resize(int width, int height)
@@ -205,28 +185,49 @@ void D12RenderTarget::Resize(int width, int height)
         throw std::invalid_argument("Width and height must be greater than zero");
     }
 
+    const bool wasMainTextureRegistered = m_mainTexture && m_mainTexture->IsBindlessRegistered();
+    const bool wasAltTextureRegistered  = m_altTexture && m_altTexture->IsBindlessRegistered();
+
+    if (wasMainTextureRegistered)
+    {
+        m_mainTexture->UnregisterBindless();
+    }
+    if (wasAltTextureRegistered)
+    {
+        m_altTexture->UnregisterBindless();
+    }
+
     m_width  = width;
     m_height = height;
+    m_mainTextureIndex = INVALID_BINDLESS_INDEX;
+    m_altTextureIndex  = INVALID_BINDLESS_INDEX;
+    m_formattedDebugName.clear();
+    m_isUploaded = false;
 
-    // 重新创建纹理和描述符
+    // Recreate textures and descriptors.
     InitializeTextures(width, height);
     CreateDescriptors();
 
-    // 如果之前已注册Bindless,需要重新注册
-    if (IsBindlessRegistered())
+    if (!Upload())
     {
-        UnregisterBindless(); // 注销旧索引
-        RegisterBindless(); // 分配新索引并创建描述符
+        throw std::runtime_error("Failed to upload resized render target resources");
     }
 
-    // 教学要点: Iris的resize逻辑 - 完全重建纹理资源
+    // Keep shader-visible indices valid after the underlying texture resources change.
+    if (wasMainTextureRegistered || wasAltTextureRegistered)
+    {
+        if (!RegisterBindless().has_value())
+        {
+            throw std::runtime_error("Failed to register resized render target bindless descriptors");
+        }
+    }
 }
 
 bool D12RenderTarget::ResizeIfNeeded(int width, int height)
 {
     if (m_width == width && m_height == height)
     {
-        return false; // 尺寸未变化,无需resize
+        return false;
     }
 
     Resize(width, height);

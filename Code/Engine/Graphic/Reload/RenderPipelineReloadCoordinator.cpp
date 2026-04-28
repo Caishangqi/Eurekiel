@@ -7,6 +7,7 @@
 #include "Engine/Graphic/Bundle/ShaderBundleEvents.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp"
+#include "Engine/Graphic/Integration/RendererFrontendMutationGate.hpp"
 #include "Engine/Graphic/Reload/RendererFrontendReloadService.hpp"
 #include "Engine/Graphic/Reload/RenderPipelineReloadEvents.hpp"
 #include "Engine/Voxel/World/World.hpp"
@@ -18,6 +19,7 @@ namespace enigma::graphic
     RenderPipelineReloadCoordinator::~RenderPipelineReloadCoordinator()
     {
         UnsubscribeRendererEvents();
+        releaseMutationGateIfOwned();
     }
 
     bool RenderPipelineReloadCoordinator::RequestLoadShaderBundle(const ShaderBundleMeta& meta)
@@ -273,6 +275,16 @@ namespace enigma::graphic
             return false;
         }
 
+        if (!tryAcquireMutationGate(request))
+        {
+            m_requestGate.MarkIgnored(request, RenderPipelineReloadIgnoredReason::RendererFrontendMutationGateBusy);
+            m_requestGate.MarkIdle();
+            m_diagnostics.RecordIgnoredRequest(
+                request,
+                RenderPipelineReloadIgnoredReason::RendererFrontendMutationGateBusy);
+            return false;
+        }
+
         RenderPipelineReloadTransaction transaction;
         transaction.id = allocateTransactionId();
         transaction.generation = m_currentGeneration;
@@ -449,6 +461,7 @@ namespace enigma::graphic
 
     void RenderPipelineReloadCoordinator::completeActiveTransaction()
     {
+        releaseMutationGateIfOwned();
         m_requestGate.MarkIdle();
         m_diagnostics.ClearActiveRequest();
         m_activeTransaction.reset();
@@ -495,16 +508,18 @@ namespace enigma::graphic
                 RenderPipelineReloadEvents::OnTransactionFailed.Broadcast(
                     m_activeTransaction->id,
                     rollbackFailure);
+                releaseMutationGateIfOwned();
                 m_requestGate.MarkIdle();
                 ERROR_AND_DIE(rollbackFailure.message)
                 return;
             }
 
-            ERROR_RECOVERABLE(failure.message);
             RenderPipelineReloadEvents::OnTransactionFailed.Broadcast(
                 m_activeTransaction->id,
                 failure);
+            releaseMutationGateIfOwned();
             m_requestGate.MarkIdle();
+            ERROR_RECOVERABLE(failure.message);
             return;
         }
 
@@ -513,10 +528,39 @@ namespace enigma::graphic
             RenderPipelineReloadEvents::OnTransactionFailed.Broadcast(
                 m_activeTransaction->id,
                 failure);
+            releaseMutationGateIfOwned();
             m_requestGate.MarkIdle();
             ERROR_AND_DIE(failure.message)
             return;
         }
+    }
+
+    bool RenderPipelineReloadCoordinator::tryAcquireMutationGate(const RenderPipelineReloadRequest& request)
+    {
+        RendererFrontendMutationGate& gate = GetRendererFrontendMutationGate();
+        if (gate.TryBegin(RendererFrontendMutationOwner::ShaderBundleReload, request.debugName.c_str()))
+        {
+            m_hasMutationGate = true;
+            return true;
+        }
+
+        const RendererFrontendMutationGateSnapshot snapshot = gate.GetDiagnosticsSnapshot();
+        m_diagnostics.SetBlockingReason(Stringf(
+            "Renderer frontend mutation gate busy: owner=%s reason=%s",
+            ToString(snapshot.owner),
+            snapshot.reason.c_str()));
+        return false;
+    }
+
+    void RenderPipelineReloadCoordinator::releaseMutationGateIfOwned()
+    {
+        if (!m_hasMutationGate)
+        {
+            return;
+        }
+
+        GetRendererFrontendMutationGate().End(RendererFrontendMutationOwner::ShaderBundleReload);
+        m_hasMutationGate = false;
     }
 
     void RenderPipelineReloadCoordinator::rollbackToPreviousStableBundle()

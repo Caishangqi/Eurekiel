@@ -65,6 +65,8 @@ namespace enigma::graphic
         void commitActiveTransaction();
         void completeActiveTransaction();
         void failActiveTransaction(const RenderPipelineReloadException& exception);
+        bool tryAcquireMutationGate(const RenderPipelineReloadRequest& request);
+        void releaseMutationGateIfOwned();
         void rollbackToPreviousStableBundle();
         void beginWorldReloadGeneration();
         void endWorldReloadGeneration();
@@ -82,6 +84,7 @@ namespace enigma::graphic
         std::optional<RenderPipelineReloadTransaction>  m_activeTransaction;
         enigma::event::DelegateHandle                   m_beginFrameHandle = 0;
         enigma::event::DelegateHandle                   m_frameSlotAcquiredHandle = 0;
+        bool                                            m_hasMutationGate = false;
         uint64_t                                        m_nextRequestId = 1;
         RenderPipelineReloadTransactionId               m_nextTransactionId = 1;
         RenderPipelineReloadGeneration                  m_currentGeneration;

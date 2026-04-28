@@ -13,6 +13,7 @@
 #include "Engine/Input/InputSystem.hpp"
 #include "Engine/Math/MathUtils.hpp"
 #include "Engine/Renderer/Camera.hpp"
+#include "Engine/Window/WindowEvents.hpp"
 //
 DevConsole* g_theDevConsole = nullptr;
 
@@ -329,7 +330,9 @@ bool DevConsole::Command_Help(EventArgs& args)
 bool DevConsole::Command_Quit(EventArgs& args)
 {
     UNUSED(args)
-    g_theEventSubsystem->FireStringEvent("WindowCloseEvent");
+    enigma::window::WindowCloseRequest request;
+    request.reason = enigma::window::WindowCloseReason::ConsoleCommand;
+    enigma::window::WindowEvents::OnWindowCloseRequested.Broadcast(request);
     return true;
 }
 

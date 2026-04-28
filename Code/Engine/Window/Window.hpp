@@ -16,13 +16,14 @@ class InputSystem;
 namespace enigma::window
 {
     class IWindowsMessagePreprocessor;
+    enum class WindowCloseReason;
+    struct WindowModeRequest;
 }
 
 enum class WindowMode
 {
     Windowed = 0,
-    Fullscreen = 1,
-    BorderlessFullscreen = 2
+    BorderlessFullscreen = 1
 };
 
 struct WindowConfig
@@ -33,18 +34,11 @@ struct WindowConfig
     WindowMode   m_windowMode  = WindowMode::Windowed;
     IntVec2      m_resolution  = IntVec2(1920, 1080);
     bool         m_alwaysOnTop = false; // Window always stays on top of other windows
-
-    // Backward compatibility method
-    bool IsFullscreen() const
-    {
-        return m_windowMode != WindowMode::Windowed;
-    }
 };
 
 class Window
 {
 public:
-    friend class IRenderer;
     Window(const WindowConfig& config);
     ~Window();
 
@@ -69,34 +63,37 @@ public:
     bool       IsInFullscreenMode() const;
     bool       IsInWindowedMode() const;
     bool       IsAlwaysOnTop() const;
+    bool       IsMinimized() const;
     void       SetAlwaysOnTop(bool alwaysOnTop);
+    bool       ApplyWindowModeRequest(const enigma::window::WindowModeRequest& request);
+    bool       SetWindowMode(WindowMode mode);
+    void       HandleClientSizeChanged(void* platformWindowHandle, unsigned int sizeType, int width, int height);
+    void       RequestClose(enigma::window::WindowCloseReason reason);
 
-    //---------------------------------------------------------------------
-    // 消息预处理器管理
-    //---------------------------------------------------------------------
-
-    // 注册消息预处理器
-    // 预处理器将按优先级排序，优先级数值越小越早处理
     void RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor);
-
-    // 注销消息预处理器
     void UnregisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor);
 
     static Window* s_mainWindow; // fancy way of advertising global variables (advertisement)
 
-    // 消息预处理器列表（按优先级排序）
     std::vector<enigma::window::IWindowsMessagePreprocessor*> m_messagePreprocessors;
 
 private:
     void CreateOSWindow();
-    void CreateFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
     void CreateBorderlessFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
     void CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect);
+    bool ApplyWindowedMode();
+    bool ApplyBorderlessFullscreenMode();
+    void SaveWindowedPlacementIfNeeded();
+    void BroadcastWindowModeChanged(WindowMode oldMode, WindowMode newMode);
 
-    // 按优先级排序预处理器
     void SortPreprocessors();
 
     WindowConfig m_config;
     void*        m_windowHandle   = nullptr; // Actually a Windows HWND on the Windows platform
     void*        m_displayContext = nullptr; // Actually a Windows HDC on the Windows platform
+    IntVec2      m_lastClientDimensions = IntVec2();
+    IntVec2      m_savedWindowedPosition = IntVec2();
+    IntVec2      m_savedWindowedDimensions = IntVec2();
+    bool         m_isMinimized          = false;
+    bool         m_hasSavedWindowedPlacement = false;
 };

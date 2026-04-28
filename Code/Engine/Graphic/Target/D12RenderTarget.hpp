@@ -4,6 +4,7 @@
 #include "../Resource/Texture/D12Texture.hpp"
 #include <memory>
 #include <string>
+#include <cstdint>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <stdexcept>
@@ -95,27 +96,18 @@ namespace enigma::graphic
             ClearValue  m_clearValue        = ClearValue::Color(Rgba8::BLACK);
 
         public:
-            /**
-             * @brief 设置调试名称 (对应Iris setName)
-             */
             Builder& SetName(const std::string& name)
             {
                 m_name = name;
                 return *this;
             }
 
-            /**
-             * @brief 设置纹理格式 (对应Iris setInternalFormat)
-             */
             Builder& SetFormat(DXGI_FORMAT format)
             {
                 m_format = format;
                 return *this;
             }
 
-            /**
-             * @brief 设置尺寸 (对应Iris setDimensions)
-             */
             Builder& SetDimensions(int width, int height)
             {
                 if (width <= 0 || height <= 0)
@@ -127,34 +119,12 @@ namespace enigma::graphic
                 return *this;
             }
 
-            /**
-             * @brief 设置尺寸 (别名方法，方便使用)
-             */
-            Builder& SetSize(int width, int height)
-            {
-                return SetDimensions(width, height);
-            }
-
-            /**
-             * @brief 设置过滤模式 (对应Iris的allowsLinear逻辑)
-             */
             Builder& SetLinearFilter(bool enable)
             {
                 m_allowLinearFilter = enable;
                 return *this;
             }
 
-            /**
-             * @brief 设置过滤模式 (别名方法)
-             */
-            Builder& SetAllowLinearFilter(bool enable)
-            {
-                return SetLinearFilter(enable);
-            }
-
-            /**
-             * @brief 设置多重采样 (DirectX特有)
-             */
             Builder& SetSampleCount(int sampleCount)
             {
                 if (sampleCount < 1 || sampleCount > 16)
@@ -237,28 +207,28 @@ namespace enigma::graphic
         };
 
     private:
-        std::shared_ptr<D12Texture> m_mainTexture; // 对应Iris mainTexture
-        std::shared_ptr<D12Texture> m_altTexture; // 对应Iris altTexture
+        std::shared_ptr<D12Texture> m_mainTexture;
+        std::shared_ptr<D12Texture> m_altTexture;
 
-        DXGI_FORMAT m_format; // 对应Iris internalFormat
-        int         m_width; // 对应Iris width
-        int         m_height; // 对应Iris height
-        bool        m_allowLinearFilter; // 对应Iris allowsLinear判断
-        int         m_sampleCount; // DirectX专有: 多重采样数
-        bool        m_enableMipmap; // Milestone 3.0: Mipmap支持
-        ClearValue  m_clearValue; // Clear value for Fast Clear optimization
+        DXGI_FORMAT m_format;
+        int         m_width;
+        int         m_height;
+        bool        m_allowLinearFilter;
+        int         m_sampleCount;
+        bool        m_enableMipmap;
+        ClearValue  m_clearValue;
 
-        uint32_t m_mainTextureIndex; // 主纹理在Bindless堆中的索引 (对应架构文档RenderTargetPair)
-        uint32_t m_altTextureIndex; // 替代纹理在Bindless堆中的索引
+        uint32_t m_mainTextureIndex;
+        uint32_t m_altTextureIndex;
 
-        // DirectX专有描述符
-        D3D12_CPU_DESCRIPTOR_HANDLE m_mainRTV; // 主纹理RTV
-        D3D12_CPU_DESCRIPTOR_HANDLE m_altRTV; // 替代纹理RTV
-        D3D12_CPU_DESCRIPTOR_HANDLE m_mainSRV; // 主纹理SRV
-        D3D12_CPU_DESCRIPTOR_HANDLE m_altSRV; // 替代纹理SRV
+        D3D12_CPU_DESCRIPTOR_HANDLE m_mainRTV;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_altRTV;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_mainSRV;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_altSRV;
+        uint32_t                    m_mainRtvHeapIndex; // Stable RTV descriptor slot
+        uint32_t                    m_altRtvHeapIndex; // Stable RTV descriptor slot
 
-        // 调试支持
-        mutable std::string m_formattedDebugName; // 格式化的调试名称（用于GetDebugName重写）
+        mutable std::string m_formattedDebugName;
 
     public:
         /**

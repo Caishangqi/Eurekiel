@@ -9,6 +9,96 @@
 
 namespace enigma::graphic
 {
+    namespace
+    {
+        int CalculateScaledDimension(int baseDimension, float scale)
+        {
+            const int dimension = static_cast<int>(static_cast<float>(baseDimension) * scale);
+            return (dimension > 0) ? dimension : 1;
+        }
+
+        RenderTargetConfig ResolveColorTargetConfig(
+            RenderTargetConfig config,
+            int                baseWidth,
+            int                baseHeight)
+        {
+            config.width  = CalculateScaledDimension(baseWidth, config.widthScale);
+            config.height = CalculateScaledDimension(baseHeight, config.heightScale);
+            return config;
+        }
+
+        bool HasDifferentColorClearValue(const ClearValue& lhs, const ClearValue& rhs)
+        {
+            return lhs.colorRgba8 != rhs.colorRgba8;
+        }
+
+        bool RequiresColorTargetRebuild(
+            const RenderTargetConfig&          currentConfig,
+            const RenderTargetConfig&          nextConfig,
+            const std::shared_ptr<D12RenderTarget>& renderTarget)
+        {
+            if (!renderTarget)
+            {
+                return true;
+            }
+
+            return currentConfig.format != nextConfig.format ||
+                   currentConfig.width != nextConfig.width ||
+                   currentConfig.height != nextConfig.height ||
+                   currentConfig.enableMipmap != nextConfig.enableMipmap ||
+                   currentConfig.allowLinearFilter != nextConfig.allowLinearFilter ||
+                   currentConfig.sampleCount != nextConfig.sampleCount ||
+                   HasDifferentColorClearValue(currentConfig.clearValue, nextConfig.clearValue) ||
+                   renderTarget->GetWidth() != nextConfig.width ||
+                   renderTarget->GetHeight() != nextConfig.height ||
+                   renderTarget->GetFormat() != nextConfig.format ||
+                   renderTarget->GetSampleCount() != nextConfig.sampleCount ||
+                   renderTarget->IsMipmapEnabled() != nextConfig.enableMipmap;
+        }
+
+        std::shared_ptr<D12RenderTarget> CreateColorRenderTarget(
+            int                       index,
+            const RenderTargetConfig& config)
+        {
+            auto builder = D12RenderTarget::Create()
+                           .SetFormat(config.format)
+                           .SetDimensions(config.width, config.height)
+                           .SetLinearFilter(config.allowLinearFilter)
+                           .SetSampleCount(config.sampleCount)
+                           .EnableMipmap(config.enableMipmap)
+                           .SetClearValue(config.clearValue);
+
+            char debugName[32];
+            sprintf_s(debugName, "colortex%d", index);
+            builder.SetName(debugName);
+
+            auto renderTarget = builder.Build();
+            renderTarget->Upload();
+            renderTarget->RegisterBindless();
+            return renderTarget;
+        }
+
+        void UnregisterColorRenderTarget(const std::shared_ptr<D12RenderTarget>& renderTarget)
+        {
+            if (!renderTarget)
+            {
+                return;
+            }
+
+            auto mainTexture = renderTarget->GetMainTexture();
+            if (mainTexture && mainTexture->IsBindlessRegistered())
+            {
+                mainTexture->UnregisterBindless();
+            }
+
+            auto altTexture = renderTarget->GetAltTexture();
+            if (altTexture && altTexture->IsBindlessRegistered())
+            {
+                altTexture->UnregisterBindless();
+            }
+        }
+    }
+
     // ============================================================================
     // Constructor
     // ============================================================================
@@ -55,33 +145,10 @@ namespace enigma::graphic
         // Create render targets from configs
         for (int i = 0; i < m_activeCount; ++i)
         {
-            const auto& config = configs[i];
+            const auto config = ResolveColorTargetConfig(configs[i], baseWidth, baseHeight);
             m_configs.push_back(config);
 
-            // Calculate actual dimensions with scale
-            int rtWidth  = static_cast<int>(baseWidth * config.widthScale);
-            int rtHeight = static_cast<int>(baseHeight * config.heightScale);
-            rtWidth      = (rtWidth > 0) ? rtWidth : 1;
-            rtHeight     = (rtHeight > 0) ? rtHeight : 1;
-
-            // Build render target using Builder pattern
-            auto builder = D12RenderTarget::Create()
-                           .SetFormat(config.format)
-                           .SetDimensions(rtWidth, rtHeight)
-                           .SetLinearFilter(config.allowLinearFilter)
-                           .SetSampleCount(config.sampleCount)
-                           .EnableMipmap(config.enableMipmap)
-                           .SetClearValue(config.clearValue);
-
-            // Set debug name (colortex0, colortex1, ...)
-            char debugName[32];
-            sprintf_s(debugName, "colortex%d", i);
-            builder.SetName(debugName);
-
-            // Build and initialize
-            m_renderTargets[i] = builder.Build();
-            m_renderTargets[i]->Upload();
-            m_renderTargets[i]->RegisterBindless();
+            m_renderTargets[i] = CreateColorRenderTarget(i, config);
         }
 
         LogInfo(LogRenderTargetProvider,
@@ -205,37 +272,18 @@ namespace enigma::graphic
         ValidateIndex(index);
 
         const RenderTargetConfig& currentConfig = m_configs[index];
+        const RenderTargetConfig nextConfig = ResolveColorTargetConfig(config, m_baseWidth, m_baseHeight);
+        const bool needRebuild = RequiresColorTargetRebuild(
+            currentConfig,
+            nextConfig,
+            m_renderTargets[index]);
 
-        // [REFACTOR] Only rebuild if format changes
-        bool needRebuild = (currentConfig.format != config.format);
-
-        // Update stored config
-        m_configs[index] = config;
+        m_configs[index] = nextConfig;
 
         if (needRebuild)
         {
-            // Calculate new dimensions
-            int rtWidth  = static_cast<int>(m_baseWidth * config.widthScale);
-            int rtHeight = static_cast<int>(m_baseHeight * config.heightScale);
-            rtWidth      = (rtWidth > 0) ? rtWidth : 1;
-            rtHeight     = (rtHeight > 0) ? rtHeight : 1;
-
-            // Recreate render target with new config
-            auto builder = D12RenderTarget::Create()
-                           .SetFormat(config.format)
-                           .SetDimensions(rtWidth, rtHeight)
-                           .SetLinearFilter(config.allowLinearFilter)
-                           .SetSampleCount(config.sampleCount)
-                           .EnableMipmap(config.enableMipmap)
-                           .SetClearValue(config.clearValue);
-
-            char debugName[32];
-            sprintf_s(debugName, "colortex%d", index);
-            builder.SetName(debugName);
-
-            m_renderTargets[index] = builder.Build();
-            m_renderTargets[index]->Upload();
-            m_renderTargets[index]->RegisterBindless();
+            UnregisterColorRenderTarget(m_renderTargets[index]);
+            m_renderTargets[index] = CreateColorRenderTarget(index, nextConfig);
 
             // Re-upload indices after resource recreation
             UpdateIndices();
@@ -369,14 +417,9 @@ namespace enigma::graphic
 
         for (int i = 0; i < m_activeCount; ++i)
         {
-            const auto& config = m_configs[i];
+            m_configs[i] = ResolveColorTargetConfig(m_configs[i], newWidth, newHeight);
 
-            int rtWidth  = static_cast<int>(newWidth * config.widthScale);
-            int rtHeight = static_cast<int>(newHeight * config.heightScale);
-            rtWidth      = (rtWidth > 0) ? rtWidth : 1;
-            rtHeight     = (rtHeight > 0) ? rtHeight : 1;
-
-            m_renderTargets[i]->ResizeIfNeeded(rtWidth, rtHeight);
+            m_renderTargets[i]->ResizeIfNeeded(m_configs[i].width, m_configs[i].height);
         }
 
         LogInfo(LogRenderTargetProvider,

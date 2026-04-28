@@ -38,6 +38,7 @@ namespace enigma::graphic
         BundleOnLoadBusy,
         BundleApplyBusy,
         FrameSlotMutationBusy,
+        RendererFrontendMutationGateBusy,
         CurrentBundleAlreadyLoaded
     };
 
@@ -240,6 +241,8 @@ namespace enigma::graphic
             return "BundleApplyBusy";
         case RenderPipelineReloadIgnoredReason::FrameSlotMutationBusy:
             return "FrameSlotMutationBusy";
+        case RenderPipelineReloadIgnoredReason::RendererFrontendMutationGateBusy:
+            return "RendererFrontendMutationGateBusy";
         case RenderPipelineReloadIgnoredReason::CurrentBundleAlreadyLoaded:
             return "CurrentBundleAlreadyLoaded";
         }

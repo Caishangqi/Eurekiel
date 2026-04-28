@@ -105,23 +105,19 @@ namespace enigma::graphic
     public:
 
     private:
-        // ==================== 视图管理 ====================
-        // 注意: 不再包含D12Texture成员，直接继承D12Resource管理DirectX资源
+        D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle;
+        D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle;
+        uint32_t                    m_dsvHeapIndex; ///< Stable DSV descriptor slot
+        bool                        m_hasSRV;
 
-        D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle; ///< 深度模板视图句柄
-        D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle; ///< 着色器资源视图句柄 (可选)
-        bool                        m_hasSRV; ///< 是否支持着色器采样
+        std::string m_name;
+        uint32_t    m_width;
+        uint32_t    m_height;
+        DXGI_FORMAT m_depthFormat;
 
-        // ==================== 属性管理 ====================
-        std::string m_name; ///< 深度纹理名称 - 对应Iris构造函数的name参数
-        uint32_t    m_width; ///< 宽度 - 对应Iris构造函数的width参数
-        uint32_t    m_height; ///< 高度 - 对应Iris构造函数的height参数
-        DXGI_FORMAT m_depthFormat; ///< DXGI深度格式
-
-        // ==================== 状态管理 ====================
-        float               m_clearDepth; ///< 默认清除深度值
-        uint8_t             m_clearStencil; ///< 默认清除模板值
-        bool                m_supportSampling; ///< 是否支持深度采样
+        float               m_clearDepth;
+        uint8_t             m_clearStencil;
+        bool                m_supportSampling;
         bool                m_hasValidDSV; ///< 是否有有效的DSV
         bool                m_hasValidSRV; ///< 是否有有效的SRV
         mutable std::string m_formattedDebugName; ///< 格式化的调试名称（用于GetDebugName重写）
@@ -426,28 +422,5 @@ namespace enigma::graphic
         void SetInternalDebugName();
     };
 
-    // ==================== 未来扩展：基于用途的快捷构建函数 ====================
-    // TODO: 添加基于用途的快捷构建函数，提供更好的易用性
-    //
-    // 建议的函数：
-    // - static DepthTexturePtr CreateDepthOnlyTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DXGI_FORMAT_D32_FLOAT
-    //   - 仅用于深度测试，不支持采样
-    //
-    // - static DepthTexturePtr CreateDepthStencilTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DXGI_FORMAT_D24_UNORM_S8_UINT
-    //   - 支持深度+模板操作
-    //
-    // - static DepthTexturePtr CreateShadowMapTexture(uint32_t width, uint32_t height, const std::string& name);
-    //   - 使用 DXGI_FORMAT_D32_FLOAT
-    //   - 支持着色器采样（用于阴影贴图）
-    //
-    // - static DepthTexturePtr CreateFromConfig(const DepthTextureConfig& config);
-    //   - 使用配置结构体创建深度纹理
-    //   - 支持自定义分辨率和格式
-    //
-    // 这些函数将简化常见深度纹理创建场景，提供更友好的API
-
-    // ==================== 类型别名 ====================
     using DepthTexturePtr = std::unique_ptr<D12DepthTexture>;
 } // namespace enigma::graphic

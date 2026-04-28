@@ -309,6 +309,9 @@ namespace enigma::graphic
          * Create the swap chain managed directly by D3D12RenderSystem.
          */
         static bool CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount = 3);
+        static bool ResizeSwapChain(uint32_t width, uint32_t height);
+        static uint32_t GetSwapChainWidth() noexcept { return s_swapChainWidth; }
+        static uint32_t GetSwapChainHeight() noexcept { return s_swapChainHeight; }
 
         /**
          * Get the RTV of the current swap-chain back buffer.
@@ -630,6 +633,8 @@ namespace enigma::graphic
         static void ResetFrameExecutionState() noexcept;
         static void ReleaseFallbackTextures() noexcept;
         static void ReleaseBindlessInfrastructure() noexcept;
+        static bool CreateSwapChainRenderTargets(bool allocateRtvDescriptors);
+        static void ReleaseSwapChainBackBuffers(bool clearRtvHandles) noexcept;
         static void ReleaseSwapChainResources() noexcept;
         static void ReportLiveObjectsBeforeDeviceRelease() noexcept;
         static void ReleaseDeviceObjects() noexcept;

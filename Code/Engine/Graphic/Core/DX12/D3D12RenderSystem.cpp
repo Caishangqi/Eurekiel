@@ -1637,14 +1637,21 @@ namespace enigma::graphic
         s_bindlessIndexAllocator.reset();
     }
 
-    void D3D12RenderSystem::ReleaseSwapChainResources() noexcept
+    void D3D12RenderSystem::ReleaseSwapChainBackBuffers(bool clearRtvHandles) noexcept
     {
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
             s_swapChainBuffers[i].Reset();
-            s_swapChainRTVs[i] = {};
+            if (clearRtvHandles)
+            {
+                s_swapChainRTVs[i] = {};
+            }
         }
+    }
 
+    void D3D12RenderSystem::ReleaseSwapChainResources() noexcept
+    {
+        ReleaseSwapChainBackBuffers(true);
         s_swapChain.Reset();
         s_currentBackBufferIndex = 0;
         s_swapChainBufferCount   = 3;
@@ -2702,6 +2709,12 @@ namespace enigma::graphic
      */
     bool D3D12RenderSystem::CreateSwapChain(HWND hwnd, uint32_t width, uint32_t height, uint32_t bufferCount)
     {
+        if (width == 0 || height == 0)
+        {
+            LogError("D3D12RenderSystem", "Cannot create a zero-sized SwapChain: %ux%u", width, height);
+            return false;
+        }
+
         if (!s_device || !s_dxgiFactory || !s_commandListManager)
         {
             LogError("D3D12RenderSystem", "Device or DXGI Factory not initialized for SwapChain creation");
@@ -2751,7 +2764,100 @@ namespace enigma::graphic
         // Disable the default Alt+Enter fullscreen toggle.
         s_dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER);
 
-        if (!s_globalDescriptorHeapManager)
+        if (!CreateSwapChainRenderTargets(true))
+        {
+            ReleaseSwapChainResources();
+            return false;
+        }
+
+        s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
+
+        LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
+
+        // No explicit swap-chain state bootstrap is required.
+        // BeginFrame and EndFrame own the only meaningful transitions.
+
+        return true;
+    }
+
+    bool D3D12RenderSystem::ResizeSwapChain(uint32_t width, uint32_t height)
+    {
+        if (width == 0 || height == 0)
+        {
+            LogWarn("D3D12RenderSystem", "Ignored zero-sized SwapChain resize request: %ux%u", width, height);
+            return false;
+        }
+
+        if (!s_device || !s_swapChain)
+        {
+            LogError("D3D12RenderSystem", "Cannot resize SwapChain before it is initialized");
+            return false;
+        }
+
+        if (width == s_swapChainWidth && height == s_swapChainHeight)
+        {
+            return true;
+        }
+
+        if (!SynchronizeActiveQueues("SwapChainResize"))
+        {
+            LogError("D3D12RenderSystem", "Failed to synchronize queues before SwapChain resize");
+            return false;
+        }
+
+        const uint32_t oldWidth = s_swapChainWidth;
+        const uint32_t oldHeight = s_swapChainHeight;
+        ReleaseSwapChainBackBuffers(false);
+
+        const HRESULT hr = s_swapChain->ResizeBuffers(
+            s_swapChainBufferCount,
+            width,
+            height,
+            s_backbufferFormat,
+            DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH);
+
+        if (FAILED(hr))
+        {
+            LogError("D3D12RenderSystem", "ResizeBuffers failed for SwapChain resize to %ux%u, HRESULT=0x%08X",
+                     width, height, hr);
+            if (CreateSwapChainRenderTargets(false))
+            {
+                s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
+                s_swapChainWidth = oldWidth;
+                s_swapChainHeight = oldHeight;
+            }
+            else
+            {
+                LogError("D3D12RenderSystem", "Failed to restore old SwapChain render targets after ResizeBuffers failure");
+            }
+            return false;
+        }
+
+        s_swapChainWidth = width;
+        s_swapChainHeight = height;
+
+        if (!CreateSwapChainRenderTargets(false))
+        {
+            LogError("D3D12RenderSystem", "Failed to rebuild SwapChain render targets after resize to %ux%u",
+                     width, height);
+            return false;
+        }
+
+        s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
+        LogInfo("D3D12RenderSystem", "SwapChain resized successfully: %ux%u, %u buffers",
+                width, height, s_swapChainBufferCount);
+        return true;
+    }
+
+    bool D3D12RenderSystem::CreateSwapChainRenderTargets(bool allocateRtvDescriptors)
+    {
+        if (!s_device || !s_swapChain)
+        {
+            LogError("D3D12RenderSystem", "Device or SwapChain not initialized for RTV creation");
+            return false;
+        }
+
+        if (!s_globalDescriptorHeapManager && allocateRtvDescriptors)
         {
             LogError("D3D12RenderSystem", "GlobalDescriptorHeapManager not available for RTV creation");
             return false;
@@ -2759,24 +2865,32 @@ namespace enigma::graphic
 
         for (uint32_t i = 0; i < s_swapChainBufferCount; ++i)
         {
-            hr = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_swapChainBuffers[i]));
+            HRESULT hr = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_swapChainBuffers[i]));
             if (FAILED(hr))
             {
                 LogError("D3D12RenderSystem", "Failed to get SwapChain buffer %d", i);
                 return false;
             }
 
-            auto rtvAllocation = s_globalDescriptorHeapManager->AllocateRtv();
-            if (!rtvAllocation.isValid)
+            if (allocateRtvDescriptors)
             {
-                LogError("D3D12RenderSystem", "Failed to allocate RTV descriptor for SwapChain buffer %d", i);
+                auto rtvAllocation = s_globalDescriptorHeapManager->AllocateRtv();
+                if (!rtvAllocation.isValid)
+                {
+                    LogError("D3D12RenderSystem", "Failed to allocate RTV descriptor for SwapChain buffer %d", i);
+                    return false;
+                }
+
+                s_swapChainRTVs[i] = rtvAllocation.cpuHandle;
+            }
+            else if (s_swapChainRTVs[i].ptr == 0)
+            {
+                LogError("D3D12RenderSystem", "Missing reusable RTV descriptor for SwapChain buffer %d", i);
                 return false;
             }
 
-            s_swapChainRTVs[i] = rtvAllocation.cpuHandle;
-
             D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-            rtvDesc.Format                        = DXGI_FORMAT_R8G8B8A8_UNORM;
+            rtvDesc.Format                        = s_backbufferFormat;
             rtvDesc.ViewDimension                 = D3D12_RTV_DIMENSION_TEXTURE2D;
             rtvDesc.Texture2D.MipSlice            = 0;
 
@@ -2789,13 +2903,6 @@ namespace enigma::graphic
             std::string debugName = "SwapChain Buffer " + std::to_string(i);
             SetDebugName(s_swapChainBuffers[i].Get(), debugName.c_str());
         }
-
-        s_currentBackBufferIndex = s_swapChain->GetCurrentBackBufferIndex();
-
-        LogInfo("D3D12RenderSystem", "SwapChain created successfully: %dx%d, %d buffers", width, height, s_swapChainBufferCount);
-
-        // No explicit swap-chain state bootstrap is required.
-        // BeginFrame and EndFrame own the only meaningful transitions.
 
         return true;
     }

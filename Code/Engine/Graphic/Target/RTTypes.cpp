@@ -1,14 +1,7 @@
 ﻿#include "Engine/Graphic/Target/RTTypes.hpp"
 
-#include "Engine/Core/EngineCommon.hpp"
-#include "Engine/Core/ErrorWarningAssert.hpp"
-
 namespace enigma::graphic
 {
-    // ============================================================================  
-    // ClearValue 静态工厂方法实现
-    // ============================================================================
-
     ClearValue ClearValue::Color(const Rgba8& rgba8)
     {
         ClearValue cv;
@@ -18,7 +11,6 @@ namespace enigma::graphic
 
     ClearValue ClearValue::Color(float r, float g, float b, float a)
     {
-        // 将浮点值 [0-1] 转换为Rgba8 [0-255]
         unsigned char rByte = static_cast<unsigned char>(r * 255.0f);
         unsigned char gByte = static_cast<unsigned char>(g * 255.0f);
         unsigned char bByte = static_cast<unsigned char>(b * 255.0f);
@@ -27,15 +19,6 @@ namespace enigma::graphic
         ClearValue cv;
         cv.colorRgba8 = Rgba8(rByte, gByte, bByte, aByte);
         return cv;
-    }
-
-    ClearValue ClearValue::Color(float r, float g, float b)
-    {
-        UNUSED(r)
-        UNUSED(g)
-        UNUSED(b)
-        ClearValue clear_value;
-        ERROR_AND_DIE("3 Channel clear value not implemented")
     }
 
     ClearValue ClearValue::Depth(float depth, uint8_t stencil)
@@ -48,13 +31,8 @@ namespace enigma::graphic
 
     void ClearValue::GetColorAsFloats(float* outFloats) const
     {
-        // 使用Rgba8::GetAsFloats()转换为D3D12 API所需的float数组
         colorRgba8.GetAsFloats(outFloats);
     }
-
-    // ============================================================================  
-    // RenderTargetConfig 静态工厂方法实现
-    // ============================================================================
 
     RenderTargetConfig RenderTargetConfig::ColorTarget(
         const std::string& name,
@@ -118,11 +96,9 @@ namespace enigma::graphic
         bool               allowLinearFilter,
         int                sampleCount)
     {
-        // 调用ColorTarget()创建基础配置，width和height暂时设为0
-        // 实际尺寸由RenderTargetManager构造时根据widthScale/heightScale计算
         RenderTargetConfig config = ColorTarget(
             name,
-            0, 0, // width和height暂时设为0
+            0, 0,
             format,
             enableFlipper,
             loadAction,
@@ -132,7 +108,6 @@ namespace enigma::graphic
             sampleCount
         );
 
-        // 设置相对缩放因子
         config.widthScale  = widthScale;
         config.heightScale = heightScale;
 
@@ -148,31 +123,23 @@ namespace enigma::graphic
         ClearValue         clearValue,
         int                sampleCount)
     {
-        // 调用DepthTarget()创建基础配置，width和height暂时设为0
-        // 实际尺寸由RenderTargetManager构造时根据widthScale/heightScale计算
-        // 深度纹理固定参数：enableFlipper=false, enableMipmap=false, allowLinearFilter=true
         RenderTargetConfig config = DepthTarget(
             name,
-            0, 0, // width和height暂时设为0
+            0, 0,
             format,
-            false, // enableFlipper - 深度纹理通常不启用翻转
+            false,
             loadAction,
             clearValue,
-            false, // enableMipmap - 深度纹理通常不启用Mipmap
-            true, // allowLinearFilter - 允许线性过滤
+            false,
+            true,
             sampleCount
         );
 
-        // 设置相对缩放因子
         config.widthScale  = widthScale;
         config.heightScale = heightScale;
 
         return config;
     }
-
-    // ============================================================================
-    // Shadow Render Target Factory Methods Implementation
-    // ============================================================================
 
     RenderTargetConfig RenderTargetConfig::ShadowColorTarget(
         const std::string& name,
@@ -182,17 +149,16 @@ namespace enigma::graphic
         LoadAction         loadAction,
         ClearValue         clearValue)
     {
-        // Shadow color targets use square resolution
         return ColorTarget(
             name,
-            resolution, resolution, // width = height = resolution
+            resolution, resolution,
             format,
             enableFlipper,
             loadAction,
             clearValue,
-            false, // enableMipmap - shadow maps typically don't use mipmaps
-            true, // allowLinearFilter
-            1 // sampleCount - no MSAA for shadow maps
+            false,
+            true,
+            1
         );
     }
 
@@ -203,17 +169,16 @@ namespace enigma::graphic
         LoadAction         loadAction,
         ClearValue         clearValue)
     {
-        // Shadow depth targets use square resolution, no flipper
         return DepthTarget(
             name,
-            resolution, resolution, // width = height = resolution
+            resolution, resolution,
             format,
-            false, // enableFlipper - shadow depth doesn't need flipper
+            false,
             loadAction,
             clearValue,
-            false, // enableMipmap - shadow maps typically don't use mipmaps
-            true, // allowLinearFilter
-            1 // sampleCount - no MSAA for shadow maps
+            false,
+            true,
+            1
         );
     }
 } // namespace enigma::graphic

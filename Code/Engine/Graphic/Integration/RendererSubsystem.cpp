@@ -7,12 +7,14 @@
 #include "Engine/Core/ImGui/ImGuiSubsystem.hpp"
 #include "Engine/Graphic/Core/DX12/D3D12RenderSystem.hpp"
 #include "Engine/Graphic/Integration/RendererFrontendReloadScope.hpp"
+#include "Engine/Graphic/Integration/RendererWindowResizeCoordinator.hpp"
 #include "Engine/Graphic/Integration/RendererEvents.hpp"
 #include "Engine/Graphic/Mipmap/MipmapGenerator.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12VertexBuffer.hpp"
 #include "Engine/Graphic/Resource/Buffer/D12IndexBuffer.hpp"
 #include "Engine/Graphic/Resource/Texture/D12Texture.hpp"
 #include "Engine/Graphic/Target/RTTypes.hpp"
+#include "Engine/Graphic/Target/D12RenderTarget.hpp"
 #include "Engine/Graphic/Target/RenderTargetHelper.hpp" // Render-target helper utilities
 #include "Engine/Graphic/Target/RenderTargetBinder.hpp" // Unified RT binding
 #include "Engine/Graphic/Shader/Uniform/UniformManager.hpp"
@@ -85,6 +87,21 @@ namespace
             slotIndex,
             CustomImageManager::MAX_CUSTOM_IMAGE_SLOTS - 1));
     }
+}
+
+const char* enigma::graphic::ToString(RendererResizeReason reason) noexcept
+{
+    switch (reason)
+    {
+    case RendererResizeReason::Unknown:
+        return "Unknown";
+    case RendererResizeReason::WindowClientSizeChanged:
+        return "WindowClientSizeChanged";
+    case RendererResizeReason::WindowModeChanged:
+        return "WindowModeChanged";
+    }
+
+    return "Unknown";
 }
 
 #pragma region Lifecycle Management
@@ -245,13 +262,10 @@ void RendererSubsystem::Startup()
     LogInfo(LogRenderer, "VertexLayoutRegistry initialized with predefined layouts");
 
     // ==================== Create DepthTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating DepthTextureProvider...");
 
-        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
-        // Always creates MAX_DEPTH_TEXTURES (3) depthtex, format from config
         std::vector<RenderTargetConfig> depthConfigs = m_configuration.GetDepthTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
@@ -268,17 +282,13 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ShadowColorProvider (with UniformManager) ====================
-    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating ShadowColorProvider...");
 
-        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
-        // Always creates MAX_SHADOW_COLORS (8) shadowcolor, format from config
         std::vector<RenderTargetConfig> shadowColorConfigs = m_configuration.GetShadowColorConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
-        // [FIX] Pass 0, 0 to use absolute dimensions from config (e.g., 2048x2048)
         // Shadow textures should NOT use screen resolution override
         m_shadowColorProvider = std::make_unique<ShadowColorProvider>(
             0, 0, shadowColorConfigs, m_uniformManager.get()
@@ -293,17 +303,13 @@ void RendererSubsystem::Startup()
     }
 
     // ==================== Create ShadowTextureProvider (with UniformManager) ====================
-    // [REFACTOR] Load RenderTargetConfig from RendererSubsystemConfig instead of hardcoding
     try
     {
         LogInfo(LogRenderer, "Creating ShadowTextureProvider...");
 
-        // [REFACTOR] Get RenderTargetConfig from configuration (YAML or defaults)
-        // Always creates MAX_SHADOW_TEXTURES (2) shadowtex, format from config
         std::vector<RenderTargetConfig> shadowTexConfigs = m_configuration.GetShadowTexConfigs();
 
         // [RAII] Pass UniformManager to constructor for Shader RT Fetching
-        // [FIX] Pass 0, 0 to use absolute dimensions from config (e.g., 2048x2048)
         // Shadow textures should NOT use screen resolution override
         m_shadowTextureProvider = std::make_unique<ShadowTextureProvider>(
             0, 0, shadowTexConfigs, m_uniformManager.get()
@@ -410,6 +416,14 @@ void RendererSubsystem::Startup()
     /// Full Screen Quads Renderer
     m_fullQuadsRenderer = std::make_unique<FullQuadsRenderer>();
 
+    if (m_configuration.targetWindow)
+    {
+        m_windowResizeCoordinator = std::make_unique<RendererWindowResizeCoordinator>();
+        m_windowResizeCoordinator->SetServices(m_configuration.targetWindow, this);
+        m_windowResizeCoordinator->SubscribeEvents();
+        LogInfo(LogRenderer, "RendererWindowResizeCoordinator subscribed to window and renderer events");
+    }
+
     // Subscribe static services to pipeline events (before broadcast)
     MipmapGenerator::Initialize();
 
@@ -426,6 +440,13 @@ void RendererSubsystem::Shutdown()
 
     m_isShutdown = true;
     LogInfo(LogRenderer, "Shutting down...");
+
+    if (m_windowResizeCoordinator)
+    {
+        m_windowResizeCoordinator->UnsubscribeEvents();
+        m_windowResizeCoordinator->SetServices(nullptr, nullptr);
+        m_windowResizeCoordinator.reset();
+    }
 
     if (VertexLayoutRegistry::IsInitialized())
     {
@@ -495,15 +516,8 @@ void RendererSubsystem::ResetFrontendShutdownState() noexcept
 #pragma endregion
 
 #pragma region Shader Compilation
-/**
- * @brief 检查渲染系统是否准备好进行渲染
- * @return 如果D3D12RenderSystem已初始化且设备可用则返回true
- *
- * 教学要点: 通过检查底层API封装层的状态确定渲染系统就绪状态
- */
 bool RendererSubsystem::IsReadyForRendering() const noexcept
 {
-    // 通过D3D12RenderSystem静态API检查设备状态
     return D3D12RenderSystem::IsInitialized() && D3D12RenderSystem::GetDevice() != nullptr;
 }
 
@@ -699,23 +713,17 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
 {
     LogInfo(LogRenderer, "Compiling shader program from source: %s", programName.c_str());
 
-    // ========================================================================
-    // Step 1: 创建 ShaderSource（自动解析 ProgramDirectives）
-    // ========================================================================
     ShaderSource shaderSource(
         programName,
         vsSource,
         psSource,
-        "", // geometrySource（可选）
-        "", // hullSource（可选）
-        "", // domainSource（可选）
-        "", // computeSource（可选）
-        nullptr // parent（可为 nullptr）
+        "",
+        "",
+        "",
+        "",
+        nullptr
     );
 
-    // ========================================================================
-    // Step 2: 验证 ShaderSource
-    // ========================================================================
     if (!shaderSource.IsValid())
     {
         LogError(LogRenderer, "Invalid ShaderSource (missing VS or PS): %s",
@@ -732,13 +740,10 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
             programName.c_str()))
     }
 
-    // ========================================================================
-    // Step 3: 使用 ShaderProgramBuilder 编译（Shrimp Task 3: 支持自定义编译选项）
-    // ========================================================================
     auto buildResult = ShaderProgramBuilder::BuildProgram(
         shaderSource,
         ShaderType::GBuffers_Terrain,
-        options //  传递用户自定义编译选项
+        options
     );
 
     if (!buildResult.success)
@@ -751,10 +756,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromSource(
             buildResult.errorMessage.c_str()))
     }
 
-
-    // ========================================================================
-    // Step 5: 创建 ShaderProgram
-    // ========================================================================
     auto program = std::make_shared<ShaderProgram>();
     program->Create(
         std::move(*buildResult.vertexShader),
@@ -776,9 +777,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     const ShaderCompileOptions&  options
 )
 {
-    // ========================================================================
-    // Step 1: 读取着色器源码
-    // ========================================================================
     auto vsSourceOpt = ShaderCompilationHelper::ReadShaderSourceFromFile(vsPath);
     if (!vsSourceOpt)
     {
@@ -800,34 +798,24 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
     std::string vsSource = *vsSourceOpt;
     std::string psSource = *psSourceOpt;
 
-    // ========================================================================
-    // Step 2: 自动检测是否包含#include指令
-    // ========================================================================
     bool hasIncludes = (vsSource.find("#include") != std::string::npos) ||
         (psSource.find("#include") != std::string::npos);
 
-    // ========================================================================
-    // Step 3: 如果包含#include，使用Include系统展开
-    // ========================================================================
     if (hasIncludes)
     {
         LogInfo(LogRenderer, "Detected #include directives in shader files, using Include system");
 
         try
         {
-            // 3.1 确定根目录（从shader文件路径推断）
             std::filesystem::path rootPath = ShaderIncludeHelper::DetermineRootPath(vsPath);
             LogDebug(LogRenderer, "Include system root path: {}", rootPath.string().c_str());
 
-            // 3.2 将相对路径转换为绝对路径
             std::filesystem::path vsAbsPath = std::filesystem::absolute(vsPath);
             std::filesystem::path psAbsPath = std::filesystem::absolute(psPath);
 
-            // 3.3 计算相对于根目录的路径
             std::filesystem::path vsRelPath = std::filesystem::relative(vsAbsPath, rootPath);
             std::filesystem::path psRelPath = std::filesystem::relative(psAbsPath, rootPath);
 
-            // 3.4 构建IncludeGraph（使用完整相对路径，添加前导斜杠）
             std::vector<std::string> shaderFiles = {
                 "/" + vsRelPath.generic_string(),
                 "/" + psRelPath.generic_string()
@@ -840,7 +828,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
                 ERROR_AND_DIE("Failed to build IncludeGraph for shader files")
             }
 
-            // 3.3 检查Include构建失败
             if (!graph->GetFailures().empty())
             {
                 LogWarn(LogRenderer, "IncludeGraph has %d failures:", graph->GetFailures().size());
@@ -850,14 +837,13 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
                 }
             }
 
-            // 3.4 展开VS源码
             ShaderPath vsShaderPath = ShaderPath::FromAbsolutePath("/" + vsRelPath.generic_string());
             if (graph->HasNode(vsShaderPath))
             {
                 vsSource = ShaderIncludeHelper::ExpandShaderSource(
                     *graph,
                     vsShaderPath,
-                    options.enableDebugInfo // 调试模式使用LineDirectives
+                    options.enableDebugInfo
                 );
                 LogDebug(LogRenderer, "Expanded VS source with Include system ({} bytes)", vsSource.size());
             }
@@ -866,14 +852,13 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
                 LogWarn(LogRenderer, "VS file not found in IncludeGraph, using original source");
             }
 
-            // 3.5 展开PS源码
             ShaderPath psShaderPath = ShaderPath::FromAbsolutePath("/" + psRelPath.generic_string());
             if (graph->HasNode(psShaderPath))
             {
                 psSource = ShaderIncludeHelper::ExpandShaderSource(
                     *graph,
                     psShaderPath,
-                    options.enableDebugInfo // 调试模式使用LineDirectives
+                    options.enableDebugInfo
                 );
                 LogDebug(LogRenderer, "Expanded PS source with Include system ({} bytes)", psSource.size());
             }
@@ -895,9 +880,6 @@ std::shared_ptr<ShaderProgram> RendererSubsystem::CreateShaderProgramFromFiles(
 
     std::string finalProgramName = programName.empty() ? ShaderCompilationHelper::ExtractProgramNameFromPath(vsPath) : programName;
 
-    // ========================================================================
-    // Step 5: 调用CreateShaderProgramFromSource编译
-    // ========================================================================
     return CreateShaderProgramFromSource(
         vsSource,
         psSource,
@@ -976,14 +958,11 @@ void RendererSubsystem::InvalidateGraphicsRootBindings() noexcept
 
 DXGI_FORMAT RendererSubsystem::GetRTVFormat() const noexcept
 {
-    // SwapChain后台缓冲区固定使用RGBA8格式
     return DXGI_FORMAT_R8G8B8A8_UNORM;
 }
 
 uint32_t RendererSubsystem::GetFramesInFlight() const noexcept
 {
-    // 返回SwapChain缓冲区数量（通常为2或3）
-    // 默认为2（双缓冲），可从配置读取
     return 2;
 }
 
@@ -1035,13 +1014,6 @@ void RendererSubsystem::ClearCustomImage(int slotIndex)
 
 std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(int width, int height, DXGI_FORMAT format, const void* initialData)
 {
-    // [DELEGATION] 委托给D3D12RenderSystem创建纹理
-    // 教学要点：
-    // - 使用unique_ptr::release()转移所有权
-    // - 返回裸指针，调用者负责管理生命周期
-    // - 建议调用者使用智能指针管理返回的纹理
-
-    // 1. 调用D3D12RenderSystem创建纹理（返回unique_ptr）
     return D3D12RenderSystem::CreateTexture2D(width, height, format, initialData);
 }
 
@@ -1056,11 +1028,6 @@ std::shared_ptr<D12Texture> RendererSubsystem::CreateTexture2D(const std::string
     return texture;
 }
 
-//-----------------------------------------------------------------------------------------------
-// M2 灵活渲染接口实现 (Milestone 2)
-// Teaching Note: 提供高层API，封装DirectX 12复杂性
-// Reference: DX11Renderer.cpp中的类似方法
-//-----------------------------------------------------------------------------------------------
 // M6.2.1: UseProgram RT binding (pair-based API)
 //-----------------------------------------------------------------------------------------------
 
@@ -1218,6 +1185,67 @@ void RendererSubsystem::ReloadFrontendState(const RendererFrontendReloadScope& s
     }
 }
 
+bool RendererSubsystem::ResizeFrontendState(uint32_t width, uint32_t height, RendererResizeReason reason)
+{
+    if (width == 0 || height == 0)
+    {
+        LogWarn(LogRenderer,
+                "RendererSubsystem::ResizeFrontendState ignored zero-sized request: %ux%u",
+                width,
+                height);
+        return false;
+    }
+
+    if (!m_colorTextureProvider || !m_depthTextureProvider || !m_uniformManager)
+    {
+        LogError(LogRenderer, "RendererSubsystem::ResizeFrontendState missing required frontend services");
+        return false;
+    }
+
+    try
+    {
+        m_configuration.renderWidth = width;
+        m_configuration.renderHeight = height;
+
+        m_viewportUniforms.viewWidth = static_cast<float>(width);
+        m_viewportUniforms.viewHeight = static_cast<float>(height);
+        m_viewportUniforms.aspectRatio = m_viewportUniforms.viewWidth / m_viewportUniforms.viewHeight;
+
+        if (m_renderTargetBinder)
+        {
+            m_renderTargetBinder->ClearBindings();
+        }
+
+        m_currentVertexLayout = VertexLayoutRegistry::GetDefault();
+        m_lastBoundPSO = nullptr;
+
+        m_colorTextureProvider->OnResize(static_cast<int>(width), static_cast<int>(height));
+        m_depthTextureProvider->OnResize(static_cast<int>(width), static_cast<int>(height));
+
+        if (m_renderTargetBinder)
+        {
+            m_renderTargetBinder->ClearBindings();
+        }
+
+        LogInfo(LogRenderer,
+                "RendererSubsystem::ResizeFrontendState applied %ux%u (%s)",
+                width,
+                height,
+                ToString(reason));
+        return true;
+    }
+    catch (const std::exception& e)
+    {
+        LogError(LogRenderer,
+                 "RendererSubsystem::ResizeFrontendState failed for %ux%u (%s): %s",
+                 width,
+                 height,
+                 ToString(reason),
+                 e.what());
+        return false;
+    }
+}
+
 // BeginCamera - ICamera interface version
 void RendererSubsystem::BeginCamera(const ICamera& camera)
 {
@@ -1266,7 +1294,6 @@ D12VertexBuffer* RendererSubsystem::CreateVertexBuffer(size_t size, unsigned str
             "CreateVertexBuffer: Successfully created D12VertexBuffer (size: {}, stride: {}, count: {})",
             size, stride, size / stride);
 
-    // 返回裸指针，转移所有权给调用者
     return vertexBuffer.release();
 }
 
@@ -1278,12 +1305,6 @@ void RendererSubsystem::SetVertexBuffer(D12VertexBuffer* buffer, uint32_t slot)
         return;
     }
 
-    // 教学要点：
-    // - 直接调用D3D12RenderSystem::BindVertexBuffer()的D12VertexBuffer重载
-    // - D3D12RenderSystem内部会提取D3D12_VERTEX_BUFFER_VIEW并绑定
-    // - 无需手动访问View（封装性更好）
-
-    // 委托给D3D12RenderSystem的底层API（D12VertexBuffer重载）
     D3D12RenderSystem::BindVertexBuffer(buffer, slot);
 
     LogDebug(LogRenderer,
@@ -1299,13 +1320,6 @@ void RendererSubsystem::SetIndexBuffer(D12IndexBuffer* buffer)
         return;
     }
 
-    // 教学要点：
-    // - 直接调用D3D12RenderSystem::BindIndexBuffer()的D12IndexBuffer重载
-    // - D3D12RenderSystem内部会提取D3D12_INDEX_BUFFER_VIEW并绑定
-    // - IndexBuffer只有一个槽位（与VertexBuffer不同）
-    // - 无需手动访问View（封装性更好）
-
-    // 委托给D3D12RenderSystem的底层API（D12IndexBuffer重载）
     D3D12RenderSystem::BindIndexBuffer(buffer);
 
     LogDebug(LogRenderer,
@@ -1425,8 +1439,8 @@ bool RendererSubsystem::PreparePSOAndBindings(ID3D12GraphicsCommandList* cmdList
     // Step 4: Inline PSO state construction
     RenderStateValidator::DrawState state{};
     state.program             = const_cast<ShaderProgram*>(m_currentShaderProgram);
-    state.blendConfig         = m_currentBlendConfig; // [REFACTORED] Use BlendConfig
-    state.depthConfig         = m_currentDepthConfig; // [REFACTORED] Use DepthConfig
+    state.blendConfig         = m_currentBlendConfig;
+    state.depthConfig         = m_currentDepthConfig;
     state.stencilDetail       = m_currentStencilTest;
     state.rasterizationConfig = m_currentRasterizationConfig;
     state.topology            = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -1526,7 +1540,6 @@ void RendererSubsystem::Draw(uint32_t vertexCount, uint32_t startVertex)
         return;
     }
 
-    // [REFACTORED] Use public helper functions to prepare PSO and resource bindings
     if (!PreparePSOAndBindings(cmdList))
     {
         return;
@@ -1559,7 +1572,6 @@ void RendererSubsystem::DrawIndexed(uint32_t indexCount, uint32_t startIndex, in
         return;
     }
 
-    // [REFACTORED] Use public helper functions to prepare PSO and resource bindings
     if (!PreparePSOAndBindings(cmdList))
     {
         return;
@@ -1593,7 +1605,6 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
         return;
     }
 
-    // [REFACTORED] 使用公共辅助函数准备PSO和资源绑定
     if (!PreparePSOAndBindings(cmdList))
     {
         return;
@@ -1611,10 +1622,6 @@ void RendererSubsystem::DrawInstanced(uint32_t vertexCount, uint32_t instanceCou
     LogDebug(LogRenderer, "DrawInstanced: Drew %u vertices x %u instances starting from vertex %u, instance %u",
              vertexCount, instanceCount, startVertex, startInstance);
 }
-
-// ============================================================================
-// M6.3: Present RT输出API
-// ============================================================================
 
 void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType)
 {
@@ -1667,11 +1674,30 @@ void RendererSubsystem::PresentRenderTarget(int rtIndex, RenderTargetType rtType
     // Step 4.5: Use CopyResource when possible, otherwise use shader blit conversion.
     DXGI_FORMAT sourceFormat     = provider->GetFormat(rtIndex);
     DXGI_FORMAT backbufferFormat = D3D12RenderSystem::GetBackBufferFormat();
+    const D3D12_RESOURCE_DESC sourceDesc     = sourceRT->GetDesc();
+    const D3D12_RESOURCE_DESC backBufferDesc = backBuffer->GetDesc();
+    const bool canCopyResource =
+        sourceFormat == backbufferFormat &&
+        sourceDesc.Dimension == backBufferDesc.Dimension &&
+        sourceDesc.Width == backBufferDesc.Width &&
+        sourceDesc.Height == backBufferDesc.Height &&
+        sourceDesc.DepthOrArraySize == backBufferDesc.DepthOrArraySize &&
+        sourceDesc.MipLevels == backBufferDesc.MipLevels &&
+        sourceDesc.SampleDesc.Count == backBufferDesc.SampleDesc.Count &&
+        sourceDesc.SampleDesc.Quality == backBufferDesc.SampleDesc.Quality;
 
-    if (sourceFormat != backbufferFormat)
+    if (!canCopyResource)
     {
-        LogDebug(LogRenderer, "PresentRenderTarget: Format mismatch (source=%d vs backbuffer=%d), using shader blit",
-                 static_cast<int>(sourceFormat), static_cast<int>(backbufferFormat));
+        LogDebug(LogRenderer,
+                 "PresentRenderTarget: CopyResource incompatible (source=%llux%u fmt=%d mips=%u, backbuffer=%llux%u fmt=%d mips=%u), using shader blit",
+                 static_cast<unsigned long long>(sourceDesc.Width),
+                 sourceDesc.Height,
+                 static_cast<int>(sourceFormat),
+                 static_cast<unsigned int>(sourceDesc.MipLevels),
+                 static_cast<unsigned long long>(backBufferDesc.Width),
+                 backBufferDesc.Height,
+                 static_cast<int>(backbufferFormat),
+                 static_cast<unsigned int>(backBufferDesc.MipLevels));
         PresentRenderTargetWithShaderBlit(rtIndex, rtType, sourceInitialState);
         g_theImGui->Render();
         return;
@@ -1784,6 +1810,9 @@ void RendererSubsystem::PresentRenderTargetWithShaderBlit(
     // Step 3: Bind backbuffer as RTV
     auto backBufferRTV = D3D12RenderSystem::GetBackBufferRTV();
     cmdList->OMSetRenderTargets(1, &backBufferRTV, FALSE, nullptr);
+    D3D12RenderSystem::SetViewport(
+        static_cast<int>(D3D12RenderSystem::GetSwapChainWidth()),
+        static_cast<int>(D3D12RenderSystem::GetSwapChainHeight()));
 
     // Step 4: Set backbuffer format override for correct PSO creation
     DXGI_FORMAT backbufferFormat = D3D12RenderSystem::GetBackBufferFormat();
@@ -2080,17 +2109,6 @@ void RendererSubsystem::DrawVertexBuffer(const std::shared_ptr<D12VertexBuffer>&
 
 void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, const Rgba8& clearColor)
 {
-    // ========================================================================
-    // [REFACTORED] Provider-based Architecture
-    // ========================================================================
-    // 重构说明：
-    // - 使用 IRenderTargetProvider 统一接口替代废弃的 m_renderTargetManager
-    // - 支持 ColorTex 和 ShadowColor 类型（RTV-based）
-    // - DepthTex 和 ShadowTex 应使用 ClearDepthStencil 方法
-    // - 符合 SOLID 原则（依赖倒置）
-    // ========================================================================
-
-    // Step 1: 验证 RenderTargetType 是否支持 RTV Clear
     if (rtType == RenderTargetType::DepthTex || rtType == RenderTargetType::ShadowTex)
     {
         LogError(LogRenderer, "ClearRenderTarget: RenderTargetType %d is depth-based, use ClearDepthStencil instead",
@@ -2098,7 +2116,6 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
         return;
     }
 
-    // Step 2: 获取 CommandList
     auto* cmdList = GetCurrentCommandList();
     if (!cmdList)
     {
@@ -2106,7 +2123,6 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
         return;
     }
 
-    // Step 3: 获取对应的 Provider
     IRenderTargetProvider* provider = GetRenderTargetProvider(rtType);
     if (!provider)
     {
@@ -2114,7 +2130,6 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
         return;
     }
 
-    // Step 4: 验证 rtIndex 范围
     const int rtCount = provider->GetCount();
     if (rtIndex < 0 || rtIndex >= rtCount)
     {
@@ -2123,10 +2138,8 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
         return;
     }
 
-    // Step 5: 获取 RTV handle
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = provider->GetMainRTV(rtIndex);
 
-    // Step 6: 转换 Rgba8 到 float 数组
     float clearColorFloat[4] = {
         clearColor.r / 255.0f,
         clearColor.g / 255.0f,
@@ -2134,10 +2147,8 @@ void RendererSubsystem::ClearRenderTarget(RenderTargetType rtType, int rtIndex, 
         clearColor.a / 255.0f
     };
 
-    // Step 7: 执行 Clear
     cmdList->ClearRenderTargetView(rtvHandle, clearColorFloat, 0, nullptr);
 
-    // Step 8: 输出日志
     const char* rtTypeName = (rtType == RenderTargetType::ColorTex) ? "colortex" : "shadowcolor";
     LogDebug(LogRenderer, "ClearRenderTarget: Cleared %s%d to RGBA(%u,%u,%u,%u)",
              rtTypeName, rtIndex, clearColor.r, clearColor.g, clearColor.b, clearColor.a);
@@ -2169,7 +2180,6 @@ void RendererSubsystem::ClearDepthStencil(uint32_t depthIndex, float clearDepth,
             depthIndex, clearDepth, clearStencil);
 }
 
-// [REFACTOR] ClearAllRenderTargets - Use RenderTargetConfig for per-RT clear settings
 void RendererSubsystem::ClearAllRenderTargets()
 {
     auto* cmdList = GetCurrentCommandList();
@@ -2187,6 +2197,7 @@ void RendererSubsystem::ClearAllRenderTargets()
             const RenderTargetConfig& config = m_colorTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
+                m_colorTextureProvider->PrepareForRendering(i);
                 auto rtvHandle = m_colorTextureProvider->GetMainRTV(i);
                 D3D12RenderSystem::ClearRenderTargetByConfig(cmdList, rtvHandle, config);
             }
@@ -2201,6 +2212,11 @@ void RendererSubsystem::ClearAllRenderTargets()
             const RenderTargetConfig& config = m_depthTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
+                auto depthTexture = m_depthTextureProvider->GetDepthTexture(i);
+                if (depthTexture)
+                {
+                    depthTexture->TransitionToDepthWrite();
+                }
                 auto dsvHandle = m_depthTextureProvider->GetMainRTV(i); // DSV handle
                 D3D12RenderSystem::ClearDepthStencilByConfig(cmdList, dsvHandle, config);
             }
@@ -2215,6 +2231,11 @@ void RendererSubsystem::ClearAllRenderTargets()
             const RenderTargetConfig& config = m_shadowTextureProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
+                auto depthTexture = m_shadowTextureProvider->GetDepthTexture(i);
+                if (depthTexture)
+                {
+                    depthTexture->TransitionToDepthWrite();
+                }
                 auto dsvHandle = m_shadowTextureProvider->GetMainRTV(i); // DSV handle
                 D3D12RenderSystem::ClearDepthStencilByConfig(cmdList, dsvHandle, config);
             }
@@ -2229,6 +2250,11 @@ void RendererSubsystem::ClearAllRenderTargets()
             const RenderTargetConfig& config = m_shadowColorProvider->GetConfig(i);
             if (config.loadAction == LoadAction::Clear)
             {
+                auto renderTarget = m_shadowColorProvider->GetRenderTarget(i);
+                if (renderTarget)
+                {
+                    renderTarget->TransitionToRenderTarget();
+                }
                 auto rtvHandle = m_shadowColorProvider->GetMainRTV(i);
                 D3D12RenderSystem::ClearRenderTargetByConfig(cmdList, rtvHandle, config);
             }

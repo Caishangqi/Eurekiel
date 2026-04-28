@@ -6,6 +6,7 @@
 #include "Engine/Core/EngineCommon.hpp"
 #include "Engine/Input/InputSystem.hpp"
 #include "IWindowsMessagePreprocessor.hpp"
+#include "WindowEvents.hpp"
 
 // static variables
 Window* Window::s_mainWindow = nullptr;
@@ -16,7 +17,30 @@ Window* Window::s_mainWindow = nullptr;
 
 LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessageCode, WPARAM wParam, LPARAM lParam)
 {
-    // 优先调用消息预处理器链
+    if (Window::s_mainWindow)
+    {
+        switch (wmMessageCode)
+        {
+        case WM_SIZE:
+            {
+                const int width  = LOWORD(lParam);
+                const int height = HIWORD(lParam);
+                Window::s_mainWindow->HandleClientSizeChanged(
+                    windowHandle,
+                    static_cast<unsigned int>(wParam),
+                    width,
+                    height);
+                break;
+            }
+        case WM_CLOSE:
+            {
+                Window::s_mainWindow->RequestClose(enigma::window::WindowCloseReason::CloseButton);
+                return 0;
+            }
+        default: ;
+        }
+    }
+
     if (Window::s_mainWindow)
     {
         LRESULT result = 0;
@@ -24,13 +48,11 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
         {
             if (preprocessor->ProcessMessage(windowHandle, wmMessageCode, wParam, lParam, result))
             {
-                // 消息已被此预处理器消费，立即返回
                 return result;
             }
         }
     }
 
-    // 如果没有预处理器消费消息，继续原有的InputSystem处理逻辑
     InputSystem* input = nullptr;
 
     if (Window::s_mainWindow && Window::s_mainWindow->GetConfig().m_inputSystem)
@@ -47,13 +69,6 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
             FireEvent("CharInput", args);
             return 0;
         }
-    // App close requested via "X" button, or right-click "Close Window" on task bar, or "Close" from system menu, or Alt-F4
-    case WM_CLOSE:
-        {
-            g_theEventSubsystem->FireStringEvent("WindowCloseEvent"); // Fire the WindowCloseEvent
-            return 0;
-        }
-
     // Raw physical keyboard "key-was-just-depressed" event (case-insensitive, not translated)
     case WM_KEYDOWN:
         {
@@ -68,14 +83,6 @@ LRESULT CALLBACK WindowsMessageHandlingProcedure(HWND windowHandle, UINT wmMessa
             EventArgs args;
             args.SetValue("KeyCode", Stringf("%d", keyCode));
             FireEvent("KeyPressed", args);
-
-            /*unsigned char asKey = static_cast<unsigned char>(wParam);
-            if (input)
-            {
-                input->HandleKeyPressed(asKey);
-            }
-
-            break;*/
             return 0;
         }
 
@@ -173,13 +180,6 @@ void Window::Startup()
 
 void Window::Shutdown()
 {
-    if (m_config.m_windowMode == WindowMode::Fullscreen)
-    {
-        ClipCursor(nullptr);
-        DebuggerPrintf("Mouse cursor clipping released\n");
-    }
-
-    // 清空预处理器列表(但不删除,因为生命周期由外部管理)
     m_messagePreprocessors.clear();
 }
 
@@ -223,6 +223,11 @@ Vec2 Window::GetNormalizedMouseUV()
 IntVec2 Window::GetClientDimensions() const
 {
     auto windowHandle = static_cast<HWND>(GetWindowHandle());
+    if (!windowHandle)
+    {
+        return m_config.m_resolution;
+    }
+
     RECT clientRect;
     GetClientRect(windowHandle, &clientRect);
     return IntVec2(clientRect.right, clientRect.bottom);
@@ -258,8 +263,7 @@ IntVec2 Window::GetConfiguredResolution() const
 
 bool Window::IsInFullscreenMode() const
 {
-    return m_config.m_windowMode == WindowMode::Fullscreen ||
-        m_config.m_windowMode == WindowMode::BorderlessFullscreen;
+    return m_config.m_windowMode == WindowMode::BorderlessFullscreen;
 }
 
 bool Window::IsInWindowedMode() const
@@ -270,6 +274,11 @@ bool Window::IsInWindowedMode() const
 bool Window::IsAlwaysOnTop() const
 {
     return m_config.m_alwaysOnTop;
+}
+
+bool Window::IsMinimized() const
+{
+    return m_isMinimized;
 }
 
 void Window::SetAlwaysOnTop(bool alwaysOnTop)
@@ -290,6 +299,250 @@ void Window::SetAlwaysOnTop(bool alwaysOnTop)
         DebuggerPrintf("Window always-on-top set to: %s\n",
                        alwaysOnTop ? "true" : "false");
     }
+}
+
+bool Window::ApplyWindowModeRequest(const enigma::window::WindowModeRequest& request)
+{
+    switch (request.type)
+    {
+    case enigma::window::WindowModeRequestType::ToggleFullscreen:
+        return SetWindowMode(IsInWindowedMode() ? WindowMode::BorderlessFullscreen : WindowMode::Windowed);
+    case enigma::window::WindowModeRequestType::SetWindowed:
+        return SetWindowMode(WindowMode::Windowed);
+    case enigma::window::WindowModeRequestType::SetBorderlessFullscreen:
+        return SetWindowMode(WindowMode::BorderlessFullscreen);
+    }
+
+    return false;
+}
+
+bool Window::SetWindowMode(WindowMode mode)
+{
+    WindowMode targetMode = mode;
+    if (m_config.m_windowMode == targetMode)
+    {
+        return true;
+    }
+
+    auto windowHandle = static_cast<HWND>(m_windowHandle);
+    if (!windowHandle)
+    {
+        return false;
+    }
+
+    const WindowMode oldMode = m_config.m_windowMode;
+    if (targetMode == WindowMode::BorderlessFullscreen && oldMode == WindowMode::Windowed)
+    {
+        SaveWindowedPlacementIfNeeded();
+    }
+
+    m_config.m_windowMode = targetMode;
+
+    bool             success = false;
+    switch (targetMode)
+    {
+    case WindowMode::Windowed:
+        success = ApplyWindowedMode();
+        break;
+    case WindowMode::BorderlessFullscreen:
+        success = ApplyBorderlessFullscreenMode();
+        break;
+    default:
+        m_config.m_windowMode = oldMode;
+        return false;
+    }
+
+    if (!success)
+    {
+        m_config.m_windowMode = oldMode;
+        return false;
+    }
+
+    m_isMinimized = IsIconic(windowHandle) != FALSE;
+    m_lastClientDimensions = GetClientDimensions();
+    BroadcastWindowModeChanged(oldMode, targetMode);
+    return true;
+}
+
+void Window::HandleClientSizeChanged(void* platformWindowHandle, unsigned int sizeType, int width, int height)
+{
+    const IntVec2 newClientSize(width > 0 ? width : 0, height > 0 ? height : 0);
+    const IntVec2 oldClientSize = m_lastClientDimensions;
+    const bool    wasMinimized  = m_isMinimized;
+
+    enigma::window::WindowResizeReason reason = enigma::window::WindowResizeReason::ClientSizeChanged;
+    switch (sizeType)
+    {
+    case SIZE_MINIMIZED:
+        reason        = enigma::window::WindowResizeReason::Minimized;
+        m_isMinimized = true;
+        break;
+    case SIZE_MAXIMIZED:
+        reason        = enigma::window::WindowResizeReason::Maximized;
+        m_isMinimized = false;
+        break;
+    case SIZE_RESTORED:
+        reason        = wasMinimized ? enigma::window::WindowResizeReason::Restored : enigma::window::WindowResizeReason::UserResize;
+        m_isMinimized = false;
+        break;
+    default:
+        m_isMinimized = false;
+        break;
+    }
+
+    if (oldClientSize == newClientSize && wasMinimized == m_isMinimized)
+    {
+        return;
+    }
+
+    m_lastClientDimensions = newClientSize;
+
+    enigma::window::WindowClientSizeEvent event;
+    event.windowHandle  = platformWindowHandle;
+    event.oldClientSize = oldClientSize;
+    event.newClientSize = newClientSize;
+    event.mode          = m_config.m_windowMode;
+    event.reason        = reason;
+    event.isMinimized   = m_isMinimized;
+    event.isRestored    = !m_isMinimized && wasMinimized;
+
+    enigma::window::WindowEvents::OnClientSizeChanged.Broadcast(event);
+}
+
+void Window::RequestClose(enigma::window::WindowCloseReason reason)
+{
+    enigma::window::WindowCloseRequest request;
+    request.windowHandle = m_windowHandle;
+    request.reason       = reason;
+
+    enigma::window::WindowEvents::OnWindowCloseRequested.Broadcast(request);
+}
+
+bool Window::ApplyWindowedMode()
+{
+    auto windowHandle = static_cast<HWND>(m_windowHandle);
+    if (!windowHandle)
+    {
+        return false;
+    }
+
+    ClipCursor(nullptr);
+    ShowWindow(windowHandle, SW_RESTORE);
+
+    const DWORD windowStyleFlags = WS_OVERLAPPEDWINDOW;
+    const DWORD windowStyleExFlags = WS_EX_APPWINDOW;
+    SetWindowLongPtr(windowHandle, GWL_STYLE, static_cast<LONG_PTR>(windowStyleFlags));
+    SetWindowLongPtr(windowHandle, GWL_EXSTYLE, static_cast<LONG_PTR>(windowStyleExFlags));
+
+    RECT windowRect = {};
+    if (m_hasSavedWindowedPlacement)
+    {
+        windowRect.left = m_savedWindowedPosition.x;
+        windowRect.top = m_savedWindowedPosition.y;
+        windowRect.right = windowRect.left + m_savedWindowedDimensions.x;
+        windowRect.bottom = windowRect.top + m_savedWindowedDimensions.y;
+    }
+    else
+    {
+        HMONITOR monitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        GetMonitorInfo(monitor, &monitorInfo);
+
+        RECT clientRect = {};
+        clientRect.right = m_config.m_resolution.x;
+        clientRect.bottom = m_config.m_resolution.y;
+        AdjustWindowRectEx(&clientRect, windowStyleFlags, FALSE, windowStyleExFlags);
+
+        const int windowWidth = clientRect.right - clientRect.left;
+        const int windowHeight = clientRect.bottom - clientRect.top;
+        const int monitorWidth = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+        const int monitorHeight = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
+
+        windowRect.left = monitorInfo.rcWork.left + (monitorWidth - windowWidth) / 2;
+        windowRect.top = monitorInfo.rcWork.top + (monitorHeight - windowHeight) / 2;
+        windowRect.right = windowRect.left + windowWidth;
+        windowRect.bottom = windowRect.top + windowHeight;
+    }
+
+    HWND insertAfter = m_config.m_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
+    return SetWindowPos(
+        windowHandle,
+        insertAfter,
+        windowRect.left,
+        windowRect.top,
+        windowRect.right - windowRect.left,
+        windowRect.bottom - windowRect.top,
+        SWP_FRAMECHANGED | SWP_SHOWWINDOW) != FALSE;
+}
+
+bool Window::ApplyBorderlessFullscreenMode()
+{
+    auto windowHandle = static_cast<HWND>(m_windowHandle);
+    if (!windowHandle)
+    {
+        return false;
+    }
+
+    SaveWindowedPlacementIfNeeded();
+    ShowWindow(windowHandle, SW_RESTORE);
+
+    HMONITOR monitor = MonitorFromWindow(windowHandle, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo = {};
+    monitorInfo.cbSize = sizeof(MONITORINFO);
+    if (!GetMonitorInfo(monitor, &monitorInfo))
+    {
+        return false;
+    }
+
+    const DWORD windowStyleFlags = WS_POPUP | WS_VISIBLE;
+    const DWORD windowStyleExFlags = WS_EX_APPWINDOW;
+    SetWindowLongPtr(windowHandle, GWL_STYLE, static_cast<LONG_PTR>(windowStyleFlags));
+    SetWindowLongPtr(windowHandle, GWL_EXSTYLE, static_cast<LONG_PTR>(windowStyleExFlags));
+
+    HWND insertAfter = m_config.m_alwaysOnTop ? HWND_TOPMOST : HWND_TOP;
+    return SetWindowPos(
+        windowHandle,
+        insertAfter,
+        monitorInfo.rcMonitor.left,
+        monitorInfo.rcMonitor.top,
+        monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+        monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+        SWP_FRAMECHANGED | SWP_SHOWWINDOW) != FALSE;
+}
+
+void Window::SaveWindowedPlacementIfNeeded()
+{
+    if (m_config.m_windowMode != WindowMode::Windowed)
+    {
+        return;
+    }
+
+    auto windowHandle = static_cast<HWND>(m_windowHandle);
+    if (!windowHandle)
+    {
+        return;
+    }
+
+    RECT windowRect = {};
+    if (!GetWindowRect(windowHandle, &windowRect))
+    {
+        return;
+    }
+
+    m_savedWindowedPosition = IntVec2(windowRect.left, windowRect.top);
+    m_savedWindowedDimensions = IntVec2(windowRect.right - windowRect.left, windowRect.bottom - windowRect.top);
+    m_hasSavedWindowedPlacement = true;
+}
+
+void Window::BroadcastWindowModeChanged(WindowMode oldMode, WindowMode newMode)
+{
+    enigma::window::WindowModeChangedEvent event;
+    event.windowHandle = m_windowHandle;
+    event.oldMode = oldMode;
+    event.newMode = newMode;
+    event.clientSize = GetClientDimensions();
+    enigma::window::WindowEvents::OnWindowModeChanged.Broadcast(event);
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -324,11 +577,6 @@ void Window::CreateOSWindow()
 
     switch (m_config.m_windowMode)
     {
-    case WindowMode::Fullscreen:
-        DebuggerPrintf("Window mode: Fullscreen\n");
-        CreateFullscreenWindow(static_cast<float>(screenWidth), static_cast<float>(screenHeight), windowStyleFlags, windowStyleExFlags, windowRect);
-        break;
-
     case WindowMode::BorderlessFullscreen:
         DebuggerPrintf("Window mode: BorderlessFullscreen\n");
         CreateBorderlessFullscreenWindow(static_cast<float>(screenWidth), static_cast<float>(screenHeight), windowStyleFlags, windowStyleExFlags, windowRect);
@@ -384,60 +632,12 @@ void Window::CreateOSWindow()
         DebuggerPrintf("Window set to always-on-top as configured\n");
     }
 
-    // For full screen mode, make sure the window is at the top and limit the mouse
-    if (m_config.m_windowMode == WindowMode::Fullscreen)
-    {
-        // Force window to front desk and top floor
-        SetWindowPos(windowHandle, HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-
-        RECT windowClientRect;
-        GetClientRect(windowHandle, &windowClientRect);
-
-        // Convert to screen coordinates
-        POINT topLeft     = {windowClientRect.left, windowClientRect.top};
-        POINT bottomRight = {windowClientRect.right, windowClientRect.bottom};
-        ClientToScreen(windowHandle, &topLeft);
-        ClientToScreen(windowHandle, &bottomRight);
-
-        RECT clipRect = {topLeft.x, topLeft.y, bottomRight.x, bottomRight.y};
-        ClipCursor(&clipRect);
-
-        DebuggerPrintf("Mouse cursor clipped to fullscreen window: %d,%d to %d,%d\n",
-                       clipRect.left, clipRect.top, clipRect.right, clipRect.bottom);
-    }
-
-    m_displayContext = GetDC(windowHandle);
+    m_displayContext        = GetDC(windowHandle);
+    m_lastClientDimensions = GetClientDimensions();
+    m_isMinimized          = IsIconic(windowHandle) != FALSE;
 
     HCURSOR cursor = LoadCursor(nullptr, IDC_ARROW);
     SetCursor(cursor);
-}
-
-void Window::CreateFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect)
-{
-    DebuggerPrintf("Creating exclusive fullscreen window\n");
-
-    // True exclusive full screen mode - use minimal window style
-    windowStyleFlags   = WS_POPUP | WS_VISIBLE;
-    windowStyleExFlags = WS_EX_APPWINDOW | WS_EX_TOPMOST;
-
-    // Get the exact resolution of the main monitor
-    HDC hdc          = GetDC(nullptr);
-    int screenWidth  = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    ReleaseDC(nullptr, hdc);
-
-    DebuggerPrintf("System metrics - Screen: %dx%d, Desktop: %.0fx%.0f\n",
-                   screenWidth, screenHeight, desktopWidth, desktopHeight);
-
-    // Use system metrics to precise screen size
-    windowRect.left   = 0;
-    windowRect.top    = 0;
-    windowRect.right  = screenWidth;
-    windowRect.bottom = screenHeight;
-
-    DebuggerPrintf("Fullscreen window rect: left=%d, top=%d, right=%d, bottom=%d\n",
-                   windowRect.left, windowRect.top, windowRect.right, windowRect.bottom);
 }
 
 void Window::CreateBorderlessFullscreenWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect)
@@ -456,7 +656,7 @@ void Window::CreateBorderlessFullscreenWindow(float desktopWidth, float desktopH
 void Window::CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD& windowStyleFlags, DWORD& windowStyleExFlags, RECT& windowRect)
 {
     // Regular windowed mode
-    windowStyleFlags   = WS_CAPTION | WS_BORDER | WS_SYSMENU | WS_OVERLAPPED;
+    windowStyleFlags   = WS_OVERLAPPEDWINDOW;
     windowStyleExFlags = WS_EX_APPWINDOW;
 
     float clientAspect  = m_config.m_aspectRatio;
@@ -519,8 +719,6 @@ void Window::CreateWindowedWindow(float desktopWidth, float desktopHeight, DWORD
 }
 
 //-----------------------------------------------------------------------------------------------
-// 消息预处理器管理
-
 void Window::RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreprocessor* preprocessor)
 {
     if (!preprocessor)
@@ -529,7 +727,6 @@ void Window::RegisterMessagePreprocessor(enigma::window::IWindowsMessagePreproce
         return;
     }
 
-    // 检查是否已注册
     auto it = std::find(m_messagePreprocessors.begin(), m_messagePreprocessors.end(), preprocessor);
     if (it != m_messagePreprocessors.end())
     {
