@@ -10,6 +10,12 @@
     <Filter Include="Tests\Core">
       <UniqueIdentifier>{28D9DAEC-8A9F-47A9-85BE-7E32065982B2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Tests\Graphic">
+      <UniqueIdentifier>{F52CA7ED-DF13-4010-AC01-F64B13F9DE38}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tests\Graphic\Font">
+      <UniqueIdentifier>{3F28D2B0-47F5-4498-8E89-7B4128A5749E}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ThirdParty">
       <UniqueIdentifier>{F9F1A464-FD64-4C87-B945-CCB275BF9E39}</UniqueIdentifier>
     </Filter>
@@ -20,6 +26,9 @@
     </ClCompile>
     <ClCompile Include="Tests\Core\Test_ByteBuffer.cpp">
       <Filter>Tests\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontModuleSmokeTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
     </ClCompile>
     <ClCompile Include="..\..\ThirdParty\googletest\googletest\src\gtest-all.cc">
       <Filter>ThirdParty</Filter>

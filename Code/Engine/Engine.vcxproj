@@ -511,6 +511,7 @@
     <ClCompile Include="Graphic\Camera\UICamera.cpp"/>
     <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp" />
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
+    <ClCompile Include="Graphic\Font\FontCommon.cpp"/>
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
     <ClCompile Include="Graphic\Helper\VertexConversionHelper.cpp" />
     <ClCompile Include="Graphic\Integration\GraphicsRootBinder.cpp"/>
@@ -1104,6 +1105,16 @@
     <ClInclude Include="Graphic\Core\RenderState\DepthState.hpp"/>
     <ClInclude Include="Graphic\Core\RenderState\RasterizeState.hpp"/>
     <ClInclude Include="Graphic\Core\RenderState\StencilState.hpp"/>
+    <ClInclude Include="Graphic\Font\Font.hpp"/>
+    <ClInclude Include="Graphic\Font\FontCommon.hpp"/>
+    <ClInclude Include="Graphic\Font\Exception\FontException.hpp"/>
+    <ClInclude Include="Graphic\Font\TrueType\TrueTypeFont.hpp"/>
+    <ClInclude Include="Graphic\Font\Atlas\GlyphMetrics.hpp"/>
+    <ClInclude Include="Graphic\Font\Atlas\GlyphAtlas.hpp"/>
+    <ClInclude Include="Graphic\Font\Layout\TextLayout.hpp"/>
+    <ClInclude Include="Graphic\Font\Layout\VertexFont.hpp"/>
+    <ClInclude Include="Graphic\Font\Render\FontRenderer.hpp"/>
+    <ClInclude Include="Graphic\Font\Render\FontShaderPreset.hpp"/>
     <ClInclude Include="Graphic\Helper\StencilHelper.hpp" />
     <ClInclude Include="Graphic\Helper\VertexConversionHelper.hpp" />
     <ClInclude Include="Graphic\Integration\GraphicsRootBinder.hpp"/>
