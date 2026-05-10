@@ -30,6 +30,9 @@
     <ClCompile Include="Tests\Graphic\Font\FontModuleSmokeTests.cpp">
       <Filter>Tests\Graphic\Font</Filter>
     </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontTrueTypeTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\ThirdParty\googletest\googletest\src\gtest-all.cc">
       <Filter>ThirdParty</Filter>
     </ClCompile>
