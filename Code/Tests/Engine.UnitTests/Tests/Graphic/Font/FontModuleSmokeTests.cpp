@@ -18,6 +18,18 @@ TEST(FontModuleSmokeTests, AggregateHeaderExposesM1ShellTypes)
     GlyphMetrics metrics;
     EXPECT_EQ(metrics.glyphIndex, 0u);
     EXPECT_FLOAT_EQ(metrics.advanceX, 0.0f);
+    EXPECT_FALSE(glyphAtlas.IsBuilt());
+
+    GlyphAtlasBuildSettings atlasSettings;
+    EXPECT_FLOAT_EQ(atlasSettings.pixelHeight, 0.0f);
+    GlyphAtlasDiagnostics atlasDiagnostics;
+    EXPECT_EQ(atlasDiagnostics.pixelFormat, GlyphAtlasPixelFormat::AlphaCoverage8);
+
+    TextLayoutSettings layoutSettings;
+    TextLayoutResult layoutResult;
+    EXPECT_EQ(layoutResult.lineCount, 0);
+    EXPECT_EQ(layoutSettings.missingPolicy, TextLayoutMissingPolicy::UseAtlasFallback);
+
     EXPECT_EQ(userPreset.GetOwner(), FontShaderPresetOwner::User);
 
     (void)trueTypeFont;
@@ -38,6 +50,11 @@ TEST(FontModuleSmokeTests, ResourceShellsAreMoveOnly)
     static_assert(!std::is_copy_assignable_v<GlyphAtlas>);
     static_assert(std::is_move_constructible_v<GlyphAtlas>);
     static_assert(std::is_move_assignable_v<GlyphAtlas>);
+
+    static_assert(!std::is_copy_constructible_v<TextLayout>);
+    static_assert(!std::is_copy_assignable_v<TextLayout>);
+    static_assert(std::is_move_constructible_v<TextLayout>);
+    static_assert(std::is_move_assignable_v<TextLayout>);
 
     static_assert(!std::is_copy_constructible_v<FontRenderer>);
     static_assert(!std::is_copy_assignable_v<FontRenderer>);

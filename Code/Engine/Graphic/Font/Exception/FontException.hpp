@@ -39,4 +39,10 @@ namespace enigma::graphic
     public:
         using FontException::FontException;
     };
+
+    class AtlasBuildException : public FontException
+    {
+    public:
+        using FontException::FontException;
+    };
 } // namespace enigma::graphic

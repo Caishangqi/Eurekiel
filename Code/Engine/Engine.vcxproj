@@ -512,6 +512,10 @@
     <ClCompile Include="Graphic\Core\DX12\D3D12RenderSystem.cpp" />
     <ClCompile Include="Graphic\Core\EnigmaGraphicCommon.cpp" />
     <ClCompile Include="Graphic\Font\FontCommon.cpp"/>
+    <ClCompile Include="Graphic\Font\Atlas\GlyphAtlas.cpp"/>
+    <ClCompile Include="Graphic\Font\Atlas\RectanglePacker.cpp"/>
+    <ClCompile Include="Graphic\Font\Layout\TextLayout.cpp"/>
+    <ClCompile Include="Graphic\Font\Layout\Utf8Text.cpp"/>
     <ClCompile Include="Graphic\Font\TrueType\TrueTypeFont.cpp"/>
     <ClCompile Include="Graphic\Font\TrueType\TtfLibraryWrapper.cpp"/>
     <ClCompile Include="Graphic\Helper\StencilHelper.cpp" />
@@ -1115,7 +1119,9 @@
     <ClInclude Include="Graphic\Font\Atlas\GlyphMetrics.hpp"/>
     <ClInclude Include="Graphic\Font\Atlas\GlyphBitmap.hpp"/>
     <ClInclude Include="Graphic\Font\Atlas\GlyphAtlas.hpp"/>
+    <ClInclude Include="Graphic\Font\Atlas\RectanglePacker.hpp"/>
     <ClInclude Include="Graphic\Font\Layout\TextLayout.hpp"/>
+    <ClInclude Include="Graphic\Font\Layout\Utf8Text.hpp"/>
     <ClInclude Include="Graphic\Font\Layout\VertexFont.hpp"/>
     <ClInclude Include="Graphic\Font\Render\FontRenderer.hpp"/>
     <ClInclude Include="Graphic\Font\Render\FontShaderPreset.hpp"/>

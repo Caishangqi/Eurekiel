@@ -27,10 +27,22 @@
     <ClCompile Include="Tests\Core\Test_ByteBuffer.cpp">
       <Filter>Tests\Core</Filter>
     </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontGlyphAtlasTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
+    </ClCompile>
     <ClCompile Include="Tests\Graphic\Font\FontModuleSmokeTests.cpp">
       <Filter>Tests\Graphic\Font</Filter>
     </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontRectanglePackerTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
+    </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontTextLayoutTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
+    </ClCompile>
     <ClCompile Include="Tests\Graphic\Font\FontTrueTypeTests.cpp">
+      <Filter>Tests\Graphic\Font</Filter>
+    </ClCompile>
+    <ClCompile Include="Tests\Graphic\Font\FontUtf8TextTests.cpp">
       <Filter>Tests\Graphic\Font</Filter>
     </ClCompile>
     <ClCompile Include="..\..\ThirdParty\googletest\googletest\src\gtest-all.cc">

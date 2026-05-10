@@ -95,8 +95,12 @@
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Tests\Core\Test_ByteBuffer.cpp" />
+    <ClCompile Include="Tests\Graphic\Font\FontGlyphAtlasTests.cpp" />
     <ClCompile Include="Tests\Graphic\Font\FontModuleSmokeTests.cpp" />
+    <ClCompile Include="Tests\Graphic\Font\FontRectanglePackerTests.cpp" />
+    <ClCompile Include="Tests\Graphic\Font\FontTextLayoutTests.cpp" />
     <ClCompile Include="Tests\Graphic\Font\FontTrueTypeTests.cpp" />
+    <ClCompile Include="Tests\Graphic\Font\FontUtf8TextTests.cpp" />
     <ClCompile Include="..\..\ThirdParty\googletest\googletest\src\gtest-all.cc" />
   </ItemGroup>
   <ItemGroup>
